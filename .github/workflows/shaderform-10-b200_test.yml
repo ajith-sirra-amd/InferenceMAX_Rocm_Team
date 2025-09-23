@@ -5,24 +5,19 @@ on:
     inputs:
       run_1k1k:
         type: boolean
-        required: false
-        default: true
+        required: true
       run_8k1k:
         type: boolean
-        required: false
-        default: true
+        required: true
       run_1k8k:
         type: boolean
-        required: false
-        default: true
+        required: true
       use_b200:
         type: boolean
-        required: false
-        default: true
+        required: true
       runner_label:
         type: string 
-        required: false
-        default: 'self-hosted'
+        required: true
 jobs:
   gptoss-1k1k:
     if: ${{ inputs.use_b200 }}

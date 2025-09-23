@@ -4,8 +4,8 @@ jobs:
   call-reusable-workflow:
     uses: ./.github/workflows/shaderform-10-b200_test.yml
     with:
-      runner_label: 'self-hosted'
       run_1k1k: true
       run_8k1k: false
       run_1k8k: false
       use_b200: true
+      runner_label: 'self-hosted'
