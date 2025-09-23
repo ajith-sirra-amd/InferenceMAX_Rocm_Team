@@ -2,7 +2,6 @@ name: Run benchmark workflow
 on: [push] # Or any other event that triggers this workflow
 jobs:
   call-reusable-workflow:
-    runs-on: self-hosted
     uses: ./.github/workflows/shaderform-10-b200_test.yml
     with:
       exp-name: 'gptoss_trtllm'
@@ -11,3 +10,4 @@ jobs:
       max-model-len: '2304'
       random-range-ratio: '0.8'
       use_b200: true
+      runs-on: self-hosted
