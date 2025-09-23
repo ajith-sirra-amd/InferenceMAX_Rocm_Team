@@ -20,7 +20,7 @@ on:
         required: true
 jobs:
   gptoss-1k1k:
-    if: ${{ inputs.use_b200 }}
+    if: ${{ inputs.run_1k1k && inputs.use_b200 }}
     uses: ./.github/workflows/benchmark-tmpl_fix.yml
     secrets: inherit
     with:
@@ -44,7 +44,7 @@ jobs:
       exp-name: 'gptoss_1k1k'
 
   gptoss-8k1k:
-    if: ${{ inputs.use_b200 }}
+    if: ${{ inputs.run_8k1k && inputs.use_b200 }}
     uses: ./.github/workflows/benchmark-tmpl_fix.yml
     secrets: inherit
     with:
@@ -68,7 +68,7 @@ jobs:
       exp-name: 'gptoss_8k1k'
 
   gptoss-1k8k:
-    if: ${{ inputs.use_b200 }}
+    if: ${{ inputs.run_1k8k && inputs.use_b200 }}
     uses: ./.github/workflows/benchmark-tmpl_fix.yml
     secrets: inherit
     with:
