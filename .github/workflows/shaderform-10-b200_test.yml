@@ -7,23 +7,15 @@ on:
         required: true
         type: string
         default: 'gptoss_trtllm'
-      isl:
+      run_1k1k:
+        type: boolean
         required: true
-        type: string
-        default: '1024'
-      osl:
+      run_8k1k:
+        type: boolean
         required: true
-        type: string
-        default: '1024'
-      max-model-len:
+      run_1k8k:
+        type: boolean
         required: true
-        type: string
-        default: '2304'
-      random-range-ratio:
-        required: true
-        type: string
-        default: '0.8'
-
       use_b200:
         type: boolean
         required: true
@@ -31,19 +23,74 @@ on:
         type: string 
         required: true
 jobs:
-  bmk-b200-trt:
+  gptoss-1k1k:
     if: ${{ inputs.use_b200 }}
     uses: ./.github/workflows/benchmark-tmpl_fix.yml
     secrets: inherit
     with:
-      exp-name: ${{ inputs.exp-name }}
-      isl: ${{ inputs.isl }}
-      osl: ${{ inputs.osl }}
-      max-model-len: ${{ inputs.max-model-len }}
-      random-range-ratio: ${{ inputs.random-range-ratio }}
+      exp-name: 'gptoss-trtllm-1k1k'
+      isl: 1024
+      osl: 1024
+      max-model-len: 2048
+      random-range-ratio: 0.8
       runner: ${{ inputs.runner_label }}
       image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
       model: 'openai/gpt-oss-120b'
       tp-list: '[8]'
       framework: 'trt'
       precision: 'fp4'
+  collect-gptoss-1k1k-results:
+    needs: gptoss-1k1k
+    if: ${{ inputs.run_1k1k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_1k1k'
+
+  gptoss-8k1k:
+    if: ${{ inputs.use_b200 }}
+    uses: ./.github/workflows/benchmark-tmpl_fix.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss-trtllm-8k1k'
+      isl: '8292'
+      osl: '1024'
+      max-model-len: '9216'
+      random-range-ratio: 0.8
+      runner: ${{ inputs.runner_label }}
+      image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
+      model: 'openai/gpt-oss-120b'
+      tp-list: '[8]'
+      framework: 'trt'
+      precision: 'fp4'
+  collect-gptoss-8k1k-results:
+    needs: gptoss-8k1k
+    if: ${{ inputs.run_8k1k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_8k1k'
+
+  gptoss-1k8k:
+    if: ${{ inputs.use_b200 }}
+    uses: ./.github/workflows/benchmark-tmpl_fix.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss-trtllm-1k8k'
+      isl: '1024'
+      osl: '8192'
+      max-model-len: '9216'
+      random-range-ratio: 0.8
+      runner: ${{ inputs.runner_label }}
+      image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
+      model: 'openai/gpt-oss-120b'
+      tp-list: '[8]'
+      framework: 'trt'
+      precision: 'fp4'
+  collect-gptoss-1k8k-results:
+    needs: gptoss-1k8k
+    if: ${{ inputs.run_1k8k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_1k8k'
