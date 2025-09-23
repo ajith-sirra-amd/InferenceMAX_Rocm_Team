@@ -45,4 +45,3 @@ jobs:
       tp-list: '[1, 8]'
       framework: 'trt'
       precision: 'fp4'
-    runs-on: self-hosted
