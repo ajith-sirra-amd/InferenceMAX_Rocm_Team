@@ -44,6 +44,6 @@ jobs:
       runner: ${{ inputs.runner_label }}
       image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
       model: 'openai/gpt-oss-120b'
-      tp-list: '1'
+      tp-list: '[1]'
       framework: 'trt'
       precision: 'fp4'
