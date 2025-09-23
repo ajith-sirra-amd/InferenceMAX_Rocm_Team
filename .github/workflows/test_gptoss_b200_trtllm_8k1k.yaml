@@ -5,7 +5,7 @@ jobs:
     uses: ./.github/workflows/shaderform-10-b200_test.yml
     with:
       exp-name: 'gptoss_trtllm'
-      isl: '1024'
+      isl: '8192'
       osl: '1024'
       max-model-len: '2304'
       random-range-ratio: '0.8'
