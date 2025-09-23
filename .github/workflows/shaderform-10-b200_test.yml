@@ -3,25 +3,26 @@ name: gpt-oss trtllm
 on:
   workflow_call:
     inputs:
-      exp-name:
-        required: true
-        type: string
-        default: 'gptoss_trtllm'
       run_1k1k:
         type: boolean
-        required: true
+        required: false
+        default: true
       run_8k1k:
         type: boolean
-        required: true
+        required: false
+        default: true
       run_1k8k:
         type: boolean
-        required: true
+        required: false
+        default: true
       use_b200:
         type: boolean
-        required: true
+        required: false
+        default: true
       runner_label:
         type: string 
-        required: true
+        required: false
+        default: 'self-hosted'
 jobs:
   gptoss-1k1k:
     if: ${{ inputs.use_b200 }}
