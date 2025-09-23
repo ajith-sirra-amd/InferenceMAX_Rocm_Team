@@ -27,7 +27,9 @@ on:
       use_b200:
         type: boolean
         required: true
-
+      runner_label:
+        type: string 
+        required: true
 jobs:
   bmk-b200-trt:
     if: ${{ inputs.use_b200 }}
@@ -45,3 +47,4 @@ jobs:
       tp-list: '[1, 8]'
       framework: 'trt'
       precision: 'fp4'
+      runs-on: ${{ inputs.runner_label }}
