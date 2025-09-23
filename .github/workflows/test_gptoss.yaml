@@ -10,3 +10,4 @@ jobs:
       osl: '1024'
       max-model-len: '2304'
       random-range-ratio: '0.8'
+      use_b200: true
