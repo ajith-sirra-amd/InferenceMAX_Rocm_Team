@@ -25,7 +25,6 @@ on:
 
 jobs:
   bmk-b200-trt:
-    runs-on: self-hosted
     if: ${{ inputs.use_b200 }}
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
@@ -41,3 +40,4 @@ jobs:
       tp-list: '[1, 8]'
       framework: 'trt'
       precision: 'fp4'
+      runs-on: self-hosted
