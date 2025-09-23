@@ -1,0 +1,7 @@
+name: Run benchmark workflow
+on: [push] # Or any other event that triggers this workflow
+jobs:
+  call-reusable-workflow:
+    uses: ./.github/workflows/shaderform-10-b200_test.yml
+    with:
+      name: 'gpt-oss-trtllm'
