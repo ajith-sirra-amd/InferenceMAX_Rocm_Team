@@ -10,4 +10,4 @@ jobs:
       max-model-len: '2304'
       random-range-ratio: '0.8'
       use_b200: true
-      runner_label: 'shaderform-10-b200'
+      runner_label: 'self-hosted'
