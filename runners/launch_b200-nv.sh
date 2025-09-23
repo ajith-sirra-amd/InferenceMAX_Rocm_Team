@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-export HF_HUB_CACHE_MOUNT="/raid/hf_hub_cache/"
+export HF_HUB_CACHE_MOUNT="/mnt/nvme7n1/"
 export PORT_OFFSET=0  # Doesn't matter when --exclusive
 
 MODEL_CODE="${EXP_NAME%%_*}"
