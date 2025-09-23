@@ -24,7 +24,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl_fix.yml
     secrets: inherit
     with:
-      exp-name: 'gptoss-trtllm-1k1k'
+      exp-name: 'gptoss-fp4-b200'
       isl: 1024
       osl: 1024
       max-model-len: 2048
@@ -48,7 +48,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl_fix.yml
     secrets: inherit
     with:
-      exp-name: 'gptoss-trtllm-8k1k'
+      exp-name: 'gptoss-fp4-b200'
       isl: '8292'
       osl: '1024'
       max-model-len: '9216'
@@ -72,7 +72,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl_fix.yml
     secrets: inherit
     with:
-      exp-name: 'gptoss-trtllm-1k8k'
+      exp-name: 'gptoss-fp4-b200'
       isl: '1024'
       osl: '8192'
       max-model-len: '9216'
