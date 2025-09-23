@@ -1,4 +1,4 @@
-name: Template - gpt-oss
+name: gpt-oss trtllm
 
 on:
   workflow_call:
