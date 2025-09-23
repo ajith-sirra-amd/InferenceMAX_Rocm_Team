@@ -33,7 +33,7 @@ on:
 jobs:
   bmk-b200-trt:
     if: ${{ inputs.use_b200 }}
-    uses: ./.github/workflows/benchmark-tmpl.yml
+    uses: ./.github/workflows/benchmark-tmpl_fix.yml
     secrets: inherit
     with:
       exp-name: ${{ inputs.exp-name }}
