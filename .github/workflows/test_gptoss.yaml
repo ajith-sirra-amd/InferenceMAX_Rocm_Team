@@ -4,7 +4,6 @@ jobs:
   call-reusable-workflow:
     uses: ./.github/workflows/shaderform-10-b200_test.yml
     with:
-      name: 'gpt-oss-trtllm'
       exp-name: 'gptoss_trtllm'
       isl: '1024'
       osl: '1024'
