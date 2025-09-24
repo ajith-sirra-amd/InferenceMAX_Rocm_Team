@@ -1,4 +1,4 @@
-name: GPT OSS sweep
+name: Test - GPT OSS sweep
 
 on:
   workflow_dispatch:
