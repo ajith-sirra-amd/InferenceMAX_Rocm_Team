@@ -6,18 +6,19 @@ on:
       run_1k1k:
         type: boolean
         required: true
+        default: true
       run_8k1k:
         type: boolean
         required: true
+        default: true
       run_1k8k:
         type: boolean
         required: true
+        default: true
       use_mi355x:
         type: boolean
         required: true
-      runner_label:
-        type: list 
-        default: '[self-hosted, mi355x]'
+        default: true
 
 jobs:
   gptoss-1k1k:
@@ -30,7 +31,7 @@ jobs:
       osl: 1024
       max-model-len: 2048
       random-range-ratio: 0.8
-      runner: ${{ inputs.runner_label }}
+      runner: '[self-hosted, mi355x]'
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250915'
       model: 'openai/gpt-oss-120b'
       tp-list: '[8, 1]'
@@ -54,7 +55,7 @@ jobs:
       osl: '1024'
       max-model-len: '9216'
       random-range-ratio: 0.8
-      runner: ${{ inputs.runner_label }}
+      runner: '[self-hosted, mi355x]'
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250915'
       model: 'openai/gpt-oss-120b'
       tp-list: '[8, 1]'
@@ -78,7 +79,7 @@ jobs:
       osl: '8192'
       max-model-len: '9216'
       random-range-ratio: 0.8
-      runner: ${{ inputs.runner_label }}
+      runner: '[self-hosted, mi355x]'
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250915'
       model: 'openai/gpt-oss-120b'
       tp-list: '[8, 1]'
