@@ -1,8 +1,4 @@
-name: Test - GPT OSS
-
-concurrency:
-  group: benchmark-lock
-  cancel-in-progress: false
+name: GPT OSS sweep
 
 on:
   workflow_dispatch:
