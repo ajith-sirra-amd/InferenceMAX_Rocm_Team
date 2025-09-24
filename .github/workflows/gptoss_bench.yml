@@ -1,0 +1,70 @@
+name: GPT-OSS Bench MI300X/MI325X
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Container image (e.g., rocm/pytorch-private:TAG)"
+        required: true
+        default: "rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250915"
+      gpu_type:
+        description: "mi300x or mi325x"
+        required: true
+        default: "mi300x"
+      tp:
+        description: "Tensor parallel size"
+        required: true
+        default: "1"
+      model_path:
+        description: "Host model path on the node"
+        required: true
+        default: "/home/amd/models/gpt-oss-120b"
+
+jobs:
+  bench:
+    runs-on: [self-hosted, rocm, mi300x, gptoss-bench-runner]
+    timeout-minutes: 360
+
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node info
+        run: |
+          echo "=== uname ==="; uname -a || true
+          echo "=== rocminfo (first 40 lines) ==="; (which rocminfo && rocminfo | head -n 40) || true
+          echo "=== docker ==="; docker --version || true
+          echo "=== whoami ==="; whoami
+
+      - name: Ensure script is executable
+        run: chmod +x ./scripts/gptoss_fp4_benchmark.sh
+
+      - name: Run benchmark script
+        id: runbench
+        env:
+          IMAGE: ${{ github.event.inputs.image }} 
+        run: |
+          set -euo pipefail
+          ./scripts/gptoss_fp4_benchmark.sh \
+            "${{ github.event.inputs.gpu_type }}" \
+            "${{ github.event.inputs.tp }}" \
+            "${{ github.event.inputs.model_path }}"
+          # assume script writes results like: inferencemax_results_YYYYMMDD...
+          RESDIR=$(ls -d inferencemax_results_* | tail -n 1)
+          echo "results_dir=${RESDIR}" >> "$GITHUB_OUTPUT"
+          echo "Results in ${RESDIR}"
+
+      - name: Upload raw results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.gpu_type }}_${{ github.event.inputs.tp }}_${{ github.run_number }}
+          path: |
+            ${{ steps.runbench.outputs.results_dir }}/**/*.json
+            ${{ steps.runbench.outputs.results_dir }}/**/*.csv
+            ${{ steps.runbench.outputs.results_dir }}/**/*.md
+          if-no-files-found: warn
+          retention-days: 30
