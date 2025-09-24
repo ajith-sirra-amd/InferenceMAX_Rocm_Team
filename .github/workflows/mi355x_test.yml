@@ -1,7 +1,7 @@
-name: gpt-oss trtllm
+name: gpt-oss mi355x vllm
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       run_1k1k:
         type: boolean
