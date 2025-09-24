@@ -1,0 +1,11 @@
+name: GPT OSS 120B SWEEP VLLM MI355X
+on: [push] # Or any other event that triggers this workflow
+jobs:
+  call-reusable-workflow:
+    uses: ./.github/workflows/shaderform-10-b200_test.yml
+    with:
+      run_1k1k: true
+      run_8k1k: false 
+      run_1k8k: false
+      use_mi355x: true
+      runner_label: 'mi355x_vllm'
