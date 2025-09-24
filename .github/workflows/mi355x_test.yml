@@ -16,7 +16,7 @@ on:
         type: boolean
         required: true
       runner_label:
-        type: string 
+        type: list 
         default: '[self-hosted, mi355x]'
 
 jobs:
