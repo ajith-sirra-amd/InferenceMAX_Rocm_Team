@@ -43,6 +43,8 @@ jobs:
       run_1k1k: ${{ inputs.run_1k1k }}
       run_8k1k: ${{ inputs.run_8k1k }}
       run_1k8k: ${{ inputs.run_1k8k }}
+      use_h100: ${{ inputs.use_h100 }}
+      use_h200: ${{ inputs.use_h200 }}
       use_b200: ${{ inputs.use_b200 }}
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
