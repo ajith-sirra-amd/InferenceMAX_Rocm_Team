@@ -15,7 +15,7 @@
 # HF_TOKEN
 
 HF_HUB_CACHE_MOUNT="/data"  # Temp solution
-VLLM_CACHE_MOUNT="/data/vllm_cache"  # Temp solution
+VLLM_CACHE_MOUNT="/data/.vllm_cache/"  # Temp solution
 PORT=8888
 
 network_name="bmk-net"
@@ -30,6 +30,7 @@ docker run --rm -d --ipc=host --shm-size=16g --network=$network_name --name=$ser
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
+-v $VLLM_CACHE_MOUNT:/root/.cache/vllm/ \
 -e HF_TOKEN -e HF_HUB_CACHE -e MODEL -e TP -e CONC -e MAX_MODEL_LEN -e PORT=$PORT \
 --entrypoint=/bin/bash \
 $IMAGE \
