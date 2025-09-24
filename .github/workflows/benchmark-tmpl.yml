@@ -41,7 +41,7 @@ on:
 
 env:
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
-  HF_HUB_CACHE: '/mnt/hf_hub_cache/'
+  HF_HUB_CACHE: '/data/'
   EXP_NAME: ${{ inputs.exp-name }}
   MODEL: ${{ inputs.model }}
   ISL: ${{ inputs.isl }}
