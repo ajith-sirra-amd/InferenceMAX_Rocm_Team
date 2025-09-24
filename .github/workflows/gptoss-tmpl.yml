@@ -19,21 +19,6 @@ on:
         required: true
         type: string
 
-      use_h100:
-        type: boolean
-        required: true
-      use_h200:
-        type: boolean
-        required: true
-      use_b200:
-        type: boolean
-        required: true
-      use_mi300x:
-        type: boolean
-        required: true
-      use_mi325x:
-        type: boolean
-        required: true
       use_mi355x:
         type: boolean
         required: true
@@ -69,7 +54,7 @@ jobs:
       runner: 'self-hosted'
       image: 'vllm/vllm-openai:v0.10.2'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 8]'
+      tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
       precision: 'fp4'
 
@@ -86,7 +71,7 @@ jobs:
       runner: 'self-hosted'
       image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 8]'
+      tp-list: '[1, 2, 4, 8]'
       framework: 'trt'
       precision: 'fp4'
 
@@ -154,6 +139,6 @@ jobs:
       runner: 'self-hosted'
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250915'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[1]'
+      tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
       precision: 'fp4'

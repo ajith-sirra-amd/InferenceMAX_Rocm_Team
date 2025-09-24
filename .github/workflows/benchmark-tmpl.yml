@@ -37,7 +37,7 @@ on:
         type: string
       conc-list:
         type: string
-        default: '[4, 8]'
+        default: '[4, 8, 16, 32, 64]'
 
 env:
   HF_TOKEN: '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'
@@ -83,10 +83,6 @@ jobs:
           RUNNER_NAME: ${{ runner.name }}
           RESULT_FILENAME: ${{ env.EXP_NAME }}_${{ env.PRECISION }}_${{ env.FRAMEWORK }}_tp${{ env.TP }}_conc${{ env.CONC }}_${{ runner.name }}
         run: |
-          echo $MODEL
-          echo $MODEL
-          echo $MODEL
-          echo $MODEL
           bash ./runners/launch_${RUNNER_NAME%%_*}.sh
           if [ -f "$RESULT_FILENAME.json" ]; then
             echo "RESULT_FILENAME=${RESULT_FILENAME}" >> $GITHUB_ENV
