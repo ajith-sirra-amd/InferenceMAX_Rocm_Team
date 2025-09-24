@@ -49,12 +49,3 @@ jobs:
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
-
-  calc-success-rate:
-    needs: gpt-oss-test-run
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-
-    env:
-      RESULTS_DIR: "results/"
-      STATS_FILENAME: "run_stats"
