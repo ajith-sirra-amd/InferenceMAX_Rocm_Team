@@ -63,7 +63,7 @@ bench_serving/benchmark_serving.py \
 --result-dir=/workspace/ --result-filename=$RESULT_FILENAME.json
 
 # CUSTOM
-ifor CONTAINER_NAME in $server_name; do
+for CONTAINER_NAME in $server_name; do
     running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
     if [ $running_container ]; then
         echo "Terminating the already running $CONTAINER_NAME container"
