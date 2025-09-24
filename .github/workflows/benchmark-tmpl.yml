@@ -75,7 +75,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.REPO_PAT }}
+          token: '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'
           fetch-depth: 0
 
       - name: Launch job script
