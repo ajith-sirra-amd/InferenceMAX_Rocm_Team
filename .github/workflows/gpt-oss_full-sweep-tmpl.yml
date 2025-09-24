@@ -1,4 +1,4 @@
-name: gpt-oss trtllm
+name: Template - Full Sweep
 
 on:
   workflow_call:
@@ -12,17 +12,24 @@ on:
       run_1k8k:
         type: boolean
         required: true
+
+      use_b200:
+        type: boolean
+        required: true
+      use_mi300x:
+        type: boolean
+        required: true
+      use_mi325x:
+        type: boolean
+        required: true
       use_mi355x:
         type: boolean
         required: true
-      runner_label:
-        type: string 
-        default: '[self-hosted, mi355x]'
 
 jobs:
   gptoss-1k1k:
-    if: ${{ inputs.run_1k1k && inputs.use_mi355x }}
-    uses: ./.github/workflows/benchmark-tmpl_fix.yml
+    if: ${{ inputs.run_1k1k }}
+    uses: ./.github/workflows/gptoss-tmpl.yml
     secrets: inherit
     with:
       exp-name: 'gptoss_1k1k'
@@ -30,12 +37,13 @@ jobs:
       osl: 1024
       max-model-len: 2048
       random-range-ratio: 0.8
-      runner: ${{ inputs.runner_label }}
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250915'
-      model: 'openai/gpt-oss-120b'
-      tp-list: '[8, 1]'
-      framework: 'trt'
-      precision: 'fp4'
+      use_h100: ${{ inputs.use_h100 }}
+      use_h200: ${{ inputs.use_h200 }}
+      use_b200: ${{ inputs.use_b200 }}
+      use_mi300x: ${{ inputs.use_mi300x }}
+      use_mi325x: ${{ inputs.use_mi325x }}
+      use_mi355x: ${{ inputs.use_mi355x }}
+
   collect-gptoss-1k1k-results:
     needs: gptoss-1k1k
     if: ${{ inputs.run_1k1k && (success() || failure()) }}
@@ -45,21 +53,22 @@ jobs:
       exp-name: 'gptoss_1k1k'
 
   gptoss-8k1k:
-    if: ${{ inputs.run_8k1k && inputs.use_mi355x }}
-    uses: ./.github/workflows/benchmark-tmpl_fix.yml
+    if: ${{ inputs.run_8k1k }}
+    uses: ./.github/workflows/gptoss-tmpl.yml
     secrets: inherit
     with:
       exp-name: 'gptoss_8k1k'
-      isl: '8292'
-      osl: '1024'
-      max-model-len: '9216'
+      isl: 8192
+      osl: 1024
+      max-model-len: 9216
       random-range-ratio: 0.8
-      runner: ${{ inputs.runner_label }}
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250915'
-      model: 'openai/gpt-oss-120b'
-      tp-list: '[8, 1]'
-      framework: 'trt'
-      precision: 'fp4'
+      use_h100: ${{ inputs.use_h100 }}
+      use_h200: ${{ inputs.use_h200 }}
+      use_b200: ${{ inputs.use_b200 }}
+      use_mi300x: ${{ inputs.use_mi300x }}
+      use_mi325x: ${{ inputs.use_mi325x }}
+      use_mi355x: ${{ inputs.use_mi355x }}
+
   collect-gptoss-8k1k-results:
     needs: gptoss-8k1k
     if: ${{ inputs.run_8k1k && (success() || failure()) }}
@@ -69,21 +78,22 @@ jobs:
       exp-name: 'gptoss_8k1k'
 
   gptoss-1k8k:
-    if: ${{ inputs.run_1k8k && inputs.use_mi355x }}
-    uses: ./.github/workflows/benchmark-tmpl_fix.yml
+    if: ${{ inputs.run_1k8k }}
+    uses: ./.github/workflows/gptoss-tmpl.yml
     secrets: inherit
     with:
       exp-name: 'gptoss_1k8k'
-      isl: '1024'
-      osl: '8192'
-      max-model-len: '9216'
+      isl: 1024
+      osl: 8192
+      max-model-len: 9216
       random-range-ratio: 0.8
-      runner: ${{ inputs.runner_label }}
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250915'
-      model: 'openai/gpt-oss-120b'
-      tp-list: '[8, 1]'
-      framework: 'trt'
-      precision: 'fp4'
+      use_h100: ${{ inputs.use_h100 }}
+      use_h200: ${{ inputs.use_h200 }}
+      use_b200: ${{ inputs.use_b200 }}
+      use_mi300x: ${{ inputs.use_mi300x }}
+      use_mi325x: ${{ inputs.use_mi325x }}
+      use_mi355x: ${{ inputs.use_mi355x }}
+
   collect-gptoss-1k8k-results:
     needs: gptoss-1k8k
     if: ${{ inputs.run_1k8k && (success() || failure()) }}

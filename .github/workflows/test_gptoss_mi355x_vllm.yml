@@ -1,5 +1,5 @@
 name: GPT OSS 120B SWEEP VLLM MI355X
-on: [push] # Or any other event that triggers this workflow
+on: [pull_request] # Or any other event that triggers this workflow
 jobs:
   call-reusable-workflow:
     uses: ./.github/workflows/mi355x_test.yml
@@ -8,4 +8,4 @@ jobs:
       run_8k1k: false 
       run_1k8k: false
       use_mi355x: true
-      runner_label: 'self-hosted'
+      runner_label: '[self-hosted, mi355x]'
