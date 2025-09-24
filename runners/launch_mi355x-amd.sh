@@ -14,6 +14,38 @@
 # RESULT_FILENAME
 # HF_TOKEN
 
+#==
+for CONTAINER_NAME in "bmk-server"; do
+    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
+    if [ $running_container ]; then
+        echo "Terminating the already running $CONTAINER_NAME container"
+        docker stop $CONTAINER_NAME
+        sleep 30
+    fi
+    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
+    if [ $running_container ]; then
+        echo "Terminating the already running $CONTAINER_NAME container"
+        docker rm $CONTAINER_NAME
+        sleep 30
+    fi
+done
+for CONTAINER_NAME in "bmk-client"; do
+    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
+    if [ $running_container ]; then
+        echo "Terminating the already running $CONTAINER_NAME container"
+        docker stop $CONTAINER_NAME
+        sleep 30
+    fi
+    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
+    if [ $running_container ]; then
+        echo "Terminating the already running $CONTAINER_NAME container"
+        docker rm $CONTAINER_NAME
+        sleep 30
+    fi
+done
+docker network rm bmk-net
+#==
+
 HF_HUB_CACHE_MOUNT="/data"  # Temp solution
 PORT=8888
 
