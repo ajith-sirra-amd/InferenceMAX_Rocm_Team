@@ -13,6 +13,12 @@ on:
         type: boolean
         required: true
 
+      use_h100:
+        type: boolean
+        required: true
+      use_h200:
+        type: boolean
+        required: true
       use_b200:
         type: boolean
         required: true
@@ -25,6 +31,10 @@ on:
       use_mi355x:
         type: boolean
         required: true
+      use_gb200:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   gptoss-1k1k:

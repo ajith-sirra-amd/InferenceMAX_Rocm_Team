@@ -1,4 +1,4 @@
-name: Test - Full Sweep
+name: Test - GPT OSS
 
 concurrency:
   group: benchmark-lock
@@ -17,12 +17,6 @@ on:
         type: boolean
         required: false
 
-      use_h100:
-        type: boolean
-        required: false
-      use_h200:
-        type: boolean
-        required: false
       use_b200:
         type: boolean
         required: false
@@ -35,28 +29,22 @@ on:
       use_mi355x:
         type: boolean
         required: false
-      use_gb200:
-        type: boolean
-        required: false
 
 jobs:
-  mega-test-run:
-    uses: ./.github/workflows/full-sweep-tmpl.yml
+  got-oss-test-run:
+    uses: ./.github/workflows/gpt-oss-sweep-tmpl.yml
     secrets: inherit
     with:
       run_1k1k: ${{ inputs.run_1k1k }}
       run_8k1k: ${{ inputs.run_8k1k }}
       run_1k8k: ${{ inputs.run_1k8k }}
-      use_h100: ${{ inputs.use_h100 }}
-      use_h200: ${{ inputs.use_h200 }}
       use_b200: ${{ inputs.use_b200 }}
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
-      use_gb200: ${{ inputs.use_gb200 }}
 
   calc-success-rate:
-    needs: mega-test-run
+    needs: gpt-oss-test-run
     if: ${{ always() }}
     runs-on: ubuntu-latest
 
@@ -67,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.REPO_PAT }}
+          token: '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'
           fetch-depth: 0
 
       - name: Download results artifacts
