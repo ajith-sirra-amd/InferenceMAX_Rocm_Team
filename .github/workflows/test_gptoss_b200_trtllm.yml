@@ -1,4 +1,4 @@
-name: Test - GPT OSS sweep, B200, TRTLLM 1.1.0rc2.post2
+name: GPT OSS 120B SWEEP TRTLLM B200
 on: [push] # Or any other event that triggers this workflow
 jobs:
   call-reusable-workflow:
