@@ -1,4 +1,4 @@
-name: Test - GPT OSS sweep
+name: Test - GPT OSS sweep 0924_AITER_MOE
 
 on:
   workflow_dispatch:
