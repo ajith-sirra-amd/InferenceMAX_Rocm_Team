@@ -1,4 +1,4 @@
-name: Test - GPT OSS sweep, MI355X, 0924 image
+name: Test - GPT OSS sweep, MI355X, 0925 image
 
 on:
   workflow_dispatch:
