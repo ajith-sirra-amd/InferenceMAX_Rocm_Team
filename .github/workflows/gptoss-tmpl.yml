@@ -35,7 +35,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: 'self-hosted'
-      image: 'rocm/vllm-private:nightly_custom_355_wip_20250925'
+      image: 'rocm/vllm-private:355_wip_0b6b4168_0925'
       model: 'openai/gpt-oss-120b'
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
