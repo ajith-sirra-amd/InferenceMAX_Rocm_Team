@@ -1,5 +1,6 @@
 name: GPT OSS 120B SWEEP TRTLLM B200
-on: [push] # Or any other event that triggers this workflow
+on: 
+  workflow_call:
 jobs:
   call-reusable-workflow:
     uses: ./.github/workflows/shaderform-10-b200_test.yml
