@@ -37,6 +37,6 @@ jobs:
       runner: 'self-hosted'
       image: 'rocm/pytorch-private:vllm_85_rocm7.0_aiter_0927_bd781f_latest_rccl'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[2, 4, 8]'
+      tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
       precision: 'fp4'
