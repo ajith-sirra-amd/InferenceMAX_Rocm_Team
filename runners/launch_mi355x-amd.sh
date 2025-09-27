@@ -15,8 +15,6 @@
 # HF_TOKEN
 
 HF_HUB_CACHE_MOUNT="/data"  # Temp solution
-#VLLM_CACHE_MOUNT="/data/.vllm_cache_0925_final/"  # Temp solution
-#-v $VLLM_CACHE_MOUNT:/root/.cache/vllm/ \
 PORT=8888
 
 network_name="bmk-net"
@@ -32,6 +30,7 @@ docker run --rm -d --ipc=host --shm-size=16g --network=$network_name --name=$ser
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
 -e HF_TOKEN -e HF_HUB_CACHE -e MODEL -e TP -e CONC -e MAX_MODEL_LEN -e PORT=$PORT \
+-e ISL -e OSL \
 --entrypoint=/bin/bash \
 $IMAGE \
 benchmarks/"${EXP_NAME%%_*}_${PRECISION}_mi355x_docker.sh"
