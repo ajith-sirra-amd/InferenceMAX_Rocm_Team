@@ -21,8 +21,6 @@ huggingface-cli download $MODEL
 SERVER_LOG=$(mktemp /tmp/server-XXXXXX.log)
 PORT=8888
 
-export HSA_NO_SCRATCH_RECLAIM=1
-export NCCL_MIN_NCHANNELS=112
 export VLLM_ROCM_USE_AITER=1
 export VLLM_USE_AITER_UNIFIED_ATTENTION=1
 export VLLM_ROCM_USE_AITER_MHA=0
