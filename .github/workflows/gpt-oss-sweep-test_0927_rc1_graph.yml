@@ -1,0 +1,28 @@
+name: Test - GPT OSS sweep, MI355X, 0927 (bd781f) rc1 + graph final image 
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_1k1k:
+        type: boolean
+        required: false
+      run_8k1k:
+        type: boolean
+        required: false
+      run_1k8k:
+        type: boolean
+        required: false
+
+      use_mi355x:
+        type: boolean
+        required: false
+
+jobs:
+  gpt-oss-test-run:
+    uses: ./.github/workflows/gpt-oss-sweep-tmpl.yml
+    secrets: inherit
+    with:
+      run_1k1k: ${{ inputs.run_1k1k }}
+      run_8k1k: ${{ inputs.run_8k1k }}
+      run_1k8k: ${{ inputs.run_1k8k }}
+      use_mi355x: ${{ inputs.use_mi355x }}
