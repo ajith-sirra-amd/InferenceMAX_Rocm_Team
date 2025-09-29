@@ -15,7 +15,7 @@
 # HF_TOKEN
 
 HF_HUB_CACHE_MOUNT="/data"  # Temp solution
-VLLM_CACHE_MOUNT="/data/.vllm_cache_0927_rc1/"  # Temp solution
+VLLM_CACHE_MOUNT="/data/.vllm_cache_0927_rc1_graph/"  # Temp solution
 PORT=8888
 
 network_name="bmk-net"
