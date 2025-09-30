@@ -14,7 +14,20 @@
 # RESULT_FILENAME
 # HF_TOKEN
 
-HF_HUB_CACHE_MOUNT="/nfsdata/hf_hub_cache-1/"  # Temp solution
+# CUSTOM
+for CONTAINER_NAME in $server_name; do
+    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
+    if [ $running_container ]; then
+        echo "Terminating the already running $CONTAINER_NAME container"
+        docker stop $CONTAINER_NAME
+        sleep 5
+        docker rm $CONTAINER_NAME
+        sleep 5
+        docker network rm $network_name
+    fi
+done
+
+HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
 PORT=8888
 
 network_name="bmk-net"

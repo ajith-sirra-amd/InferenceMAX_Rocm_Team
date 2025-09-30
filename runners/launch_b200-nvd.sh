@@ -1,6 +1,19 @@
 #!/usr/bin/bash
 
-HF_HUB_CACHE_MOUNT="/raid/hf_hub_cache/"
+# CUSTOM
+for CONTAINER_NAME in $server_name; do
+    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
+    if [ $running_container ]; then
+        echo "Terminating the already running $CONTAINER_NAME container"
+        docker stop $CONTAINER_NAME
+        sleep 5
+        docker rm $CONTAINER_NAME
+        sleep 5
+        docker network rm $network_name
+    fi
+done
+
+HF_HUB_CACHE_MOUNT="/mnt/nvme7n1/"
 FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
 PORT=8888
 
