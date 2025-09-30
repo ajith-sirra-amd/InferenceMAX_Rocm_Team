@@ -17,7 +17,7 @@
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
 if [[ "$FRAMEWORK" == "vllm_dsr1" ]]; then
     DEVICE_FRAMEWORK_SUFFIX="mi355xvllm_dsr1"
-else; then
+else
     DEVICE_FRAMEWORK_SUFFIX="mi355x"
 fi
 
