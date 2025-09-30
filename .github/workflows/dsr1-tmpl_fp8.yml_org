@@ -86,7 +86,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: mi355x
+      runner: m10-33
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
