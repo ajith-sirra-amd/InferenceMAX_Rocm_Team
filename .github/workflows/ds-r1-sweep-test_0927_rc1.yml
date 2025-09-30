@@ -1,4 +1,4 @@
-name: Test - GPT OSS sweep, MI355X, 0927 (bd781f) rc1 final image 
+name: Test - DeepSeek R1 sweep, MI355X/B200, best vs best, 0927 (bd781f) rc1 image 
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ on:
 
 jobs:
   gpt-oss-test-run:
-    uses: ./.github/workflows/gpt-oss-sweep-tmpl.yml
+    uses: ./.github/workflows/dsr1-sweep-tmpl.yml
     secrets: inherit
     with:
       run_1k1k: ${{ inputs.run_1k1k }}

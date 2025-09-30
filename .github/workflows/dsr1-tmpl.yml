@@ -1,0 +1,133 @@
+name: Template - DeepSeek R1
+
+on:
+  workflow_call:
+    inputs:
+      exp-name:
+        required: true
+        type: string
+      isl:
+        required: true
+        type: string
+      osl:
+        required: true
+        type: string
+      max-model-len:
+        required: true
+        type: string
+      random-range-ratio:
+        required: true
+        type: string
+
+      use_b200:
+        type: boolean
+        required: true
+      use_mi355x:
+        type: boolean
+        required: true
+
+jobs:
+  bmk-b200-fp8:
+    if: ${{ inputs.use_b200 }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: shaderform-10
+      image: 'lmsysorg/sglang:v0.5.3rc1-cu129-b200'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
+  bmk-b200-trt-fp8:
+    if: ${{ inputs.use_b200 }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: shaderform-10
+      image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'trt'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
+  bmk-mi355x-fp8:
+    if: ${{ inputs.use_mi355x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: m10-33
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
+  bmk-b200-fp4:
+    if: ${{ inputs.use_b200 }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: shaderform-10
+      image: 'lmsysorg/sglang:v0.5.3rc1-cu129-b200'
+      model: 'nvidia/DeepSeek-R1-0528-FP4'
+      framework: 'sglang'
+      precision: 'fp4'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[4,8]'
+      conc-list: '[4, 8, 16, 32, 64, 128]'  # Custom concurrency values for this job
+
+  bmk-b200-trt-fp4:
+    if: ${{ inputs.use_b200 }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: shaderform-10
+      image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
+      model: 'nvidia/DeepSeek-R1-0528-FP4-v2'
+      framework: 'trt'
+      precision: fp4
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[4, 8]'
+      conc-list: '[4, 8, 16, 32, 64, 128, 256]'  # DPA4EP4 is already 30 tok/s/user and DPA8EP8 is already 35tok/s/user. 512 conc would be too much so we skipping it
+
+  bmk-mi355x-fp4:
+    if: ${{ inputs.use_mi355x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: m10-33
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
+      framework: 'sglang'
+      precision: 'fp4'
+      model: 'amd/DeepSeek-R1-0528-MXFP4-Preview'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[4, 8]'
+
