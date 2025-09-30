@@ -15,7 +15,11 @@
 # HF_TOKEN
 
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
-FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "vllm_ds1" ]] && printf '_vllm_ds1' || printf '')
+if [[ "$FRAMEWORK" == "vllm_dsr1" ]]; then
+    FRAMEWORK_SUFFIX="vllm_dsr1"
+fi
+
+echo $FRAMEWORK_SUFFIX
 PORT=8888
 
 network_name="bmk-net"
