@@ -19,7 +19,6 @@ if [[ "$FRAMEWORK" == "vllm_dsr1" ]]; then
     DEVICE_FRAMEWORK_SUFFIX="mi355xvllm_dsr1"
 else; then
     DEVICE_FRAMEWORK_SUFFIX="mi355x"
-mi355x$
 fi
 
 echo $DEVICE_FRAMEWORK_SUFFIX
