@@ -15,13 +15,14 @@
 # HF_TOKEN
 
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
-if [[ "$FRAMEWORK" == "vllm_dsr1" ]]; then
-    DEVICE_FRAMEWORK_SUFFIX="mi355xvllm_dsr1"
-else
-    DEVICE_FRAMEWORK_SUFFIX="mi355x"
-fi
 
-echo $DEVICE_FRAMEWORK_SUFFIX
+if [[ "$FRAMEWORK" == "vllm_dsr1" ]]; then
+    FRAMEWORK_SUFFIX="vllm_dsr1"
+else
+    FRAMEWORK_SUFFIX=""
+fi
+echo $FRAMEWORK_SUFFIX
+
 PORT=8888
 
 network_name="bmk-net"
@@ -53,7 +54,7 @@ docker run --rm -d --ipc=host --shm-size=16g --network=$network_name --name=$ser
 -e ISL -e OSL \
 --entrypoint=/bin/bash \
 $IMAGE \
-benchmarks/"${EXP_NAME%%_*}_${PRECISION}_${DEVICE_FRAMEWORK_SUFFIX}_docker.sh"
+benchmarks/"${EXP_NAME%%_*}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}_docker.sh"
 
 set +x
 while IFS= read -r line; do
