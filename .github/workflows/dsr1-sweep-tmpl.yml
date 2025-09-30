@@ -23,7 +23,7 @@ on:
 jobs:
   dsr1-1k1k:
     if: ${{ inputs.run_1k1k }}
-    uses: ./.github/workflows/dsr1-tmpl.yml
+    uses: ./.github/workflows/dsr1-tmpl_fp8.yml
     secrets: inherit
     with:
       exp-name: 'dsr1_1k1k'
