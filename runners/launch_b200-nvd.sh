@@ -1,5 +1,17 @@
 #!/usr/bin/bash
 
+
+HF_HUB_CACHE_MOUNT="/mnt/nvme7n1/"
+FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
+PORT=8888
+
+# Create unique cache directory based on model parameters
+MODEL_NAME=$(basename "$MODEL")
+CACHE_DIR="/raid/flashinfer_cache/${MODEL_NAME}_${PRECISION}${FRAMEWORK_SUFFIX}_isl${ISL}_osl${OSL}_tp${TP}_conc${CONC}"
+
+server_name="bmk-server"
+client_name="bmk-client"
+
 # CUSTOM
 for CONTAINER_NAME in $server_name; do
     running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
@@ -12,17 +24,6 @@ for CONTAINER_NAME in $server_name; do
         docker network rm $network_name
     fi
 done
-
-HF_HUB_CACHE_MOUNT="/mnt/nvme7n1/"
-FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
-PORT=8888
-
-# Create unique cache directory based on model parameters
-MODEL_NAME=$(basename "$MODEL")
-CACHE_DIR="/raid/flashinfer_cache/${MODEL_NAME}_${PRECISION}${FRAMEWORK_SUFFIX}_isl${ISL}_osl${OSL}_tp${TP}_conc${CONC}"
-
-server_name="bmk-server"
-client_name="bmk-client"
 
 nvidia-smi
 

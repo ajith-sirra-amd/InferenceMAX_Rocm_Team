@@ -14,6 +14,13 @@
 # RESULT_FILENAME
 # HF_TOKEN
 
+HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
+PORT=8888
+
+network_name="bmk-net"
+server_name="bmk-server"
+client_name="bmk-client"
+
 # CUSTOM
 for CONTAINER_NAME in $server_name; do
     running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
@@ -26,13 +33,6 @@ for CONTAINER_NAME in $server_name; do
         docker network rm $network_name
     fi
 done
-
-HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
-PORT=8888
-
-network_name="bmk-net"
-server_name="bmk-server"
-client_name="bmk-client"
 
 docker network create $network_name
 
