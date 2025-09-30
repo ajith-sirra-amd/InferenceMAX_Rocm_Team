@@ -69,7 +69,7 @@ jobs:
     secrets: inherit
     with:
       runner: m10-33
-      image: 'rocm/pytorch-private:vllm_85_rocm7.0_aiter_0927_bd781f_latest_rccl'
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'vllm_dsr1'
       precision: 'fp8'

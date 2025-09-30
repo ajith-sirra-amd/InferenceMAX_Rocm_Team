@@ -1,4 +1,4 @@
-name: Template - gpt-oss
+name: Template - DeepSeek R1
 
 on:
   workflow_call:
@@ -27,53 +27,56 @@ on:
         required: true
 
 jobs:
-  bmk-b200:
+  bmk-b200-fp8:
     if: ${{ inputs.use_b200 }}
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      exp-name: ${{ inputs.exp-name }}
-      isl: ${{ inputs.isl }}
-      osl: ${{ inputs.osl }}
-      max-model-len: ${{ inputs.max-model-len }}
-      random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: shaderform-10
-      image: 'vllm/vllm-openai:v0.10.2'
-      model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 2, 4, 8]'
-      framework: 'vllm'
-      precision: 'fp4'
-
-  bmk-b200-trt:
-    if: ${{ inputs.use_b200 }}
-    uses: ./.github/workflows/benchmark-tmpl.yml
-    secrets: inherit
-    with:
+      image: 'lmsysorg/sglang:v0.5.3rc1-cu129-b200'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
+      precision: 'fp8'
       exp-name: ${{ inputs.exp-name }}
       isl: ${{ inputs.isl }}
       osl: ${{ inputs.osl }}
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]'  
+
+  bmk-b200-trt-fp8:
+    if: ${{ inputs.use_b200 }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
       runner: shaderform-10
       image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
-      model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 2, 4, 8]'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'trt'
-      precision: 'fp4'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]'  
 
-  bmk-mi355x:
+  bmk-mi355x_vllm_dsr1-fp8:
     if: ${{ inputs.use_mi355x }}
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
+      runner: m10-33
+      image: 'rocm/pytorch-private:vllm_85_rocm7.0_aiter_0927_bd781f_latest_rccl'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'vllm_dsr1'
+      precision: 'fp8'
       exp-name: ${{ inputs.exp-name }}
       isl: ${{ inputs.isl }}
       osl: ${{ inputs.osl }}
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
-      runner: m10-33
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
-      model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 2, 4, 8]'
-      framework: 'vllm'
-      precision: 'fp4'
+      tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]'  
