@@ -34,7 +34,7 @@ jobs:
       osl: ${{ inputs.osl }}
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
-      runner: mi355x-amd
+      runner: m10-33
       image: 'rocm/pytorch-private:vllm_85_rocm7.0_aiter_0927_bd781f_latest_rccl'
       model: 'openai/gpt-oss-120b'
       tp-list: '[8]'
