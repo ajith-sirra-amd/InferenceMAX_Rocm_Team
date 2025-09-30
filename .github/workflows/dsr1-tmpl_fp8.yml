@@ -63,24 +63,6 @@ jobs:
       tp-list: '[8]'
       conc-list: '[4, 8, 16, 32, 64]'  
 
-  bmk-mi355x-fp8:
-    if: ${{ inputs.use_mi355x }}
-    uses: ./.github/workflows/benchmark-tmpl.yml
-    secrets: inherit
-    with:
-      runner: m10-33
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
-      model: 'deepseek-ai/DeepSeek-R1-0528'
-      framework: 'sglang'
-      precision: 'fp8'
-      exp-name: ${{ inputs.exp-name }}
-      isl: ${{ inputs.isl }}
-      osl: ${{ inputs.osl }}
-      max-model-len: ${{ inputs.max-model-len }}
-      random-range-ratio: ${{ inputs.random-range-ratio }}
-      tp-list: '[8]'
-      conc-list: '[4, 8, 16, 32, 64]'  
-
   bmk-mi355x_vllm_dsr1-fp8:
     if: ${{ inputs.use_mi355x }}
     uses: ./.github/workflows/benchmark-tmpl.yml
