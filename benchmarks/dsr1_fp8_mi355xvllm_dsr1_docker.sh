@@ -22,7 +22,7 @@ max_num_batched_tokens=131072  # Smaller values may result in better TTFT but wo
 
 vllm serve $MODEL \
     --host=0.0.0.0 \
-    --port 8000 \
+    --port $PORT \
     --swap-space 64 \
     --tensor-parallel-size $TP \
     --max-num-seqs ${max_num_seqs} \
