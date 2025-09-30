@@ -9,6 +9,12 @@
 # CONC
 # MAX_MODEL_LEN
 
+nvidia-smi
+
+sed -i '102,108d' /usr/local/lib/python3.12/dist-packages/flashinfer/jit/cubin_loader.py
+
+
+
 FUSION_FLAG='{'\
 '"pass_config": {"enable_fi_allreduce_fusion": true, "enable_attn_fusion": true, "enable_noop": true},'\
 '"custom_ops": ["+quant_fp8", "+rms_norm"],'\
@@ -34,5 +40,5 @@ vllm serve $MODEL --host=0.0.0.0 --port=$PORT \
 --gpu-memory-utilization=0.9 \
 --tensor-parallel-size=$TP \
 --max-num-seqs=512 \
---config=config.yaml \
+--config config.yaml \
 --disable-log-requests

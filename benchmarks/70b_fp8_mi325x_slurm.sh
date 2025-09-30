@@ -24,30 +24,23 @@ PORT=$(( 8888 + $PORT_OFFSET ))
 # Reference
 # https://rocm.docs.amd.com/en/docs-7.0-rc1/preview/benchmark-docker/inference-vllm-llama-3.3-70b-fp8.html#run-the-inference-benchmark
 
-export VLLM_USE_V1=1
-export VLLM_V1_USE_PREFILL_DECODE_ATTENTION=1
-export AMDGCN_USE_BUFFER_OPS=1
-export VLLM_USE_AITER_TRITON_ROPE=1
-export TRITON_HIP_ASYNC_COPY_BYPASS_PERMUTE=1
-export TRITON_HIP_USE_ASYNC_COPY=1
-export TRITON_HIP_USE_BLOCK_PINGPONG=1
-export TRITON_HIP_ASYNC_FAST_SWIZZLE=1
-export VLLM_ROCM_USE_AITER=1
-export VLLM_ROCM_USE_AITER_RMSNORM=1
-
-if [[ "$isl" == "1024" && "$osl" == "1024" ]]; then
+if [[ "$ISL" == "1024" && "$OSL" == "1024" ]]; then
     export VLLM_ROCM_USE_AITER_MHA=0
-elif [[ "$isl" == "1024" && "$osl" == "8192" ]]; then
+elif [[ "$ISL" == "1024" && "$OSL" == "8192" ]]; then
     export VLLM_ROCM_USE_AITER_MHA=0
-elif [[ "$isl" == "8192" && "$osl" == "1024" ]]; then
-    export VLLM_ROCM_USE_AITER_MHA=1
+elif [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
+	if [[ "$CONC" -gt "16" ]]; then
+		export VLLM_ROCM_USE_AITER_MHA=1
+	fi
 fi
 
+# In this specific case, float16 performs better than the datatype
+# picked by vllm when using auto for --dtype (bfloat16).
 set -x
 vllm serve $MODEL --port=$PORT \
 --swap-space=64 \
 --gpu-memory-utilization=0.94 \
---dtype=auto --kv-cache-dtype=fp8 \
+--dtype=float16 --kv-cache-dtype=fp8 \
 --distributed-executor-backend=mp --tensor-parallel-size=$TP \
 --max-model-len=$MAX_MODEL_LEN \
 --max-seq-len-to-capture=$MAX_MODEL_LEN \

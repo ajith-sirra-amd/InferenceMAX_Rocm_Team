@@ -16,6 +16,7 @@ docker run --rm -d --ipc=host --shm-size=16g --network=$network_name --name=$ser
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
 -e HF_TOKEN -e HF_HUB_CACHE -e MODEL -e TP -e CONC -e MAX_MODEL_LEN -e PORT=$PORT \
+-e ISL -e OSL \
 --entrypoint=/bin/bash \
 $IMAGE \
 benchmarks/"${EXP_NAME%%_*}_${PRECISION}_mi300x_docker.sh"
@@ -46,8 +47,21 @@ bench_serving/benchmark_serving.py \
 --save-result --percentile-metrics="ttft,tpot,itl,e2el" \
 --result-dir=/workspace/ --result-filename=$RESULT_FILENAME.json
 
-while [ -n "$(docker ps -aq)" ]; do
-    docker stop $server_name
-    docker network rm $network_name
-    sleep 5
+#while [ -n "$(docker ps -aq)" ]; do
+#    docker stop $server_name
+#    docker network rm $network_name
+#    sleep 5
+#done
+
+# CUSTOM
+for CONTAINER_NAME in $server_name; do
+    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
+    if [ $running_container ]; then
+        echo "Terminating the already running $CONTAINER_NAME container"
+        docker stop $CONTAINER_NAME
+        sleep 5
+        docker rm $CONTAINER_NAME
+        sleep 5
+        docker network rm $network_name
+    fi
 done
