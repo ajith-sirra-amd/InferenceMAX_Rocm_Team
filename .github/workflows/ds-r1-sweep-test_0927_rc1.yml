@@ -21,7 +21,7 @@ on:
         required: false
 
 jobs:
-  gpt-oss-test-run:
+  ds-r1-test-run:
     uses: ./.github/workflows/dsr1-sweep-tmpl.yml
     secrets: inherit
     with:

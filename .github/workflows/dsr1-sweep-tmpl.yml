@@ -44,7 +44,7 @@ jobs:
 
   dsr1-8k1k:
     if: ${{ inputs.run_8k1k }}
-    uses: ./.github/workflows/dsr1-tmpl.yml
+    uses: ./.github/workflows/dsr1-tmpl_fp8.yml
     secrets: inherit
     with:
       exp-name: 'dsr1_8k1k'
@@ -65,7 +65,7 @@ jobs:
 
   dsr1-1k8k:
     if: ${{ inputs.run_1k8k }}
-    uses: ./.github/workflows/dsr1-tmpl.yml
+    uses: ./.github/workflows/dsr1-tmpl_fp8.yml
     secrets: inherit
     with:
       exp-name: 'dsr1_1k8k'
