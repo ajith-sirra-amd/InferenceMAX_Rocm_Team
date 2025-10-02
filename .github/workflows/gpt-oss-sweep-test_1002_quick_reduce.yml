@@ -19,7 +19,7 @@ on:
 
 jobs:
   gpt-oss-test-run:
-    uses: ./.github/workflows/gpt-oss-sweep-tmpl.yml
+    uses: ./.github/workflows/gpt-oss-sweep-tmpl_quick_reduce.yml
     secrets: inherit
     with:
       run_1k1k: ${{ inputs.run_1k1k }}
