@@ -1,4 +1,4 @@
-name: Test - GPT OSS sweep, MI355X, 0927 (bd781f) rc1 final image
+name: Test - GPT OSS sweep, MI355X, 0927 (bd781f) rc1 final image + quick reduce
 
 on:
   workflow_dispatch:
