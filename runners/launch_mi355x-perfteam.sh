@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 
 # === Workflow-defined Env Vars ===
 # IMAGE
@@ -51,6 +51,7 @@ docker run --rm --network=$network_name --name=$client_name \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -e HF_HUB_CACHE -e HF_HUB_OFFLINE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
+-v $RESULTS_DIR:/results/ \
 -e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
 --entrypoint=python3 \
 $IMAGE \
@@ -62,15 +63,13 @@ bench_serving/benchmark_serving.py \
 --max-concurrency=$CONC \
 --request-rate=inf --ignore-eos \
 --save-result --percentile-metrics="ttft,tpot,itl,e2el" \
---result-dir=/workspace/ --result-filename=$RESULT_FILENAME.json
+--result-dir=/results/ --result-filename=$RESULT_FILENAME.json
 
 if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
   rm -f gpucore.*
 fi
 
-
-#while [ -n "$(docker ps -aq)" ]; do
 while [ -n "$(docker ps -a | grep -v -e "^CONTAINER" -e node-exporter.service -e amd-smi-exporter | cut -d ' ' -f 1)" ]; do
     docker stop $server_name
     docker network rm $network_name

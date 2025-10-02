@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
-HF_HUB_CACHE_MOUNT="/data/huggingface-cache/hub"
 FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
+HF_HUB_CACHE_MOUNT=/data/huggingface-cache/hub
 PORT=8888
 
 server_name="bmk-server"
@@ -34,6 +34,7 @@ docker run --rm --network host --name $client_name \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -e HF_HUB_CACHE -e HF_HUB_OFFLINE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
+-v $RESULTS_DIR:/results/ \
 -e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
 --entrypoint=/bin/bash \
 $(echo "$IMAGE" | sed 's/#/\//') \
@@ -46,7 +47,7 @@ python3 bench_serving/benchmark_serving.py \
 --max-concurrency $CONC \
 --request-rate inf --ignore-eos \
 --save-result --percentile-metrics 'ttft,tpot,itl,e2el' \
---result-dir /workspace/ --result-filename $RESULT_FILENAME.json"
+--result-dir /results/ --result-filename $RESULT_FILENAME.json"
 
 
 #while [ -n "$(docker ps -aq)" ]; do
