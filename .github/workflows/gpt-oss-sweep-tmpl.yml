@@ -23,7 +23,7 @@ on:
 jobs:
   gptoss-1k1k:
     if: ${{ inputs.run_1k1k }}
-    uses: ./.github/workflows/gptoss-tmpl_quick_reduce.yml
+    uses: ./.github/workflows/gptoss-tmpl.yml
     secrets: inherit
     with:
       exp-name: 'gptoss_1k1k'
@@ -44,7 +44,7 @@ jobs:
 
   gptoss-8k1k:
     if: ${{ inputs.run_8k1k }}
-    uses: ./.github/workflows/gptoss-tmpl_quick_reduce.yml
+    uses: ./.github/workflows/gptoss-tmpl.yml
     secrets: inherit
     with:
       exp-name: 'gptoss_8k1k'
@@ -65,7 +65,7 @@ jobs:
 
   gptoss-1k8k:
     if: ${{ inputs.run_1k8k }}
-    uses: ./.github/workflows/gptoss-tmpl_quick_reduce.yml
+    uses: ./.github/workflows/gptoss-tmpl.yml
     secrets: inherit
     with:
       exp-name: 'gptoss_1k8k'
