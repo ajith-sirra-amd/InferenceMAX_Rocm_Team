@@ -4,11 +4,8 @@ HF_HUB_CACHE_MOUNT="/data/huggingface-cache/hub"
 FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
 PORT=8888
 
-network_name="bmk-net"
 server_name="bmk-server"
 client_name="bmk-client"
-
-docker network create $network_name
 
 set -x
 docker run --rm -d --network host --name $server_name \
@@ -17,6 +14,7 @@ docker run --rm -d --network host --name $server_name \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
 -e HF_TOKEN -e HF_HUB_CACHE -e MODEL -e TP -e CONC -e MAX_MODEL_LEN -e ISL -e OSL -e PORT=$PORT \
 -e TORCH_CUDA_ARCH_LIST="10.0" -e CUDA_DEVICE_ORDER=PCI_BUS_ID -e CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
+-e HF_HUB_OFFLINE=1 \
 --entrypoint=/bin/bash \
 $(echo "$IMAGE" | sed 's/#/\//') \
 benchmarks/"${EXP_NAME%%_*}_${PRECISION}_b200${FRAMEWORK_SUFFIX}_docker.sh"
@@ -33,6 +31,8 @@ git clone https://github.com/kimbochen/bench_serving.git
 
 set -x
 docker run --rm --network host --name $client_name \
+-v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
+-e HF_HUB_CACHE -e HF_HUB_OFFLINE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
 -e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
 --entrypoint=/bin/bash \
@@ -48,27 +48,22 @@ python3 bench_serving/benchmark_serving.py \
 --save-result --percentile-metrics 'ttft,tpot,itl,e2el' \
 --result-dir /workspace/ --result-filename $RESULT_FILENAME.json"
 
-if ls gpucore.* 1> /dev/null 2>&1; then
-  echo "gpucore files exist. not good"
-  rm -f gpucore.*
-fi
 
-
-while [ -n "$(docker ps -aq)" ]; do
-    docker stop $server_name
-    docker network rm $network_name
-    sleep 5
-done
+#while [ -n "$(docker ps -aq)" ]; do
+#    docker stop $server_name
+#    docker network rm $network_name
+#    sleep 5
+#done
 
 # CUSTOM
-#for CONTAINER_NAME in $server_name; do
-#    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
-#    if [ $running_container ]; then
-#        echo "Terminating the already running $CONTAINER_NAME container"
-#        docker stop $CONTAINER_NAME
-#        sleep 5
-#        docker rm $CONTAINER_NAME
-#        sleep 5
-#        docker network rm $network_name
-#    fi
-#done
+for CONTAINER_NAME in $server_name; do
+    running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
+    if [ $running_container ]; then
+        echo "Terminating the already running $CONTAINER_NAME container"
+        docker stop $CONTAINER_NAME
+        sleep 5
+        docker rm $CONTAINER_NAME
+        #sleep 5
+        #docker network rm $network_name
+    fi
+done
