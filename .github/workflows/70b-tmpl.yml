@@ -36,6 +36,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi300x-amd
+      runner-script: 'launch_mi300x-amd.sh'
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
       framework: 'vllm'
@@ -54,6 +55,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi325x-amd
+      runner-script: 'launch_mi325x-amd.sh'
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
       framework: 'vllm'
@@ -72,6 +74,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x-amd
+      runner-script: 'launch_mi355x-amd.sh'
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
       framework: 'vllm'
