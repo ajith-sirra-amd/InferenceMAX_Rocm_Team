@@ -21,7 +21,7 @@ on:
 
       use_b200:
         type: boolean
-        required: true
+        required: false
       use_mi355x:
         type: boolean
         required: true
@@ -74,6 +74,6 @@ jobs:
       runner: m10-33
       image: 'rocm/pytorch-private:rocm7.0_vllm0.10.1_instinct_20250927_rc1_quick_reduce_update'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 2, 4, 8]'
+      tp-list: '[8]'
       framework: 'vllm'
       precision: 'fp4'
