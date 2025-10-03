@@ -1,21 +1,23 @@
 #!/bin/bash
 # Note: This script should be run from the InferenceMAX directory, e.g. run-scripts/run-all-mi355x.sh
 
-export RUNNER=b200-perfteam
+export RUNNER=b200-perfteam-profile
 export HF_HUB_CACHE=/data/huggingface-cache/hub
 export HF_HUB_OFFLINE=1
 export MODEL=nvidia/Llama-3.3-70B-Instruct-FP4
 export RANDOM_RANGE_RATIO=0.8
-export IMAGE=vllm/vllm-openai:v0.10.2
-export FRAMEWORK=vllm
+export IMAGE=nvcr.io/nvidia/tensorrt-llm/release:1.1.0rc2.post2
+export FRAMEWORK=trt
 export INFERENCEMAX_HOME=$(pwd)
 export GITHUB_WORKSPACE=${INFERENCEMAX_HOME}
 export RESULTS_BASE_DIR="${HOME}/inferencemax_results/results_$(date +%Y%m%d%H%M%S)"
+export PROFILE_BASE_DIR="${RESULTS_BASE_DIR}/profiles"
 
 mkdir -p ${RESULTS_BASE_DIR}
+mkdir -p ${PROFILE_BASE_DIR}
 
 models=("70b fp4 nvidia/Llama-3.3-70B-Instruct-FP4")
-seqlens=("1024 1024" "1024 8192" "8192 1024")
+seqlens=("1024 1024")
 
 for model in "${models[@]}"; do
 	set -- $model
@@ -37,6 +39,8 @@ for model in "${models[@]}"; do
 			for CONC in 4 8 16 32 64; do
 				export CONC
 				export RESULT_FILENAME="${EXP_NAME}_${PRECISION}_${FRAMEWORK}_tp${TP}_conc${CONC}_${RUNNER}"
+				export PROFILE_DIR="${PROFILE_BASE_DIR}/${EXP_NAME}_${ISL}_${OSL}/${RESULT_FILENAME}"
+				mkdir -p ${PROFILE_DIR}
 				bash ./runners/launch_${RUNNER}.sh
 				echo "RESULT_FILENAME=${RESULT_FILENAME}"
 				pushd ${RESULTS_DIR}
