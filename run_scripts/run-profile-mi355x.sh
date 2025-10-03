@@ -41,7 +41,7 @@ for model in "${models[@]}"; do
 			for CONC in 4 8 16 32 64; do
 				export CONC
 				export RESULT_FILENAME="${EXP_NAME}_${PRECISION}_${FRAMEWORK}_tp${TP}_conc${CONC}_${RUNNER}"
-				export PROFILE_DIR="${PROFILE_BASE_DIR}/${RESULT_FILENAME}"
+				export PROFILE_DIR="${PROFILE_BASE_DIR}/${EXP_NAME}_${ISL}_${OSL}/${RESULT_FILENAME}"
 				mkdir -p ${PROFILE_DIR}
 				bash ./runners/launch_${RUNNER}.sh
 				echo "RESULT_FILENAME=${RESULT_FILENAME}"
