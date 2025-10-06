@@ -34,6 +34,19 @@ on:
         type: boolean
         required: true
 
+      use_h100:
+        type: boolean
+        required: false
+        default: false
+      use_h200:
+        type: boolean
+        required: false
+        default: false
+      use_b200:
+        type: boolean
+        required: false
+        default: false
+
 jobs:
   bmk-mi300x-amd-fp8:
     if: ${{ inputs.use_mi300x }}
@@ -82,6 +95,61 @@ jobs:
       runner-script: 'launch_mi355x-amd.sh'
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
+      framework: 'vllm'
+      precision: ${{ inputs.precision }}
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]'
+
+  bmk-h100:
+    if: ${{ inputs.use_h100 && inputs.precision == 'fp8' }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: h100-cw
+      image: 'vllm/vllm-openai:v0.10.2'
+      model: 'meta-llama/Llama-3.3-70B-Instruct'
+      framework: 'vllm'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]'
+
+  bmk-h200:
+    if: ${{ inputs.use_h200 && inputs.precision == 'fp8' }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: h200-nv
+      image: 'vllm/vllm-openai:v0.10.2'
+      model: 'meta-llama/Llama-3.3-70B-Instruct'
+      framework: 'vllm'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]'
+
+  bmk-b200:
+    if: ${{ inputs.use_b200 }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: b200-nvd
+      runner-script: 'launch_b200-nvd.sh'
+      image: 'vllm/vllm-openai:v0.10.2'
+      model: 'meta-llama/Llama-3.3-70B-Instruct'
       framework: 'vllm'
       precision: ${{ inputs.precision }}
       exp-name: ${{ inputs.exp-name }}

@@ -23,6 +23,19 @@ on:
         type: boolean
         required: true
 
+      use_h100:
+        type: boolean
+        required: false
+        default: false
+      use_h200:
+        type: boolean
+        required: false
+        default: false
+      use_b200:
+        type: boolean
+        required: false
+        default: false
+
       precision:
         type: string
         required: false
@@ -43,6 +56,9 @@ jobs:
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
+      use_h100: ${{ inputs.use_h100 }}
+      use_h200: ${{ inputs.use_h200 }}
+      use_b200: ${{ inputs.use_b200 }}
 
   collect-llama70b-1k1k-results:
     needs: llama70b-1k1k
@@ -66,6 +82,9 @@ jobs:
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
+      use_h100: ${{ inputs.use_h100 }}
+      use_h200: ${{ inputs.use_h200 }}
+      use_b200: ${{ inputs.use_b200 }}
 
   collect-llama70b-8k1k-results:
     needs: llama70b-8k1k
@@ -89,6 +108,9 @@ jobs:
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
+      use_h100: ${{ inputs.use_h100 }}
+      use_h200: ${{ inputs.use_h200 }}
+      use_b200: ${{ inputs.use_b200 }}
 
   collect-llama70b-1k8k-results:
     needs: llama70b-1k8k
