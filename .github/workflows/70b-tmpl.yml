@@ -19,6 +19,11 @@ on:
         required: true
         type: string
 
+      precision:
+        type: string
+        required: false
+        default: 'fp8'
+
       use_mi300x:
         type: boolean
         required: true
@@ -40,7 +45,7 @@ jobs:
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
       framework: 'vllm'
-      precision: 'fp8'
+      precision: ${{ inputs.precision }}
       exp-name: ${{ inputs.exp-name }}
       isl: ${{ inputs.isl }}
       osl: ${{ inputs.osl }}
@@ -59,7 +64,7 @@ jobs:
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
       framework: 'vllm'
-      precision: 'fp8'
+      precision: ${{ inputs.precision }}
       exp-name: ${{ inputs.exp-name }}
       isl: ${{ inputs.isl }}
       osl: ${{ inputs.osl }}
@@ -78,7 +83,7 @@ jobs:
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
       framework: 'vllm'
-      precision: 'fp8'
+      precision: ${{ inputs.precision }}
       exp-name: ${{ inputs.exp-name }}
       isl: ${{ inputs.isl }}
       osl: ${{ inputs.osl }}

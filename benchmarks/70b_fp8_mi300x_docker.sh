@@ -22,8 +22,6 @@ if [[ "$version" == "" || $version -lt 177 ]]; then
   export HSA_NO_SCRATCH_RECLAIM=1
 fi
 
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
-
 if [[ "$ISL" == "1024" && "$OSL" == "1024" ]]; then
     export VLLM_ROCM_USE_AITER_MHA=0
 elif [[ "$ISL" == "1024" && "$OSL" == "8192" ]]; then
