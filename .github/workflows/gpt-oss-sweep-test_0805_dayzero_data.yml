@@ -13,6 +13,9 @@ on:
         type: boolean
         required: false
 
+      use_b200:
+        type: boolean
+        required: false
       use_mi355x:
         type: boolean
         required: false
@@ -25,4 +28,6 @@ jobs:
       run_1k1k: ${{ inputs.run_1k1k }}
       run_8k1k: ${{ inputs.run_8k1k }}
       run_1k8k: ${{ inputs.run_1k8k }}
+      use_b200: ${{ inputs.use_b200 }}
       use_mi355x: ${{ inputs.use_mi355x }}
+
