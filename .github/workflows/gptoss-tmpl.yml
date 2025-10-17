@@ -72,7 +72,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: m10-33
-      image: 'rocm/7.0-preview:rocm7.0_preview_pytorch_training_mi35X_alpha'
+      image: 'rocm/vllm-dev:open-mi355-08052025'
       model: 'openai/gpt-oss-120b'
       tp-list: '[1, 2, 4, 8]'
       conc-list: '[4, 8, 16, 32, 64]'
