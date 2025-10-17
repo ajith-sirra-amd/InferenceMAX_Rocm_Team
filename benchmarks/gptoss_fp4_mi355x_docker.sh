@@ -46,4 +46,10 @@ export TRITON_HIP_PRESHUFFLE_SCALES=1
 
 set -x
 
-vllm serve openai/gpt-oss-120b --compilation-config '{"compile_sizes": [1, 2, 4, 8, 16, 24, 32, 64, 128, 256, 4096, 8192], "full_cuda_graph": true}' --block-size 64
+vllm serve $MODEL --port $PORT \
+--tensor-parallel-size=$TP \
+--gpu-memory-utilization 0.95 \
+--max-model-len $MAX_MODEL_LEN \
+--max-seq-len-to-capture $MAX_MODEL_LEN \
+--compilation-config '{"compile_sizes": [1, 2, 4, 8, 16, 24, 32, 64, 128, 256, 4096, 8192], "full_cuda_graph": true}' --block-size 64 --no-enable-prefix-caching 
+
