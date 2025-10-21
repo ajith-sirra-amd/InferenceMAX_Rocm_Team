@@ -1,0 +1,308 @@
+name: GPT OSS Accuracy Sweep (MI355X) - 20251021
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_1k1k:
+        description: 'Run 1k/1k throughput + accuracy sweep'
+        required: false
+        type: boolean
+        default: true
+      run_8k1k:
+        description: 'Run 8k/1k throughput + accuracy sweep'
+        required: false
+        type: boolean
+        default: false
+      run_1k8k:
+        description: 'Run 1k/8k throughput + accuracy sweep'
+        required: false
+        type: boolean
+        default: false
+      accuracy_model:
+        description: 'Model id to evaluate with lm-eval'
+        required: false
+        type: string
+        default: 'deepseek-ai/DeepSeek-V3.2-Exp'
+      lm_eval_tasks:
+        description: 'Comma-separated lm-eval tasks'
+        required: false
+        type: string
+        default: 'gsm8k'
+      lm_eval_batch_size:
+        description: 'lm-eval batch size override'
+        required: false
+        type: string
+        default: 'auto'
+      lm_eval_num_fewshot:
+        description: 'Number of fewshot examples for lm-eval'
+        required: false
+        type: string
+        default: '5'
+      lm_eval_num_concurrent:
+        description: 'Max concurrent lm-eval requests'
+        required: false
+        type: string
+        default: '256'
+      lm_eval_max_retries:
+        description: 'Max retry attempts for lm-eval'
+        required: false
+        type: string
+        default: '10'
+      lm_eval_max_gen_toks:
+        description: 'Max generation tokens for lm-eval'
+        required: false
+        type: string
+        default: '2048'
+
+jobs:
+  gptoss-1k1k-mi355x-acc:
+    if: ${{ inputs.run_1k1k }}
+    runs-on: m10-33
+    timeout-minutes: 180
+
+    strategy:
+      fail-fast: false
+      matrix:
+        tp: [1, 2, 4, 8]
+        conc: [4, 8, 16, 32, 64]
+
+    env:
+      HF_TOKEN: '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'
+      HF_HUB_CACHE: '/mnt/hf_hub_cache/'
+      EXP_NAME: 'gptoss_1k1k_acc'
+      MODEL: 'openai/gpt-oss-120b'
+      ISL: '1024'
+      OSL: '1024'
+      MAX_MODEL_LEN: '2048'
+      RANDOM_RANGE_RATIO: '0.8'
+      IMAGE: 'rocm/vllm-dev:open-mi355-08052025'
+      FRAMEWORK: 'vllm'
+      PRECISION: 'fp4'
+      TP: ${{ matrix.tp }}
+      CONC: ${{ matrix.conc }}
+      RUN_ACCURACY_TEST: 'true'
+      ACCURACY_MODEL: ${{ inputs.accuracy_model }}
+      LM_EVAL_TASKS: ${{ inputs.lm_eval_tasks }}
+      LM_EVAL_BATCH_SIZE: ${{ inputs.lm_eval_batch_size }}
+      LM_EVAL_NUM_FEWSHOT: ${{ inputs.lm_eval_num_fewshot }}
+      LM_EVAL_NUM_CONCURRENT: ${{ inputs.lm_eval_num_concurrent }}
+      LM_EVAL_MAX_RETRIES: ${{ inputs.lm_eval_max_retries }}
+      LM_EVAL_MAX_GEN_TOKS: ${{ inputs.lm_eval_max_gen_toks }}
+
+    steps:
+      - name: Resource cleanup
+        run: echo "[Docker] Skip Cleaning up resources ..."
+
+      - uses: actions/checkout@v3
+        with:
+          token: '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'
+          fetch-depth: 0
+
+      - name: Launch job script
+        env:
+          RUNNER_NAME: ${{ runner.name }}
+          RESULT_FILENAME: ${{ env.EXP_NAME }}_${{ env.PRECISION }}_${{ env.FRAMEWORK }}_tp${{ env.TP }}_conc${{ env.CONC }}_${{ runner.name }}
+        run: |
+          export LM_EVAL_OUTPUT_BASENAME="VLLM_${EXP_NAME}_tp${TP}_conc${CONC}"
+          bash ./runners/launch_${RUNNER_NAME%%_*}.sh
+          if [ -f "$RESULT_FILENAME.json" ]; then
+            echo "RESULT_FILENAME=${RESULT_FILENAME}" >> "$GITHUB_ENV"
+          else
+            echo "Run failed: Benchmark result $RESULT_FILENAME.json not found." >&2
+            exit 1
+          fi
+
+      - name: Process result
+        run: |
+          python3 utils/process_result.py m10-33 $TP $RESULT_FILENAME $FRAMEWORK $PRECISION
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RESULT_FILENAME }}
+          path: |
+            ${{ env.RESULT_FILENAME }}.json
+            agg_${{ env.RESULT_FILENAME }}.json
+
+      - name: Upload accuracy artifacts
+        if: ${{ env.RUN_ACCURACY_TEST == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: accuracy_${{ env.EXP_NAME }}_tp${{ env.TP }}_conc${{ env.CONC }}
+          path: results_accuracy/
+
+  collect-gptoss-1k1k-acc-results:
+    needs: gptoss-1k1k-mi355x-acc
+    if: ${{ inputs.run_1k1k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_1k1k_acc'
+
+  gptoss-8k1k-mi355x-acc:
+    if: ${{ inputs.run_8k1k }}
+    runs-on: m10-33
+    timeout-minutes: 180
+
+    strategy:
+      fail-fast: false
+      matrix:
+        tp: [1, 2, 4, 8]
+        conc: [4, 8, 16, 32, 64]
+
+    env:
+      HF_TOKEN: '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'
+      HF_HUB_CACHE: '/mnt/hf_hub_cache/'
+      EXP_NAME: 'gptoss_8k1k_acc'
+      MODEL: 'openai/gpt-oss-120b'
+      ISL: '8192'
+      OSL: '1024'
+      MAX_MODEL_LEN: '9216'
+      RANDOM_RANGE_RATIO: '0.8'
+      IMAGE: 'rocm/vllm-dev:open-mi355-08052025'
+      FRAMEWORK: 'vllm'
+      PRECISION: 'fp4'
+      TP: ${{ matrix.tp }}
+      CONC: ${{ matrix.conc }}
+      RUN_ACCURACY_TEST: 'true'
+      ACCURACY_MODEL: ${{ inputs.accuracy_model }}
+      LM_EVAL_TASKS: ${{ inputs.lm_eval_tasks }}
+      LM_EVAL_BATCH_SIZE: ${{ inputs.lm_eval_batch_size }}
+      LM_EVAL_NUM_FEWSHOT: ${{ inputs.lm_eval_num_fewshot }}
+      LM_EVAL_NUM_CONCURRENT: ${{ inputs.lm_eval_num_concurrent }}
+      LM_EVAL_MAX_RETRIES: ${{ inputs.lm_eval_max_retries }}
+      LM_EVAL_MAX_GEN_TOKS: ${{ inputs.lm_eval_max_gen_toks }}
+
+    steps:
+      - name: Resource cleanup
+        run: echo "[Docker] Skip Cleaning up resources ..."
+
+      - uses: actions/checkout@v3
+        with:
+          token: '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'
+          fetch-depth: 0
+
+      - name: Launch job script
+        env:
+          RUNNER_NAME: ${{ runner.name }}
+          RESULT_FILENAME: ${{ env.EXP_NAME }}_${{ env.PRECISION }}_${{ env.FRAMEWORK }}_tp${{ env.TP }}_conc${{ env.CONC }}_${{ runner.name }}
+        run: |
+          export LM_EVAL_OUTPUT_BASENAME="VLLM_${EXP_NAME}_tp${TP}_conc${CONC}"
+          bash ./runners/launch_${RUNNER_NAME%%_*}.sh
+          if [ -f "$RESULT_FILENAME.json" ]; then
+            echo "RESULT_FILENAME=${RESULT_FILENAME}" >> "$GITHUB_ENV"
+          else
+            echo "Run failed: Benchmark result $RESULT_FILENAME.json not found." >&2
+            exit 1
+          fi
+
+      - name: Process result
+        run: |
+          python3 utils/process_result.py m10-33 $TP $RESULT_FILENAME $FRAMEWORK $PRECISION
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RESULT_FILENAME }}
+          path: |
+            ${{ env.RESULT_FILENAME }}.json
+            agg_${{ env.RESULT_FILENAME }}.json
+
+      - name: Upload accuracy artifacts
+        if: ${{ env.RUN_ACCURACY_TEST == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: accuracy_${{ env.EXP_NAME }}_tp${{ env.TP }}_conc${{ env.CONC }}
+          path: results_accuracy/
+
+  collect-gptoss-8k1k-acc-results:
+    needs: gptoss-8k1k-mi355x-acc
+    if: ${{ inputs.run_8k1k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_8k1k_acc'
+
+  gptoss-1k8k-mi355x-acc:
+    if: ${{ inputs.run_1k8k }}
+    runs-on: m10-33
+    timeout-minutes: 180
+
+    strategy:
+      fail-fast: false
+      matrix:
+        tp: [1, 2, 4, 8]
+        conc: [4, 8, 16, 32, 64]
+
+    env:
+      HF_TOKEN: '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'
+      HF_HUB_CACHE: '/mnt/hf_hub_cache/'
+      EXP_NAME: 'gptoss_1k8k_acc'
+      MODEL: 'openai/gpt-oss-120b'
+      ISL: '1024'
+      OSL: '8192'
+      MAX_MODEL_LEN: '9216'
+      RANDOM_RANGE_RATIO: '0.8'
+      IMAGE: 'rocm/vllm-dev:open-mi355-08052025'
+      FRAMEWORK: 'vllm'
+      PRECISION: 'fp4'
+      TP: ${{ matrix.tp }}
+      CONC: ${{ matrix.conc }}
+      RUN_ACCURACY_TEST: 'true'
+      ACCURACY_MODEL: ${{ inputs.accuracy_model }}
+      LM_EVAL_TASKS: ${{ inputs.lm_eval_tasks }}
+      LM_EVAL_BATCH_SIZE: ${{ inputs.lm_eval_batch_size }}
+      LM_EVAL_NUM_FEWSHOT: ${{ inputs.lm_eval_num_fewshot }}
+      LM_EVAL_NUM_CONCURRENT: ${{ inputs.lm_eval_num_concurrent }}
+      LM_EVAL_MAX_RETRIES: ${{ inputs.lm_eval_max_retries }}
+      LM_EVAL_MAX_GEN_TOKS: ${{ inputs.lm_eval_max_gen_toks }}
+
+    steps:
+      - name: Resource cleanup
+        run: echo "[Docker] Skip Cleaning up resources ..."
+
+      - uses: actions/checkout@v3
+        with:
+          token: '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'
+          fetch-depth: 0
+
+      - name: Launch job script
+        env:
+          RUNNER_NAME: ${{ runner.name }}
+          RESULT_FILENAME: ${{ env.EXP_NAME }}_${{ env.PRECISION }}_${{ env.FRAMEWORK }}_tp${{ env.TP }}_conc${{ env.CONC }}_${{ runner.name }}
+        run: |
+          export LM_EVAL_OUTPUT_BASENAME="VLLM_${EXP_NAME}_tp${TP}_conc${CONC}"
+          bash ./runners/launch_${RUNNER_NAME%%_*}.sh
+          if [ -f "$RESULT_FILENAME.json" ]; then
+            echo "RESULT_FILENAME=${RESULT_FILENAME}" >> "$GITHUB_ENV"
+          else
+            echo "Run failed: Benchmark result $RESULT_FILENAME.json not found." >&2
+            exit 1
+          fi
+
+      - name: Process result
+        run: |
+          python3 utils/process_result.py m10-33 $TP $RESULT_FILENAME $FRAMEWORK $PRECISION
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RESULT_FILENAME }}
+          path: |
+            ${{ env.RESULT_FILENAME }}.json
+            agg_${{ env.RESULT_FILENAME }}.json
+
+      - name: Upload accuracy artifacts
+        if: ${{ env.RUN_ACCURACY_TEST == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: accuracy_${{ env.EXP_NAME }}_tp${{ env.TP }}_conc${{ env.CONC }}
+          path: results_accuracy/
+
+  collect-gptoss-1k8k-acc-results:
+    needs: gptoss-1k8k-mi355x-acc
+    if: ${{ inputs.run_1k8k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_1k8k_acc'
