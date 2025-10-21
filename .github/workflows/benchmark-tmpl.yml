@@ -35,6 +35,10 @@ on:
       tp-list:
         required: true
         type: string
+      run-accuracy-test:
+        type: boolean
+        required: false
+        default: false
       conc-list:
         type: string
         default: '[4]'
@@ -51,6 +55,7 @@ env:
   IMAGE: ${{ inputs.image }}
   FRAMEWORK: ${{ inputs.framework }}
   PRECISION: ${{ inputs.precision }}
+  RUN_ACCURACY_TEST: ${{ inputs.run-accuracy-test && 'true' || 'false' }}
 
 jobs:
   benchmark:
@@ -94,4 +99,3 @@ jobs:
       - name: Process result
         run: |
           python3 utils/process_result.py ${{ inputs.runner }} $TP $RESULT_FILENAME $FRAMEWORK $PRECISION
-

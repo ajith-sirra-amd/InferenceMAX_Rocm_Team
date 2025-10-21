@@ -5,14 +5,20 @@ on:
     inputs:
       run_1k1k:
         type: boolean
-        required: true
+        required: false
+        default: false
       run_8k1k:
         type: boolean
-        required: true
+        required: false
+        default: false
       run_1k8k:
         type: boolean
-        required: true
-
+        required: false
+        default: false
+      run_acc:
+        type: boolean
+        required: false
+        default: false
       use_b200:
         type: boolean
         required: false
@@ -21,6 +27,28 @@ on:
         required: true
 
 jobs:
+  gptoss-acc:
+    if: ${{ inputs.run_acc }}
+    uses: ./.github/workflows/gptoss-tmpl_quick_reduce.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_acc'
+      isl: 1024
+      osl: 1024
+      max-model-len: 2048
+      random-range-ratio: 0.8
+      use_b200: ${{ inputs.use_b200 }}
+      use_mi355x: ${{ inputs.use_mi355x }}
+      run-accuracy-test: true
+
+  collect-gptoss-acc-results:
+    needs: gptoss-acc
+    if: ${{ inputs.run_acc && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_acc'
+
   gptoss-1k1k:
     if: ${{ inputs.run_1k1k }}
     uses: ./.github/workflows/gptoss-tmpl_quick_reduce.yml

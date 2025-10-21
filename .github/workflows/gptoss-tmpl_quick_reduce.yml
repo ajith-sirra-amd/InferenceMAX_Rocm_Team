@@ -18,6 +18,10 @@ on:
       random-range-ratio:
         required: true
         type: string
+      run-accuracy-test:
+        type: boolean
+        required: false
+        default: false
 
       use_b200:
         type: boolean
@@ -43,6 +47,7 @@ jobs:
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
       precision: 'fp4'
+      run-accuracy-test: ${{ inputs.run-accuracy-test }}
 
   bmk-b200-trt:
     if: ${{ inputs.use_b200 }}
@@ -60,6 +65,7 @@ jobs:
       tp-list: '[1, 2, 4, 8]'
       framework: 'trt'
       precision: 'fp4'
+      run-accuracy-test: ${{ inputs.run-accuracy-test }}
 
   bmk-mi355x:
     if: ${{ inputs.use_mi355x }}
@@ -77,3 +83,4 @@ jobs:
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
       precision: 'fp4'
+      run-accuracy-test: ${{ inputs.run-accuracy-test }}
