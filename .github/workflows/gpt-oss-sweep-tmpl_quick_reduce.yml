@@ -19,6 +19,10 @@ on:
         type: boolean
         required: false
         default: false
+      collect-acc-results:
+        type: boolean
+        required: false
+        default: false
       use_b200:
         type: boolean
         required: false
@@ -40,10 +44,11 @@ jobs:
       use_b200: ${{ inputs.use_b200 }}
       use_mi355x: ${{ inputs.use_mi355x }}
       run-accuracy-test: true
+      run-benchmark: false
 
   collect-gptoss-acc-results:
     needs: gptoss-acc
-    if: ${{ inputs.run_acc && (success() || failure()) }}
+    if: ${{ inputs.collect-acc-results && inputs.run_acc && (success() || failure()) }}
     uses: ./.github/workflows/collect-results.yml
     secrets: inherit
     with:

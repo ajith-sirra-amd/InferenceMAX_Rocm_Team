@@ -22,6 +22,10 @@ on:
         type: boolean
         required: false
         default: false
+      run-benchmark:
+        type: boolean
+        required: false
+        default: true
 
       use_b200:
         type: boolean
@@ -48,6 +52,7 @@ jobs:
       framework: 'vllm'
       precision: 'fp4'
       run-accuracy-test: ${{ inputs.run-accuracy-test }}
+      run-benchmark: ${{ inputs.run-benchmark }}
 
   bmk-b200-trt:
     if: ${{ inputs.use_b200 }}
@@ -66,6 +71,7 @@ jobs:
       framework: 'trt'
       precision: 'fp4'
       run-accuracy-test: ${{ inputs.run-accuracy-test }}
+      run-benchmark: ${{ inputs.run-benchmark }}
 
   bmk-mi355x:
     if: ${{ inputs.use_mi355x }}
@@ -84,3 +90,4 @@ jobs:
       framework: 'vllm'
       precision: 'fp4'
       run-accuracy-test: ${{ inputs.run-accuracy-test }}
+      run-benchmark: ${{ inputs.run-benchmark }}

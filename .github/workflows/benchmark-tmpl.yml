@@ -35,6 +35,10 @@ on:
       tp-list:
         required: true
         type: string
+      run-benchmark:
+        type: boolean
+        required: false
+        default: true
       run-accuracy-test:
         type: boolean
         required: false
@@ -56,6 +60,7 @@ env:
   FRAMEWORK: ${{ inputs.framework }}
   PRECISION: ${{ inputs.precision }}
   RUN_ACCURACY_TEST: ${{ inputs.run-accuracy-test && 'true' || 'false' }}
+  RUN_BENCHMARK: ${{ inputs.run-benchmark && 'true' || 'false' }}
 
 jobs:
   benchmark:
@@ -89,13 +94,16 @@ jobs:
           RESULT_FILENAME: ${{ env.EXP_NAME }}_${{ env.PRECISION }}_${{ env.FRAMEWORK }}_tp${{ env.TP }}_conc${{ env.CONC }}_${{ runner.name }}
         run: |
           bash ./runners/launch_${RUNNER_NAME%%_*}.sh
-          if [ -f "$RESULT_FILENAME.json" ]; then
-            echo "RESULT_FILENAME=${RESULT_FILENAME}" >> $GITHUB_ENV
-          else
-            echo "Run failed: Benchmark result $RESULT_FILENAME.json not found." >&2
-            exit 1
+          if [ "${RUN_BENCHMARK}" != "false" ]; then
+            if [ -f "$RESULT_FILENAME.json" ]; then
+              echo "RESULT_FILENAME=${RESULT_FILENAME}" >> $GITHUB_ENV
+            else
+              echo "Run failed: Benchmark result $RESULT_FILENAME.json not found." >&2
+              exit 1
+            fi
           fi
 
       - name: Process result
+        if: ${{ inputs.run-benchmark }}
         run: |
           python3 utils/process_result.py ${{ inputs.runner }} $TP $RESULT_FILENAME $FRAMEWORK $PRECISION

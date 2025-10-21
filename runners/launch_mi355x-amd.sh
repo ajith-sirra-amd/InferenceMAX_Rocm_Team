@@ -38,6 +38,9 @@ network_name="bmk-net"
 server_name="bmk-server"
 client_name="bmk-client"
 
+run_benchmark=${RUN_BENCHMARK:-true}
+run_benchmark=${run_benchmark,,}
+
 # CUSTOM
 for CONTAINER_NAME in $server_name; do
     running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
@@ -73,23 +76,26 @@ while IFS= read -r line; do
     fi
 done < <(docker logs -f --tail=0 $server_name 2>&1)
 
-git clone https://github.com/kimbochen/bench_serving.git
+if [[ "$run_benchmark" != "false" ]]; then
+  git clone https://github.com/kimbochen/bench_serving.git
 
-set -x
-docker run --rm --network=$network_name --name=$client_name \
--v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
--e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
---entrypoint=python3 \
-$IMAGE \
-bench_serving/benchmark_serving.py \
---model=$MODEL --backend=vllm --base-url="http://$server_name:$PORT" \
---dataset-name=random \
---random-input-len=$ISL --random-output-len=$OSL --random-range-ratio=$RANDOM_RANGE_RATIO \
---num-prompts=$(( $CONC * 10 )) \
---max-concurrency=$CONC \
---request-rate=inf --ignore-eos \
---save-result --percentile-metrics="ttft,tpot,itl,e2el" \
---result-dir=/workspace/ --result-filename=$RESULT_FILENAME.json
+  set -x
+  docker run --rm --network=$network_name --name=$client_name \
+  -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
+  -e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
+  --entrypoint=python3 \
+  $IMAGE \
+  bench_serving/benchmark_serving.py \
+  --model=$MODEL --backend=vllm --base-url="http://$server_name:$PORT" \
+  --dataset-name=random \
+  --random-input-len=$ISL --random-output-len=$OSL --random-range-ratio=$RANDOM_RANGE_RATIO \
+  --num-prompts=$(( $CONC * 10 )) \
+  --max-concurrency=$CONC \
+  --request-rate=inf --ignore-eos \
+  --save-result --percentile-metrics="ttft,tpot,itl,e2el" \
+  --result-dir=/workspace/ --result-filename=$RESULT_FILENAME.json
+  set +x
+fi
 
 if [[ "${RUN_ACCURACY_TEST,,}" == "true" ]]; then
   accuracy_client_name="${client_name}-accuracy"
