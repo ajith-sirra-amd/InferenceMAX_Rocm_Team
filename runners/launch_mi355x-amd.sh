@@ -13,6 +13,15 @@
 # GITHUB_WORKSPACE
 # RESULT_FILENAME
 # HF_TOKEN
+# RUN_ACCURACY_TEST
+# ACCURACY_MODEL
+# LM_EVAL_TASKS
+# LM_EVAL_BATCH_SIZE
+# LM_EVAL_NUM_FEWSHOT
+# LM_EVAL_NUM_CONCURRENT
+# LM_EVAL_MAX_RETRIES
+# LM_EVAL_MAX_GEN_TOKS
+# LM_EVAL_OUTPUT_BASENAME
 
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
 
@@ -81,6 +90,35 @@ bench_serving/benchmark_serving.py \
 --request-rate=inf --ignore-eos \
 --save-result --percentile-metrics="ttft,tpot,itl,e2el" \
 --result-dir=/workspace/ --result-filename=$RESULT_FILENAME.json
+
+if [[ "${RUN_ACCURACY_TEST,,}" == "true" ]]; then
+  accuracy_client_name="${client_name}-accuracy"
+  accuracy_timestamp=$(date +"%Y%m%d_%H%M%S")
+  sanitized_model=${ACCURACY_MODEL:-$MODEL}
+  sanitized_model=${sanitized_model//\//-}
+  accuracy_basename=${LM_EVAL_OUTPUT_BASENAME:-"VLLM_${sanitized_model}_${accuracy_timestamp}"}
+  accuracy_output_relative="results_accuracy/${accuracy_basename}"
+  eval_tasks=${LM_EVAL_TASKS:-gsm8k}
+  eval_batch_size=${LM_EVAL_BATCH_SIZE:-auto}
+  eval_num_fewshot=${LM_EVAL_NUM_FEWSHOT:-5}
+  eval_num_concurrent=${LM_EVAL_NUM_CONCURRENT:-256}
+  eval_max_retries=${LM_EVAL_MAX_RETRIES:-10}
+  eval_max_gen_toks=${LM_EVAL_MAX_GEN_TOKS:-2048}
+  accuracy_model_args=$(cat <<EOF
+{"model": "${ACCURACY_MODEL:-$MODEL}", "base_url": "http://$server_name:$PORT/v1/completions", "num_concurrent": $eval_num_concurrent, "max_retries": $eval_max_retries, "max_gen_toks": $eval_max_gen_toks}
+EOF
+)
+  mkdir -p "$GITHUB_WORKSPACE/results_accuracy"
+  set -x
+  docker run --rm --network=$network_name --name=$accuracy_client_name \
+  -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
+  -e LM_EVAL_MODEL_ARGS="$accuracy_model_args" \
+  --entrypoint=/bin/bash \
+  $IMAGE \
+  -lc "mkdir -p /workspace/results_accuracy && lm_eval --model local-completions --model_args \"\$LM_EVAL_MODEL_ARGS\" --tasks $eval_tasks --batch_size $eval_batch_size --num_fewshot $eval_num_fewshot --output_path /workspace/$accuracy_output_relative"
+  set +x
+fi
+set -x
 
 if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
