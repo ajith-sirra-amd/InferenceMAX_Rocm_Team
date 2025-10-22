@@ -94,7 +94,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: m10-33
-      image: 'rocm/pytorch-private:rocm7.0_vllm0.10.1_instinct_20250927_rc1_quick_reduce_update'
+      image: 'rocm/pytorch-private:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1_QR_pr25892'
       model: 'openai/gpt-oss-120b'
       tp-list: ${{ inputs.tp-list }}
       conc-list: ${{ inputs.conc-list }}
