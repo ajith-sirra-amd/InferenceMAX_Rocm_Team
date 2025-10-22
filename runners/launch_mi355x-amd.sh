@@ -32,7 +32,7 @@ else
 fi
 echo $FRAMEWORK_SUFFIX
 
-PORT=8888
+PORT=8777
 
 network_name="bmk-net"
 server_name="bmk-server"
