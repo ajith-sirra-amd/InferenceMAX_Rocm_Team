@@ -16,8 +16,11 @@ export PROFILE_BASE_DIR="${RESULTS_BASE_DIR}/profiles"
 mkdir -p ${RESULTS_BASE_DIR}
 mkdir -p ${PROFILE_BASE_DIR}
 
+echo 0 | sudo tee /proc/sys/kernel/perf_event_paranoid
+nsys status --environment
+
 models=("70b fp4 nvidia/Llama-3.3-70B-Instruct-FP4")
-seqlens=("1024 1024")
+seqlens=("1024 1024" "8192 1024")
 
 for model in "${models[@]}"; do
 	set -- $model
@@ -34,9 +37,11 @@ for model in "${models[@]}"; do
 		mkdir -p ${RESULTS_DIR}
 
 		for TP in 1 2 4 8 ; do
+		#for TP in 1 8 ; do
 			export TP
 
-			for CONC in 4 8 16 32 64; do
+			for CONC in 4 8 16 32 64 ; do
+			#for CONC in 4 8 16 32 64 ; do
 				export CONC
 				export RESULT_FILENAME="${EXP_NAME}_${PRECISION}_${FRAMEWORK}_tp${TP}_conc${CONC}_${RUNNER}"
 				export PROFILE_DIR="${PROFILE_BASE_DIR}/${EXP_NAME}_${ISL}_${OSL}/${RESULT_FILENAME}"

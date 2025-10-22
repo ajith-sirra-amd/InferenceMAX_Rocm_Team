@@ -14,8 +14,7 @@ export RESULTS_BASE_DIR="${HOME}/inferencemax_results/results_$(date +%Y%m%d%H%M
 
 mkdir -p ${RESULTS_BASE_DIR}
 
-models=("70b fp4 amd/Llama-3.3-70B-Instruct-MXFP4-Preview" "70b fp8 amd/Llama-3.3-70B-Instruct-FP8-KV" "dsr1 fp4 amd/DeepSeek-R1-0528-MXFP4-Preview" "dsr1 fp8 deepseek-ai/DeepSeek-R1-0528" "gptoss fp4 openai/gpt-oss-120b")
-#models=("70b fp4 nvidia/Llama-3.3-70B-Instruct-FP4")
+models=("70b fp4 nvidia/Llama-3.3-70B-Instruct-FP4")
 seqlens=("1024 1024" "1024 8192" "8192 1024")
 
 for model in "${models[@]}"; do

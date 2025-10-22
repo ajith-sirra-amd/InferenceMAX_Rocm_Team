@@ -7,58 +7,18 @@ PORT=8888
 server_name="bmk-server"
 client_name="bmk-client"
 
-#function fn_oom_watcher_docker_logs {
-#	
-#	 # Define the error messages to search for
-#	 # NOTE: In many cases these error messages cause the parent
-#	 # process to get stuck and waste a bunch of time. It is better
-#	 # to search for the output and kill the parent process early
-#	 # rather than wait for the iteration timeout is reached.
-#	 #local ERROR_MESSAGES=("CUDA out of memory"
-#	 #    "Runtime Error"
-#	 #    "Reason to shutdown:"
-#	 #    "MPI_ABORT was invoked on rank"
-#	 #    "the job has been aborted"
-#	 #    "CUDA kernel errors might be asynchronously reported at some other API call")
-#	
-#	 # early exit server container if an error is detected.
-#	 # exit loop if client container exited normally.
-#	 while true; do
-#	    # 1. Fetch the latest logs from the Docker container
-#	    docker logs $server_name 2>&1 | grep -e "Runtime Error"
-#	    if [[ $? -eq 0 ]]; then
-#	        echo "Error detected in docker logs"
-#	        docker stop $client_name
-#	        exit 1
-#	    fi
-#	    
-#	    sleep 5
-#	   # 2. stop if bmk-client docker container exits
-#	    docker ps | grep $client_name
-#	    if [[ $? -ne 0 ]]; then
-#	        echo "$client_name docker container has exited; stopping oom watcher"
-#	        break
-#		#exit 0
-#	    fi
-#	
-#	    sleep 60  # Adjust the sleep duration as needed
-#	 done
-#	
-#}
-
 set -x
 docker run --rm -d --network host --name $server_name \
 --runtime nvidia --gpus all --ipc host --privileged --shm-size=16g --ulimit memlock=-1 --ulimit stack=67108864 \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
--v ${PROFILE_DIR}:/profile \
+-v ${FREQ_DIR}:/freq/ \
 -e HF_TOKEN -e HF_HUB_CACHE -e MODEL -e TP -e CONC -e MAX_MODEL_LEN -e ISL -e OSL -e PORT=$PORT \
 -e TORCH_CUDA_ARCH_LIST="10.0" -e CUDA_DEVICE_ORDER=PCI_BUS_ID -e CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
 -e HF_HUB_OFFLINE=1 \
 --entrypoint=/bin/bash \
 $(echo "$IMAGE" | sed 's/#/\//') \
-benchmarks/"${EXP_NAME%%_*}_${PRECISION}_b200${FRAMEWORK_SUFFIX}_docker_profile.sh"
-#-lc nsys launch --run-agent-in-process=false --cuda-graph-trace node --trace=cuda,cudnn,cublas,nvtx \
+benchmarks/"${EXP_NAME%%_*}_${PRECISION}_b200${FRAMEWORK_SUFFIX}_docker.sh"
 
 set +x
 while IFS= read -r line; do
@@ -70,19 +30,39 @@ done < <(docker logs -f --tail=0 $server_name 2>&1)
 
 git clone https://github.com/kimbochen/bench_serving.git
 
+# Spawn TP8 power profiling containers one for each GPU index
+for gpu in 0 1 2 3 4 5 6 7 ; do
+    GPU_FILENAME=${RESULT_FILENAME}_gpu${gpu}
+    echo $GPU_FILENAME
+    docker run -d --rm --network host --name gpu_$gpu \
+    --ipc=host --privileged --cap-add=SYS_ADMIN --cap-add=SYS_PTRACE \
+    --security-opt seccomp=unconfined --gpus all \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
+    -e HF_HUB_CACHE -e HF_HUB_OFFLINE \
+    -w /workspace/ \
+    -v $RESULTS_DIR:/results/ \
+    -v ${FREQ_DIR}:/freq/ \
+    -e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
+    --entrypoint=/bin/bash \
+    $(echo "$IMAGE" | sed 's/#/\//') \
+    -lc "apt-get update && apt-get install docker.io -y && \
+    python3 /workspace/zeus/workload_profile/measure_power.py -s B200 \
+    --out-dir /freq/ --workload-name $GPU_FILENAME -g $gpu -n 1 --live-log \
+    --pre-workload-time 10 -p 10 --num-samples 1000000 --workload-cmd \
+    docker wait $server_name"
+done
+
+sleep 15
 set -x
-
-docker exec $server_name nsys start --stats true -o /profile/$RESULT_FILENAME
-
-#fn_oom_watcher_docker_logs
-
 docker run --rm --network host --name $client_name \
---cap-add=sys_nice --mount type=bind,source=/usr/bin/docker,target=/usr/bin/docker \
--v /var/run/docker.sock:/var/run/docker.sock \
+--ipc=host --privileged --cap-add=SYS_ADMIN --cap-add=SYS_PTRACE \
+--security-opt seccomp=unconfined --gpus all \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -e HF_HUB_CACHE -e HF_HUB_OFFLINE \
--v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
+-v $GITHUB_WORKSPACE:/workspace_client/ -w /workspace_client/ \
 -v $RESULTS_DIR:/results/ \
+-v ${FREQ_DIR}:/freq/ \
 -e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
 --entrypoint=/bin/bash \
 $(echo "$IMAGE" | sed 's/#/\//') \
@@ -95,10 +75,7 @@ python3 bench_serving/benchmark_serving.py \
 --max-concurrency $CONC \
 --request-rate inf --ignore-eos \
 --save-result --percentile-metrics 'ttft,tpot,itl,e2el' \
---result-dir /results/ --result-filename $RESULT_FILENAME.json" 
-
-docker exec $server_name nsys stop
-docker exec $server_name nsys stats --report nvtx_sum,cuda_gpu_kern_sum --format csv --output /profile/$RESULT_FILENAME /profile/$RESULT_FILENAME.sqlite
+--result-dir /results/ --result-filename $RESULT_FILENAME.json"
 
 #while [ -n "$(docker ps -aq)" ]; do
 #    docker stop $server_name
@@ -111,8 +88,8 @@ for CONTAINER_NAME in $server_name; do
     running_container=$(docker ps -a -q --filter "name=$CONTAINER_NAME")
     if [ $running_container ]; then
         echo "Terminating the already running $CONTAINER_NAME container"
-	docker stop $CONTAINER_NAME
-        sleep 5
+        docker stop $CONTAINER_NAME
+        sleep 55
         docker rm $CONTAINER_NAME
         #sleep 5
         #docker network rm $network_name
