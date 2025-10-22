@@ -9,7 +9,7 @@ on:
 
 jobs:
   collect-results:
-    runs-on: m10-33
+    runs-on: mi355x
 
     steps:
       - name: Checkout code
