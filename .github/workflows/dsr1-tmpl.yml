@@ -148,9 +148,9 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
       model: 'deepseek-ai/DeepSeek-R1-0528'
-      framework: 'sglang'
+      framework: 'vllm'
       precision: 'fp8'
       exp-name: ${{ inputs.exp-name }}
       isl: ${{ inputs.isl }}
@@ -196,7 +196,7 @@ jobs:
       conc-list: '[4, 8, 16, 32, 64, 128, 256]'  # DPA4EP4 is already 30 tok/s/user and DPA8EP8 is already 35tok/s/user. 512 conc would be too much so we skipping it
 
   bmk-mi355x-fp4:
-    if: ${{ inputs.use_mi355x }}
+    if: 0
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
