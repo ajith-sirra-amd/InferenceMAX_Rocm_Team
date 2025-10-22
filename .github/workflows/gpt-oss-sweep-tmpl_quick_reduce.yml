@@ -45,6 +45,8 @@ jobs:
       use_mi355x: ${{ inputs.use_mi355x }}
       run-accuracy-test: true
       run-benchmark: false
+      tp-list: '[1]'
+      conc-list: '[1]'
 
   collect-gptoss-acc-results:
     needs: gptoss-acc

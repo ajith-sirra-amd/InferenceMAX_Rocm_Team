@@ -26,6 +26,14 @@ on:
         type: boolean
         required: false
         default: true
+      tp-list:
+        type: string
+        required: false
+        default: '[1, 2, 4, 8]'
+      conc-list:
+        type: string
+        required: false
+        default: '[4]'
 
       use_b200:
         type: boolean
@@ -48,7 +56,8 @@ jobs:
       runner: shaderform-10
       image: 'vllm/vllm-openai:v0.10.2'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 2, 4, 8]'
+      tp-list: ${{ inputs.tp-list }}
+      conc-list: ${{ inputs.conc-list }}
       framework: 'vllm'
       precision: 'fp4'
       run-accuracy-test: ${{ inputs.run-accuracy-test }}
@@ -67,7 +76,8 @@ jobs:
       runner: shaderform-10
       image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 2, 4, 8]'
+      tp-list: ${{ inputs.tp-list }}
+      conc-list: ${{ inputs.conc-list }}
       framework: 'trt'
       precision: 'fp4'
       run-accuracy-test: ${{ inputs.run-accuracy-test }}
@@ -86,7 +96,8 @@ jobs:
       runner: m10-33
       image: 'rocm/pytorch-private:rocm7.0_vllm0.10.1_instinct_20250927_rc1_quick_reduce_update'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 2, 4, 8]'
+      tp-list: ${{ inputs.tp-list }}
+      conc-list: ${{ inputs.conc-list }}
       framework: 'vllm'
       precision: 'fp4'
       run-accuracy-test: ${{ inputs.run-accuracy-test }}
