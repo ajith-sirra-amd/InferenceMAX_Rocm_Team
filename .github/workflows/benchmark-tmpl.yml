@@ -45,7 +45,7 @@ on:
         default: false
       conc-list:
         type: string
-        default: '[4]'
+        default: '[4, 8, 16, 32, 64]'
 
 env:
   HF_TOKEN: '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'
@@ -107,3 +107,9 @@ jobs:
         if: ${{ inputs.run-benchmark }}
         run: |
           python3 utils/process_result.py ${{ inputs.runner }} $TP $RESULT_FILENAME $FRAMEWORK $PRECISION
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RESULT_FILENAME }}
+          path: agg_${{ env.RESULT_FILENAME }}.json

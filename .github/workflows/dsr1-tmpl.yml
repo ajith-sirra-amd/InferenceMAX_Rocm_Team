@@ -19,20 +19,67 @@ on:
         required: true
         type: string
 
+      use_h200:
+        type: boolean
+        required: true
       use_b200:
+        type: boolean
+        required: true
+      use_mi300x:
+        type: boolean
+        required: true
+      use_mi325x:
         type: boolean
         required: true
       use_mi355x:
         type: boolean
         required: true
+      use_gb200:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
+  bmk-h200-fp8:
+    if: ${{ inputs.use_h200 }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: h200
+      image: 'lmsysorg/sglang:v0.5.2rc2-cu126'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
+  bmk-h200-trt-fp8:
+    if: ${{ inputs.use_h200 }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: h200-trt
+      image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'trt'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
   bmk-b200-fp8:
     if: ${{ inputs.use_b200 }}
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: shaderform-10
+      runner: b200
       image: 'lmsysorg/sglang:v0.5.3rc1-cu129-b200'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
@@ -49,10 +96,44 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: shaderform-10
+      runner: b200-trt
       image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'trt'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
+  bmk-mi300x-fp8:
+    if: ${{ inputs.use_mi300x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: mi300x
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi30x-20250915'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
+  bmk-mi325x-fp8:
+    if: ${{ inputs.use_mi325x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: mi325x
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi30x-20250915'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
       precision: 'fp8'
       exp-name: ${{ inputs.exp-name }}
       isl: ${{ inputs.isl }}
@@ -66,7 +147,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: m10-33
+      runner: mi355x
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
@@ -83,7 +164,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: shaderform-10
+      runner: b200
       image: 'lmsysorg/sglang:v0.5.3rc1-cu129-b200'
       model: 'nvidia/DeepSeek-R1-0528-FP4'
       framework: 'sglang'
@@ -101,7 +182,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: shaderform-10
+      runner: b200-trt
       image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
       model: 'nvidia/DeepSeek-R1-0528-FP4-v2'
       framework: 'trt'
@@ -119,7 +200,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: m10-33
+      runner: mi355x
       image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
       framework: 'sglang'
       precision: 'fp4'
@@ -129,5 +210,56 @@ jobs:
       osl: ${{ inputs.osl }}
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
-      tp-list: '[4, 8]'
+      # These tensor parallelism settings are not necessary as they cannot fall on the Pareto frontier with this particular container - we remove them to save CI time.
+      tp-list: ${{ inputs.isl == 1024 && inputs.osl == 1024 && '[4, 8]' || '[8]' }}
 
+  bmk-gb200-fp4-multinode-mtp-off:
+    if: ${{ inputs.use_gb200 && !(inputs.isl == '1024' && inputs.osl == '8192') }}
+    uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+    secrets: inherit
+    with:
+      runner: gb200
+      image: 'nvcr.io#nvidia/ai-dynamo/tensorrtllm-runtime:0.5.1-rc0.pre3'
+      model: 'deepseek-r1-fp4'
+      framework: 'dynamo-trtllm'
+      precision: 'fp4'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      mtp-mode: 'off'
+
+  bmk-gb200-fp4-multinode-mtp-on:
+    if: ${{ inputs.use_gb200 && !(inputs.isl == '1024' && inputs.osl == '8192') }}
+    uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+    secrets: inherit
+    with:
+      runner: gb200
+      image: 'nvcr.io#nvidia/ai-dynamo/tensorrtllm-runtime:0.5.1-rc0.pre3'
+      model: 'deepseek-r1-fp4'
+      framework: 'dynamo-trtllm'
+      precision: 'fp4'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      mtp-mode: 'on'
+
+  bmk-gb200-fp8-multinode:
+    if: ${{ inputs.use_gb200 && !(inputs.isl == '1024' && inputs.osl == '8192') }}
+    uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+    secrets: inherit
+    with:
+      runner: gb200
+      image: 'nvcr.io/nvidia/ai-dynamo/sglang-runtime:0.5.1-rc0.pre1'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'dynamo-sglang'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      mtp-mode: 'off'
