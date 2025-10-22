@@ -211,7 +211,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       # These tensor parallelism settings are not necessary as they cannot fall on the Pareto frontier with this particular container - we remove them to save CI time.
-      tp-list: ${{ inputs.isl == 1024 && inputs.osl == 1024 && '[4, 8]' || '[8]' }}
+      tp-list: '[8]'
 
   bmk-gb200-fp4-multinode-mtp-off:
     if: ${{ inputs.use_gb200 && !(inputs.isl == '1024' && inputs.osl == '8192') }}
