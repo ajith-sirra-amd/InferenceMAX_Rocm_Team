@@ -12,6 +12,13 @@
 # Reference
 # https://rocm.docs.amd.com/en/docs-7.0-rc1/preview/benchmark-docker/inference-vllm-llama-3.3-70b-fp8.html#run-the-inference-benchmark
 
+cat > config.yaml << EOF
+compilation-config: '{"custom_ops": ["-rms_norm", "-quant_fp8", "-silu_and_mul"]}'
+EOF
+
+sleep 5
+cat config.yaml
+
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 
 if [[ "$ISL" == "1024" && "$OSL" == "1024" ]]; then
@@ -19,8 +26,10 @@ if [[ "$ISL" == "1024" && "$OSL" == "1024" ]]; then
 elif [[ "$ISL" == "1024" && "$OSL" == "8192" ]]; then
     export VLLM_ROCM_USE_AITER_MHA=0
 elif [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
-    if [[ "$CONC" -gt "16" ]]; then
+    if [[ "$CONC" -ge "16" ]]; then
         export VLLM_ROCM_USE_AITER_MHA=1
+    else
+		export VLLM_ROCM_USE_AITER_MHA=0
     fi
 fi
 
@@ -35,6 +44,7 @@ vllm serve $MODEL --port=$PORT \
 --max-num-seqs=$CONC \
 --max-num-batched-tokens=131072 \
 --no-enable-prefix-caching \
+--config config.yaml \
 --async-scheduling \
 --disable-log-requests
 
