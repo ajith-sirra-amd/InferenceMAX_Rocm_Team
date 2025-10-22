@@ -24,4 +24,3 @@ jobs:
       use_mi325x: false
       use_mi355x: true
       use_gb200: false
-
