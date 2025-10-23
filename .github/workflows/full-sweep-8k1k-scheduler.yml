@@ -11,13 +11,13 @@ jobs:
       run_1k1k: false
       run_8k1k: true
       run_1k8k: false
-      use_h100: true
-      use_h200: true
-      use_b200: true
-      use_mi300x: true
-      use_mi325x: true
+      use_h100: false
+      use_h200: false
+      use_b200: false
+      use_mi300x: false
+      use_mi325x: false
       use_mi355x: true
-      use_gb200: true
+      use_gb200: false
 
   calc-success-rate:
     needs: mega-run
