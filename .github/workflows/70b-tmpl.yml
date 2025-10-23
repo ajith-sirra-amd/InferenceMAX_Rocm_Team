@@ -218,7 +218,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/vllm-private:355_wip_2b4cb8a11_1021'
+      image: 'rocm/vllm-private:355_wip_311_eccac3268_1023'
       model: 'amd/Llama-3.3-70B-Instruct-MXFP4-Preview'
       framework: 'vllm'
       precision: 'fp4'
