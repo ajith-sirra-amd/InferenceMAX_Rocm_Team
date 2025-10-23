@@ -148,7 +148,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
+      image: 'rocm/vllm-private:355_wip_2b4cb8a11_1021'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'vllm'
       precision: 'fp8'
