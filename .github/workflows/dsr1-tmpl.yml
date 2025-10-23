@@ -158,6 +158,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]' 
 
   bmk-b200-fp4:
     if: ${{ inputs.use_b200 }}
@@ -196,13 +197,13 @@ jobs:
       conc-list: '[4, 8, 16, 32, 64, 128, 256]'  # DPA4EP4 is already 30 tok/s/user and DPA8EP8 is already 35tok/s/user. 512 conc would be too much so we skipping it
 
   bmk-mi355x-fp4:
-    if: 0
+    if: ${{ inputs.use_mi355x }}
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
-      framework: 'sglang'
+      image: 'rocm/vllm-private:355_wip_311_eccac3268_1023'
+      framework: 'vllm'
       precision: 'fp4'
       model: 'amd/DeepSeek-R1-0528-MXFP4-Preview'
       exp-name: ${{ inputs.exp-name }}
@@ -212,6 +213,7 @@ jobs:
       random-range-ratio: ${{ inputs.random-range-ratio }}
       # These tensor parallelism settings are not necessary as they cannot fall on the Pareto frontier with this particular container - we remove them to save CI time.
       tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]' 
 
   bmk-gb200-fp4-multinode-mtp-off:
     if: ${{ inputs.use_gb200 && !(inputs.isl == '1024' && inputs.osl == '8192') }}
