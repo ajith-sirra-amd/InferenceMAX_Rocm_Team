@@ -15,15 +15,11 @@ if [[ "$ISL" == "1024" && "$OSL" == "1024" ]]; then
 	export VLLM_ROCM_USE_AITER_MHA=0
 	if [[ "$CONC" -le "16" ]]; then
 		export VLLM_ROCM_USE_AITER_TRITON_BF16_GEMM=0
-	else
-		export VLLM_TRITON_FP4_GEMM_USE_ASM=1
 	fi
 elif [[ "$ISL" == "1024" && "$OSL" == "8192" ]]; then
 	export VLLM_ROCM_USE_AITER_MHA=0
 	if [[ "$CONC" -le "16" ]]; then
 		export VLLM_ROCM_USE_AITER_TRITON_BF16_GEMM=0
-	else
-		export VLLM_TRITON_FP4_GEMM_USE_ASM=1
 	fi
 elif [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
 	if [[ "$CONC" -ge "16" ]]; then
@@ -33,10 +29,10 @@ elif [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
 	fi
 	if [[ "$CONC" -lt "16" && "$TP" -gt "1" ]]; then
 		export VLLM_ROCM_USE_AITER_TRITON_BF16_GEMM=0
-	else
-		export VLLM_TRITON_FP4_GEMM_USE_ASM=1
 	fi
 fi
+
+export VLLM_TRITON_FP4_GEMM_USE_ASM=1
 
 set -x
 vllm serve $MODEL \
