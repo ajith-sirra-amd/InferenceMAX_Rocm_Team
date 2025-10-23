@@ -32,7 +32,9 @@ elif [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
 	fi
 fi
 
-export VLLM_TRITON_FP4_GEMM_USE_ASM=1
+if [[ "$TP" == "1" ]]; then
+	export VLLM_TRITON_FP4_GEMM_USE_ASM=1
+fi
 
 set -x
 vllm serve $MODEL \
