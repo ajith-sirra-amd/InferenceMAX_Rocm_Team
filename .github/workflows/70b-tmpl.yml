@@ -166,7 +166,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1'
+      image: 'rocm/vllm-private:355_wip_311_eccac3268_1023'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
       framework: 'vllm'
       precision: 'fp8'
