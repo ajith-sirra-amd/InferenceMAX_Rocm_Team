@@ -21,7 +21,7 @@ max_num_batched_tokens=131072  # Smaller values may result in better TTFT but wo
 # Note: Using `--kv-cache-dtype fp8` with DeepSeek may cause accuracy issues
 
 vllm serve ${MODEL} \
-    --host localhost \
+    --host=0.0.0.0 \
     --port $PORT \
     --swap-space 64 \
     --tensor-parallel-size $TP \
