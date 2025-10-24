@@ -1,7 +1,7 @@
 name: Test - DeepSeek R1, SGLang on MI355
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       run_1k1k:
         type: boolean
