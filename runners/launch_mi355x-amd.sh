@@ -25,7 +25,7 @@
 
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
 
-if [[ "$MODEL" == *"DeepSeek-R1" && "$FRAMEWORK" == "sglang" ]]; then
+if [[ "$MODEL" == *"DeepSeek-R1"* && "$FRAMEWORK" == "sglang" ]]; then
     FRAMEWORK_SUFFIX="_sglang"
 else
     FRAMEWORK_SUFFIX=""
