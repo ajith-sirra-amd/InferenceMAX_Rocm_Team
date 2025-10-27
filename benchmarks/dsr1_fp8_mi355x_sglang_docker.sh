@@ -13,6 +13,8 @@
 # https://rocm.docs.amd.com/en/docs-7.0-docker/benchmark-docker/inference-sglang-deepseek-r1-fp8.html
 
 export SGLANG_USE_AITER=1
+export SGLANG_USE_ROCM700A=1
+export SGLANG_ROCM_FUSED_DECODE_MLA=1
 
 pip install -U xgrammar
 
