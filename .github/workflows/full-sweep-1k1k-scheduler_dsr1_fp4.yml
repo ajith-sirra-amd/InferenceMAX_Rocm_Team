@@ -5,7 +5,7 @@ on:
 
 jobs:
   mega-run:
-    uses: ./.github/workflows/full-sweep-tmpl_70_fp4.yml
+    uses: ./.github/workflows/full-sweep-tmpl_dsr1_fp4.yml
     secrets: inherit
     with:
       run_1k1k: true
