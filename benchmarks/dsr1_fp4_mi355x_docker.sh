@@ -20,9 +20,6 @@ max_num_batched_tokens=131072  # Smaller values may result in better TTFT but wo
 #export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 # Note: Using `--kv-cache-dtype fp8` with DeepSeek may cause accuracy issues
 
-# Only for FP4
-export VLLM_ROCM_USE_CK_MXFP4_MOE=1
-
 vllm serve ${MODEL} \
     --host=0.0.0.0 \
     --port $PORT \
