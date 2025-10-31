@@ -1,4 +1,4 @@
-name: Full Sweep Scheduler - 1k1k DSR1 FP4 
+name: Full Sweep Scheduler - 1k1k DSR1 FP4
 
 on:
   workflow_dispatch:
