@@ -36,6 +36,7 @@ on:
         required: false
         default: false
 
+jobs:
   dsr1-1k1k:
     if: ${{ inputs.run_1k1k }}
     uses: ./.github/workflows/dsr1-tmpl_fp4.yml
