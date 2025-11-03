@@ -36,7 +36,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi300x
-      image: 'lmsysorg/sglang:v0.5.4-rocm700-mi35x'
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
       precision: 'fp8'
@@ -53,7 +53,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi325x
-      image: 'lmsysorg/sglang:v0.5.4-rocm700-mi35x'
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
       precision: 'fp8'
@@ -70,7 +70,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'lmsysorg/sglang:v0.5.4-rocm700-mi35x'
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
       precision: 'fp8'
@@ -89,7 +89,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'lmsysorg/sglang:v0.5.4-rocm700-mi35x'
+      image: 'rocm/7.0:rocm7.0_ubuntu_22.04_sgl-dev-v0.5.2-rocm7.0-mi35x-20250915'
       framework: 'sglang'
       precision: 'fp4'
       model: 'amd/DeepSeek-R1-0528-MXFP4-Preview'
