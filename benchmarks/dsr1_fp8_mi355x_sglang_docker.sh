@@ -14,7 +14,6 @@
 
 export SGLANG_USE_AITER=1
 export RCCL_MSCCL_ENABLE=0
-export SGLANG_SET_CPU_AFFINITY=1
 
 pip install -U xgrammar
 
