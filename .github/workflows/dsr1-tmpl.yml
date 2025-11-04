@@ -75,7 +75,7 @@ jobs:
       tp-list: '[8]'
 
   bmk-b200-fp8:
-    if: ${{ inputs.use_b200 }}
+    if: 0
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
@@ -92,7 +92,7 @@ jobs:
       tp-list: '[8]'
 
   bmk-b200-trt-fp8:
-    if: ${{ inputs.use_b200 }}
+    if: 0
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
@@ -161,7 +161,7 @@ jobs:
       conc-list: '[4, 8, 16, 32, 64]' 
 
   bmk-b200-fp4:
-    if: ${{ inputs.use_b200 }}
+    if: 0
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
@@ -179,7 +179,7 @@ jobs:
       conc-list: '[4, 8, 16, 32, 64, 128]'  # Custom concurrency values for this job
 
   bmk-b200-trt-fp4:
-    if: ${{ inputs.use_b200 }}
+    if: 0
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
