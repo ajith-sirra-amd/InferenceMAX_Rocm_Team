@@ -143,12 +143,12 @@ jobs:
       tp-list: '[8]'
 
   bmk-mi355x-fp8:
-    if: 0
+    if: ${{ inputs.use_mi355x }}
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/vllm-private:355_wip_338_b5fa817f1_1031'
+      image: 'rocm/vllm-private:355_wip_322_3d192ffe9_1026'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'vllm'
       precision: 'fp8'
@@ -197,12 +197,12 @@ jobs:
       conc-list: '[4, 8, 16, 32, 64, 128, 256]'  # DPA4EP4 is already 30 tok/s/user and DPA8EP8 is already 35tok/s/user. 512 conc would be too much so we skipping it
 
   bmk-mi355x-fp4:
-    if: ${{ inputs.use_mi355x }}
+    if: 0
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/vllm-private:355_wip_338_b5fa817f1_1031'
+      image: 'rocm/vllm-private:355_wip_322_3d192ffe9_1026'
       framework: 'vllm'
       precision: 'fp4'
       model: 'amd/DeepSeek-R1-0528-MXFP4-Preview'

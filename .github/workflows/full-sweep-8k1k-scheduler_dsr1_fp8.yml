@@ -1,15 +1,15 @@
-name: Full Sweep Scheduler - 1k1k DSR1 FP4
+name: Full Sweep Scheduler - 8k1k DSR1 FP8
 
 on:
   workflow_dispatch:
 
 jobs:
   mega-run:
-    uses: ./.github/workflows/full-sweep-tmpl_dsr1_fp4.yml
+    uses: ./.github/workflows/full-sweep-tmpl_dsr1_fp8.yml
     secrets: inherit
     with:
-      run_1k1k: true
-      run_8k1k: false
+      run_1k1k: false
+      run_8k1k: true
       run_1k8k: false
       use_h100: false
       use_h200: false
