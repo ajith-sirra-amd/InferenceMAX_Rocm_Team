@@ -148,7 +148,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/vllm-private:355_wip_338_b5fa817f1_1031'
+      image: 'rocm/vllm:latest'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'vllm'
       precision: 'fp8'
@@ -202,7 +202,7 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/vllm-private:355_wip_338_b5fa817f1_1031'
+      image: 'rocm/vllm:latest'
       framework: 'vllm'
       precision: 'fp4'
       model: 'amd/DeepSeek-R1-0528-MXFP4-Preview'
