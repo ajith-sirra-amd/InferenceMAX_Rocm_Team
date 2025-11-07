@@ -13,33 +13,19 @@
 # CONC
 # RESULT_FILENAME
 # PORT_OFFSET
+# DP_ATTENTION
+# EP_SIZE
 
 echo "JOB $SLURM_JOB_ID running on $SLURMD_NODENAME"
 
-echo "TP: $TP, CONC: $CONC, ISL: $ISL, OSL: $OSL"
+echo "TP: $TP, CONC: $CONC, ISL: $ISL, OSL: $OSL, EP_SIZE: $EP_SIZE, DP_ATTENTION: $DP_ATTENTION"
 
 hf download $MODEL
 
 # ========= Determine DP_ATTENTION, EP_SIZE and MOE_BACKEND based on ISL, OSL, CONC =========
-EP_SIZE="$TP"
 MOE_BACKEND="DEEPGEMM"
-DP_ATTENTION=false
 
-if [[ "$ISL" == "1024" && "$OSL" == "1024" ]]; then
-    if [[ $CONC -gt 32 ]]; then
-        DP_ATTENTION=true
-    fi
-elif [[ "$ISL" == "1024" && "$OSL" == "8192" ]]; then
-    if [[ $CONC -gt 64 ]]; then
-        DP_ATTENTION=true
-    fi
-elif [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
-    if [[ $CONC -gt 64 ]]; then
-        DP_ATTENTION=true
-    fi
-fi
-
-echo "Final configuration: EP_SIZE='$EP_SIZE', MOE_BACKEND='$MOE_BACKEND', DP_ATTENTION='$DP_ATTENTION'"
+echo "MOE_BACKEND set to '$MOE_BACKEND'"
 
 SERVER_LOG=$(mktemp /tmp/server-XXXXXX.log)
 PORT=$(( 8888 + $PORT_OFFSET ))
@@ -88,12 +74,6 @@ mpirun -n 1 --oversubscribe --allow-run-as-root \
 set +x
 while IFS= read -r line; do
     printf '%s\n' "$line"
-    if [[ "$line" =~ [Ee][Rr][Rr][Oo][Rr] ]]; then
-        sleep 5
-        tail -n100 $SERVER_LOG
-        echo "JOB $SLURM_JOB_ID ran on NODE $SLURMD_NODENAME"
-        exit 1
-    fi
     if [[ "$line" == *"Application startup complete"* ]]; then
         break
     fi

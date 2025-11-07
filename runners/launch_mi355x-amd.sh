@@ -24,7 +24,7 @@
 # LM_EVAL_OUTPUT_BASENAME
 
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"  # Temp solution
-VLLM_CACHE_MOUNT="/data/.vllm_cache-mi355x/" # Temp solution
+#VLLM_CACHE_MOUNT="/data/.vllm_cache-mi355x/" # Temp solution
 
 if [[ "$MODEL" == *"DeepSeek-R1"* && "$FRAMEWORK" == "sglang" ]]; then
     FRAMEWORK_SUFFIX="_sglang"
@@ -57,12 +57,13 @@ done
 
 docker network create $network_name
 
+# Turn off now (dsr1 have huge cache variation)
+#-v $VLLM_CACHE_MOUNT:/root/.cache/vllm/ \
 set -x
 docker run --rm -d --ipc=host --shm-size=16g --network=$network_name --name=$server_name \
 --privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
--v $VLLM_CACHE_MOUNT:/root/.cache/vllm/ \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
 -e HF_TOKEN -e HF_HUB_CACHE -e MODEL -e TP -e CONC -e MAX_MODEL_LEN -e PORT=$PORT \
 -e ISL -e OSL \
@@ -101,7 +102,7 @@ if [[ "$run_benchmark" != "false" ]]; then
   --model=$MODEL --backend=vllm --base-url="http://$server_name:$PORT" \
   --dataset-name=random \
   --random-input-len=$ISL --random-output-len=$OSL --random-range-ratio=$RANDOM_RANGE_RATIO \
-  --num-prompts=$(( $CONC * 10 )) \
+  --num-prompts=$NUM_PROMPTS \
   --max-concurrency=$CONC \
   --request-rate=inf --ignore-eos \
   --save-result --percentile-metrics="ttft,tpot,itl,e2el" \

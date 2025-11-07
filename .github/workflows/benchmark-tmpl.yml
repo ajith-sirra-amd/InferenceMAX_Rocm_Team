@@ -50,6 +50,7 @@ on:
         type: string
         required: false
         default: ''
+        default: '[4, 8, 16, 32, 64]' 
 
 env:
   HF_TOKEN: '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'

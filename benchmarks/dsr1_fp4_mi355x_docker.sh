@@ -4,28 +4,32 @@
 # HF_TOKEN
 # HF_HUB_CACHE
 # MODEL
-# MAX_MODEL_LEN
-# RANDOM_RANGE_RATIO
+# PORT
 # TP
 # CONC
-# PORT
-export SGLANG_USE_AITER=1
+# MAX_MODEL_LEN
 
-PREFILL_SIZE=196608
-if [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
-	if [[ "$CONC" -gt "32" ]]; then
-		PREFILL_SIZE=32768
-	fi
-fi
+# Reference
+# https://amd.atlassian.net/wiki/spaces/RPLBAS/pages/1149960861/WIP+rocm+7.0+rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1
 
-set -x
-python3 -m sglang.launch_server --model-path=$MODEL --trust-remote-code \
---host=0.0.0.0 --port=$PORT \
---tensor-parallel-size=$TP \
---chunked-prefill-size=$PREFILL_SIZE \
---mem-fraction-static=0.8 \
---disable-radix-cache \
---num-continuous-decode-steps=4 \
---max-prefill-tokens=$PREFILL_SIZE \
---cuda-graph-max-bs=128
+max_model_len=$MAX_MODEL_LEN            # Must be >= the input + output length
+max_seq_len_to_capture=$MAX_MODEL_LEN   # Beneficial to set this to max_model_len
+max_num_seqs=$CONC
+max_num_batched_tokens=131072  # Smaller values may result in better TTFT but worse TPOT / Throughput
+# Note: this flag may not be compatible with MI325X
+#export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+# Note: Using `--kv-cache-dtype fp8` with DeepSeek may cause accuracy issues
 
+vllm serve ${MODEL} \
+    --host=0.0.0.0 \
+    --port $PORT \
+    --swap-space 64 \
+    --tensor-parallel-size $TP \
+    --max-num-seqs ${max_num_seqs} \
+    --no-enable-prefix-caching \
+    --max-num-batched-tokens ${max_num_batched_tokens} \
+    --max-model-len ${max_model_len} \
+    --block-size 1 \
+    --gpu-memory-utilization 0.95 \
+    --async-scheduling \
+    --kv-cache-dtype auto
