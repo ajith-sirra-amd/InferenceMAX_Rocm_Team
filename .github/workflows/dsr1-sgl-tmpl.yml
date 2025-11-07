@@ -35,7 +35,8 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: mi300x
+      runner: mi300x-amd
+      runner-script: 'launch_mi300x-amd.sh'
       image: 'lmsysorg/sglang:v0.5.4.post2-rocm700-mi30x'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
@@ -52,7 +53,8 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: mi325x
+      runner: mi325x-amd
+      runner-script: 'launch_mi325x-amd.sh'
       image: 'lmsysorg/sglang:v0.5.4.post2-rocm700-mi30x'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
@@ -69,7 +71,8 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: mi355x
+      runner: mi355x-amd
+      runner-script: 'launch_mi355x-amd.sh'
       image: 'lmsysorg/sglang:v0.5.4.post2-rocm700-mi35x'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
@@ -88,7 +91,8 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: mi355x
+      runner: mi355x-amd
+      runner-script: 'launch_mi355x-amd.sh'
       image: 'lmsysorg/sglang:v0.5.4.post2-rocm700-mi35x'
       framework: 'sglang'
       precision: 'fp4'
