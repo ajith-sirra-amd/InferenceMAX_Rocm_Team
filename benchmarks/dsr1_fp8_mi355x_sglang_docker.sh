@@ -13,9 +13,6 @@
 # https://rocm.docs.amd.com/en/docs-7.0-docker/benchmark-docker/inference-sglang-deepseek-r1-fp8.html
 
 export SGLANG_USE_AITER=1
-export RCCL_MSCCL_ENABLE=0
-
-pip install -U xgrammar
 
 python3 -m sglang.launch_server \
     --model-path $MODEL \
