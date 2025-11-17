@@ -2,6 +2,15 @@ name: Full Sweep Scheduler - 1k1k
 
 on:
   workflow_dispatch:
+    inputs:
+      run_dsr1:
+        required: true
+        type: boolean
+        default: False
+      run_gptoss:
+        required: true
+        type: boolean
+        default: False
 
 jobs:
   mega-run:
