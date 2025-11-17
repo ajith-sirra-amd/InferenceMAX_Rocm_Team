@@ -13,15 +13,14 @@ on:
         default: False
 
 jobs:
-  mega-run:
-    uses: ./.github/workflows/full-sweep-tmpl.yml
+  mega-run-dsr1:
+    if: ${{ inputs.run_dsr1 }}
+    uses: ./.github/workflows/full-sweep-tmpl_dsr1.yml
     secrets: inherit
     with:
       run_1k1k: false
       run_8k1k: true
       run_1k8k: false
-      run_dsr1: true
-      run_gptoss: true
       use_h100: false
       use_h200: false
       use_b200: false
@@ -30,3 +29,18 @@ jobs:
       use_mi355x: true
       use_gb200: false
 
+  mega-run-gptoss:
+    if: ${{ inputs.run_gptoss }}
+    uses: ./.github/workflows/full-sweep-tmpl_gptoss.yml
+    secrets: inherit
+    with:
+      run_1k1k: false
+      run_8k1k: true
+      run_1k8k: false
+      use_h100: false
+      use_h200: false
+      use_b200: false
+      use_mi300x: false
+      use_mi325x: false
+      use_mi355x: true
+      use_gb200: false
