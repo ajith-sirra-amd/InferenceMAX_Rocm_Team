@@ -23,10 +23,10 @@ jobs:
       run_1k8k: false
       use_h100: false
       use_h200: false
-      use_b200: false
+      use_b200: true
       use_mi300x: false
       use_mi325x: false
-      use_mi355x: true
+      use_mi355x: false
       use_gb200: false
 
   mega-run-gptoss:
@@ -39,8 +39,8 @@ jobs:
       run_1k8k: false
       use_h100: false
       use_h200: false
-      use_b200: false
+      use_b200: true
       use_mi300x: false
       use_mi325x: false
-      use_mi355x: true
+      use_mi355x: false
       use_gb200: false
