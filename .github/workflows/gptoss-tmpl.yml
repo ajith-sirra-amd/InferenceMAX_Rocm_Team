@@ -86,7 +86,7 @@ jobs:
       runner: b200
       image: 'vllm/vllm-openai:v0.11.0'
       model: 'openai/gpt-oss-120b'
-      tp-list: '[1, 2, 4, 8]'
+      tp-list: '[1, 8]'
       framework: 'vllm'
       precision: 'fp4'
       conc-list: '[4, 8, 16, 32, 64, 128]' 
