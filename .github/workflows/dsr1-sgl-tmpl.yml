@@ -53,7 +53,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: mi325x
+      runner: mi325x-amd
       runner-script: 'launch_mi325x-amd.sh'
       image: 'lmsysorg/sglang:v0.5.5.post2-rocm700-mi30x'
       model: 'deepseek-ai/DeepSeek-R1-0528'
