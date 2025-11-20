@@ -1,0 +1,41 @@
+name: Test - GPT OSS sweep, MI355X
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_1k1k:
+        type: boolean
+        required: false
+      run_8k1k:
+        type: boolean
+        required: false
+      run_1k8k:
+        type: boolean
+        required: false
+
+      use_b200:
+        type: boolean
+        required: false
+      use_mi300x:
+        type: boolean
+        required: false
+      use_mi325x:
+        type: boolean
+        required: false
+      use_mi355x:
+        type: boolean
+        required: false
+
+jobs:
+  gpt-oss-test-run:
+    uses: ./.github/workflows/gpt-oss-sweep-tmpl.yml
+    secrets: inherit
+    with:
+      run_1k1k: ${{ inputs.run_1k1k }}
+      run_8k1k: ${{ inputs.run_8k1k }}
+      run_1k8k: ${{ inputs.run_1k8k }}
+
+      use_b200: ${{ inputs.use_b200 }}
+      use_mi300x: ${{ inputs.use_mi300x }}
+      use_mi325x: ${{ inputs.use_mi325x }}
+      use_mi355x: ${{ inputs.use_mi355x }}

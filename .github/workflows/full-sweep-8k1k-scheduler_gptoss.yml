@@ -1,16 +1,7 @@
-name: Full Sweep Scheduler - 1k8k
+name: Full Sweep Scheduler - 8k1k, GPTOSS
 
 on:
   workflow_dispatch:
-    inputs:
-      run_dsr1:
-        required: true
-        type: boolean
-        default: False
-      run_gptoss:
-        required: true
-        type: boolean
-        default: False
 
 jobs:
   mega-run:
@@ -18,8 +9,10 @@ jobs:
     secrets: inherit
     with:
       run_1k1k: false
-      run_8k1k: false
-      run_1k8k: true
+      run_8k1k: true
+      run_1k8k: false
+      run_dsr1: false
+      run_gptoss: true
       use_h100: false
       use_h200: false
       use_b200: false

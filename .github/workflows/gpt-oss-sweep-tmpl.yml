@@ -1,0 +1,105 @@
+name: Template - Full Sweep
+
+on:
+  workflow_call:
+    inputs:
+      run_1k1k:
+        type: boolean
+        required: true
+      run_8k1k:
+        type: boolean
+        required: true
+      run_1k8k:
+        type: boolean
+        required: true
+
+      use_b200:
+        type: boolean
+        required: true
+      use_mi300x:
+        type: boolean
+        required: true
+      use_mi325x:
+        type: boolean
+        required: true
+      use_mi355x:
+        type: boolean
+        required: true
+
+jobs:
+  gptoss-1k1k:
+    if: ${{ inputs.run_1k1k }}
+    uses: ./.github/workflows/gptoss-tmpl.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_1k1k'
+      isl: 1024
+      osl: 1024
+      max-model-len: 2048
+      random-range-ratio: 0.8
+      use_h100: false
+      use_h200: false
+      use_b200: ${{ inputs.use_b200 }}
+      use_mi300x: false
+      use_mi325x: false
+      use_mi355x: ${{ inputs.use_mi355x }}
+
+
+  collect-gptoss-1k1k-results:
+    needs: gptoss-1k1k
+    if: ${{ inputs.run_1k1k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_1k1k'
+
+  gptoss-8k1k:
+    if: ${{ inputs.run_8k1k }}
+    uses: ./.github/workflows/gptoss-tmpl.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_8k1k'
+      isl: 8192
+      osl: 1024
+      max-model-len: 9216
+      random-range-ratio: 0.8
+      use_h100: false
+      use_h200: false
+      use_b200: ${{ inputs.use_b200 }}
+      use_mi300x: false
+      use_mi325x: false
+      use_mi355x: ${{ inputs.use_mi355x }}
+
+
+  collect-gptoss-8k1k-results:
+    needs: gptoss-8k1k
+    if: ${{ inputs.run_8k1k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_8k1k'
+
+  gptoss-1k8k:
+    if: ${{ inputs.run_1k8k }}
+    uses: ./.github/workflows/gptoss-tmpl.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_1k8k'
+      isl: 1024
+      osl: 8192
+      max-model-len: 9216
+      random-range-ratio: 0.8
+      use_h100: false
+      use_h200: false
+      use_b200: ${{ inputs.use_b200 }}
+      use_mi300x: false
+      use_mi325x: false
+      use_mi355x: ${{ inputs.use_mi355x }}
+
+  collect-gptoss-1k8k-results:
+    needs: gptoss-1k8k
+    if: ${{ inputs.run_1k8k && (success() || failure()) }}
+    uses: ./.github/workflows/collect-results.yml
+    secrets: inherit
+    with:
+      exp-name: 'gptoss_1k8k'

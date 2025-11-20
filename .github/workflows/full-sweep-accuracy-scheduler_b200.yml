@@ -1,0 +1,19 @@
+name: Full Sweep Scheduler - accuracay, B200
+
+on:
+  workflow_dispatch:
+
+jobs:
+  mega-run:
+    uses: ./.github/workflows/full-sweep-accuracy-tmpl.yml
+    secrets: inherit
+    with:
+      run_accuracy: true
+      use_h100: false
+      use_h200: false
+      use_b200: true
+      use_mi300x: false
+      use_mi325x: false
+      use_mi355x: false
+      use_gb200: false
+

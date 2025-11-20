@@ -1,0 +1,30 @@
+name: Full Sweep Scheduler - 1k1k DSR1 FP4
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_1k1k:
+        type: boolean
+        required: true
+      run_8k1k:
+        type: boolean
+        required: true
+      run_1k8k:
+        type: boolean
+        required: true
+
+jobs:
+  mega-run:
+    uses: ./.github/workflows/full-sweep-tmpl_dsr1_fp4.yml
+    secrets: inherit
+    with:
+      run_1k1k: ${{ inputs.run_1k1k }}
+      run_8k1k: ${{ inputs.run_8k1k }}
+      run_1k8k: ${{ inputs.run_1k8k }}
+      use_h100: false
+      use_h200: false
+      use_b200: false
+      use_mi300x: false
+      use_mi325x: false
+      use_mi355x: true
+      use_gb200: false
