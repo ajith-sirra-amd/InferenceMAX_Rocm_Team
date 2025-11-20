@@ -20,8 +20,8 @@ jobs:
       run_1k1k: true
       run_8k1k: false
       run_1k8k: false
-      run_dsr1: true
-      run_gptoss: true
+      run_dsr1: ${{ inputs.run_dsr1 }}
+      run_gptoss: ${{ inputs.run_gptoss }}
       use_h100: false
       use_h200: false
       use_b200: false
