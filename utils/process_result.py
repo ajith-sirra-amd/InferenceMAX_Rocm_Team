@@ -6,7 +6,7 @@ from pathlib import Path
 
 hw = os.environ.get('RUNNER_TYPE')
 tp_size = int(os.environ.get('TP'))
-ep_size = int(os.environ.get('EP_SIZE'))
+ep_size = int(os.environ.get('EP_SIZE', '1'))
 prefill_gpus_str = os.environ.get('PREFILL_GPUS', '')
 decode_gpus_str = os.environ.get('DECODE_GPUS', '')
 

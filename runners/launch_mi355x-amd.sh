@@ -13,9 +13,20 @@
 # GITHUB_WORKSPACE
 # RESULT_FILENAME
 # HF_TOKEN
+# FRAMEWORK
 
 HF_HUB_CACHE_MOUNT="/nfsdata/hf_hub_cache-1/"  # Temp solution
 PORT=8888
+
+# Determine framework suffix for benchmark script
+FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "atom" ]] && printf '_atom' || printf '')
+
+# Use standard image for benchmark client when using atom (atom image lacks benchmark dependencies)
+if [[ "$FRAMEWORK" == "atom" ]]; then
+    CLIENT_IMAGE="rocm/7.0:rocm7.0_ubuntu_22.04_vllm_0.10.1_instinct_20250927_rc1"
+else
+    CLIENT_IMAGE="$IMAGE"
+fi
 
 network_name="bmk-net"
 server_name="bmk-server"
@@ -33,7 +44,7 @@ docker run --rm -d --ipc=host --shm-size=16g --network=$network_name --name=$ser
 -e ISL -e OSL \
 --entrypoint=/bin/bash \
 $IMAGE \
-benchmarks/"${EXP_NAME%%_*}_${PRECISION}_mi355x_docker.sh"
+benchmarks/"${EXP_NAME%%_*}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}_docker.sh"
 
 set +x
 while IFS= read -r line; do
@@ -60,13 +71,14 @@ docker run --rm --network=$network_name --name=$client_name \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
 -e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
 --entrypoint=python3 \
-$IMAGE \
+$CLIENT_IMAGE \
 bench_serving/benchmark_serving.py \
 --model=$MODEL --backend=vllm --base-url="http://$server_name:$PORT" \
 --dataset-name=random \
 --random-input-len=$ISL --random-output-len=$OSL --random-range-ratio=$RANDOM_RANGE_RATIO \
 --num-prompts=$NUM_PROMPTS \
 --max-concurrency=$CONC \
+--trust-remote-code \
 --request-rate=inf --ignore-eos \
 --save-result --percentile-metrics="ttft,tpot,itl,e2el" \
 --result-dir=/workspace/ --result-filename=$RESULT_FILENAME.json
@@ -77,8 +89,7 @@ if ls gpucore.* 1> /dev/null 2>&1; then
 fi
 
 
-while [ -n "$(docker ps -aq)" ]; do
-    docker stop $server_name
-    docker network rm $network_name
-    sleep 5
-done
+# Cleanup: stop server container and remove network
+docker stop $server_name 2>/dev/null || true
+docker rm $server_name 2>/dev/null || true
+docker network rm $network_name 2>/dev/null || true

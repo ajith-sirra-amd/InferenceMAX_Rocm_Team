@@ -1,0 +1,43 @@
+name: Template - Llama 70B
+
+on:
+  workflow_call:
+    inputs:
+      exp-name:
+        required: true
+        type: string
+      isl:
+        required: true
+        type: string
+      osl:
+        required: true
+        type: string
+      max-model-len:
+        required: true
+        type: string
+      random-range-ratio:
+        required: true
+        type: string
+
+      use_mi355x:
+        type: boolean
+        required: true
+
+jobs:
+  bmk-mi355x:
+    if: ${{ inputs.use_mi355x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      runner: mi355x
+      image: 'rocm/vllm-private:355_wip_0ba4600b1_1120'
+      model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
+      tp-list: '[1, 2, 4, 8]'
+      framework: 'vllm'
+      precision: 'fp8'
+      conc-list: '[4, 8, 16, 32, 64]' 

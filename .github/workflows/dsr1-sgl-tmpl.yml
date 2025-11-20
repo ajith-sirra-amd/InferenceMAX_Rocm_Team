@@ -1,0 +1,106 @@
+name: Template - DeepSeek R1, SGLang on MI355
+
+on:
+  workflow_call:
+    inputs:
+      exp-name:
+        required: true
+        type: string
+      isl:
+        required: true
+        type: string
+      osl:
+        required: true
+        type: string
+      max-model-len:
+        required: true
+        type: string
+      random-range-ratio:
+        required: true
+        type: string
+
+      use_mi300x:
+        type: boolean
+        required: true
+      use_mi325x:
+        type: boolean
+        required: true
+      use_mi355x:
+        type: boolean
+        required: true
+
+jobs:
+  bmk-mi300x-fp8:
+    if: ${{ inputs.use_mi300x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: mi300x-amd
+      runner-script: 'launch_mi300x-amd.sh'
+      image: 'lmsysorg/sglang:v0.5.4.post2-rocm700-mi30x'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
+  bmk-mi325x-fp8:
+    if: ${{ inputs.use_mi325x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: mi325x-amd
+      runner-script: 'launch_mi325x-amd.sh'
+      image: 'lmsysorg/sglang:v0.5.4.post2-rocm700-mi30x'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+
+  bmk-mi355x-fp8:
+    if: ${{ inputs.use_mi355x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: mi355x-amd
+      runner-script: 'launch_mi355x-amd.sh'
+      image: 'lmsysorg/sglang:v0.5.4.post2-rocm700-mi35x'
+      model: 'deepseek-ai/DeepSeek-R1-0528'
+      framework: 'sglang'
+      precision: 'fp8'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]' 
+
+
+  bmk-mi355x-fp4:
+    if: ${{ inputs.use_mi355x }}
+    uses: ./.github/workflows/benchmark-tmpl.yml
+    secrets: inherit
+    with:
+      runner: mi355x-amd
+      runner-script: 'launch_mi355x-amd.sh'
+      image: 'lmsysorg/sglang:v0.5.4.post2-rocm700-mi35x'
+      framework: 'sglang'
+      precision: 'fp4'
+      model: 'amd/DeepSeek-R1-0528-MXFP4-Preview'
+      exp-name: ${{ inputs.exp-name }}
+      isl: ${{ inputs.isl }}
+      osl: ${{ inputs.osl }}
+      max-model-len: ${{ inputs.max-model-len }}
+      random-range-ratio: ${{ inputs.random-range-ratio }}
+      tp-list: '[8]'
+      conc-list: '[4, 8, 16, 32, 64]' 

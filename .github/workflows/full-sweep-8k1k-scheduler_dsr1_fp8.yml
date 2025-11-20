@@ -1,20 +1,11 @@
-name: Full Sweep Scheduler - 8k1k
+name: Full Sweep Scheduler - 8k1k DSR1 FP8
 
 on:
   workflow_dispatch:
-    inputs:
-      run_dsr1:
-        required: true
-        type: boolean
-        default: False
-      run_gptoss:
-        required: true
-        type: boolean
-        default: False
 
 jobs:
   mega-run:
-    uses: ./.github/workflows/full-sweep-tmpl.yml
+    uses: ./.github/workflows/full-sweep-tmpl_dsr1_fp8.yml
     secrets: inherit
     with:
       run_1k1k: false
