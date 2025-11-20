@@ -61,7 +61,7 @@ done < <(docker logs -f --tail=0 $server_name 2>&1)
 git clone https://github.com/kimbochen/bench_serving.git
 
 
-if [[ "$MODEL" == "nvidia/DeepSeek-R1-0528-FP4" || "$MODEL" == "deepseek-ai/DeepSeek-R1-0528" ]]; then
+if [[ "$MODEL" == "nvidia/DeepSeek-R1-0528-FP4-v2" ||  "$MODEL" == "nvidia/DeepSeek-R1-0528-FP4" || "$MODEL" == "deepseek-ai/DeepSeek-R1-0528" ]]; then
   if [[ "$OSL" == "8192" ]]; then
     NUM_PROMPTS=$(( CONC * 20 ))
   else

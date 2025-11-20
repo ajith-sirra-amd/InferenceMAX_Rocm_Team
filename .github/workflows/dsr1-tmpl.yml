@@ -92,11 +92,11 @@ jobs:
       tp-list: '[8]'
 
   bmk-b200-trt-fp8:
-    if: 0
+    if: ${{ inputs.use_b200 }}
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: b200-trt
+      runner: b200
       image: 'nvcr.io#nvidia/tensorrt-llm/release:1.1.0rc2.post2'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'trt'

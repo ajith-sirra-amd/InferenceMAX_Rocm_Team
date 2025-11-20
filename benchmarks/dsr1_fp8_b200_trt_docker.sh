@@ -16,26 +16,34 @@
 
 echo "TP: $TP, CONC: $CONC, ISL: $ISL, OSL: $OSL"
 
+#hf download $MODEL
+#
+## ========= Determine DP_ATTENTION, EP_SIZE and MOE_BACKEND based on ISL, OSL, CONC =========
+#EP_SIZE="$TP"
+#MOE_BACKEND="DEEPGEMM"
+#DP_ATTENTION=false
+#
+#if [[ "$ISL" == "1024" && "$OSL" == "1024" ]]; then
+#    if [[ $CONC -gt 32 ]]; then
+#        DP_ATTENTION=true
+#    fi
+#elif [[ "$ISL" == "1024" && "$OSL" == "8192" ]]; then
+#    if [[ $CONC -gt 64 ]]; then
+#        DP_ATTENTION=true
+#    fi
+#elif [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
+#    if [[ $CONC -gt 64 ]]; then
+#        DP_ATTENTION=true
+#    fi
+#fi
+
 hf download $MODEL
 
 # ========= Determine DP_ATTENTION, EP_SIZE and MOE_BACKEND based on ISL, OSL, CONC =========
+#https://github.com/ai-dynamo/dynamo/blob/0219979006dc009f5a39d6f93126a31a15189c7a/examples/backends/trtllm/performance_sweeps/scripts/gen_yaml.py#L202C28-L202C34
 EP_SIZE="$TP"
-MOE_BACKEND="DEEPGEMM"
+MOE_BACKEND="TRTLLM"
 DP_ATTENTION=false
-
-if [[ "$ISL" == "1024" && "$OSL" == "1024" ]]; then
-    if [[ $CONC -gt 32 ]]; then
-        DP_ATTENTION=true
-    fi
-elif [[ "$ISL" == "1024" && "$OSL" == "8192" ]]; then
-    if [[ $CONC -gt 64 ]]; then
-        DP_ATTENTION=true
-    fi
-elif [[ "$ISL" == "8192" && "$OSL" == "1024" ]]; then
-    if [[ $CONC -gt 64 ]]; then
-        DP_ATTENTION=true
-    fi
-fi
 
 echo "Final configuration: EP_SIZE='$EP_SIZE', MOE_BACKEND='$MOE_BACKEND', DP_ATTENTION='$DP_ATTENTION'"
 
@@ -46,7 +54,7 @@ EXTRA_CONFIG_FILE="dsr1-fp8.yml"
 cat > $EXTRA_CONFIG_FILE << EOF
 cuda_graph_config:
     enable_padding: true
-    max_batch_size: 256
+    max_batch_size: 128
 enable_attention_dp: $DP_ATTENTION
 print_iter_log: true
 kv_cache_config:
