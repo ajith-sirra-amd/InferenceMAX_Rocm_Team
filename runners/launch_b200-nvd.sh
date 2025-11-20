@@ -71,6 +71,8 @@ else
   NUM_PROMPTS=$(( CONC * 10 ))
 fi
 
+#TODO:remove
+NUM_PROMPTS=$(( CONC * 10 ))
 set -x
 docker run --rm --network host --name $client_name \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
