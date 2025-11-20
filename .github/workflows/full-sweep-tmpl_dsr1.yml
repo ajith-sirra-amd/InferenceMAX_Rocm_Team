@@ -43,7 +43,7 @@ jobs:
     secrets: inherit
     with:
       exp-name: 'dsr1_1k1k'
-      isl: 1024
+      isl: 1
       osl: 1024
       max-model-len: 2048
       random-range-ratio: 0.8
