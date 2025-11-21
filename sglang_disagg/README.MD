@@ -6,7 +6,7 @@ Dense Models
 - amd/Llama-3.3-70B-Instruct-FP8-KV (https://huggingface.co/amd/Llama-3.3-70B-Instruct-FP8-KV)
 - amd/Llama-3.1-405B-Instruct-FP8-KV (https://huggingface.co/amd/Llama-3.1-405B-Instruct-FP8-KV)
 
-Small Experts Models
+MoE Models
 - DeepSeek-V3 (https://huggingface.co/deepseek-ai/DeepSeek-V3)
 - Mixtral-8x7B-v0.1 (https://huggingface.co/mistralai/Mixtral-8x7B-v0.1)
 
