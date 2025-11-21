@@ -37,7 +37,7 @@ on:
         required: true
         type: string
         description: "AMD docker image"
-        default: "rocm/vllm-dev:nightly2"
+        default: "rocm/vllm-dev:nightly"
 
 jobs:
   mega-run-oob:
