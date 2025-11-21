@@ -15,11 +15,11 @@ on:
         required: true
         type: boolean
         default: false
-      run_mi355x:
+      use_mi355x:
         required: true
         type: boolean
         default: False
-      run_b200:
+      use_b200:
         required: true
         type: boolean
         default: False
@@ -48,7 +48,7 @@ jobs:
       run_1k1k: ${{ inputs.run_1k1k }}
       run_8k1k: ${{ inputs.run_8k1k }}
       run_1k8k: ${{ inputs.run_1k8k }}
-      use_b200: ${{ inputs.run_b200 }}
+      use_b200: ${{ inputs.use_b200 }}
       use_mi355x: ${{ inputs.use_mi355x }}
       model_name: ${{ inputs.model_name }}
       nv_vllm_image: ${{ inputs.nv_vllm_image }}
