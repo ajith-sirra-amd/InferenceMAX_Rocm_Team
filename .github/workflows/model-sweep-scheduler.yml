@@ -1,4 +1,4 @@
-name: Model Sweep Scheduler
+name: Model Sweep Scheduler 
 
 on:
   workflow_dispatch:
@@ -25,9 +25,12 @@ on:
         default: False
       model_name:
         required: true
-        type: string
+        type: choice
         description: "HF model name"
         default: "deepseek-ai/DeepSeek-V3"
+        options:
+          - moonshotai/Kimi-K2-Thinking
+          - Qwen/Qwen3-Next-80B-A3B-Instruct
       nv_vllm_image:
         required: true
         type: string
@@ -44,9 +47,9 @@ jobs:
     uses: ./.github/workflows/full-sweep-tmpl_oob.yml
     secrets: inherit
     with:
-      run_1k1k: ${{ inputs.run_1k1k }}
-      run_8k1k: ${{ inputs.run_8k1k }}
-      run_1k8k: ${{ inputs.run_1k8k }}
+      run_1k1k: ${{ inputs.run_1k1k }} 
+      run_8k1k: ${{ inputs.run_8k1k }}  
+      run_1k8k: ${{ inputs.run_1k8k }} 
       use_b200: ${{ inputs.use_b200 }}
       use_mi355x: ${{ inputs.use_mi355x }}
       model_name: ${{ inputs.model_name }}
