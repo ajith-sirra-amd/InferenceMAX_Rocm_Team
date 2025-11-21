@@ -135,7 +135,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: mi300x
-      image: 'rocm/vllm-private:dsfp4_1111'
+      image: 'rocm/vllm-private:355_wip_413_ba6d283bd_1120'
       model: 'openai/gpt-oss-120b'
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
@@ -152,7 +152,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: mi325x
-      image: 'rocm/vllm-private:dsfp4_1111'
+      image: 'rocm/vllm-private:355_wip_413_ba6d283bd_1120'
       model: 'openai/gpt-oss-120b'
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
@@ -169,7 +169,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: mi355x
-      image: 'rocm/vllm-private:dsfp4_1111'
+      image: 'rocm/vllm-private:355_wip_413_ba6d283bd_1120'
       model: 'openai/gpt-oss-120b'
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
