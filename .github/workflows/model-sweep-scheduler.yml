@@ -1,0 +1,55 @@
+name: Model Sweep Scheduler
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_1k1k:
+        required: true
+        type: boolean
+        default: true
+      run_8k1k:
+        required: true
+        type: boolean
+        default: true
+      run_1k8k:
+        required: true
+        type: boolean
+        default: false
+      run_mi355x:
+        required: true
+        type: boolean
+        default: False
+      run_b200:
+        required: true
+        type: boolean
+        default: False
+      model_name:
+        required: true
+        type: string
+        description: "HF model name"
+        default: "deepseek-ai/DeepSeek-V3"
+      nv_vllm_image:
+        required: true
+        type: string
+        description: "NV docker image"
+        default: "vllm/vllm-openai:latest"
+      amd_vllm_image:
+        required: true
+        type: string
+        description: "AMD docker image"
+        default: "rocm/vllm-dev:nightly2"
+
+jobs:
+  mega-run-oob:
+    if: ${{ inputs.run_mi355x }}
+    uses: ./.github/workflows/full-sweep-tmpl_oob.yml
+    secrets: inherit
+    with:
+      run_1k1k: ${{ inputs.run_1k1k }}
+      run_8k1k: ${{ inputs.run_8k1k }}
+      run_1k8k: ${{ inputs.run_1k8k }}
+      use_b200: ${{ inputs.run_b200 }}
+      use_mi355x: ${{ inputs.use_mi355x }}
+      model_name: ${{ inputs.model_name }}
+      nv_vllm_image: ${{ inputs.nv_vllm_image }}
+      amd_vllm_image: ${{ inputs.amd_vllm_image }}
