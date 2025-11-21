@@ -71,6 +71,7 @@ python3 bench_serving/benchmark_serving.py \
 --random-input-len $ISL --random-output-len $OSL --random-range-ratio $RANDOM_RANGE_RATIO \
 --num-prompts $NUM_PROMPTS \
 --max-concurrency $CONC \
+--trust-remote-code \
 --request-rate inf --ignore-eos \
 --save-result --percentile-metrics 'ttft,tpot,itl,e2el' \
 --result-dir /workspace/ --result-filename $RESULT_FILENAME.json"
