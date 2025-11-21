@@ -41,7 +41,6 @@ on:
 
 jobs:
   mega-run-oob:
-    if: ${{ inputs.run_mi355x }}
     uses: ./.github/workflows/full-sweep-tmpl_oob.yml
     secrets: inherit
     with:
