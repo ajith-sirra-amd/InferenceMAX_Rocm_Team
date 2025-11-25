@@ -71,7 +71,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: mi355x-amd
+      runner: mi355x
       runner-script: 'launch_mi355x-amd.sh'
       image: 'lmsysorg/sglang:v0.5.5.post3-rocm700-mi35x'
       model: 'deepseek-ai/DeepSeek-R1-0528'
@@ -91,7 +91,7 @@ jobs:
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:
-      runner: mi355x-amd
+      runner: mi355x
       runner-script: 'launch_mi355x-amd.sh'
       image: 'lmsysorg/sglang:v0.5.5.post3-rocm700-mi35x'
       framework: 'sglang'
