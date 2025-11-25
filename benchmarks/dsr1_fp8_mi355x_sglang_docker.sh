@@ -13,6 +13,7 @@
 # https://rocm.docs.amd.com/en/docs-7.0-docker/benchmark-docker/inference-sglang-deepseek-r1-fp8.html
 
 export SGLANG_USE_AITER=1
+ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 
 python3 -m sglang.launch_server \
     --model-path $MODEL \
@@ -24,5 +25,6 @@ python3 -m sglang.launch_server \
     --mem-fraction-static 0.8 --disable-radix-cache \
     --num-continuous-decode-steps 4 \
     --max-prefill-tokens 196608 \
-    --cuda-graph-max-bs 128
+    --cuda-graph-max-bs 128 \
+    --enable-torch-compile
     
