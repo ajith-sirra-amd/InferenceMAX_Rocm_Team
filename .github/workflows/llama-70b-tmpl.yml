@@ -35,7 +35,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: mi355x
-      image: 'rocm/vllm-private:355_wip_0ba4600b1_1120'
+      image: 'rocm/pytorch-private:vllm_120_rocm7.0_aiter_1124_6097a9_latest'
       model: 'amd/Llama-3.3-70B-Instruct-FP8-KV'
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
