@@ -37,7 +37,7 @@ jobs:
       use_h100: false
       use_h200: false
       use_b200: ${{ inputs.use_b200 }}
-      use_b200-trt: ${{ inputs.use_b200trt }}
+      use_b200trt: ${{ inputs.use_b200trt }}
       use_mi300x: false
       use_mi325x: false
       use_mi355x: ${{ inputs.use_mi355x}}
