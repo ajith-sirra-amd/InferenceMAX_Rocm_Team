@@ -11,6 +11,14 @@ on:
         required: true
         type: boolean
         default: False
+      use_b200:
+        required: true
+        type: boolean
+        default: False
+      use_mi355x:
+        required: true
+        type: boolean
+        default: False
 
 jobs:
   mega-run:
@@ -24,8 +32,9 @@ jobs:
       run_gptoss: ${{ inputs.run_gptoss }}
       use_h100: false
       use_h200: false
-      use_b200: false
+      use_b200: ${{ inputs.use_b200}}
       use_mi300x: false
       use_mi325x: false
-      use_mi355x: true
+      use_mi355x: ${{ inputs.use_mi355x}}
       use_gb200: false
+
