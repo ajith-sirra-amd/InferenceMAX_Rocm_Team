@@ -52,7 +52,7 @@ on:
         default: '[4, 8, 16, 32, 64, 128]' 
 
 env:
-  HF_TOKEN: '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'
+  HF_TOKEN: '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'
   HF_HUB_CACHE: '/mnt/hf_hub_cache/'
   EXP_NAME: ${{ inputs.exp-name }}
   MODEL: ${{ inputs.model }}
