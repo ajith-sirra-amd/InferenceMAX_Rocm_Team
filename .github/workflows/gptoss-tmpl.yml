@@ -28,6 +28,9 @@ on:
       use_b200:
         type: boolean
         required: true
+      use_b200trt:
+        type: boolean
+        required: true
       use_mi300x:
         type: boolean
         required: true
@@ -91,7 +94,7 @@ jobs:
       precision: 'fp4'
 
   bmk-b200-trt:
-    if: 0
+    if: ${{ inputs.use_b200trt }}
     uses: ./.github/workflows/benchmark-tmpl.yml
     secrets: inherit
     with:

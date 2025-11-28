@@ -28,6 +28,9 @@ on:
       use_b200:
         type: boolean
         required: true
+      use_b200trt:
+        type: boolean
+        required: true
       use_mi300x:
         type: boolean
         required: true
@@ -55,6 +58,7 @@ jobs:
       random-range-ratio: 0.8
       use_h200: ${{ inputs.use_h200 }}
       use_b200: ${{ inputs.use_b200 }}
+      use_b200trt: ${{ inputs.use_b200trt }}
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
@@ -81,6 +85,7 @@ jobs:
       use_h100: ${{ inputs.use_h100 }}
       use_h200: ${{ inputs.use_h200 }}
       use_b200: ${{ inputs.use_b200 }}
+      use_b200trt: ${{ inputs.use_b200trt }}
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
@@ -105,6 +110,7 @@ jobs:
       random-range-ratio: 0.8
       use_h200: ${{ inputs.use_h200 }}
       use_b200: ${{ inputs.use_b200 }}
+      use_b200trt: ${{ inputs.use_b200trt }}
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
@@ -131,6 +137,7 @@ jobs:
       use_h100: ${{ inputs.use_h100 }}
       use_h200: ${{ inputs.use_h200 }}
       use_b200: ${{ inputs.use_b200 }}
+      use_b200trt: ${{ inputs.use_b200trt }}
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
@@ -155,6 +162,7 @@ jobs:
       random-range-ratio: 0.8
       use_h200: ${{ inputs.use_h200 }}
       use_b200: ${{ inputs.use_b200 }}
+      use_b200trt: ${{ inputs.use_b200trt }}
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
@@ -181,6 +189,7 @@ jobs:
       use_h100: ${{ inputs.use_h100 }}
       use_h200: ${{ inputs.use_h200 }}
       use_b200: ${{ inputs.use_b200 }}
+      use_b200trt: ${{ inputs.use_b200trt }}
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
