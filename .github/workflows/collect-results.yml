@@ -15,7 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          token: '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'
+          token: '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'
           fetch-depth: 0
 
       - name: Download JSON artifacts
