@@ -52,7 +52,7 @@ on:
         default: '[4, 8, 16, 32, 64, 128]' 
 
 env:
-  HF_TOKEN: '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'
+  HF_TOKEN: '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'
   HF_HUB_CACHE: '/mnt/hf_hub_cache/'
   EXP_NAME: ${{ inputs.exp-name }}
   MODEL: ${{ inputs.model }}
@@ -89,7 +89,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          token: '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'
+          token: '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'
           fetch-depth: 0
 
       - name: Launch job script
