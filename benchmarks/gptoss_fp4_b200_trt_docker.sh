@@ -14,6 +14,10 @@
 # NUM_PROMPTS
 # RESULT_FILENAME
 
+#workaround
+export DP_ATTENTION=0
+export EP_SIZE=0
+
 SERVER_LOG=$(mktemp /tmp/server-XXXXXX.log)
 
 # GPTOSS TRTLLM Deployment Guide:
