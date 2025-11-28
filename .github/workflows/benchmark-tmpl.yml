@@ -70,7 +70,8 @@ jobs:
   benchmark:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 180
-
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
