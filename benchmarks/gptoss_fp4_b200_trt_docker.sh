@@ -15,8 +15,8 @@
 # RESULT_FILENAME
 
 #workaround
-export DP_ATTENTION=0
-export EP_SIZE=0
+export DP_ATTENTION=false
+export EP_SIZE=1
 
 SERVER_LOG=$(mktemp /tmp/server-XXXXXX.log)
 
