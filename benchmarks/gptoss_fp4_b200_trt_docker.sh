@@ -69,4 +69,4 @@ mpirun -n 1 --oversubscribe --allow-run-as-root \
     --max_seq_len=$MAX_MODEL_LEN \
     --max_num_tokens=$MAX_NUM_TOKENS \
     --tp_size=$TP --ep_size=$EP_SIZE \
-    --extra_llm_api_options=$EXTRA_CONFIG_FILE &
+    --extra_llm_api_options=$EXTRA_CONFIG_FILE 
