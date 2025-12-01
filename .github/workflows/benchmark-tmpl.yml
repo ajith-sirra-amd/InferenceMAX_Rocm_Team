@@ -44,7 +44,7 @@ on:
         default: ''
 
 env:
-  HF_TOKEN: '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'
+  HF_TOKEN: ''
   HF_HUB_CACHE: '/mnt/hf_hub_cache/'
   EXP_NAME: ${{ inputs.exp-name }}
   MODEL: ${{ inputs.model }}
