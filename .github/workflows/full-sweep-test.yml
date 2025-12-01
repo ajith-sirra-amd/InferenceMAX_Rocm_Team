@@ -63,12 +63,12 @@ jobs:
     env:
       RESULTS_DIR: "results/"
       STATS_FILENAME: "run_stats"
-      GITHUB_TOKEN: ${{ secrets.REPO_PAT }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.REPO_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Download results artifacts
