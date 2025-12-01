@@ -67,7 +67,7 @@ jobs:
         conc: [4, 8, 16, 32, 64]
 
     env:
-      HF_TOKEN: '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'
+      HF_TOKEN: ''
       HF_HUB_CACHE: '/mnt/hf_hub_cache/'
       EXP_NAME: 'gptoss_1k1k_acc'
       MODEL: 'openai/gpt-oss-120b'
@@ -151,7 +151,7 @@ jobs:
         conc: [4, 8, 16, 32, 64]
 
     env:
-      HF_TOKEN: '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'
+      HF_TOKEN: ''
       HF_HUB_CACHE: '/mnt/hf_hub_cache/'
       EXP_NAME: 'gptoss_8k1k_acc'
       MODEL: 'openai/gpt-oss-120b'
@@ -235,7 +235,7 @@ jobs:
         conc: [4, 8, 16, 32, 64]
 
     env:
-      HF_TOKEN: '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'
+      HF_TOKEN: ''
       HF_HUB_CACHE: '/mnt/hf_hub_cache/'
       EXP_NAME: 'gptoss_1k8k_acc'
       MODEL: 'openai/gpt-oss-120b'
