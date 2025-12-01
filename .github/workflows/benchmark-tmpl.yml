@@ -90,7 +90,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          token: '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'
+          token: ''
           fetch-depth: 0
 
       - name: Launch job script
