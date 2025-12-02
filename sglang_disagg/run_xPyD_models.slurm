@@ -21,11 +21,6 @@ echo ""
 
 # Define valid model names
 VALID_MODELS=( \
-    "Qwen3-32B" \
-    "Mixtral-8x7B-v0.1" \
-    "Llama-3.1-8B-Instruct" \
-    "Llama-3.1-405B-Instruct-FP8-KV" \
-    "amd-Llama-3.3-70B-Instruct-FP8-KV" \
     "DeepSeek-V3" \
     "DeepSeek-R1" 
 )
@@ -33,11 +28,6 @@ VALID_MODELS=( \
 
 # Each model has an associated run file - Set it here
 declare -A MODEL_RUNFILES=(
-    ["Qwen3-32B"]="sglang_disagg_server.sh"
-    ["Mixtral-8x7B-v0.1"]="sglang_disagg_server.sh"
-    ["Llama-3.1-8B-Instruct"]="sglang_disagg_server.sh"
-    ["Llama-3.1-405B-Instruct-FP8-KV"]="sglang_disagg_server.sh"
-    ["amd-Llama-3.3-70B-Instruct-FP8-KV"]="sglang_disagg_server.sh"
     ["DeepSeek-V3"]="sglang_disagg_server.sh"
     ["DeepSeek-R1"]="sglang_disagg_server.sh"
 )
@@ -298,9 +288,9 @@ export RUN_FILE_FULL="$MOONCAKE_COOKBOOK_PATH/${RUN_FILE}"
 # Use only the selected nodes for srun execution
 SELECTED_NODELIST_SRUN=$(echo "$SELECTED_NODES" | paste -sd,)
 
+# sudo docker ps -q | xargs --no-run-if-empty sudo docker stop;
 srun --nodelist="$SELECTED_NODELIST_SRUN" bash -c '
 echo "Rank $SLURM_PROCID on $(hostname)";
-sudo docker ps -q | xargs --no-run-if-empty sudo docker stop;
 sudo docker run --rm \
     --device /dev/dri \
     --device /dev/kfd \

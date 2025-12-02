@@ -14,6 +14,7 @@ MODEL_NAME="${MODEL_NAME:-}"
 xP="${xP:-1}"
 yD="${yD:-1}"
 IPADDRS="${IPADDRS:-localhost}"
+PROFILER_ARGS="${PROFILER_ARGS:-}"
 
 # =============================================================================
 # Dependencies and Environment Setup
@@ -30,12 +31,12 @@ host_name=$(hostname)
 
 declare -A MODEL_PREFILL_CONFIGS=(
     ["DeepSeek-V3"]="--moe-a2a-backend none --enable-dp-attention --decode-log-interval 1 --load-balance-method round_robin --moe-dense-tp-size 1 --enable-dp-lm-head --disable-radix-cache --watchdog-timeout 1000000 --mem-fraction-static 0.9 --chunked-prefill-size 131076 --max-running-requests 4096 --context-length 12288 --max-total-tokens 131024 --disable-cuda-graph --attention-backend aiter"
-    ["DeepSeek-R1"]="--moe-a2a-backend none --enable-dp-attention --decode-log-interval 1 --load-balance-method round_robin --moe-dense-tp-size 1 --enable-dp-lm-head --disable-radix-cache --watchdog-timeout 1000000 --mem-fraction-static 0.9 --chunked-prefill-size 131076 --max-running-requests 4096 --context-length 12288 --max-total-tokens 131024 --disable-cuda-graph --attention-backend aiter"
+    ["DeepSeek-R1"]="--moe-a2a-backend mori --enable-dp-attention --decode-log-interval 1 --load-balance-method round_robin --moe-dense-tp-size 1 --enable-dp-lm-head --disable-radix-cache --watchdog-timeout 1000000 --mem-fraction-static 0.7 --chunked-prefill-size 8192 --max-running-requests 4096 --context-length 12288 --max-total-tokens 131024 --disable-cuda-graph --attention-backend aiter"
 )
 
 declare -A MODEL_DECODE_CONFIGS=(
     ["DeepSeek-V3"]="--moe-a2a-backend none --enable-dp-attention --decode-log-interval 1 --prefill-round-robin-balance --moe-dense-tp-size 1 --enable-dp-lm-head --watchdog-timeout 1000000 --mem-fraction-static 0.9 --max-running-requests 4096 --cuda-graph-bs 128 256 --attention-backend aiter"
-    ["DeepSeek-R1"]="--moe-a2a-backend none --enable-dp-attention --decode-log-interval 1 --prefill-round-robin-balance --moe-dense-tp-size 1 --enable-dp-lm-head --watchdog-timeout 1000000 --mem-fraction-static 0.9 --max-running-requests 4096 --cuda-graph-bs 128 256 --attention-backend aiter"
+    ["DeepSeek-R1"]="--moe-a2a-backend mori --enable-dp-attention --decode-log-interval 1 --prefill-round-robin-balance --moe-dense-tp-size 1 --enable-dp-lm-head --watchdog-timeout 1000000 --mem-fraction-static 0.7 --max-running-requests 4096 --cuda-graph-bs 128 256 --attention-backend aiter"
 )
 
 # =============================================================================
@@ -130,6 +131,7 @@ if [ "$NODE_RANK" -eq 0 ]; then
     
     proxy_pid=$!
     
+    # start the head prefill server
     PREFILL_CMD="MC_TE_METRIC=true python3 -m sglang.launch_server \
         --model-path $MODEL_PATH/$MODEL_NAME \
         --disaggregation-mode prefill \
@@ -162,34 +164,12 @@ if [ "$NODE_RANK" -eq 0 ]; then
 
     echo "Proxy Server Ready for benchmarking on ${host_name}:${host_ip}"
 
-    ### slow down Decode nodes
-    echo "Begin to slow down decode server"
-    wait=0
-
-    set -x 
-    sleep 10
-    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -H "Content-Type: application/json" -d '{"forward_sleep_time": 60}' -X POST "${DECODE_ARGS}/slow_down")
-    if [ ! "$code" -eq 200 ]; then
-        echo "failed to slow down decode server. status code: $code"
-    else
-        cd /opt/mooncake-cookbook
-        bash /opt/mooncake-cookbook/benchmark_xPyD.sh
-        wait=1
-
-        sleep 60
-        ### recover Decode nodes
-        echo "Begin to recover decode server"
-        code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -H "Content-Type: application/json" -d '{"forward_sleep_time": null}' -X POST "${DECODE_ARGS}/slow_down")
-        if [ ! "$code" -eq 200 ]; then
-            echo "failed to recover decode server. status code: $code"
-            wait=0
-        fi
-    fi
-    set +x
-
-    if [ "$wait" -eq 1 ]; then
-        sleep 300
-    fi
+    echo "Benchmarking on ${host_name}:${host_ip}"
+    cd /opt/mooncake-cookbook
+    # todo: put bench.sh in sglang folder
+    # n_prefill n_decode prefill_gpus decode_gpus model_path model_name log_path isl osl concurrency_list req_rate
+    bash /opt/mooncake-cookbook/bench.sh 1 1 8 8 $MODEL_PATH $MODEL_NAME /run_logs/${SLURM_JOB_ID} ${PROFILER_ARGS}
+ 
     echo "Killing the proxy server and prefill server"
     kill $proxy_pid
     kill $prefill0_pid
