@@ -12,6 +12,12 @@ on:
       run_1k8k:
         type: boolean
         required: true
+      run_fp8:
+        type: boolean
+        required: true
+      run_fp4:
+        type: boolean
+        required: true
 
       use_mi300x:
         type: boolean
@@ -37,6 +43,8 @@ jobs:
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
+      run_fp8: ${{ inputs.run_fp8 }}
+      run_fp4: ${{ inputs.run_fp4 }}
 
   collect-dsr1-1k1k-results:
     needs: dsr1-1k1k
@@ -59,6 +67,8 @@ jobs:
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
+      run_fp8: ${{ inputs.run_fp8 }}
+      run_fp4: ${{ inputs.run_fp4 }}
 
   collect-dsr1-8k1k-results:
     needs: dsr1-8k1k
@@ -81,6 +91,8 @@ jobs:
       use_mi300x: ${{ inputs.use_mi300x }}
       use_mi325x: ${{ inputs.use_mi325x }}
       use_mi355x: ${{ inputs.use_mi355x }}
+      run_fp8: ${{ inputs.run_fp8 }}
+      run_fp4: ${{ inputs.run_fp4 }}
 
   collect-dsr1-1k8k-results:
     needs: dsr1-1k8k
