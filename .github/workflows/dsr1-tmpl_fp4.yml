@@ -202,8 +202,8 @@ jobs:
     secrets: inherit
     with:
       runner: mi355x
-      image: 'rocm/vllm-private:dsfp4_1111'
-      framework: 'vllm'
+      image: 'lmsysorg/sglang:v0.5.6.post1-rocm700-mi35x'
+      framework: 'sglang'
       precision: 'fp4'
       model: 'amd/DeepSeek-R1-0528-MXFP4-Preview'
       exp-name: ${{ inputs.exp-name }}
