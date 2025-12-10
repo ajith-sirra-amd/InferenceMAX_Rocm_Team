@@ -71,7 +71,7 @@ docker run --rm --network=$network_name --name=$client_name \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
 -e HF_TOKEN -e PYTHONPYCACHEPREFIX=/tmp/pycache/ \
 --entrypoint=python3 \
-$CLIENT_IMAGE \
+lmsysorg/sglang:v0.5.5.post3-rocm700-mi35x \
 bench_serving/benchmark_serving.py \
 --model=$MODEL --backend=vllm --base-url="http://$server_name:$PORT" \
 --dataset-name=random \
