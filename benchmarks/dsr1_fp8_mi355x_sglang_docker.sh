@@ -26,5 +26,6 @@ python3 -m sglang.launch_server \
     --num-continuous-decode-steps 4 \
     --max-prefill-tokens 196608 \
     --cuda-graph-max-bs 128 \
-    --enable-torch-compile
+    --enable-torch-compile \
+    --kv-cache-dtype fp8_e4m3
     
