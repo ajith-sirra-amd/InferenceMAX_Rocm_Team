@@ -27,5 +27,6 @@ python3 -m sglang.launch_server --model-path=$MODEL --trust-remote-code \
 --disable-radix-cache \
 --num-continuous-decode-steps=4 \
 --max-prefill-tokens=$PREFILL_SIZE \
---cuda-graph-max-bs=128
+--cuda-graph-max-bs=128 \
+--attention-backend aiter
 
