@@ -13,6 +13,9 @@ on:
         type: boolean
         required: true
 
+      use_mi300x:
+        type: boolean
+        required: true
       use_mi355x:
         type: boolean
         required: true
@@ -29,6 +32,7 @@ jobs:
       osl: 1024
       max-model-len: 2048
       random-range-ratio: 0.8
+      use_mi300x: ${{ inputs.use_mi300x }}
       use_mi355x: ${{ inputs.use_mi355x }}
 
   collect-llama-70b-fp8-1k1k-results:
@@ -49,6 +53,7 @@ jobs:
       osl: 1024
       max-model-len: 9216
       random-range-ratio: 0.8
+      use_mi300x: ${{ inputs.use_mi300x }}
       use_mi355x: ${{ inputs.use_mi355x }}
 
   collect-llama-70b-fp8-8k1k-results:
@@ -69,6 +74,7 @@ jobs:
       osl: 8192
       max-model-len: 9216
       random-range-ratio: 0.8
+      use_mi300x: ${{ inputs.use_mi300x }}
       use_mi355x: ${{ inputs.use_mi355x }}
 
   collect-llama-70b-fp8-1k8k-results:
