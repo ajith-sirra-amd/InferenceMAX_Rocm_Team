@@ -322,7 +322,7 @@ sudo docker run --rm \
     --name $DOCKER_CONT_NAME \
     $DOCKER_IMAGE_NAME bash -c "
         mkdir -p /run_logs/${SLURM_JOB_ID}
-        $RUN_FILE_FULL 2>&1 | tee /run_logs/${SLURM_JOB_ID}/pd_sglang_bench_serving.sh_NODE${SLURM_PROCID}.log
+        $RUN_FILE_FULL ${PROFILER_ARGS} 2>&1 | tee /run_logs/${SLURM_JOB_ID}/pd_sglang_bench_serving.sh_NODE${SLURM_PROCID}.log
     "
 '
 srun --nodelist="$SELECTED_NODELIST_SRUN" bash -c 'sudo docker rm -f $DOCKER_CONT_NAME'
