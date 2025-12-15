@@ -69,7 +69,7 @@ env:
 jobs:
   benchmark:
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 180
+    timeout-minutes: 360
     permissions:
       contents: write
     strategy:
