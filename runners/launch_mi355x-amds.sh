@@ -5,12 +5,15 @@
 set -x
 
 # Set up environment variables for SLURM
-export SLURM_PARTITION="batch"
-export SLURM_ACCOUNT="benchmark"
-export SLURM_JOB_NAME="benchmark-dynamo.job"
+export SLURM_ACCOUNT="billhe12"
+export SLURM_PARTITION="Compute-Group01"
+export SLURM_JOB_NAME="benchmark-sglang-standalone.job"
 
+export SGL_SLURM_JOBS_PATH="../sglang_disagg"
 
-export MODEL_PATH="/mnt/lustre01/models/deepseek-r1-0528"
+export MODEL_NAME="DeepSeek-R1"
+# export MODEL_PATH="/mnt/lustre01/models/deepseek-r1-0528"
+export MODEL_PATH="/apps/data/models"
 export ISL="$ISL"
 export OSL="$OSL"
 
@@ -30,7 +33,7 @@ done
 
 # Process results from all configurations
 
-#TODO(billishyahao): process the log file...
+# TODO(billishyahao): process the log file...
 # search for "FRAMEWORK_DIFF_IF_STATEMENT #3" for this if-statement
 # Find the latest log directory that contains the data
 cat > collect_latest_results.py <<'PY'
