@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Before running this code - request 5 nodes from salloc 
-#salloc -N 5 --ntasks-per-node=1 --nodelist=<Nodes> --gres=gpu:8 -p <partition> -t 12:00:00
+# salloc -N 5 --ntasks-per-node=1 --nodelist=<Nodes> --gres=gpu:8 -p <partition> -t 12:00:00
 #Sample Commands
 # Parallelism Configuration:
 # PREFILL_TP_SIZE: Tensor Parallelism size for Prefill nodes (default: 8)

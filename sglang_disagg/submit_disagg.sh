@@ -2,6 +2,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+# set -x 
+
 usage() {
     cat << 'USAGE'
 This script aims to provide a one-liner call to the submit_job_script.py,
@@ -76,21 +78,41 @@ NUM_NODES=$((PREFILL_NODES + DECODE_NODES))
 profiler_args="${ISL} ${OSL} ${CONCURRENCIES} ${REQUEST_RATE}"
 
 # Export variables for the SLURM job
-export MODEL_NAME=$MODEL_NAME
 export MODEL_DIR=$MODEL_PATH
 export DOCKER_IMAGE_NAME=$CONTAINER_IMAGE
 export xP=$PREFILL_NODES
 export yD=$DECODE_NODES
 export PROFILER_ARGS=$profiler_args
 
+
+
+export xP=$PREFILL_WORKERS
+export yD=$DECODE_WORKERS
+export MODEL_NAME=$MODEL_NAME
+export PREFILL_TP_SIZE=8
+export PREFILL_ENABLE_EP=true
+export PREFILL_ENABLE_DP=true
+export DECODE_TP_SIZE=8
+export DECODE_ENABLE_EP=true
+export DECODE_ENABLE_DP=true
+export BENCH_INPUT_LEN=1024
+export BENCH_OUTPUT_LEN=1024
+export BENCH_RANDOM_RANGE_RATIO=1
+export BENCH_NUM_PROMPTS_MULTIPLIER=10
+export BENCH_MAX_CONCURRENCY=2048
+export BENCH_REQUEST_RATE=${REQUEST_RATE}
+# bash run_xPyD_models.slurm 2>&1 | tee log_${MODEL_NAME}_xP${xP}_yD${yD}.log
+
 # Construct the sbatch command
 sbatch_cmd=(
-    sbatch 
+    sbatch
     -N "$NUM_NODES" 
     -n "$NUM_NODES" 
     --time "$TIME_LIMIT" 
     --partition "$SLURM_PARTITION" 
-    --account "$SLURM_ACCOUNT" 
+    --account "$SLURM_ACCOUNT"
+    --nodelist smci355-ccs-aus-n08-[25,33],smci355-ccs-aus-n09-21
+    --job-name 1p2d_bench-serving
     run_xPyD_models.slurm
 )
 

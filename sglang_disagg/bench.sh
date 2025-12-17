@@ -30,22 +30,54 @@ head_port="30000"
 # MODEL_NAME="DeepSeek-R1"
 # MODEL_PATH="/shared-inference"
 
-source benchmark_utils.sh
+# source benchmark_utils.sh
 
 # wait_for_model $head_node $head_port $n_prefill $n_decode 5 900 60
 
 # sleep 300
 
-set -e
+# set -e
 # warmup_model $head_node $head_port $MODEL_PATH $MODEL_PATH "${chosen_isl}x${chosen_osl}x10000x10000x250"
-set +e
+# set +e
 
 profile_folder="${log_path}/sglang_isl_${chosen_isl}_osl_${chosen_osl}"
 mkdir -p $profile_folder
 
+source "$(dirname "$0")/benchmark_lib.sh"
+
+
+for max_concurrency in ${chosen_concurrencies[@]}; do
+
+    export_file="${profile_folder}/concurrency_${max_concurrency}_req_rate_${chosen_req_rate}.json"
+
+    echo "profile_folder: $profile_folder"
+    echo "max_concurrency: $max_concurrency"
+    echo "chosen_req_rate: $chosen_req_rate"
+    echo "MODEL_PATH: $MODEL_PATH"
+    echo "head_port: $head_port"
+    echo "chosen_isl: $chosen_isl"
+    echo "chosen_osl: $chosen_osl"
+    echo "export_file: $export_file"
+
+
+    run_benchmark_serving \
+        --model  ${MODEL_PATH} \
+        --port ${head_port} \
+        --backend openai \
+        --input-len ${chosen_isl} \
+        --output-len ${chosen_osl} \
+        --random-range-ratio ${random_range_ratio} \
+        --num-prompts $(( $max_concurrency * $num_prompts_multiplier )) \
+        --max-concurrency "$max_concurrency" \
+        --result-filename "$export_file" \
+        --result-dir /workspace/
+
+    echo "-----------------------------------------"
+done
+
 # for max_concurrency in ${chosen_concurrencies[@]}; do
 
-#     chosen_n_requests=$((5*max_concurrency))
+#     chosen_n_requests=$(( $max_concurrency * $num_prompts_multiplier ))
 
 #     export_file="${profile_folder}/concurrency_${max_concurrency}_req_rate_${chosen_req_rate}.json"
 
@@ -67,30 +99,30 @@ mkdir -p $profile_folder
 #     echo "-----------------------------------------"
 # done
 
-source "$(dirname "$0")/benchmark_lib.sh"
+# source "$(dirname "$0")/benchmark_lib.sh"
 
-max_concurrency=${chosen_concurrencies[0]}
-export_file="${profile_folder}/concurrency_${max_concurrency}_req_rate_${chosen_req_rate}.json"
+# max_concurrency=${chosen_concurrencies[0]}
+# export_file="${profile_folder}/concurrency_${max_concurrency}_req_rate_${chosen_req_rate}.json"
 
-echo "=== debug info ==="
+# echo "=== debug info ==="
 
-echo "profile_folder: $profile_folder"
-echo "max_concurrency: $max_concurrency"
-echo "chosen_req_rate: $chosen_req_rate"
-echo "MODEL_PATH: $MODEL_PATH"
-echo "head_port: $head_port"
-echo "chosen_isl: $chosen_isl"
-echo "chosen_osl: $chosen_osl"
-echo "export_file: $export_file"
+# echo "profile_folder: $profile_folder"
+# echo "max_concurrency: $max_concurrency"
+# echo "chosen_req_rate: $chosen_req_rate"
+# echo "MODEL_PATH: $MODEL_PATH"
+# echo "head_port: $head_port"
+# echo "chosen_isl: $chosen_isl"
+# echo "chosen_osl: $chosen_osl"
+# echo "export_file: $export_file"
 
-run_benchmark_serving \
-    --model  ${MODEL_PATH} \
-    --port ${head_port} \
-    --backend openai \
-    --input-len ${chosen_isl} \
-    --output-len ${chosen_osl} \
-    --random-range-ratio ${random_range_ratio} \
-    --num-prompts $(( $max_concurrency * $num_prompts_multiplier )) \
-    --max-concurrency "$max_concurrency" \
-    --result-filename "$export_file" \
-    --result-dir /workspace/
+# run_benchmark_serving \
+#     --model  ${MODEL_PATH} \
+#     --port ${head_port} \
+#     --backend openai \
+#     --input-len ${chosen_isl} \
+#     --output-len ${chosen_osl} \
+#     --random-range-ratio ${random_range_ratio} \
+#     --num-prompts $(( $max_concurrency * $num_prompts_multiplier )) \
+#     --max-concurrency "$max_concurrency" \
+#     --result-filename "$export_file" \
+#     --result-dir /workspace/

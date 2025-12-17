@@ -28,6 +28,7 @@ DECODE_ENABLE_DP="${DECODE_ENABLE_DP:-true}"
 BENCH_INPUT_LEN="${BENCH_INPUT_LEN:-1024}"
 BENCH_OUTPUT_LEN="${BENCH_OUTPUT_LEN:-1024}"
 BENCH_RANDOM_RANGE_RATIO="${BENCH_RANDOM_RANGE_RATIO:-1}"
+BENCH_REQUEST_RATE="${BENCH_REQUEST_RATE:-inf}"
 BENCH_NUM_PROMPTS_MULTIPLIER="${BENCH_NUM_PROMPTS_MULTIPLIER:-10}"
 BENCH_MAX_CONCURRENCY="${BENCH_MAX_CONCURRENCY:-512}"
 
@@ -263,7 +264,7 @@ if [ "$NODE_RANK" -eq 0 ]; then
     cd /sglang_disagg
     # todo: put bench.sh in sglang folder
     # n_prefill n_decode prefill_gpus decode_gpus model_dir model_name log_path isl osl concurrency_list req_rate random_range_ratio num_prompts_multiplier
-    bash /sglang_disagg/bench.sh 1 1 8 8 $MODEL_DIR $MODEL_NAME /run_logs/${SLURM_JOB_ID} ${BENCH_INPUT_LEN} ${BENCH_OUTPUT_LEN} "${BENCH_MAX_CONCURRENCY}" 1 ${BENCH_RANDOM_RANGE_RATIO} ${BENCH_NUM_PROMPTS_MULTIPLIER}
+    bash /sglang_disagg/bench.sh 1 1 8 8 $MODEL_DIR $MODEL_NAME /run_logs/${SLURM_JOB_ID} ${BENCH_INPUT_LEN} ${BENCH_OUTPUT_LEN} "${BENCH_MAX_CONCURRENCY}" ${BENCH_REQUEST_RATE} ${BENCH_RANDOM_RANGE_RATIO} ${BENCH_NUM_PROMPTS_MULTIPLIER}
  
     echo "Killing the proxy server and prefill server"
     kill $proxy_pid
