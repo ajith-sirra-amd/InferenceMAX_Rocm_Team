@@ -6,20 +6,17 @@ on:
 
 jobs:
   prep:
-    steps:
-    - name: Checkout specific branch
-      uses: actions/checkout@v4
-      with:
-        ref: atom # Specify the branch name here
+    uses: actions/checkout@v4
+    with:
+      ref: atom # Specify the branch name here
   mega-run:
-    - name: Run
-      uses: ./.github/workflows/full-sweep-tmpl.yml
-      secrets: inherit
-      with:
-        run_1k1k: true
-        run_8k1k: false
-        run_1k8k: false
-        run_dsr1: true
-        run_gptoss: true
-        use_mi355x: true
-        atom_image: "rocm/atom:latest"
+    uses: ./.github/workflows/full-sweep-tmpl.yml
+    secrets: inherit
+    with:
+      run_1k1k: true
+      run_8k1k: false
+      run_1k8k: false
+      run_dsr1: true
+      run_gptoss: true
+      use_mi355x: true
+      atom_image: "rocm/atom:latest"
