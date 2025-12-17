@@ -4,17 +4,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  prep:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout 
-      uses: actions/checkout@v4
-      env:
-        GH_TOKEN: ${{ secrets.GH_TKN_SROK }}
-      with:
-        ref: atom # Specify the branch name here
   mega-run:
     uses: ./.github/workflows/full-sweep-tmpl.yml
+    secrets: inherit
     with:
       run_1k1k: true
       run_8k1k: false
