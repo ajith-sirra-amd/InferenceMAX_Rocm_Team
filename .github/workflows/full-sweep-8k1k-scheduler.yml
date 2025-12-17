@@ -10,8 +10,8 @@ jobs:
     secrets: inherit
     with:
       ref: atom
-      run_1k1k: true
-      run_8k1k: false
+      run_1k1k: false
+      run_8k1k: true
       run_1k8k: false
       run_dsr1: true
       run_gptoss: true
