@@ -7,7 +7,6 @@ on:
 
 jobs:
   mega-run:
-    if: ${{ inputs.testcase == 'perf' }}
     uses: ./.github/workflows/full-sweep-tmpl.yml
     secrets: inherit
     with:
