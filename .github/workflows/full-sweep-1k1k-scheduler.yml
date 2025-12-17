@@ -5,12 +5,13 @@ on:
     - cron: "*/5 * * * *"
 
 jobs:
-  mega-run:
+  prep:
     steps:
     - name: Checkout specific branch
       uses: actions/checkout@v4
       with:
         ref: atom # Specify the branch name here
+  mega-run:
     - name: Run
       uses: ./.github/workflows/full-sweep-tmpl.yml
       secrets: inherit
