@@ -5,18 +5,20 @@ on:
     - cron: "*/5 * * * *"
 
 jobs:
-  prep:
-    uses: actions/checkout@v4
-    with:
-      ref: atom # Specify the branch name here
   mega-run:
-    uses: ./.github/workflows/full-sweep-tmpl.yml
-    secrets: inherit
-    with:
-      run_1k1k: true
-      run_8k1k: false
-      run_1k8k: false
-      run_dsr1: true
-      run_gptoss: true
-      use_mi355x: true
-      atom_image: "rocm/atom:latest"
+    steps:
+    - name: Checkout 
+      uses: actions/checkout@v4
+      with:
+        ref: atom # Specify the branch name here
+    - name: Run
+      uses: ./.github/workflows/full-sweep-tmpl.yml
+      secrets: inherit
+      with:
+        run_1k1k: true
+        run_8k1k: false
+        run_1k8k: false
+        run_dsr1: true
+        run_gptoss: true
+        use_mi355x: true
+        atom_image: "rocm/atom:latest"
