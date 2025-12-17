@@ -2,7 +2,7 @@ name: Full Sweep Scheduler - 1k1k
 
 on:
   schedule:
-    - cron: "28 8 * * *"
+    - cron: "33 8 * * *"
 
 jobs:
   mega-run:
