@@ -6,6 +6,7 @@ on:
 
 jobs:
   mega-run:
+    runs-on: ubunt-latest
     steps:
     - name: Checkout 
       uses: actions/checkout@v4
