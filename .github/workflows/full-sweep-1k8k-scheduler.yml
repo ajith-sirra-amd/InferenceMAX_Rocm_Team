@@ -1,9 +1,8 @@
 name: Full Sweep Scheduler - 1k8k
 
 on:
-  workflow_dispatch:
-    schedule:
-      - cron: "27 8 * * *"
+  schedule:
+    - cron: "30 8 * * *"
 
 jobs:
   mega-run:
