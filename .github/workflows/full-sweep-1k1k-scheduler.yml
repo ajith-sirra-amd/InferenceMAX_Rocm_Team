@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  mega-run:
+  prep:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout 
@@ -15,6 +15,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GH_TKN_SROK }}
       with:
         ref: atom # Specify the branch name here
+  mega-run:
     - name: Run
       uses: ./.github/workflows/full-sweep-tmpl.yml
       with:
