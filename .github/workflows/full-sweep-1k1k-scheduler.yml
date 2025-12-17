@@ -2,18 +2,23 @@ name: Full Sweep Scheduler - 1k1k
 
 on:
   schedule:
-    - cron: "33 8 * * *"
+    - cron: "*/5 * * * *"
 
 jobs:
   mega-run:
-    uses: ./.github/workflows/full-sweep-tmpl.yml
-    secrets: inherit
-    with:
-      ref: atom
-      run_1k1k: true
-      run_8k1k: false
-      run_1k8k: false
-      run_dsr1: true
-      run_gptoss: true
-      use_mi355x: true
-      atom_image: "rocm/atom:latest"
+    steps:
+    - name: Checkout specific branch
+      uses: actions/checkout@v4
+      with:
+        ref: atom # Specify the branch name here
+    - name: Run
+      uses: ./.github/workflows/full-sweep-tmpl.yml
+      secrets: inherit
+      with:
+        run_1k1k: true
+        run_8k1k: false
+        run_1k8k: false
+        run_dsr1: true
+        run_gptoss: true
+        use_mi355x: true
+        atom_image: "rocm/atom:latest"
