@@ -14,7 +14,6 @@ jobs:
         ref: atom # Specify the branch name here
     - name: Run
       uses: ./.github/workflows/full-sweep-tmpl.yml
-      secrets: inherit
       with:
         run_1k1k: true
         run_8k1k: false
