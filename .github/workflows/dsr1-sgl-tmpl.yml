@@ -44,7 +44,7 @@ jobs:
     with:
       runner: mi300x-amd
       runner-script: 'launch_mi300x-amd.sh'
-      image: 'lmsysorg/sglang:v0.5.6.post1-rocm700-mi30x'
+      image: 'lmsysorg/sglang:v0.5.6.post2-rocm700-mi30x'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
       precision: 'fp8'
@@ -62,7 +62,7 @@ jobs:
     with:
       runner: mi325x-amd
       runner-script: 'launch_mi325x-amd.sh'
-      image: 'lmsysorg/sglang:v0.5.6.post1-rocm700-mi30x'
+      image: 'lmsysorg/sglang:v0.5.6.post2-rocm700-mi30x'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
       precision: 'fp8'
@@ -80,7 +80,7 @@ jobs:
     with:
       runner: mi355x
       runner-script: 'launch_mi355x-amd.sh'
-      image: 'lmsysorg/sglang:v0.5.6.post1-rocm700-mi35x'
+      image: 'lmsysorg/sglang:v0.5.6.post2-rocm700-mi35x'
       model: 'deepseek-ai/DeepSeek-R1-0528'
       framework: 'sglang'
       precision: 'fp8'
@@ -100,7 +100,7 @@ jobs:
     with:
       runner: mi355x
       runner-script: 'launch_mi355x-amd.sh'
-      image: 'lmsysorg/sglang:v0.5.6.post1-rocm700-mi35x'
+      image: 'lmsysorg/sglang:v0.5.6.post2-rocm700-mi35x'
       framework: 'sglang'
       precision: 'fp4'
       model: 'amd/DeepSeek-R1-0528-MXFP4-Preview'
