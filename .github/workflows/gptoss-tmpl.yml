@@ -173,7 +173,7 @@ jobs:
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: mi355x
       image: 'rocm/pytorch-private:vllm_vllm_rocm7.0_aiter_1212_89f199_latest'
-      model: 'openai/gpt-oss-120b'
+      model: 'amd/gpt-oss120b-w-mxfp4-a-fp8'
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
       precision: 'fp4'
