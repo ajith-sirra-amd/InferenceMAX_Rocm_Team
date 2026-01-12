@@ -172,7 +172,7 @@ jobs:
       max-model-len: ${{ inputs.max-model-len }}
       random-range-ratio: ${{ inputs.random-range-ratio }}
       runner: mi355x
-      image: 'rocm/vllm-private:main_814_30399cc72_0107'
+      image: 'rocm/pytorch-private:vllm_vllm_rocm7.0_aiter_1212_89f199_latest'
       model: 'openai/gpt-oss-120b'
       tp-list: '[1, 2, 4, 8]'
       framework: 'vllm'
