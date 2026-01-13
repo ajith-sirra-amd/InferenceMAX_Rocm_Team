@@ -30,6 +30,5 @@ vllm serve ${MODEL} \
     --max-model-len ${max_model_len} \
     --block-size 1 \
     --gpu-memory-utilization 0.95 \
-   # --max-seq-len-to-capture ${max_seq_len_to_capture} \
     --async-scheduling \
     --kv-cache-dtype auto
