@@ -3,35 +3,41 @@ name: Template - Collect Results
 on:
   workflow_call:
     inputs:
-      exp-name:
-        required: true
+      result-prefix:
+        required: false
         type: string
+        default: ''
+
+permissions:
+  contents: read
 
 jobs:
   collect-results:
-    runs-on: mi355x
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
-          token: ''
+          token: ${{ secrets.REPO_PAT }}
           fetch-depth: 0
 
       - name: Download JSON artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           path: results/
-          pattern: ${{ inputs.exp-name }}_*
+          pattern: ${{ inputs.result-prefix && format('{0}_*', inputs.result-prefix) || '*' }}
 
       - name: Print summary
-        run: python3 utils/summarize.py results/ ${{ inputs.exp-name }} >> $GITHUB_STEP_SUMMARY
+        run: |
+          pip install tabulate
+          python3 utils/summarize.py results/ >> $GITHUB_STEP_SUMMARY
 
       - name: Aggregate results
-        run: python3 utils/collect_results.py results/ ${{ inputs.exp-name }}
+        run: python3 utils/collect_results.py results/ ${{ inputs.result-prefix || 'all' }}
 
       - name: Upload aggregated results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: results_${{ inputs.exp-name }}
-          path: agg_${{ inputs.exp-name }}.json
+          name: results_${{ inputs.result-prefix || 'all' }}
+          path: agg_${{ inputs.result-prefix || 'all' }}.json
