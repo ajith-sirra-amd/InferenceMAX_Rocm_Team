@@ -175,8 +175,8 @@ gptoss-fp4-mi325x-vllm:
     - { tp: 8, conc-start: 4, conc-end: 16 }
 
 gptoss-fp4-mi355x-vllm:
-  image: rocm/vllm-dev:preview_0.14_7139802818885a4f4e5aff75e7de98c908135a14_20260113
-  model: openai/gpt-oss-120b
+  image: rocm/vllm-dev:preview_1231_rc3_amd_dev_20260103
+  model: amd/gpt-oss120b-w-mxfp4-a-fp8
   model-prefix: gptoss
   runner: mi355x
   precision: fp4
