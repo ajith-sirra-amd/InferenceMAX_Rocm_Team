@@ -17,6 +17,7 @@ check_env_vars \
 
 export AMDGCN_USE_BUFFER_OPS=1
 export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_USE_AITER_MHA=0
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 
 SERVER_LOG=$(mktemp /tmp/server-XXXXXX.log)
