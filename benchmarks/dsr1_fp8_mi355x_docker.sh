@@ -10,32 +10,27 @@ check_env_vars \
     CONC \
     ISL \
     OSL \
+    MAX_MODEL_LEN \
     RANDOM_RANGE_RATIO \
     RESULT_FILENAME \
     NUM_PROMPTS
 
-# Reference
-# https://rocm.docs.amd.com/en/docs-7.0-docker/benchmark-docker/inference-sglang-deepseek-r1-fp8.html
-
-export SGLANG_USE_AITER=1
-export RCCL_MSCCL_ENABLE=0
-export ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+export AMDGCN_USE_BUFFER_OPS=1
+export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 
 SERVER_LOG=$(mktemp /tmp/server-XXXXXX.log)
 
-python3 -m sglang.launch_server \
-    --attention-backend aiter \
-    --model-path $MODEL \
-    --host=0.0.0.0 \
-    --port $PORT \
-    --tensor-parallel-size $TP \
-    --trust-remote-code \
-    --chunked-prefill-size 196608 \
-    --mem-fraction-static 0.8 --disable-radix-cache \
-    --num-continuous-decode-steps 4 \
-    --max-prefill-tokens 196608 \
-    --enable-torch-compile \
-    --cuda-graph-max-bs 128 > $SERVER_LOG 2>&1 &
+set -x
+vllm serve $MODEL --port $PORT \
+--tensor-parallel-size=$TP \
+--gpu-memory-utilization 0.95 \
+--max-model-len $MAX_MODEL_LEN \
+--max-num-batched-tokens 131072 \
+--block-size 1 \
+--no-enable-prefix-caching \
+--disable-log-requests \
+--async-scheduling > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
