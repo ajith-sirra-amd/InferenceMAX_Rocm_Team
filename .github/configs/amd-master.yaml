@@ -1,5 +1,5 @@
 dsr1-fp4-mi355x-vllm:
-  image: rocm/vllm-dev:preview_0.14_7139802818885a4f4e5aff75e7de98c908135a14_20260113
+  image: rocm/vllm-dev:preview_aiter_0.1.10_releases_rocm_v0.14.0_20260117_ropotdar
   model: amd/DeepSeek-R1-0528-MXFP4-Preview
   model-prefix: dsr1
   runner: mi355x
@@ -114,7 +114,7 @@ dsr1-fp8-mi325x-sglang:
     - { tp: 8, conc-start: 4, conc-end: 64 }
 
 dsr1-fp8-mi355x-vllm:
-  image: rocm/vllm-dev:preview_0.14_7139802818885a4f4e5aff75e7de98c908135a14_20260113
+  image: rocm/vllm-dev:preview_aiter_0.1.10_releases_rocm_v0.14.0_20260117_ropotdar
   model: deepseek-ai/DeepSeek-R1-0528
   model-prefix: dsr1
   runner: mi355x
@@ -159,7 +159,7 @@ dsr1-fp8-mi355x-sglang:
     - { tp: 8, conc-start: 4, conc-end: 64 }
 
 gptoss-fp4-mi300x-vllm:
-  image: rocm/vllm-dev:preview_0.14_7139802818885a4f4e5aff75e7de98c908135a14_20260113
+  image: rocm/vllm-dev:preview_aiter_0.1.10_releases_rocm_v0.14.0_20260117_ropotdar
   model: openai/gpt-oss-120b
   model-prefix: gptoss
   runner: mi300x
@@ -190,7 +190,7 @@ gptoss-fp4-mi300x-vllm:
     - { tp: 8, conc-start: 4, conc-end: 16 }
 
 gptoss-fp4-mi325x-vllm:
-  image: rocm/vllm-dev:preview_0.14_7139802818885a4f4e5aff75e7de98c908135a14_20260113
+  image: rocm/vllm-dev:preview_aiter_0.1.10_releases_rocm_v0.14.0_20260117_ropotdar
   model: openai/gpt-oss-120b
   model-prefix: gptoss
   runner: mi325x
@@ -221,7 +221,7 @@ gptoss-fp4-mi325x-vllm:
     - { tp: 8, conc-start: 4, conc-end: 16 }
 
 gptoss-fp4-mi355x-vllm:
-  image: rocm/vllm-dev:preview_0.14_7139802818885a4f4e5aff75e7de98c908135a14_20260113
+  image: rocm/vllm-dev:preview_aiter_0.1.10_releases_rocm_v0.14.0_20260117_ropotdar
   model: openai/gpt-oss-120b
   model-prefix: gptoss
   runner: mi355x
