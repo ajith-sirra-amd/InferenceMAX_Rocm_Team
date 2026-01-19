@@ -222,7 +222,7 @@ gptoss-fp4-mi325x-vllm:
 
 gptoss-fp4-mi355x-vllm:
   image: rocm/vllm-dev:preview_aiter_0.1.10_releases_rocm_v0.14.0_20260117_ropotdar
-  model: openai/gpt-oss-120b
+  model: amd/gpt-oss120b-w-mxfp4-a-fp8
   model-prefix: gptoss
   runner: mi355x
   precision: fp4
