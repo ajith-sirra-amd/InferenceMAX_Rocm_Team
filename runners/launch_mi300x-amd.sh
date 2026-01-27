@@ -2,7 +2,7 @@
 
 sudo sh -c 'echo 0 > /proc/sys/kernel/numa_balancing'
 
-HF_HUB_CACHE_MOUNT="/shareddata/hf_hub_cache_$(hostname)/"
+HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"
 PORT=8888
 
 server_name="bmk-server"
