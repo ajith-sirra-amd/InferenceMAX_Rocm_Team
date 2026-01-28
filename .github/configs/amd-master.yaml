@@ -159,7 +159,7 @@ dsr1-fp8-mi355x-sglang:
     - { tp: 8, conc-start: 4, conc-end: 64 }
 
 gptoss-fp4-mi300x-vllm:
-  image: vllm/vllm-openai-rocm:v0.14.0
+  image: rocm/vllm-dev:fix_gfx942_pad_align
   model: openai/gpt-oss-120b
   model-prefix: gptoss
   runner: mi300x
