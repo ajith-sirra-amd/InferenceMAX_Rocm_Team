@@ -5,7 +5,7 @@ MODEL_CODE="${EXP_NAME%%_*}"
 FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
-if [[ $MODEL_CODE == "qwen3.5" && $FRAMEWORK == "vllm" ]]
+if [[ $MODEL_CODE == "qwen3.5" && $FRAMEWORK == "vllm" ]]; then
     FRAMEWORK_SUFFIX="_vllm"
 fi
 
