@@ -140,7 +140,7 @@ qwen3.5-bf16-mi355x-sglang:
   image: rocm/sgl-dev:v0.5.8.post1-rocm720-mi35x-20260215
   model: Qwen/Qwen3.5-397B-A17B
   model-prefix: qwen3.5
-  runner: mi355x
+  runner: mi355x-m15-17
   precision: bf16
   framework: sglang
   multinode: false
@@ -166,7 +166,7 @@ qwen3.5-bf16-mi355x-vllm:
   image: rocm/vllm-dev:nightly_main_20260217
   model: Qwen/Qwen3.5-397B-A17B
   model-prefix: qwen3.5
-  runner: mi355x
+  runner: mi355x-m15-17
   precision: bf16
   framework: vllm
   multinode: false
