@@ -21,6 +21,10 @@ nvidia-smi
 
 hf download "$MODEL"
 
+cat > config.yaml << EOF
+no-enable-prefix-caching: true
+EOF
+
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
