@@ -2,7 +2,7 @@
 https://github.com/SemiAnalysisAI/InferenceX (02/18/2026)
 
 - ⚠️  'main' branch is not compatible with self-hosted gh runners.
-- ⚠️  use 'rocm_main' branch to run self-hosted gh runners.
+- ⚠️  use 'main_rocm' branch to use the self-hosted gh runners.
 
 For assistance, reach out to: @Rohan138 @ajith-sirra-amd @seungrokj 
 
