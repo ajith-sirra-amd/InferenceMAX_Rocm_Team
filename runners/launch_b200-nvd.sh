@@ -1,5 +1,8 @@
 #!/usr/bin/bash
 HF_HUB_CACHE_MOUNT="/data/models/hf_hub_cache/"
+if [[ $MODEL_CODE == "qwen3.5" ]]; then
+    HF_HUB_CACHE_MOUNT="/mnt/nvme3n1"
+fi
 
 MODEL_CODE="${EXP_NAME%%_*}"
 FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
