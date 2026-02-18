@@ -24,18 +24,16 @@ hf download "$MODEL"
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
-MEM_FRAC_STATIC=0.8
-
 ps aux
 
 set -x
-PYTHONNOUSERSITE=1 python3 -m sglang.launch_server \
-    --model-path=$MODEL \
-    --host=0.0.0.0 \
-    --port=$PORT \
-    --tensor-parallel-size=$TP \
-    --mem-fraction-static $MEM_FRAC_STATIC \
-    > $SERVER_LOG 2>&1 &
+vllm serve $MODEL --host 0.0.0.0 --port $PORT \
+--config config.yaml \
+--gpu-memory-utilization 0.9 \
+--tensor-parallel-size $TP \
+--max-num-seqs 256 \
+--trust-remote-code \
+> $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 

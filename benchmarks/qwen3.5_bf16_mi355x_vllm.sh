@@ -20,14 +20,15 @@ hf download "$MODEL"
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
-python3 -m sglang.launch_server \
-    --attention-backend triton \
-    --model-path $MODEL \
-    --host=0.0.0.0 \
-    --port $PORT \
-    --tensor-parallel-size $TP \
-    --trust-remote-code \
-    --mem-fraction-static 0.8 > $SERVER_LOG 2>&1 &
+set -x
+export VLLM_ROCM_USE_AITER=1
+vllm serve $MODEL --host 0.0.0.0 --port $PORT \
+--config config.yaml \
+--gpu-memory-utilization 0.9 \
+--tensor-parallel-size $TP \
+--max-num-seqs 256 \
+--trust-remote-code \
+> $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
