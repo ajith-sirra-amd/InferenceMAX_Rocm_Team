@@ -34,7 +34,7 @@ docker run --rm --network=host --name=$server_name \
 -e PYTHONPYCACHEPREFIX=/tmp/pycache/ -e TORCH_CUDA_ARCH_LIST="9.0" -e CUDA_DEVICE_ORDER=PCI_BUS_ID -e CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
 --entrypoint=/bin/bash \
 $IMAGE \
-benchmarks/${MODEL_CODE}_${PRECISION}_b200${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}_docker.sh
+benchmarks/${MODEL_CODE}_${PRECISION}_b200${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}.sh
 
 # Cleanup: stop server container 
 docker stop $server_name 2>/dev/null || true
