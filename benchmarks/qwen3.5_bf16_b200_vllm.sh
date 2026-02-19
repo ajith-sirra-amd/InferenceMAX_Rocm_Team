@@ -33,9 +33,10 @@ ps aux
 set -x
 vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --config config.yaml \
---gpu-memory-utilization 0.9 \
 --tensor-parallel-size $TP \
+--gpu-memory-utilization 0.95 \
 --max-num-seqs 256 \
+--disable-log-requests \
 --trust-remote-code \
 > $SERVER_LOG 2>&1 &
 
