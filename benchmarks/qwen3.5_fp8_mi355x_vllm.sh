@@ -40,6 +40,7 @@ vllm serve $MODEL --port $PORT \
 --max-num-seqs 256 \
 --disable-log-requests \
 --trust-remote-code \
+--language-model-only \
 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!

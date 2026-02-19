@@ -41,6 +41,7 @@ vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --disable-log-requests \
 --trust-remote-code \
 --language-model-only \
+--attention-backend FLASH_ATTN \
 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!

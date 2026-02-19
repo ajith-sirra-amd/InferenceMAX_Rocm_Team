@@ -10,6 +10,7 @@ check_env_vars \
     CONC \
     ISL \
     OSL \
+    MAX_MODEL_LEN \
     RANDOM_RANGE_RATIO \
     RESULT_FILENAME
 
@@ -35,9 +36,12 @@ vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --config config.yaml \
 --tensor-parallel-size $TP \
 --gpu-memory-utilization 0.95 \
+--max-model-len $MAX_MODEL_LEN \
 --max-num-seqs 256 \
 --disable-log-requests \
 --trust-remote-code \
+--language-model-only \
+--attention-backend FLASH_ATTN \
 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
