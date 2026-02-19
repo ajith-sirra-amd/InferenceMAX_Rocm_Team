@@ -1,16 +1,15 @@
 #!/usr/bin/bash
-HF_HUB_CACHE_MOUNT="/data/models/hf_hub_cache/"
+HF_HUB_CACHE_MOUNT="/mnt/nvme3n1"
 
 MODEL_CODE="${EXP_NAME%%_*}"
-FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
-SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
-
-if [[ $MODEL_CODE == "qwen3.5" && $FRAMEWORK == "vllm" ]]; then
+if [[ $FRAMEWORK == "vllm" ]]; then
     FRAMEWORK_SUFFIX="_vllm"
+elif [[ $FRAMEWORK == "sglang" ]]; then
+    FRAMEWORK_SUFFIX="_sglang"
+elif [[ $FRAMEWORK == "trt" ]]; then
+    FRAMEWORK_SUFFIX="_trt"
 fi
-if [[ $MODEL_CODE == "qwen3.5" ]]; then
-    HF_HUB_CACHE_MOUNT="/mnt/nvme3n1"
-fi
+SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
 server_name="bmk-server"
 

@@ -40,13 +40,15 @@ vllm serve $MODEL --port $PORT \
 --max-num-seqs 256 \
 --disable-log-requests \
 --trust-remote-code \
+--block-size=64 \
+--mm-encoder-tp-mode data \
 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-export PYTHONDONTWRITEBYTECODE=1
+
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
@@ -57,7 +59,8 @@ run_benchmark_serving \
     --num-prompts "$((CONC * 10))" \
     --max-concurrency "$CONC" \
     --result-filename "$RESULT_FILENAME" \
-    --result-dir /workspace/
+    --result-dir /workspace/ \
+    --trust-remote-code
 
 # After throughput, run evaluation only if RUN_EVAL is true
 if [ "${RUN_EVAL}" = "true" ]; then

@@ -32,7 +32,7 @@ PORT=${PORT:-8888}
 
 set -x
 export VLLM_ROCM_USE_AITER=1
-vllm serve $MODEL --port $PORT \
+vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --config config.yaml \
 --tensor-parallel-size=$TP \
 --gpu-memory-utilization 0.95 \

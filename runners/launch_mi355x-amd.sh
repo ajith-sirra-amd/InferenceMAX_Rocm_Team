@@ -2,12 +2,14 @@
 HF_HUB_CACHE_MOUNT="/mnt/hf_hub_cache/"  # Temp solution
 
 MODEL_CODE="${EXP_NAME%%_*}"
-FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "atom" ]] && printf '_atom' || printf '')
-SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
-
-if [[ $MODEL_CODE == "qwen3.5" && $FRAMEWORK == "vllm" ]]; then
+if [[ $FRAMEWORK == "vllm" ]]; then
     FRAMEWORK_SUFFIX="_vllm"
+elif [[ $FRAMEWORK == "sglang" ]]; then
+    FRAMEWORK_SUFFIX="_sglang"
+elif [[ $FRAMEWORK == "atom" ]]; then
+    FRAMEWORK_SUFFIX="_atom"
 fi
+SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
 server_name="bmk-server"
 
