@@ -29,6 +29,7 @@ docker run --rm --network=host --name=$server_name \
 -e CONC \
 -e ISL \
 -e OSL \
+-e MAX_MODEL_LEN \
 -e RANDOM_RANGE_RATIO \
 -e RESULT_FILENAME \
 -e EP_SIZE \
