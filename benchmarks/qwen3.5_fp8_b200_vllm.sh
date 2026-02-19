@@ -34,7 +34,7 @@ set -x
 vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --config config.yaml \
 --tensor-parallel-size $TP \
---gpu-memory-utilization 0.95 \
+--gpu-memory-utilization 0.9 \
 --max-num-seqs 256 \
 --disable-log-requests \
 --trust-remote-code \

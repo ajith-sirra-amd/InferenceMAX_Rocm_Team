@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 rm -rf  /usr/local/cuda-13.0/compat
+# image: vllm/vllm-openai:glm5 
+rm -rf  /usr/local/cuda-12.9/compat
 
 source "$(dirname "$0")/benchmark_lib.sh"
 
