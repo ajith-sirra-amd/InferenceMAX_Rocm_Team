@@ -10,7 +10,6 @@ check_env_vars \
     CONC \
     ISL \
     OSL \
-    MAX_MODEL_LEN \
     RANDOM_RANGE_RATIO \
     RESULT_FILENAME
 
@@ -32,7 +31,7 @@ PORT=${PORT:-8888}
 ps aux
 
 set -x
-vllm serve $MODEL --host 0.0.0.0 --port $PORT \
+vllm serve $MODEL --port $PORT \
 --config config.yaml \
 --tensor-parallel-size $TP \
 --gpu-memory-utilization 0.95 \

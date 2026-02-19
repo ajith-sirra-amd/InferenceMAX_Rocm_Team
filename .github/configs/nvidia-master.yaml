@@ -1849,13 +1849,11 @@ kimik2.5-int4-b200-vllm:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 4 }
-
-  #  - { tp: 8, conc-start: 4, conc-end: 128 }
-  #- isl: 8192
-  #  osl: 1024
-  #  search-space:
-  #  - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
 
 minimaxm2.5-fp8-b200-vllm:
   image: vllm/vllm-openai:cu130-nightly-b6101d384db5709b4422ebd05fe84f0891ff63ce
