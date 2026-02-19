@@ -28,7 +28,7 @@ fi
 
 echo "Configs available at: $SRT_REPO_DIR/"
 
-export SLURM_PARTITION="gpu"
+export SLURM_PARTITION="gpus"
 export SLURM_ACCOUNT="root"
 
 if [[ $MODEL_PREFIX == "dsr1" ]]; then
