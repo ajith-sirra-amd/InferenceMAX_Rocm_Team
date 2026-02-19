@@ -56,7 +56,8 @@ NGINX_IMAGE="nginx:1.27.4"
 SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
 NGINX_SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$NGINX_IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
 
-srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c "enroot import -o $SQUASH_FILE docker://$IMAGE"
+#srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c "enroot import -o $SQUASH_FILE docker://$IMAGE"
+srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c $SQUASH_FILE
 srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c "enroot import -o $NGINX_SQUASH_FILE docker://$NGINX_IMAGE"
 
 # Create srtslurm.yaml for srtctl
