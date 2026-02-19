@@ -54,10 +54,10 @@ mi355x:
 - 'mi355x-amds_6'
 - 'mi355x-amds_7'
 - 'mi355x-amds_8'
-mi355x-disagg:
-- 'mi355x-amds_0'
-- 'mi355x-amds_1'
-- 'mi355x-amds_2'
+b200-disagg:
+- 'b200-nvdverda_1'
+- 'b200-nvdverda_2'
+- 'b200-nvdverda_3'
 gb200:
 - gb200-nv_0
 b200-multinode-slurm:
