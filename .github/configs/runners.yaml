@@ -72,8 +72,14 @@ h100-multinode-slurm:
 # AIG AIM nodes, active
 b200-shaderform10:
 - 'b200-nvd'
+b200-disagg:
+- 'b200-nvdverda_1'
+- 'b200-nvdverda_2'
+- 'b200-nvdverda_3'
 mi355x-m15-17:
 - 'mi355x-amd'
+mi355x-p02-g57:
+- 'mi355x-amd_2'
 
 ## AIG AIM nodes, inactive
 #b200-gpua818:
