@@ -34,6 +34,7 @@ docker run --rm --network=host --name=$server_name \
 -e RESULT_FILENAME \
 -e EP_SIZE \
 -e DP_ATTENTION \
+-e RUN_EVAL \
 -e PYTHONPYCACHEPREFIX=/tmp/pycache/ -e TORCH_CUDA_ARCH_LIST="9.0" -e CUDA_DEVICE_ORDER=PCI_BUS_ID -e CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" \
 --entrypoint=/bin/bash \
 $IMAGE \
