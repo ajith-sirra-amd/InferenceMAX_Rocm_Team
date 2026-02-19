@@ -1819,7 +1819,7 @@ qwen3.5-bf16-b200-vllm:
     - { tp: 8, conc-start: 4, conc-end: 128 }
 
 #START, inferenceX v3
-qwen3.5-fp8-mi355x-vllm:
+qwen3.5-fp8-b200-vllm:
   image: vllm/vllm-openai:qwen3_5-cu130
   model: Qwen/Qwen3.5-397B-A17B-FP8
   model-prefix: qwen3.5
@@ -1841,7 +1841,7 @@ qwen3.5-fp8-mi355x-vllm:
   #  search-space:
   #  - { tp: 8, conc-start: 4, conc-end: 128 }
 
-kimik2.5-int4-mi355x-vllm:
+kimik2.5-int4-b200-vllm:
   image: vllm/vllm-openai:cu130-nightly-b6101d384db5709b4422ebd05fe84f0891ff63ce
   model: moonshotai/Kimi-K2.5
   model-prefix: kimik2.5
@@ -1863,7 +1863,7 @@ kimik2.5-int4-mi355x-vllm:
   #  search-space:
   #  - { tp: 8, conc-start: 4, conc-end: 128 }
 
-minimaxm2.5-fp8-mi355x-vllm:
+minimaxm2.5-fp8-b200-vllm:
   image: vllm/vllm-openai:cu130-nightly-b6101d384db5709b4422ebd05fe84f0891ff63ce
   model: MiniMaxAI/MiniMax-M2.5
   model-prefix: minimaxm2.5
@@ -1887,7 +1887,7 @@ minimaxm2.5-fp8-mi355x-vllm:
   #  - { tp: 2, conc-start: 4, conc-end: 128 }
   #  - { tp: 4, conc-start: 4, conc-end: 128 }
 
-glm5-fp8-mi355x-vllm:
+glm5-fp8-b200-vllm:
   image: vllm/vllm-openai:glm5 
   model: zai-org/GLM-5-FP8
   model-prefix: glm5
