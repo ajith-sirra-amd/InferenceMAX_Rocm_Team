@@ -92,7 +92,7 @@ echo "Generated srtslurm.yaml:"
 cat srtslurm.yaml
 
 echo "Running make setup..."
-make setup ARCH=x86_64
+#make setup ARCH=x86_64
 
 echo "Submitting job with srtctl..."
 SRTCTL_OUTPUT=$(srtctl apply -f "$CONFIG_FILE" --tags "b200,dsr1,fp8,${ISL}x${OSL},infmax-$(date +%Y%m%d)" 2>&1)
