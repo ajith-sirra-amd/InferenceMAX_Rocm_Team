@@ -29,7 +29,7 @@ EOF
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
-pip uninstall transformers
+pip uninstall transformers -y
 pip install git+https://github.com/huggingface/transformers.git
 
 set -x
