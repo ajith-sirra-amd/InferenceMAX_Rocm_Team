@@ -2,7 +2,7 @@ dsr1-fp4-b200-dynamo-trt:
   image: nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:0.8.1.post1
   model: deepseek-r1-fp4
   model-prefix: dsr1
-  runner: b200-disagg
+  runner: b200-disaggc
   precision: fp4
   framework: dynamo-trt
   multinode: true
