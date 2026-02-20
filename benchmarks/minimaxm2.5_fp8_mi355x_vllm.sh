@@ -8,7 +8,6 @@ check_env_vars \
     CONC \
     ISL \
     OSL \
-    MAX_MODEL_LEN \
     RANDOM_RANGE_RATIO \
     RESULT_FILENAME
 
@@ -36,7 +35,6 @@ vllm serve $MODEL --port $PORT \
 --config config.yaml \
 --tensor-parallel-size=$TP \
 --gpu-memory-utilization 0.95 \
---max-model-len $MAX_MODEL_LEN \
 --max-num-seqs 256 \
 --disable-log-requests \
 --trust-remote-code \
@@ -47,7 +45,7 @@ SERVER_PID=$!
 
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
+export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
