@@ -41,6 +41,7 @@ vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --max-num-seqs 256 \
 --disable-log-requests \
 --trust-remote-code \
+--block-size 1 \
 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
