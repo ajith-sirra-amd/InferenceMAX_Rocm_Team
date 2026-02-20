@@ -9,7 +9,9 @@ if [ -d "$SRT_REPO_DIR" ]; then
     rm -rf "$SRT_REPO_DIR"
 fi
 
-git clone https://github.com/ishandhanani/srt-slurm.git "$SRT_REPO_DIR"
+#git clone https://github.com/ishandhanani/srt-slurm.git "$SRT_REPO_DIR"
+git clone https://github.com/seungrokj/srt-slurm.git "$SRT_REPO_DIR"
+
 cd "$SRT_REPO_DIR"
 git checkout sa-submission-q1-2026
 
