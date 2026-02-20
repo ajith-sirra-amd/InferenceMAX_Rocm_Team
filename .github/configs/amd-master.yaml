@@ -174,7 +174,7 @@ qwen3.5-bf16-mi355x-vllm:
 
 #START, inferenceX v3
 qwen3.5-fp8-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260217
+  image: rocm/vllm-dev:nightly_main_20260219
   model: Qwen/Qwen3.5-397B-A17B-FP8
   model-prefix: qwen3.5
   runner: mi355x-m15-17
@@ -196,7 +196,7 @@ qwen3.5-fp8-mi355x-vllm:
   #  - { tp: 8, conc-start: 4, conc-end: 128 }
 
 kimik2.5-int4-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260217
+  image: rocm/vllm-dev:nightly_main_20260219
   model: moonshotai/Kimi-K2.5
   model-prefix: kimik2.5
   runner: mi355x-m15-17
@@ -218,7 +218,7 @@ kimik2.5-int4-mi355x-vllm:
   #  - { tp: 8, conc-start: 4, conc-end: 128 }
 
 minimaxm2.5-fp8-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260217
+  image: rocm/vllm-dev:nightly_main_20260219
   model: MiniMaxAI/MiniMax-M2.5
   model-prefix: minimaxm2.5
   runner: mi355x-m15-17
@@ -242,7 +242,7 @@ minimaxm2.5-fp8-mi355x-vllm:
   #  - { tp: 4, conc-start: 4, conc-end: 128 }
 
 glm5-fp8-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260217
+  image: rocm/vllm-dev:nightly_main_20260219
   model: zai-org/GLM-5-FP8
   model-prefix: glm5
   runner: mi355x-m15-17

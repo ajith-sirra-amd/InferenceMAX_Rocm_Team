@@ -29,6 +29,9 @@ EOF
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
+pip uninstall transformers
+pip install git+https://github.com/huggingface/transformers.git
+
 set -x
 export VLLM_ROCM_USE_AITER=1
 vllm serve $MODEL --host 0.0.0.0 --port $PORT \
