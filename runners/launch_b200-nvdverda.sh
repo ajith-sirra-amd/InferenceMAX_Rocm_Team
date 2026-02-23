@@ -35,7 +35,7 @@ export SLURM_ACCOUNT="root"
 
 if [[ $MODEL_PREFIX == "dsr1" ]]; then
     if [[ $PRECISION == "fp4" ]]; then
-        export MODEL_PATH="/home/ubuntu/models/dsr1-0528-nvfp4-v2/.cache/huggingface/download"
+        export MODEL_PATH="/home/ubuntu/models/dsr1-0528-nvfp4-v2/"
         export SRT_SLURM_MODEL_PREFIX="dsr1"
     elif [[ $PRECISION == "fp8" ]]; then
         export MODEL_PATH="/raid/models/dsr1-0528-fp8"
