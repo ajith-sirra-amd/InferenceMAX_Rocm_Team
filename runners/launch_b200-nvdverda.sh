@@ -58,9 +58,6 @@ NGINX_IMAGE="nginx:1.27.4"
 SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
 NGINX_SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$NGINX_IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
 
-SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
-NGINX_SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$NGINX_IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
-
 # Create srtslurm.yaml for srtctl
 echo "Creating srtslurm.yaml configuration..."
 cat > srtslurm.yaml <<EOF
