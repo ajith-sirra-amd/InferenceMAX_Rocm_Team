@@ -55,14 +55,14 @@ export OSL="$OSL"
 
 NGINX_IMAGE="nginx:1.27.4"
 
-#SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
-SQUASH_FILE="docker://nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:0.8.1.post1"
+SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
+#SQUASH_FILE="docker://nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:0.8.1.post1"
 NGINX_SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$NGINX_IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
 
 #srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c "enroot import -o $SQUASH_FILE docker://$IMAGE"
 #srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c "enroot import -o $NGINX_SQUASH_FILE docker://$NGINX_IMAGE"
-srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c $SQUASH_FILE
-srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c $NGINX_SQUASH_FILE 
+srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c $SQUASH_FILE --container-mounts=/home/dynamo/.cache/flashinfer:/home/dynamo/.cache/flashinfer
+srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c $NGINX_SQUASH_FILE --container-mounts=/home/dynamo/.cache/flashinfer:/home/dynamo/.cache/flashinfer
 
 # Create srtslurm.yaml for srtctl
 echo "Creating srtslurm.yaml configuration..."
