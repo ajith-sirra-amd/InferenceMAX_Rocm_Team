@@ -63,8 +63,8 @@ NGINX_SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$NGINX_IMAG
 #srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION bash -c "enroot import -o $NGINX_SQUASH_FILE docker://$NGINX_IMAGE"
 #export FLASHINFER_CACHE_DIR=
 #export FLASHINFER_WORK_DIR=
-srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION --container-mounts=/home/ubuntu:/home/dynamo/.cache/flashinfer --container-image=docker://nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:0.8.1.post1 --export=ALL -A root bash 
-srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION --container-mounts=/home/ubuntu:/home/dynamo/.cache/flashinfer --export=ALL -A root bash -c $NGINX_SQUASH_FILE 
+srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION --container-mounts=/home/ubuntu:/home/dynamo/.cache/flashinfer --container-image=$SQUASH_FILE --export=ALL -A root bash -lc "ls"
+srun -N 1 -A $SLURM_ACCOUNT -p $SLURM_PARTITION --container-mounts=/home/ubuntu:/home/dynamo/.cache/flashinfer --container-image=$NGINX_SQUASH_FILE --export=ALL -A root bash -lc "ls"
 
 # Create srtslurm.yaml for srtctl
 echo "Creating srtslurm.yaml configuration..."
