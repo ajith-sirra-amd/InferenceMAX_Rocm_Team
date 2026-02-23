@@ -19,7 +19,7 @@ dsr1-fp4-b200-dynamo-trt:
         dp-attn: true
         additional-settings:
         # https://github.com/ishandhanani/srt-slurm/blob/sa-submission-q1-2026/recipes/trtllm/b200-fp4/1k1k/stp/ctx1_gen2_dep8_batch128_eplb0_mtp0.yaml
-        - "CONFIG_FILE=recipes/trtllm/b200-fp4/1k1k/stp/ctx1_gen2_dep8_batch512_eplb0_mtp0.yaml"
+        - "CONFIG_FILE=recipes/trtllm/b200-fp4/1k1k/stp/ctx1_gen2_dep8_batch128_eplb0_mtp0.yaml"
       decode:
         num-worker: 2
         tp: 8
