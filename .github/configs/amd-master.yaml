@@ -149,6 +149,10 @@ qwen3.5-bf16-mi355x-sglang:
     osl: 1024
     search-space:
     - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
   - isl: 8192
     osl: 1024
     search-space:
@@ -167,23 +171,8 @@ qwen3.5-bf16-mi355x-vllm:
     osl: 1024
     search-space:
     - { tp: 8, conc-start: 4, conc-end: 128 }
-  - isl: 8192
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 128 }
-
-#START, inferenceX v3
-qwen3.5-fp8-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260219
-  model: Qwen/Qwen3.5-397B-A17B-FP8
-  model-prefix: qwen3.5
-  runner: mi355x-m15-17
-  precision: fp8
-  framework: vllm
-  multinode: false
-  seq-len-configs:
   - isl: 1024
-    osl: 1024
+    osl: 8192
     search-space:
     - { tp: 8, conc-start: 4, conc-end: 128 }
   - isl: 8192
@@ -192,10 +181,10 @@ qwen3.5-fp8-mi355x-vllm:
     - { tp: 8, conc-start: 4, conc-end: 128 }
 
 kimik2.5-int4-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260219
+  image: vllm/vllm-openai-rocm:v0.15.1
   model: moonshotai/Kimi-K2.5
   model-prefix: kimik2.5
-  runner: mi355x-m15-17
+  runner: mi355x
   precision: int4
   framework: vllm
   multinode: false
@@ -203,19 +192,23 @@ kimik2.5-int4-mi355x-vllm:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 8, conc-start: 4, conc-end: 64 }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 64 }
   - isl: 8192
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 8, conc-start: 4, conc-end: 64 }
 
-minimaxm2.5-fp8-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260219
+minimaxm2.5-fp8-mi355x-sglang:
+  image: rocm/sgl-dev:v0.5.8.post1-rocm720-mi35x-20260218
   model: MiniMaxAI/MiniMax-M2.5
   model-prefix: minimaxm2.5
-  runner: mi355x-m15-17
+  runner: mi355x
   precision: fp8
-  framework: vllm
+  framework: sglang
   multinode: false
   seq-len-configs:
   - isl: 1024
@@ -228,30 +221,6 @@ minimaxm2.5-fp8-mi355x-vllm:
     search-space:
     - { tp: 2, conc-start: 4, conc-end: 128 }
     - { tp: 4, conc-start: 4, conc-end: 128 }
-
-glm5-fp8-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260219
-  model: zai-org/GLM-5-FP8
-  model-prefix: glm5
-  runner: mi355x-m15-17
-  precision: fp8
-  framework: vllm
-  multinode: false
-  seq-len-configs:
-  - isl: 128
-    osl: 128
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 4 }
-  #- isl: 1024
-  #  osl: 1024
-  #  search-space:
-  #  - { tp: 8, conc-start: 4, conc-end: 128 }
-  #- isl: 8192
-  #  osl: 1024
-  #  search-space:
-  #  - { tp: 8, conc-start: 4, conc-end: 128 }
-
-#END, inferenceX v3
 
 gptoss-fp4-mi300x-vllm:
   image: vllm/vllm-openai-rocm:v0.14.0
@@ -1125,4 +1094,5 @@ dsr1-fp4-mi355x-sglang-disagg:
   #       additional-settings:
   #       - "DECODE_NODES=2"
   #       - "DECODE_MTP_SIZE=0"
+
 

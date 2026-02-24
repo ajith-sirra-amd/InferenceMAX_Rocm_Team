@@ -54,10 +54,11 @@ mi355x:
 - 'mi355x-amds_6'
 - 'mi355x-amds_7'
 - 'mi355x-amds_8'
-b200-disagg:
-- 'b200-nvdverda_1'
-- 'b200-nvdverda_2'
-- 'b200-nvdverda_3'
+- 'mia1-p02-g57'
+mi355x-disagg:
+- 'mi355x-amds_0'
+- 'mi355x-amds_1'
+- 'mi355x-amds_2'
 gb200:
 - gb200-nv_0
 b200-multinode-slurm:
@@ -68,30 +69,3 @@ gb300:
 - 'gb300-nv_0'
 h100-multinode-slurm:
 - 'h100-dgxc-slurm_0'
-
-# AIG AIM nodes, active
-b200-shaderform10:
-- 'b200-nvd'
-b200-disagg:
-- 'b200-nvdverda_1'
-- 'b200-nvdverda_2'
-- 'b200-nvdverda_3'
-mi355x-m15-17:
-- 'mi355x-amd'
-mi355x-p02-g57:
-- 'mi355x-amd_2'
-
-## AIG AIM nodes, inactive
-#b200-gpua818:
-#- 'b200-nvd_2'
-#mi355x-p01-g42:
-#- 'mi355x-amdtwatom'
-## AIG AIM nodes, conductor nodes, mi350x, inactive
-#mi3e0x-b05-1:
-#- 'mi350x-amdconductor_1'
-#mi350x-b08-1:
-#- 'mi350x-amdconductor_2'
-#mi350x-c05-1:
-#- 'mi350x-amdconductor_3'
-#mi350x-wbb3:
-#- 'mi350x-amdconductor_4'
