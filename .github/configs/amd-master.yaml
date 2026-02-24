@@ -192,7 +192,7 @@ qwen3.5-fp8-mi355x-vllm:
     - { tp: 8, conc-start: 4, conc-end: 128 }
 
 kimik2.5-int4-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260219
+  image: aigmkt/vllm-dev:tuned-moe
   model: moonshotai/Kimi-K2.5
   model-prefix: kimik2.5
   runner: mi355x-m15-17
