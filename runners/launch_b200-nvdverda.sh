@@ -56,7 +56,7 @@ export OSL="$OSL"
 
 NGINX_IMAGE="nginx:1.27.4"
 
-SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
+SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g')_nsight.sqsh"
 
 NGINX_SQUASH_FILE="/home/ubuntu/InferenceMAX_rocm/containers/$(echo "$NGINX_IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
 
