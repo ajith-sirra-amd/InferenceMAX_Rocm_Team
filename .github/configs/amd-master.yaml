@@ -230,26 +230,22 @@ minimaxm2.5-fp8-mi355x-vllm:
     - { tp: 4, conc-start: 4, conc-end: 128 }
 
 glm5-fp8-mi355x-vllm:
-  image: rocm/vllm-dev:nightly_main_20260219
+  image: rocm/pytorch-private:vllm_glm5_0225
   model: zai-org/GLM-5-FP8
   model-prefix: glm5
-  runner: mi355x-m15-17
+  runner: mi355x-p02-g57
   precision: fp8
   framework: vllm
   multinode: false
   seq-len-configs:
-  - isl: 128
-    osl: 128
+  - isl: 1024
+    osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 4 }
-  #- isl: 1024
-  #  osl: 1024
-  #  search-space:
-  #  - { tp: 8, conc-start: 4, conc-end: 128 }
-  #- isl: 8192
-  #  osl: 1024
-  #  search-space:
-  #  - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
 
 #END, inferenceX v3
 

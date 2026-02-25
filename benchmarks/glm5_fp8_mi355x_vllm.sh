@@ -8,6 +8,7 @@ check_env_vars \
     CONC \
     ISL \
     OSL \
+    MAX_MODEL_LEN \
     RANDOM_RANGE_RATIO \
     RESULT_FILENAME
 
@@ -34,6 +35,9 @@ pip install git+https://github.com/huggingface/transformers.git
 
 set -x
 export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_USE_AITER_FP8BMM=0
+export VLLM_ROCM_USE_AITER_FP4BMM=0
+
 vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --config config.yaml \
 --tensor-parallel-size=$TP \
@@ -42,6 +46,7 @@ vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --disable-log-requests \
 --trust-remote-code \
 --block-size 1 \
+--max-model-len $MAX_MODEL_LEN \
 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
