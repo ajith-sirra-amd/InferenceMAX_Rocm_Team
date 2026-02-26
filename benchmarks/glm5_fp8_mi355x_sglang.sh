@@ -36,7 +36,8 @@ python3 -m sglang.launch_server \
     --tensor-parallel-size $TP \
     --trust-remote-code \
     --mem-fraction-static $MEM_FRAC_STATIC \
-    --kv-cache-dtype fp8_e4m3 > $SERVER_LOG 2>&1 &
+    --nsa-prefill-backend tilelang \
+    --nsa-decode-backend tilelang > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
