@@ -29,12 +29,10 @@ MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
 set -x
 pip install -U transformers
 python3 -m sglang.launch_server \
-    --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
     --tensor-parallel-size $TP \
-    --trust-remote-code \
     --mem-fraction-static $MEM_FRAC_STATIC \
     --nsa-prefill-backend tilelang \
     --nsa-decode-backend tilelang > $SERVER_LOG 2>&1 &
