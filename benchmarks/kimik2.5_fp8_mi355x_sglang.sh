@@ -28,10 +28,10 @@ MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
 
 set -x
 
-export SGLANG_USE_AITER=1
 export SGLANG_ROCM_FUSED_DECODE_MLA=0
 
 python3 -m sglang.launch_server \
+    --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
@@ -49,7 +49,7 @@ export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
-    --backend sglang \
+    --backend vllm \
     --input-len "$ISL" \
     --output-len "$OSL" \
     --random-range-ratio "$RANDOM_RANGE_RATIO" \
