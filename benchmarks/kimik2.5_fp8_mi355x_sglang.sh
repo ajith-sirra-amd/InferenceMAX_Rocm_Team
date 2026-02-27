@@ -49,7 +49,7 @@ export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
-    --backend vllm \
+    --backend sglang \
     --input-len "$ISL" \
     --output-len "$OSL" \
     --random-range-ratio "$RANDOM_RANGE_RATIO" \
