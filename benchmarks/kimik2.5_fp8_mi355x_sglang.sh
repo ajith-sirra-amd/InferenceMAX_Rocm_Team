@@ -50,7 +50,7 @@ export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
-    --backend openai \
+    --backend vllm \
     --input-len "$ISL" \
     --output-len "$OSL" \
     --random-range-ratio "$RANDOM_RANGE_RATIO" \
