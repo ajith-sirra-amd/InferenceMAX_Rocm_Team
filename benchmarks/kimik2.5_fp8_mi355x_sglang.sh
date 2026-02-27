@@ -28,6 +28,7 @@ MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
 
 set -x
 
+export SGLANG_USE_AITER=0
 export SGLANG_ROCM_FUSED_DECODE_MLA=0
 
 python3 -m sglang.launch_server \
@@ -49,7 +50,7 @@ export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
-    --backend vllm \
+    --backend openai \
     --input-len "$ISL" \
     --output-len "$OSL" \
     --random-range-ratio "$RANDOM_RANGE_RATIO" \
@@ -57,7 +58,8 @@ run_benchmark_serving \
     --max-concurrency "$CONC" \
     --result-filename "$RESULT_FILENAME" \
     --result-dir /workspace/ \
-    --trust-remote-code
+    --trust-remote-code \
+    --server-pid "$SERVER_PID"
 
 # After throughput, run evaluation only if RUN_EVAL is true
 if [ "${RUN_EVAL}" = "true" ]; then
