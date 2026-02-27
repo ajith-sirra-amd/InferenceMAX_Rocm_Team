@@ -32,7 +32,6 @@ export SGLANG_USE_AITER=1
 export SGLANG_ROCM_FUSED_DECODE_MLA=0
 
 python3 -m sglang.launch_server \
-    --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
