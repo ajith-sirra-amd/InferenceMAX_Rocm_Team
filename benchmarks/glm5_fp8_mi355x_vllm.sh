@@ -41,7 +41,7 @@ export VLLM_ROCM_USE_AITER_FP4BMM=0
 vllm serve $MODEL --host 0.0.0.0 --port $PORT \
 --config config.yaml \
 --tensor-parallel-size=$TP \
---gpu-memory-utilization 0.95 \
+--gpu-memory-utilization 0.8 \
 --max-num-seqs 256 \
 --disable-log-requests \
 --trust-remote-code \
