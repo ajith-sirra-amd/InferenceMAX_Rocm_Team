@@ -18,6 +18,7 @@ fi
 
 nvidia-smi
 hostname
+ifconfig
 
 hf download "$MODEL"
 
