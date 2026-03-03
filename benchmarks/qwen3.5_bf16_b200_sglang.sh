@@ -17,6 +17,7 @@ if [[ -n "$SLURM_JOB_ID" ]]; then
 fi
 
 nvidia-smi
+hostname
 
 hf download "$MODEL"
 
