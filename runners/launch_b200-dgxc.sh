@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-HF_HUB_CACHE_MOUNT="/raid/hf_hub_cache/"
+HF_HUB_CACHE_MOUNT="/mnt/nvme3n1"
 FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 PORT=8888
