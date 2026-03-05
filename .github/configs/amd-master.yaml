@@ -276,6 +276,24 @@ kimik2.5-fp8-mi355x-sglang:
     search-space:
     - { tp: 8, conc-start: 4, conc-end: 128 }
 
+kimik2.5-int4-mi355x-sglang:
+  image: rocm/sgl-dev:v0.5.9-rocm720-mi35x-20260226
+  model: amd/Kimi-K2.5-MXFP4
+  model-prefix: kimik2.5
+  runner: mi355x
+  precision: int4
+  framework: sglang
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+
 gptoss-fp4-mi300x-vllm:
   image: vllm/vllm-openai-rocm:v0.14.0
   model: openai/gpt-oss-120b
