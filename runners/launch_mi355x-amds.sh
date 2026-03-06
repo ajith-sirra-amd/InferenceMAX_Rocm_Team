@@ -152,9 +152,9 @@ else
 
     srun --jobid=$JOB_ID bash -c "docker stop \$(docker ps -a -q)"
 
-    if [[ "$FRAMEWORK" == "atom" ]]; then
-        srun --jobid=$JOB_ID bash -c "rm $SQUASH_FILE"
-    fi
+    #if [[ "$FRAMEWORK" == "atom" ]]; then
+    #    srun --jobid=$JOB_ID bash -c "rm $SQUASH_FILE"
+    #fi
 
     srun --jobid=$JOB_ID bash -c "enroot import -o $SQUASH_FILE docker://$IMAGE"
     if ! srun --jobid=$JOB_ID bash -c "unsquashfs -l $SQUASH_FILE > /dev/null"; then
