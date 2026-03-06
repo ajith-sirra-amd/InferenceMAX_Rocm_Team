@@ -38,7 +38,7 @@ else
 fi
 
 set -x
-export ATOM_USE_TRITON_GEMM=1
+#export ATOM_USE_TRITON_GEMM=1
 python3 -m atom.entrypoints.openai_server \
     --model $MODEL \
     --server-port $PORT \
