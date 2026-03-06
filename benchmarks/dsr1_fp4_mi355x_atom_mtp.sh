@@ -40,7 +40,8 @@ fi
 set -x
 
 export AMDGCN_USE_BUFFER_OPS=1
-
+export ATOM_USE_TRITON_GEMM=1
+export ATOM_USE_TRITON_MXFP4_BMM=1
 python3 -m atom.entrypoints.openai_server \
     --model $MODEL \
     --server-port $PORT \
