@@ -30,6 +30,7 @@ SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
 set -x
+pip install -U transformers
 export VLLM_ROCM_USE_AITER=1
 vllm serve $MODEL --port $PORT \
 --config config.yaml \
