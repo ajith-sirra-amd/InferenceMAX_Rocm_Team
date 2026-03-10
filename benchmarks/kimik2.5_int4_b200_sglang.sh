@@ -32,7 +32,7 @@ python3 -m sglang.launch_server \
     --host=0.0.0.0 \
     --port $PORT \
     --tensor-parallel-size $TP \
-    --mem-fraction-static $MEM_FRAC_STATIC > $SERVER_LOG 2>&1 &
+    --mem-fraction-static $MEM_FRAC_STATIC --trust-remote-code > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
