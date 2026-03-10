@@ -1879,7 +1879,7 @@ kimik2.5-int4-b200-sglang:
 
 minimaxm2.5-fp8-b200-sglang:
   image: lmsysorg/sglang:nightly-dev-20260305-33c92732
-  model: moonshotai/Kimi-K2.5
+  model: MiniMaxAI/MiniMax-M2.5
   model-prefix: minimaxm2.5
   runner: b200-shaderform10
   precision: fp8
