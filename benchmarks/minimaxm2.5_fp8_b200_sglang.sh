@@ -23,7 +23,7 @@ hf download "$MODEL"
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
-MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.9}
+MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
 
 set -x
 

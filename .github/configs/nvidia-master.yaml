@@ -1889,11 +1889,13 @@ minimaxm2.5-fp8-b200-sglang:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 2, conc-start: 4, conc-end: 128 }
+    - { tp: 4, conc-start: 4, conc-end: 128 }
   - isl: 8192
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 2, conc-start: 4, conc-end: 128 }
+    - { tp: 4, conc-start: 4, conc-end: 128 }
 
 
 qwen3.5-bf16-b200-vllm:
