@@ -1926,12 +1926,11 @@ qwen3.5-fp4-b200-vllm:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 4 }
-  #   - { tp: 8, conc-start: 4, conc-end: 128 }
-  # - isl: 8192
-  #   osl: 1024
-  #   search-space:
-  #   - { tp: 8, conc-start: 4, conc-end: 128 }
+     - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
 
 kimik2.5-fp4-b200-vllm:
   image: vllm/vllm-openai:cu130-nightly-5d6aae4577590cd6b6a604f9e74c17c5f234271d
@@ -1945,7 +1944,6 @@ kimik2.5-fp4-b200-vllm:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 4 }
     - { tp: 8, conc-start: 4, conc-end: 128 }
   - isl: 8192
     osl: 1024
