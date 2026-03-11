@@ -23,6 +23,7 @@ E2EL = "E2EL (s)"
 TPUT_PER_GPU = "TPUT per GPU"
 OUTPUT_TPUT_PER_GPU = "Output TPUT per GPU"
 INPUT_TPUT_PER_GPU = "Input TPUT per GPU"
+DOCKER = "Docker"
 PREFILL_TP = "Prefill TP"
 PREFILL_EP = "Prefill EP"
 PREFILL_DP_ATTN = "Prefill DP Attn"
@@ -74,7 +75,7 @@ def main():
 
         single_node_headers = [
             MODEL, SERVED_MODEL, HARDWARE, FRAMEWORK, PRECISION, ISL, OSL, TP, EP, DP_ATTENTION,
-            CONC, TTFT, TPOT, INTERACTIVITY, E2EL, TPUT_PER_GPU, OUTPUT_TPUT_PER_GPU, INPUT_TPUT_PER_GPU
+            CONC, TTFT, TPOT, INTERACTIVITY, E2EL, TPUT_PER_GPU, OUTPUT_TPUT_PER_GPU, INPUT_TPUT_PER_GPU, DOCKER
         ]
 
         single_node_rows = [
@@ -97,6 +98,7 @@ def main():
                 f"{r['tput_per_gpu']:.4f}",
                 f"{r['output_tput_per_gpu']:.4f}",
                 f"{r['input_tput_per_gpu']:.4f}",
+                f"['docker']",
             ]
             for r in single_node_results
         ]
@@ -114,7 +116,7 @@ def main():
             MODEL, SERVED_MODEL, HARDWARE, FRAMEWORK, PRECISION, ISL, OSL,
             PREFILL_TP, PREFILL_EP, PREFILL_DP_ATTN, PREFILL_WORKERS, PREFILL_GPUS,
             DECODE_TP, DECODE_EP, DECODE_DP_ATTN, DECODE_WORKERS, DECODE_GPUS,
-            CONC, TTFT, TPOT, INTERACTIVITY, E2EL, TPUT_PER_GPU, OUTPUT_TPUT_PER_GPU, INPUT_TPUT_PER_GPU
+            CONC, TTFT, TPOT, INTERACTIVITY, E2EL, TPUT_PER_GPU, OUTPUT_TPUT_PER_GPU, INPUT_TPUT_PER_GPU, DOCKER
         ]
 
         multinode_rows = [
@@ -144,6 +146,7 @@ def main():
                 f"{r['tput_per_gpu']:.4f}",
                 f"{r['output_tput_per_gpu']:.4f}",
                 f"{r['input_tput_per_gpu']:.4f}",
+                f"['docker']",
             ]
             for r in multinode_results
         ]
