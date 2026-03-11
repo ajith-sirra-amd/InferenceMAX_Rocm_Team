@@ -313,6 +313,85 @@ glm5-fp4-mi355x-vllm:
     search-space:
     - { tp: 8, conc-start: 4, conc-end: 128 }
 
+# SGL
+
+qwen3.5-bf16-mi355x-sglang:
+  image: rocm/sgl-dev:v0.5.8.post1-rocm720-mi35x-20260215
+  model: Qwen/Qwen3.5-397B-A17B
+  model-prefix: qwen3.5
+  runner: mi355x-m15-17
+  precision: bf16
+  framework: sglang
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+
+glm5-fp8-mi355x-sglang:
+  image: rocm/sgl-dev:v0.5.9-rocm720-mi35x-20260226
+  model: zai-org/GLM-5-FP8
+  model-prefix: glm5
+  runner: mi355x
+  precision: fp8
+  framework: sglang
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+
+kimik2.5-fp8-mi355x-sglang:
+  image: rocm/sgl-dev:v0.5.9-rocm720-mi35x-20260226
+  model: moonshotai/Kimi-K2.5
+  model-prefix: kimik2.5
+  runner: mi355x
+  precision: fp8
+  framework: sglang
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+
+kimik2.5-int4-mi355x-sglang:
+  image: rocm/sgl-dev:v0.5.9-rocm720-mi35x-20260226
+  model: amd/Kimi-K2.5-MXFP4
+  model-prefix: kimik2.5
+  runner: mi355x
+  precision: int4
+  framework: sglang
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+
+
 #END, inferenceX v3
 
 gptoss-fp4-mi300x-vllm:
