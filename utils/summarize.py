@@ -98,7 +98,7 @@ def main():
                 f"{r['tput_per_gpu']:.4f}",
                 f"{r['output_tput_per_gpu']:.4f}",
                 f"{r['input_tput_per_gpu']:.4f}",
-                f"['image']",
+                r['image'],
             ]
             for r in single_node_results
         ]
@@ -146,7 +146,7 @@ def main():
                 f"{r['tput_per_gpu']:.4f}",
                 f"{r['output_tput_per_gpu']:.4f}",
                 f"{r['input_tput_per_gpu']:.4f}",
-                f"['image']",
+                r['image'],
             ]
             for r in multinode_results
         ]
