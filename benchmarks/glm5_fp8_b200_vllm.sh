@@ -38,7 +38,6 @@ vllm serve $MODEL --port $PORT \
 --tensor-parallel-size $TP \
 --gpu-memory-utilization 0.95 \
 --max-num-seqs 256 \
---disable-log-requests \
 --trust-remote-code \
 > $SERVER_LOG 2>&1 &
 

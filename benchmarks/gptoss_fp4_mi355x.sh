@@ -41,7 +41,6 @@ vllm serve $MODEL --port $PORT \
 --config config.yaml \
 --block-size=64 \
 --no-enable-prefix-caching \
---disable-log-requests \
 --async-scheduling > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!

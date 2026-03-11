@@ -49,7 +49,7 @@ vllm serve $MODEL --port $PORT \
 --compilation-config  '{"cudagraph_mode": "FULL_AND_PIECEWISE"}' \
 --block-size=64 \
 --no-enable-prefix-caching \
---disable-log-requests > $SERVER_LOG 2>&1 &
+ > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
