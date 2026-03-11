@@ -38,7 +38,6 @@ vllm serve $MODEL --port $PORT \
 --max-num-seqs 256 \
 --trust-remote-code \
 --language-model-only \
---attention-backend FLASH_ATTN \
 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
