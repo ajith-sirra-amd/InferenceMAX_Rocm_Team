@@ -74,8 +74,8 @@ def main():
             r['infmax_model_prefix'], r['hw'], r['framework'], r['precision'], r['isl'], r['osl'], r['tp'], r['ep'], r['conc']))
 
         single_node_headers = [
-            MODEL, SERVED_MODEL, HARDWARE, FRAMEWORK, PRECISION, ISL, OSL, TP, EP, DP_ATTENTION,
-            CONC, TTFT, TPOT, INTERACTIVITY, E2EL, TPUT_PER_GPU, OUTPUT_TPUT_PER_GPU, INPUT_TPUT_PER_GPU, DOCKER
+            MODEL, SERVED_MODEL, HARDWARE, FRAMEWORK, DOCKER, PRECISION, ISL, OSL, TP, EP, DP_ATTENTION,
+            CONC, TTFT, TPOT, INTERACTIVITY, E2EL, TPUT_PER_GPU, OUTPUT_TPUT_PER_GPU, INPUT_TPUT_PER_GPU
         ]
 
         single_node_rows = [
@@ -84,6 +84,7 @@ def main():
                 r['model'],
                 r['hw'].upper(),
                 r['framework'].upper(),
+                r['image'],
                 r['precision'].upper(),
                 r['isl'],
                 r['osl'],
@@ -98,7 +99,6 @@ def main():
                 f"{r['tput_per_gpu']:.4f}",
                 f"{r['output_tput_per_gpu']:.4f}",
                 f"{r['input_tput_per_gpu']:.4f}",
-                r['image'],
             ]
             for r in single_node_results
         ]
@@ -113,10 +113,10 @@ def main():
                             r['osl'], r['prefill_tp'], r['prefill_ep'], r['decode_tp'], r['decode_ep'], r['conc']))
 
         multinode_headers = [
-            MODEL, SERVED_MODEL, HARDWARE, FRAMEWORK, PRECISION, ISL, OSL,
+            MODEL, SERVED_MODEL, HARDWARE, FRAMEWORK, DOCKER, PRECISION, ISL, OSL,
             PREFILL_TP, PREFILL_EP, PREFILL_DP_ATTN, PREFILL_WORKERS, PREFILL_GPUS,
             DECODE_TP, DECODE_EP, DECODE_DP_ATTN, DECODE_WORKERS, DECODE_GPUS,
-            CONC, TTFT, TPOT, INTERACTIVITY, E2EL, TPUT_PER_GPU, OUTPUT_TPUT_PER_GPU, INPUT_TPUT_PER_GPU, DOCKER
+            CONC, TTFT, TPOT, INTERACTIVITY, E2EL, TPUT_PER_GPU, OUTPUT_TPUT_PER_GPU, INPUT_TPUT_PER_GPU
         ]
 
         multinode_rows = [
@@ -125,6 +125,7 @@ def main():
                 r['model'],
                 r['hw'].upper(),
                 r['framework'].upper(),
+                r['image'],
                 r['precision'].upper(),
                 r['isl'],
                 r['osl'],
@@ -146,7 +147,6 @@ def main():
                 f"{r['tput_per_gpu']:.4f}",
                 f"{r['output_tput_per_gpu']:.4f}",
                 f"{r['input_tput_per_gpu']:.4f}",
-                r['image'],
             ]
             for r in multinode_results
         ]
