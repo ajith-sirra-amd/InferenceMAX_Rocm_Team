@@ -148,7 +148,9 @@ PY
 
 else
 
-    export HF_HUB_CACHE_MOUNT="/var/lib/hf-hub-cache/"
+    #export HF_HUB_CACHE_MOUNT="/var/lib/hf-hub-cache/"
+    #runner: mi355x-tw-sctrl
+    export HF_HUB_CACHE_MOUNT="/mnt/hf-hub-cache/"
     export PORT_OFFSET=${RUNNER_NAME: -1}
     export PORT=$(( 8888 + ${PORT_OFFSET} ))
     FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "atom" ]] && printf '_atom' || printf '')
