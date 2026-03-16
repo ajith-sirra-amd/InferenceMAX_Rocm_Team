@@ -22,6 +22,12 @@ docker pull $IMAGE
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
 echo "The image digest is: $DIGEST"
 
+if [[ "$FRAMEWORK" == "sglang-disagg" ]]; then
+    BENCHMARK_SUBDIR="multi_node"
+else
+    BENCHMARK_SUBDIR="single_node"
+fi
+
 set -x
 docker run --rm --init --network host --shm-size=16g --name=$server_name \
 --privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
@@ -43,7 +49,7 @@ docker run --rm --init --network host --shm-size=16g --name=$server_name \
 -e RUN_EVAL \
 --entrypoint=/bin/bash \
 $IMAGE \
-benchmarks/${MODEL_CODE}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}.sh
+benchmarks/${BENCHMARK_SUBDIR}/${MODEL_CODE}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}.sh
 
 if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
