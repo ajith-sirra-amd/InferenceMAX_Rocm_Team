@@ -2,6 +2,63 @@
 
 # Shared benchmarking utilities for InferenceMAX
 
+# --------------------------------
+# GPU monitoring helpers
+# --------------------------------
+
+GPU_MONITOR_PID=""
+GPU_METRICS_CSV="/workspace/gpu_metrics.csv"
+
+# Start background GPU monitoring that logs metrics every second to CSV.
+# Auto-detects NVIDIA (nvidia-smi) or AMD (amd-smi) GPUs.
+# Usage: start_gpu_monitor [--output /path/to/output.csv] [--interval 1]
+start_gpu_monitor() {
+    local output="$GPU_METRICS_CSV"
+    local interval=1
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --output)   output="$2"; shift 2 ;;
+            --interval) interval="$2"; shift 2 ;;
+            *)          shift ;;
+        esac
+    done
+
+    GPU_METRICS_CSV="$output"
+
+    if command -v nvidia-smi &>/dev/null; then
+        nvidia-smi --query-gpu=timestamp,index,power.draw,temperature.gpu,clocks.current.sm,clocks.current.memory,utilization.gpu,utilization.memory \
+            --format=csv -l "$interval" > "$output" 2>/dev/null &
+        GPU_MONITOR_PID=$!
+        echo "[GPU Monitor] Started NVIDIA (PID=$GPU_MONITOR_PID, interval=${interval}s, output=$output)"
+    elif command -v amd-smi &>/dev/null; then
+        # Use amd-smi native watch mode (-w) which includes timestamps automatically.
+        # Pipe through awk to: skip preamble lines, keep first CSV header, skip repeated headers.
+        amd-smi metric -p -c -t -u -w "$interval" --csv 2>/dev/null \
+            | awk '/^timestamp,/{if(!h){print;h=1};next} h{print}' > "$output" &
+        GPU_MONITOR_PID=$!
+        echo "[GPU Monitor] Started AMD (PID=$GPU_MONITOR_PID, interval=${interval}s, output=$output)"
+    else
+        echo "[GPU Monitor] No GPU monitoring tool found (nvidia-smi or amd-smi), skipping"
+        return 0
+    fi
+}
+
+# Stop the background GPU monitor and report file size.
+stop_gpu_monitor() {
+    if [[ -n "$GPU_MONITOR_PID" ]] && kill -0 "$GPU_MONITOR_PID" 2>/dev/null; then
+        kill "$GPU_MONITOR_PID" 2>/dev/null
+        wait "$GPU_MONITOR_PID" 2>/dev/null || true
+        echo "[GPU Monitor] Stopped (PID=$GPU_MONITOR_PID)"
+        if [[ -f "$GPU_METRICS_CSV" ]]; then
+            local lines
+            lines=$(wc -l < "$GPU_METRICS_CSV")
+            echo "[GPU Monitor] Collected $lines rows -> $GPU_METRICS_CSV"
+        fi
+    fi
+    GPU_MONITOR_PID=""
+}
+
 # Check if required environment variables are set
 # Usage: check_env_vars VAR1 VAR2 VAR3 ...
 # Exits with code 1 if any variable is not set
@@ -76,6 +133,15 @@ wait_for_server_ready() {
         echo "Error: --server-pid is required"
         return 1
     fi
+
+    # Wait for server log file to be created (container startup may delay this)
+    while [ ! -f "$server_log" ]; do
+        if ! kill -0 "$server_pid" 2>/dev/null; then
+            echo "Server died before creating log file. Exiting."
+            exit 1
+        fi
+        sleep 1
+    done
 
     # Show logs until server is ready
     tail -f -n +1 "$server_log" &
@@ -235,6 +301,18 @@ run_benchmark_serving() {
         workspace_dir=$(pwd)
     fi
 
+    # Profiling support: when PROFILE=1, ensure profiler dir exists, add --profile flag,
+    # and cap num_prompts to keep traces small.
+    local profile_flag=()
+    if [[ "${PROFILE:-}" == "1" ]]; then
+        local _prof_dir="${SGLANG_TORCH_PROFILER_DIR:-${VLLM_TORCH_PROFILER_DIR:-}}"
+        if [[ -n "$_prof_dir" ]]; then
+            mkdir -p "$_prof_dir"
+        fi
+        profile_flag+=(--profile)
+        num_prompts="$max_concurrency"
+    fi
+
     # Build benchmark command
     local benchmark_cmd=(
         python3 "$workspace_dir/utils/bench_serving/benchmark_serving.py"
@@ -249,6 +327,7 @@ run_benchmark_serving() {
         --max-concurrency "$max_concurrency"
         --request-rate inf
         --ignore-eos
+        "${profile_flag[@]}"
         --save-result
         --num-warmups "$((2 * max_concurrency))" \
         --percentile-metrics 'ttft,tpot,itl,e2el'
@@ -295,7 +374,110 @@ run_benchmark_serving() {
     fi
     set +x
 
+    # If profiling, move trace to relay-upload location
+    if [[ "${PROFILE:-}" == "1" ]]; then
+        move_profile_trace_for_relay
+    fi
+
     return $benchmark_exit_code
+}
+
+
+# --------------------------------
+# Profiling trace helpers
+# --------------------------------
+
+_find_latest_profile_trace() {
+    local latest=""
+    local dir="" candidate="" base=""
+    local -a search_roots=()
+
+    for dir in "$@"; do
+        search_roots=()
+        if [[ -d "$dir" ]]; then
+            search_roots+=("$dir")
+        fi
+        if [[ -d "$dir/profiles" ]]; then
+            search_roots+=("$dir/profiles")
+        fi
+        if [[ ${#search_roots[@]} -eq 0 ]]; then
+            continue
+        fi
+
+        while IFS= read -r -d '' candidate; do
+            base="$(basename "$candidate")"
+            if [[ "$base" == profile_*.trace.json.gz ]]; then
+                continue
+            fi
+            if [[ -z "$latest" || "$candidate" -nt "$latest" ]]; then
+                latest="$candidate"
+            fi
+        done < <(
+            find "${search_roots[@]}" -maxdepth 1 -type f \
+                \( -name "*.trace.json" -o -name "*.trace.json.gz" -o -name "*trace*.json" -o -name "*trace*.json.gz" -o -name "*profile*.json" -o -name "*profile*.json.gz" \) \
+                -print0 2>/dev/null
+        )
+    done
+
+    printf '%s' "$latest"
+}
+
+# Move profiler trace into a stable workspace path for workflow relay/upload.
+move_profile_trace_for_relay() {
+    if [[ "${PROFILE:-}" != "1" ]]; then
+        return 0
+    fi
+
+    if [[ -z "${RESULT_FILENAME:-}" ]]; then
+        echo "[PROFILE] RESULT_FILENAME is not set; skipping relay trace staging." >&2
+        return 0
+    fi
+
+    local sglang_dir="${SGLANG_TORCH_PROFILER_DIR:-/workspace}"
+    local vllm_dir="${VLLM_TORCH_PROFILER_DIR:-/workspace}"
+    local -a search_dirs=()
+    local dir="" existing=""
+    local seen=0
+
+    for dir in "$sglang_dir" "$vllm_dir" "/workspace"; do
+        if [[ -z "$dir" ]]; then
+            continue
+        fi
+        seen=0
+        for existing in "${search_dirs[@]}"; do
+            if [[ "$existing" == "$dir" ]]; then
+                seen=1
+                break
+            fi
+        done
+        if [[ "$seen" -eq 0 ]]; then
+            search_dirs+=("$dir")
+        fi
+    done
+
+    local trace_file=""
+    local wait_attempts=10
+    for (( i=1; i<=wait_attempts; i++ )); do
+        trace_file="$(_find_latest_profile_trace "${search_dirs[@]}")"
+        if [[ -n "$trace_file" ]]; then
+            break
+        fi
+        sleep 10
+    done
+
+    if [[ -z "$trace_file" ]]; then
+        echo "[PROFILE] No trace found for relay under: ${search_dirs[*]}" >&2
+        return 0
+    fi
+
+    local dest_trace="/workspace/profile_${RESULT_FILENAME}.trace.json.gz"
+    if [[ "$trace_file" == *.gz ]]; then
+        cp -f "$trace_file" "$dest_trace"
+    else
+        gzip -c "$trace_file" > "$dest_trace"
+    fi
+
+    echo "[PROFILE] Relay trace prepared: $dest_trace (source: $trace_file)"
 }
 
 
@@ -431,6 +613,7 @@ run_lm_eval() {
       --tasks "utils/evals/${task}.yaml" \
       --num_fewshot "${num_fewshot}" \
       --output_path "${results_dir}" \
+      --log_samples \
       --model_args "model=${MODEL_NAME},base_url=${openai_chat_base},api_key=${OPENAI_API_KEY},eos_string=</s>,max_retries=5,num_concurrent=${concurrent_requests},timeout=600,tokenized_requests=False,max_length=${gen_max_tokens}" \
       --gen_kwargs "max_tokens=8192,temperature=${temperature},top_p=${top_p}"
     local eval_exit=$?
@@ -480,6 +663,7 @@ append_lm_eval_summary() {
   "ep": ${EP_SIZE:-1},
   "dp_attention": ${dp_json},
   "model": "${model_name:-}",
+  "infmax_model_prefix": "${MODEL_PREFIX:-unknown}",
   "hw": "${RUNNER_TYPE:-unknown}",
   "isl": "${ISL:-0}",
   "osl": "${OSL:-0}"
