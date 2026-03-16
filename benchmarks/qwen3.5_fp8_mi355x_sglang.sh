@@ -24,10 +24,12 @@ fi
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
-MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
+MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.9}
+CHUNK_SIZE=8192
+CONTEXT_SIZE=$ISL+$OSL+1
 
 set -x
-python3 -m sglang.launch_server \
+sglang serve \
     --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
@@ -35,7 +37,17 @@ python3 -m sglang.launch_server \
     --tensor-parallel-size $TP \
     --trust-remote-code \
     --mem-fraction-static $MEM_FRAC_STATIC \
-    --kv-cache-dtype fp8_e4m3 > $SERVER_LOG 2>&1 &
+    --kv-cache-dtype fp8_e4m3 \
+    --mamba-ssm-dtype bfloat16 \
+    --cuda-graph-max-bs $CONC \
+    --max-running-requests $CONC \
+    --chunked-prefill-size $CHUNK_SIZE \
+    --max-prefill-tokens $CHUNK_SIZE \
+    --context-length $CONTEXT_SIZE \
+    --disable-radix-cache \
+    --tokenizer-worker-num $TP \
+    --num-continuous-decode-steps 2 \
+    > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
