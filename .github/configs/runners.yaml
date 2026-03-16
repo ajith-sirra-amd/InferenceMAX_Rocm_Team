@@ -110,3 +110,5 @@ gb300:
 # tw mi355x nodes
 mi355x-tw-sctrl:
 - 'mi355x-amds'
+mi355x-m15-17:
+- 'mi355x-amd'

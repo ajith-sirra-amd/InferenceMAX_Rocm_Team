@@ -1,4 +1,4 @@
-name: Atom CI
+name: Atom slurm CI
 run-name: Atom CI
 
 on:
@@ -12,5 +12,5 @@ jobs:
     uses: ./.github/workflows/e2e-tests.yml
     secrets: inherit
     with:
-      generate-cli-command: "test-config --config-files .github/configs/amd-master.yaml --config-keys '*-atom-*-ci'"
+      generate-cli-command: "test-config --config-files .github/configs/amd-master.yaml --config-keys '*-atom-*slurm-ci'"
       test-name: atom-ci
