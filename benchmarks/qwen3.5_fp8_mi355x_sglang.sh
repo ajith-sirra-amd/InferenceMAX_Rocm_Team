@@ -26,7 +26,6 @@ SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.9}
 CHUNK_SIZE=8192
-CONTEXT_SIZE=$((ISL + OSL + 200))
 
 set -x
 sglang serve \
@@ -43,7 +42,6 @@ sglang serve \
     --max-running-requests $CONC \
     --chunked-prefill-size $CHUNK_SIZE \
     --max-prefill-tokens $CHUNK_SIZE \
-    --context-length $CONTEXT_SIZE \
     --disable-radix-cache \
     --tokenizer-worker-num $TP \
     --num-continuous-decode-steps 2 \
