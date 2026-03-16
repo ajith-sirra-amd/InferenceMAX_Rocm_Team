@@ -1,5 +1,5 @@
 name: Atom docker CI
-run-name: Atom CI
+run-name: Atom docker node CI
 
 on:
   workflow_dispatch:

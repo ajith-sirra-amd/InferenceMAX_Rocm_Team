@@ -1,5 +1,5 @@
 name: Atom slurm CI
-run-name: Atom CI
+run-name: Atom slurm node CI
 
 on:
   workflow_dispatch:
