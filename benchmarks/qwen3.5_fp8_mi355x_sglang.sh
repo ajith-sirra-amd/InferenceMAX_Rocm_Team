@@ -26,7 +26,7 @@ SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.9}
 CHUNK_SIZE=8192
-CONTEXT_SIZE=$ISL+$OSL+1
+CONTEXT_SIZE=$((ISL + OSL + 200))
 
 set -x
 sglang serve \
