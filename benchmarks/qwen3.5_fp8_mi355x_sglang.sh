@@ -43,11 +43,12 @@ sglang serve \
     --chunked-prefill-size $CHUNK_SIZE \
     --max-prefill-tokens $CHUNK_SIZE \
     --disable-radix-cache \
+    --num-continuous-decode-steps 2 \
+    --tokenizer-worker-num $TP \
     > $SERVER_LOG 2>&1 &
 
-    #--num-continuous-decode-steps 2 \
-    #--tokenizer-worker-num $TP \
 
+    #--tokenizer-worker-num $TP \
 SERVER_PID=$!
 
 # Wait for server to be ready
