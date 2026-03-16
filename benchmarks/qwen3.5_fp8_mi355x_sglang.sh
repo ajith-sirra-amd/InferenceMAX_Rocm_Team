@@ -24,7 +24,7 @@ fi
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
-MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.9}
+MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
 CHUNK_SIZE=8192
 
 set -x
@@ -43,9 +43,10 @@ sglang serve \
     --chunked-prefill-size $CHUNK_SIZE \
     --max-prefill-tokens $CHUNK_SIZE \
     --disable-radix-cache \
-    --tokenizer-worker-num $TP \
-    --num-continuous-decode-steps 2 \
     > $SERVER_LOG 2>&1 &
+
+    #--num-continuous-decode-steps 2 \
+    #--tokenizer-worker-num $TP \
 
 SERVER_PID=$!
 
