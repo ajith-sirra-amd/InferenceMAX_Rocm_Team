@@ -96,15 +96,15 @@ jobs:
       - name: Resource cleanup (pre-run)
         run: &resource-cleanup |
           # Cleanup Docker resources
-          if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-            echo "[Docker] Cleaning up resources ..."
-            docker ps -aq | xargs -r docker rm -f
-            docker network prune -f
-            while [ -n "$(docker ps -aq)" ]; do
-              docker ps -a
-              sleep 5
-            done
-          fi
+          #if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+          #  echo "[Docker] Cleaning up resources ..."
+          #  docker ps -aq | xargs -r docker rm -f
+          #  docker network prune -f
+          #  while [ -n "$(docker ps -aq)" ]; do
+          #    docker ps -a
+          #    sleep 5
+          #  done
+          #fi
 
           # Cleanup SLURM resources
           if command -v squeue >/dev/null 2>&1; then
