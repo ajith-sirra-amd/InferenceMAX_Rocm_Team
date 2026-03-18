@@ -31,7 +31,6 @@ PORT=${PORT:-8888}
 
 set -x
 export VLLM_ROCM_USE_AITER=1
-export VLLM_ROCM_USE_AITER_MLA=0
 vllm serve $MODEL --port $PORT \
 --config config.yaml \
 --tensor-parallel-size=$TP \
@@ -40,6 +39,7 @@ vllm serve $MODEL --port $PORT \
 --disable-log-requests \
 --trust-remote-code \
 --block-size=64 \
+--max-num-seqs 256 \
 --mm-encoder-tp-mode data \
 > $SERVER_LOG 2>&1 &
 
