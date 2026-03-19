@@ -2,7 +2,7 @@ glm5-fp8-mi355x-atom:
   image: rocm/atom-dev:pre-build-6025637a896bc0c9c9b72c0cce6931a5c553078c
   model: zai-org/GLM-5-FP8
   model-prefix: glm5
-  runner: mi355x-tw-sctrl
+  runner: mi355x-p02-g57
   precision: fp8
   framework: atom
   multinode: false
