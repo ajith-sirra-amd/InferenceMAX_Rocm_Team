@@ -1,4 +1,4 @@
-glm5-fp8-mi355x-atom:
+glm5-fp8-mi355x-atom-docker-ci:
   image: rocm/atom-dev:nightly_202603181713 
   model: zai-org/GLM-5-FP8
   model-prefix: glm5
