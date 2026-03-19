@@ -7,7 +7,15 @@ on:
             generate-cli-command:
                 description: "Command passed to generate matrix script"
                 required: true
-                type: string
+                type: choice
+                options:
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys glm5-fp8-mi355x-atom-docker-ci"
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsr1-fp8-mi355x-atom-mtp-docker-ci"
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsr1-fp8-mi355x-atom-mtp-docker-ci"
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-int4-mi355x-atom-docker-ci"
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys qwen3.5-fp8-mi355x-atom-mtp-docker-ci"
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys minimax2.5-fp8-mi355x-atom-mtp-docker-ci"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys '*-atom-*docker-ci'"
             test-name:
                 description: "Name for this test run"
                 required: false
