@@ -596,8 +596,8 @@ gptoss-fp4-mi355x-vllm:
     - { tp: 4, conc-start: 4, conc-end: 4 }
     - { tp: 8, conc-start: 4, conc-end: 8 }
 
-gptoss-fp4-mi355x-atom:
-  image: rocm/atom:rocm7.1.1-ubuntu24.04-pytorch2.9-atom0.1.1-MI350x
+gptoss-fp4-mi355x-atom-docker-ci:
+  image: rocm/atom-dev:nightly_202603181713 
   model: openai/gpt-oss-120b
   model-prefix: gptoss
   runner: mi355x
@@ -610,11 +610,11 @@ gptoss-fp4-mi355x-atom:
     search-space:
     - { tp: 1, conc-start: 16, conc-end: 128 }
     - { tp: 8, ep: 1, conc-start: 4, conc-end: 32 }
-  - isl: 1024
-    osl: 8192
-    search-space:
-    - { tp: 1, conc-start: 16, conc-end: 128 }
-    - { tp: 8, ep: 1, conc-start: 4, conc-end: 64 }
+  #- isl: 1024
+  #  osl: 8192
+  #  search-space:
+  #  - { tp: 1, conc-start: 16, conc-end: 128 }
+  #  - { tp: 8, ep: 1, conc-start: 4, conc-end: 64 }
   - isl: 8192
     osl: 1024
     search-space:

@@ -12,6 +12,7 @@ on:
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys glm5-fp8-mi355x-atom-docker-ci"
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsr1-fp4-mi355x-atom-mtp-docker-ci"
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsr1-fp8-mi355x-atom-mtp-docker-ci"
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys gptoss-fp4-mi355x-atom-docker-ci"
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-int4-mi355x-atom-docker-ci"
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys qwen3.5-fp8-mi355x-atom-mtp-docker-ci"
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys minimax2.5-fp8-mi355x-atom-mtp-docker-ci"
