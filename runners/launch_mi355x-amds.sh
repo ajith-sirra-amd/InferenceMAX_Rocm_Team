@@ -158,7 +158,7 @@ else
 
     PARTITION="amd-aim"
     ASSOC=" -A amd-aim -p amd-aim "
-    SQUASH_FILE="/var/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
+    SQUASH_FILE="/mnt/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
     #LOCK_FILE="${SQUASH_FILE}.lock"
 
     set -x
