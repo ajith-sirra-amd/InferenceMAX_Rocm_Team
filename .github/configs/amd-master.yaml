@@ -1,3 +1,25 @@
+glm5-fp8-mi355x-atom:
+  image: rocm/atom-dev:pre-build-6025637a896bc0c9c9b72c0cce6931a5c553078c
+  model: zai-org/GLM-5-FP8
+  model-prefix: glm5
+  runner: mi355x
+  precision: fp8
+  framework: atom
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+  #- isl: 1024
+  #  osl: 8192
+  #  search-space:
+  #  - { tp: 8, conc-start: 4, conc-end: 64 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 64 }
+
 dsr1-fp4-mi355x-sglang:
   image: lmsysorg/sglang:v0.5.9-rocm700-mi35x
   model: amd/DeepSeek-R1-0528-MXFP4-Preview

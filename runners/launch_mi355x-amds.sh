@@ -31,7 +31,7 @@ if [[ "$IS_MULTINODE" == "true" ]]; then
 
     # Set up environment variables for SLURM
     export SLURM_ACCOUNT="$USER"
-    export SLURM_PARTITION="amd-tw"
+    export SLURM_PARTITION="amd-aim"
     export SLURM_JOB_NAME="benchmark-sglang-disagg.job"
 
     export MODEL_NAME=${MODEL##*/}
@@ -156,7 +156,7 @@ else
     FRAMEWORK_SUFFIX=$([[ "$FRAMEWORK" == "atom" ]] && printf '_atom' || printf '')
     SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
-    PARTITION="amd-tw"
+    PARTITION="amd-aim"
     SQUASH_FILE="/var/lib/squash/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
     #LOCK_FILE="${SQUASH_FILE}.lock"
 
