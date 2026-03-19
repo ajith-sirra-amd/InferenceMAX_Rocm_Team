@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 source "$(dirname "$0")/../benchmark_lib.sh"
+# workaround
+source "benchmarks/benchmark_lib.sh"
 
 check_env_vars \
     MODEL \
