@@ -157,14 +157,15 @@ else
     SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
     PARTITION="amd-aim"
+    ASSOC=" -A amd-aim -p amd-aim "
     SQUASH_FILE="/var/lib/squash/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
     #LOCK_FILE="${SQUASH_FILE}.lock"
 
     set -x
-    salloc --partition=$PARTITION --gres=gpu:$TP --cpus-per-task=128 --time=180 --no-shell --job-name="$RUNNER_NAME"
+    salloc --partition=$PARTITION $ASSOC --gres=gpu:$TP --cpus-per-task=128 --time=180 --no-shell --job-name="$RUNNER_NAME"
     JOB_ID=$(squeue --name="$RUNNER_NAME" -h -o %A | head -n1)
 
-    srun --jobid=$JOB_ID bash -c "docker stop \$(docker ps -a -q)"
+    srun $ASSOC --jobid=$JOB_ID bash -c "docker stop \$(docker ps -a -q)"
 
     ## Use flock to serialize concurrent imports to the same squash file
     #srun --jobid=$JOB_ID bash -c "
