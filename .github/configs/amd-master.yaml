@@ -600,7 +600,7 @@ gptoss-fp4-mi355x-atom-docker-ci:
   image: rocm/atom-dev:nightly_202603181713 
   model: openai/gpt-oss-120b
   model-prefix: gptoss
-  runner: mi355x
+  runner: mi355x-p02-g57
   precision: fp4
   framework: atom
   multinode: false
