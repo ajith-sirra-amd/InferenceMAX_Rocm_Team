@@ -284,7 +284,8 @@ qwen3-fp8-mi355x-sglang:
   image: rocm/sgl-dev:v0.5.9-rocm720-mi35x-20260315 
   model: Qwen/Qwen3-235B-A22B-Instruct-2507-FP8
   model-prefix: qwen3
-  runner: mi355x-m15-17
+  #runner: mi355x-m15-17
+  runner: mi355x-10-17
   #runner: mi355x-p02-g57
   precision: fp8
   framework: sglang
