@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-HF_HUB_CACHE_MOUNT="/mnt/hf_hub_cache/"  # Temp solution
+HF_HUB_CACHE_MOUNT="/shared/amdgpu/home/ajith_sirra_qle/ROCm_InferenceMax/Models"  # Temp solution
 
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
