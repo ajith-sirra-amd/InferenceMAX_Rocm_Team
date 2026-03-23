@@ -414,7 +414,7 @@ kimik2.5-fp4-mi355x-vllm:
   model: amd/Kimi-K2.5-MXFP4
   model-prefix: kimik2.5
   # Change runner name e.g. mi355x-aac_1
-  runner: mi355x
+  runner: mi355x-p02-g42
   precision: fp4
   framework: vllm
   multinode: false
