@@ -60,11 +60,13 @@ set -x
 vllm serve $MODEL --port $PORT \
 --tensor-parallel-size=$TP \
 $EP \
---gpu-memory-utilization 0.90 \
+--gpu-memory-utilization 0.95 \
 --max-model-len $MAX_MODEL_LEN \
 --block-size=1 \
 --trust-remote-code \
 --no-enable-prefix-caching \
+--max-num-seqs 64 \
+--max-num-batched-tokens 32768 \
 --mm-encoder-tp-mode data > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
