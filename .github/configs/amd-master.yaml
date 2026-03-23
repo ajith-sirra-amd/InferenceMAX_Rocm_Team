@@ -214,7 +214,7 @@ kimik2.5-fp4-mi355x-vllm:
   image: vllm/vllm-openai-rocm:v0.16.0
   model: amd/Kimi-K2.5-MXFP4
   model-prefix: kimik2.5
-  runner: mi355x
+  runner: mi355x-p02-g57
   precision: fp4
   framework: vllm
   multinode: false
