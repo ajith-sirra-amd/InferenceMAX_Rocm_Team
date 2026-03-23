@@ -14,11 +14,11 @@ SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 server_name="bmk-server"
 
 # Cleanup: stop server container 
-docker stop $server_name 2>/dev/null || true
-docker rm $server_name 2>/dev/null || true
+# docker stop $server_name 2>/dev/null || true
+# docker rm $server_name 2>/dev/null || true
 
 set -x
-docker pull $IMAGE
+podman pull $IMAGE
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
 echo "The image digest is: $DIGEST"
 
@@ -29,7 +29,7 @@ else
 fi
 
 set -x
-docker run --rm --init --network host --shm-size=16g --name=$server_name \
+podman run --rm --init --network host --shm-size=16g --name=$server_name \
 --privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
@@ -57,5 +57,5 @@ if ls gpucore.* 1> /dev/null 2>&1; then
 fi
 
 # Cleanup: stop server container 
-docker stop $server_name 2>/dev/null || true
-docker rm $server_name 2>/dev/null || true
+# docker stop $server_name 2>/dev/null || true
+# docker rm $server_name 2>/dev/null || true
