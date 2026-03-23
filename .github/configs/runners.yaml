@@ -114,5 +114,5 @@ mi355x-m15-17:
 - 'mi355x-amd'
 mi355x-p02-g42:
 - 'mi355x-amd_42'
-mi355x-aac-TAG:
-- 'mi355x-amd_100'
+mi355x-aac-1:
+- 'mi355x-amd_32'
