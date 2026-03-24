@@ -63,6 +63,7 @@ $EP \
 --gpu-memory-utilization 0.90 \
 --max-model-len $MAX_MODEL_LEN \
 --trust-remote-code \
+--block-size=1 \
 --no-enable-prefix-caching \
 --mm-encoder-tp-mode data > $SERVER_LOG 2>&1 &
 
