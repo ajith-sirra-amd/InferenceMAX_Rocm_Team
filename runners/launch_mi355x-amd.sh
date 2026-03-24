@@ -18,7 +18,7 @@ server_name="bmk-server"
 # docker rm $server_name 2>/dev/null || true
 
 set -x
-podman pull $IMAGE
+podman pull docker.io/$IMAGE
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
 echo "The image digest is: $DIGEST"
 
