@@ -75,6 +75,10 @@ SERVER_PID=$!
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 export PYTHONDONTWRITEBYTECODE=1
+if [ "${RUN_EVAL}" = "true" ]; then
+ISL=10
+OSL=2
+fi
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
