@@ -15,7 +15,7 @@ server_name="bmk-server"
 
 # Cleanup: stop server container 
 # docker stop $server_name 2>/dev/null || true
-# docker rm $server_name 2>/dev/null || true
+podman rm -f $server_name 2>/dev/null || true
 
 set -x
 podman pull docker.io/$IMAGE
