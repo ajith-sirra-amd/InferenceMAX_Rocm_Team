@@ -76,7 +76,7 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 export PYTHONDONTWRITEBYTECODE=1
 if [ "${RUN_EVAL}" = "true" ]; then
-  echo "skip perf"
+  echo "skip perf" > $RESULT_FILENAME
 else
   run_benchmark_serving \
       --model "$MODEL" \
