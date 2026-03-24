@@ -412,7 +412,8 @@ kimik2.5-int4-mi325x-vllm:
     - { tp: 8, conc-start: 4, conc-end: 64 }
 
 kimik2.5-fp4-mi355x-vllm-accuracy:
-  image: vllm/vllm-openai-rocm:v0.18.0
+  #image: vllm/vllm-openai-rocm:v0.18.0
+  image: vllm/vllm-openai-rocm:v0.16.0
   model: amd/Kimi-K2.5-MXFP4
   model-prefix: kimik2.5
   runner: mi355x-p02-g17
@@ -420,13 +421,13 @@ kimik2.5-fp4-mi355x-vllm-accuracy:
   framework: vllm
   multinode: false
   seq-len-configs:
-  - isl: 1024
-    osl: 8192
+  - isl: 10
+    osl: 10
     search-space:
     - { tp: 4, conc-start: 64, conc-end: 64 }
-    #- { tp: 4, ep: 4, conc-start: 64, conc-end: 64 }
-    #- { tp: 8, conc-start: 64, conc-end: 64 }
-    #- { tp: 8, ep: 8, conc-start: 64, conc-end: 64 }
+    - { tp: 4, ep: 4, conc-start: 64, conc-end: 64 }
+    - { tp: 8, conc-start: 64, conc-end: 64 }
+    - { tp: 8, ep: 8, conc-start: 64, conc-end: 64 }
 
 minimaxm2.5-fp8-mi355x-vllm:
   image: vllm/vllm-openai-rocm:v0.15.1
