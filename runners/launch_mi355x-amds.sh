@@ -20,7 +20,7 @@ echo "launch_mi355x_amds.sh"
 
 set -x
 podman pull docker.io/$IMAGE
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
+DIGEST=$(podman inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
 echo "The image digest is: $DIGEST"
 
 if [[ "$FRAMEWORK" == "sglang-disagg" ]]; then
