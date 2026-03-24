@@ -62,7 +62,6 @@ vllm serve $MODEL --port $PORT \
 $EP \
 --gpu-memory-utilization 0.90 \
 --max-model-len $MAX_MODEL_LEN \
---block-size=1 \
 --trust-remote-code \
 --no-enable-prefix-caching \
 --mm-encoder-tp-mode data > $SERVER_LOG 2>&1 &
