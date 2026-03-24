@@ -58,7 +58,7 @@ set -x
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 if [ "${TP}" = "4" ]; then
-VLLM_ROCM_USE_AITER_RMSNORM=0
+export VLLM_ROCM_USE_AITER_RMSNOR=0
 fi
 
 vllm serve $MODEL --port $PORT \
