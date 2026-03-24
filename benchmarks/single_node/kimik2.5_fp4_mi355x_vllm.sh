@@ -41,8 +41,6 @@ if [[ "$version" == "" || $version -lt 177 ]]; then
   export HSA_NO_SCRATCH_RECLAIM=1
 fi
 
-export VLLM_ROCM_USE_AITER=1
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 
 if [ "$EP_SIZE" -gt 1 ]; then
   EP=" --enable-expert-parallel"
@@ -57,6 +55,12 @@ fi
 start_gpu_monitor
 
 set -x
+export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+if [ "${TP}" = "4" ]; then
+VLLM_ROCM_USE_AITER_RMSNORM=0
+fi
+
 vllm serve $MODEL --port $PORT \
 --tensor-parallel-size=$TP \
 $EP \
