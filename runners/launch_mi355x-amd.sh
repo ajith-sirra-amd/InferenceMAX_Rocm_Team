@@ -14,8 +14,9 @@ SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 server_name="bmk-server"
 
 # Cleanup: stop server container 
-# docker stop $server_name 2>/dev/null || true
+podman stop $server_name 2>/dev/null || true
 podman rm -f $server_name 2>/dev/null || true
+echo "launch_mi355x_amd.sh"
 
 set -x
 podman pull docker.io/$IMAGE
@@ -57,5 +58,5 @@ if ls gpucore.* 1> /dev/null 2>&1; then
 fi
 
 # Cleanup: stop server container 
-# docker stop $server_name 2>/dev/null || true
-# docker rm $server_name 2>/dev/null || true
+podman stop $server_name 2>/dev/null || true
+podman rm -f $server_name 2>/dev/null || true
