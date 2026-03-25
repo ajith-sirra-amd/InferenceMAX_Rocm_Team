@@ -24,9 +24,11 @@ fi
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
-MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
+CONTEXT_LENGTH=$((ISL + OSL + 20))
+MAX_PREFILL_TOKENS=32768
 
 set -x
+
 python3 -m sglang.launch_server \
     --attention-backend triton \
     --model-path $MODEL \
@@ -34,8 +36,14 @@ python3 -m sglang.launch_server \
     --port $PORT \
     --tensor-parallel-size $TP \
     --trust-remote-code \
-    --mem-fraction-static $MEM_FRAC_STATIC \
-    --kv-cache-dtype fp8_e4m3 > $SERVER_LOG 2>&1 &
+    --tokenizer-worker-num 6 \
+    --enable-aiter-allreduce-fusion \
+    --cuda-graph-max-bs $CONC \
+    --context-length $CONTEXT_LENGTH \
+    --disable-radix-cache \
+    --max-prefill-tokens $MAX_PREFILL_TOKENS \
+    --scheduler-recv-interval 30 \
+    --mem-fraction-static 0.8 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
