@@ -57,7 +57,7 @@ start_gpu_monitor
 set -x
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
-if [ "${TP}" = "4" ]; then
+if [ "${TP}" -lt 8 ]; then
   export VLLM_ROCM_USE_AITER_RMSNORM=0
 fi
 
@@ -79,10 +79,6 @@ SERVER_PID=$!
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 export PYTHONDONTWRITEBYTECODE=1
-if [ "${RUN_EVAL}" = "true" ]; then
-ISL=10
-OSL=2
-fi
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
