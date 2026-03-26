@@ -423,9 +423,6 @@ kimik2.5-fp4-mi355x-vllm:
   - isl: 1024
     osl: 1024
     search-space:
-  - isl: 1024
-    osl: 1024
-    search-space:
     - { tp: 2, conc-start: 4, conc-end: 128 }
     - { tp: 4, conc-start: 4, conc-end: 128 }
     - { tp: 8, conc-start: 4, conc-end: 128 }
