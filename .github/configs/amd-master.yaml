@@ -1,8 +1,9 @@
-glm5-fp8-mi355x-atom-docker-ci:
-  image: rocm/atom-dev:nightly_202603181713 
+# ATOM
+glm5-fp8-mi355x-atom:
+  image: rocm/atom-dev:nightly_202603251629
   model: zai-org/GLM-5-FP8
   model-prefix: glm5
-  runner: mi355x-p02-g57
+  runner: mi355x
   precision: fp8
   framework: atom
   multinode: false
@@ -11,38 +12,142 @@ glm5-fp8-mi355x-atom-docker-ci:
     osl: 1024
     search-space:
     - { tp: 8, conc-start: 4, conc-end: 128 }
-  #- isl: 1024
-  #  osl: 8192
-  #  search-space:
-  #  - { tp: 8, conc-start: 4, conc-end: 64 }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 128 }
   - isl: 8192
     osl: 1024
     search-space:
     - { tp: 8, conc-start: 4, conc-end: 128 }
 
-dsr1-fp4-mi355x-sglang:
-  image: lmsysorg/sglang:v0.5.9-rocm700-mi35x
-  model: amd/DeepSeek-R1-0528-MXFP4-Preview
-  model-prefix: dsr1
+kimik2.5-fp4-mi355x-atom:
+  image: rocm/atom-dev:nightly_202603251629
+  model: amd/Kimi-K2.5-MXFP4
+  model-prefix: kimik2.5
   runner: mi355x
   precision: fp4
-  framework: sglang
+  framework: atom
   multinode: false
   seq-len-configs:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 4, conc-start: 4, conc-end: 64 }
-    - { tp: 8, conc-start: 4, conc-end: 64 }
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 4, conc-start: 4, conc-end: 128 }
   - isl: 1024
     osl: 8192
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 64 }
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 4, conc-start: 4, conc-end: 128 }
+    - { tp: 4, ep: 4, conc-start: 4, conc-end: 128 }
   - isl: 8192
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 64 }
+    - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 4, conc-start: 4, conc-end: 128 }
 
+minimaxm2.5-fp8-mi355x-atom:
+  image: rocm/atom-dev:nightly_202603251629
+  model: MiniMaxAI/MiniMax-M2.5
+  model-prefix: minimaxm2.5
+  runner: mi355x
+  precision: fp8
+  framework: atom
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 2, conc-start: 4, conc-end: 128 }
+    - { tp: 4, conc-start: 4, conc-end: 128 }
+    - { tp: 8, ep: 8, conc-start: 32, conc-end: 256 }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 2, conc-start: 4, conc-end: 128 }
+    - { tp: 4, conc-start: 4, conc-end: 128 }
+    - { tp: 8, ep: 8, conc-start: 32, conc-end: 256 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 2, conc-start: 4, conc-end: 128 }
+    - { tp: 4, conc-start: 4, conc-end: 128 }
+    - { tp: 8, ep: 8, conc-start: 32, conc-end: 256 }
+
+gptoss-fp4-mi355x-atom:
+  image: rocm/atom-dev:nightly_202603251629
+  model: openai/gpt-oss-120b
+  model-prefix: gptoss
+  runner: mi355x
+  precision: fp4
+  framework: atom
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 1, conc-start: 16, conc-end: 128 }
+    - { tp: 8, ep: 1, conc-start: 4, conc-end: 32 }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 1, conc-start: 16, conc-end: 128 }
+    - { tp: 8, ep: 1, conc-start: 4, conc-end: 64 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 1, conc-start: 4, conc-end: 128 }
+    - { tp: 8, ep: 1, conc-start: 4, conc-end: 16 }
+
+dsr1-fp4-mi355x-atom-mtp:
+  image: rocm/atom-dev:nightly_202603251629
+  model: amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP4
+  model-prefix: dsr1
+  runner: mi355x
+  precision: fp4
+  framework: atom
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+
+dsr1-fp8-mi355x-atom-mtp:
+  image: rocm/atom-dev:nightly_202603251629
+  model: deepseek-ai/DeepSeek-R1-0528
+  model-prefix: dsr1
+  runner: mi355x
+  precision: fp8
+  framework: atom
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
+
+# OLD
 dsr1-fp4-mi355x-atom:
   image: rocm/atom:rocm7.1.1-ubuntu24.04-pytorch2.9-atom0.1.1-MI350x
   model: amd/DeepSeek-R1-0528-MXFP4-Preview
@@ -68,12 +173,12 @@ dsr1-fp4-mi355x-atom:
     - { tp: 4, ep: 1, conc-start: 4, conc-end: 256 }
     - { tp: 8, ep: 1, conc-start: 4, conc-end: 4 }
 
-dsr1-fp4-mi355x-atom-mtp:
-  image: rocm/atom:rocm7.2.0-ubuntu24.04-pytorch2.9-atom0.1.1
-  model: amd/DeepSeek-R1-0528-MXFP4
+dsr1-fp8-mi355x-atom:
+  image: rocm/atom:rocm7.1.1-ubuntu24.04-pytorch2.9-atom0.1.1-MI350x
+  model: deepseek-ai/DeepSeek-R1-0528
   model-prefix: dsr1
   runner: mi355x
-  precision: fp4
+  precision: fp8
   # WIP framwork (no customers yet)
   framework: atom
   multinode: false
@@ -81,68 +186,41 @@ dsr1-fp4-mi355x-atom-mtp:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp }
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+    - { tp: 8, conc-start: 4, conc-end: 128 }
   - isl: 1024
     osl: 8192
     search-space:
-    # - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp }
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+    - { tp: 8, conc-start: 4, conc-end: 128 }
   - isl: 8192
     osl: 1024
     search-space:
-    #- { tp: 4, conc-start: 32, conc-end: 256, spec-decoding: mtp }
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+    - { tp: 8, conc-start: 4, conc-end: 128 }
 
-dsr1-fp4-mi355x-atom-mtp-slurm-ci:
-  image: rocm/atom-dev:nightly_202603181713 
-  model: amd/DeepSeek-R1-0528-MXFP4
+# VLLM/SGL
+
+dsr1-fp4-mi355x-sglang:
+  image: lmsysorg/sglang:v0.5.9-rocm700-mi35x
+  model: amd/DeepSeek-R1-0528-MXFP4-Preview
   model-prefix: dsr1
-  runner: mi355x-tw-sctrl
+  runner: mi355x
   precision: fp4
-  framework: atom
+  framework: sglang
   multinode: false
   seq-len-configs:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp }
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
-  - isl: 8192
-    osl: 1024
-    search-space:
-    - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-  #- isl: 1024
-  #  osl: 8192
-  #  search-space:
-  #  - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-  #  - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-
-dsr1-fp4-mi355x-atom-mtp-docker-ci:
-  image: rocm/atom-dev:nightly_202603181713 
-  model: amd/DeepSeek-R1-0528-MXFP4
-  model-prefix: dsr1
-  runner: mi355x-p02-g57
-  precision: fp4
-  framework: atom
-  multinode: false
-  seq-len-configs:
+    - { tp: 4, conc-start: 4, conc-end: 64 }
+    - { tp: 8, conc-start: 4, conc-end: 64 }
   - isl: 1024
-    osl: 1024
+    osl: 8192
     search-space:
-    - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp }
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
+    - { tp: 8, conc-start: 4, conc-end: 64 }
   - isl: 8192
     osl: 1024
     search-space:
-    - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-  #- isl: 1024
-  #  osl: 8192
-  #  search-space:
-  #  - { tp: 4, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-  #  - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
+    - { tp: 8, conc-start: 4, conc-end: 64 }
+
 
 dsr1-fp8-mi300x-sglang:
   image: lmsysorg/sglang:v0.5.9-rocm700-mi30x
@@ -606,120 +684,6 @@ gptoss-fp4-mi355x-vllm:
     - { tp: 4, conc-start: 4, conc-end: 4 }
     - { tp: 8, conc-start: 4, conc-end: 8 }
 
-gptoss-fp4-mi355x-atom-docker-ci:
-  image: rocm/atom-dev:nightly_202603181713 
-  model: openai/gpt-oss-120b
-  model-prefix: gptoss
-  runner: mi355x-p02-g57
-  precision: fp4
-  framework: atom
-  multinode: false
-  seq-len-configs:
-  - isl: 1024
-    osl: 1024
-    search-space:
-    - { tp: 1, conc-start: 16, conc-end: 128 }
-    - { tp: 8, ep: 1, conc-start: 4, conc-end: 32 }
-  #- isl: 1024
-  #  osl: 8192
-  #  search-space:
-  #  - { tp: 1, conc-start: 16, conc-end: 128 }
-  #  - { tp: 8, ep: 1, conc-start: 4, conc-end: 64 }
-  - isl: 8192
-    osl: 1024
-    search-space:
-    - { tp: 1, conc-start: 4, conc-end: 128 }
-    - { tp: 8, ep: 1, conc-start: 4, conc-end: 16 }
-
-dsr1-fp8-mi355x-atom:
-  image: rocm/atom:rocm7.1.1-ubuntu24.04-pytorch2.9-atom0.1.1-MI350x
-  model: deepseek-ai/DeepSeek-R1-0528
-  model-prefix: dsr1
-  runner: mi355x
-  precision: fp8
-  # WIP framwork (no customers yet)
-  framework: atom
-  multinode: false
-  seq-len-configs:
-  - isl: 1024
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 128 }
-  - isl: 1024
-    osl: 8192
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 128 }
-  - isl: 8192
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 128 }
-
-dsr1-fp8-mi355x-atom-mtp:
-  image: rocm/atom:rocm7.2.0-ubuntu24.04-pytorch2.9-atom0.1.1
-  model: deepseek-ai/DeepSeek-R1-0528
-  model-prefix: dsr1
-  runner: mi355x
-  precision: fp8
-  # WIP framwork (no customers yet)
-  framework: atom
-  multinode: false
-  seq-len-configs:
-  - isl: 1024
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
-  - isl: 1024
-    osl: 8192
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-  - isl: 8192
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-
-dsr1-fp8-mi355x-atom-mtp-slurm-ci:
-  image: rocm/atom-dev:nightly_202603181713 
-  model: deepseek-ai/DeepSeek-R1-0528
-  model-prefix: dsr1
-  runner: mi355x-tw-sctrl
-  precision: fp8
-  framework: atom
-  multinode: false
-  seq-len-configs:
-  - isl: 1024
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
-  - isl: 8192
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-  #- isl: 1024
-  #  osl: 8192
-  #  search-space:
-  #  - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-
-dsr1-fp8-mi355x-atom-mtp-docker-ci:
-  image: rocm/atom-dev:nightly_202603181713 
-  model: deepseek-ai/DeepSeek-R1-0528
-  model-prefix: dsr1
-  runner: mi355x-p02-g57
-  precision: fp8
-  framework: atom
-  multinode: false
-  seq-len-configs:
-  - isl: 1024
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp }
-  - isl: 8192
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
-  #- isl: 1024
-  #  osl: 8192
-  #  search-space:
-  #  - { tp: 8, conc-start: 4, conc-end: 256, spec-decoding: mtp  }
 
 dsr1-fp8-mi355x-sglang-disagg:
   image: rocm/sgl-dev:sglang-0.5.9-rocm720-mi35x-mori-0227-2

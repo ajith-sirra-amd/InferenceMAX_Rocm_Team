@@ -26,19 +26,30 @@ fi
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
+# If the machine runs a MEC FW older than 177, RCCL
+# cannot reclaim some memory.
+# Disable that features to avoid crashes.
+# This is related to the changes in the driver at:
+# https://rocm.docs.amd.com/en/docs-6.4.3/about/release-notes.html#amdgpu-driver-updates
+version=`rocm-smi --showfw | grep MEC | head -n 1 |  awk '{print $NF}'`
+if [[ "$version" == "" || $version -lt 177 ]]; then
+  export HSA_NO_SCRATCH_RECLAIM=1
+fi
+
+export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
 set -x
-export VLLM_ROCM_USE_AITER=1
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 vllm serve $MODEL --port $PORT \
 --tensor-parallel-size=$TP \
---gpu-memory-utilization 0.95 \
+--gpu-memory-utilization 0.90 \
 --max-model-len $MAX_MODEL_LEN \
 --block-size=64 \
+--no-enable-prefix-caching \
 --trust-remote-code \
---max-num-seqs 256 \
 --mm-encoder-tp-mode data > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
@@ -46,7 +57,6 @@ SERVER_PID=$!
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
