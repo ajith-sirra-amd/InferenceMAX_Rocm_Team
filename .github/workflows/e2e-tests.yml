@@ -9,6 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'minimaxm2.5-fp8-mi355x-atom' 'kimik2.5-fp4-mi355x-atom' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys '*-atom*' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'glm5-fp8-mi355x-atom' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'kimik2.5-fp4-mi355x-atom' --evals-only"
@@ -18,6 +19,7 @@ on:
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'dsr1-fp8-mi355x-atom-mtp' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'kimik2.5-fp4-mi355x-vllm' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'kimik2.5-int4-mi355x-vllm' --evals-only"
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-fp4-mi355x-vllm-accuracy --evals-only"
             test-name:
                 description: "Name for this test run"
                 required: false
