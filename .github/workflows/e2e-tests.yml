@@ -9,7 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
-                - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'minimaxm2.5-fp8-mi355x-atom' 'kimik2.5-fp4-mi355x-atom' --evals-only"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'minimaxm2.5-fp8-mi355x-atom' 'glm5-fp8-mi355x-atom' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys '*-atom*' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'glm5-fp8-mi355x-atom' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'kimik2.5-fp4-mi355x-atom' --evals-only"
