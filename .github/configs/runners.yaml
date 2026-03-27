@@ -118,3 +118,7 @@ mi355x-p02-g09:
 - 'mi355x-amd_9'
 mi355x-p02-g17:
 - 'mi355x-amd_17'
+mi355x:
+- 'mi355x-amd_p02g32'
+- 'mi355x-amd_p02g42'
+- 'mi355x-amd_p02g57'
