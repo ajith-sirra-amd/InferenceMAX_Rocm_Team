@@ -1,6 +1,6 @@
 # ATOM
 glm5-fp8-mi355x-atom:
-  image: rocm/atom-dev:nightly_202603251629
+  image: rocm/atom-dev:nightly_202603291522
   model: zai-org/GLM-5-FP8
   model-prefix: glm5
   runner: mi355x
