@@ -7,17 +7,7 @@ on:
             generate-cli-command:
                 description: "Command passed to generate matrix script"
                 required: true
-                type: choice
-                options:
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-fp4-mi355x-vllm"
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-int4-mi355x-vllm"
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys glm5-fp8-mi355x-atom       "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-fp4-mi355x-atom   "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys minimaxm2.5-fp8-mi355x-atom"
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys gptoss-fp4-mi355x-atom     "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsr1-fp4-mi355x-atom-mtp   "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsr1-fp8-mi355x-atom-mtp   "
-                - "test-config --config-files .github/configs/amd-master.yaml --config-keys '*-atom*'"
+                type: string
             test-name:
                 description: "Name for this test run"
                 required: false
