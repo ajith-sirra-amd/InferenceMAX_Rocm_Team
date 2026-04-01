@@ -44,7 +44,12 @@ fi
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 
-if [ "$EP_SIZE" -gt 1 ]; then
+# Disable AITER RMSNorm for TP < 8 due to accuracy issues
+if [ "${TP}" -lt 8 ]; then
+  export VLLM_ROCM_USE_AITER_RMSNORM=0
+fi
+
+if [ "${EP_SIZE:-0}" -gt 1 ]; then
   EP=" --enable-expert-parallel"
 else
   EP=" "
@@ -60,13 +65,11 @@ set -x
 vllm serve $MODEL --port $PORT \
 --tensor-parallel-size=$TP \
 $EP \
---gpu-memory-utilization 0.95 \
+--gpu-memory-utilization 0.90 \
 --max-model-len $MAX_MODEL_LEN \
 --block-size=1 \
---trust-remote-code \
 --no-enable-prefix-caching \
---max-num-seqs 64 \
---max-num-batched-tokens 32768 \
+--trust-remote-code \
 --mm-encoder-tp-mode data > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
@@ -74,7 +77,6 @@ SERVER_PID=$!
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
