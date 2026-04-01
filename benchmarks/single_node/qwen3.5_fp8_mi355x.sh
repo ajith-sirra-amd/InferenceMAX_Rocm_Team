@@ -19,24 +19,35 @@ hf download "$MODEL"
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
+MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
+CHUNK_SIZE=32768
 
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
-python3 -m sglang.launch_server \
+set -x
+sglang serve \
     --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
     --tensor-parallel-size $TP \
     --trust-remote-code \
-    --mem-fraction-static 0.8 > $SERVER_LOG 2>&1 &
+    --mem-fraction-static $MEM_FRAC_STATIC \
+    --kv-cache-dtype fp8_e4m3 \
+    --cuda-graph-max-bs $CONC \
+    --max-running-requests $CONC \
+    --chunked-prefill-size $CHUNK_SIZE \
+    --max-prefill-tokens $CHUNK_SIZE \
+    --num-continuous-decode-steps 2 \
+    --disable-radix-cache \
+    > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
+export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
@@ -51,10 +62,9 @@ run_benchmark_serving \
 
 # After throughput, run evaluation only if RUN_EVAL is true
 if [ "${RUN_EVAL}" = "true" ]; then
-    run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
+    run_eval --framework lm-eval --port "$PORT" 
     append_lm_eval_summary
 fi
 
 # Stop GPU monitoring
 stop_gpu_monitor
-set +x
