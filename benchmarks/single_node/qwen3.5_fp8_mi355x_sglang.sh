@@ -26,22 +26,30 @@ CHUNK_SIZE=8192
 start_gpu_monitor
 
 set -x
+#sglang serve \
+#    --attention-backend triton \
+#    --model-path $MODEL \
+#    --host=0.0.0.0 \
+#    --port $PORT \
+#    --tensor-parallel-size $TP \
+#    --trust-remote-code \
+#    --mem-fraction-static $MEM_FRAC_STATIC \
+#    --kv-cache-dtype fp8_e4m3 \
+#    --mamba-ssm-dtype bfloat16 \
+#    --cuda-graph-max-bs $CONC \
+#    --max-running-requests $CONC \
+#    --chunked-prefill-size $CHUNK_SIZE \
+#    --max-prefill-tokens $CHUNK_SIZE \
+#    --disable-radix-cache \
+#    --num-continuous-decode-steps 2 \
+#    > $SERVER_LOG 2>&1 &
+
 sglang serve \
-    --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
     --tensor-parallel-size $TP \
     --trust-remote-code \
-    --mem-fraction-static $MEM_FRAC_STATIC \
-    --kv-cache-dtype fp8_e4m3 \
-    --mamba-ssm-dtype bfloat16 \
-    --cuda-graph-max-bs $CONC \
-    --max-running-requests $CONC \
-    --chunked-prefill-size $CHUNK_SIZE \
-    --max-prefill-tokens $CHUNK_SIZE \
-    --disable-radix-cache \
-    --num-continuous-decode-steps 2 \
     > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
@@ -69,7 +77,7 @@ run_benchmark_serving \
 
 # After throughput, run evaluation only if RUN_EVAL is true
 if [ "${RUN_EVAL}" = "true" ]; then
-    run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
+    run_eval --framework lm-eval --port "$PORT" 
     append_lm_eval_summary
 fi
 
