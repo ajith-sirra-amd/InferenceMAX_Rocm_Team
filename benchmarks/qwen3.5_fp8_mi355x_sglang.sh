@@ -35,14 +35,6 @@ sglang serve \
     --trust-remote-code \
     --mem-fraction-static $MEM_FRAC_STATIC \
     --kv-cache-dtype fp8_e4m3 \
-    --mamba-ssm-dtype bfloat16 \
-    --cuda-graph-max-bs $CONC \
-    --max-running-requests $CONC \
-    --chunked-prefill-size $CHUNK_SIZE \
-    --max-prefill-tokens $CHUNK_SIZE \
-    --disable-radix-cache \
-    --num-continuous-decode-steps 2 \
-    --tokenizer-worker-num $TP \
     > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
