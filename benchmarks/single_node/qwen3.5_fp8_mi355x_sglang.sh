@@ -20,37 +20,29 @@ hf download "$MODEL"
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
-CHUNK_SIZE=8192
+CHUNK_SIZE=32768
 
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
 set -x
-#sglang serve \
-#    --attention-backend triton \
-#    --model-path $MODEL \
-#    --host=0.0.0.0 \
-#    --port $PORT \
-#    --tensor-parallel-size $TP \
-#    --trust-remote-code \
-#    --mem-fraction-static $MEM_FRAC_STATIC \
-#    --kv-cache-dtype fp8_e4m3 \
-#    --mamba-ssm-dtype bfloat16 \
-#    --cuda-graph-max-bs $CONC \
-#    --max-running-requests $CONC \
-#    --chunked-prefill-size $CHUNK_SIZE \
-#    --max-prefill-tokens $CHUNK_SIZE \
-#    --disable-radix-cache \
-#    --num-continuous-decode-steps 2 \
-#    > $SERVER_LOG 2>&1 &
-
 sglang serve \
+    --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
     --tensor-parallel-size $TP \
     --trust-remote-code \
+    --mem-fraction-static $MEM_FRAC_STATIC \
+    --kv-cache-dtype fp8_e4m3 \
+    --cuda-graph-max-bs $CONC \
+    --max-running-requests $CONC \
+    --chunked-prefill-size $CHUNK_SIZE \
+    --max-prefill-tokens $CHUNK_SIZE \
+    --disable-radix-cache \
     > $SERVER_LOG 2>&1 &
+    #--mamba-ssm-dtype bfloat16 \
+    #--num-continuous-decode-steps 2 \
 
 SERVER_PID=$!
 
