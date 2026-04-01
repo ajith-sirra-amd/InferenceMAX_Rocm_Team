@@ -19,24 +19,42 @@ hf download "$MODEL"
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
+MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
+CHUNK_SIZE=8192
 
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
-python3 -m sglang.launch_server \
+set -x
+sglang serve \
     --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
     --tensor-parallel-size $TP \
     --trust-remote-code \
-    --mem-fraction-static 0.8 > $SERVER_LOG 2>&1 &
+    --mem-fraction-static $MEM_FRAC_STATIC \
+    --kv-cache-dtype fp8_e4m3 \
+    --mamba-ssm-dtype bfloat16 \
+    --cuda-graph-max-bs $CONC \
+    --max-running-requests $CONC \
+    --chunked-prefill-size $CHUNK_SIZE \
+    --max-prefill-tokens $CHUNK_SIZE \
+    --disable-radix-cache \
+    --num-continuous-decode-steps 2 \
+    > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
+#TODO: remove
+if [ "${RUN_EVAL}" = "true" ]; then
+    ISL=10
+    OSL=10
+fi
+
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
+export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
