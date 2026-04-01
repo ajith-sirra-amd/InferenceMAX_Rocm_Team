@@ -11,6 +11,8 @@ elif [[ $FRAMEWORK == "atom" ]]; then
 fi
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
+hostname
+
 server_name="bmk-server"
 
 # Cleanup: stop server container 
