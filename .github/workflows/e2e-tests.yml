@@ -19,6 +19,7 @@ on:
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'dsr1-fp8-mi355x-atom-mtp' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'kimik2.5-fp4-mi355x-vllm' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'kimik2.5-int4-mi355x-vllm' --evals-only"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys 'qwen3.5-fp8-mi355x-sglang' --evals-only"
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-fp4-mi355x-vllm-accuracy --evals-only"
             test-name:
                 description: "Name for this test run"
