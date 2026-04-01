@@ -39,10 +39,10 @@ sglang serve \
     --max-running-requests $CONC \
     --chunked-prefill-size $CHUNK_SIZE \
     --max-prefill-tokens $CHUNK_SIZE \
+    --num-continuous-decode-steps 2 \
     --disable-radix-cache \
     > $SERVER_LOG 2>&1 &
     #--mamba-ssm-dtype bfloat16 \
-    #--num-continuous-decode-steps 2 \
 
 SERVER_PID=$!
 
