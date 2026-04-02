@@ -19,6 +19,12 @@ server_name="bmk-server"
 docker stop $server_name 2>/dev/null || true
 docker rm $server_name 2>/dev/null || true
 
+original=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)
+
+for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo "performance" | sudo tee $cpu; done
+
+lscpu
+
 set -x
 docker pull $IMAGE
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
@@ -57,6 +63,8 @@ if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
   rm -f gpucore.*
 fi
+
+for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $original | sudo tee $cpu; done
 
 # Cleanup: stop server container 
 docker stop $server_name 2>/dev/null || true
