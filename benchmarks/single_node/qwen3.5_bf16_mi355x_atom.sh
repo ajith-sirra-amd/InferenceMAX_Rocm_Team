@@ -20,16 +20,15 @@ hf download "$MODEL"
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
+# Start GPU monitoring (power, temperature, clocks every second)
+start_gpu_monitor
+
+set -x
 export AITER_QUICK_REDUCE_QUANTIZATION=INT4
 export ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1
 export ATOM_USE_CUSTOM_ALL_GATHER=0
 
-# Start GPU monitoring (power, temperature, clocks every second)
-start_gpu_monitor
-
-
 vllm serve "$MODEL" \
-    --host "0.0.0.0" \
     --port "$PORT" \
     --async-scheduling \
     --load-format fastsafetensors \
@@ -40,13 +39,15 @@ vllm serve "$MODEL" \
     --max-model-len 16384 \
     --tensor-parallel-size $TP \
     --gpu-memory-utilization 0.9 \
-    --no-enable-prefix-caching > $SERVER_LOG 2>&1 &
+    --no-enable-prefix-caching \
+    > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
+export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
@@ -57,7 +58,8 @@ run_benchmark_serving \
     --num-prompts "$((CONC * 10))" \
     --max-concurrency "$CONC" \
     --result-filename "$RESULT_FILENAME" \
-    --result-dir /workspace/
+    --result-dir /workspace/ \
+    --trust-remote-code
 
 # After throughput, run evaluation only if RUN_EVAL is true
 if [ "${RUN_EVAL}" = "true" ]; then
