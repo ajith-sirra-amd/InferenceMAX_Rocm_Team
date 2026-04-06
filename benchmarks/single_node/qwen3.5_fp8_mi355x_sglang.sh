@@ -35,7 +35,6 @@ sglang serve \
     --trust-remote-code \
     --mem-fraction-static $MEM_FRAC_STATIC \
     --kv-cache-dtype fp8_e4m3 \
-    --mamba-ssm-dtype bfloat16 \
     --cuda-graph-max-bs $CONC \
     --max-running-requests $CONC \
     --chunked-prefill-size $CHUNK_SIZE \
