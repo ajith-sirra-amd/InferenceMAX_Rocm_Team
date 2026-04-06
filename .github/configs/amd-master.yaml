@@ -133,10 +133,6 @@ qwen3.5-fp8-mi355x-sglang:
     - { tp: 2, conc-start: 128, conc-end: 128 }
     - { tp: 4, conc-start: 128, conc-end: 128 }
     - { tp: 8, conc-start: 128, conc-end: 128 }
-    - { tp: 2, ep: 2, conc-start: 128, conc-end: 128 }
-    - { tp: 4, ep: 4, conc-start: 128, conc-end: 128 }
-    - { tp: 2, dp: 2, conc-start: 128, conc-end: 128 }
-    - { tp: 2, ep: 2, dp: 2, conc-start: 128, conc-end: 128 }
 
 qwen3.5-bf16-mi355x-atom:
   image: rocm/atom:rocm7.2.1-ubuntu24.04-pytorch2.9.1-atom0.1.2-vllm0.17.0
@@ -181,7 +177,3 @@ qwen3.5-fp4-mi355x-sglang:
     - { tp: 2, conc-start: 128, conc-end: 128 }
     - { tp: 4, conc-start: 128, conc-end: 128 }
     - { tp: 8, conc-start: 128, conc-end: 128 }
-    - { tp: 2, ep: 2, conc-start: 128, conc-end: 128 }
-    - { tp: 4, ep: 4, conc-start: 128, conc-end: 128 }
-    - { tp: 2, dp: 2, conc-start: 128, conc-end: 128 }
-    - { tp: 2, ep: 2, dp: 2, conc-start: 128, conc-end: 128 }
