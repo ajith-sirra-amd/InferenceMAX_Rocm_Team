@@ -378,7 +378,7 @@ qwen3.5-fp8-mi325x-sglang:
     - { tp: 8, conc-start: 4, conc-end: 64 }
 
 qwen3.5-fp8-mi355x-sglang:
-  image: rocm/sgl-dev:v0.5.10rc0-rocm720-mi35x-20260330
+  image: lmsysorg/sglang:v0.5.10-rocm720-mi35x
   model: Qwen/Qwen3.5-397B-A17B-FP8
   model-prefix: qwen3.5
   runner: mi355x
@@ -392,9 +392,12 @@ qwen3.5-fp8-mi355x-sglang:
     - { tp: 2, conc-start: 4, conc-end: 128 }
     - { tp: 4, conc-start: 4, conc-end: 128 }
     - { tp: 8, conc-start: 4, conc-end: 128 }
+    - { tp: 2, ep: 2, conc-start: 4, conc-end: 128 }
+    - { tp: 4, ep: 4, conc-start: 4, conc-end: 128 }
+    - { tp: 2, dp: 2, conc-start: 4, conc-end: 128 }
 
 qwen3.5-fp4-mi355x-sglang:
-  image: rocm/sgl-dev:v0.5.10rc0-rocm720-mi35x-20260330
+  image: lmsysorg/sglang:v0.5.10-rocm720-mi35x
   model: amd/Qwen3.5-397B-A17B-MXFP4
   model-prefix: qwen3.5
   runner: mi355x
