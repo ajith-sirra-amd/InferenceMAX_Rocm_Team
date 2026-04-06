@@ -23,9 +23,9 @@ original=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)
 
 echo $original
 
-for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo "performance" | sudo tee $cpu; done
+# for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo "performance" | sudo tee $cpu; done
 
-lscpu
+# lscpu
 
 set -x
 docker pull $IMAGE
@@ -66,7 +66,7 @@ if ls gpucore.* 1> /dev/null 2>&1; then
   rm -f gpucore.*
 fi
 
-for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $original | sudo tee $cpu; done
+# for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $original | sudo tee $cpu; done
 
 # Cleanup: stop server container 
 docker stop $server_name 2>/dev/null || true
