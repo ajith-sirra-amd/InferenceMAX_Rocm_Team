@@ -46,6 +46,12 @@ SERVER_PID=$!
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID" --sleep-interval 60
 
+#TODO: remove
+if [ "${RUN_EVAL}" = "true" ]; then
+ISL=10
+OSL=10
+fi
+
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \

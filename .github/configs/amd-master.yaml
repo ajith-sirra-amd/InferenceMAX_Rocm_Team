@@ -179,3 +179,7 @@ qwen3.5-fp4-mi355x-sglang:
     osl: 1024
     search-space:
     - { tp: 4, conc-start: 4, conc-end: 256 }
+  - isl: 1024
+    osl: 8192
+    search-space:
+    - { tp: 4, conc-start: 4, conc-end: 256 }
