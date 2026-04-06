@@ -47,7 +47,7 @@ set -x
 EVAL_CONTEXT_ARGS=""
 
 sglang serve \
-    --attention-backend aiter \
+    --attention-backend triton \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
