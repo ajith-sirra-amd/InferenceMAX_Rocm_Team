@@ -62,7 +62,7 @@ run_benchmark_serving \
 
 # After throughput, run evaluation only if RUN_EVAL is true
 if [ "${CONC}" = "128" ]; then
-    if ["${OSL}" = "8192"]; then
+    if [ "${OSL}" = "8192" ]; then
         run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
         append_lm_eval_summary
     fi
