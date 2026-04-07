@@ -61,19 +61,12 @@ minimaxm2.5-fp8-mi355x-atom:
     search-space:
     - { tp: 2, conc-start: 128, conc-end: 256 }
     - { tp: 4, conc-start: 128, conc-end: 256 }
-    - { tp: 8, conc-start: 128, conc-end: 256 }
-    - { tp: 2, ep: 2, conc-start: 128, conc-end: 256 }
-    - { tp: 4, ep: 4, conc-start: 128, conc-end: 256 }
-    - { tp: 8, ep: 8, conc-start: 128, conc-end: 256 }
+
   - isl: 8192
     osl: 1024
     search-space:
     - { tp: 2, conc-start: 128, conc-end: 256 }
     - { tp: 4, conc-start: 128, conc-end: 256 }
-    - { tp: 8, conc-start: 128, conc-end: 256 }
-    - { tp: 2, ep: 2, conc-start: 128, conc-end: 256 }
-    - { tp: 4, ep: 4, conc-start: 128, conc-end: 256 }
-    - { tp: 8, ep: 8, conc-start: 128, conc-end: 256 }
 
 gptoss-fp4-mi355x-atom:
   image: rocm/atom-dev:nightly_202603251629
