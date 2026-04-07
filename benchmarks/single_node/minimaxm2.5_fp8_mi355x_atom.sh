@@ -2,6 +2,8 @@
 
 source "$(dirname "$0")/../benchmark_lib.sh"
 
+export PYTHONDONTWRITEBYTECODE=1
+
 check_env_vars \
     MODEL \
     TP \
@@ -76,7 +78,6 @@ if [ "${CONC}" = "128" ]; then
         append_lm_eval_summary
     fi
 fi
-
 
 # Stop GPU monitoring
 stop_gpu_monitor

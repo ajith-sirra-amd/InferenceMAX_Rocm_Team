@@ -2,6 +2,8 @@
 
 source "$(dirname "$0")/../benchmark_lib.sh"
 
+export PYTHONDONTWRITEBYTECODE=1
+
 check_env_vars \
     MODEL \
     TP \
