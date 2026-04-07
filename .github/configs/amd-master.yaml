@@ -158,5 +158,4 @@ qwen3.5-fp8-mi355x-sglang:
   - isl: 1024
     osl: 8192
     search-space:
-    - { tp: 2, conc-start: 128, conc-end: 128 }
     - { tp: 4, conc-start: 128, conc-end: 128 }
