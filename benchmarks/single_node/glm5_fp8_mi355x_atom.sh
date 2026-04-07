@@ -47,7 +47,6 @@ python3 -m atom.entrypoints.openai_server \
     --server-port $PORT \
     -tp $TP \
     --kv_cache_dtype fp8 $CALCULATED_MAX_MODEL_LEN $EP \
-    --trust-remote-code \
     --default-chat-template-kwargs '{"enable_thinking": false}' \
     > $SERVER_LOG 2>&1 &
 
