@@ -70,10 +70,13 @@ run_benchmark_serving \
     --trust-remote-code
 
 # After throughput, run evaluation only if RUN_EVAL is true
-if [ "${RUN_EVAL}" = "true" ]; then
-    run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
-    append_lm_eval_summary
+if [ "${CONC}" = "128" ]; then
+    if [ "${OSL}" = "8192" ]; then
+        run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
+        append_lm_eval_summary
+    fi
 fi
+
 
 # Stop GPU monitoring
 stop_gpu_monitor
