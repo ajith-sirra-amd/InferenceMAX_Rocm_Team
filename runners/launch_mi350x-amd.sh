@@ -11,21 +11,11 @@ elif [[ $FRAMEWORK == "atom" ]]; then
 fi
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
-hostname
-
 server_name="bmk-server"
 
 # Cleanup: stop server container 
 docker stop $server_name 2>/dev/null || true
 docker rm $server_name 2>/dev/null || true
-
-original=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)
-
-echo $original
-
-# for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo "performance" | sudo tee $cpu; done
-
-# lscpu
 
 set -x
 docker pull $IMAGE
@@ -65,8 +55,6 @@ if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
   rm -f gpucore.*
 fi
-
-# for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $original | sudo tee $cpu; done
 
 # Cleanup: stop server container 
 docker stop $server_name 2>/dev/null || true
