@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -x
+
 source "$(dirname "$0")/../benchmark_lib.sh"
 
 export PYTHONDONTWRITEBYTECODE=1
@@ -19,37 +21,36 @@ fi
 
 hf download "$MODEL"
 
+export SGLANG_USE_AITER=1
+
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
-CHUNK_SIZE=8192
+
+if [ "${EVAL_ONLY}" = "true" ]; then
+    setup_eval_context
+fi
 
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
-set -x
-sglang serve \
-    --attention-backend triton \
-    --model-path $MODEL \
-    --host=0.0.0.0 \
-    --port $PORT \
-    --tensor-parallel-size $TP \
-    --trust-remote-code \
-    --mem-fraction-static $MEM_FRAC_STATIC \
-    --kv-cache-dtype fp8_e4m3 \
-    --cuda-graph-max-bs $CONC \
-    --max-running-requests $CONC \
-    --chunked-prefill-size $CHUNK_SIZE \
-    --max-prefill-tokens $CHUNK_SIZE \
-    --disable-radix-cache \
-    --num-continuous-decode-steps 2 \
-    > $SERVER_LOG 2>&1 &
+
+python3 -m sglang.launch_server --model-path=$MODEL --trust-remote-code \
+--host=0.0.0.0 --port=$PORT \
+--tensor-parallel-size=$TP \
+--data-parallel-size=2 \
+--attention-backend aiter \
+--mem-fraction-static $MEM_FRAC_STATIC \
+--model-loader-extra-config '{"enable_multithread_load": true}' \
+--watchdog-timeout 1200  \
+--disable-radix-cache \
+> $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
 # Wait for server to be ready
-wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-export PYTHONDONTWRITEBYTECODE=1
+wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID" --sleep-interval 60
+
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
@@ -62,11 +63,10 @@ run_benchmark_serving \
     --result-filename "$RESULT_FILENAME" \
     --result-dir /workspace/
 
-if [ "${CONC}" = "128" ]; then
-    if [ "${OSL}" = "8192" ]; then
-        run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
-        append_lm_eval_summary
-    fi
+# After throughput, run evaluation only if RUN_EVAL is true
+if [ "${RUN_EVAL}" = "true" ]; then
+    run_eval --framework lm-eval --port "$PORT"
+    append_lm_eval_summary
 fi
 
 # Stop GPU monitoring
