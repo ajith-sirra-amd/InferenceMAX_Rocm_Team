@@ -38,7 +38,6 @@ start_gpu_monitor
 python3 -m sglang.launch_server --model-path=$MODEL --trust-remote-code \
 --host=0.0.0.0 --port=$PORT \
 --tensor-parallel-size=$TP \
---data-parallel-size=2 \
 --attention-backend aiter \
 --mem-fraction-static $MEM_FRAC_STATIC \
 --model-loader-extra-config '{"enable_multithread_load": true}' \
