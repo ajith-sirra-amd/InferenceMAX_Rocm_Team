@@ -45,11 +45,7 @@ if [ "${EVAL_ONLY}" = "true" ]; then
     CONTEXT_LENGTH="$EVAL_MAX_MODEL_LEN"
 fi
 
-if [[ $TP -eq 8 ]]; then
-  EXTRA_ARGS="--enable-flashinfer-allreduce-fusion"
-else
-  EXTRA_ARGS=""
-fi
+EXTRA_ARGS=""
 
 echo "SCHEDULER_RECV_INTERVAL: $SCHEDULER_RECV_INTERVAL, CONC: $CONC, ISL: $ISL, OSL: $OSL"
 
@@ -61,7 +57,6 @@ start_gpu_monitor
 PYTHONNOUSERSITE=1 python3 -m sglang.launch_server --model-path=$MODEL --host=0.0.0.0 --port=$PORT \
 --trust-remote-code \
 --tensor-parallel-size=$TP --data-parallel-size=1 --ep-size $EP_SIZE \
---kv-cache-dtype fp8_e4m3 \
 --cuda-graph-max-bs $CUDA_GRAPH_MAX_BATCH_SIZE --max-running-requests $MAX_RUNNING_REQUESTS \
 --mem-fraction-static $MEM_FRAC_STATIC --chunked-prefill-size $CHUNKED_PREFILL_SIZE --max-prefill-tokens $MAX_PREFILL_TOKENS \
 --context-length $CONTEXT_LENGTH --disable-radix-cache \
