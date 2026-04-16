@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
+set -x
+
 source "$(dirname "$0")/../benchmark_lib.sh"
+
+export PYTHONDONTWRITEBYTECODE=1
 
 check_env_vars \
     MODEL \
@@ -17,44 +21,54 @@ fi
 
 hf download "$MODEL"
 
+export SGLANG_USE_AITER=1
+
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
-CHUNK_SIZE=32768
+
+# Default: recv every ~10 requests; if CONC ≥ 16, relax to ~30 requests between scheduler recv polls.
+if [[ $CONC -ge 16 ]]; then
+  SCHEDULER_RECV_INTERVAL=30
+else
+  SCHEDULER_RECV_INTERVAL=10
+fi
+
+MEM_FRAC_STATIC=0.82
+CHUNKED_PREFILL_SIZE=32768
+MAX_PREFILL_TOKENS=32768
+CUDA_GRAPH_MAX_BATCH_SIZE=$CONC
+MAX_RUNNING_REQUESTS=128
+CONTEXT_LENGTH=$((ISL + OSL + 20))
+if [ "${EVAL_ONLY}" = "true" ]; then
+    setup_eval_context
+    CONTEXT_LENGTH="$EVAL_MAX_MODEL_LEN"
+fi
+
+EXTRA_ARGS=""
+
+echo "SCHEDULER_RECV_INTERVAL: $SCHEDULER_RECV_INTERVAL, CONC: $CONC, ISL: $ISL, OSL: $OSL"
+
 
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
-set -x
-sglang serve \
-    --model-path $MODEL \
-    --host=0.0.0.0 \
-    --port $PORT \
-    --tensor-parallel-size $TP \
-    --trust-remote-code \
-    --mem-fraction-static $MEM_FRAC_STATIC \
-    --kv-cache-dtype fp8_e4m3 \
-    --attention-backend aiter \
-    --cuda-graph-max-bs $CONC \
-    --max-running-requests $CONC \
-    --chunked-prefill-size $CHUNK_SIZE \
-    --max-prefill-tokens $CHUNK_SIZE \
-    --num-continuous-decode-steps 2 \
-    --disable-radix-cache \
-    > $SERVER_LOG 2>&1 &
-    #--mamba-ssm-dtype bfloat16 \
+
+PYTHONNOUSERSITE=1 python3 -m sglang.launch_server --model-path=$MODEL --host=0.0.0.0 --port=$PORT \
+--trust-remote-code \
+--tensor-parallel-size=$TP --data-parallel-size=1 --ep-size $EP_SIZE \
+--cuda-graph-max-bs $CUDA_GRAPH_MAX_BATCH_SIZE --max-running-requests $MAX_RUNNING_REQUESTS \
+--mem-fraction-static $MEM_FRAC_STATIC --chunked-prefill-size $CHUNKED_PREFILL_SIZE --max-prefill-tokens $MAX_PREFILL_TOKENS \
+--context-length $CONTEXT_LENGTH --disable-radix-cache \
+--attention-backend aiter \
+$EXTRA_ARGS --scheduler-recv-interval $SCHEDULER_RECV_INTERVAL \
+--tokenizer-worker-num 6 --stream-interval 30 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
-#TODO: remove
-if [ "${RUN_EVAL}" = "true" ]; then
-    ISL=10
-    OSL=10
-fi
-
 # Wait for server to be ready
-wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-export PYTHONDONTWRITEBYTECODE=1
+wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID" --sleep-interval 60
+
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
@@ -69,7 +83,7 @@ run_benchmark_serving \
 
 # After throughput, run evaluation only if RUN_EVAL is true
 if [ "${RUN_EVAL}" = "true" ]; then
-    run_eval --framework lm-eval --port "$PORT" 
+    run_eval --framework lm-eval --port "$PORT"
     append_lm_eval_summary
 fi
 
