@@ -44,7 +44,7 @@ PYTHONNOUSERSITE=1 python3 -m sglang.launch_server --model-path=$MODEL --host=0.
 --mem-fraction-static $MEM_FRAC_STATIC \
 --context-length $CONTEXT_LENGTH --disable-radix-cache \
 --attention-backend aiter $EXTRA_ARGS \
---tokenizer-worker-num 4 > $SERVER_LOG 2>&1 &
+--tokenizer-worker-num $((TP*2)) > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
