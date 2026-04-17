@@ -64,6 +64,7 @@ ISL=10
 OSL=10
 fi
 
+export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
