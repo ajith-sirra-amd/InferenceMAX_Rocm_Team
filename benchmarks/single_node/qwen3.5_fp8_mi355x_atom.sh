@@ -9,37 +9,45 @@ check_env_vars \
     ISL \
     OSL \
     RANDOM_RANGE_RATIO \
-    RESULT_FILENAME
+    RESULT_FILENAME \
+    EP_SIZE \
+    DP_ATTENTION
 
 if [[ -n "$SLURM_JOB_ID" ]]; then
   echo "JOB $SLURM_JOB_ID running on $SLURMD_NODENAME"
 fi
 
-hf download "$MODEL"
+echo "TP: $TP, CONC: $CONC, ISL: $ISL, OSL: $OSL, EP_SIZE: $EP_SIZE, DP_ATTENTION: $DP_ATTENTION"
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
+
+export OMP_NUM_THREADS=1
+
+# Calculate max-model-len based on ISL and OSL
+if [ "$ISL" = "1024" ] && [ "$OSL" = "1024" ]; then
+    CALCULATED_MAX_MODEL_LEN=""
+else
+    CALCULATED_MAX_MODEL_LEN=" --max-model-len 10240 "
+fi
+
+if [ "$EP_SIZE" -gt 1 ]; then
+  EP=" --enable-expert-parallel"
+else
+  EP=" "
+fi
 
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
 set -x
-export AITER_QUICK_REDUCE_QUANTIZATION=INT4
-export ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1
-export ATOM_USE_CUSTOM_ALL_GATHER=0
 
-vllm serve "$MODEL" \
-    --port "$PORT" \
-    --async-scheduling \
-    --load-format fastsafetensors \
-    --compilation-config '{"cudagraph_mode": "FULL_AND_PIECEWISE"}' \
+python3 -m atom.entrypoints.openai_server \
+    --model $MODEL \
+    --server-port $PORT \
+    -tp $TP \
+    --kv_cache_dtype fp8 $CALCULATED_MAX_MODEL_LEN $EP \
     --trust-remote-code \
-    --kv-cache-dtype fp8 \
-    --max-num-batched-tokens 32768 \
-    --max-model-len 16384 \
-    --tensor-parallel-size $TP \
-    --gpu-memory-utilization 0.9 \
-    --no-enable-prefix-caching \
     > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
@@ -47,10 +55,9 @@ SERVER_PID=$!
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-#TODO: remove
 if [ "${RUN_EVAL}" = "true" ]; then
-ISL=10
-OSL=10
+    ISL=10
+    OSL=10
 fi
 
 export PYTHONDONTWRITEBYTECODE=1

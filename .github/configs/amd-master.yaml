@@ -135,7 +135,8 @@ qwen3.5-fp8-mi355x-sglang:
     #- { tp: 8, conc-start: 128, conc-end: 128 }
 
 qwen3.5-bf16-mi355x-atom:
-  image: rocm/atom:rocm7.2.1-ubuntu24.04-pytorch2.9.1-atom0.1.2-vllm0.17.0
+  #image: rocm/atom:rocm7.2.1-ubuntu24.04-pytorch2.9.1-atom0.1.2-vllm0.17.0
+  image: rocm/atom-dev:sglang-v0.5.10-nightly_20260416
   model: Qwen/Qwen3.5-397B-A17B
   model-prefix: qwen3.5
   runner: mi355x
@@ -149,7 +150,8 @@ qwen3.5-bf16-mi355x-atom:
     - { tp: 8, conc-start: 256, conc-end: 256 }
 
 qwen3.5-fp8-mi355x-atom:
-  image: rocm/atom:rocm7.2.1-ubuntu24.04-pytorch2.9.1-atom0.1.2-vllm0.17.0
+  #image: rocm/atom:rocm7.2.1-ubuntu24.04-pytorch2.9.1-atom0.1.2-vllm0.17.0
+  image: rocm/atom-dev:sglang-v0.5.10-nightly_20260416
   model: Qwen/Qwen3.5-397B-A17B-FP8
   model-prefix: qwen3.5
   runner: mi355x
