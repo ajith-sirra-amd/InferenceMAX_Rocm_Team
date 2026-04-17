@@ -123,7 +123,7 @@ kimik2.5-int4-mi355x-vllm:
   image: aigmkt/kimi-k25-dev
   model: moonshotai/Kimi-K2.5
   model-prefix: kimik2.5
-  runner: mi355x
+  runner: mi355x_srok
   precision: int4
   framework: vllm
   multinode: false
