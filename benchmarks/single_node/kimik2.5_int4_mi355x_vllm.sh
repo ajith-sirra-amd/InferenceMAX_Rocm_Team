@@ -50,12 +50,19 @@ vllm serve $MODEL --port $PORT \
 --block-size=64 \
 --no-enable-prefix-caching \
 --trust-remote-code \
+--max-num-seqs $CONC \
 --mm-encoder-tp-mode data > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+
+#TODO: remove
+if [ "${RUN_EVAL}" = "true" ]; then
+ISL=10
+OSL=10
+fi
 
 run_benchmark_serving \
     --model "$MODEL" \
