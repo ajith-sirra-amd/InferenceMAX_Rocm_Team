@@ -25,44 +25,23 @@ export SGLANG_USE_AITER=1
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
-MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
+MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.9}
 
-# Default: recv every ~10 requests; if CONC ≥ 16, relax to ~30 requests between scheduler recv polls.
-if [[ $CONC -ge 16 ]]; then
-  SCHEDULER_RECV_INTERVAL=30
-else
-  SCHEDULER_RECV_INTERVAL=10
-fi
-
-MEM_FRAC_STATIC=0.82
-CHUNKED_PREFILL_SIZE=32768
-MAX_PREFILL_TOKENS=32768
-CUDA_GRAPH_MAX_BATCH_SIZE=$CONC
-MAX_RUNNING_REQUESTS=128
-CONTEXT_LENGTH=$((ISL + OSL + 20))
-if [ "${EVAL_ONLY}" = "true" ]; then
-    setup_eval_context
-    CONTEXT_LENGTH="$EVAL_MAX_MODEL_LEN"
-fi
-
-EXTRA_ARGS=""
+MEM_FRAC_STATIC=0.9
 
 echo "SCHEDULER_RECV_INTERVAL: $SCHEDULER_RECV_INTERVAL, CONC: $CONC, ISL: $ISL, OSL: $OSL"
-
 
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
-
 PYTHONNOUSERSITE=1 python3 -m sglang.launch_server --model-path=$MODEL --host=0.0.0.0 --port=$PORT \
 --trust-remote-code \
---tensor-parallel-size=$TP --data-parallel-size=1 --ep-size $EP_SIZE \
---cuda-graph-max-bs $CUDA_GRAPH_MAX_BATCH_SIZE --max-running-requests $MAX_RUNNING_REQUESTS \
---mem-fraction-static $MEM_FRAC_STATIC --chunked-prefill-size $CHUNKED_PREFILL_SIZE --max-prefill-tokens $MAX_PREFILL_TOKENS \
+--tensor-parallel-size=$TP --ep-size $EP_SIZE \
+--cuda-graph-max-bs $CUDA_GRAPH_MAX_BATCH_SIZE \
+--mem-fraction-static $MEM_FRAC_STATIC \
 --context-length $CONTEXT_LENGTH --disable-radix-cache \
---attention-backend aiter \
-$EXTRA_ARGS --scheduler-recv-interval $SCHEDULER_RECV_INTERVAL \
---tokenizer-worker-num 6 --stream-interval 30 > $SERVER_LOG 2>&1 &
+--attention-backend aiter $EXTRA_ARGS \
+--tokenizer-worker-num 4 > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
