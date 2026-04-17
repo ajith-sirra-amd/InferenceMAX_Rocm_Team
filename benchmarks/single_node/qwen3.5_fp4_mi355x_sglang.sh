@@ -37,7 +37,7 @@ start_gpu_monitor
 PYTHONNOUSERSITE=1 python3 -m sglang.launch_server --model-path=$MODEL --host=0.0.0.0 --port=$PORT \
 --trust-remote-code \
 --tensor-parallel-size=$TP --ep-size $EP_SIZE \
---cuda-graph-max-bs $CUDA_GRAPH_MAX_BATCH_SIZE \
+--cuda-graph-max-bs $CONC \
 --mem-fraction-static $MEM_FRAC_STATIC \
 --context-length $CONTEXT_LENGTH --disable-radix-cache \
 --attention-backend aiter $EXTRA_ARGS \
