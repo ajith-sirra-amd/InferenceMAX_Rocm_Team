@@ -9,7 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
-                - "test-config --config-files .github/configs/nvidia-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4-fp4-b200-sglangq   "
+                - "test-config --config-files .github/configs/nvidia-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4-fp4-b200-sglang   "
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys qwen3.5-fp8-mi355x-atom   "
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys qwen3.5-bf16-mi355x-atom   "
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-fp4-mi355x-vllm"
