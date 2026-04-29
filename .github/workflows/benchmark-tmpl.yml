@@ -116,12 +116,12 @@ jobs:
                 sleep 5
               done
             else
-              echo "[Slurm] Cleaning up jobs for user: $USER ..."
-              scancel -u "$USER" || true
-              while [ -n "$(squeue -u "$USER" --noheader --format='%i')" ]; do
-                squeue -u "$USER"
-                sleep 5
-              done
+              echo "[Slurm] Cleaning up jobs for user: $USER ... skipped"
+              # scancel -u "$USER" || true
+              # while [ -n "$(squeue -u "$USER" --noheader --format='%i')" ]; do
+              #   squeue -u "$USER"
+              #   sleep 5
+              # done
             fi
           fi
 
