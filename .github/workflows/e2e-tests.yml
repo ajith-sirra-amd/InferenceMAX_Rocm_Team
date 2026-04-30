@@ -48,14 +48,6 @@ on:
                 - "dsr1-fp8-mi355x-sglang-disagg-mtp"
                 - "dsr1-fp4-mi355x-sglang-disagg"
                 - "dsr1-fp4-mi355x-sglang-disagg-mtp"
-            generate-cli-command:
-                description: "Command passed to generate matrix script (optional if test-name is selected)"
-                required: false
-                type: string
-            ref:
-                description: "Ref (branch/sha) to checkout for generating configs"
-                required: false
-                type: string
     workflow_call:
         inputs:
             generate-cli-command:
