@@ -215,6 +215,24 @@ dsv4-fp8-mi355x-sglang:
     search-space:
     - { tp: 8, conc-start: 4, conc-end: 64 }
 
+dsv4-fp4-mi355x-sglang:
+  image: rocm/sgl-dev:rocm720-deepseek-v4-mi35x
+  model: deepseek-ai/DeepSeek-V4-Pro
+  model-prefix: dsv4
+  runner: mi355x
+  precision: fp4
+  framework: sglang
+  multinode: false
+  seq-len-configs:
+  - isl: 1024
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 64 }
+  - isl: 8192
+    osl: 1024
+    search-space:
+    - { tp: 8, conc-start: 4, conc-end: 64 }
+
 dsv4-fp4-mi355x-vllm:
   image: rocm/pytorch-private:dsv4_dsv4_adapt_upstream_0430
   model: deepseek-ai/DeepSeek-V4-Pro
