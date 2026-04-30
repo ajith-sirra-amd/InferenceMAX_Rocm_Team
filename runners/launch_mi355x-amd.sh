@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-if [[ $RUNNER_NAME == "mi355x" ]]; then
+if [[ $RUNNER_TYPE == "mi355x" ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/hf_cache/"  # Temp solution
-elif [[ $RUNNER_NAME == "mi355x-p02-g57" ]]; then
+elif [[ $RUNNER_TYPE == "mi355x-p02-g57" ]]; then
     HF_HUB_CACHE_MOUNT="/mnt/hf_hub_cache/"
 fi
 
