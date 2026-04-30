@@ -4,28 +4,51 @@ run-name: e2e Test - ${{ inputs.test-name || inputs.generate-cli-command || gith
 on:
     workflow_dispatch:
         inputs:
-            generate-cli-command:
-                description: "Command passed to generate matrix script"
-                required: true
+            test-name:
+                description: "Name for this test run (auto-generates generate-cli-command if not provided)"
+                required: false
                 type: choice
                 options:
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4-fp4-mi355x-vllm"
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4-fp8-mi355x-sglang"
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4f-fp8-mi355x-sglang"
-                - "test-config --config-files .github/configs/nvidia-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4-fp4-b200-sglang   "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys qwen3.5-fp8-mi355x-atom   "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys qwen3.5-bf16-mi355x-atom   "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-fp4-mi355x-vllm"
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-int4-mi355x-vllm"
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys glm5-fp8-mi355x-atom       "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys kimik2.5-fp4-mi355x-atom   "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys minimaxm2.5-fp8-mi355x-atom"
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys gptoss-fp4-mi355x-atom     "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsr1-fp4-mi355x-atom-mtp   "
-                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsr1-fp8-mi355x-atom-mtp   "
-                - "test-config --config-files .github/configs/amd-master.yaml --config-keys '*-atom*'"
-            test-name:
-                description: "Name for this test run"
+                - ""
+                - "glm5-fp8-mi355x-atom"
+                - "kimik2.5-fp4-mi355x-atom"
+                - "minimaxm2.5-fp8-mi355x-atom"
+                - "gptoss-fp4-mi355x-atom"
+                - "dsr1-fp4-mi355x-atom-mtp"
+                - "dsr1-fp8-mi355x-atom-mtp"
+                - "dsr1-fp4-mi355x-atom"
+                - "dsr1-fp8-mi355x-atom"
+                - "dsv4-fp8-mi355x-sglang"
+                - "dsv4f-fp8-mi355x-sglang"
+                - "dsv4-fp4-mi355x-vllm"
+                - "dsr1-fp4-mi355x-sglang"
+                - "dsr1-fp8-mi300x-sglang"
+                - "dsr1-fp8-mi325x-sglang"
+                - "dsr1-fp8-mi355x-sglang"
+                - "qwen3.5-bf16-mi355x-sglang"
+                - "qwen3.5-bf16-mi355x-atom"
+                - "qwen3.5-bf16-mi300x-sglang"
+                - "qwen3.5-bf16-mi325x-sglang"
+                - "qwen3.5-fp8-mi325x-sglang"
+                - "qwen3.5-fp8-mi355x-sglang"
+                - "qwen3.5-fp8-mi355x-atom"
+                - "qwen3.5-fp8-mi300x-sglang"
+                - "glm5-fp8-mi355x-sglang"
+                - "kimik2.5-int4-mi355x-vllm"
+                - "kimik2.5-int4-mi325x-vllm"
+                - "kimik2.5-fp4-mi355x-vllm"
+                - "minimaxm2.5-fp8-mi355x-vllm"
+                - "minimaxm2.5-fp8-mi300x-vllm"
+                - "minimaxm2.5-fp8-mi325x-vllm"
+                - "gptoss-fp4-mi300x-vllm"
+                - "gptoss-fp4-mi325x-vllm"
+                - "gptoss-fp4-mi355x-vllm"
+                - "dsr1-fp8-mi355x-sglang-disagg"
+                - "dsr1-fp8-mi355x-sglang-disagg-mtp"
+                - "dsr1-fp4-mi355x-sglang-disagg"
+                - "dsr1-fp4-mi355x-sglang-disagg-mtp"
+            generate-cli-command:
+                description: "Command passed to generate matrix script (optional if test-name is selected)"
                 required: false
                 type: string
             ref:
@@ -67,8 +90,12 @@ jobs:
             - id: get-jobs
               run: |
                   pip install pydantic
-                  CONFIG_JSON=$(python3 ${GITHUB_WORKSPACE}/utils/matrix_logic/generate_sweep_configs.py \
-                    ${{ inputs.generate-cli-command || github.event.inputs.generate-cli-command }})
+                  CLI_CMD="${{ inputs.generate-cli-command || github.event.inputs.generate-cli-command }}"
+                  TEST_NAME="${{ inputs.test-name || github.event.inputs.test-name }}"
+                  if [ -z "$CLI_CMD" ] && [ -n "$TEST_NAME" ]; then
+                    CLI_CMD="test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys $TEST_NAME"
+                  fi
+                  CONFIG_JSON=$(python3 ${GITHUB_WORKSPACE}/utils/matrix_logic/generate_sweep_configs.py $CLI_CMD)
                   SINGLE=$(echo "$CONFIG_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps([x for x in d if 'prefill' not in x]))")
                   MULTI=$(echo "$CONFIG_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps([x for x in d if 'prefill' in x]))")
                   echo "single-node-config=$SINGLE" >> $GITHUB_OUTPUT
