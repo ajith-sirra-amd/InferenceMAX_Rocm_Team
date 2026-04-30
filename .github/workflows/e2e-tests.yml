@@ -9,6 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4-fp4-mi355x-vllm"
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4-fp8-mi355x-sglang"
                 - "test-config --config-files .github/configs/amd-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4f-fp8-mi355x-sglang"
                 - "test-config --config-files .github/configs/nvidia-master.yaml --runner-config .github/configs/runners.yaml --config-keys dsv4-fp4-b200-sglang   "
