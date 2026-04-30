@@ -39,17 +39,30 @@ else:
     print(f"No patch needed: model_type is {config.get('model_type')!r}")
 PYEOF
 
+PATCH_FILE="/tmp/pr_24127_layernorm_dsv4.patch"
+TARGET_FILE="/sgl-workspace/sglang-dsv4-0426/python/sglang/srt/layers/layernorm.py"
+
 # Write and apply layernorm patch from PR #24127 https://github.com/sgl-project/sglang/pull/24127/changes
-cat > /tmp/layernorm.patch << 'PATCH_EOF'
-diff --git a/python/sglang/srt/layers/layernorm.py b/python/sglang/srt/layers/layernorm.py
-index 3293a8a59..d380d4fbe 100644
---- a/python/sglang/srt/layers/layernorm.py
-+++ b/python/sglang/srt/layers/layernorm.py
-@@ -142,6 +142,12 @@ class RMSNorm(CustomOp):
-         x: torch.Tensor,
+cat > $PATCH_FILE << 'PATCH_EOF'
+--- /sgl-workspace/sglang-dsv4-0426/python/sglang/srt/layers/layernorm.py	2026-04-30 10:05:36.665047183 +0000
++++ /sgl-workspace/sglang-dsv4-0426/python/sglang/srt/layers/layernorm.py	2026-04-30 10:06:28.805281594 +0000
+@@ -200,6 +200,10 @@
+         )
+         if _use_aiter:
+             self._forward_method = self.forward_aiter
++        # if get_bool_env_var("SGLANG_USE_NATIVE_LAYERNORM"):
++        #    self._forward_method = self.forward_native
++        # elif _use_aiter:
++        #    self._forward_method = self.forward_aiter
+ 
+     def forward_cuda(
+         self,
+@@ -284,6 +288,13 @@
          residual: Optional[torch.Tensor] = None,
+         post_residual_addition: Optional[torch.Tensor] = None,
      ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-+        # Fix dsv4 dp attention issue
++
++        # Fix dsv4 dp attenton issue
 +        # the symptom is torch.AcceleratorError: HIP error: invalid configuration argument
 +        if x.shape[0] == 0:
 +            if residual is not None:
@@ -58,15 +71,33 @@ index 3293a8a59..d380d4fbe 100644
          if residual is not None:
              residual_out = torch.empty_like(x)
              output = torch.empty_like(x)
+
 PATCH_EOF
 
-cd /sgl-project/sglang-dsv4-0426
-if git apply --reverse --check /tmp/layernorm.patch >/dev/null 2>&1; then
-    echo "layernorm.patch already applied; skipping"
-else
-    git apply --3way /tmp/layernorm.patch
+PATCH_MARKER="Fix dsv4 dp attenton issue"
+
+if [[ ! -f "$TARGET_FILE" ]]; then
+    echo "ERROR: target file not found: $TARGET_FILE"
+    exit 1
 fi
-cd -
+
+if grep -Fq "$PATCH_MARKER" "$TARGET_FILE"; then
+    echo "Layernorm patch already present; skipping apply."
+else
+    if patch --forward "$TARGET_FILE" < "$PATCH_FILE"; then
+        echo "Patch command completed."
+    else
+        echo "ERROR: failed to apply patch file: $PATCH_FILE"
+        exit 1
+    fi
+
+    if grep -Fq "$PATCH_MARKER" "$TARGET_FILE"; then
+        echo "Layernorm patch applied successfully."
+    else
+        echo "ERROR: patch command ran but expected marker not found in $TARGET_FILE"
+        exit 1
+    fi
+fi
 
 export SGLANG_REASONING_EFFORT=max
 
