@@ -36,7 +36,6 @@ set -x
 export VLLM_ROCM_USE_AITER=1
 vllm serve $MODEL --port $PORT \
   --trust-remote-code \
-  --kv-cache-dtype fp8 \
   --moe-backend triton_unfused \
   --enforce-eager \
   --distributed-executor-backend mp \
