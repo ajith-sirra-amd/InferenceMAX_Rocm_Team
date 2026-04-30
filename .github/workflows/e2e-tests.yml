@@ -10,6 +10,10 @@ on:
                 type: choice
                 options:
                 - ""
+                - "dsv4-fp4-mi355x-vllm"
+                - "dsv4-fp4-mi355x-sglang"
+                - "dsv4-fp8-mi355x-sglang"
+                - "dsv4f-fp8-mi355x-sglang"
                 - "glm5-fp8-mi355x-atom"
                 - "kimik2.5-fp4-mi355x-atom"
                 - "minimaxm2.5-fp8-mi355x-atom"
@@ -18,9 +22,6 @@ on:
                 - "dsr1-fp8-mi355x-atom-mtp"
                 - "dsr1-fp4-mi355x-atom"
                 - "dsr1-fp8-mi355x-atom"
-                - "dsv4-fp8-mi355x-sglang"
-                - "dsv4f-fp8-mi355x-sglang"
-                - "dsv4-fp4-mi355x-vllm"
                 - "dsr1-fp4-mi355x-sglang"
                 - "dsr1-fp8-mi300x-sglang"
                 - "dsr1-fp8-mi325x-sglang"
