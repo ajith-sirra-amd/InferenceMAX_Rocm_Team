@@ -68,28 +68,33 @@ else
 fi
 cd -
 
-# DSv4-specific SGLang env vars (from sgl-project/sglang#23608)
-export SGLANG_OPT_USE_FUSED_COMPRESS=false
-export SGLANG_OPT_USE_OLD_COMPRESSOR=true
-export SGLANG_OPT_USE_TILELANG_SWA_PREPARE=false
-export SGLANG_OPT_USE_JIT_KERNEL_FUSED_TOPK=false
-export SGLANG_OPT_USE_FUSED_HASH_TOPK=false
+export SGLANG_REASONING_EFFORT=max
+
+export SGLANG_OPT_USE_FUSED_COMPRESS=false #use PyTorch implemented compressor
+export SGLANG_OPT_USE_OLD_COMPRESSOR=true #use old compressor
+export SGLANG_OPT_USE_TILELANG_SWA_PREPARE=false #use old prepare
+export SGLANG_OPT_USE_JIT_KERNEL_FUSED_TOPK=false #use old topk
+export SGLANG_OPT_USE_FUSED_HASH_TOPK=false #AMD: hash_topk JIT needs CUDA toolchain
+
 export SGLANG_HACK_FLASHMLA_BACKEND=torch
-export SGLANG_OPT_DEEPGEMM_HC_PRENORM=false
-export SGLANG_OPT_USE_TILELANG_MHC_PRE=false
-export SGLANG_OPT_USE_TILELANG_MHC_POST=false
+export SGLANG_HACK_FLASHMLA_BACKEND=tilelang
+export SGLANG_OPT_DEEPGEMM_HC_PRENORM=false #use old prenorm
+
+export SGLANG_OPT_USE_TILELANG_MHC_PRE=false #use torch hc_pre
+export SGLANG_OPT_USE_TILELANG_MHC_POST=false #use torch hc_post
+
 export SGLANG_ENABLE_THINKING=1
 export SGLANG_USE_AITER=1
 export SGLANG_USE_ROCM700A=1
 export SGLANG_TOPK_TRANSFORM_512_TORCH=1
 export SGLANG_FP8_PAGED_MQA_LOGITS_TORCH=1
-export SGLANG_DSV4_FP4_EXPERTS=false
-export SGLANG_OPT_DPSK_V4_RADIX=0
-export SGLANG_OPT_USE_OVERLAP_STORE_CACHE=false
-export SGLANG_OPT_USE_FUSED_STORE_CACHE=false
-export SGLANG_FORCE_TRITON_MOE_FP8=1
-# for FP4 model
+
 export SGLANG_DSV4_FP4_EXPERTS=True
+
+export SGLANG_OPT_DPSK_V4_RADIX=0
+export SGLANG_OPT_USE_OVERLAP_STORE_CACHE=false #non-radix backend has no store_cache method
+export SGLANG_OPT_USE_FUSED_STORE_CACHE=false #fused_store_cache JIT needs CUDA toolchain
+
 export SGLANG_FORCE_TRITON_MOE_FP8=0
 
 SERVER_LOG=/workspace/server.log
