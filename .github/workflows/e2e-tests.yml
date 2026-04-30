@@ -13,7 +13,6 @@ on:
                 - "dsv4-fp4-mi355x-vllm"
                 - "dsv4-fp4-mi355x-sglang"
                 - "dsv4-fp8-mi355x-sglang"
-                - "dsv4f-fp8-mi355x-sglang"
                 - "glm5-fp8-mi355x-atom"
                 - "kimik2.5-fp4-mi355x-atom"
                 - "minimaxm2.5-fp8-mi355x-atom"
