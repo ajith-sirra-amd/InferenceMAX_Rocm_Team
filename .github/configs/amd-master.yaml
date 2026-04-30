@@ -216,7 +216,7 @@ dsv4-fp8-mi355x-sglang:
     - { tp: 8, conc-start: 4, conc-end: 64 }
 
 dsv4-fp4-mi355x-vllm:
-  image: rocm/pytorch-private:dsv4_dsv4_adapt_upstream_0430
+  image: rocm/vllm-dev:ds-v4-mi35x-0430
   model: deepseek-ai/DeepSeek-V4-Pro
   model-prefix: dsv4
   runner: mi355x-p02-g57
@@ -228,7 +228,7 @@ dsv4-fp4-mi355x-vllm:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 8 }
+    - { tp: 8, conc-start: 4, conc-end: 64 }
 
 dsr1-fp4-mi355x-sglang:
   image: lmsysorg/sglang:v0.5.9-rocm700-mi35x

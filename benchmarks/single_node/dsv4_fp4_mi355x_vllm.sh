@@ -37,11 +37,13 @@ export VLLM_ROCM_USE_AITER=1
 vllm serve $MODEL --port $PORT \
   --trust-remote-code \
   --moe-backend triton_unfused \
-  --enforce-eager \
   --distributed-executor-backend mp \
   --max-num-seqs $CONC \
   --tensor-parallel-size=$TP \
-  --gpu-memory-utilization 0.90 \
+  --kv-cache-dtype="fp8" \
+  --gpu-memory-utilization 0.60 \
+  --async-scheduling \
+  --enforce-eager \
   --no-enable-prefix-caching > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
