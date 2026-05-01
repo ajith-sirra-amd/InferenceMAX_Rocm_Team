@@ -52,7 +52,7 @@ $EP \
 --block-size=64 \
 --no-enable-prefix-caching \
 --trust-remote-code \
---max-num-seqs $CONC \
+--max-num-seqs 256 \
 --mm-encoder-tp-mode data > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
