@@ -55,7 +55,7 @@ vllm serve $MODEL --port $PORT \
   --max-num-batched-tokens 8192 \
   --distributed-executor-backend mp \
   --trust-remote-code \
-  --gpu-memory-utilization 0.9 \
+  --gpu-memory-utilization 0.6 \
   --moe-backend triton_unfused \
   --tokenizer-mode deepseek_v4 \
   --reasoning-parser deepseek_v4 \
