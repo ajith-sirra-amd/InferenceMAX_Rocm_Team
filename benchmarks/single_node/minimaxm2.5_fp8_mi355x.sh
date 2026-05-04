@@ -31,6 +31,11 @@ export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 VLLM_BLOCK_SIZE=16
 EP_ARGS=()
 ASYNC_ARGS=()
+LOG_REQUEST_ARGS=()
+
+if vllm serve --help 2>&1 | grep -q -- "--disable-log-requests"; then
+    LOG_REQUEST_ARGS+=(--disable-log-requests)
+fi
 
 if [[ "$CONC" != "128" ]]; then
     ASYNC_ARGS+=(--no-async-scheduling)
@@ -64,7 +69,7 @@ vllm serve "$MODEL" --port "$PORT" \
     --max-model-len "$MAX_MODEL_LEN" \
     --uvicorn-log-level warning \
     --disable-log-stats \
-    --disable-log-requests \
+    "${LOG_REQUEST_ARGS[@]}" \
     "${ASYNC_ARGS[@]}" \
     --trust-remote-code > "$SERVER_LOG" 2>&1 &
 
