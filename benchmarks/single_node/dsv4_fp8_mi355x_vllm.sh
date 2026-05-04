@@ -56,7 +56,7 @@ vllm serve $MODEL --port $PORT \
     --moe-backend "triton_unfused" \
     --no-enable-prefix-caching \
     --max-num-seqs 128 \
-    -- distributed-executor-backend mp \
+    --distributed-executor-backend mp \
     --tokenizer-mode deepseek_v4 \
     --tool-call-parser deepseek_v4 \
     --enable-auto-tool-choice \
