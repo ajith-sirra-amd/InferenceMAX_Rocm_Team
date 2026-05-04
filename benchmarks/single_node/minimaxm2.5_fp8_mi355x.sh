@@ -5,6 +5,7 @@ source "$(dirname "$0")/../benchmark_lib.sh"
 check_env_vars \
     MODEL \
     TP \
+    EP_SIZE \
     CONC \
     ISL \
     OSL \
@@ -24,6 +25,26 @@ if [ -n "$ROCR_VISIBLE_DEVICES" ]; then
 fi
 
 export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_SHUFFLE_KV_CACHE_LAYOUT=1
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+
+VLLM_BLOCK_SIZE=16
+EP_ARGS=()
+ASYNC_ARGS=()
+
+if [[ "$CONC" != "128" ]]; then
+    ASYNC_ARGS+=(--no-async-scheduling)
+fi
+
+if [[ "$TP" == "8" && "$EP_SIZE" == "8" ]]; then
+    export VLLM_ROCM_SHUFFLE_KV_CACHE_LAYOUT=0
+    VLLM_BLOCK_SIZE=32
+    echo "Disabling shuffle KV cache layout and using block size 32 for TP8/EP8."
+fi
+
+if [[ "$EP_SIZE" -gt 1 ]]; then
+    EP_ARGS+=(--enable-expert-parallel)
+fi
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
@@ -32,13 +53,20 @@ PORT=${PORT:-8888}
 start_gpu_monitor
 
 set -x
-vllm serve $MODEL --port $PORT \
---tensor-parallel-size=$TP \
---gpu-memory-utilization 0.95 \
---max-model-len $MAX_MODEL_LEN \
---block-size=32 \
---disable-log-requests \
---trust-remote-code > $SERVER_LOG 2>&1 &
+vllm serve "$MODEL" --port "$PORT" \
+    --tensor-parallel-size="$TP" \
+    "${EP_ARGS[@]}" \
+    --gpu-memory-utilization 0.95 \
+    --kv-cache-dtype fp8 \
+    --block-size="$VLLM_BLOCK_SIZE" \
+    --no-enable-prefix-caching \
+    --attention-backend ROCM_AITER_FA \
+    --max-model-len "$MAX_MODEL_LEN" \
+    --uvicorn-log-level warning \
+    --disable-log-stats \
+    --disable-log-requests \
+    "${ASYNC_ARGS[@]}" \
+    --trust-remote-code > "$SERVER_LOG" 2>&1 &
 
 SERVER_PID=$!
 

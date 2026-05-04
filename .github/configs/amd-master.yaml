@@ -600,7 +600,7 @@ kimik2.5-fp4-mi355x-vllm:
     - { tp: 8, ep: 8, conc-start: 4, conc-end: 128 }
 
 minimaxm2.5-fp8-mi355x-vllm:
-  image: vllm/vllm-openai-rocm:v0.15.1
+  image: jiahcao/vllm-minimax-m25:dev
   model: MiniMaxAI/MiniMax-M2.5
   model-prefix: minimaxm2.5
   runner: mi355x
@@ -1661,4 +1661,3 @@ dsr1-fp4-mi355x-sglang-disagg-mtp:
   #       additional-settings:
   #       - "DECODE_NODES=2"
   #       - "DECODE_MTP_SIZE=0"
-
