@@ -132,5 +132,3 @@ mi350x:
 - 'mi350x-amd_wbb3'
 mi355x-p02-g57:
 - 'mi355x-amd_p02_g57'
-mi355x-amd_p02_g57:
-- 'mi355x-p02-g57'
