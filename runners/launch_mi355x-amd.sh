@@ -14,6 +14,10 @@ elif [[ $FRAMEWORK == "atom" ]]; then
     FRAMEWORK_SUFFIX="_atom"
 fi
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
+SCRIPT_NAME="${MODEL_CODE}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}.sh"
+if [[ ! -f "benchmarks/single_node/${SCRIPT_NAME}" ]]; then
+    SCRIPT_NAME="${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh"
+fi
 
 server_name="bmk-server"
 
@@ -53,7 +57,7 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 -e RUN_EVAL \
 --entrypoint=/bin/bash \
 $IMAGE \
-benchmarks/${BENCHMARK_SUBDIR}/${MODEL_CODE}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}.sh
+benchmarks/${BENCHMARK_SUBDIR}/${SCRIPT_NAME}
 
 if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
