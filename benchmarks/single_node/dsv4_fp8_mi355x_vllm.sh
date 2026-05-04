@@ -46,21 +46,23 @@ fi
 start_gpu_monitor
 
 set -x
+
 vllm serve $MODEL --port $PORT \
-    --tensor-parallel-size $TP \
-    --gpu-memory-utilization 0.90 \
-    --max-model-len $MAX_MODEL_LEN \
-    --kv-cache-dtype fp8 \
-    --trust-remote-code \
-    --enforce-eager \
-    --moe-backend "triton_unfused" \
-    --no-enable-prefix-caching \
-    --max-num-seqs 128 \
-    --distributed-executor-backend mp \
-    --tokenizer-mode deepseek_v4 \
-    --tool-call-parser deepseek_v4 \
-    --enable-auto-tool-choice \
-    --reasoning-parser deepseek_v4 > $SERVER_LOG 2>&1 &
+  --dtype auto \
+  --kv-cache-dtype fp8 \
+  --tensor-parallel-size 8 \
+  --max-num-seqs 128 \
+  --max-num-batched-tokens 8192 \
+  --distributed-executor-backend mp \
+  --trust-remote-code \
+  --gpu-memory-utilization 0.9 \
+  --moe-backend triton_unfused \
+  --tokenizer-mode deepseek_v4 \
+  --reasoning-parser deepseek_v4 \
+  --tool-call-parser deepseek_v4 \
+  --enable-auto-tool-choice \
+  --async-scheduling \
+  --enforce-eager > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
