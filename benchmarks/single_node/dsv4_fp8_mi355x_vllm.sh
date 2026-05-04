@@ -10,6 +10,8 @@ set -eo pipefail
 # the PR branch on top. Once both PRs merge into a release, switch to
 # a vLLM ROCm MI355X image and remove the build.
 
+set -x
+
 source "$(dirname "$0")/../benchmark_lib.sh"
 
 check_env_vars \
@@ -44,8 +46,6 @@ if [ "${EVAL_ONLY}" = "true" ]; then
 fi
 
 start_gpu_monitor
-
-set -x
 
 vllm serve $MODEL --port $PORT \
   --dtype auto \
