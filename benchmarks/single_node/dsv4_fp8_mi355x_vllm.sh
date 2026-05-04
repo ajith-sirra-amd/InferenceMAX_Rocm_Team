@@ -70,7 +70,6 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 run_benchmark_serving \
     --model "$MODEL" \
-    --tokenizer "$MODEL" \
     --port "$PORT" \
     --backend vllm \
     --input-len "$ISL" \
