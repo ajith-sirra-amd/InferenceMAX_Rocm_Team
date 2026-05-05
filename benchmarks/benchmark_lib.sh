@@ -627,7 +627,19 @@ run_lm_eval() {
       --gen_kwargs "max_tokens=8192,temperature=${temperature},top_p=${top_p}"
     local eval_exit=$?
     set +x
-    return $eval_exit
+    if [[ "$eval_exit" -ne 0 ]]; then
+        return "$eval_exit"
+    fi
+
+    local results_file
+    results_file=$(find "$results_dir" -type f -name "results*.json" -print -quit 2>/dev/null || true)
+    if [[ -z "$results_file" ]]; then
+        echo "Eval failed: no results*.json generated under ${results_dir}." >&2
+        find "$results_dir" -maxdepth 3 -type f -print >&2 2>/dev/null || true
+        return 1
+    fi
+
+    return 0
 }
 
 append_lm_eval_summary() {

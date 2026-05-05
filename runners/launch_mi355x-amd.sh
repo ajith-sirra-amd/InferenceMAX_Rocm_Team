@@ -55,6 +55,15 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 -e EP_SIZE \
 -e DP_ATTENTION \
 -e RUN_EVAL \
+-e EVAL_ONLY \
+-e EVAL_MAX_MODEL_LEN \
+-e EVAL_TASK \
+-e NUM_FEWSHOT \
+-e MODEL_PREFIX \
+-e FRAMEWORK \
+-e PRECISION \
+-e SPEC_DECODING \
+-e RUNNER_TYPE \
 --entrypoint=/bin/bash \
 $IMAGE \
 benchmarks/${BENCHMARK_SUBDIR}/${SCRIPT_NAME}
