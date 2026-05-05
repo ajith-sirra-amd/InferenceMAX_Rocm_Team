@@ -47,6 +47,15 @@ on:
                 - "dsr1-fp8-mi355x-sglang-disagg-mtp"
                 - "dsr1-fp4-mi355x-sglang-disagg"
                 - "dsr1-fp4-mi355x-sglang-disagg-mtp"
+            generate-cli-command:
+                description: "Raw matrix generator command"
+                required: false
+                type: string
+            eval-only:
+                description: "Skip throughput and run eval for selected single-node jobs"
+                required: false
+                type: boolean
+                default: false
     workflow_call:
         inputs:
             generate-cli-command:
@@ -61,6 +70,11 @@ on:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
                 type: string
+            eval-only:
+                description: "Skip throughput and run eval for selected single-node jobs"
+                required: false
+                type: boolean
+                default: false
 
 jobs:
     get-jobs:
@@ -159,11 +173,12 @@ jobs:
             spec-decoding: ${{ matrix.config.spec-decoding }}
             disagg: ${{ matrix.config.disagg }}
             run-eval: ${{ matrix.config.run-eval }}
+            eval-only: ${{ inputs.eval-only }}
             ref: ${{ inputs.ref }}
 
     collect-results:
         needs: [test-sweep-multi-node, test-sweep-single-node]
-        if: ${{ always() }}
+        if: ${{ always() && !inputs.eval-only }}
         uses: ./.github/workflows/collect-results.yml
         secrets: inherit
         with:
@@ -177,7 +192,7 @@ jobs:
 
     calc-success-rate:
         needs: [collect-results, collect-evals]
-        if: ${{ always() }}
+        if: ${{ always() && !inputs.eval-only }}
         runs-on: ubuntu-latest
         permissions:
             contents: read

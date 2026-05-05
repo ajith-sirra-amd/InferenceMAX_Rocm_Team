@@ -301,6 +301,15 @@ run_benchmark_serving() {
         workspace_dir=$(pwd)
     fi
 
+    if [[ "${EVAL_ONLY:-false}" == "true" ]]; then
+        if [[ "${RUN_EVAL:-false}" != "true" ]]; then
+            echo "EVAL_ONLY=true requires RUN_EVAL=true." >&2
+            return 1
+        fi
+        echo "EVAL_ONLY=true: skipping throughput benchmark."
+        return 0
+    fi
+
     # Profiling support: when PROFILE=1, ensure profiler dir exists, add --profile flag,
     # and cap num_prompts to keep traces small.
     local profile_flag=()
