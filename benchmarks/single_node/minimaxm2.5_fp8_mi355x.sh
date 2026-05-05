@@ -37,6 +37,10 @@ if vllm serve --help 2>&1 | grep -q -- "--disable-log-requests"; then
     LOG_REQUEST_ARGS+=(--disable-log-requests)
 fi
 
+if [[ "${EVAL_ONLY:-false}" == "true" ]]; then
+    MAX_MODEL_LEN="${EVAL_MAX_MODEL_LEN:-16384}"
+fi
+
 if [[ "$ISL" == "1024" && "$OSL" == "1024" && "$TP" == "8" && "$EP_SIZE" == "8" ]] && (( CONC == 2 )); then
     ASYNC_ARGS+=(--no-async-scheduling)
     echo "Using baseline block size 32, shuffle disabled, and disabling async scheduling for 1k1k TP8/EP8 c2."
