@@ -47,7 +47,7 @@ python3 -m atom.entrypoints.openai_server \
     --model $MODEL \
     --server-port $PORT \
     -tp $TP \
-    --kv_cache_dtype fp8 > $SERVER_LOG 2>&1 &
+    --kv_cache_dtype fp8 --enable-disagg > $SERVER_LOG 2>&1 &
     # $CALCULATED_MAX_MODEL_LEN $EP --block-size $BLOCK_SIZE > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
