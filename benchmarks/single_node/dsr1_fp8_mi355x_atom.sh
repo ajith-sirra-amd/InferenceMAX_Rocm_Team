@@ -41,6 +41,9 @@ fi
 start_gpu_monitor
 
 set -x
+pip uninstall -y atom
+git clone -b atom_rapidserve https://github.com/ROCm/ATOM.git /app/ATOM-rapidserve
+pip install /app/ATOM-rapidserve
 
 BLOCK_SIZE=${BLOCK_SIZE:-16}
 python3 -m atom.entrypoints.openai_server \
