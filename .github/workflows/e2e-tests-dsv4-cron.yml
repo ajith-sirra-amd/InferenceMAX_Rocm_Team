@@ -3,7 +3,7 @@ run-name: e2e Test - ${{ inputs.test-name || inputs.generate-cli-command || gith
 
 on:
     schedule:
-        - cron: "15 2 * * *"
+        - cron: "50 4 * * *"
     workflow_dispatch:
         inputs:
             test-name:
