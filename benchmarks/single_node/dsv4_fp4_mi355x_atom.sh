@@ -22,7 +22,8 @@ echo "TP: $TP, CONC: $CONC, ISL: $ISL, OSL: $OSL, EP_SIZE: $EP_SIZE, DP_ATTENTIO
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
-export OMP_NUM_THREADS=1
+#srok, disabled for stability
+#export OMP_NUM_THREADS=1
 
 # Calculate max-model-len based on ISL and OSL
 if [ "$ISL" = "1024" ] && [ "$OSL" = "1024" ]; then
