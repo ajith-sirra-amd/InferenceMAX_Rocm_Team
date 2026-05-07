@@ -1,0 +1,13 @@
+name: Hello Cron
+
+on:
+    schedule:
+        - cron: "5 2 * * *"
+    workflow_dispatch:
+
+jobs:
+    hello:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Print hello
+              run: echo "hello"
