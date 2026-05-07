@@ -41,7 +41,7 @@ fi
 start_gpu_monitor
 
 set -x
-
+export ATOM_USE_TRITON_MOE=1
 python3 -m atom.entrypoints.openai_server \
     --model $MODEL \
     --server-port $PORT \
