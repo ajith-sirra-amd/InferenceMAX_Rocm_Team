@@ -38,7 +38,7 @@ export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_LINEAR=1
 
 SERVER_LOG=/workspace/server.log
-PORT=${PORT:-8888}
+PORT=${PORT:-8985}
 
 if [ "${EVAL_ONLY}" = "true" ]; then
     setup_eval_context

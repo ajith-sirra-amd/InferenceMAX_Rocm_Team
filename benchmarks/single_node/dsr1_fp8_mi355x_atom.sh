@@ -20,7 +20,7 @@ fi
 echo "TP: $TP, CONC: $CONC, ISL: $ISL, OSL: $OSL, EP_SIZE: $EP_SIZE, DP_ATTENTION: $DP_ATTENTION"
 
 SERVER_LOG=/workspace/server.log
-PORT=${PORT:-8888}
+PORT=${PORT:-8985}
 
 export OMP_NUM_THREADS=1
 
