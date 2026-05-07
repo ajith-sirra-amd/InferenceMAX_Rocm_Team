@@ -12,6 +12,7 @@ on:
                 type: choice
                 options:
                 - "dsv4-fp4-mi355x-vllm"
+                - "dsv4-fp4-mi355x-atom"
     workflow_call:
         inputs:
             generate-cli-command:
