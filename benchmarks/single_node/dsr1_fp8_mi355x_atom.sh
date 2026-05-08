@@ -20,7 +20,7 @@ fi
 echo "TP: $TP, CONC: $CONC, ISL: $ISL, OSL: $OSL, EP_SIZE: $EP_SIZE, DP_ATTENTION: $DP_ATTENTION"
 
 SERVER_LOG=/workspace/server.log
-PORT=${PORT:-8888}
+PORT=${PORT:-8985}
 
 export OMP_NUM_THREADS=1
 
@@ -41,14 +41,17 @@ fi
 start_gpu_monitor
 
 set -x
+pip uninstall -y atom
+git clone -b atom_rapidserve https://github.com/ROCm/ATOM.git /app/ATOM-rapidserve
+pip install /app/ATOM-rapidserve
 
 BLOCK_SIZE=${BLOCK_SIZE:-16}
 python3 -m atom.entrypoints.openai_server \
     --model $MODEL \
     --server-port $PORT \
     -tp $TP \
-    --kv_cache_dtype fp8 $CALCULATED_MAX_MODEL_LEN $EP \
-    --block-size $BLOCK_SIZE > $SERVER_LOG 2>&1 &
+    --kv_cache_dtype fp8 --enable-disagg > $SERVER_LOG 2>&1 &
+    # $CALCULATED_MAX_MODEL_LEN $EP --block-size $BLOCK_SIZE > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 

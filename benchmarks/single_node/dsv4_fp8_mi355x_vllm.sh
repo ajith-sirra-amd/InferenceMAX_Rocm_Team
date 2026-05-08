@@ -10,6 +10,8 @@ set -eo pipefail
 # the PR branch on top. Once both PRs merge into a release, switch to
 # a vLLM ROCm MI355X image and remove the build.
 
+set -x
+
 source "$(dirname "$0")/../benchmark_lib.sh"
 
 check_env_vars \
@@ -36,7 +38,7 @@ export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_LINEAR=1
 
 SERVER_LOG=/workspace/server.log
-PORT=${PORT:-8888}
+PORT=${PORT:-8985}
 
 if [ "${EVAL_ONLY}" = "true" ]; then
     setup_eval_context
@@ -45,22 +47,22 @@ fi
 
 start_gpu_monitor
 
-set -x
 vllm serve $MODEL --port $PORT \
-    --tensor-parallel-size $TP \
-    --gpu-memory-utilization 0.90 \
-    --max-model-len $MAX_MODEL_LEN \
-    --kv-cache-dtype fp8 \
-    --trust-remote-code \
-    --enforce-eager \
-    --moe-backend "triton_unfused" \
-    --no-enable-prefix-caching \
-    --max-num-seqs 128 \
-    -- distributed-executor-backend mp \
-    --tokenizer-mode deepseek_v4 \
-    --tool-call-parser deepseek_v4 \
-    --enable-auto-tool-choice \
-    --reasoning-parser deepseek_v4 > $SERVER_LOG 2>&1 &
+  --dtype auto \
+  --kv-cache-dtype fp8 \
+  --tensor-parallel-size 8 \
+  --max-num-seqs 128 \
+  --max-num-batched-tokens 8192 \
+  --distributed-executor-backend mp \
+  --trust-remote-code \
+  --gpu-memory-utilization 0.6 \
+  --moe-backend triton_unfused \
+  --tokenizer-mode deepseek_v4 \
+  --reasoning-parser deepseek_v4 \
+  --tool-call-parser deepseek_v4 \
+  --enable-auto-tool-choice \
+  --async-scheduling \
+  --enforce-eager > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
