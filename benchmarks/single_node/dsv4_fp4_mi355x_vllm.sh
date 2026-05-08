@@ -23,9 +23,6 @@ if [ -n "$ROCR_VISIBLE_DEVICES" ]; then
     export HIP_VISIBLE_DEVICES="$ROCR_VISIBLE_DEVICES"
 fi
 
-export VLLM_ROCM_USE_AITER=1
-#export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
-
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
 
@@ -33,6 +30,8 @@ PORT=${PORT:-8888}
 start_gpu_monitor
 
 set -x
+export VLLM_ROCM_USE_AITER=1
+#export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 export VLLM_ROCM_USE_AITER=1
 vllm serve $MODEL --port $PORT \
   --trust-remote-code \
@@ -42,6 +41,11 @@ vllm serve $MODEL --port $PORT \
   --tensor-parallel-size=$TP \
   --kv-cache-dtype="fp8" \
   --gpu-memory-utilization 0.60 \
+  --moe-backend triton_unfused \
+  --tokenizer-mode deepseek_v4 \
+  --reasoning-parser deepseek_v4 \
+  --tool-call-parser deepseek_v4 \
+  --enable-auto-tool-choice \
   --async-scheduling \
   --enforce-eager \
   --no-enable-prefix-caching > $SERVER_LOG 2>&1 &
