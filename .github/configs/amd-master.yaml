@@ -215,7 +215,7 @@ dsr1-fp8-mi355x-atom:
   - isl: 8192
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 256 }
+    - { tp: 8, conc-start: 64, conc-end: 128 }
 
 dsr1-fp4-mi355x-sglang:
   image: lmsysorg/sglang:v0.5.9-rocm700-mi35x
