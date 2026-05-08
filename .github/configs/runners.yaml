@@ -125,6 +125,7 @@ mi355x:
 - 'mi355x-amd_p01g06'
 - 'mi355x-amd_p01g07'
 - 'mi355x-p02-g57'
+- 'mi355x-amd_m15_17'
 mi350x:
 - 'mi350x-amd_b08_1'
 - 'mi350x-amd_wbb3'
