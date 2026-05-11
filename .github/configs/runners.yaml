@@ -91,6 +91,7 @@ mi355x:
 - 'mi355x-amds_7'
 - 'mi355x-amds_8'
 - 'mi355x-amd_p01_g05_a'
+- 'mi355x-amd_m15_17'
 mi355x-disagg:
 - 'mi355x-amds_0'
 - 'mi355x-amds_1'
