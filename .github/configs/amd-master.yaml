@@ -199,12 +199,11 @@ dsr1-fp4-mi355x-atom:
     - { tp: 8, ep: 1, conc-start: 4, conc-end: 4 }
 
 dsr1-fp8-mi355x-atom:
-  image: rocm/atom-dev:latest
+  image: aigmkt/vllm:rs_constrained
   model: deepseek-ai/DeepSeek-R1-0528
   model-prefix: dsr1
   runner: mi355x
   precision: fp8
-  # WIP framwork (no customers yet)
   framework: atom
   multinode: false
   seq-len-configs:
@@ -215,7 +214,7 @@ dsr1-fp8-mi355x-atom:
   - isl: 8192
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 256, conc-end: 256 }
+    - { tp: 8, conc-start: 4, conc-end: 256 }
 
 dsr1-fp4-mi355x-sglang:
   image: lmsysorg/sglang:v0.5.9-rocm700-mi35x
