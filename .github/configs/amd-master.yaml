@@ -202,7 +202,7 @@ dsr1-fp8-mi355x-atom:
   image: aigmkt/vllm:rs_constrained
   model: deepseek-ai/DeepSeek-R1-0528
   model-prefix: dsr1
-  runner: mi355x
+  runner: mi355x-p01-g05
   precision: fp8
   framework: atom
   multinode: false
