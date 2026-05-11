@@ -166,7 +166,7 @@ else
     JOB_ID=$(squeue --name="$RUNNER_NAME" -h -o %A | head -n1)
 
     # Set up trap to cancel SLURM job on script exit/interruption
-    trap "echo 'Canceling SLURM job $JOB_ID'; scancel $JOB_ID 2>/dev/null || true" EXIT INT TERM
+    # trap "echo 'Canceling SLURM job $JOB_ID'; scancel $JOB_ID 2>/dev/null || true" EXIT INT TERM
 
     #srun $ASSOC --jobid=$JOB_ID bash -c "docker stop \$(docker ps -a -q)"
 
