@@ -2,8 +2,6 @@
 
 source "$(dirname "$0")/../benchmark_lib.sh"
 
-export PYTHONDONTWRITEBYTECODE=1
-
 check_env_vars \
     MODEL \
     TP \
@@ -21,34 +19,34 @@ hf download "$MODEL"
 
 SERVER_LOG=/workspace/server.log
 PORT=${PORT:-8888}
-MEM_FRAC_STATIC=${MEM_FRAC_STATIC:-0.8}
-CHUNK_SIZE=8192
 
 # Start GPU monitoring (power, temperature, clocks every second)
 start_gpu_monitor
 
 set -x
-sglang serve \
-    --attention-backend triton \
-    --model-path $MODEL \
-    --host=0.0.0.0 \
-    --port $PORT \
-    --tensor-parallel-size $TP \
+export AITER_QUICK_REDUCE_QUANTIZATION=INT4
+export ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1
+export ATOM_USE_CUSTOM_ALL_GATHER=0
+
+vllm serve "$MODEL" \
+    --port "$PORT" \
+    --async-scheduling \
+    --load-format fastsafetensors \
+    --compilation-config '{"cudagraph_mode": "FULL_AND_PIECEWISE"}' \
     --trust-remote-code \
-    --mem-fraction-static $MEM_FRAC_STATIC \
-    --kv-cache-dtype fp8_e4m3 \
-    --cuda-graph-max-bs $CONC \
-    --max-running-requests $CONC \
-    --chunked-prefill-size $CHUNK_SIZE \
-    --max-prefill-tokens $CHUNK_SIZE \
-    --disable-radix-cache \
-    --num-continuous-decode-steps 2 \
+    --kv-cache-dtype fp8 \
+    --max-num-batched-tokens 32768 \
+    --max-model-len 16384 \
+    --tensor-parallel-size $TP \
+    --gpu-memory-utilization 0.9 \
+    --no-enable-prefix-caching \
     > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
 
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+
 export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
@@ -60,15 +58,15 @@ run_benchmark_serving \
     --num-prompts "$((CONC * 10))" \
     --max-concurrency "$CONC" \
     --result-filename "$RESULT_FILENAME" \
-    --result-dir /workspace/
+    --result-dir /workspace/ \
+    --trust-remote-code
 
 # After throughput, run evaluation only if RUN_EVAL is true
-if [ "${CONC}" = "128" ]; then
-    if [ "${OSL}" = "8192" ]; then
-        run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
-        append_lm_eval_summary
-    fi
+if [ "${RUN_EVAL}" = "true" ]; then
+    run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
+    append_lm_eval_summary
 fi
 
 # Stop GPU monitoring
 stop_gpu_monitor
+set +x
