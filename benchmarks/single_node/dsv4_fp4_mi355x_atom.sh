@@ -20,17 +20,7 @@ fi
 echo "TP: $TP, CONC: $CONC, ISL: $ISL, OSL: $OSL, EP_SIZE: $EP_SIZE, DP_ATTENTION: $DP_ATTENTION"
 
 SERVER_LOG=/workspace/server.log
-PORT=${PORT:-4778}
-
-#srok, disabled for stability
-#export OMP_NUM_THREADS=1
-
-# Calculate max-model-len based on ISL and OSL
-if [ "$ISL" = "1024" ] && [ "$OSL" = "1024" ]; then
-    CALCULATED_MAX_MODEL_LEN=""
-else
-    CALCULATED_MAX_MODEL_LEN=" --max-model-len 10240 "
-fi
+PORT=${PORT:-8888}
 
 if [ "$EP_SIZE" -gt 1 ]; then
   EP=" --enable-expert-parallel"
@@ -42,14 +32,15 @@ fi
 start_gpu_monitor
 
 set -x
+#export OMP_NUM_THREADS=1
 export ATOM_DISABLE_MMAP=true
-export ATOM_USE_TRITON_MOE=1
+export AITER_BF16_FP8_MOE_BOUND=0
+export ATOM_MOE_GU_ITLV=1
 python3 -m atom.entrypoints.openai_server \
     --model $MODEL \
     --server-port $PORT \
     -tp $TP \
-    --kv_cache_dtype fp8 $CALCULATED_MAX_MODEL_LEN $EP \
-    --trust-remote-code \
+    --kv_cache_dtype fp8 $EP \
     > $SERVER_LOG 2>&1 &
 
 SERVER_PID=$!
@@ -57,7 +48,6 @@ SERVER_PID=$!
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-export PYTHONDONTWRITEBYTECODE=1
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
@@ -68,12 +58,11 @@ run_benchmark_serving \
     --num-prompts "$((CONC * 10))" \
     --max-concurrency "$CONC" \
     --result-filename "$RESULT_FILENAME" \
-    --result-dir /workspace/ \
-    --trust-remote-code
+    --result-dir /workspace/ 
 
 # After throughput, run evaluation only if RUN_EVAL is true
 if [ "${RUN_EVAL}" = "true" ]; then
-    run_eval --framework lm-eval --port "$PORT" --concurrent-requests $CONC
+    run_eval --framework lm-eval --port "$PORT"
     append_lm_eval_summary
 fi
 
