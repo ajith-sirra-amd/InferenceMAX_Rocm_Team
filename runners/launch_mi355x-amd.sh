@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-HF_HUB_CACHE_MOUNT="/raid0"  # Temp solution
+HF_HUB_CACHE_MOUNT="/it-share" #solution
 
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
