@@ -199,10 +199,10 @@ dsr1-fp4-mi355x-atom:
     - { tp: 8, ep: 1, conc-start: 4, conc-end: 4 }
 
 dsr1-fp8-mi355x-atom:
-  image: aigmkt/vllm:rs_unconstrained
+  image: aigmkt/vllm:rs_constrained
   model: deepseek-ai/DeepSeek-R1-0528
   model-prefix: dsr1
-  runner: mi355x-p01-g07
+  runner: mi355x-amd_mia1
   precision: fp8
   framework: atom
   multinode: false
