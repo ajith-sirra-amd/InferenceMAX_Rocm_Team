@@ -46,6 +46,7 @@ set -x
 # pip install /app/ATOM-rapidserve
 
 BLOCK_SIZE=${BLOCK_SIZE:-16}
+cd /app/ATOM
 python3 -m atom.entrypoints.openai_server \
     --model $MODEL \
     --server-port $PORT \
