@@ -59,6 +59,7 @@ SERVER_PID=$!
 # Wait for server to be ready
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
+cd /workspace
 run_benchmark_serving \
     --model "$MODEL" \
     --port "$PORT" \
