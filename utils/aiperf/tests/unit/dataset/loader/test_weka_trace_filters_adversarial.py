@@ -21,6 +21,7 @@ def _mk_user_config(*, max_isl=None, max_osl=None, start=None, end=None):
     uc.input.ignore_trace_delays = False
     uc.input.use_think_time_only = False
     uc.loadgen.inter_turn_delay_cap_seconds = None
+    uc.loadgen.trace_idle_gap_cap_seconds = None
     uc.input.synthesis.max_isl = max_isl
     uc.input.synthesis.max_osl = max_osl
     uc.input.max_context_length = None
@@ -134,6 +135,50 @@ def test_max_isl_one_less_than_input_length_drops_request(tmp_path, monkeypatch)
     loader = _make_loader(path, uc, monkeypatch)
     convs = loader.convert_to_conversations(loader.load_dataset())
     assert len(convs[0].turns) == 0
+
+
+def test_max_context_length_drops_trace_with_oversized_subagent(tmp_path, monkeypatch):
+    """The context cap applies to subagent branches, not just parent turns."""
+    good = _base_trace([_normal(0.0, 100, 10, [1, 2])], trace_id="good")
+    bad = _base_trace(
+        [
+            _normal(0.0, 100, 10, [1, 2]),
+            _subagent(
+                1.0,
+                "agent_oversized",
+                [_normal(1.0, 2000, 10, [3, 4], model="m")],
+            ),
+        ],
+        trace_id="bad",
+    )
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    _write_trace(traces_dir, good, name="good.json")
+    _write_trace(traces_dir, bad, name="bad.json")
+
+    uc = _mk_user_config()
+    uc.input.max_context_length = 1000
+    loader = _make_loader(traces_dir, uc, monkeypatch)
+
+    convs = loader.convert_to_conversations(loader.load_dataset())
+    assert [conv.session_id for conv in convs] == ["good"]
+
+
+def test_max_context_length_includes_requested_output(tmp_path, monkeypatch):
+    """The context cap must account for prompt tokens plus max_tokens."""
+    good = _base_trace([_normal(0.0, 900, 99, [1, 2])], trace_id="good")
+    bad = _base_trace([_normal(0.0, 900, 101, [1, 2])], trace_id="bad")
+    traces_dir = tmp_path / "traces"
+    traces_dir.mkdir()
+    _write_trace(traces_dir, good, name="good.json")
+    _write_trace(traces_dir, bad, name="bad.json")
+
+    uc = _mk_user_config()
+    uc.input.max_context_length = 1000
+    loader = _make_loader(traces_dir, uc, monkeypatch)
+
+    convs = loader.convert_to_conversations(loader.load_dataset())
+    assert [conv.session_id for conv in convs] == ["good"]
 
 
 def test_max_osl_zero_caps_all_outputs_to_zero(monkeypatch):

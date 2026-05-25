@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+_AGENTX_SCENARIO = "inferencex-agentx-mvp"
+_AGENTX_WEKA_HF_REPO = "semianalysisai/cc-traces-weka-with-subagents-051926"
+
 
 @dataclass
 class ValidationOutcome:
@@ -261,6 +264,20 @@ def validate_scenario(
                     message=f"scenario {spec.name!r} requires loader={display}",
                 )
             )
+        if spec.name == _AGENTX_SCENARIO and detected == "weka_hf":
+            hf_weka_repo = getattr(user_config.input, "hf_weka_repo", None)
+            if hf_weka_repo != _AGENTX_WEKA_HF_REPO:
+                violations.append(
+                    ScenarioViolation(
+                        flag="--hf-weka-repo",
+                        current_value=hf_weka_repo,
+                        required_value=_AGENTX_WEKA_HF_REPO,
+                        message=(
+                            f"scenario {spec.name!r} only allows --public-dataset "
+                            f"weka_hf with hf_weka_repo={_AGENTX_WEKA_HF_REPO}"
+                        ),
+                    )
+                )
 
     if spec.require_cache_bust is not None:
         cache_bust_cfg = getattr(
@@ -333,29 +350,55 @@ def validate_scenario(
             "Scenario %r: auto-set random_seed=%d (was unset).", spec.name, seed
         )
 
-    cap_explicit = getattr(
-        user_config.loadgen, "_inter_turn_delay_cap_explicitly_set", False
-    )
-    cap = user_config.loadgen.inter_turn_delay_cap_seconds
-    if cap_explicit:
-        if cap != spec.inter_turn_delay_cap_seconds:
-            violations.append(
-                ScenarioViolation(
-                    flag="--inter-turn-delay-cap-seconds",
-                    current_value=cap,
-                    required_value=spec.inter_turn_delay_cap_seconds,
-                    message=f"scenario {spec.name!r} locks the cap to {spec.inter_turn_delay_cap_seconds}",
+    if spec.inter_turn_delay_cap_seconds is not None:
+        cap_explicit = getattr(
+            user_config.loadgen, "_inter_turn_delay_cap_explicitly_set", False
+        )
+        cap = user_config.loadgen.inter_turn_delay_cap_seconds
+        if cap_explicit:
+            if cap != spec.inter_turn_delay_cap_seconds:
+                violations.append(
+                    ScenarioViolation(
+                        flag="--inter-turn-delay-cap-seconds",
+                        current_value=cap,
+                        required_value=spec.inter_turn_delay_cap_seconds,
+                        message=f"scenario {spec.name!r} locks the cap to {spec.inter_turn_delay_cap_seconds}",
+                    )
                 )
+        elif cap is None:
+            user_config.loadgen.inter_turn_delay_cap_seconds = (
+                spec.inter_turn_delay_cap_seconds
             )
-    elif cap is None:
-        user_config.loadgen.inter_turn_delay_cap_seconds = (
-            spec.inter_turn_delay_cap_seconds
+            _logger.info(
+                "Scenario %r: auto-set --inter-turn-delay-cap-seconds=%s (was unset).",
+                spec.name,
+                spec.inter_turn_delay_cap_seconds,
+            )
+
+    if spec.trace_idle_gap_cap_seconds is not None:
+        idle_explicit = getattr(
+            user_config.loadgen, "_trace_idle_gap_cap_explicitly_set", False
         )
-        _logger.info(
-            "Scenario %r: auto-set --inter-turn-delay-cap-seconds=%s (was unset).",
-            spec.name,
-            spec.inter_turn_delay_cap_seconds,
-        )
+        idle = user_config.loadgen.trace_idle_gap_cap_seconds
+        if idle_explicit:
+            if idle != spec.trace_idle_gap_cap_seconds:
+                violations.append(
+                    ScenarioViolation(
+                        flag="--trace-idle-gap-cap-seconds",
+                        current_value=idle,
+                        required_value=spec.trace_idle_gap_cap_seconds,
+                        message=f"scenario {spec.name!r} locks the per-trace idle-gap cap to {spec.trace_idle_gap_cap_seconds}",
+                    )
+                )
+        elif idle is None:
+            user_config.loadgen.trace_idle_gap_cap_seconds = (
+                spec.trace_idle_gap_cap_seconds
+            )
+            _logger.info(
+                "Scenario %r: auto-set --trace-idle-gap-cap-seconds=%s (was unset).",
+                spec.name,
+                spec.trace_idle_gap_cap_seconds,
+            )
 
     unsafe = bool(getattr(user_config, "unsafe_override", False))
     if violations and not unsafe:

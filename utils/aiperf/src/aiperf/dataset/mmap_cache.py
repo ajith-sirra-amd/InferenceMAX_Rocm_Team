@@ -43,6 +43,7 @@ import functools
 import hashlib
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -53,13 +54,17 @@ from aiperf.common.aiperf_logger import AIPerfLogger
 from aiperf.common.environment import Environment
 from aiperf.common.models.base_models import AIPerfBaseModel
 from aiperf.dataset.mmap_cache_lock import acquire_cache_lock as _acquire_cache_lock
+from aiperf.plugin import plugins
 
 if TYPE_CHECKING:
     from aiperf.common.config import UserConfig
 
 _logger = AIPerfLogger(__name__)
 
-MANIFEST_VERSION = 1
+# Bump when cached side-data changes. Version 3 adds ConversationMetadata
+# system/user-context prefixes, which trajectory sampling needs to decide
+# whether an empty per-turn messages delta can still start a valid request.
+MANIFEST_VERSION = 3
 MANIFEST_FILENAME = "manifest.json"
 INPUTS_JSON_FILENAME = "inputs.json"
 
@@ -309,17 +314,39 @@ def lookup(cache_key: str, *, compressed: bool) -> CacheHit | None:
     )
 
 
+def _restore_file(src: Path, dst: Path) -> str:
+    start = time.perf_counter()
+    try:
+        os.link(src, dst)
+        method = "hardlink"
+    except OSError:
+        shutil.copyfile(src, dst)
+        method = "copy"
+    duration = time.perf_counter() - start
+    size_gib = src.stat().st_size / (1024**3)
+    _logger.info(
+        f"Restored mmap cache file {dst.name} via {method} "
+        f"in {duration:.3f}s ({size_gib:.2f} GiB)"
+    )
+    return method
+
+
 def restore_to_run_dir(
     hit: CacheHit, run_data_path: Path, run_index_path: Path
 ) -> None:
-    """Copy cached dataset/index files into the run directory.
-
-    The run directory is created if needed. Files are copied (not symlinked) so the
-    backing-store cleanup hook can ``unlink`` them at run end without nuking the cache.
-    """
+    """Restore cached dataset/index files into the run directory."""
+    total_start = time.perf_counter()
     run_data_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(hit.data_path, run_data_path)
-    shutil.copyfile(hit.index_path, run_index_path)
+    data_method = _restore_file(hit.data_path, run_data_path)
+    index_method = _restore_file(hit.index_path, run_index_path)
+    total_duration = time.perf_counter() - total_start
+    data_size_gib = hit.data_path.stat().st_size / (1024**3)
+    index_size_gib = hit.index_path.stat().st_size / (1024**3)
+    _logger.info(
+        f"Restored mmap cache files in {total_duration:.3f}s via "
+        f"dataset={data_method} index={index_method} "
+        f"(dataset={data_size_gib:.2f} GiB, index={index_size_gib:.2f} GiB)"
+    )
 
 
 def populate(
@@ -376,11 +403,7 @@ def populate(
         shutil.copyfile(run_data_path, cache_data)
         shutil.copyfile(run_index_path, cache_index)
 
-        if inputs_json_path is not None and inputs_json_path.exists():
-            shutil.copyfile(inputs_json_path, tmp_dir / INPUTS_JSON_FILENAME)
-            manifest.has_inputs_json = True
-        else:
-            manifest.has_inputs_json = False
+        manifest.has_inputs_json = False
 
         manifest_bytes = orjson.dumps(
             manifest.model_dump(mode="json"),
@@ -426,6 +449,31 @@ def _tokenizer_identity_from_user_config(
     }
 
 
+def _public_dataset_source_from_user_config(
+    user_config: UserConfig,
+) -> dict[str, object] | None:
+    inp = user_config.input
+    if inp.public_dataset is None:
+        return None
+
+    public_dataset = str(inp.public_dataset)
+    metadata = plugins.get_public_dataset_loader_metadata(public_dataset)
+    hf_dataset_name = inp.hf_weka_repo or metadata.hf_dataset_name
+    if hf_dataset_name is None:
+        return {"plugin": public_dataset}
+
+    hf_subset = (
+        inp.hf_dataset_subset
+        if inp.hf_dataset_subset is not None
+        else metadata.hf_subset
+    )
+    source = metadata.model_dump(mode="json", exclude_none=True)
+    source["hf_dataset_name"] = hf_dataset_name
+    source["hf_split"] = metadata.hf_split
+    source["hf_subset"] = hf_subset
+    return source
+
+
 def _settings_payload_from_user_config(
     user_config: UserConfig,
 ) -> dict[str, object]:
@@ -446,9 +494,7 @@ def _settings_payload_from_user_config(
             if inp.custom_dataset_type is not None
             else None
         ),
-        "public_dataset": (
-            str(inp.public_dataset) if inp.public_dataset is not None else None
-        ),
+        "public_dataset_source": _public_dataset_source_from_user_config(user_config),
         "prompt": prompt_dump,
         "endpoint_type": str(user_config.endpoint.type),
         "model_name": user_config.endpoint.model_names[0],
@@ -486,9 +532,7 @@ def compute_cache_key_from_user_config(user_config: UserConfig) -> str | None:
 
     return compute_cache_key(
         input_file=input_file,
-        public_dataset=str(inp.public_dataset)
-        if inp.public_dataset is not None
-        else None,
+        public_dataset=None,
         custom_dataset_type=(
             str(inp.custom_dataset_type)
             if inp.custom_dataset_type is not None

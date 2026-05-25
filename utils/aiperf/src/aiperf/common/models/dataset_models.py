@@ -133,6 +133,14 @@ class TurnMetadata(AIPerfBaseModel):
         default_factory=list,
         description="Conditions gating dispatch of this turn (DAG projection).",
     )
+    raw_messages_count: int | None = Field(
+        default=None,
+        description=(
+            "Number of OpenAI-compatible raw messages on the source Turn. "
+            "None means Turn.raw_messages is None; zero means an explicit empty "
+            "messages delta."
+        ),
+    )
 
 
 class Turn(AIPerfBaseModel):
@@ -229,6 +237,9 @@ class Turn(AIPerfBaseModel):
             delay_ms=self.delay,
             branch_ids=self.branch_ids,
             prerequisites=self.prerequisites,
+            raw_messages_count=None
+            if self.raw_messages is None
+            else len(self.raw_messages),
         )
 
     def copy_with_stripped_media(self) -> "Turn":
@@ -292,6 +303,22 @@ class ConversationMetadata(AIPerfBaseModel):
     turns: list[TurnMetadata] = Field(
         default_factory=list,
         description="The metadata of the turns in the conversation.",
+    )
+    system_message: str | None = Field(
+        default=None,
+        description=(
+            "Optional shared system message prepended to the first request. "
+            "Timing strategies use this to decide whether an otherwise empty "
+            "per-turn raw-message delta can still start a valid request."
+        ),
+    )
+    user_context_message: str | None = Field(
+        default=None,
+        description=(
+            "Optional per-conversation user context prepended to the first request. "
+            "Timing strategies use this to decide whether an otherwise empty "
+            "per-turn raw-message delta can still start a valid request."
+        ),
     )
     branches: list[ConversationBranchInfo] = Field(
         default_factory=list,
@@ -469,11 +496,16 @@ class Conversation(AIPerfBaseModel):
                     delay_ms=turn.delay,
                     branch_ids=turn.branch_ids,
                     has_forks=has_forks,
+                    raw_messages_count=None
+                    if turn.raw_messages is None
+                    else len(turn.raw_messages),
                 )
             )
         return ConversationMetadata(
             conversation_id=self.session_id,
             turns=turn_metas,
+            system_message=self.system_message,
+            user_context_message=self.user_context_message,
             branches=self.branches,
             is_root=self.is_root,
             agent_depth=self.agent_depth,
@@ -492,6 +524,8 @@ class Conversation(AIPerfBaseModel):
         return ConversationMetadata(
             conversation_id=self.session_id,
             turns=[t.metadata() for t in self.turns],
+            system_message=self.system_message,
+            user_context_message=self.user_context_message,
             branches=list(self.branches),
             is_root=self.is_root,
             agent_depth=self.agent_depth,
