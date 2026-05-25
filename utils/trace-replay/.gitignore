@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test outputs
+results/
+output/
+output_*/
+single_prompt_output/
+cacherate_*/
+workingset_*/
+*.log
+
+# Local configuration (contains machine-specific paths)
+config.yaml
+config.local.yaml
+launcher/config.yaml
+launcher/config.local.yaml
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+traces_neon/trace_0045.json
+traces_neon/trace_0045.json

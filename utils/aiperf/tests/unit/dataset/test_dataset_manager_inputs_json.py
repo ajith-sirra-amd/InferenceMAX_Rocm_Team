@@ -1,0 +1,449 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+"""
+Unit tests for DatasetManager._generate_inputs_json_file method.
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Any
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
+from aiperf.common.config import EndpointConfig, InputConfig, OutputConfig, UserConfig
+from aiperf.common.config.config_defaults import OutputDefaults
+from aiperf.common.enums import ModelSelectionStrategy
+from aiperf.common.models import Conversation, InputsFile, SessionPayloads, Turn
+from aiperf.common.models.model_endpoint_info import (
+    EndpointInfo,
+    ModelEndpointInfo,
+    ModelInfo,
+    ModelListInfo,
+)
+from aiperf.plugin import plugins
+from aiperf.plugin.enums import EndpointType
+
+
+def _validate_chat_payload_structure(payload: dict) -> None:
+    """Helper function to validate chat payload structure."""
+    assert "messages" in payload
+    assert "model" in payload
+    assert "stream" in payload
+    assert isinstance(payload["messages"], list)
+    assert len(payload["messages"]) > 0
+    for message in payload["messages"]:
+        assert "role" in message
+        assert "content" in message
+
+
+def _validate_inputs_file_structure(content: dict) -> None:
+    """Helper function to validate InputsFile structure."""
+    assert "data" in content
+    assert isinstance(content["data"], list)
+    for session in content["data"]:
+        assert "session_id" in session
+        assert "payloads" in session
+        assert isinstance(session["payloads"], list)
+        for payload in session["payloads"]:
+            _validate_chat_payload_structure(payload)
+
+
+class TestDatasetManagerInputsJsonGeneration:
+    """Test suite for inputs.json file generation functionality."""
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_success_with_populated_dataset(
+        self,
+        populated_dataset_manager,
+        capture_file_writes,
+    ):
+        """Test comprehensive successful generation with populated dataset."""
+        await populated_dataset_manager._generate_inputs_json_file()
+
+        written_json = json.loads(capture_file_writes.written_content)
+        _validate_inputs_file_structure(written_json)
+
+        # Verify specific dataset content
+        assert len(written_json["data"]) == 2
+        sessions = {session["session_id"]: session for session in written_json["data"]}
+        assert "session_1" in sessions
+        assert "session_2" in sessions
+
+        # Verify turn counts match conversation structure
+        assert len(sessions["session_1"]["payloads"]) == 2  # 2 turns
+        assert len(sessions["session_2"]["payloads"]) == 1  # 1 turn
+
+        # Verify user config is applied
+        for session in written_json["data"]:
+            for payload in session["payloads"]:
+                assert payload["model"] == "test-model"
+                assert payload["stream"] is False
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_empty_dataset(
+        self,
+        empty_dataset_manager,
+        capture_file_writes,
+    ):
+        """Test generation with empty dataset creates empty inputs file."""
+        await empty_dataset_manager._generate_inputs_json_file()
+
+        written_json = json.loads(capture_file_writes.written_content)
+        assert written_json == {"data": []}
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_file_path_and_io(
+        self,
+        populated_dataset_manager,
+        tmp_path: Path,
+    ):
+        """Test file creation in correct location and valid JSON output."""
+        populated_dataset_manager.user_config.output.artifact_directory = tmp_path
+
+        await populated_dataset_manager._generate_inputs_json_file()
+
+        expected_path = tmp_path / OutputDefaults.INPUTS_JSON_FILE
+        assert expected_path.exists()
+
+        with open(expected_path) as f:
+            content = json.load(f)
+        _validate_inputs_file_structure(content)
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_session_order_preservation(
+        self,
+        populated_dataset_manager,
+        capture_file_writes,
+    ):
+        """Test that sessions are preserved in dataset iteration order."""
+        await populated_dataset_manager._generate_inputs_json_file()
+
+        written_json = json.loads(capture_file_writes.written_content)
+        session_ids = [session["session_id"] for session in written_json["data"]]
+        expected_order = list(populated_dataset_manager.dataset.keys())
+        assert session_ids == expected_order
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_custom_field_preservation(
+        self,
+        populated_dataset_manager,
+        capture_file_writes,
+    ):
+        """Test that custom fields like max_completion_tokens are preserved."""
+        await populated_dataset_manager._generate_inputs_json_file()
+
+        written_json = json.loads(capture_file_writes.written_content)
+        session_2 = next(
+            session
+            for session in written_json["data"]
+            if session["session_id"] == "session_2"
+        )
+
+        payload = session_2["payloads"][0]
+        assert "max_completion_tokens" in payload
+        assert payload["max_completion_tokens"] == 100
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_pydantic_model_compatibility(
+        self,
+        populated_dataset_manager,
+        capture_file_writes,
+    ):
+        """Test that generated content is compatible with InputsFile Pydantic model."""
+        await populated_dataset_manager._generate_inputs_json_file()
+
+        written_json = json.loads(capture_file_writes.written_content)
+        inputs_file = InputsFile.model_validate(written_json)
+
+        assert isinstance(inputs_file, InputsFile)
+        assert len(inputs_file.data) == 2
+        assert all(isinstance(session, SessionPayloads) for session in inputs_file.data)
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_plugin_creation_error(
+        self,
+        populated_dataset_manager,
+        caplog,
+    ):
+        """Test error handling when plugin class creation fails."""
+        with patch.object(
+            plugins,
+            "get_class",
+            side_effect=Exception("Plugin error"),
+        ):
+            with pytest.raises(Exception, match="Plugin error"):
+                await populated_dataset_manager._generate_inputs_json_file()
+            assert any(
+                "Error generating inputs.json file" in record.message
+                for record in caplog.records
+            )
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_file_io_error(
+        self,
+        populated_dataset_manager,
+        caplog,
+    ):
+        """Test error handling when file I/O operation fails."""
+        with patch(
+            "pathlib.Path.write_bytes",
+            side_effect=OSError("Permission denied"),
+        ):
+            await populated_dataset_manager._generate_inputs_json_file()
+            assert any(
+                "Error generating inputs.json file" in record.message
+                for record in caplog.records
+            )
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_payload_conversion_error(
+        self,
+        populated_dataset_manager,
+        caplog,
+    ):
+        """Test error handling when payload conversion fails."""
+        mock_converter = Mock()
+        mock_converter.format_payload = Mock(
+            side_effect=Exception("Payload conversion error")
+        )
+        mock_converter.get_endpoint_headers = Mock(return_value={})
+        mock_converter.get_endpoint_params = Mock(return_value={})
+
+        with patch.object(
+            plugins,
+            "get_class",
+            return_value=lambda **kwargs: mock_converter,
+        ):
+            with pytest.raises(Exception, match="Payload conversion error"):
+                await populated_dataset_manager._generate_inputs_json_file()
+            assert any(
+                "Error generating inputs.json file" in record.message
+                for record in caplog.records
+            )
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_includes_system_message(
+        self,
+        populated_dataset_manager,
+        capture_file_writes,
+    ):
+        """Test that system_message from conversation is included in payloads."""
+        # Set system_message on first conversation
+        populated_dataset_manager.dataset[
+            "session_1"
+        ].system_message = "You are a helpful assistant."
+
+        await populated_dataset_manager._generate_inputs_json_file()
+
+        written_json = json.loads(capture_file_writes.written_content)
+        session_1 = next(
+            s for s in written_json["data"] if s["session_id"] == "session_1"
+        )
+
+        # System message should appear as the first message with role "system"
+        first_payload_messages = session_1["payloads"][0]["messages"]
+        assert first_payload_messages[0]["role"] == "system"
+        assert first_payload_messages[0]["content"] == "You are a helpful assistant."
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_includes_user_context_message(
+        self,
+        populated_dataset_manager,
+        capture_file_writes,
+    ):
+        """Test that user_context_message from conversation is included in payloads."""
+        populated_dataset_manager.dataset[
+            "session_2"
+        ].user_context_message = "Context about this user session."
+
+        await populated_dataset_manager._generate_inputs_json_file()
+
+        written_json = json.loads(capture_file_writes.written_content)
+        session_2 = next(
+            s for s in written_json["data"] if s["session_id"] == "session_2"
+        )
+
+        # User context message should appear in the messages
+        messages = session_2["payloads"][0]["messages"]
+        assert any(
+            msg["content"] == "Context about this user session." for msg in messages
+        )
+
+    @pytest.mark.asyncio
+    async def test_generate_inputs_json_logging(
+        self,
+        populated_dataset_manager,
+        caplog,
+    ):
+        """Test that appropriate log messages are generated."""
+        caplog.set_level(logging.INFO)
+
+        await populated_dataset_manager._generate_inputs_json_file()
+
+        log_messages = [record.message for record in caplog.records]
+        assert any("Generating inputs.json file" in msg for msg in log_messages)
+        assert any("inputs.json file generated" in msg for msg in log_messages)
+
+
+class TestGenerateInputPayloadsRawEndpoint:
+    """_generate_input_payloads must use raw_payload directly, not format_payload."""
+
+    @staticmethod
+    def _make_dataset_manager_stub(
+        conversations: dict[str, Conversation],
+    ) -> Any:
+        from aiperf.dataset.dataset_manager import DatasetManager
+
+        mgr = object.__new__(DatasetManager)
+        mgr.dataset = conversations
+        return mgr
+
+    @staticmethod
+    def _raw_model_endpoint() -> ModelEndpointInfo:
+        return ModelEndpointInfo(
+            models=ModelListInfo(
+                models=[ModelInfo(name="test")],
+                model_selection_strategy=ModelSelectionStrategy.ROUND_ROBIN,
+            ),
+            endpoint=EndpointInfo(type=EndpointType.RAW, base_url="http://localhost"),
+        )
+
+    def test_raw_payloads_bypass_format_conversation_payloads(self) -> None:
+        """Conversations with raw_payload turns must not call format_payload."""
+        raw1 = {"model": "m", "messages": [{"role": "user", "content": "hi"}]}
+        raw2 = {"model": "m", "messages": [{"role": "user", "content": "bye"}]}
+        conv = Conversation(
+            session_id="s1",
+            turns=[
+                Turn(role="user", raw_payload=raw1),
+                Turn(role="user", raw_payload=raw2),
+            ],
+        )
+        mgr = self._make_dataset_manager_stub({"s1": conv})
+
+        inputs = mgr._generate_input_payloads(self._raw_model_endpoint())
+        assert len(inputs.data) == 1
+        assert inputs.data[0].session_id == "s1"
+        assert inputs.data[0].payloads == [raw1, raw2]
+
+    def test_normal_payloads_still_use_format_conversation_payloads(self) -> None:
+        """Non-raw conversations must still go through format_conversation_payloads."""
+        from aiperf.common.models.dataset_models import Text
+
+        conv = Conversation(
+            session_id="s1",
+            turns=[Turn(role="user", texts=[Text(contents=["hello"])])],
+        )
+        mgr = self._make_dataset_manager_stub({"s1": conv})
+
+        model_endpoint = ModelEndpointInfo(
+            models=ModelListInfo(
+                models=[ModelInfo(name="test")],
+                model_selection_strategy=ModelSelectionStrategy.ROUND_ROBIN,
+            ),
+            endpoint=EndpointInfo(type=EndpointType.CHAT, base_url="http://localhost"),
+        )
+
+        with patch(
+            "aiperf.dataset.payload_formatting.format_conversation_payloads"
+        ) as mock_fmt:
+            mock_fmt.return_value = iter([("s1", 0, {"formatted": True})])
+            inputs = mgr._generate_input_payloads(model_endpoint)
+
+        assert len(inputs.data) == 1
+        assert inputs.data[0].payloads == [{"formatted": True}]
+
+
+class TestSkipInputsJsonForPreBuiltPayloads:
+    """inputs.json generation should be skipped for raw_payload and inputs_json datasets."""
+
+    @staticmethod
+    def _make_dataset_manager(
+        tmp_path: Path,
+        custom_dataset_type: str | None,
+    ) -> Any:
+        from aiperf.common.config import ServiceConfig
+        from aiperf.dataset.dataset_manager import DatasetManager
+
+        input_file = None
+        if custom_dataset_type is not None:
+            input_file = tmp_path / "fake_input.jsonl"
+            input_file.touch()
+
+        user_config = UserConfig(
+            endpoint=EndpointConfig(
+                model_names=["test-model"],
+                type=EndpointType.RAW,
+                streaming=False,
+                url="http://localhost:8000",
+            ),
+            input=InputConfig(
+                custom_dataset_type=custom_dataset_type,
+                file=str(input_file) if input_file else None,
+            ),
+            output=OutputConfig(artifact_directory=tmp_path),
+        )
+        mgr = DatasetManager(
+            service_config=ServiceConfig(),
+            user_config=user_config,
+            service_id="test_dm",
+        )
+        mgr.dataset = {
+            "s1": Conversation(
+                session_id="s1",
+                turns=[
+                    Turn(
+                        role="user",
+                        raw_payload={
+                            "model": "m",
+                            "messages": [{"role": "user", "content": "hi"}],
+                        },
+                    ),
+                ],
+            ),
+        }
+        return mgr
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("dataset_type", ["raw_payload", "inputs_json"])
+    async def test_skips_inputs_json_for_prebuilt_types(
+        self, tmp_path: Path, dataset_type: str
+    ):
+        mgr = self._make_dataset_manager(tmp_path, dataset_type)
+        mgr._configure_dataset = AsyncMock()
+        mgr._configure_tokenizer = AsyncMock()
+        mgr._configure_dataset_client_and_free_memory = AsyncMock()
+
+        with patch.object(
+            mgr, "_generate_inputs_json_file", new_callable=AsyncMock
+        ) as mock_gen:
+            await mgr._profile_configure_command(Mock())
+            mock_gen.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_still_generates_inputs_json_for_single_turn(self, tmp_path: Path):
+        mgr = self._make_dataset_manager(tmp_path, "single_turn")
+        mgr._configure_dataset = AsyncMock()
+        mgr._configure_tokenizer = AsyncMock()
+        mgr._configure_dataset_client_and_free_memory = AsyncMock()
+
+        with patch.object(
+            mgr, "_generate_inputs_json_file", new_callable=AsyncMock
+        ) as mock_gen:
+            await mgr._profile_configure_command(Mock())
+            mock_gen.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_still_generates_inputs_json_for_none_type(self, tmp_path: Path):
+        mgr = self._make_dataset_manager(tmp_path, None)
+        mgr._configure_dataset = AsyncMock()
+        mgr._configure_tokenizer = AsyncMock()
+        mgr._configure_dataset_client_and_free_memory = AsyncMock()
+
+        with patch.object(
+            mgr, "_generate_inputs_json_file", new_callable=AsyncMock
+        ) as mock_gen:
+            await mgr._profile_configure_command(Mock())
+            mock_gen.assert_called_once()
