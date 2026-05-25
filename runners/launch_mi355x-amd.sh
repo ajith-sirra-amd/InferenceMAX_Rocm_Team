@@ -53,6 +53,9 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 -e EP_SIZE \
 -e DP_ATTENTION \
 -e RUN_EVAL \
+-e OFFLOADING \
+-e TOTAL_CPU_DRAM_GB \
+-e RESULT_DIR
 --entrypoint=/bin/bash \
 $IMAGE \
 upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/agentic/${MODEL_CODE}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}.sh
