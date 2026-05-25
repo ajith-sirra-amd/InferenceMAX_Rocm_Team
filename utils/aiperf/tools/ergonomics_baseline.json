@@ -148,11 +148,6 @@
     ],
     [
       "file-size",
-      "src/aiperf/dataset/mmap_cache.py",
-      ""
-    ],
-    [
-      "file-size",
       "src/aiperf/endpoints/base_endpoint.py",
       ""
     ],
@@ -490,16 +485,6 @@
       "function-size",
       "src/aiperf/dataset/loader/weka_parallel_convert.py",
       "_process_task"
-    ],
-    [
-      "function-size",
-      "src/aiperf/dataset/loader/weka_synth_buf.py",
-      "ConversationReconstructor.advance_turn"
-    ],
-    [
-      "function-size",
-      "src/aiperf/dataset/loader/weka_synth_buf.py",
-      "ConversationReconstructor.init_turn_0"
     ],
     [
       "function-size",
@@ -1115,16 +1100,6 @@
       "function-size",
       "src/aiperf/timing/phase_orchestrator.py",
       "PhaseOrchestrator.__init__"
-    ],
-    [
-      "function-size",
-      "src/aiperf/timing/strategies/agentic_replay.py",
-      "AgenticReplayStrategy.__init__"
-    ],
-    [
-      "function-size",
-      "src/aiperf/timing/strategies/agentic_replay.py",
-      "AgenticReplayStrategy.handle_credit_return"
     ],
     [
       "function-size",

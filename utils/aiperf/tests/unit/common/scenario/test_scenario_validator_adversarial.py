@@ -28,10 +28,9 @@ def _user_config(
     use_think_time_only: bool = True,
     ignore_trace_delays: bool = False,
     synthesis_max_isl: int | None = None,
-    loader: str | None = "semianalysis_cc_traces_weka_with_subagents",
+    loader: str | None = "semianalysis_cc_traces_weka",
     benchmark_duration: float | None = 900.0,
-    inter_turn_delay_cap_seconds: float | None = None,
-    trace_idle_gap_cap_seconds: float | None = 60.0,
+    inter_turn_delay_cap_seconds: float | None = 60.0,
     random_seed: int | None = 42,
     unsafe_override: bool = False,
     cache_bust_target: CacheBustTarget = CacheBustTarget.FIRST_TURN_PREFIX,
@@ -49,11 +48,9 @@ def _user_config(
     cfg.input.detected_loader = loader
     cfg.loadgen.benchmark_duration = benchmark_duration
     cfg.loadgen.inter_turn_delay_cap_seconds = inter_turn_delay_cap_seconds
-    cfg.loadgen.trace_idle_gap_cap_seconds = trace_idle_gap_cap_seconds
     cfg.input.prompt.cache_bust.target = cache_bust_target
     cfg.input._use_think_time_only_explicitly_set = False
     cfg.loadgen._inter_turn_delay_cap_explicitly_set = False
-    cfg.loadgen._trace_idle_gap_cap_explicitly_set = False
     cfg.input.prompt.cache_bust._target_explicitly_set = False
     return cfg
 
@@ -178,21 +175,24 @@ def test_extra_inputs_json_string_vs_dict_identical_clean_outcome() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 7: ignore_trace_delays + use_think_time_only combo is no longer flagged
-# under AgentX MVP. The scenario no longer requires use_think_time_only, so
-# the `if user_config.input.ignore_trace_delays and spec.require_use_think_time_only`
-# branch in validator.py is dormant for this scenario. Pin: no violation.
+# Test 7: Mutually-exclusive flag combination is caught upstream.
+# input_config.py:75 rejects --ignore-trace-delays + --use-think-time-only
+# *before* the scenario validator runs. We verify the validator, when fed
+# this (illegal-but-bypassed) combo, reports one violation about
+# --ignore-trace-delays only — not a duplicate report on --use-think-time-only.
 # ---------------------------------------------------------------------------
-def test_ignore_trace_delays_with_use_think_time_only_no_longer_violates() -> None:
+def test_mutually_exclusive_flags_no_double_report() -> None:
     cfg = _user_config(
         ignore_trace_delays=True,
         use_think_time_only=True,
         extra_inputs={"ignore_eos": True},
     )
     cfg.input._use_think_time_only_explicitly_set = True
-    outcome = validate_scenario(cfg)
-    assert outcome.violations == []
-    assert outcome.submission_valid is True
+    with pytest.raises(ScenarioLockError) as exc:
+        validate_scenario(cfg)
+    flags = [v.flag for v in exc.value.violations]
+    assert flags.count("--ignore-trace-delays") == 1
+    assert "--use-think-time-only" not in flags
 
 
 # ---------------------------------------------------------------------------
@@ -277,51 +277,52 @@ def test_random_seed_zero_not_auto_injected(
 
 
 # ---------------------------------------------------------------------------
-# Test 12: All 5 invariants violated simultaneously under AgentX MVP.
+# Test 12: All 7 invariants violated simultaneously.
 # 1) timing_mode mismatch
 # 2) ignore_eos=false explicit
-# 3) synthesis.max_isl set
-# 4) wrong loader
-# 5) duration below floor
-#
-# Note: use_think_time_only and ignore_trace_delays no longer surface as
-# violations — the scenario dropped require_use_think_time_only=True in favor
-# of trace_idle_gap_cap_seconds.
+# 3) use_think_time_only=false explicit
+# 4) ignore_trace_delays=true
+# 5) synthesis.max_isl set
+# 6) wrong loader
+# 7) duration below floor
 # ---------------------------------------------------------------------------
-def _five_violations_config(*, unsafe_override: bool) -> MagicMock:
+def _seven_violations_config(*, unsafe_override: bool) -> MagicMock:
     cfg = _user_config(
         timing_mode=TimingMode.REQUEST_RATE,
         extra_inputs={"ignore_eos": False},
+        use_think_time_only=False,
+        ignore_trace_delays=True,
         synthesis_max_isl=4096,
         loader="dag_jsonl",
         benchmark_duration=60.0,
         unsafe_override=unsafe_override,
     )
+    cfg.input._use_think_time_only_explicitly_set = True
     cfg._timing_mode_explicitly_set = True
     return cfg
 
 
-def test_all_five_invariants_lock_raises_with_five_violations() -> None:
-    cfg = _five_violations_config(unsafe_override=False)
+def test_all_seven_invariants_lock_raises_with_seven_violations() -> None:
+    cfg = _seven_violations_config(unsafe_override=False)
     with pytest.raises(ScenarioLockError) as exc:
         validate_scenario(cfg)
-    assert len(exc.value.violations) == 5
+    assert len(exc.value.violations) == 7
 
 
-def test_all_five_invariants_unsafe_override_warns_and_invalidates(
+def test_all_seven_invariants_unsafe_override_warns_and_invalidates(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    cfg = _five_violations_config(unsafe_override=True)
+    cfg = _seven_violations_config(unsafe_override=True)
     with caplog.at_level("WARNING"):
         outcome = validate_scenario(cfg)
     assert outcome.submission_valid is False
-    assert len(outcome.violations) == 5
+    assert len(outcome.violations) == 7
     warning_count = sum(
         1
         for r in caplog.records
         if r.levelname == "WARNING" and "Scenario violation" in r.message
     )
-    assert warning_count == 5
+    assert warning_count == 7
     assert "unsafe_override" in outcome.submission_invalid_reasons
 
 

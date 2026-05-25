@@ -23,7 +23,10 @@ from dataclasses import dataclass
 import numpy as np
 
 from aiperf.common.models import DatasetMetadata
-from aiperf.common.scenario.base import EmptyTracePoolError
+from aiperf.common.scenario.base import (
+    EmptyTracePoolError,
+    InsufficientTrajectoriesError,
+)
 from aiperf.dataset.protocols import DatasetSamplingStrategyProtocol
 from aiperf.timing.conversation_source import ConversationSource, SampledSession
 
@@ -46,17 +49,6 @@ def _seed_for_trace(base_seed: int, trace_id: str) -> int:
     linear correlation.
     """
     h = hashlib.sha256(f"{base_seed}:{trace_id}".encode()).digest()
-    return int.from_bytes(h[:8], "big")
-
-
-def _seed_for_trace_lane(base_seed: int, trace_id: str, lane_index: int) -> int:
-    """Derive a per-(trace, lane) RNG seed by hashing ``trace_id`` and lane index.
-
-    Wrap-fill lanes share a ``conversation_id`` but must produce different
-    ``start_turn_index`` values; salting the digest with ``lane_index``
-    decorrelates them while keeping the choice deterministic in ``base_seed``.
-    """
-    h = hashlib.sha256(f"{base_seed}:{trace_id}:{lane_index}".encode()).digest()
     return int.from_bytes(h[:8], "big")
 
 
@@ -100,31 +92,24 @@ class TrajectorySource(ConversationSource):
         pool_size = len(dataset_metadata.conversations)
         self._concurrency = concurrency
         self._pool_size = pool_size
-        # Build distinct trajectories up to the user-requested concurrency.
-        # If the pool or its usable subset (after dropping traces too short
-        # to split into warmup+profile turns) is smaller than concurrency,
-        # ``_wrap_fill_lanes`` below cycles through the distinct trajectories
-        # with fresh per-lane ``start_turn_index`` salts so the run still
-        # honours ``--concurrency`` instead of silently capping effective load.
+        # Build trajectories up to the user-requested concurrency. If we can't
+        # fill that many lanes from the pool (either pool < concurrency, or
+        # too many traces are too short to split into warmup+profiling), the
+        # post-build check below rejects the run instead of silently capping
+        # effective load below --concurrency.
         self._target_size = concurrency
-        distinct: list[Trajectory] = self._build_trajectories()
+        self.trajectories: list[Trajectory] = self._build_trajectories()
 
-        if not distinct:
+        if not self.trajectories:
             raise EmptyTracePoolError(
                 "Trajectories empty after skipping invalid traces; pool exhausted."
             )
 
-        self.trajectories: list[Trajectory] = list(distinct)
         if len(self.trajectories) < concurrency:
-            extras = self._wrap_fill_lanes(distinct, concurrency - len(distinct))
-            self.trajectories.extend(extras)
-            _logger.info(
-                "Trajectory reuse: %d distinct trajectories fanned out to %d "
-                "lanes (avg %.1f lanes per trace). Cache-bust marker keeps "
-                "per-lane traffic distinct when cache_bust.target != NONE.",
-                len(distinct),
-                concurrency,
-                concurrency / len(distinct),
+            raise InsufficientTrajectoriesError(
+                concurrency=concurrency,
+                usable_trajectories=len(self.trajectories),
+                pool_size=pool_size,
             )
 
         self._log_trajectory_summary()
@@ -230,112 +215,16 @@ class TrajectorySource(ConversationSource):
                 continue
             rng = np.random.default_rng(_seed_for_trace(self._random_seed, cid))
             if n == 2:
-                candidates = [0]
+                k_i = 0
             else:
                 k_min = min(int(self._start_min_ratio * n), n - 2)
                 k_max = min(int(self._start_max_ratio * n), n - 2)
                 if k_min > k_max:
                     k_min = k_max
-                candidates = list(range(k_min, k_max + 1))
-
-            candidates = [
-                k
-                for k in candidates
-                if self._trajectory_start_is_sendable(meta, k)
-                and self._trajectory_start_is_sendable(meta, k + 1)
-            ]
-            if not candidates:
-                _logger.warning(
-                    "Skipping trace %r at trajectory selection: no valid "
-                    "warmup/profile start pair in configured range.",
-                    cid,
-                )
-                continue
-            k_i = int(rng.choice(candidates))
+                k_i = int(rng.integers(low=k_min, high=k_max + 1))
             trajectories.append(Trajectory(conversation_id=cid, start_turn_index=k_i))
 
         return trajectories
-
-    @staticmethod
-    def _trajectory_start_is_sendable(meta, turn_index: int) -> bool:
-        """Return whether ``turn_index`` can be the first request of a session.
-
-        Agentic replay starts a fresh session at ``k_i`` during WARMUP and at
-        ``k_i + 1`` during PROFILING. In live-assistant mode the loader emits
-        user-only deltas, so a mid-trace turn whose delta contains only the
-        original assistant segment has ``raw_messages=[]``. That turn is valid
-        after prior live responses have been accumulated, but invalid as the
-        first request of a fresh OpenAI chat session: vLLM/Kimi rejects an
-        empty ``messages`` array in the chat template. Metadata stores only
-        ``raw_messages_count`` instead of duplicating full OpenAI payloads.
-        """
-        if turn_index < 0 or turn_index >= len(meta.turns):
-            return False
-        turn = meta.turns[turn_index]
-
-        raw_messages_count = getattr(turn, "raw_messages_count", None)
-        if raw_messages_count is not None:
-            if raw_messages_count > 0:
-                return True
-            return bool(meta.system_message or meta.user_context_message)
-
-        # Backwards compatibility for old metadata and lightweight tests.
-        raw_messages = getattr(turn, "raw_messages", None)
-        if raw_messages is None:
-            return True
-        if raw_messages:
-            return True
-        return bool(meta.system_message or meta.user_context_message)
-
-    def _wrap_fill_lanes(
-        self, distinct: list[Trajectory], extra_count: int
-    ) -> list[Trajectory]:
-        """Return ``extra_count`` additional trajectories cycling through ``distinct``.
-
-        Each wrap-filled lane reuses a source ``conversation_id`` but gets a
-        fresh ``start_turn_index`` sampled with a per-(trace, absolute-lane-index)
-        RNG seed. ``absolute_lane_index`` is ``len(distinct) + i`` where ``i``
-        is the position within the extra block, so seeds are unique even when
-        two extras share the same source ``conversation_id``.
-        """
-        extras: list[Trajectory] = []
-        base_count = len(distinct)
-        for i in range(extra_count):
-            source = distinct[i % base_count]
-            lane_index = base_count + i
-            meta = self._metadata_lookup[source.conversation_id]
-            n = len(meta.turns)
-            rng = np.random.default_rng(
-                _seed_for_trace_lane(
-                    self._random_seed, source.conversation_id, lane_index
-                )
-            )
-            if n == 2:
-                candidates = [0]
-            else:
-                k_min = min(int(self._start_min_ratio * n), n - 2)
-                k_max = min(int(self._start_max_ratio * n), n - 2)
-                if k_min > k_max:
-                    k_min = k_max
-                candidates = list(range(k_min, k_max + 1))
-            candidates = [
-                k
-                for k in candidates
-                if self._trajectory_start_is_sendable(meta, k)
-                and self._trajectory_start_is_sendable(meta, k + 1)
-            ]
-            if not candidates:
-                _logger.warning(
-                    "Skipping wrap-fill lane for trace %r: no valid "
-                    "warmup/profile start pair in configured range.",
-                    source.conversation_id,
-                )
-                continue
-            k_i = int(rng.choice(candidates))
-            extras.append(
-                Trajectory(conversation_id=source.conversation_id, start_turn_index=k_i)
-            )
-        return extras
 
     def session_for(
         self,

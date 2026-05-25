@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import math
 import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -347,10 +346,8 @@ class ServerMetricsDataCollector(BaseMetricsCollectorMixin[ServerMetricsRecord])
         samples_by_labels: dict[tuple, float] = {}
 
         for sample in family.samples:
-            # Skip samples with missing or non-finite values. Some servers emit
-            # NaN while metrics are warming up; JSON transport converts that to
-            # null, which is not a valid simple MetricSample on the receiver.
-            if sample.value is None or not math.isfinite(sample.value):
+            # Skip samples with None or infinity values (can happen with NaN or missing data)
+            if sample.value is None or sample.value == float("inf"):
                 continue
             label_key = tuple(sorted(sample.labels.items()))
             samples_by_labels[label_key] = sample.value

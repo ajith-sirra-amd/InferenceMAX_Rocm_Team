@@ -423,7 +423,6 @@ class TestSkipInputsJsonForPreBuiltPayloads:
             mock_gen.assert_not_called()
 
     @pytest.mark.asyncio
-    @pytest.mark.asyncio
     async def test_still_generates_inputs_json_for_single_turn(self, tmp_path: Path):
         mgr = self._make_dataset_manager(tmp_path, "single_turn")
         mgr._configure_dataset = AsyncMock()
@@ -448,47 +447,3 @@ class TestSkipInputsJsonForPreBuiltPayloads:
         ) as mock_gen:
             await mgr._profile_configure_command(Mock())
             mock_gen.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_skips_inputs_json_for_weka_trace(self, tmp_path: Path):
-        mgr = self._make_dataset_manager(tmp_path, "weka_trace")
-        mgr._configure_dataset = AsyncMock()
-        mgr._configure_tokenizer = AsyncMock()
-        mgr._configure_dataset_client_and_free_memory = AsyncMock()
-
-        with patch.object(
-            mgr, "_generate_inputs_json_file", new_callable=AsyncMock
-        ) as mock_gen:
-            await mgr._profile_configure_command(Mock())
-            mock_gen.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_skips_inputs_json_for_public_weka_dataset(self, tmp_path: Path):
-        mgr = self._make_dataset_manager(tmp_path, None)
-        mgr.user_config.input.public_dataset = (
-            "semianalysis_cc_traces_weka_with_subagents"
-        )
-        mgr._configure_dataset = AsyncMock()
-        mgr._configure_tokenizer = AsyncMock()
-        mgr._configure_dataset_client_and_free_memory = AsyncMock()
-
-        with patch.object(
-            mgr, "_generate_inputs_json_file", new_callable=AsyncMock
-        ) as mock_gen:
-            await mgr._profile_configure_command(Mock())
-            mock_gen.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_skips_inputs_json_for_generic_weka_hf(self, tmp_path: Path):
-        mgr = self._make_dataset_manager(tmp_path, None)
-        mgr.user_config.input.public_dataset = "weka_hf"
-        mgr.user_config.input.detected_loader = "weka_hf"
-        mgr._configure_dataset = AsyncMock()
-        mgr._configure_tokenizer = AsyncMock()
-        mgr._configure_dataset_client_and_free_memory = AsyncMock()
-
-        with patch.object(
-            mgr, "_generate_inputs_json_file", new_callable=AsyncMock
-        ) as mock_gen:
-            await mgr._profile_configure_command(Mock())
-            mock_gen.assert_not_called()

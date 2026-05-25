@@ -256,7 +256,6 @@ def build_process_records_result(
     error_tracker: ErrorTracker,
     cancelled: bool,
     branch_stats: BranchStats | None = None,
-    context_overflow_count: int = 0,
 ) -> ProcessRecordsResult:
     """Assemble the final ``ProcessRecordsResult`` from accumulator output.
 
@@ -277,7 +276,6 @@ def build_process_records_result(
             ),
             was_cancelled=cancelled,
             branch_stats=branch_stats,
-            context_overflow_count=context_overflow_count,
         ),
         errors=error_results,
     )

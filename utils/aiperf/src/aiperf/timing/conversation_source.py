@@ -87,9 +87,8 @@ class SampledSession:
 
         Used by AgenticReplayStrategy to start a session at turn k_i (warmup)
         or to resume at k_i + 1 (profiling) without dispatching the leading
-        turns. Dataset-specific start validation can use lightweight turn
-        metadata such as ``raw_messages_count`` before this method creates the
-        send handle.
+        turns. The full message history for turn k_i is already in
+        metadata.turns[turn_index].raw_messages (populated by WekaTraceLoader).
 
         Raises IndexError if turn_index is out of range.
         """

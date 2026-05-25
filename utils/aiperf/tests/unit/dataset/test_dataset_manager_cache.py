@@ -10,7 +10,6 @@ Verifies that:
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -27,37 +26,7 @@ from aiperf.common.environment import Environment
 from aiperf.common.messages.command_messages import ProfileConfigureCommand
 from aiperf.dataset import mmap_cache
 from aiperf.dataset.dataset_manager import DatasetManager
-from aiperf.plugin.enums import CustomDatasetType, PublicDatasetType
-
-
-def _write_legacy_cache_entry_with_inputs_json(
-    cache_key: str, tmp_path: Path
-) -> mmap_cache.CacheHit:
-    import orjson
-
-    entry_dir = mmap_cache.cache_dir() / cache_key
-    entry_dir.mkdir(parents=True)
-    (entry_dir / "dataset.dat").write_bytes(b"DATA")
-    (entry_dir / "index.dat").write_bytes(b"IDX")
-    (entry_dir / mmap_cache.INPUTS_JSON_FILENAME).write_bytes(b'{"requests": []}')
-    manifest = mmap_cache.CacheManifest(
-        cache_key=cache_key,
-        created_at=time.time(),
-        num_conversations=0,
-        total_size_bytes=4,
-        compressed=False,
-        compressed_size_bytes=0,
-        mmap_format="conversation",
-        dataset_metadata_json='{"conversations": [], "sampling_strategy": "random"}',
-        has_inputs_json=True,
-    )
-    (entry_dir / mmap_cache.MANIFEST_FILENAME).write_bytes(
-        orjson.dumps(manifest.model_dump(mode="json"))
-    )
-    hit = mmap_cache.lookup(cache_key, compressed=False)
-    assert hit is not None
-    assert hit.inputs_json_path is not None
-    return hit
+from aiperf.plugin.enums import CustomDatasetType
 
 
 @pytest.fixture(autouse=True)
@@ -176,50 +145,6 @@ class TestDatasetManagerCacheRoundtrip:
         assert key_a != key_b
 
     @pytest.mark.asyncio
-    async def test_hf_weka_repo_change_invalidates_cache(
-        self, tmp_path: Path, mock_tokenizer
-    ) -> None:
-        trace = _write_trace(tmp_path)
-        cfg_a = _make_config(file_path=trace, benchmark_id="weka-a")
-        cfg_a.input.file = None
-        cfg_a.input.custom_dataset_type = None
-        cfg_a.input.public_dataset = PublicDatasetType.WEKA_HF
-        cfg_a.input.hf_weka_repo = "semianalysisai/cc-traces-weka-051826"
-        cfg_b = _make_config(file_path=trace, benchmark_id="weka-b")
-        cfg_b.input.file = None
-        cfg_b.input.custom_dataset_type = None
-        cfg_b.input.public_dataset = PublicDatasetType.WEKA_HF
-        cfg_b.input.hf_weka_repo = "semianalysisai/cc-traces-weka-with-subagents-051826"
-
-        key_a = mmap_cache.compute_cache_key_from_user_config(cfg_a)
-        key_b = mmap_cache.compute_cache_key_from_user_config(cfg_b)
-
-        assert key_a is not None and key_b is not None
-        assert key_a != key_b
-
-    @pytest.mark.asyncio
-    async def test_public_dataset_aliases_with_same_hf_source_share_cache(
-        self, tmp_path: Path, mock_tokenizer
-    ) -> None:
-        trace = _write_trace(tmp_path)
-        cfg_a = _make_config(file_path=trace, benchmark_id="alias-a")
-        cfg_a.input.file = None
-        cfg_a.input.custom_dataset_type = None
-        cfg_a.input.public_dataset = PublicDatasetType.SEMIANALYSIS_CC_TRACES_WEKA
-        cfg_b = _make_config(file_path=trace, benchmark_id="alias-b")
-        cfg_b.input.file = None
-        cfg_b.input.custom_dataset_type = None
-        cfg_b.input.public_dataset = (
-            PublicDatasetType.SEMIANALYSIS_CC_TRACES_WEKA_NO_SUBAGENTS
-        )
-
-        key_a = mmap_cache.compute_cache_key_from_user_config(cfg_a)
-        key_b = mmap_cache.compute_cache_key_from_user_config(cfg_b)
-
-        assert key_a is not None and key_b is not None
-        assert key_a == key_b
-
-    @pytest.mark.asyncio
     async def test_cache_disabled_skips_lookup(
         self, tmp_path: Path, mock_tokenizer, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -233,28 +158,3 @@ class TestDatasetManagerCacheRoundtrip:
         # No populate happens, so the cache dir stays empty.
         cache_root = mmap_cache.cache_dir()
         assert not cache_root.exists() or not any(cache_root.iterdir())
-
-    @pytest.mark.asyncio
-    async def test_cache_hit_does_not_restore_inputs_json(
-        self, tmp_path: Path, mock_tokenizer
-    ) -> None:
-        trace = _write_trace(tmp_path)
-        cfg = _make_config(file_path=trace, benchmark_id="hit-no-inputs")
-        key = mmap_cache.compute_cache_key_from_user_config(cfg)
-        assert key is not None
-        _write_legacy_cache_entry_with_inputs_json(key, tmp_path)
-
-        target = cfg.output.artifact_directory / "inputs.json"
-        if target.exists():
-            target.unlink()
-
-        with patch.object(
-            DatasetManager,
-            "_configure_dataset_client_and_free_memory",
-            new_callable=AsyncMock,
-        ):
-            dm = await _run_configure(cfg)
-
-        assert dm._cache_hit_used is True
-        assert not target.exists()
-        await dm.stop()

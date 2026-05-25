@@ -694,7 +694,7 @@ class HistogramTimeSeries:
 
     def get_indices_for_filter(
         self, time_filter: TimeRangeFilter | None
-    ) -> tuple[int | None, int | None]:
+    ) -> tuple[int | None, int]:
         """Get (reference_idx, final_idx) indices for time-filtered histogram processing.
 
         For histogram metrics (cumulative counters), we need:
@@ -712,8 +712,7 @@ class HistogramTimeSeries:
         Returns:
             Tuple of (reference_idx, final_idx) where:
             - reference_idx: Index of last sample < start_ns, or None if none exists
-            - final_idx: Index of last sample <= end_ns, last index if no end bound,
-              or None if end_ns is before the first sample
+            - final_idx: Index of last sample <= end_ns, or last index if no end bound
         """
         reference_idx = None
         final_idx = self._size - 1
@@ -731,7 +730,7 @@ class HistogramTimeSeries:
                 insert_pos = int(
                     np.searchsorted(timestamps, time_filter.end_ns, side="right")
                 )
-                final_idx = insert_pos - 1 if insert_pos > 0 else None
+                final_idx = insert_pos - 1 if insert_pos > 0 else self._size - 1
 
         return reference_idx, final_idx
 
@@ -758,8 +757,6 @@ class HistogramTimeSeries:
             Empty array if fewer than 2 samples or all intervals have zero duration.
         """
         ref_idx, final_idx = self.get_indices_for_filter(time_filter)
-        if final_idx is None:
-            return np.array([], dtype=np.float64)
         start_idx = ref_idx if ref_idx is not None else 0
 
         ts = self.timestamps[start_idx : final_idx + 1]

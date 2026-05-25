@@ -16,6 +16,7 @@ import pytest
 
 from aiperf.common.scenario.base import (
     EmptyTracePoolError,
+    InsufficientTrajectoriesError,
 )
 from aiperf.timing.trajectory_source import TrajectorySource
 
@@ -38,29 +39,23 @@ def _sampler_for(ids: list[str]) -> MagicMock:
     return sampler
 
 
-def test_pool_one_concurrency_ten_wrap_fills_to_ten_lanes(caplog):
-    """concurrency > pool: wrap-fill produces ``concurrency`` lanes that
-    cycle through the single distinct trajectory. An INFO log records the
-    reuse fanout factor.
-    """
+def test_pool_one_concurrency_ten_raises_insufficient_trajectories():
     md = _make_dataset_metadata({"only": 5})
     sampler = _sampler_for(["only"])
 
-    with caplog.at_level(logging.INFO, logger="aiperf.timing.trajectory_source"):
-        src = TrajectorySource(
+    with pytest.raises(InsufficientTrajectoriesError) as exc_info:
+        TrajectorySource(
             dataset_metadata=md,
             dataset_sampler=sampler,
             concurrency=10,
             random_seed=42,
         )
 
-    assert len(src.trajectories) == 10
-    distinct_cids = {t.conversation_id for t in src.trajectories}
-    assert distinct_cids == {"only"}
-    reuse_logs = [
-        r.getMessage() for r in caplog.records if "Trajectory reuse" in r.getMessage()
-    ]
-    assert reuse_logs, "expected an INFO log about trajectory reuse / wrap-fill"
+    assert exc_info.value.concurrency == 10
+    assert exc_info.value.usable_trajectories == 1
+    assert exc_info.value.pool_size == 1
+    assert "concurrency 10" in str(exc_info.value)
+    assert "trajectory count 1" in str(exc_info.value)
 
 
 def test_empty_pool_raises_at_construction():

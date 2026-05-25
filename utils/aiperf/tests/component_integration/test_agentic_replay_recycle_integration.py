@@ -14,7 +14,6 @@ values to pin the strategy-level routing in isolation.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 from unittest.mock import AsyncMock, MagicMock
 
@@ -106,16 +105,14 @@ def _make_credit(
     conversation_id: str,
     turn_index: int,
     num_turns: int,
-    x_correlation_id: str | None = None,
+    x_correlation_id: str = "xcorr",
     phase: CreditPhase = CreditPhase.PROFILING,
 ) -> Credit:
     return Credit(
         id=0,
         phase=phase,
         conversation_id=conversation_id,
-        x_correlation_id=x_correlation_id
-        if x_correlation_id is not None
-        else uuid.uuid4().hex,
+        x_correlation_id=x_correlation_id,
         turn_index=turn_index,
         num_turns=num_turns,
         issued_at_ns=0,
