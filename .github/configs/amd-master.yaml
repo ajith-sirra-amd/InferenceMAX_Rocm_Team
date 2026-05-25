@@ -551,6 +551,23 @@ glm5.1-fp4-mi355x-sglang-agentic:
       # sglang manages KV eviction; mi355x glm5.1 caps at tp=4 conc=16 in fixed-seq, so cap conservatively
       - { tp: 4, offloading: none, conc-list: [1, 2, 4, 8, 16, 32] }
 
+glm5.1-fp4-mi355x-sglang-agentic_internal:
+  image: lmsysorg/sglang-rocm:v0.5.10rc0-rocm720-mi35x-20260415
+  model: amd/GLM-5.1-MXFP4
+  model-prefix: glm5.1
+  runner: mi355x
+  precision: fp4
+  framework: sglang
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - duration: 1800
+      search-space:
+      # sglang manages KV eviction; mi355x glm5.1 caps at tp=4 conc=16 in fixed-seq, so cap conservatively
+      - { tp: 4, offloading: none, conc-list: [32] }
+      - { tp: 4, offloading: cpu, conc-list: [32] }
+
+
 glm5.1-fp4-mi355x-atom:
   image: rocm/atom:rocm7.2.2_ubuntu24.04_py3.12_pytorch_release_2.10.0_atom0.1.2.post
   model: amd/GLM-5.1-MXFP4
