@@ -32,6 +32,14 @@ else
     BENCHMARK_SUBDIR="single_node"
 fi
 
+if [[ "$OFFLOADING" == "cpu" ]] || [[ "$OFFLOADING" == "none" ]] || [[ "$OFFLOADING" == "lmcache" ]] || [[ "$OFFLOADING" == "hicache" ]]; then
+    BENCHMARK_PATH=upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/agentic/${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
+else
+    BENCHMARK_PATH=upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
+fi
+
+export PYTHONDONTWRITEBYTECODE=1
+
 set -x
 docker run --rm --init --network host --shm-size=128g --name=$server_name \
 --ipc=host \
@@ -56,10 +64,10 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 -e OFFLOADING \
 -e TOTAL_CPU_DRAM_GB \
 -e RESULT_DIR \
+-e PYTHONDONTWRITEBYTECODE \
 --entrypoint=/bin/bash \
 $IMAGE \
-upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/agentic/${MODEL_CODE}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}.sh
-#upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/${MODEL_CODE}_${PRECISION}_mi355x${FRAMEWORK_SUFFIX}${SPEC_SUFFIX}.sh
+$BENCHMARK_PATH
 
 if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
