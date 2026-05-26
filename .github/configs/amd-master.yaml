@@ -202,7 +202,7 @@ dsr1-fp8-mi355x-atom:
   image: aigmkt/vllm:rs_constrained
   model: deepseek-ai/DeepSeek-R1-0528
   model-prefix: dsr1
-  runner: mi355x-amd_mia1
+  runner: mi355x
   precision: fp8
   framework: atom
   multinode: false
@@ -210,11 +210,11 @@ dsr1-fp8-mi355x-atom:
   - isl: 1024
     osl: 1024
     search-space:
-    - { tp: 8, conc-start: 4, conc-end: 512 }
-  - isl: 8192
-    osl: 1024
-    search-space:
-    - { tp: 8, conc-start: 4, conc-end: 512 }
+    - { tp: 8, conc-start: 4, conc-end: 4 }
+  # - isl: 8192
+  #   osl: 1024
+  #   search-space:
+  #   - { tp: 8, conc-start: 4, conc-end: 512 }
 
 dsr1-fp4-mi355x-sglang:
   image: lmsysorg/sglang:v0.5.9-rocm700-mi35x
