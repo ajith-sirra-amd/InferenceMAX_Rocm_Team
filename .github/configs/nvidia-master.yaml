@@ -2705,7 +2705,7 @@ kimik2.5-fp4-b200-vllm-agentic-internal:
   image: vllm/vllm-openai:v0.20.2
   model: nvidia/Kimi-K2.5-NVFP4
   model-prefix: kimik2.5
-  runner: b200
+  runner: b200-dgxc
   precision: fp4
   framework: vllm
   multinode: false
