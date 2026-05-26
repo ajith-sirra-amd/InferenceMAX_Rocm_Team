@@ -2713,8 +2713,7 @@ kimik2.5-fp4-b200-vllm-agentic-internal:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 4, ep: 1, offloading: none, conc-list: [32] }
-      - { tp: 4, ep: 1, offloading: cpu,  conc-list: [32] }
+      - { tp: 4, ep: 1, offloading: lmcache,  conc-list: [32] }
 
 kimik2.5-fp4-b200-vllm-agentic-lmcache:
   image: vllm/vllm-openai:v0.21.0
