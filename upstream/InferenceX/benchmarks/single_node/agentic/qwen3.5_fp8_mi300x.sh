@@ -85,9 +85,12 @@ case "$OFFLOADING" in
         # HiCache startup reaches API readiness but SGLang's internal warmup
         # request can time out on this path; let aiperf own benchmark traffic.
         WARMUP_ARGS=(--skip-server-warmup)
-        # Don't force ROCm graph capture at every high concurrency point; conc=16
-        # is the highest known-good capture size for this model/server path.
-        HICACHE_CUDA_GRAPH_MAX_BS="${HICACHE_CUDA_GRAPH_MAX_BS:-16}"
+        # Capture ROCm graphs up to full concurrency so the hicache arm is a
+        # fair A/B against the none arm (which captures to $CONC). The MI355X
+        # recipe caps this at 16 due to a high-conc capture crash on that HW;
+        # on MI300X we lift it to match $CONC. Override via env if MI300X hits
+        # the same startup crash at high conc.
+        HICACHE_CUDA_GRAPH_MAX_BS="${HICACHE_CUDA_GRAPH_MAX_BS:-$CONC}"
         if [ "$HICACHE_CUDA_GRAPH_MAX_BS" -lt "$CUDA_GRAPH_MAX_BS" ]; then
             CUDA_GRAPH_MAX_BS="$HICACHE_CUDA_GRAPH_MAX_BS"
         fi
