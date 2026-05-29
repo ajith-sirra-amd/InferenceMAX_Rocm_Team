@@ -244,4 +244,4 @@ build_replay_cmd "$RESULT_DIR"
 run_agentic_replay_and_write_outputs "$RESULT_DIR"
 
 # ---- hack ; permission issue, TODO: remove ----------------------------------------------------------
-chmod -R 777 results/
+chmod -R 777 results/ LMCache
