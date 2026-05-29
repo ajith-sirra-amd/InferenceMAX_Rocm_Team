@@ -79,6 +79,12 @@ if ls gpucore.* 1> /dev/null 2>&1; then
   rm -f gpucore.*
 fi
 
+# The benchmark container runs as root and writes results/ into the mounted
+# workspace as root, which the (non-root) runner cannot delete on the next
+# checkout (EACCES on actions/checkout cleanup). Chown the workspace back to
+# the runner's uid:gid via a throwaway root container.
+docker run --rm -v "$GITHUB_WORKSPACE":/ws --entrypoint chown "$IMAGE" -R "$(id -u):$(id -g)" /ws 2>/dev/null || true
+
 # Cleanup: stop server container
 docker stop $server_name 2>/dev/null || true
 docker rm $server_name 2>/dev/null || true
