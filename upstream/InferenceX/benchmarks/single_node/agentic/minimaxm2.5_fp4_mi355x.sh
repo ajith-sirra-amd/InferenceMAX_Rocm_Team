@@ -134,6 +134,9 @@ case "$OFFLOADING" in
         CXX=hipcc BUILD_WITH_HIP=1 pip install -e .   --no-build-isolation
         cd ..
 
+        # ---- hack ; permission issue, TODO: remove ----------------------------------------------------------
+        chmod -R 777 LMCache
+
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
         # Match the B200 Kimi LMCache setup: keep a 2.5 TB semantic CPU KV
@@ -148,7 +151,7 @@ case "$OFFLOADING" in
         # ZMQ endpoint. Bind the server to a raw host, but pass the connector a
         # ZMQ-style host string.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
-        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$(TOTAL_CPU_DRAM_GB / 8 * TP)}"
+        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
         # LMCache read locks are leases on chunks that lookup has promised
         # vLLM can retrieve. The default 300s TTL is too short for this
