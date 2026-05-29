@@ -18,6 +18,9 @@ on:
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic-hicache"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic-smoke"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic-hicache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic-smoke"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi300x-vllm-agentic-lmcache"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi325x-vllm-agentic-lmcache"
             ref:
