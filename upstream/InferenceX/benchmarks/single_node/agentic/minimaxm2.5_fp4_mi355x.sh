@@ -230,7 +230,7 @@ VLLM_CMD=(
     --kv-cache-dtype fp8 \
     --block-size=32
     --trust-remote-code
-    --attention-backend "ROCM_AITER_FA" \
+    --attention-backend "ROCM_AITER_FA" 
     --max-num-seqs "$CONC"
     "${PREFIX_CACHE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
