@@ -136,7 +136,7 @@ case "$OFFLOADING" in
 
         # ---- hack ; permission issue, TODO: remove ----------------------------------------------------------
         set -x
-        chmod -R 777 LMCache
+        chmod -R 777 results/ LMCache
 
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
@@ -166,6 +166,7 @@ case "$OFFLOADING" in
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
         export LMCACHE_BLOCKING_TIMEOUT_SECS=120
 
+        set -x
         echo "Starting LMCache MP server..."
         LMCACHE_CMD=(
             lmcache server
