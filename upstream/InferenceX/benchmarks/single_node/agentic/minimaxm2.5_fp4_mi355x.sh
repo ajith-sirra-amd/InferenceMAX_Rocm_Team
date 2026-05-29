@@ -39,7 +39,6 @@ amd-smi || true
 # Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
 export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
 
-# ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
 install_agentic_deps
 
