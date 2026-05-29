@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+set -x
+
+# Agentic trace replay benchmark for Qwen3.5 FP8 on B200 using SGLang.
+#
+# Required env vars:
+#   MODEL, TP, CONC, RESULT_DIR
+
+source "$(dirname "$0")/../../benchmark_lib.sh"
+
+check_env_vars MODEL TP CONC RESULT_DIR DURATION EP_SIZE
+
+SCHEDULER_RECV_INTERVAL=${SCHEDULER_RECV_INTERVAL:-10}
+if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
+    MAX_MODEL_LEN=131072
+fi
+
+if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
+fi
+
+if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
+nvidia-smi
+
+# ---- Resolve traces and install deps ----------------------------------------
+resolve_trace_source
+install_agentic_deps
+
+# ---- Start SGLang server ----------------------------------------------------
+SERVER_LOG="$RESULT_DIR/server.log"
+mkdir -p "$RESULT_DIR"
+
+echo "Starting SGLang server..."
+export TORCH_CUDA_ARCH_LIST="10.0"
+export PYTHONNOUSERSITE=1
+export NCCL_NVLS_ENABLE=1
+export SGL_ENABLE_JIT_DEEPGEMM=false
+export SGLANG_ENABLE_FLASHINFER_GEMM=true
+
+python3 -m sglang.launch_server \
+--model-path=$MODEL \
+--host=0.0.0.0 \
+--port=$PORT \
+--served-model-name "Qwen/Qwen3.5-397B-A17B-FP8" \
+--trust-remote-code \
+--tensor-parallel-size=$TP \
+--data-parallel-size=1 \
+--ep-size $EP_SIZE \
+--cuda-graph-max-bs $CONC \
+--max-running-requests $CONC \
+--mem-fraction-static 0.82 \
+--chunked-prefill-size 32768 \
+--max-prefill-tokens 32768 \
+--context-length $MAX_MODEL_LEN \
+--attention-backend trtllm_mha \
+--moe-runner-backend flashinfer_trtllm \
+--enable-flashinfer-allreduce-fusion \
+--scheduler-recv-interval $SCHEDULER_RECV_INTERVAL \
+--tokenizer-worker-num 6 \
+--stream-interval 30 \
+--enable-metrics > "$SERVER_LOG" 2>&1 &
+SERVER_PID=$!
+echo "Server PID: $SERVER_PID"
+
+wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+
+# ---- Run benchmark ----------------------------------------------------------
+build_replay_cmd "$RESULT_DIR"
+
+run_agentic_replay_and_write_outputs "$RESULT_DIR"
