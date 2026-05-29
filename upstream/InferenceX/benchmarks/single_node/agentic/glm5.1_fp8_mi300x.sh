@@ -2,14 +2,18 @@
 set -euo pipefail
 set -x
 
-# Agentic trace replay benchmark for GLM-5.1 FP4 on MI355X using SGLang.
+# Agentic trace replay benchmark for GLM-5.1 FP8 on MI300X using SGLang.
 #
 # Required env vars:
-#   MODEL, TP, CONC, RESULT_DIR
+#   MODEL, TP, CONC, OFFLOADING, TOTAL_CPU_DRAM_GB, RESULT_DIR, DURATION
+#
+# OFFLOADING values:
+#   none    - SGLang GPU KV with the default RadixAttention prefix cache.
+#   hicache - SGLang HiCache with a local CPU hierarchical cache on top of radix.
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL TP CONC RESULT_DIR DURATION
+check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION
 
 if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
     MAX_MODEL_LEN=131072
@@ -27,14 +31,52 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-# ROCm / SGLang performance tuning for MI355X
-export SGLANG_ROCM_FUSED_DECODE_MLA=0
-export ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+# ROCm / SGLang performance tuning for MI300X (gfx942)
 export SAFETENSORS_FAST_GPU=1
 
-# ---- Start SGLang server ----------------------------------------------------
+# ---- Cache / offload config -------------------------------------------------
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
+
+CACHE_ARGS=()
+CUDA_GRAPH_MAX_BS="$CONC"
+case "$OFFLOADING" in
+    none)
+        # Leave SGLang's default RadixAttention prefix cache on — agentic
+        # replay needs it; --disable-radix-cache would zero the hit rate.
+        ;;
+    hicache)
+        # GLM-5.1 is a dense-KV (non-hybrid) model, so it allocates a single
+        # HiCache host pool per TP rank. --hicache-size is per rank per host
+        # pool while the workflow input is a node-total DRAM budget, so divide
+        # by TP and the host-pool count. Overridable for one-off tuning.
+        HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-1}"
+        HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-180}"
+        HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through}"
+        HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
+        HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-layer_first}"
+        HICACHE_SIZE_GB="${HICACHE_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / TP / HICACHE_HOST_POOL_COUNT))}"
+        if [ "$HICACHE_SIZE_GB" -gt "$HICACHE_MAX_SIZE_GB_PER_RANK_POOL" ]; then
+            HICACHE_SIZE_GB="$HICACHE_MAX_SIZE_GB_PER_RANK_POOL"
+        fi
+        if [ "$HICACHE_SIZE_GB" -lt 1 ]; then
+            echo "Error: computed HICACHE_SIZE_GB=$HICACHE_SIZE_GB from TOTAL_CPU_DRAM_GB=$TOTAL_CPU_DRAM_GB, TP=$TP, HICACHE_HOST_POOL_COUNT=$HICACHE_HOST_POOL_COUNT" >&2
+            exit 1
+        fi
+        echo "HiCache CPU pool: ${HICACHE_SIZE_GB} GB per rank per host pool across TP=${TP}, host_pool_count=${HICACHE_HOST_POOL_COUNT}"
+        CACHE_ARGS=(
+            --enable-hierarchical-cache
+            --hicache-size "$HICACHE_SIZE_GB"
+            --hicache-io-backend "$HICACHE_IO_BACKEND"
+            --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
+            --hicache-write-policy "$HICACHE_WRITE_POLICY"
+        )
+        ;;
+    *)
+        echo "Error: unsupported OFFLOADING value '$OFFLOADING' (expected one of: none, hicache)" >&2
+        exit 1
+        ;;
+esac
 
 pip install -U transformers
 
@@ -47,7 +89,7 @@ python3 -m sglang.launch_server \
     --port $PORT \
     --tensor-parallel-size $TP \
     --trust-remote-code \
-    --cuda-graph-max-bs $CONC \
+    --cuda-graph-max-bs $CUDA_GRAPH_MAX_BS \
     --max-running-requests $CONC \
     --context-length $MAX_MODEL_LEN \
     --mem-fraction-static 0.85 \
@@ -58,6 +100,7 @@ python3 -m sglang.launch_server \
     --nsa-decode-backend tilelang \
     --kv-cache-dtype fp8_e4m3 \
     --tokenizer-worker-num $((TP*2)) \
+    "${CACHE_ARGS[@]}" \
     --enable-metrics > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
