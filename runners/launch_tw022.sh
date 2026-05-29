@@ -3,6 +3,11 @@ if [[ $RUNNER_TYPE == "mi300x" ]]; then
     HF_HUB_CACHE_MOUNT="/home/amd/models/"  # shared AMD model cache on the mi300x host
 fi
 
+# tw022 host has a persistent ssh tunnel bound to 127.0.0.1:8888 (sglang's
+# default PORT), so the server can't bind there. Pin a free port; the runner
+# forwards -e PORT and both the launcher and aiperf read $PORT.
+export PORT=8911
+
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
     FRAMEWORK_SUFFIX="_vllm"
