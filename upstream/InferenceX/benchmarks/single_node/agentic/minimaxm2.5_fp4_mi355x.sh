@@ -135,6 +135,7 @@ case "$OFFLOADING" in
         cd ..
 
         # ---- hack ; permission issue, TODO: remove ----------------------------------------------------------
+        set -x
         chmod -R 777 LMCache
 
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
@@ -247,5 +248,6 @@ build_replay_cmd "$RESULT_DIR"
 run_agentic_replay_and_write_outputs "$RESULT_DIR"
 
 # ---- hack ; permission issue, TODO: remove ----------------------------------------------------------
+set -x
 chmod -R 777 results/ LMCache
 chmod -R 777 *
