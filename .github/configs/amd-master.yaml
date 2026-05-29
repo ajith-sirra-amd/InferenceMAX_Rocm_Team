@@ -12,7 +12,7 @@ minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 1, ep: 1, offloading: none, conc-list: [16] }
+      #- { tp: 1, ep: 1, offloading: none, conc-list: [16] }
       - { tp: 1, ep: 1, offloading: lmcache, conc-list: [16] }
 
 # (seungrok)

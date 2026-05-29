@@ -123,6 +123,7 @@ case "$OFFLOADING" in
         OFFLOAD_ARGS=(
             --kv_offloading_backend native
             --kv_offloading_size "$TOTAL_CPU_DRAM_GB"
+            --no-disable-hybrid-kv-cache-manager
         )
         ;;
     lmcache)
@@ -195,6 +196,7 @@ case "$OFFLOADING" in
         OFFLOAD_ARGS=(
             --kv-transfer-config
             "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"lmcache.integration.vllm.lmcache_mp_connector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"$LMCACHE_CONNECT_HOST\",\"lmcache.mp.port\":$LMCACHE_PORT}}"
+            --no-disable-hybrid-kv-cache-manager
         )
         ;;
     *) echo "Error: unsupported OFFLOADING value '$OFFLOADING'" >&2; exit 1 ;;
