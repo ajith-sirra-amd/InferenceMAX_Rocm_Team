@@ -120,10 +120,13 @@ case "$OFFLOADING" in
 
         # Remove --disable-hybrid-kv-cache-manager and enable hybrid kv cache manager (default)
         # This gives extra cache hit than disabling hybrid kv cache manager
+        # srok,
+        # --no-disable-hybrid-kv-cache-manager is not compatible with lmcache, even for non-hma
+        # https://github.com/vllm-project/vllm/blob/0585b5ba2eaa7860d6976bc7ba376bdbca5119fc/vllm/distributed/kv_transfer/kv_connector/factory.py#L56-L60
         OFFLOAD_ARGS=(
             --kv_offloading_backend native
             --kv_offloading_size "$TOTAL_CPU_DRAM_GB"
-            --no-disable-hybrid-kv-cache-manager
+            --disable-hybrid-kv-cache-manager
         )
         ;;
     lmcache)
@@ -191,12 +194,13 @@ case "$OFFLOADING" in
         wait_for_lmcache_ready
 
         PREFIX_CACHE_ARGS=(--enable-prefix-caching)
-        # Remove --disable-hybrid-kv-cache-manager and enable hybrid kv cache manager (default)
-        # This gives extra cache hit than disabling hybrid kv cache manager
+        # srok,
+        # --no-disable-hybrid-kv-cache-manager is not compatible with lmcache, even for non-hma
+        # https://github.com/vllm-project/vllm/blob/0585b5ba2eaa7860d6976bc7ba376bdbca5119fc/vllm/distributed/kv_transfer/kv_connector/factory.py#L56-L60
         OFFLOAD_ARGS=(
             --kv-transfer-config
             "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"lmcache.integration.vllm.lmcache_mp_connector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"$LMCACHE_CONNECT_HOST\",\"lmcache.mp.port\":$LMCACHE_PORT}}"
-            --no-disable-hybrid-kv-cache-manager
+            --disable-hybrid-kv-cache-manager
         )
         ;;
     *) echo "Error: unsupported OFFLOADING value '$OFFLOADING'" >&2; exit 1 ;;
