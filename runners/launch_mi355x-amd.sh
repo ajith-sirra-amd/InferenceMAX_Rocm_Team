@@ -64,6 +64,7 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 -e OFFLOADING \
 -e TOTAL_CPU_DRAM_GB \
 -e RESULT_DIR \
+-e DURATION \
 -e PYTHONDONTWRITEBYTECODE \
 --entrypoint=/bin/bash \
 $IMAGE \
