@@ -1,5 +1,5 @@
 name: End-to-End Tests
-run-name: e2e Test - ${{ inputs.test-name || inputs.generate-cli-command || github.event.inputs.generate-cli-command }}
+run-name: e2e Test - ${{ inputs.test-name || github.event.inputs.test-name || inputs.generate-cli-command || github.event.inputs.generate-cli-command }}
 
 on:
     workflow_dispatch:
@@ -7,11 +7,18 @@ on:
             generate-cli-command:
                 description: "Command passed to generate matrix script"
                 required: true
-                type: string
-            test-name:
-                description: "Name for this test run"
-                required: false
-                type: string
+                type: choice
+                options:
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi355x-vllm-agentic-lmcache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys kimik2.5-fp4-mi355x-vllm-agentic-lmcache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi355x-sglang-agentic-hicache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp4-mi355x-sglang-agentic-hicache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp4-mi355x-sglang-agentic-hicache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi300x-vllm-agentic-lmcache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi325x-vllm-agentic-lmcache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-vllm-agentic"
             ref:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
