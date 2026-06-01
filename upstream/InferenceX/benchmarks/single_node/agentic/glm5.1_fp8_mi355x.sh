@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -euo pipefail
+set -x
+
+# Agentic trace replay benchmark for GLM-5.1 FP4 on MI355X using SGLang.
+#
+# Required env vars:
+#   MODEL, TP, CONC, RESULT_DIR
+
+source "$(dirname "$0")/../../benchmark_lib.sh"
+
+check_env_vars MODEL TP CONC RESULT_DIR DURATION
+
+if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
+    MAX_MODEL_LEN=131072
+fi
+
+if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
+fi
+
+if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
+rocm-smi || true
+amd-smi || true
+
+# ---- Resolve traces and install deps ----------------------------------------
+resolve_trace_source
+install_agentic_deps
+
+# ROCm / SGLang performance tuning for MI355X
+export SGLANG_ROCM_FUSED_DECODE_MLA=0
+export ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+export SAFETENSORS_FAST_GPU=1
+
+# ---- Start SGLang server ----------------------------------------------------
+SERVER_LOG="$RESULT_DIR/server.log"
+mkdir -p "$RESULT_DIR"
+
+pip install -U transformers
+
+CACHE_ARGS=()
+WARMUP_ARGS=()
+CUDA_GRAPH_MAX_BS="$CONC"
+case "$OFFLOADING" in
+    none)
+        # Leave SGLang's default RadixAttention prefix cache on — agentic
+        # replay needs it; --disable-radix-cache would zero the hit rate.
+        ;;
+    hicache)
+        # Qwen3.5's hybrid GDN/Mamba path allocates two HiCache host pools per
+        # TP rank (one hierarchical KV, one hierarchical Mamba), so the
+        # node-total DRAM budget divides by TP and the host-pool count.
+        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-${TOTAL_CPU_DRAM_GB}}"
+        HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-1}"
+        HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-180}}"
+        HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
+        # Qwen3.5's hybrid Mamba path runs SGLang's no_buffer scheduler, which
+        # requires page_size=1. Keep the safer direct/layer_first copy path;
+        # kernel/page_first faults on first prefill in this mode on ROCm.
+        HICACHE_PAGE_SIZE="${HICACHE_PAGE_SIZE:-1}"
+        HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
+        HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-layer_first}"
+        HICACHE_SIZE_GB="${HICACHE_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / TP / HICACHE_HOST_POOL_COUNT))}"
+        if [ "$HICACHE_SIZE_GB" -gt "$HICACHE_MAX_SIZE_GB_PER_RANK_POOL" ]; then
+            HICACHE_SIZE_GB="$HICACHE_MAX_SIZE_GB_PER_RANK_POOL"
+        fi
+        if [ "$HICACHE_SIZE_GB" -lt 1 ]; then
+            echo "Error: computed HICACHE_SIZE_GB=$HICACHE_SIZE_GB from TOTAL_CPU_DRAM_GB=$TOTAL_CPU_DRAM_GB, TP=$TP, HICACHE_HOST_POOL_COUNT=$HICACHE_HOST_POOL_COUNT" >&2
+            exit 1
+        fi
+        echo "HiCache CPU pool: ${HICACHE_SIZE_GB} GB per rank per host pool across TP=${TP}, host_pool_count=${HICACHE_HOST_POOL_COUNT}"
+        CACHE_ARGS=(
+            --page-size "$HICACHE_PAGE_SIZE"
+            --enable-hierarchical-cache
+            --hicache-size "$HICACHE_SIZE_GB"
+            --hicache-io-backend "$HICACHE_IO_BACKEND"
+            --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
+            --hicache-write-policy "$HICACHE_WRITE_POLICY"
+        )
+        # HiCache startup reaches API readiness but SGLang's internal warmup
+        # request can time out on this path; let aiperf own benchmark traffic.
+        WARMUP_ARGS=(--skip-server-warmup)
+        # Don't force ROCm graph capture at every high concurrency point; conc=16
+        # is the highest known-good capture size for this model/server path.
+        HICACHE_CUDA_GRAPH_MAX_BS="${HICACHE_CUDA_GRAPH_MAX_BS:-16}"
+        if [ "$HICACHE_CUDA_GRAPH_MAX_BS" -lt "$CUDA_GRAPH_MAX_BS" ]; then
+            CUDA_GRAPH_MAX_BS="$HICACHE_CUDA_GRAPH_MAX_BS"
+        fi
+        ;;
+    *)
+        echo "Error: unsupported OFFLOADING value '$OFFLOADING' (expected one of: none, hicache)" >&2
+        exit 1
+        ;;
+esac
+
+echo "Starting SGLang server..."
+export PYTHONNOUSERSITE=1
+
+python3 -m sglang.launch_server \
+    --model-path $MODEL \
+    --host=0.0.0.0 \
+    --port $PORT \
+    --tensor-parallel-size $TP \
+    --trust-remote-code \
+    --cuda-graph-max-bs $CONC \
+    --max-running-requests $CONC \
+    --context-length $MAX_MODEL_LEN \
+    --mem-fraction-static 0.85 \
+    --tool-call-parser glm47 \
+    --reasoning-parser glm45 \
+    --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}' \
+    --nsa-prefill-backend tilelang \
+    --nsa-decode-backend tilelang \
+    --kv-cache-dtype fp8_e4m3 \
+    --tokenizer-worker-num $((TP*2)) \
+    "${CACHE_ARGS[@]}" \
+    "${WARMUP_ARGS[@]}" \
+    --enable-metrics > "$SERVER_LOG" 2>&1 &
+SERVER_PID=$!
+echo "Server PID: $SERVER_PID"
+
+wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+
+# ---- Run benchmark ----------------------------------------------------------
+build_replay_cmd "$RESULT_DIR"
+
+run_agentic_replay_and_write_outputs "$RESULT_DIR"
