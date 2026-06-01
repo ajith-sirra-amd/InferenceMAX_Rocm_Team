@@ -5,7 +5,8 @@ fi
 
 # tw22 host has a persistent ssh tunnel bound to 127.0.0.1:8888 (sglang's
 # default PORT), so the server can't bind there. Pin a free port; the runner
-# forwards -e PORT and both the launcher and aiperf read $PORT. tw22 shares
+# forwards -e PORT and both the launcher and aiperf read $PORT. This is tw22-
+# specific (other tw* hosts have no 8888 listener). tw22 shares
 # RUNNER_TYPE=mi300x with the amds pool, so gate on the runner name instead.
 if [[ $RUNNER_NAME == *tw22* ]]; then
     export PORT=8911
@@ -28,10 +29,11 @@ server_name="bmk-server"
 # checkout (EACCES on actions/checkout cleanup). Chown the workspace back to
 # the runner's uid:gid via a throwaway root container. Run it from an EXIT trap
 # so a crashed/cancelled benchmark still hands the workspace back instead of
-# wedging the next checkout. tw22 is the non-CI self-hosted host that hits this;
-# the amds pool runs as a uid that already owns the workspace.
+# wedging the next checkout. The TensorWave self-hosted hosts (mi300x-amd_tw*)
+# hit this; the CI amds pool (mi300x-amds_*) runs as a uid that already owns the
+# workspace.
 chown_workspace_back() {
-    if [[ $RUNNER_NAME == *tw22* ]]; then
+    if [[ $RUNNER_NAME == *_tw* ]]; then
         docker run --rm -v "$GITHUB_WORKSPACE":/ws --entrypoint chown "$IMAGE" -R "$(id -u):$(id -g)" /ws 2>/dev/null || true
     fi
 }
