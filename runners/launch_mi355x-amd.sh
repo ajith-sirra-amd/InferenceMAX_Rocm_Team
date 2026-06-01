@@ -17,6 +17,11 @@ SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
 server_name="bmk-server"
 
+chown_workspace_back() {
+    docker run --rm -v "$GITHUB_WORKSPACE":/ws --entrypoint chown "$IMAGE" -R "$(id -u):$(id -g)" /ws 2>/dev/null || true
+}
+trap chown_workspace_back EXIT
+
 # Cleanup: stop server container 
 docker stop $server_name 2>/dev/null || true
 docker rm $server_name 2>/dev/null || true
