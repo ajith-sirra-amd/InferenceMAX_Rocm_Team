@@ -2,7 +2,10 @@
 
 set -x
 
-cat /proc/meminfo | grep -E 'MemTotal|MemFree|MemAvailable'
+cat /proc/meminfo | grep -E 'MemTotal|MemFree|MemAvailable|Cached|Buffers|SwapCached'
+sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
+sh -c 'echo 0 > /proc/sys/vm/drop_caches'
+cat /proc/meminfo | grep -E 'MemTotal|MemFree|MemAvailable|Cached|Buffers|SwapCached'
 
 if [[ $RUNNER_TYPE == "mi355x" ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/hf_cache/"  # Temp solution
