@@ -93,7 +93,7 @@ case "$OFFLOADING" in
         WARMUP_ARGS=(--skip-server-warmup)
         # Don't force ROCm graph capture at every high concurrency point; conc=16
         # is the highest known-good capture size for this model/server path.
-        HICACHE_CUDA_GRAPH_MAX_BS="${HICACHE_CUDA_GRAPH_MAX_BS:-16}"
+        HICACHE_CUDA_GRAPH_MAX_BS="${HICACHE_CUDA_GRAPH_MAX_BS:-256}"
         if [ "$HICACHE_CUDA_GRAPH_MAX_BS" -lt "$CUDA_GRAPH_MAX_BS" ]; then
             CUDA_GRAPH_MAX_BS="$HICACHE_CUDA_GRAPH_MAX_BS"
         fi
