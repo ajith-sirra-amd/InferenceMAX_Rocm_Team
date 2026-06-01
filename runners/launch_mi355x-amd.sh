@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+set -x
+
 if [[ $RUNNER_TYPE == "mi355x" ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/hf_cache/"  # Temp solution
 elif [[ $RUNNER_TYPE == "mi355x-p02-g57" ]]; then
@@ -26,7 +29,6 @@ trap chown_workspace_back EXIT
 docker stop $server_name 2>/dev/null || true
 docker rm $server_name 2>/dev/null || true
 
-set -x
 docker pull $IMAGE
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
 echo "The image digest is: $DIGEST"
