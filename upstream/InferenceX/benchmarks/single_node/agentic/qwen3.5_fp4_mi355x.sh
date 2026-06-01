@@ -36,6 +36,12 @@ rocm-smi || true
 amd-smi || true
 
 # ---- Resolve traces and install deps ----------------------------------------
+# Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
+# unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
+# signal at high concurrency.
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+
+# ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
 install_agentic_deps
 
