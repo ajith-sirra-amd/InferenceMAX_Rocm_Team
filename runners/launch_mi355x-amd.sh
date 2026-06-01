@@ -2,6 +2,8 @@
 
 set -x
 
+cat /proc/meminfo | grep -E 'MemTotal|MemFree|MemAvailable'
+
 if [[ $RUNNER_TYPE == "mi355x" ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/hf_cache/"  # Temp solution
 elif [[ $RUNNER_TYPE == "mi355x-p02-g57" ]]; then
