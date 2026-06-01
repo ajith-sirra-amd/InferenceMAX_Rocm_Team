@@ -154,11 +154,14 @@ jobs:
           # write to fixed subpaths (aiperf_artifacts/, metrics_*, etc.), so stale
           # data from a previous job would otherwise be picked up as this
           # job's output when replay fails early.
-          # Fix permissions first to avoid EACCES errors when checkout tries to clean.
-          chmod -R u+w ${{ github.workspace }}
-          rm -rf ${{ github.workspace }}/* ${{ github.workspace }}/.[!.]* 
-          rm -rf ${{ github.workspace }}/results 
-          ls -la ${{ github.workspace }}
+          # Use Docker to handle permission issues from prior container-created files.
+          if command -v docker >/dev/null 2>&1 && [ -n "$IMAGE" ]; then
+            docker run --rm -v "${{ github.workspace }}":/ws --entrypoint sh $IMAGE -c "rm -rf /ws/* /ws/.[!.]*" 
+          else
+            chmod -R u+w "${{ github.workspace }}" || true
+            rm -rf "${{ github.workspace }}"/* "${{ github.workspace }}"/.[!.]*
+          fi
+          ls -la "${{ github.workspace }}" 
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
