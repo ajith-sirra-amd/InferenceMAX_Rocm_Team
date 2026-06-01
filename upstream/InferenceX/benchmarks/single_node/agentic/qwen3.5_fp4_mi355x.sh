@@ -2,14 +2,21 @@
 set -euo pipefail
 set -x
 
-# Agentic trace replay benchmark for Qwen3.5 FP8 on MI355X using SGLang.
+# Agentic trace replay benchmark for Qwen3.5 FP8 on MI300X using SGLang.
+#
+# Base server recipe follows the upstream MI300X reference
+# (benchmarks/single_node/qwen3.5_fp8_mi300x.sh, the "AMD Andy" recipe):
+# aiter attention backend, aiter allreduce fusion, mem-fraction 0.75.
+# The agentic harness (resolve_trace_source / build_replay_cmd /
+# run_agentic_replay_and_write_outputs) replaces run_benchmark_serving, and
+# --disable-radix-cache is dropped because agentic replay needs prefix reuse.
 #
 # Required env vars:
-#   MODEL, TP, CONC, OFFLOADING, TOTAL_CPU_DRAM_GB, RESULT_DIR
+#   MODEL, TP, CONC, OFFLOADING, TOTAL_CPU_DRAM_GB, RESULT_DIR, DURATION, EP_SIZE
 #
 # OFFLOADING values:
-#   none    - SGLang GPU KV only with radix cache disabled.
-#   hicache - SGLang HiCache with local CPU hierarchical cache.
+#   none    - SGLang GPU KV with the default RadixAttention prefix cache.
+#   hicache - SGLang HiCache with a local CPU hierarchical cache on top of radix.
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
@@ -32,7 +39,7 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-# ---- Server config ----------------------------------------------------------
+# ---- Cache / offload config -------------------------------------------------
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 
@@ -45,26 +52,19 @@ case "$OFFLOADING" in
         # replay needs it; --disable-radix-cache would zero the hit rate.
         ;;
     hicache)
-        # MI355X nodes have about 3 TB of host DRAM, but Qwen3.5's hybrid
-        # GDN/Mamba path allocates two HiCache host pools per TP rank: one for
-        # hierarchical KV cache and one for hierarchical Mamba cache. A 2 TB
-        # node-total target at TP=8 is therefore 2000 / (8 * 2) = 125 GB per
-        # host pool, not 250 GB. Keep overrides for one-off tuning.
-        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-2000}"
+        # Qwen3.5's hybrid GDN/Mamba path allocates two HiCache host pools per
+        # TP rank (one hierarchical KV, one hierarchical Mamba), so the
+        # node-total DRAM budget divides by TP and the host-pool count.
+        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-${TOTAL_CPU_DRAM_GB}}"
         HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-2}"
         HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-180}}"
         HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
-        # Qwen3.5's hybrid Mamba path runs SGLang's no_buffer scheduler on
-        # MI355X, which requires page_size=1. The kernel/page_first HiCache
-        # transfer path faults on first prefill in this mode on ROCm, so keep
-        # the default on the safer direct/layer_first copy path. These remain
-        # env-overridable for future SGLang/ROCm fixes.
+        # Qwen3.5's hybrid Mamba path runs SGLang's no_buffer scheduler, which
+        # requires page_size=1. Keep the safer direct/layer_first copy path;
+        # kernel/page_first faults on first prefill in this mode on ROCm.
         HICACHE_PAGE_SIZE="${HICACHE_PAGE_SIZE:-1}"
         HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
         HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-layer_first}"
-        # SGLang --hicache-size is per rank per host pool, while the workflow
-        # input is a node-total DRAM budget. Divide by TP and the number of
-        # host pools unless HICACHE_SIZE_GB is set directly for one-off tuning.
         HICACHE_SIZE_GB="${HICACHE_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / TP / HICACHE_HOST_POOL_COUNT))}"
         if [ "$HICACHE_SIZE_GB" -gt "$HICACHE_MAX_SIZE_GB_PER_RANK_POOL" ]; then
             HICACHE_SIZE_GB="$HICACHE_MAX_SIZE_GB_PER_RANK_POOL"
@@ -82,16 +82,11 @@ case "$OFFLOADING" in
             --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
             --hicache-write-policy "$HICACHE_WRITE_POLICY"
         )
-        # HiCache startup reaches API readiness, but SGLang's internal warmup
-        # request has timed out after 600s on this Qwen MI355X path. Let aiperf
-        # own benchmark traffic instead of blocking server readiness on it.
+        # HiCache startup reaches API readiness but SGLang's internal warmup
+        # request can time out on this path; let aiperf own benchmark traffic.
         WARMUP_ARGS=(--skip-server-warmup)
-        # Keep request concurrency as the swept variable, but do not force
-        # HiCache runs to capture ROCm graphs at every high concurrency point.
-        # The conc=32 HiCache job crashed after startup readiness, before any
-        # aiperf traffic, while conc=16 is the highest known-good capture size
-        # for this model/server path. Requests above the capture size can still
-        # run; they just do not require a larger captured graph at startup.
+        # Don't force ROCm graph capture at every high concurrency point; conc=16
+        # is the highest known-good capture size for this model/server path.
         HICACHE_CUDA_GRAPH_MAX_BS="${HICACHE_CUDA_GRAPH_MAX_BS:-16}"
         if [ "$HICACHE_CUDA_GRAPH_MAX_BS" -lt "$CUDA_GRAPH_MAX_BS" ]; then
             CUDA_GRAPH_MAX_BS="$HICACHE_CUDA_GRAPH_MAX_BS"
@@ -105,6 +100,7 @@ esac
 
 echo "Starting SGLang server..."
 export PYTHONNOUSERSITE=1
+
 
 { set +x; } 2>/dev/null
 SGLANG_CMD=(
