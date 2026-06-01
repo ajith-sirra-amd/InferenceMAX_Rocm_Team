@@ -119,10 +119,8 @@ python3 -m sglang.launch_server \
     --enable-aiter-allreduce-fusion \
     --cuda-graph-max-bs $CONC \
     --max-running-requests $CONC \
-    --max-prefill-tokens 32768 \
     --scheduler-recv-interval $SCHEDULER_RECV_INTERVAL \
     --mem-fraction-static 0.8 \
-    --context-length $MAX_MODEL_LEN \
     "${CACHE_ARGS[@]}" \
     "${WARMUP_ARGS[@]}" \
     --enable-metrics > "$SERVER_LOG" 2>&1 &
