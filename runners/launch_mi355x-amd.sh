@@ -25,9 +25,8 @@ server_name="bmk-server"
 # }
 # trap chown_workspace_back EXIT
 
-# Cleanup: stop server container 
-docker stop $server_name 2>/dev/null || true
-docker rm $server_name 2>/dev/null || true
+# Cleanup: force remove any existing container with the same name
+docker rm -f $server_name 2>/dev/null || true
 
 docker pull $IMAGE
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
@@ -82,6 +81,5 @@ if ls gpucore.* 1> /dev/null 2>&1; then
   rm -f gpucore.*
 fi
 
-# Cleanup: stop server container 
-docker stop $server_name 2>/dev/null || true
-docker rm $server_name 2>/dev/null || true
+# Cleanup: force remove any existing container with the same name
+docker rm -f $server_name 2>/dev/null || true
