@@ -32,6 +32,11 @@ if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
 rocm-smi || true
 amd-smi || true
 
+# RCCL on these MI300X hosts fails ncclCommInitRank with an unhandled CUDA
+# error when P2P is enabled; disable the P2P transport so TP init falls back
+# to the shared-memory path. Overridable for hosts where P2P works.
+export NCCL_P2P_DISABLE="${NCCL_P2P_DISABLE:-1}"
+
 # ---- Resolve traces and install deps ----------------------------------------
 # Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
 # unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
