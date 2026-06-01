@@ -15,10 +15,6 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION
 
-if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
-    MAX_MODEL_LEN=131072
-fi
-
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
@@ -91,7 +87,6 @@ python3 -m sglang.launch_server \
     --trust-remote-code \
     --cuda-graph-max-bs $CUDA_GRAPH_MAX_BS \
     --max-running-requests $CONC \
-    --context-length $MAX_MODEL_LEN \
     --mem-fraction-static 0.85 \
     --tool-call-parser glm47 \
     --reasoning-parser glm45 \
