@@ -3,6 +3,14 @@ if [[ $RUNNER_TYPE == "mi300x" ]]; then
     HF_HUB_CACHE_MOUNT="/home/amd/models/"  # shared AMD model cache on the mi300x host
 fi
 
+# tw22 host has a persistent ssh tunnel bound to 127.0.0.1:8888 (sglang's
+# default PORT), so the server can't bind there. Pin a free port; the runner
+# forwards -e PORT and both the launcher and aiperf read $PORT. tw22 shares
+# RUNNER_TYPE=mi300x with the amds pool, so gate on the runner name instead.
+if [[ $RUNNER_NAME == *tw22* ]]; then
+    export PORT=8911
+fi
+
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
     FRAMEWORK_SUFFIX="_vllm"
@@ -14,6 +22,20 @@ fi
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
 server_name="bmk-server"
+
+# The benchmark container runs as root and writes results/ into the mounted
+# workspace as root, which the (non-root) runner cannot delete on the next
+# checkout (EACCES on actions/checkout cleanup). Chown the workspace back to
+# the runner's uid:gid via a throwaway root container. Run it from an EXIT trap
+# so a crashed/cancelled benchmark still hands the workspace back instead of
+# wedging the next checkout. tw22 is the non-CI self-hosted host that hits this;
+# the amds pool runs as a uid that already owns the workspace.
+chown_workspace_back() {
+    if [[ $RUNNER_NAME == *tw22* ]]; then
+        docker run --rm -v "$GITHUB_WORKSPACE":/ws --entrypoint chown "$IMAGE" -R "$(id -u):$(id -g)" /ws 2>/dev/null || true
+    fi
+}
+trap chown_workspace_back EXIT
 
 # Cleanup: stop server container
 docker stop $server_name 2>/dev/null || true
@@ -77,3 +99,5 @@ fi
 # Cleanup: stop server container
 docker stop $server_name 2>/dev/null || true
 docker rm $server_name 2>/dev/null || true
+
+# Workspace chown-back runs from the EXIT trap registered above.
