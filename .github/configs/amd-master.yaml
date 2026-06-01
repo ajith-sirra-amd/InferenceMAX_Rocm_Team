@@ -56,7 +56,7 @@ kimik2.5-fp4-mi355x-vllm-agentic-lmcache:
 
 # (giovanni/ajith)
 qwen3.5-fp8-mi355x-sglang-agentic-hicache:
-  image: lmsysorg/sglang-rocm:v0.5.12-rocm720-mi35x-20260521
+  image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260531
   model: Qwen/Qwen3.5-397B-A17B-FP8
   model-prefix: qwen3.5
   runner: mi355x
@@ -72,7 +72,7 @@ qwen3.5-fp8-mi355x-sglang-agentic-hicache:
 
 # (giovanni/ajith)
 qwen3.5-fp4-mi355x-sglang-agentic-hicache:
-  image: lmsysorg/sglang-rocm:v0.5.12-rocm720-mi35x-20260521
+  image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260531
   model: amd/Qwen3.5-397B-A17B-MXFP4
   model-prefix: qwen3.5
   runner: mi355x
@@ -94,7 +94,7 @@ qwen3.5-fp4-mi355x-sglang-agentic-hicache:
 # The original glm5.1-fp4-mi355x-sglang entry stays byte-identical to origin/main.
 # (giovanni/ajith)
 glm5.1-fp4-mi355x-sglang-agentic-hicache:
-  image: lmsysorg/sglang-rocm:v0.5.10rc0-rocm720-mi35x-20260415
+  image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260531
   model: amd/GLM-5.1-MXFP4
   model-prefix: glm5.1
   runner: mi355x
@@ -108,6 +108,22 @@ glm5.1-fp4-mi355x-sglang-agentic-hicache:
       # sglang manages KV eviction; mi355x glm5.1 caps at tp=4 conc=16 in fixed-seq, so cap conservatively
       - { tp: 4, offloading: none, conc-list: [16] }
       - { tp: 4, offloading: hicache, conc-list: [16] }
+
+glm5.1-fp8-mi355x-sglang-agentic-hicache:
+  image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260531
+  model: zai-org/GLM-5.1-FP8
+  model-prefix: glm5.1
+  runner: mi355x
+  precision: fp8
+  framework: sglang
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - duration: 1800
+      search-space:
+      - { tp: 8, ep: 1, offloading: none,    conc-list: [1, 2, 4, 8, 16, 32, 64] }
+      - { tp: 8, ep: 1, offloading: hicache, conc-list: [1, 2, 4, 8, 16, 32, 64] }
+
 
 glm5.1-fp8-mi300x-sglang-agentic:
   image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi30x-20260524
