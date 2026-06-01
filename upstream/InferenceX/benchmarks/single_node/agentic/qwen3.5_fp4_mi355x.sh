@@ -36,6 +36,12 @@ rocm-smi || true
 amd-smi || true
 
 # ---- Resolve traces and install deps ----------------------------------------
+# Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
+# unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
+# signal at high concurrency.
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+
+# ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
 install_agentic_deps
 
@@ -57,7 +63,7 @@ case "$OFFLOADING" in
         # node-total DRAM budget divides by TP and the host-pool count.
         TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-${TOTAL_CPU_DRAM_GB}}"
         HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-1}"
-        HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-180}}"
+        HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-300}}"
         HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
         # Qwen3.5's hybrid Mamba path runs SGLang's no_buffer scheduler, which
         # requires page_size=1. Keep the safer direct/layer_first copy path;
