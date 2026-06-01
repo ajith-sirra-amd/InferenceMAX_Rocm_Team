@@ -14,7 +14,11 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION
+check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR EP_SIZE DP_ATTENTION
+
+PORT=${PORT:-8888}
+DURATION=${DURATION:-1800}
+EP_SIZE=${EP_SIZE:-1}
 
 
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
@@ -35,6 +39,8 @@ mkdir -p "$RESULT_DIR"
 
 OFFLOAD_ARGS=()
 PREFIX_CACHE_ARGS=()
+
+# ---- Lmcache config ----------------------------------------------------------
 LMCACHE_PID=""
 
 cleanup_lmcache_server() {
@@ -94,6 +100,7 @@ case "$OFFLOADING" in
         # RSS + page cache. Eager mode (the shortcut form default) is
         # intentional here per user request — Kimi FP4 on B200 has cleared
         # the full eager sweep before.
+        #TODO: fix
         TOTAL_CPU_DRAM_GB=2500
         export VLLM_USE_SIMPLE_KV_OFFLOAD=1
         OFFLOAD_ARGS=(
@@ -106,7 +113,12 @@ case "$OFFLOADING" in
         { set +x; } 2>/dev/null
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
 
-        agentic_pip_install --quiet --no-cache-dir lmcache
+        #agentic_pip_install --quiet --no-cache-dir lmcache
+        git clone https://github.com/LMCache/LMCache.git
+        cd LMCache
+        pip install -r requirements/build.txt 
+        pip install -e .   --no-build-isolation
+        cd ..
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
         # Keep the semantic CPU KV pool at 2.5 TB for every TP shape. MP mode
@@ -114,6 +126,7 @@ case "$OFFLOADING" in
         # --kv-offloading-size through vLLM's integrated LMCache convenience
         # path, which divides the value by TP and then hits a large single-shot
         # cudaHostAlloc in LMCache 0.4.5's single-process local CPU backend.
+        #TODO: fix
         TOTAL_CPU_DRAM_GB=2500
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
@@ -123,13 +136,15 @@ case "$OFFLOADING" in
         # includes the tcp:// scheme. Keep the server bind host raw, but pass
         # a ZMQ-style host string to the connector.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
-        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$TOTAL_CPU_DRAM_GB}"
+        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
+        LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
         # Initial allocation is deliberately small; --l1-size-gb above is the
         # actual pool capacity and grows lazily as the run fills the cache.
-        LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
+        LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
         LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
+        export LMCACHE_BLOCKING_TIMEOUT_SECS=120
 
         echo "Starting LMCache MP server..."
         LMCACHE_CMD=(
@@ -164,6 +179,7 @@ case "$OFFLOADING" in
         ;;
 esac
 
+# ---- LLM server config ----------------------------------------------------------
 echo "Starting vllm server..."
 export TORCH_CUDA_ARCH_LIST="10.0"
 export PYTHONNOUSERSITE=1
