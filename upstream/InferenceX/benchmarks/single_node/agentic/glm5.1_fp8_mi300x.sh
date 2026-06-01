@@ -67,6 +67,15 @@ case "$OFFLOADING" in
             --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
             --hicache-write-policy "$HICACHE_WRITE_POLICY"
         )
+        # Capture ROCm graphs up to full concurrency so the hicache arm is a
+        # fair A/B against the none arm (which captures to $CONC). The MI355X
+        # recipe caps this at 16 due to a high-conc capture crash on that HW;
+        # on MI300X we follow $CONC. Override via env if MI300X hits the same
+        # startup crash at high conc.
+        HICACHE_CUDA_GRAPH_MAX_BS="${HICACHE_CUDA_GRAPH_MAX_BS:-$CONC}"
+        if [ "$HICACHE_CUDA_GRAPH_MAX_BS" -lt "$CUDA_GRAPH_MAX_BS" ]; then
+            CUDA_GRAPH_MAX_BS="$HICACHE_CUDA_GRAPH_MAX_BS"
+        fi
         ;;
     *)
         echo "Error: unsupported OFFLOADING value '$OFFLOADING' (expected one of: none, hicache)" >&2
