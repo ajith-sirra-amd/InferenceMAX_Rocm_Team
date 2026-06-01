@@ -162,7 +162,6 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
           fetch-depth: 0
           ref: ${{ inputs.ref || github.sha }}
-          clean: true
           submodules: true
 
       - name: Cleanup stale outputs (pre-run)
