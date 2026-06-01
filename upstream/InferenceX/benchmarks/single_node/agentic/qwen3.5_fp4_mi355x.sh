@@ -56,7 +56,7 @@ case "$OFFLOADING" in
         # TP rank (one hierarchical KV, one hierarchical Mamba), so the
         # node-total DRAM budget divides by TP and the host-pool count.
         TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-${TOTAL_CPU_DRAM_GB}}"
-        HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-2}"
+        HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-1}"
         HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-180}}"
         HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
         # Qwen3.5's hybrid Mamba path runs SGLang's no_buffer scheduler, which
