@@ -106,8 +106,8 @@ glm5.1-fp4-mi355x-sglang-agentic-hicache:
     - duration: 1800
       search-space:
       # sglang manages KV eviction; mi355x glm5.1 caps at tp=4 conc=16 in fixed-seq, so cap conservatively
-      - { tp: 4, offloading: none, conc-list: [16] }
-      - { tp: 4, offloading: hicache, conc-list: [16] }
+      - { tp: 4, offloading: none, conc-list: [16, 32, 64] }
+      - { tp: 4, offloading: hicache, conc-list: [16, 32, 64] }
 
 glm5.1-fp8-mi355x-sglang-agentic-hicache:
   image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260531
