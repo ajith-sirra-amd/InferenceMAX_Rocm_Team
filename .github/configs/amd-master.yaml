@@ -109,6 +109,22 @@ glm5.1-fp4-mi355x-sglang-agentic-hicache:
       - { tp: 4, offloading: none, conc-list: [16] }
       - { tp: 4, offloading: hicache, conc-list: [16] }
 
+glm5.1-fp8-mi355x-sglang-agentic-hicache:
+  image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi30x-20260524
+  model: zai-org/GLM-5.1-FP8
+  model-prefix: glm5.1
+  runner: mi355x
+  precision: fp8
+  framework: sglang
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - duration: 1800
+      search-space:
+      - { tp: 8, ep: 1, offloading: none,    conc-list: [1, 2, 4, 8, 16, 32, 64] }
+      - { tp: 8, ep: 1, offloading: hicache, conc-list: [1, 2, 4, 8, 16, 32, 64] }
+
+
 glm5.1-fp8-mi300x-sglang-agentic:
   image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi30x-20260524
   model: zai-org/GLM-5.1-FP8
