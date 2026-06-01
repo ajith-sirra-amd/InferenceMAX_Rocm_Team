@@ -47,7 +47,7 @@ case "$OFFLOADING" in
         # pool while the workflow input is a node-total DRAM budget, so divide
         # by TP and the host-pool count. Overridable for one-off tuning.
         HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-1}"
-        HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-300}"
+        HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-180}"
         HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through}"
         HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
         HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-layer_first}"
