@@ -2713,7 +2713,7 @@ kimik2.5-fp4-b200-vllm-agentic-lmcache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 4, ep: 1, offloading: none, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
+      #- { tp: 4, ep: 1, offloading: none, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
       - { tp: 4, ep: 1, offloading: lmcache, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
 
 # NOTE: At the time of submission, https://docs.vllm.ai/projects/recipes/en/latest/moonshotai/Kimi-K2.5.html
