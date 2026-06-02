@@ -208,17 +208,18 @@ VLLM_CMD=(
     --host 0.0.0.0
     --port "$PORT"
     --tensor-parallel-size="$TP"
-    --gpu-memory-utilization 0.90
+    --gpu-memory-utilization 0.80
     --max-num-seqs "$CONC"
     --reasoning-parser kimi_k2
     --tool-call-parser kimi_k2
     --compilation_config.pass_config.fuse_allreduce_rms true
     --kv-cache-dtype fp8
-    --max-cudagraph-capture-size 2048
-    --stream-interval 20
+    --max-cudagraph-capture-size "$CONC"
     --trust-remote-code
     "${PREFIX_CACHE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
+    #--gpu-memory-utilization 0.90
+    #--stream-interval 20
 )
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
