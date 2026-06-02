@@ -12,8 +12,8 @@ minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache:
     agentic-coding:
     - duration: 1800
       search-space:
-      #- { tp: 1, ep: 1, offloading: none, conc-list: [16] }
-      - { tp: 1, ep: 1, offloading: lmcache, conc-list: [16] }
+      - { tp: 1, ep: 1, offloading: none, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
+      - { tp: 1, ep: 1, offloading: lmcache, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
 
 # (seungrok)
 minimaxm2.5-fp8-mi355x-vllm-agentic-lmcache:
@@ -31,8 +31,8 @@ minimaxm2.5-fp8-mi355x-vllm-agentic-lmcache:
     # AMD uses native OffloadingConnector (NOT SimpleCPUOffloadConnector).
     - duration: 1800
       search-space:
-      - { tp: 2, ep: 1, offloading: none, conc-list: [16] }
-      - { tp: 2, ep: 1, offloading: lmcache, conc-list: [16] }
+      - { tp: 2, ep: 1, offloading: none, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
+      - { tp: 2, ep: 1, offloading: lmcache, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
 
 # Diverged from kimik2.5-fp4-mi355x-vllm (agentic-coding sibling). Reasons below;
 # the original kimik2.5-fp4-mi355x-vllm entry is left identical to origin/main so
