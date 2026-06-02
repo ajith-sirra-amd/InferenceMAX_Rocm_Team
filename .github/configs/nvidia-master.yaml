@@ -2702,7 +2702,7 @@ kimik2.5-fp4-b200-vllm-agentic:
       - { tp: 4, ep: 1, offloading: cpu,  conc-list: [12, 14, 16, 18, 20, 22, 24, 32] }
 
 kimik2.5-fp4-b200-vllm-agentic-lmcache:
-  image: vllm/vllm-openai:v0.22.0
+  image: vllm/vllm-openai:v0.21.0
   model: nvidia/Kimi-K2.5-NVFP4
   model-prefix: kimik2.5
   runner: b200-dgxc

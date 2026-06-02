@@ -29,6 +29,14 @@ if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
 nvidia-smi
 
 # ---- Resolve traces and install deps ----------------------------------------
+# H100 max_model_len caps at 131k (HBM-bound). The unfiltered with-subagents
+# corpus has requests up to ~1M proxy tokens that the server would reject.
+# Switch to the 256k-capped variant (470 traces, max in+out <= 256k); even
+# at 131k context, the rejection rate is much lower than against the
+# unfiltered corpus.
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+
+# ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
 install_agentic_deps
 
