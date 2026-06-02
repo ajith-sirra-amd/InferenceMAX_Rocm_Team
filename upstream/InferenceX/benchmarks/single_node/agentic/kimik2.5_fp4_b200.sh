@@ -114,6 +114,7 @@ case "$OFFLOADING" in
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
 
         set -x
+        pip uninstall -y lmcache
         agentic_pip_install --quiet --no-cache-dir lmcache
         #echo "installing lmcache from source"
         #git clone https://github.com/LMCache/LMCache.git
