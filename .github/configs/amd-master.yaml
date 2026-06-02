@@ -214,8 +214,8 @@ qwen3.5-fp8-mi300x-sglang-agentic-smoke:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 8, ep: 1, offloading: none,    conc-list: [16] }
-      - { tp: 8, ep: 1, offloading: hicache, conc-list: [16] }
+      - { tp: 8, ep: 1, offloading: none,    conc-list: [64] }
+      - { tp: 8, ep: 1, offloading: hicache, conc-list: [64] }
 
 # Diverged from minimaxm2.5-fp8-mi300x-vllm (agentic-coding sibling). Reasons below;
 # the original minimaxm2.5-fp8-mi300x-vllm entry is left identical to origin/main so
