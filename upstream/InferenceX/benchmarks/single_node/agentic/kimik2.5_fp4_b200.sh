@@ -130,8 +130,7 @@ case "$OFFLOADING" in
         # path, which divides the value by TP and then hits a large single-shot
         # cudaHostAlloc in LMCache 0.4.5's single-process local CPU backend.
         #TODO: fix
-        #TOTAL_CPU_DRAM_GB=2500
-        TOTAL_CPU_DRAM_GB=1500
+        TOTAL_CPU_DRAM_GB=2500
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8080}"
@@ -145,8 +144,7 @@ case "$OFFLOADING" in
         # Initial allocation is deliberately small; --l1-size-gb above is the
         # actual pool capacity and grows lazily as the run fills the cache.
         LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
-        #LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
-        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-1024}"
+        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
         export LMCACHE_BLOCKING_TIMEOUT_SECS=120
@@ -156,13 +154,13 @@ case "$OFFLOADING" in
             lmcache server
             --host "$LMCACHE_HOST"
             --port "$LMCACHE_PORT"
+            --http-host "$LMCACHE_HOST"
+            --http-port "$LMCACHE_HTTP_PORT"
             --l1-size-gb "$LMCACHE_L1_SIZE_GB"
+            --l1-init-size-gb "$LMCACHE_L1_INIT_SIZE_GB"
             --chunk-size "$LMCACHE_CHUNK_SIZE"
             --max-workers "$LMCACHE_MAX_WORKERS"
             --eviction-policy LRU
-            #--http-host "$LMCACHE_HOST"
-            #--http-port "$LMCACHE_HTTP_PORT"
-            #--l1-init-size-gb "$LMCACHE_L1_INIT_SIZE_GB"
         )
         printf '%q ' "${LMCACHE_CMD[@]}" > "$RESULT_DIR/lmcache_command.txt"
         printf '\n' >> "$RESULT_DIR/lmcache_command.txt"
@@ -172,14 +170,9 @@ case "$OFFLOADING" in
         wait_for_lmcache_ready
 
         PREFIX_CACHE_ARGS=(--enable-prefix-caching)
-        #OFFLOAD_ARGS=(
-        #    --kv-transfer-config
-        #    "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"lmcache.integration.vllm.lmcache_mp_connector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"$LMCACHE_CONNECT_HOST\",\"lmcache.mp.port\":$LMCACHE_PORT}}"
-        #    --disable-hybrid-kv-cache-manager
-        #)
         OFFLOAD_ARGS=(
             --kv-transfer-config
-            "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"$LMCACHE_CONNECT_HOST\",\"lmcache.mp.port\":$LMCACHE_PORT}}"
+            "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"lmcache.integration.vllm.lmcache_mp_connector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"$LMCACHE_CONNECT_HOST\",\"lmcache.mp.port\":$LMCACHE_PORT}}"
             --disable-hybrid-kv-cache-manager
         )
         ;;
@@ -208,18 +201,17 @@ VLLM_CMD=(
     --host 0.0.0.0
     --port "$PORT"
     --tensor-parallel-size="$TP"
-    --gpu-memory-utilization 0.80
+    --gpu-memory-utilization 0.90
     --max-num-seqs "$CONC"
     --reasoning-parser kimi_k2
     --tool-call-parser kimi_k2
     --compilation_config.pass_config.fuse_allreduce_rms true
     --kv-cache-dtype fp8
-    --max-cudagraph-capture-size "$CONC"
+    --max-cudagraph-capture-size 2048
+    --stream-interval 20
     --trust-remote-code
     "${PREFIX_CACHE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
-    #--gpu-memory-utilization 0.90
-    #--stream-interval 20
 )
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
