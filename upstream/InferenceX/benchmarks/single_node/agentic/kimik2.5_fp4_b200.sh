@@ -113,12 +113,13 @@ case "$OFFLOADING" in
         { set +x; } 2>/dev/null
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
 
-        #agentic_pip_install --quiet --no-cache-dir lmcache
-        git clone https://github.com/LMCache/LMCache.git
-        cd LMCache
-        pip install -r requirements/build.txt 
-        pip install -e .   --no-build-isolation
-        cd ..
+        set -x
+        agentic_pip_install --quiet --no-cache-dir lmcache
+        #git clone https://github.com/LMCache/LMCache.git
+        #cd LMCache
+        #pip install -r requirements/build.txt 
+        #pip install -e .   --no-build-isolation
+        #cd ..
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
         # Keep the semantic CPU KV pool at 2.5 TB for every TP shape. MP mode
