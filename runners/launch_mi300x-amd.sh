@@ -39,9 +39,16 @@ chown_workspace_back() {
 }
 trap chown_workspace_back EXIT
 
-# Cleanup: stop server container
-docker stop $server_name 2>/dev/null || true
-docker rm $server_name 2>/dev/null || true
+# Cleanup: force-remove any stale server container. A force-cancelled run
+# leaves bmk-server running (the --rm client is killed but the daemon keeps
+# the container, and the EXIT trap never fires). stop+rm races with --rm
+# autoremoval and can leave the name occupied, so rm -f and then wait until
+# the name is actually free before reusing it on the docker run below.
+docker rm -f $server_name 2>/dev/null || true
+for _ in $(seq 1 30); do
+    docker ps -aq -f "name=^${server_name}$" | grep -q . || break
+    sleep 1
+done
 
 set -x
 docker pull $IMAGE
