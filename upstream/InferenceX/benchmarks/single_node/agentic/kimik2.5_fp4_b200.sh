@@ -36,9 +36,10 @@ nvidia-smi
 
 # ---- Resolve traces and install deps ----------------------------------------
 # Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
-# unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
+# unfiltered 060226 corpus whose ~1M-token traces get rejected and add no perf
 # signal at high concurrency.
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+#export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060226_256k
 
 # ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
