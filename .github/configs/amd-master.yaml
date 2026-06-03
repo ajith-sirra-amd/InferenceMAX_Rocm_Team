@@ -56,7 +56,7 @@ kimik2.5-fp4-mi355x-vllm-agentic-lmcache:
 
 # (giovanni/ajith)
 qwen3.5-fp8-mi355x-sglang-agentic-hicache:
-  image: lmsysorg/sglang-rocm:v0.5.12-rocm720-mi35x-20260517
+  image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260531
   model: Qwen/Qwen3.5-397B-A17B-FP8
   model-prefix: qwen3.5
   runner: mi355x
