@@ -39,7 +39,8 @@ amd-smi || true
 # Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
 # unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
 # signal at high concurrency.
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+# export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060226_256k
 
 # ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
@@ -108,21 +109,17 @@ echo "Starting SGLang server..."
 export PYTHONNOUSERSITE=1
 
 python3 -m sglang.launch_server \
-    --attention-backend triton \
-    --model-path "$MODEL_PATH" --served-model-name "$MODEL" \
+    --attention-backend aiter \
+    --model-path "$MODEL" \
     --host=0.0.0.0 \
     --port $PORT \
     --tensor-parallel-size $TP \
     --ep-size $EP_SIZE \
     --trust-remote-code \
-    --tokenizer-worker-num 6 \
-    --enable-aiter-allreduce-fusion \
+    --tokenizer-worker-num 4 \
     --cuda-graph-max-bs $CONC \
     --max-running-requests $CONC \
-    --max-prefill-tokens 32768 \
-    --scheduler-recv-interval 30 \
     --mem-fraction-static 0.8 \
-    --context-length $MAX_MODEL_LEN \
     "${CACHE_ARGS[@]}" \
     "${WARMUP_ARGS[@]}" \
     --enable-metrics > "$SERVER_LOG" 2>&1 &
