@@ -24,7 +24,17 @@ if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
 
-if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
+# `hf download` creates the target dir if missing and is itself idempotent.
+# When MODEL_PATH is unset (stand-alone runs), fall back to the HF_HUB_CACHE
+# Either way, MODEL_PATH is what the server is launched with.
+if [[ -n "${MODEL_PATH:-}" ]]; then
+    if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
+        hf download "$MODEL" --local-dir "$MODEL_PATH"
+    fi
+else
+    hf download "$MODEL"
+    export MODEL_PATH="$MODEL"
+fi
 nvidia-smi
 
 # ---- Resolve traces and install deps ----------------------------------------
@@ -85,7 +95,7 @@ export SGLANG_ENABLE_FLASHINFER_GEMM=true
 { set +x; } 2>/dev/null
 SGLANG_CMD=(
     python3 -m sglang.launch_server
-    --model-path="$MODEL"
+    --model-path="$MODEL_PATH" --served-model-name="$MODEL"
     --host=0.0.0.0
     --port="$PORT"
     --served-model-name "Qwen/Qwen3.5-397B-A17B-FP8"

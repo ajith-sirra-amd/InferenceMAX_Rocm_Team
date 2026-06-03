@@ -14,27 +14,25 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR EP_SIZE DP_ATTENTION
-
-PORT=${PORT:-8888}
-DURATION=${DURATION:-1800}
-EP_SIZE=${EP_SIZE:-1}
+check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION
 
 
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
 
-if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
+# `hf download` creates the target dir if missing and is itself idempotent.
+# When MODEL_PATH is unset (stand-alone runs), fall back to the HF_HUB_CACHE
+# Either way, MODEL_PATH is what the server is launched with.
+if [[ -n "${MODEL_PATH:-}" ]]; then
+    if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
+        hf download "$MODEL" --local-dir "$MODEL_PATH"
+    fi
+else
+    hf download "$MODEL"
+    export MODEL_PATH="$MODEL"
+fi
 nvidia-smi
-
-# ---- Resolve traces and install deps ----------------------------------------
-# H100 max_model_len caps at 131k (HBM-bound). The unfiltered with-subagents
-# corpus has requests up to ~1M proxy tokens that the server would reject.
-# Switch to the 256k-capped variant (470 traces, max in+out <= 256k); even
-# at 131k context, the rejection rate is much lower than against the
-# unfiltered corpus.
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
 
 # ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
@@ -47,8 +45,6 @@ mkdir -p "$RESULT_DIR"
 
 OFFLOAD_ARGS=()
 PREFIX_CACHE_ARGS=()
-
-# ---- Lmcache config ----------------------------------------------------------
 LMCACHE_PID=""
 
 cleanup_lmcache_server() {
@@ -108,7 +104,6 @@ case "$OFFLOADING" in
         # RSS + page cache. Eager mode (the shortcut form default) is
         # intentional here per user request — Kimi FP4 on B200 has cleared
         # the full eager sweep before.
-        #TODO: fix
         TOTAL_CPU_DRAM_GB=2500
         export VLLM_USE_SIMPLE_KV_OFFLOAD=1
         OFFLOAD_ARGS=(
@@ -121,15 +116,7 @@ case "$OFFLOADING" in
         { set +x; } 2>/dev/null
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
 
-        set -x
-        pip uninstall -y lmcache
         agentic_pip_install --quiet --no-cache-dir lmcache
-        #echo "installing lmcache from source"
-        #git clone https://github.com/LMCache/LMCache.git
-        #cd LMCache
-        #pip install -r requirements/build.txt 
-        #pip install -e .   --no-build-isolation
-        #cd ..
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
         # Keep the semantic CPU KV pool at 2.5 TB for every TP shape. MP mode
@@ -137,7 +124,6 @@ case "$OFFLOADING" in
         # --kv-offloading-size through vLLM's integrated LMCache convenience
         # path, which divides the value by TP and then hits a large single-shot
         # cudaHostAlloc in LMCache 0.4.5's single-process local CPU backend.
-        #TODO: fix
         TOTAL_CPU_DRAM_GB=2500
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
@@ -147,15 +133,13 @@ case "$OFFLOADING" in
         # includes the tcp:// scheme. Keep the server bind host raw, but pass
         # a ZMQ-style host string to the connector.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
-        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
-        LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
+        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$TOTAL_CPU_DRAM_GB}"
         # Initial allocation is deliberately small; --l1-size-gb above is the
         # actual pool capacity and grows lazily as the run fills the cache.
-        LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
+        LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
         LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
-        export LMCACHE_BLOCKING_TIMEOUT_SECS=120
 
         echo "Starting LMCache MP server..."
         LMCACHE_CMD=(
@@ -190,7 +174,6 @@ case "$OFFLOADING" in
         ;;
 esac
 
-# ---- LLM server config ----------------------------------------------------------
 echo "Starting vllm server..."
 export TORCH_CUDA_ARCH_LIST="10.0"
 export PYTHONNOUSERSITE=1
@@ -205,7 +188,7 @@ export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0
 
 { set +x; } 2>/dev/null
 VLLM_CMD=(
-    vllm serve "$MODEL" --served-model-name "$MODEL"
+    vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
     --port "$PORT"
     --tensor-parallel-size="$TP"

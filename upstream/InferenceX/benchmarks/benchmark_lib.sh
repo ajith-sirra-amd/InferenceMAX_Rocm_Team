@@ -217,6 +217,7 @@ run_benchmark_serving() {
     local dsv4=false
     local trust_remote_code=false
     local server_pid=""
+    local tokenizer=""
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -283,6 +284,10 @@ run_benchmark_serving() {
                 ;;
             --server-pid)
                 server_pid="$2"
+                shift 2
+                ;;
+            --tokenizer)
+                tokenizer="$2"
                 shift 2
                 ;;
             *)
@@ -390,6 +395,10 @@ run_benchmark_serving() {
     # Add --trust-remote-code if requested
     if [[ "$trust_remote_code" == true ]]; then
         benchmark_cmd+=(--trust-remote-code)
+    fi
+
+    if [[ -n "$tokenizer" ]]; then
+        benchmark_cmd+=(--tokenizer "$tokenizer")
     fi
 
     # Run benchmark with optional server monitoring
@@ -915,8 +924,19 @@ resolve_trace_source() {
     # public-dataset loader names allowed by the inferencex-agentx-mvp
     # scenario. Used by recipes whose servers have non-default context
     # caps (e.g. minimaxm2.5 at max_model_len ~256k can't replay the
-    # unfiltered 052726 corpus and switches to the 256k-capped variant).
-    local loader="${WEKA_LOADER_OVERRIDE:-semianalysis_cc_traces_weka_with_subagents}"
+    # unfiltered corpus and switches to the 256k-capped variant), or
+    # by recipes that want to pin a specific corpus generation rather
+    # than ride the model-prefix-aware default below.
+    #
+    # Default (no override) is model-prefix-aware:
+    #   DSv4 recipes      -> 052726 (v5 corpus, the original baseline)
+    #   everything else   -> 060226 (v6 corpus, newer CC versions)
+    # DSv4 stays on 052726 for continuity with prior published baselines.
+    local default_loader="semianalysis_cc_traces_weka_with_subagents_060226"
+    if [[ "${MODEL_PREFIX:-}" == "dsv4" ]]; then
+        default_loader="semianalysis_cc_traces_weka_with_subagents"
+    fi
+    local loader="${WEKA_LOADER_OVERRIDE:-$default_loader}"
     local dataset
     case "$loader" in
         semianalysis_cc_traces_weka_with_subagents)
@@ -925,13 +945,19 @@ resolve_trace_source() {
         semianalysis_cc_traces_weka_with_subagents_256k)
             dataset="semianalysisai/cc-traces-weka-with-subagents-052726-256k"
             ;;
+        semianalysis_cc_traces_weka_with_subagents_060226)
+            dataset="semianalysisai/cc-traces-weka-with-subagents-060226"
+            ;;
+        semianalysis_cc_traces_weka_with_subagents_060226_256k)
+            dataset="semianalysisai/cc-traces-weka-with-subagents-060226-256k"
+            ;;
         *)
-            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k" >&2
+            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k" >&2
             exit 1
             ;;
     esac
     TRACE_SOURCE_FLAG="--public-dataset $loader"
-    echo "Loading traces via aiperf public-dataset: $loader ($dataset)"
+    echo "Loading traces via aiperf public-dataset: $loader ($dataset) [MODEL_PREFIX=${MODEL_PREFIX:-unset}]"
     # Pre-download the dataset into the shared HF_HUB_CACHE (same mount used
     # for model weights) so subsequent runs read from cache instead of
     # re-downloading every job.
