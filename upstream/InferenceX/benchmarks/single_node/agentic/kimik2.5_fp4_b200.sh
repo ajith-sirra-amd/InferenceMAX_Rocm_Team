@@ -35,6 +35,12 @@ fi
 nvidia-smi
 
 # ---- Resolve traces and install deps ----------------------------------------
+# Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
+# unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
+# signal at high concurrency.
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+
+# ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
 install_agentic_deps
 
@@ -133,7 +139,8 @@ case "$OFFLOADING" in
         # includes the tcp:// scheme. Keep the server bind host raw, but pass
         # a ZMQ-style host string to the connector.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
-        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$TOTAL_CPU_DRAM_GB}"
+        #LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$TOTAL_CPU_DRAM_GB}"
+        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         # Initial allocation is deliberately small; --l1-size-gb above is the
         # actual pool capacity and grows lazily as the run fills the cache.
         LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
