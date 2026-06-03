@@ -19,9 +19,25 @@ if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
 
-if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
+# `hf download` creates the target dir if missing and is itself idempotent.
+# When MODEL_PATH is unset (stand-alone runs), fall back to the HF_HUB_CACHE
+# Either way, MODEL_PATH is what the server is launched with.
+if [[ -n "${MODEL_PATH:-}" ]]; then
+    if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
+        hf download "$MODEL" --local-dir "$MODEL_PATH"
+    fi
+else
+    hf download "$MODEL"
+    export MODEL_PATH="$MODEL"
+fi
 rocm-smi || true
 amd-smi || true
+# ---- Resolve traces and install deps ----------------------------------------
+# Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
+# unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
+# signal at high concurrency.
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+
 
 # ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
@@ -97,7 +113,8 @@ echo "Starting SGLang server..."
 export PYTHONNOUSERSITE=1
 
 python3 -m sglang.launch_server \
-    --model-path $MODEL \
+    --model-path "$MODEL_PATH" \
+    --served-model-name "$MODEL" \
     --host=0.0.0.0 \
     --port $PORT \
     --tensor-parallel-size $TP \

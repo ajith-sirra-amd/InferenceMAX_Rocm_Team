@@ -132,6 +132,8 @@ python3 -m sglang.launch_server \
     --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}' \
     --dsa-prefill-backend tilelang \
     --dsa-decode-backend tilelang \
+    --chunked-prefill-size 131072 \
+    --watchdog-timeout 1200 \
     --kv-cache-dtype fp8_e4m3 \
     --tokenizer-worker-num $((TP*2)) \
     "${CACHE_ARGS[@]}" \
