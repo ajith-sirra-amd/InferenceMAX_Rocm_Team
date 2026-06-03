@@ -62,7 +62,7 @@ case "$OFFLOADING" in
         # Qwen3.5's hybrid GDN/Mamba path allocates two HiCache host pools per
         # TP rank (one hierarchical KV, one hierarchical Mamba), so the
         # node-total DRAM budget divides by TP and the host-pool count.
-        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-625}}"
+        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-$((TOTAL_CPU_DRAM_GB * TP / 8))}"
         HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-2}"
         HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-300}}"
         HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
@@ -108,30 +108,21 @@ esac
 echo "Starting SGLang server..."
 export PYTHONNOUSERSITE=1
 
-
-{ set +x; } 2>/dev/null
-SGLANG_CMD=(
-    python3 -m sglang.launch_server
-    --attention-backend triton
-    --model-path "$MODEL"
-    --host=0.0.0.0
-    --port "$PORT"
-    --tensor-parallel-size "$TP"
-    --ep-size "$EP_SIZE"
-    --trust-remote-code
-    --tokenizer-worker-num 6
-    --enable-aiter-allreduce-fusion
-    --cuda-graph-max-bs "$CUDA_GRAPH_MAX_BS"
-    --max-running-requests "$CONC"
-    --scheduler-recv-interval "$SCHEDULER_RECV_INTERVAL"
-    --mem-fraction-static 0.8
-    --enable-metrics
-    "${CACHE_ARGS[@]}"
-    "${WARMUP_ARGS[@]}"
-)
-printf '%q ' "${SGLANG_CMD[@]}" | tee "$RESULT_DIR/sglang_command.txt"
-printf '\n' | tee -a "$RESULT_DIR/sglang_command.txt"
-"${SGLANG_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+python3 -m sglang.launch_server \
+    --attention-backend aiter \
+    --model-path "$MODEL" \
+    --host=0.0.0.0 \
+    --port $PORT \
+    --tensor-parallel-size $TP \
+    --ep-size $EP_SIZE \
+    --trust-remote-code \
+    --tokenizer-worker-num 4 \
+    --cuda-graph-max-bs $CONC \
+    --max-running-requests $CONC \
+    --mem-fraction-static 0.8 \
+    "${CACHE_ARGS[@]}" \
+    "${WARMUP_ARGS[@]}" \
+    --enable-metrics > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
