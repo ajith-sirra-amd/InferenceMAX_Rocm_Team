@@ -119,7 +119,7 @@ python3 -m sglang.launch_server \
     --port $PORT \
     --tensor-parallel-size $TP \
     --trust-remote-code \
-    --cuda-graph-max-bs $CONC \
+    --cuda-graph-max-bs $CUDA_GRAPH_MAX_BS \
     --max-running-requests $CONC \
     --context-length $MAX_MODEL_LEN \
     --mem-fraction-static 0.85 \
