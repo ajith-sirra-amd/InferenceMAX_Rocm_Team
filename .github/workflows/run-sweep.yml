@@ -233,6 +233,7 @@ jobs:
         name: agentic /
         strategy:
             fail-fast: false
+            max-parallel: 1
             matrix:
                 config: ${{ fromJson(needs.setup.outputs.search-space-config).single_node['agentic'] }}
         secrets: inherit
