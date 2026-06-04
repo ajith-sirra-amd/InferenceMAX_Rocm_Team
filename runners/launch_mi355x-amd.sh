@@ -45,6 +45,15 @@ exec 9>"${BMK_LOCK}"
 flock -x 9
 echo "[lock] Lock acquired (PID=$$)."
 
+# After acquiring the lock, reset any GPU compute processes that a previous
+# crashed job (SIGKILL/OOM) may have left behind, preventing NCCL
+# "unhandled cuda error" on ncclCommInitRank.
+echo "[lock] Killing stale GPU compute processes ..."
+for dev in /dev/dri/render*; do
+    fuser -k "$dev" 2>/dev/null || true
+done
+sleep 3
+
 # chown_workspace_back() {
 #     docker run --rm -v "$GITHUB_WORKSPACE":/ws --entrypoint sh "$IMAGE" -c "rm -rf /ws/* /ws/.[!.]* /ws/..?*" 2>/dev/null || true
 # }
