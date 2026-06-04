@@ -23,7 +23,9 @@ elif [[ $FRAMEWORK == "atom" ]]; then
 fi
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
-server_name="bmk-server"
+# Use PID to avoid container name conflicts when multiple jobs run concurrently
+# on the same physical runner (e.g. original + _clone jobs on p01_g07).
+server_name="bmk-server-$$"
 
 # chown_workspace_back() {
 #     docker run --rm -v "$GITHUB_WORKSPACE":/ws --entrypoint sh "$IMAGE" -c "rm -rf /ws/* /ws/.[!.]* /ws/..?*" 2>/dev/null || true
