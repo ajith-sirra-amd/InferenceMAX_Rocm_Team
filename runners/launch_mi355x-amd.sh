@@ -33,6 +33,18 @@ server_name="bmk-server-$$"
 # common defaults (8888) and SSH tunnels.
 export PORT="${PORT:-$((8800 + ($$ % 100)))}"
 
+# Acquire an exclusive host-level lock before running the benchmark.
+# This serializes jobs across all runner processes on the same physical machine
+# (e.g. "mi355x-amd_p02_g17" and "mi355x-amd_p02_g17_clone"), preventing
+# GPU/NCCL conflicts and CPU RAM exhaustion from concurrent HiCache allocations.
+# flock -x blocks until the lock is available; it is released automatically
+# when this script exits (fd 9 is closed by the shell).
+BMK_LOCK=/tmp/bmk-mi355x-amd.lock
+echo "[lock] Waiting for host-level benchmark lock (${BMK_LOCK}) ..."
+exec 9>"${BMK_LOCK}"
+flock -x 9
+echo "[lock] Lock acquired (PID=$$)."
+
 # chown_workspace_back() {
 #     docker run --rm -v "$GITHUB_WORKSPACE":/ws --entrypoint sh "$IMAGE" -c "rm -rf /ws/* /ws/.[!.]* /ws/..?*" 2>/dev/null || true
 # }
