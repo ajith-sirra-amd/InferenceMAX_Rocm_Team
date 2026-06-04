@@ -124,14 +124,6 @@ permissions:
 jobs:
   benchmark:
     runs-on: ${{ inputs.runner }}
-    # Serialize jobs that land on the same physical host to avoid GPU/NCCL conflicts
-    # and CPU RAM exhaustion (e.g. HiCache FP8 TP4 = ~1475 GB).
-    # "_clone" runners share hardware with their base label, so we key the group on
-    # model-prefix + precision only (not the runner label) to cover both.
-    # cancel-in-progress: false ensures the running job completes before the next starts.
-    concurrency:
-      group: bmk-${{ inputs.model-prefix }}-${{ inputs.precision }}
-      cancel-in-progress: false
     timeout-minutes: 500
     name: "${{ inputs.exp-name }} ${{ inputs.precision }} ${{ inputs.runner }} ${{ inputs.framework }} | tp=${{ inputs.tp }} ep=${{ inputs.ep }} dpa=${{ inputs.dp-attn }} | disagg-${{ inputs.disagg }} spec-${{ inputs.spec-decoding }} conc-${{ inputs.conc }}${{ inputs.eval-only && ' | eval-only' || (inputs.run-eval && ' | eval' || '') }}"
     steps:
