@@ -62,31 +62,24 @@ case "$OFFLOADING" in
         # Qwen3.5's hybrid GDN/Mamba path allocates two HiCache host pools per
         # TP rank (one hierarchical KV, one hierarchical Mamba), so the
         # node-total DRAM budget divides by TP and the host-pool count.
-        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-$((TOTAL_CPU_DRAM_GB * TP / 8))}"
+        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-2500}"
         HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-2}"
-        HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-300}}"
         HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
-        # Qwen3.5's hybrid Mamba path runs SGLang's no_buffer scheduler, which
-        # requires page_size=1. Keep the safer direct/layer_first copy path;
-        # kernel/page_first faults on first prefill in this mode on ROCm.
-        HICACHE_PAGE_SIZE="${HICACHE_PAGE_SIZE:-1}"
-        HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
-        HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-layer_first}"
+        # SGLang --hicache-size is per rank per host pool, while the workflow
+        # input is a node-total DRAM budget. Divide by TP and the number of
+        # host pools unless HICACHE_SIZE_GB is set directly for one-off tuning.
         HICACHE_SIZE_GB="${HICACHE_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / TP / HICACHE_HOST_POOL_COUNT))}"
-        if [ "$HICACHE_SIZE_GB" -gt "$HICACHE_MAX_SIZE_GB_PER_RANK_POOL" ]; then
-            HICACHE_SIZE_GB="$HICACHE_MAX_SIZE_GB_PER_RANK_POOL"
-        fi
         if [ "$HICACHE_SIZE_GB" -lt 1 ]; then
             echo "Error: computed HICACHE_SIZE_GB=$HICACHE_SIZE_GB from TOTAL_CPU_DRAM_GB=$TOTAL_CPU_DRAM_GB, TP=$TP, HICACHE_HOST_POOL_COUNT=$HICACHE_HOST_POOL_COUNT" >&2
             exit 1
         fi
         echo "HiCache CPU pool: ${HICACHE_SIZE_GB} GB per rank per host pool across TP=${TP}, host_pool_count=${HICACHE_HOST_POOL_COUNT}"
         CACHE_ARGS=(
-            --page-size "$HICACHE_PAGE_SIZE"
+            --page-size 64
             --enable-hierarchical-cache
             --hicache-size "$HICACHE_SIZE_GB"
-            --hicache-io-backend "$HICACHE_IO_BACKEND"
-            --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
+            --hicache-io-backend kernel
+            --hicache-mem-layout page_first
             --hicache-write-policy "$HICACHE_WRITE_POLICY"
         )
         # HiCache startup reaches API readiness but SGLang's internal warmup
