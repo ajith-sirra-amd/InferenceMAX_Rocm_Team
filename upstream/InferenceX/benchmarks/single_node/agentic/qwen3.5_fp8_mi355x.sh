@@ -120,10 +120,8 @@ SGLANG_CMD=(
     --enable-aiter-allreduce-fusion
     --cuda-graph-max-bs "$CUDA_GRAPH_MAX_BS"
     --max-running-requests "$CONC"
-    --max-prefill-tokens 32768
     --scheduler-recv-interval "$SCHEDULER_RECV_INTERVAL"
     --mem-fraction-static 0.8
-    --context-length "$MAX_MODEL_LEN"
     --enable-metrics
     "${CACHE_ARGS[@]}"
     "${WARMUP_ARGS[@]}"
