@@ -62,7 +62,7 @@ case "$OFFLOADING" in
         # Qwen3.5's hybrid GDN/Mamba path allocates two HiCache host pools per
         # TP rank (one hierarchical KV, one hierarchical Mamba), so the
         # node-total DRAM budget divides by TP and the host-pool count.
-        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-625}"
+        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-$((TOTAL_CPU_DRAM_GB * TP / 8))}"
         HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-2}"
         HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-300}}"
         HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
