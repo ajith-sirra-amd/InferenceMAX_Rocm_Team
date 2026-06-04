@@ -6,11 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 files = [
-    '/home/srok/InferenceMAX_rocm/results/0603_sa/kimik2.5-fp4-mi355x-vllm-agentic-lmcache/results_bmk/agg_bmk.json',
-    '/home/srok/InferenceMAX_rocm/results/0603_sa/qwen3.5-fp8-mi355x-sglang-agentic-hicache/results_bmk/agg_bmk.json',
-    '/home/srok/InferenceMAX_rocm/results/0603_sa/glm5.1-fp4-mi355x-sglang-agentic-hicache/results_bmk/agg_bmk.json',
-    '/home/srok/InferenceMAX_rocm/results/0603_sa/minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache/results_bmk/agg_bmk.json',
     '/home/srok/InferenceMAX_rocm/results/0603_sa/minimaxm2.5-fp8-mi355x-vllm-agentic-lmcache/results_bmk/agg_bmk.json',
+    '/home/srok/InferenceMAX_rocm/results/0604_sa/results_bmk/agg_bmk.json',
 ]
 
 offload_colors = {
@@ -216,7 +213,7 @@ for row_idx, data in enumerate(datasets):
     ax_cache.grid(True, alpha=0.3, axis='y')
 
 plt.tight_layout()
-out_path = '/home/srok/InferenceMAX_rocm/results/0603_sa/pareto_chart_lat.png'
+out_path = '/home/srok/InferenceMAX_rocm/results/0604_sa/pareto_chart_lat.png'
 plt.savefig(out_path, dpi=150, bbox_inches='tight')
 print(f'Saved to {out_path}')
 plt.close()
