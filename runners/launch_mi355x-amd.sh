@@ -27,6 +27,12 @@ SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 # on the same physical runner (e.g. original + _clone jobs on p01_g07).
 server_name="bmk-server-$$"
 
+# Derive a unique PORT from PID to avoid "[Errno 98] Address already in use"
+# when two _clone jobs run concurrently on the same host.
+# Base 8800 + (PID mod 100) gives a port in [8800, 8899], safely away from
+# common defaults (8888) and SSH tunnels.
+export PORT="${PORT:-$((8800 + ($$ % 100)))}"
+
 # chown_workspace_back() {
 #     docker run --rm -v "$GITHUB_WORKSPACE":/ws --entrypoint sh "$IMAGE" -c "rm -rf /ws/* /ws/.[!.]* /ws/..?*" 2>/dev/null || true
 # }
@@ -78,6 +84,7 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 -e TOTAL_CPU_DRAM_GB \
 -e RESULT_DIR \
 -e DURATION \
+-e PORT \
 -e PYTHONDONTWRITEBYTECODE \
 --entrypoint=/bin/bash \
 $IMAGE \
