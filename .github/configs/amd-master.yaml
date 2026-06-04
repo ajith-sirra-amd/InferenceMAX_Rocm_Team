@@ -120,8 +120,8 @@ glm5.1-fp8-mi355x-sglang-agentic-hicache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 8, ep: 1, offloading: none,    conc-list: [32, 64, 128] }
-      - { tp: 8, ep: 1, offloading: hicache, conc-list: [32, 64, 128] }
+      - { tp: 4, ep: 1, offloading: none,    conc-list: [32, 64, 128] }
+      - { tp: 4, ep: 1, offloading: hicache, conc-list: [32, 64, 128] }
 
 
 glm5.1-fp8-mi300x-sglang-agentic:
