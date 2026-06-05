@@ -1,0 +1,497 @@
+2026-06-02 22:22:08.580 - aiperf.cli_runner - INFO - Starting AIPerf System
+2026-06-02 22:22:08.805 - system_controller - INFO - Registered Worker Manager (id: 'worker_manager')
+2026-06-02 22:22:08.842 - server_metrics_manager - INFO - Server Metrics: Discovered 1 endpoints: ['http://localhost:8888/metrics']
+2026-06-02 22:22:08.872 - system_controller - INFO - Registered Server Metrics Manager (id: 'server_metrics_manager')
+2026-06-02 22:22:08.872 - system_controller - INFO - Registered Gpu Telemetry Manager (id: 'gpu_telemetry_manager')
+2026-06-02 22:22:08.938 - system_controller - INFO - Registered Dataset Manager (id: 'dataset_manager')
+2026-06-02 22:22:08.952 - system_controller - INFO - Registered Worker (id: 'worker_01b63ca0')
+2026-06-02 22:22:08.955 - system_controller - INFO - Registered Worker (id: 'worker_b1ebf886')
+2026-06-02 22:22:08.955 - system_controller - INFO - Registered Worker (id: 'worker_ed009e73')
+2026-06-02 22:22:08.956 - system_controller - INFO - Registered Worker (id: 'worker_10aec5b1')
+2026-06-02 22:22:08.958 - system_controller - INFO - Registered Timing Manager (id: 'timing_manager')
+2026-06-02 22:22:08.960 - system_controller - INFO - Registered Record Processor (id: 'record_processor_983396dc')
+2026-06-02 22:22:08.960 - system_controller - INFO - Registered Record Processor (id: 'record_processor_32785559')
+2026-06-02 22:22:08.960 - system_controller - INFO - Registered Record Processor (id: 'record_processor_97a78fea')
+2026-06-02 22:22:08.960 - system_controller - INFO - Registered Worker (id: 'worker_0573c1d9')
+2026-06-02 22:22:08.960 - system_controller - INFO - Registered Worker (id: 'worker_88f54e01')
+2026-06-02 22:22:08.964 - system_controller - INFO - Registered Worker (id: 'worker_17c0afc2')
+2026-06-02 22:22:08.971 - system_controller - INFO - Registered Worker (id: 'worker_2ff63d9e')
+2026-06-02 22:22:08.972 - system_controller - INFO - Registered Worker (id: 'worker_04a68fbd')
+2026-06-02 22:22:09.041 - GPUTelemetryJSONLWriter_95b6897f - INFO - GPU telemetry export enabled: /workspace/results/aiperf_artifacts/gpu_telemetry_export.jsonl
+2026-06-02 22:22:09.043 - RecordExportJSONLWriter_9d5259f0 - INFO - Record metrics export enabled: /workspace/results/aiperf_artifacts/profile_export.jsonl
+2026-06-02 22:22:09.052 - system_controller - INFO - Registered Worker (id: 'worker_151ff4db')
+2026-06-02 22:22:09.053 - system_controller - INFO - Registered Worker (id: 'worker_cb46a145')
+2026-06-02 22:22:09.053 - system_controller - INFO - Registered Worker (id: 'worker_49dba9cc')
+2026-06-02 22:22:09.053 - system_controller - INFO - Registered Worker (id: 'worker_bc5602ec')
+2026-06-02 22:22:09.053 - system_controller - INFO - Registered Worker (id: 'worker_8241e56a')
+2026-06-02 22:22:09.060 - system_controller - INFO - Registered Record Processor (id: 'record_processor_3ecafccf')
+2026-06-02 22:22:09.067 - system_controller - INFO - Registered Worker (id: 'worker_8d4299b6')
+2026-06-02 22:22:09.067 - system_controller - INFO - Registered Worker (id: 'worker_aecbe20f')
+2026-06-02 22:22:09.184 - system_controller - INFO - Registered Records Manager (id: 'records_manager')
+2026-06-02 22:22:09.292 - system_controller - INFO - AIPerf System is CONFIGURING
+2026-06-02 22:22:09.292 - system_controller - INFO - Configuring all services to start profiling
+2026-06-02 22:22:09.293 - timing_manager - INFO - Waiting for dataset to be configured before configuring timing
+2026-06-02 22:22:09.293 - InferenceResultParser_83c8ce11 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 22:22:09.294 - InferenceResultParser_8bebb269 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 22:22:09.294 - InferenceResultParser_16b0dee4 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 22:22:09.294 - InferenceResultParser_103e760b - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 22:22:09.302 - system_controller - INFO - GPU telemetry disabled - no DCGM endpoints reachable
+2026-06-02 22:22:09.307 - server_metrics_manager - INFO - Server Metrics: Capturing baseline metrics...
+2026-06-02 22:22:09.324 - http://localhost:8888/metrics - INFO - Skipping unsupported summary metric: http_request_size_bytes
+2026-06-02 22:22:09.324 - http://localhost:8888/metrics - INFO - Skipping unsupported summary metric: http_response_size_bytes
+2026-06-02 22:22:09.325 - system_controller - INFO - Server metrics enabled - 1/1 endpoint(s) reachable.
+2026-06-02 22:22:09.341 - dataset_manager - INFO - Memory-mapped dataset cache HIT (key=9ea77629aaffea823767a106cff84381); skipping tokenizer + composer.
+2026-06-02 22:22:10.532 - aiperf.dataset.mmap_cache - INFO - Restored mmap cache file dataset.dat via copy in 1.191s (2.10 GiB)
+2026-06-02 22:22:10.535 - aiperf.dataset.mmap_cache - INFO - Restored mmap cache file index.dat via copy in 0.002s (0.00 GiB)
+2026-06-02 22:22:10.535 - aiperf.dataset.mmap_cache - INFO - Restored mmap cache files in 1.194s via dataset=copy index=copy (dataset=2.10 GiB, index=0.00 GiB)
+2026-06-02 22:22:10.782 - dataset_manager - INFO - sampling strategy: sequential, unique conversations: 634, unique turn count: 62664
+2026-06-02 22:22:10.983 - dataset_manager - INFO - Dataset client initialized and freed 0 conversations from memory
+2026-06-02 22:22:11.128 - aiperf.timing.trajectory_source - INFO - TrajectorySource: built 16 trajectories from 225 traces
+  range cfg=[0.25, 0.75]  observed sample pct: min= 27% median= 48% max= 71%
+    lane=00  sample_time= 39%  root_next= 14/32  ( 44% turns)  live=1 ready=1  trace_id=00e7d11db2db59f44a87b4110175b11d1af3
+    lane=01  sample_time= 55%  root_next= 20/37  ( 54% turns)  live=1 ready=1  trace_id=01fece675b92efe07620225cd69c3884f774
+    lane=02  sample_time= 55%  root_next=311/594 ( 52% turns)  live=1 ready=1  trace_id=0275949f4db511444909fe92b12f7e921e4a
+    lane=03  sample_time= 27%  root_next= 13/27  ( 48% turns)  live=1 ready=1  trace_id=03be8f1eb1e9e620f46bd07068d6ab1aaae3
+    lane=04  sample_time= 40%  root_next= 69/151 ( 46% turns)  live=1 ready=1  trace_id=0475b786230f3f2e24220d28e247eaee2dae
+    lane=05  sample_time= 50%  root_next= 99/187 ( 53% turns)  live=1 ready=1  trace_id=04b25fe5b2ffa5e7ec9890426cce59838a05
+    lane=06  sample_time= 69%  root_next= 10/20  ( 50% turns)  live=1 ready=1  trace_id=06385769df23204ac35c53ad431cf42f7c02
+    lane=07  sample_time= 63%  root_next= 65/121 ( 54% turns)  live=1 ready=1  trace_id=07fc71985fbafc8e1abb181b7d28b8349f45
+    lane=08  sample_time= 29%  root_next= 46/165 ( 28% turns)  live=1 ready=1  trace_id=09a5d415a7157ed48a5a6fa2711f2d8565c1
+    lane=09  sample_time= 28%  root_next=  7/27  ( 26% turns)  live=1 ready=1  trace_id=09c188c8b9201ec2046cc2df702623fef33e
+    lane=10  sample_time= 44%  root_next= 41/85  ( 48% turns)  live=1 ready=1  trace_id=0b1cf5ad73920121aa53e1acb0851a8ecf32
+    lane=11  sample_time= 61%  root_next=161/254 ( 63% turns)  live=1 ready=1  trace_id=0b4a56f22f01dc235b7ce1cc3aeabd6943e8
+    lane=12  sample_time= 32%  root_next=199/504 ( 39% turns)  live=1 ready=1  trace_id=0d75185d4e958ad360c16451eaa95d508edf
+    lane=13  sample_time= 51%  root_next= 13/22  ( 59% turns)  live=1 ready=1  trace_id=0da3a3bea6f3559a2eff4114839b328dad53
+    lane=14  sample_time= 71%  root_next= 18/23  ( 78% turns)  live=1 ready=1  trace_id=116cb8d945f9d0810e788e51e3744adaab74
+    lane=15  sample_time= 46%  root_next= 30/49  ( 61% turns)  live=1 ready=1  trace_id=1186d32070428ea303de493d61ee3effd467
+2026-06-02 22:22:11.128 - PhaseOrchestrator_353406f7 - INFO - Initialized 2 phase(s): ['Warmup', 'Profiling']
+2026-06-02 22:22:11.162 - system_controller - INFO - All services configured in 1.87 seconds
+2026-06-02 22:22:11.162 - system_controller - INFO - AIPerf System is CONFIGURED
+2026-06-02 22:22:11.163 - server_metrics_manager - INFO - Server Metrics: Started 1 collector(s) successfully
+2026-06-02 22:22:11.181 - PhaseRunner - NOTICE - Phase warmup started | target: 16 requests
+2026-06-02 22:22:11.181 - AgenticReplayTiming - INFO - WARMUP execute: dispatching 16 trajectory credits
+2026-06-02 22:22:11.182 - PhaseRunner - NOTICE - Phase warmup sending complete | sent=16, completed=0, in_flight=16
+2026-06-02 22:22:11.371 - records_manager - INFO - Credit phase start: warmup
+2026-06-02 22:22:11.372 - system_controller - INFO - All services started profiling successfully
+2026-06-02 22:22:11.372 - system_controller - INFO - AIPerf System is PROFILING
+2026-06-02 22:24:27.606 - PhaseRunner - NOTICE - Phase warmup complete | completed=16, cancelled=0, errors=0 | elapsed=136.43s
+2026-06-02 22:24:27.606 - aiperf.timing.branch_orchestrator - INFO - BranchOrchestrator stats: spawned=0 completed=0 errored=0 suspended=0 resumed=0 parents_failed_due_to_child_error=0 joins_suppressed=0
+2026-06-02 22:24:27.616 - AgenticReplayTiming - INFO - PROFILING setup: trajectories=16 traces, recycle_queue=225 traces (full pool)
+2026-06-02 22:24:27.616 - PhaseRunner - NOTICE - Phase profiling started | target: 1800.0s duration
+2026-06-02 22:24:27.616 - records_manager - INFO - Credit phase start: profiling
+2026-06-02 22:24:27.617 - PhaseRunner - INFO - Waiting for event 'profiling phase sending' with timeout of 1799.999478895s
+2026-06-02 22:24:27.617 - AgenticReplayTiming - INFO - PROFILING execute: resuming 16 trajectory sessions
+2026-06-02 22:24:31.370 - EventLoopMonitor - WARNING - Event loop for worker_04a68fbd is taking too long to run. Overhead: 43.73ms
+2026-06-02 22:24:32.751 - AgenticReplayTiming - INFO - Terminating trajectory 0d75185d4e958ad360c16451eaa95d508edf early at turn 199/503: context-overflow error from server
+2026-06-02 22:24:32.870 - EventLoopMonitor - WARNING - Event loop for worker_8d4299b6 is taking too long to run. Overhead: 34.25ms
+2026-06-02 22:24:34.330 - AgenticReplayTiming - INFO - Terminating trajectory 04b25fe5b2ffa5e7ec9890426cce59838a05 early at turn 99/186: context-overflow error from server
+2026-06-02 22:25:09.123 - records_manager - INFO - [realtime 00:41 profiling] rps=0.4 (avg 0.4) tput_in=30790/s tput_out=132/s done=15 ok=15 err=0
+                           ttft p50=4414ms p75=8137ms p95=12044ms p99=12141ms
+                           itl  p50=18ms   p75=20ms   p95=25ms   p99=26ms
+                           e2e  p50=9164ms p75=16997ms p95=24010ms p99=29654ms
+                           intvty p50=56     p75=60     p95=77     p99=78 (1/tpot tok/s)
+                           isl  p50=85,344    p75=87,752    p90=161,234   p99=221,531 (tokens)
+                           osl  p50=210       p75=481       p90=858       p99=975 (tokens)
+                           tot  in=1,034,872      out=4,422
+                           trace theoretical_prefix_cache_hit=90.8%
+                           srv  prefix_cache_hit=53.2% unique_in_srv=1,692,727 ext_cache_hit=0.0% kv_usage=37.6% queue=8r/0w tput_in_srv=20,147/s tput_out_srv=112/s
+2026-06-02 22:25:25.983 - AgenticReplayTiming - INFO - Terminating trajectory 0da3a3bea6f3559a2eff4114839b328dad53 early at turn 14/21: context-overflow error from server
+2026-06-02 22:25:39.169 - records_manager - INFO - [realtime 01:11 profiling] rps=0.4 (avg 0.4) tput_in=34100/s tput_out=184/s done=28 ok=28 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=21,007/s tput_out_srv=137/s
+2026-06-02 22:25:48.814 - AgenticReplayTiming - INFO - Terminating trajectory 1186d32070428ea303de493d61ee3effd467 early at turn 31/48: context-overflow error from server
+2026-06-02 22:26:09.215 - records_manager - INFO - [realtime 01:41 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=18,376/s tput_out_srv=120/s
+2026-06-02 22:26:39.258 - records_manager - INFO - [realtime 02:11 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=16,331/s tput_out_srv=106/s
+2026-06-02 22:27:09.304 - records_manager - INFO - [realtime 02:41 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=14,695/s tput_out_srv=96/s
+2026-06-02 22:27:39.352 - records_manager - INFO - [realtime 03:11 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=13,343/s tput_out_srv=87/s
+2026-06-02 22:28:09.398 - records_manager - INFO - [realtime 03:41 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=12,231/s tput_out_srv=80/s
+2026-06-02 22:28:39.443 - records_manager - INFO - [realtime 04:11 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=11,290/s tput_out_srv=73/s
+2026-06-02 22:29:09.490 - records_manager - INFO - [realtime 04:41 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=10,483/s tput_out_srv=68/s
+2026-06-02 22:29:39.540 - records_manager - INFO - [realtime 05:11 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=9,784/s tput_out_srv=64/s
+2026-06-02 22:30:09.587 - records_manager - INFO - [realtime 05:41 profiling] rps=0.0 (avg 0.4) tput_in=34100/s tput_out=184/s done=29 ok=29 err=0
+                           ttft p50=1513ms p75=6674ms p95=12125ms p99=12252ms
+                           itl  p50=19ms   p75=23ms   p95=41ms   p99=46ms
+                           e2e  p50=9683ms p75=16997ms p95=31399ms p99=38275ms
+                           intvty p50=52     p75=61     p95=76     p99=77 (1/tpot tok/s)
+                           isl  p50=72,489    p75=88,338    p90=152,592   p99=251,433 (tokens)
+                           osl  p50=229       p75=696       p90=1,110     p99=1,292 (tokens)
+                           tot  in=2,044,778      out=11,061
+                           trace theoretical_prefix_cache_hit=90.5%
+                           srv  prefix_cache_hit=61.6% unique_in_srv=1,779,403 ext_cache_hit=0.0% kv_usage=37.9% queue=9r/0w tput_in_srv=9,173/s tput_out_srv=60/s
+2026-06-02 22:30:30.894 - InferenceResultParser_103e760b - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.896 - InferenceResultParser_16b0dee4 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.895 - InferenceResultParser_8bebb269 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.896 - InferenceResultParser_83c8ce11 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.900 - InferenceResultParser_8bebb269 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.900 - InferenceResultParser_16b0dee4 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.900 - InferenceResultParser_103e760b - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.901 - InferenceResultParser_83c8ce11 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.902 - InferenceResultParser_8bebb269 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.903 - InferenceResultParser_16b0dee4 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.903 - InferenceResultParser_103e760b - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.904 - InferenceResultParser_83c8ce11 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.905 - InferenceResultParser_8bebb269 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.906 - InferenceResultParser_103e760b - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.907 - records_manager - WARNING - --failed-request-threshold exceeded: 4/33 = 0.121 > 0.100 (grace floor 16). Broadcasting ProfileCancelCommand to terminate the run.
+2026-06-02 22:30:30.907 - InferenceResultParser_16b0dee4 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.908 - timing_manager - WARNING - Received profile cancel command: {"message_type":"command","service_id":"records_manager","command":"profile_cancel","command_id":"5d572bb0-04a9-49aa-968a-71b4aa25621b"}
+2026-06-02 22:30:30.908 - PhaseOrchestrator_353406f7 - WARNING - Cancelling phase orchestrator
+2026-06-02 22:30:30.908 - timing_manager - INFO - Phase orchestrator cancelled
+2026-06-02 22:30:30.908 - PhaseRunner - NOTICE - Phase profiling sending complete | sent=45, completed=45, in_flight=0 | sessions: sent=4, completed=0
+2026-06-02 22:30:30.908 - aiperf.timing.branch_orchestrator - INFO - BranchOrchestrator stats: spawned=0 completed=0 errored=0 suspended=0 resumed=0 parents_failed_due_to_child_error=0 joins_suppressed=0
+2026-06-02 22:30:30.909 - PhaseRunner - NOTICE - Phase profiling complete | completed=45, cancelled=0, errors=0 | sessions: completed=0, cancelled=0 | elapsed=363.29s | was_cancelled=True
+2026-06-02 22:30:30.909 - PhaseOrchestrator_353406f7 - NOTICE - All credits completed
+2026-06-02 22:30:30.909 - system_controller - INFO - Received credits complete from 'timing_manager'
+2026-06-02 22:30:30.909 - InferenceResultParser_83c8ce11 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 22:30:30.909 - records_manager - INFO - Sent 45 requests. Waiting for all to complete...
+2026-06-02 22:30:30.910 - records_manager - INFO - Received CREDIT_PHASE_COMPLETE message, Phase complete: PhaseRecordsStats(phase=CreditPhase.PROFILING, start_ns=1780439067616497743, sent_end_ns=1780439430908750903, requests_end_ns=1780439430908938521, total_expected_requests=None, expected_duration_sec=None, expected_num_sessions=None, expected_grace_period_sec=None, final_requests_sent=None, final_requests_completed=45, final_requests_cancelled=0, final_request_errors=0, final_sent_sessions=None, final_completed_sessions=None, final_cancelled_sessions=None, timeout_triggered=False, grace_period_timeout_triggered=False, was_cancelled=True, records_end_ns=None, success_records=29, error_records=8)
+2026-06-02 22:30:30.910 - records_manager - NOTICE - All requests have completed, please wait for the results to be processed (currently 37 of 45 records processed)...
+2026-06-02 22:30:30.910 - records_manager - INFO - All credits complete, please wait for the results to be processed...
+2026-06-02 22:30:30.911 - records_manager - INFO - Processed 29 valid requests and 16 errors (45 total).
+2026-06-02 22:30:30.911 - records_manager - INFO - Received all records, processing now...
+2026-06-02 22:30:30.912 - records_manager - INFO - Waiting 2.0s for server metrics flush period...
+2026-06-02 22:30:32.910 - records_manager - INFO - Processing records results...
+2026-06-02 22:30:34.965 - RecordExportJSONLWriter_9d5259f0 - WARNING - Timeout waiting for 0 pending flush tasks during shutdown. Cancelling tasks and proceeding with cleanup.
+2026-06-02 22:30:34.986 - system_controller - INFO - Waiting for server metrics results...
+2026-06-02 22:30:34.986 - system_controller - INFO - Waiting for server metrics results...
+2026-06-02 22:30:35.210 - records_manager - INFO - _finalize_and_process_results completed
+2026-06-02 22:30:35.324 - system_controller - INFO - All results received, initiating shutdown
+2026-06-02 22:30:35.929 - ExporterManager - INFO - Exporting all records
+2026-06-02 22:30:36.095 - aiperf.common.scenario.validator - INFO - Scenario 'inferencex-agentx-mvp': setting timing_mode=agentic_replay (was at default request_rate).
+2026-06-02 22:30:36.875 - aiperf.common.scenario.validator - INFO - Scenario 'inferencex-agentx-mvp': setting timing_mode=agentic_replay (was at default request_rate).
+2026-06-02 22:30:36.892 - ExporterManager - INFO - Exporting console data

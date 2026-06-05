@@ -1,0 +1,311 @@
+{
+  "schema_version": "1.1",
+  "aiperf_version": "0.8.0",
+  "benchmark_id": "670c19da-dd3e-4b06-9418-7050922567eb",
+  "error_request_count": {
+    "unit": "requests",
+    "avg": 32.0
+  },
+  "telemetry_data": {
+    "summary": {
+      "endpoints_configured": [],
+      "endpoints_successful": [],
+      "start_time": "2026-06-02T21:43:51.951405",
+      "end_time": "2026-06-02T21:44:16.029770"
+    },
+    "endpoints": {},
+    "error_summary": []
+  },
+  "input_config": {
+    "endpoint": {
+      "model_names": [
+        "/lustre/fsw/models/Kimi-K2.5-NVFP4"
+      ],
+      "custom_endpoint": "/v1/chat/completions",
+      "type": "chat",
+      "streaming": true,
+      "urls": [
+        "http://localhost:8888"
+      ],
+      "use_server_token_count": true
+    },
+    "input": {
+      "extra": [
+        [
+          "ignore_eos",
+          true
+        ]
+      ],
+      "extra_inputs_parsed": {
+        "ignore_eos": true
+      },
+      "detected_loader": "semianalysis_cc_traces_weka_with_subagents_060226",
+      "public_dataset": "semianalysis_cc_traces_weka_with_subagents_060226",
+      "random_seed": 42,
+      "conversation": {
+        "num_dataset_entries": 472
+      }
+    },
+    "output": {
+      "artifact_directory": "/workspace/results/aiperf_artifacts",
+      "slice_duration": 1.0
+    },
+    "tokenizer": {
+      "trust_remote_code": true
+    },
+    "loadgen": {
+      "benchmark_duration": 1800.0,
+      "failed_request_threshold": 0.1,
+      "trajectory_start_min_ratio": 0.25,
+      "trajectory_start_max_ratio": 0.75,
+      "concurrency": 32,
+      "trace_idle_gap_cap_seconds": 60.0
+    },
+    "cli_command": "aiperf profile --scenario 'inferencex-agentx-mvp' --url 'http://localhost:8888' --endpoint '/v1/chat/completions' --endpoint-type 'chat' --streaming --model '/lustre/fsw/models/Kimi-K2.5-NVFP4' --concurrency 32 --benchmark-duration 1800 --random-seed 42 --failed-request-threshold 0.1 --trajectory-start-min-ratio 0.25 --trajectory-start-max-ratio 0.75 --use-server-token-count --tokenizer-trust-remote-code --num-dataset-entries 472 --slice-duration 1.0 --output-artifact-dir '/workspace/results/aiperf_artifacts' --public-dataset 'semianalysis_cc_traces_weka_with_subagents_060226'",
+    "benchmark_id": "670c19da-dd3e-4b06-9418-7050922567eb",
+    "scenario": "inferencex-agentx-mvp"
+  },
+  "was_cancelled": true,
+  "error_summary": [
+    {
+      "error_details": {
+        "type": "ValueError",
+        "message": "ValueError('Unsupported OpenAI object type: None')",
+        "cause_chain": [
+          "ValueError"
+        ]
+      },
+      "count": 6
+    },
+    {
+      "error_details": {
+        "code": 500,
+        "type": "Internal Server Error",
+        "message": "{\"error\":{\"message\":\"EngineCore encountered an issue. See stack trace (above) for the root cause.\",\"type\":\"InternalServerError\",\"param\":null,\"code\":500}}"
+      },
+      "count": 1
+    },
+    {
+      "error_details": {
+        "type": "ClientConnectorError",
+        "message": "ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, \"Connect call failed ('127.0.0.1', 8888)\"))",
+        "cause": "ConnectionRefusedError(111, \"Connect call failed ('127.0.0.1', 8888)\")",
+        "cause_chain": [
+          "ClientConnectorError",
+          "ConnectionRefusedError"
+        ]
+      },
+      "count": 25
+    }
+  ],
+  "start_time": "2026-06-02T21:43:51.951405",
+  "end_time": "2026-06-02T21:44:12.020324",
+  "branch_stats": {
+    "children_spawned": 0,
+    "children_completed": 0,
+    "children_errored": 0,
+    "parents_suspended": 0,
+    "parents_resumed": 0,
+    "parents_failed_due_to_child_error": 0,
+    "joins_suppressed": 0,
+    "children_truncated": 0
+  },
+  "context_overflow_count": {
+    "unit": "requests",
+    "avg": 0.0
+  },
+  "effective_concurrency": {
+    "unit": "requests",
+    "avg": 0.5013229509937259,
+    "p50": 0.0,
+    "p90": 2.0,
+    "p95": 4.0,
+    "p99": 6.0,
+    "min": 0.0,
+    "max": 6.0,
+    "std": 1.3432860271648286
+  },
+  "effective_decode_throughput": {
+    "unit": "tokens/sec",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "effective_prefill_throughput": {
+    "unit": "tokens/sec",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "effective_decode_concurrency": {
+    "unit": "requests",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "effective_prefill_concurrency": {
+    "unit": "requests",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "effective_total_throughput": {
+    "unit": "tokens/sec",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "effective_decode_throughput_per_user": {
+    "unit": "tokens/sec/user",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "effective_prefill_throughput_per_user": {
+    "unit": "tokens/sec/user",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "tokens_in_flight": {
+    "unit": "tokens",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "active_decode_throughput": {
+    "unit": "tokens/sec",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "active_prefill_throughput": {
+    "unit": "tokens/sec",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "active_decode_throughput_per_user": {
+    "unit": "tokens/sec/user",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "active_prefill_throughput_per_user": {
+    "unit": "tokens/sec/user",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "active_total_throughput": {
+    "unit": "tokens/sec",
+    "avg": 0.0,
+    "p50": 0.0,
+    "p90": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "std": 0.0
+  },
+  "credit_to_start_latency": {
+    "unit": "ms",
+    "avg": 13.624168,
+    "p1": 0.8241510400000001,
+    "p5": 0.8328192,
+    "p10": 0.8637696,
+    "p25": 1.344832,
+    "p50": 3.801472,
+    "p75": 10.569023999999999,
+    "p90": 44.55531520000006,
+    "p95": 63.19580159999998,
+    "p99": 110.61511936000005,
+    "min": 0.82304,
+    "max": 124.637952,
+    "std": 26.175043073118637,
+    "count": 32,
+    "sum": 435.973376
+  },
+  "effective_latency": {
+    "unit": "ms",
+    "avg": 321.36980000000005,
+    "p1": 1.59557376,
+    "p5": 1.6792448,
+    "p10": 1.9567104,
+    "p25": 2.3778560000000004,
+    "p50": 6.055424,
+    "p75": 58.392384,
+    "p90": 1584.9411328,
+    "p95": 1865.1678847999997,
+    "p99": 2079.50208,
+    "min": 1.560576,
+    "max": 2091.739392,
+    "std": 658.3255629435395,
+    "count": 32,
+    "sum": 10283.833600000002
+  },
+  "metadata": {
+    "scenario": "inferencex-agentx-mvp",
+    "submission_valid": true
+  }
+}

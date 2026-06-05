@@ -1,0 +1,287 @@
+2026-06-02 21:39:23.493 - aiperf.cli_runner - INFO - Starting AIPerf System
+2026-06-02 21:39:23.725 - system_controller - INFO - Registered Worker Manager (id: 'worker_manager')
+2026-06-02 21:39:23.766 - server_metrics_manager - INFO - Server Metrics: Discovered 1 endpoints: ['http://localhost:8888/metrics']
+2026-06-02 21:39:23.812 - system_controller - INFO - Registered Server Metrics Manager (id: 'server_metrics_manager')
+2026-06-02 21:39:23.813 - system_controller - INFO - Registered Gpu Telemetry Manager (id: 'gpu_telemetry_manager')
+2026-06-02 21:39:23.868 - system_controller - INFO - Registered Dataset Manager (id: 'dataset_manager')
+2026-06-02 21:39:23.873 - system_controller - INFO - Registered Worker (id: 'worker_ce1bc72d')
+2026-06-02 21:39:23.873 - system_controller - INFO - Registered Worker (id: 'worker_cccd36e1')
+2026-06-02 21:39:23.873 - system_controller - INFO - Registered Worker (id: 'worker_a40c7c3d')
+2026-06-02 21:39:23.873 - system_controller - INFO - Registered Worker (id: 'worker_748490d8')
+2026-06-02 21:39:23.878 - system_controller - INFO - Registered Worker (id: 'worker_1d715565')
+2026-06-02 21:39:23.881 - system_controller - INFO - Registered Worker (id: 'worker_54b44661')
+2026-06-02 21:39:23.882 - system_controller - INFO - Registered Worker (id: 'worker_e7e336ac')
+2026-06-02 21:39:23.887 - system_controller - INFO - Registered Worker (id: 'worker_978272a0')
+2026-06-02 21:39:23.890 - system_controller - INFO - Registered Worker (id: 'worker_0f7a15e6')
+2026-06-02 21:39:23.890 - system_controller - INFO - Registered Worker (id: 'worker_3e8d9017')
+2026-06-02 21:39:23.891 - system_controller - INFO - Registered Worker (id: 'worker_ab5c36ca')
+2026-06-02 21:39:23.891 - system_controller - INFO - Registered Worker (id: 'worker_614c2197')
+2026-06-02 21:39:23.892 - system_controller - INFO - Registered Worker (id: 'worker_439dc51f')
+2026-06-02 21:39:23.892 - system_controller - INFO - Registered Worker (id: 'worker_a98ce4a5')
+2026-06-02 21:39:23.894 - system_controller - INFO - Registered Worker (id: 'worker_ed6ecdae')
+2026-06-02 21:39:23.902 - system_controller - INFO - Registered Worker (id: 'worker_f1251d8f')
+2026-06-02 21:39:23.914 - system_controller - INFO - Registered Worker (id: 'worker_1fd1e28b')
+2026-06-02 21:39:23.917 - system_controller - INFO - Registered Worker (id: 'worker_bce18f94')
+2026-06-02 21:39:23.919 - system_controller - INFO - Registered Timing Manager (id: 'timing_manager')
+2026-06-02 21:39:23.920 - system_controller - INFO - Registered Worker (id: 'worker_20f70dd5')
+2026-06-02 21:39:23.921 - system_controller - INFO - Registered Record Processor (id: 'record_processor_c4bb6404')
+2026-06-02 21:39:23.922 - system_controller - INFO - Registered Record Processor (id: 'record_processor_e9683277')
+2026-06-02 21:39:23.924 - system_controller - INFO - Registered Record Processor (id: 'record_processor_47277ead')
+2026-06-02 21:39:23.924 - system_controller - INFO - Registered Worker (id: 'worker_5decfa23')
+2026-06-02 21:39:23.925 - system_controller - INFO - Registered Worker (id: 'worker_79f83550')
+2026-06-02 21:39:23.926 - system_controller - INFO - Registered Record Processor (id: 'record_processor_39b77e8f')
+2026-06-02 21:39:24.019 - system_controller - INFO - Registered Worker (id: 'worker_f0adeec1')
+2026-06-02 21:39:24.022 - system_controller - INFO - Registered Record Processor (id: 'record_processor_41888fe2')
+2026-06-02 21:39:24.023 - system_controller - INFO - Registered Worker (id: 'worker_19d241f6')
+2026-06-02 21:39:24.034 - system_controller - INFO - Registered Worker (id: 'worker_7a3ac70a')
+2026-06-02 21:39:24.038 - GPUTelemetryJSONLWriter_5c00a074 - INFO - GPU telemetry export enabled: /workspace/results/aiperf_artifacts/gpu_telemetry_export.jsonl
+2026-06-02 21:39:24.041 - RecordExportJSONLWriter_45aa35cb - INFO - Record metrics export enabled: /workspace/results/aiperf_artifacts/profile_export.jsonl
+2026-06-02 21:39:24.048 - system_controller - INFO - Registered Worker (id: 'worker_ea93e5f0')
+2026-06-02 21:39:24.049 - system_controller - INFO - Registered Record Processor (id: 'record_processor_d3e20f2e')
+2026-06-02 21:39:24.049 - system_controller - INFO - Registered Record Processor (id: 'record_processor_af5cc8f5')
+2026-06-02 21:39:24.050 - system_controller - INFO - Registered Worker (id: 'worker_540331b7')
+2026-06-02 21:39:24.050 - system_controller - INFO - Registered Worker (id: 'worker_1a275b94')
+2026-06-02 21:39:24.050 - system_controller - INFO - Registered Worker (id: 'worker_e3c4b5c5')
+2026-06-02 21:39:24.051 - system_controller - INFO - Registered Worker (id: 'worker_334ecf65')
+2026-06-02 21:39:24.051 - system_controller - INFO - Registered Record Processor (id: 'record_processor_13d6c57c')
+2026-06-02 21:39:24.051 - system_controller - INFO - Registered Worker (id: 'worker_0182b9fd')
+2026-06-02 21:39:24.059 - system_controller - INFO - Registered Worker (id: 'worker_0fc864c3')
+2026-06-02 21:39:24.060 - system_controller - INFO - Registered Worker (id: 'worker_27fe1a23')
+2026-06-02 21:39:24.338 - system_controller - INFO - Registered Records Manager (id: 'records_manager')
+2026-06-02 21:39:24.714 - system_controller - INFO - AIPerf System is CONFIGURING
+2026-06-02 21:39:24.714 - system_controller - INFO - Configuring all services to start profiling
+2026-06-02 21:39:24.716 - timing_manager - INFO - Waiting for dataset to be configured before configuring timing
+2026-06-02 21:39:24.716 - InferenceResultParser_30ea33d0 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 21:39:24.716 - InferenceResultParser_374cd59f - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 21:39:24.716 - InferenceResultParser_4613b5e2 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 21:39:24.716 - InferenceResultParser_8aa37efe - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 21:39:24.716 - InferenceResultParser_cb5deb48 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 21:39:24.716 - InferenceResultParser_89217996 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 21:39:24.716 - InferenceResultParser_0a418fd8 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 21:39:24.717 - InferenceResultParser_03e04784 - INFO - Tokenization is disabled for this endpoint, skipping tokenizer configuration
+2026-06-02 21:39:24.725 - system_controller - INFO - GPU telemetry disabled - no DCGM endpoints reachable
+2026-06-02 21:39:24.730 - server_metrics_manager - INFO - Server Metrics: Capturing baseline metrics...
+2026-06-02 21:39:24.748 - http://localhost:8888/metrics - INFO - Skipping unsupported summary metric: http_request_size_bytes
+2026-06-02 21:39:24.749 - http://localhost:8888/metrics - INFO - Skipping unsupported summary metric: http_response_size_bytes
+2026-06-02 21:39:24.751 - system_controller - INFO - Server metrics enabled - 1/1 endpoint(s) reachable.
+2026-06-02 21:39:24.768 - dataset_manager - INFO - Memory-mapped dataset cache HIT (key=9ea77629aaffea823767a106cff84381); skipping tokenizer + composer.
+2026-06-02 21:39:26.048 - aiperf.dataset.mmap_cache - INFO - Restored mmap cache file dataset.dat via copy in 1.280s (2.10 GiB)
+2026-06-02 21:39:26.051 - aiperf.dataset.mmap_cache - INFO - Restored mmap cache file index.dat via copy in 0.002s (0.00 GiB)
+2026-06-02 21:39:26.051 - aiperf.dataset.mmap_cache - INFO - Restored mmap cache files in 1.282s via dataset=copy index=copy (dataset=2.10 GiB, index=0.00 GiB)
+2026-06-02 21:39:26.322 - dataset_manager - INFO - sampling strategy: sequential, unique conversations: 634, unique turn count: 62664
+2026-06-02 21:39:26.544 - dataset_manager - INFO - Dataset client initialized and freed 0 conversations from memory
+2026-06-02 21:39:26.805 - aiperf.timing.trajectory_source - INFO - TrajectorySource: built 32 trajectories from 225 traces
+  range cfg=[0.25, 0.75]  observed sample pct: min= 25% median= 45% max= 74%
+    lane=00  sample_time= 39%  root_next= 14/32  ( 44% turns)  live=1 ready=1  trace_id=00e7d11db2db59f44a87b4110175b11d1af3
+    lane=01  sample_time= 55%  root_next= 20/37  ( 54% turns)  live=1 ready=1  trace_id=01fece675b92efe07620225cd69c3884f774
+    lane=02  sample_time= 55%  root_next=311/594 ( 52% turns)  live=1 ready=1  trace_id=0275949f4db511444909fe92b12f7e921e4a
+    lane=03  sample_time= 27%  root_next= 13/27  ( 48% turns)  live=1 ready=1  trace_id=03be8f1eb1e9e620f46bd07068d6ab1aaae3
+    lane=04  sample_time= 40%  root_next= 69/151 ( 46% turns)  live=1 ready=1  trace_id=0475b786230f3f2e24220d28e247eaee2dae
+    lane=05  sample_time= 50%  root_next= 99/187 ( 53% turns)  live=1 ready=1  trace_id=04b25fe5b2ffa5e7ec9890426cce59838a05
+    lane=06  sample_time= 69%  root_next= 10/20  ( 50% turns)  live=1 ready=1  trace_id=06385769df23204ac35c53ad431cf42f7c02
+    lane=07  sample_time= 63%  root_next= 65/121 ( 54% turns)  live=1 ready=1  trace_id=07fc71985fbafc8e1abb181b7d28b8349f45
+    lane=08  sample_time= 29%  root_next= 46/165 ( 28% turns)  live=1 ready=1  trace_id=09a5d415a7157ed48a5a6fa2711f2d8565c1
+    lane=09  sample_time= 28%  root_next=  7/27  ( 26% turns)  live=1 ready=1  trace_id=09c188c8b9201ec2046cc2df702623fef33e
+    lane=10  sample_time= 44%  root_next= 41/85  ( 48% turns)  live=1 ready=1  trace_id=0b1cf5ad73920121aa53e1acb0851a8ecf32
+    lane=11  sample_time= 61%  root_next=161/254 ( 63% turns)  live=1 ready=1  trace_id=0b4a56f22f01dc235b7ce1cc3aeabd6943e8
+    lane=12  sample_time= 32%  root_next=199/504 ( 39% turns)  live=1 ready=1  trace_id=0d75185d4e958ad360c16451eaa95d508edf
+    lane=13  sample_time= 51%  root_next= 13/22  ( 59% turns)  live=1 ready=1  trace_id=0da3a3bea6f3559a2eff4114839b328dad53
+    lane=14  sample_time= 71%  root_next= 18/23  ( 78% turns)  live=1 ready=1  trace_id=116cb8d945f9d0810e788e51e3744adaab74
+    lane=15  sample_time= 46%  root_next= 30/49  ( 61% turns)  live=1 ready=1  trace_id=1186d32070428ea303de493d61ee3effd467
+    lane=16  sample_time= 74%  root_next= 23/26  ( 88% turns)  live=1 ready=1  trace_id=13762df76dba635a268bf3acbb30bfffed63
+    lane=17  sample_time= 27%  root_next=  8/27  ( 30% turns)  live=1 ready=1  trace_id=14933d8a4190c45ac8fbd21183bba9469140
+    lane=18  sample_time= 43%  root_next= 24/38  ( 63% turns)  live=1 ready=1  trace_id=1770548ae8e30555e62d6d6296c0166d6074
+    lane=19  sample_time= 35%  root_next= 18/44  ( 41% turns)  live=1 ready=1  trace_id=1ac9d045056424d98ec4b5725460ca2b6120
+    lane=20  sample_time= 55%  root_next= 31/50  ( 62% turns)  live=1 ready=1  trace_id=1b29955ec88767b5f8870f705f770cd46c60
+    lane=21  sample_time= 69%  root_next=318/452 ( 70% turns)  live=1 ready=1  trace_id=1ec7f23f1ca1449b1758b86dba91df97cf1a
+    lane=22  sample_time= 40%  root_next= 13/31  ( 42% turns)  live=1 ready=1  trace_id=1ff2c5c397d1c8f4a2e069449ec8e10b882a
+    lane=23  sample_time= 34%  root_next= 33/55  ( 60% turns)  live=1 ready=1  trace_id=219331470ffaa5388ff9d7d8da92f5dc575b
+    lane=24  sample_time= 46%  root_next= 38/63  ( 60% turns)  live=1 ready=1  trace_id=263134ce70d475337deb473aadc255479210
+    lane=25  sample_time= 25%  root_next= 14/39  ( 36% turns)  live=1 ready=1  trace_id=265a5749ca677d0b0c90e7d3d6029a45318f
+    lane=26  sample_time= 26%  root_next=  7/21  ( 33% turns)  live=1 ready=1  trace_id=2781d1fa9a22e982996948283bbcd3136c44
+    lane=27  sample_time= 45%  root_next= 17/30  ( 57% turns)  live=1 ready=1  trace_id=27bf77bcaaf2b6d2210bdbdab4934348f322
+    lane=28  sample_time= 73%  root_next= 61/84  ( 73% turns)  live=1 ready=1  trace_id=27cf2ada39b896fea5580c895bfbd4119490
+    lane=29  sample_time= 52%  root_next= 20/34  ( 59% turns)  live=1 ready=1  trace_id=298daf6961d9121ca2f5d3cde68ba961c0c5
+    lane=30  sample_time= 27%  root_next= 15/43  ( 35% turns)  live=1 ready=1  trace_id=2b971773e1889a7692523d5cc0a78a0361cb
+    lane=31  sample_time= 43%  root_next=  8/21  ( 38% turns)  live=1 ready=1  trace_id=2c3e52bf4e687293e9fb70cba1c1786dceea
+2026-06-02 21:39:26.806 - PhaseOrchestrator_ece7657a - INFO - Initialized 2 phase(s): ['Warmup', 'Profiling']
+2026-06-02 21:39:27.010 - system_controller - INFO - All services configured in 2.30 seconds
+2026-06-02 21:39:27.010 - system_controller - INFO - AIPerf System is CONFIGURED
+2026-06-02 21:39:27.011 - server_metrics_manager - INFO - Server Metrics: Started 1 collector(s) successfully
+2026-06-02 21:39:27.033 - PhaseRunner - NOTICE - Phase warmup started | target: 32 requests
+2026-06-02 21:39:27.034 - AgenticReplayTiming - INFO - WARMUP execute: dispatching 32 trajectory credits
+2026-06-02 21:39:27.036 - PhaseRunner - NOTICE - Phase warmup sending complete | sent=32, completed=0, in_flight=32
+2026-06-02 21:39:27.158 - records_manager - INFO - Credit phase start: warmup
+2026-06-02 21:39:27.158 - system_controller - INFO - All services started profiling successfully
+2026-06-02 21:39:27.158 - system_controller - INFO - AIPerf System is PROFILING
+2026-06-02 21:43:51.936 - PhaseRunner - NOTICE - Phase warmup complete | completed=32, cancelled=0, errors=0 | elapsed=264.90s
+2026-06-02 21:43:51.940 - aiperf.timing.branch_orchestrator - INFO - BranchOrchestrator stats: spawned=0 completed=0 errored=0 suspended=0 resumed=0 parents_failed_due_to_child_error=0 joins_suppressed=0
+2026-06-02 21:43:51.951 - AgenticReplayTiming - INFO - PROFILING setup: trajectories=32 traces, recycle_queue=225 traces (full pool)
+2026-06-02 21:43:51.951 - PhaseRunner - NOTICE - Phase profiling started | target: 1800.0s duration
+2026-06-02 21:43:51.951 - records_manager - INFO - Credit phase start: profiling
+2026-06-02 21:43:51.951 - PhaseRunner - INFO - Waiting for event 'profiling phase sending' with timeout of 1799.999457324s
+2026-06-02 21:43:51.952 - AgenticReplayTiming - INFO - PROFILING execute: resuming 32 trajectory sessions
+2026-06-02 21:43:53.882 - InferenceResultParser_30ea33d0 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 21:43:53.882 - InferenceResultParser_89217996 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 21:43:54.244 - aiperf.metrics.column_store - WARNING - ColumnStore.numeric: unknown tag 'output_sequence_length' on a non-empty store (known numeric tags: ['context_overflow_count', 'error_request_count']). Returning NaN-fill — check for a typo or missing ingestion.
+2026-06-02 21:43:54.244 - aiperf.metrics.column_store - WARNING - ColumnStore.numeric: unknown tag 'input_sequence_length' on a non-empty store (known numeric tags: ['context_overflow_count', 'error_request_count']). Returning NaN-fill — check for a typo or missing ingestion.
+2026-06-02 21:43:54.256 - records_manager - INFO - [realtime 00:02 profiling] rps=- (avg -) tput_in=-/s tput_out=-/s done=2 ok=0 err=2
+                           ttft p50=-      p75=-      p95=-      p99=-
+                           itl  p50=-      p75=-      p95=-      p99=-
+                           e2e  p50=-      p75=-      p95=-      p99=-
+                           intvty p50=-      p75=-      p95=-      p99=- (1/tpot tok/s)
+                           srv  prefix_cache_hit=0.0% unique_in_srv=2,881,394 ext_cache_hit=1.6% kv_usage=1.8% queue=0r/1w tput_in_srv=10,527/s tput_out_srv=198/s
+2026-06-02 21:43:54.769 - InferenceResultParser_4613b5e2 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 21:43:54.769 - InferenceResultParser_cb5deb48 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 21:43:55.427 - InferenceResultParser_374cd59f - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 21:43:55.429 - InferenceResultParser_0a418fd8 - ERROR - Error processing valid record: Unsupported OpenAI object type: None
+Traceback (most recent call last):
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 195, in parse_request_record
+    record = await self.process_valid_record(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/records/inference_result_parser.py", line 288, in process_valid_record
+    resp = self.endpoint.extract_response_data(request_record)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/base_endpoint.py", line 76, in extract_response_data
+    if (parsed := self.parse_response(response))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 104, in parse_response
+    data = self.extract_chat_response_data(json_obj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/utils/aiperf/src/aiperf/endpoints/openai_chat.py", line 133, in extract_chat_response_data
+    raise ValueError(f"Unsupported OpenAI object type: {object_type!r}")
+ValueError: Unsupported OpenAI object type: None
+2026-06-02 21:43:55.700 - EventLoopMonitor - WARNING - Event loop for worker_54b44661 is taking too long to run. Overhead: 59.22ms
+2026-06-02 21:43:55.747 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:43:57.436 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:43:58.182 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:43:59.142 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:00.929 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:01.271 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:02.110 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:03.224 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:03.990 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:04.169 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:04.332 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:05.844 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:06.106 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:06.164 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:07.802 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:07.810 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:07.838 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:08.015 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:09.087 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:09.457 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:10.028 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:10.136 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:10.438 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:11.066 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:12.014 - AioHttpClient - ERROR - Error in aiohttp request: ClientConnectorError(ConnectionKey(host='localhost', port=8888, is_ssl=False, ssl=True, proxy=None, proxy_auth=None, proxy_headers_hash=None), ConnectionRefusedError(111, "Connect call failed ('127.0.0.1', 8888)"))
+2026-06-02 21:44:12.018 - records_manager - WARNING - --failed-request-threshold exceeded: 32/32 = 1.000 > 0.100 (grace floor 32). Broadcasting ProfileCancelCommand to terminate the run.
+2026-06-02 21:44:12.019 - timing_manager - WARNING - Received profile cancel command: {"message_type":"command","service_id":"records_manager","command":"profile_cancel","command_id":"aa1c4753-908c-43a4-b3e4-7976b4883e6d"}
+2026-06-02 21:44:12.019 - PhaseOrchestrator_ece7657a - WARNING - Cancelling phase orchestrator
+2026-06-02 21:44:12.020 - timing_manager - INFO - Phase orchestrator cancelled
+2026-06-02 21:44:12.020 - PhaseRunner - NOTICE - Phase profiling sending complete | sent=32, completed=32, in_flight=0
+2026-06-02 21:44:12.020 - aiperf.timing.branch_orchestrator - INFO - BranchOrchestrator stats: spawned=0 completed=0 errored=0 suspended=0 resumed=0 parents_failed_due_to_child_error=0 joins_suppressed=0
+2026-06-02 21:44:12.020 - PhaseRunner - NOTICE - Phase profiling complete | completed=32, cancelled=0, errors=0 | elapsed=20.07s | was_cancelled=True
+2026-06-02 21:44:12.020 - PhaseOrchestrator_ece7657a - NOTICE - All credits completed
+2026-06-02 21:44:12.020 - system_controller - INFO - Received credits complete from 'timing_manager'
+2026-06-02 21:44:12.021 - records_manager - INFO - Sent 32 requests. Waiting for all to complete...
+2026-06-02 21:44:12.021 - records_manager - INFO - Received CREDIT_PHASE_COMPLETE message, Phase complete: PhaseRecordsStats(phase=CreditPhase.PROFILING, start_ns=1780436631951405356, sent_end_ns=1780436652020156132, requests_end_ns=1780436652020324423, total_expected_requests=None, expected_duration_sec=None, expected_num_sessions=None, expected_grace_period_sec=None, final_requests_sent=None, final_requests_completed=32, final_requests_cancelled=0, final_request_errors=0, final_sent_sessions=None, final_completed_sessions=None, final_cancelled_sessions=None, timeout_triggered=False, grace_period_timeout_triggered=False, was_cancelled=True, records_end_ns=None, success_records=0, error_records=32)
+2026-06-02 21:44:12.021 - records_manager - NOTICE - All requests have completed, please wait for the results to be processed (currently 32 of 32 records processed)...
+2026-06-02 21:44:12.022 - records_manager - INFO - Processed 0 valid requests and 32 errors (32 total).
+2026-06-02 21:44:12.022 - records_manager - INFO - Received all records, processing now...
+2026-06-02 21:44:12.022 - records_manager - INFO - All credits complete, please wait for the results to be processed...
+2026-06-02 21:44:12.023 - records_manager - INFO - Waiting 2.0s for server metrics flush period...
+2026-06-02 21:44:14.020 - records_manager - INFO - Processing records results...
+2026-06-02 21:44:14.021 - aiperf.metrics.column_store - WARNING - ColumnStore.numeric: unknown tag 'output_sequence_length' on a non-empty store (known numeric tags: ['context_overflow_count', 'error_request_count']). Returning NaN-fill — check for a typo or missing ingestion.
+2026-06-02 21:44:14.021 - aiperf.metrics.column_store - WARNING - ColumnStore.numeric: unknown tag 'input_sequence_length' on a non-empty store (known numeric tags: ['context_overflow_count', 'error_request_count']). Returning NaN-fill — check for a typo or missing ingestion.
+2026-06-02 21:44:16.026 - RecordExportJSONLWriter_45aa35cb - WARNING - Timeout waiting for 0 pending flush tasks during shutdown. Cancelling tasks and proceeding with cleanup.
+2026-06-02 21:44:16.033 - system_controller - INFO - Waiting for server metrics results...
+2026-06-02 21:44:16.034 - system_controller - INFO - Waiting for server metrics results...
+2026-06-02 21:44:16.052 - records_manager - INFO - _finalize_and_process_results completed
+2026-06-02 21:44:16.058 - system_controller - INFO - All results received, initiating shutdown
+2026-06-02 21:44:16.666 - ExporterManager - INFO - Exporting all records
+2026-06-02 21:44:16.846 - aiperf.common.scenario.validator - INFO - Scenario 'inferencex-agentx-mvp': setting timing_mode=agentic_replay (was at default request_rate).
+2026-06-02 21:44:17.642 - aiperf.common.scenario.validator - INFO - Scenario 'inferencex-agentx-mvp': setting timing_mode=agentic_replay (was at default request_rate).
+2026-06-02 21:44:17.646 - ExporterManager - INFO - Exporting console data

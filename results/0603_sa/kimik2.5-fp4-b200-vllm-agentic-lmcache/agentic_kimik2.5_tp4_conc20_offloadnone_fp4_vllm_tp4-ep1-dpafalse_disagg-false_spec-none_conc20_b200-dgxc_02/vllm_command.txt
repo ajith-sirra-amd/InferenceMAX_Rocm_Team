@@ -1,0 +1,1 @@
+vllm serve /lustre/fsw/models/Kimi-K2.5-NVFP4 --host 0.0.0.0 --port 8888 --tensor-parallel-size=4 --gpu-memory-utilization 0.90 --max-num-seqs 20 --reasoning-parser kimi_k2 --tool-call-parser kimi_k2 --compilation_config.pass_config.fuse_allreduce_rms true --kv-cache-dtype fp8 --max-cudagraph-capture-size 2048 --stream-interval 20 --trust-remote-code 

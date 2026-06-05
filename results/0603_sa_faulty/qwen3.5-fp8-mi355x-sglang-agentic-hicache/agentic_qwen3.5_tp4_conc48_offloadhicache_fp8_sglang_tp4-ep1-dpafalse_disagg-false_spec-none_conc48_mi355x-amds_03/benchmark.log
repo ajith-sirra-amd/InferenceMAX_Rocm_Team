@@ -1,0 +1,829 @@
+10:07:08.481 INFO     Starting AIPerf System (cli_runner.py:148)
+10:07:08.627 INFO     Registered Dataset Manager (id: 'dataset_manager') (system_controller.py:377)
+10:07:08.638 INFO     Registered Gpu Telemetry Manager (id: 'gpu_telemetry_manager') (system_controller.py:377)
+10:07:08.660 INFO     Server Metrics: Discovered 1 endpoints: ['http://localhost:8891/metrics'] (manager.py:70)
+10:07:08.686 INFO     Registered Server Metrics Manager (id: 'server_metrics_manager') (system_controller.py:377)
+10:07:08.728 INFO     Registered Worker Manager (id: 'worker_manager') (system_controller.py:377)
+10:07:08.810 INFO     Registered Timing Manager (id: 'timing_manager') (system_controller.py:377)
+10:07:08.921 INFO     Registered Record Processor (id: 'record_processor_08f7ac53') (system_controller.py:377)
+10:07:08.921 INFO     Registered Record Processor (id: 'record_processor_d2358677') (system_controller.py:377)
+10:07:08.923 INFO     Registered Record Processor (id: 'record_processor_7c63d746') (system_controller.py:377)
+10:07:08.923 INFO     Registered Record Processor (id: 'record_processor_27b3e97e') (system_controller.py:377)
+10:07:08.924 INFO     Registered Record Processor (id: 'record_processor_39dc7255') (system_controller.py:377)
+10:07:08.936 INFO     Registered Record Processor (id: 'record_processor_693d7a15') (system_controller.py:377)
+10:07:08.978 INFO     GPU telemetry export enabled: /workspace/results/aiperf_artifacts/gpu_telemetry_export.jsonl (jsonl_writer.py:54)
+10:07:08.980 INFO     Record metrics export enabled: /workspace/results/aiperf_artifacts/profile_export.jsonl (record_export_jsonl_writer.py:58)
+10:07:09.014 INFO     Registered Worker (id: 'worker_cee4fd6c') (system_controller.py:377)
+10:07:09.021 INFO     Registered Record Processor (id: 'record_processor_9861fec9') (system_controller.py:377)
+10:07:09.023 INFO     Registered Record Processor (id: 'record_processor_a928e29a') (system_controller.py:377)
+10:07:09.030 INFO     Registered Worker (id: 'worker_5a692c6a') (system_controller.py:377)
+10:07:09.042 INFO     Registered Records Manager (id: 'records_manager') (system_controller.py:377)
+10:07:09.046 INFO     Registered Worker (id: 'worker_3de9f3fa') (system_controller.py:377)
+10:07:09.047 INFO     Registered Worker (id: 'worker_25000e6f') (system_controller.py:377)
+10:07:09.048 INFO     Registered Worker (id: 'worker_ecb2fe0c') (system_controller.py:377)
+10:07:09.065 INFO     AIPerf System is CONFIGURING (system_controller.py:265)
+10:07:09.065 INFO     Configuring all services to start profiling (system_controller.py:278)
+10:07:09.068 INFO     Waiting for dataset to be configured before configuring timing (manager.py:117)
+10:07:09.068 INFO     Tokenization is disabled for this endpoint, skipping tokenizer configuration (inference_result_parser.py:77)
+10:07:09.068 INFO     Tokenization is disabled for this endpoint, skipping tokenizer configuration (inference_result_parser.py:77)
+10:07:09.068 INFO     Tokenization is disabled for this endpoint, skipping tokenizer configuration (inference_result_parser.py:77)
+10:07:09.068 INFO     Tokenization is disabled for this endpoint, skipping tokenizer configuration (inference_result_parser.py:77)
+10:07:09.068 INFO     Tokenization is disabled for this endpoint, skipping tokenizer configuration (inference_result_parser.py:77)
+10:07:09.068 INFO     Tokenization is disabled for this endpoint, skipping tokenizer configuration (inference_result_parser.py:77)
+10:07:09.068 INFO     Tokenization is disabled for this endpoint, skipping tokenizer configuration (inference_result_parser.py:77)
+10:07:09.068 INFO     Tokenization is disabled for this endpoint, skipping tokenizer configuration (inference_result_parser.py:77)
+10:07:09.072 INFO     Memory-mapped dataset cache HIT (key=e7ae475fead88ea42fd4368031a2d95c); skipping tokenizer + composer. (dataset_manager.py:174)
+10:07:09.079 INFO     GPU telemetry disabled - no DCGM endpoints reachable (system_controller.py:466)
+10:07:09.093 INFO     Server Metrics: Capturing baseline metrics... (manager.py:152)
+10:07:09.146 INFO     Registered Worker (id: 'worker_afa18017') (system_controller.py:377)
+10:07:09.147 INFO     Registered Worker (id: 'worker_e530e6d7') (system_controller.py:377)
+10:07:09.147 INFO     Registered Worker (id: 'worker_b7b3ad90') (system_controller.py:377)
+10:07:09.147 INFO     Registered Worker (id: 'worker_6a2d8aa1') (system_controller.py:377)
+10:07:09.147 INFO     Registered Worker (id: 'worker_3c99e688') (system_controller.py:377)
+10:07:09.148 INFO     Registered Worker (id: 'worker_42d16921') (system_controller.py:377)
+10:07:09.148 INFO     Registered Worker (id: 'worker_7e653055') (system_controller.py:377)
+10:07:09.148 INFO     Registered Worker (id: 'worker_da3d43a2') (system_controller.py:377)
+10:07:09.149 INFO     Registered Worker (id: 'worker_5abf2cbf') (system_controller.py:377)
+10:07:09.149 INFO     Registered Worker (id: 'worker_cb720945') (system_controller.py:377)
+10:07:09.149 INFO     Registered Worker (id: 'worker_ae5012dd') (system_controller.py:377)
+10:07:09.150 INFO     Registered Worker (id: 'worker_c5b964ee') (system_controller.py:377)
+10:07:09.150 INFO     Registered Worker (id: 'worker_404eb9d1') (system_controller.py:377)
+10:07:09.150 INFO     Registered Worker (id: 'worker_a1000265') (system_controller.py:377)
+10:07:09.150 INFO     Registered Worker (id: 'worker_2f1e7e62') (system_controller.py:377)
+10:07:09.150 INFO     Registered Worker (id: 'worker_d4c9ae1f') (system_controller.py:377)
+10:07:09.151 INFO     Registered Worker (id: 'worker_dea25044') (system_controller.py:377)
+10:07:09.151 INFO     Registered Worker (id: 'worker_26ebdfee') (system_controller.py:377)
+10:07:09.152 INFO     Server metrics enabled - 1/1 endpoint(s) reachable. (system_controller.py:492)
+10:07:09.152 INFO     Registered Worker (id: 'worker_de32caac') (system_controller.py:377)
+10:07:09.152 INFO     Registered Worker (id: 'worker_74306168') (system_controller.py:377)
+10:07:09.155 INFO     Registered Worker (id: 'worker_101c157c') (system_controller.py:377)
+10:07:09.160 INFO     Registered Worker (id: 'worker_ae873306') (system_controller.py:377)
+10:07:09.160 INFO     Registered Worker (id: 'worker_e2f1d60d') (system_controller.py:377)
+10:07:09.160 INFO     Registered Worker (id: 'worker_7303055d') (system_controller.py:377)
+10:07:09.160 INFO     Registered Worker (id: 'worker_9a27de38') (system_controller.py:377)
+10:07:09.161 INFO     Registered Worker (id: 'worker_cfaf58a7') (system_controller.py:377)
+10:07:09.167 INFO     Restored mmap cache file dataset.dat via copy in 0.094s (0.07 GiB) (mmap_cache.py:327)
+10:07:09.168 INFO     Restored mmap cache file index.dat via copy in 0.001s (0.00 GiB) (mmap_cache.py:327)
+10:07:09.168 INFO     Restored mmap cache files in 0.096s via dataset=copy index=copy (dataset=0.07 GiB, index=0.00 GiB) (mmap_cache.py:345)
+10:07:09.169 INFO     Registered Worker (id: 'worker_03c8874a') (system_controller.py:377)
+10:07:09.199 INFO     sampling strategy: sequential, unique conversations: 84, unique turn count: 3696 (dataset_manager.py:853)
+10:07:09.246 WARNING  Received command response for service we were not expecting: worker_c5b964ee. Ignoring. (command_handler_mixin.py:363)
+10:07:09.251 INFO     TrajectorySource: built 48 trajectories from 78 traces
+  range cfg=[0.25, 0.75]  observed sample pct: min= 25% median= 44% max= 75%
+    lane=00  sample_time= 39%  root_next= 14/32  ( 44% turns)  live=1 ready=1  trace_id=00e7d11db2db59f44a87b4110175b11d1af3
+    lane=01  sample_time= 27%  root_next= 13/27  ( 48% turns)  live=1 ready=1  trace_id=03be8f1eb1e9e620f46bd07068d6ab1aaae3
+    lane=02  sample_time= 71%  root_next= 18/23  ( 78% turns)  live=1 ready=1  trace_id=116cb8d945f9d0810e788e51e3744adaab74
+    lane=03  sample_time= 74%  root_next= 23/26  ( 88% turns)  live=1 ready=1  trace_id=13762df76dba635a268bf3acbb30bfffed63
+    lane=04  sample_time= 27%  root_next=  8/27  ( 30% turns)  live=1 ready=1  trace_id=14933d8a4190c45ac8fbd21183bba9469140
+    lane=05  sample_time= 43%  root_next= 24/38  ( 63% turns)  live=1 ready=1  trace_id=1770548ae8e30555e62d6d6296c0166d6074
+    lane=06  sample_time= 35%  root_next= 18/44  ( 41% turns)  live=1 ready=1  trace_id=1ac9d045056424d98ec4b5725460ca2b6120
+    lane=07  sample_time= 40%  root_next= 13/31  ( 42% turns)  live=1 ready=1  trace_id=1ff2c5c397d1c8f4a2e069449ec8e10b882a
+    lane=08  sample_time= 46%  root_next= 38/63  ( 60% turns)  live=1 ready=1  trace_id=263134ce70d475337deb473aadc255479210
+    lane=09  sample_time= 25%  root_next= 14/39  ( 36% turns)  live=1 ready=1  trace_id=265a5749ca677d0b0c90e7d3d6029a45318f
+    lane=10  sample_time= 26%  root_next=  7/21  ( 33% turns)  live=1 ready=1  trace_id=2781d1fa9a22e982996948283bbcd3136c44
+    lane=11  sample_time= 45%  root_next= 17/30  ( 57% turns)  live=1 ready=1  trace_id=27bf77bcaaf2b6d2210bdbdab4934348f322
+    lane=12  sample_time= 52%  root_next= 20/34  ( 59% turns)  live=1 ready=1  trace_id=298daf6961d9121ca2f5d3cde68ba961c0c5
+    lane=13  sample_time= 27%  root_next= 15/43  ( 35% turns)  live=1 ready=1  trace_id=2b971773e1889a7692523d5cc0a78a0361cb
+    lane=14  sample_time= 43%  root_next=  8/21  ( 38% turns)  live=1 ready=1  trace_id=2c3e52bf4e687293e9fb70cba1c1786dceea
+    lane=15  sample_time= 38%  root_next= 15/26  ( 58% turns)  live=1 ready=1  trace_id=2cfbb581474c482911487fd9b13d720889fa
+    lane=16  sample_time= 75%  root_next= 28/38  ( 74% turns)  live=1 ready=1  trace_id=322d6256b084ece9fbbaa8ec9cca3dadaf7e
+    lane=17  sample_time= 54%  root_next= 52/104 ( 50% turns)  live=1 ready=1  trace_id=350b6e2414c221593bf4a0772ecd7c4fa009
+    lane=18  sample_time= 42%  root_next= 12/25  ( 48% turns)  live=1 ready=1  trace_id=388f557746c6b960834161cca0a7c99a3bf2
+    lane=19  sample_time= 59%  root_next= 30/38  ( 79% turns)  live=1 ready=1  trace_id=3b87c0e23861fdc2e2351fbe9c7f69668069
+    lane=20  sample_time= 39%  root_next= 13/31  ( 42% turns)  live=1 ready=1  trace_id=40b9e8d2a8419b1139f7cd0fda216cce1387
+    lane=21  sample_time= 27%  root_next=  6/28  ( 21% turns)  live=1 ready=1  trace_id=40f6b0a41facc7166110ec6f649e0d93567d
+    lane=22  sample_time= 33%  root_next= 14/25  ( 56% turns)  live=1 ready=1  trace_id=49ffa26d794d34ba3c66358e1d781b9f3c9c
+    lane=23  sample_time= 41%  root_next= 16/37  ( 43% turns)  live=1 ready=1  trace_id=4d31a8c14c39af1c31a386144a00b042397d
+    lane=24  sample_time= 25%  root_next= 28/86  ( 33% turns)  live=1 ready=1  trace_id=4d9a5d6076d2e738ba1c7531c8405acffb2a
+    lane=25  sample_time= 34%  root_next= 10/23  ( 43% turns)  live=1 ready=1  trace_id=4e7e9da6007f4fdebede92e497cafdc8362b
+    lane=26  sample_time= 47%  root_next= 11/22  ( 50% turns)  live=1 ready=1  trace_id=57757583724fa86f94219c6746bfc3709491
+    lane=27  sample_time= 67%  root_next=654/688 ( 95% turns)  live=1 ready=1  trace_id=58a3784a3e86cd4210e39c1d67757cca1f0f
+    lane=28  sample_time= 37%  root_next=  8/20  ( 40% turns)  live=1 ready=1  trace_id=61008926cac879d7ac099f873f3edb3c75ee
+    lane=29  sample_time= 55%  root_next= 14/40  ( 35% turns)  live=1 ready=1  trace_id=66eca77264acd8d1c1e95da8065f3e726e8c
+    lane=30  sample_time= 46%  root_next= 29/59  ( 49% turns)  live=1 ready=1  trace_id=74dbd77fc18b4696b5cf203d4d38a8a7c87f
+    lane=31  sample_time= 38%  root_next= 29/84  ( 35% turns)  live=1 ready=1  trace_id=7535c4f09c83c2e8d9ffa273cfca76b53871
+    lane=32  sample_time= 48%  root_next= 31/49  ( 63% turns)  live=1 ready=1  trace_id=76f66f1802d3f394d05477f8decd4386f512
+    lane=33  sample_time= 50%  root_next= 27/47  ( 57% turns)  live=1 ready=1  trace_id=791fc77464d5445a3f9e9cb14970a399a12e
+    lane=34  sample_time= 45%  root_next= 17/23  ( 74% turns)  live=1 ready=1  trace_id=84a14c6889c6cd1936a3b71e03b1ffb9d2a4
+    lane=35  sample_time= 70%  root_next= 18/25  ( 72% turns)  live=1 ready=1  trace_id=875fce6a7ffc402e48b74d44dbcaa4551a8c
+    lane=36  sample_time= 35%  root_next= 36/64  ( 56% turns)  live=1 ready=1  trace_id=888c5a8d8a4440adc2d0402a9a52af4075df
+    lane=37  sample_time= 66%  root_next= 20/26  ( 77% turns)  live=1 ready=1  trace_id=8a9d31047365083a978ab97b58bae62be6a7
+    lane=38  sample_time= 61%  root_next= 40/63  ( 63% turns)  live=1 ready=1  trace_id=8e7ba33cefd66ca8d2eb5c0420182e971748
+    lane=39  sample_time= 32%  root_next= 13/21  ( 62% turns)  live=1 ready=1  trace_id=905c177e85c26620cde0957e45af6d8ae1bd
+    lane=40  sample_time= 47%  root_next= 20/37  ( 54% turns)  live=1 ready=1  trace_id=924cdbd835a5567b0cca1484ce60e90e9f4f
+    lane=41  sample_time= 63%  root_next= 73/97  ( 75% turns)  live=1 ready=1  trace_id=95779044cc58023c929e52070a6df2cf2b91
+    lane=42  sample_time= 38%  root_next= 16/36  ( 44% turns)  live=1 ready=1  trace_id=96afe650c6da22ce32b05d3579c2fa028461
+    lane=43  sample_time= 72%  root_next= 22/24  ( 92% turns)  live=1 ready=1  trace_id=994eeb65edeb127ae7995d0817105c91c361
+    lane=44  sample_time= 38%  root_next= 15/48  ( 31% turns)  live=1 ready=1  trace_id=999cd8f2bf5389b17a4cd0b67dce25046859
+    lane=45  sample_time= 66%  root_next= 34/43  ( 79% turns)  live=1 ready=1  trace_id=9a47a25e8bb87492c599e8f1139c3333956e
+    lane=46  sample_time= 61%  root_next= 22/28  ( 79% turns)  live=1 ready=1  trace_id=9caaf8d22b815d8ec8e90b120f057906a81d
+    lane=47  sample_time= 54%  root_next= 15/22  ( 68% turns)  live=1 ready=1  trace_id=9e34ace570f04b8aed5bde41cb248b0c4126 (trajectory_source.py:256)
+10:07:09.252 INFO     Initialized 2 phase(s): ['Warmup', 'Profiling'] (phase_orchestrator.py:185)
+10:07:09.255 WARNING  Received command response for service we were not expecting: worker_e530e6d7. Ignoring. (command_handler_mixin.py:363)
+10:07:09.255 WARNING  Received command response for service we were not expecting: worker_b7b3ad90. Ignoring. (command_handler_mixin.py:363)
+10:07:09.256 WARNING  Received command response for service we were not expecting: worker_3c99e688. Ignoring. (command_handler_mixin.py:363)
+10:07:09.256 WARNING  Received command response for service we were not expecting: worker_42d16921. Ignoring. (command_handler_mixin.py:363)
+10:07:09.256 WARNING  Received command response for service we were not expecting: worker_da3d43a2. Ignoring. (command_handler_mixin.py:363)
+10:07:09.256 WARNING  Received command response for service we were not expecting: worker_6a2d8aa1. Ignoring. (command_handler_mixin.py:363)
+10:07:09.257 WARNING  Received command response for service we were not expecting: worker_afa18017. Ignoring. (command_handler_mixin.py:363)
+10:07:09.257 WARNING  Received command response for service we were not expecting: worker_a1000265. Ignoring. (command_handler_mixin.py:363)
+10:07:09.258 WARNING  Received command response for service we were not expecting: worker_404eb9d1. Ignoring. (command_handler_mixin.py:363)
+10:07:09.258 WARNING  Received command response for service we were not expecting: worker_7e653055. Ignoring. (command_handler_mixin.py:363)
+10:07:09.278 WARNING  Received command response for service we were not expecting: worker_ae5012dd. Ignoring. (command_handler_mixin.py:363)
+10:07:09.309 INFO     Dataset client initialized and freed 0 conversations from memory (dataset_manager.py:301)
+10:07:09.310 INFO     All services configured in 0.24 seconds (system_controller.py:290)
+10:07:09.310 INFO     AIPerf System is CONFIGURED (system_controller.py:267)
+10:07:09.311 INFO     Server Metrics: Started 1 collector(s) successfully (manager.py:216)
+10:07:09.314 INFO     All services started profiling successfully (system_controller.py:312)
+10:07:09.314 INFO     AIPerf System is PROFILING (system_controller.py:269)
+10:07:09.320 NOTICE   Phase warmup started | target: 48 requests (runner.py:303)
+10:07:09.320 INFO     WARMUP execute: dispatching 48 trajectory credits (agentic_replay.py:229)
+10:07:09.321 INFO     Credit phase start: warmup (records_manager.py:738)
+10:07:09.324 NOTICE   Phase warmup sending complete | sent=48, completed=0, in_flight=48 (runner.py:575)
+10:14:31.670 NOTICE   Phase warmup complete | completed=48, cancelled=0, errors=0 | elapsed=442.35s (runner.py:662)
+10:14:31.671 INFO     BranchOrchestrator stats: spawned=0 completed=0 errored=0 suspended=0 resumed=0 parents_failed_due_to_child_error=0 joins_suppressed=0 (branch_orchestrator.py:1152)
+10:14:31.672 INFO     PROFILING setup: trajectories=48 traces, recycle_queue=78 traces (full pool) (agentic_replay.py:214)
+10:14:31.673 NOTICE   Phase profiling started | target: 1800.0s duration (runner.py:303)
+10:14:31.673 INFO     Waiting for event 'profiling phase sending' with timeout of 1799.999709442s (runner.py:736)
+10:14:31.673 INFO     PROFILING execute: resuming 48 trajectory sessions (agentic_replay.py:279)
+10:14:31.673 INFO     Credit phase start: profiling (records_manager.py:738)
+10:15:09.083 INFO     [realtime 00:37 profiling] rps=0.1 (avg 0.1) tput_in=9341/s tput_out=13/s done=4 ok=4 err=0
+                           ttft p50=2496ms p75=3537ms p95=5198ms p99=5530ms
+                           itl  p50=153ms  p75=162ms  p95=185ms  p99=190ms
+                           e2e  p50=21095ms p75=25603ms p95=27376ms p99=27730ms
+                           intvty p50=7      p75=8      p95=12     p99=13 (1/tpot tok/s)
+                           isl  p50=74,358    p75=86,284    p90=88,247    p99=89,425 (tokens)
+                           osl  p50=115       p75=128       p90=130       p99=132 (tokens)
+                           tot  in=283,468        out=406
+                           trace theoretical_prefix_cache_hit=98.4%
+                           srv  prefix_cache_hit=6.0% unique_in_srv=3,325,350 kv_usage=52.0% cpu_kv_usage=28.3% queue=31r/1w tput_in_srv=10,751/s tput_out_srv=287/s (records_manager.py:976)
+10:15:39.154 INFO     [realtime 01:07 profiling] rps=0.5 (avg 0.3) tput_in=19630/s tput_out=63/s done=20 ok=20 err=0
+                           ttft p50=2757ms p75=3427ms p95=4596ms p99=5409ms
+                           itl  p50=135ms  p75=153ms  p95=182ms  p99=189ms
+                           e2e  p50=27032ms p75=43600ms p95=62764ms p99=64933ms
+                           intvty p50=7      p75=9      p95=13     p99=15 (1/tpot tok/s)
+                           isl  p50=64,018    p75=89,589    p90=92,044    p99=99,382 (tokens)
+                           osl  p50=171       p75=285       p90=376       p99=449 (tokens)
+                           tot  in=1,310,265      out=4,180
+                           trace theoretical_prefix_cache_hit=98.4%
+                           srv  prefix_cache_hit=24.6% unique_in_srv=3,442,667 kv_usage=57.0% cpu_kv_usage=28.3% queue=37r/0w tput_in_srv=12,701/s tput_out_srv=273/s (records_manager.py:976)
+10:16:09.251 INFO     [realtime 01:37 profiling] rps=0.3 (avg 0.4) tput_in=24158/s tput_out=91/s done=30 ok=30 err=0
+                           ttft p50=2391ms p75=2993ms p95=4699ms p99=5385ms
+                           itl  p50=112ms  p75=147ms  p95=174ms  p99=188ms
+                           e2e  p50=27734ms p75=45404ms p95=64191ms p99=71418ms
+                           intvty p50=9      p75=10     p95=14     p99=15 (1/tpot tok/s)
+                           isl  p50=64,018    p75=89,887    p90=93,113    p99=99,832 (tokens)
+                           osl  p50=200       p75=366       p90=456       p99=547 (tokens)
+                           tot  in=1,983,514      out=7,471
+                           trace theoretical_prefix_cache_hit=96.4%
+                           srv  prefix_cache_hit=32.7% unique_in_srv=3,522,444 kv_usage=55.0% cpu_kv_usage=28.3% queue=35r/0w tput_in_srv=13,451/s tput_out_srv=261/s (records_manager.py:976)
+10:16:39.348 INFO     [realtime 02:07 profiling] rps=0.0 (avg 0.4) tput_in=24158/s tput_out=91/s done=30 ok=30 err=0
+                           ttft p50=2391ms p75=2993ms p95=4699ms p99=5385ms
+                           itl  p50=112ms  p75=147ms  p95=174ms  p99=188ms
+                           e2e  p50=27734ms p75=45404ms p95=64191ms p99=71418ms
+                           intvty p50=9      p75=10     p95=14     p99=15 (1/tpot tok/s)
+                           isl  p50=64,018    p75=89,887    p90=93,113    p99=99,832 (tokens)
+                           osl  p50=200       p75=366       p90=456       p99=547 (tokens)
+                           tot  in=1,983,514      out=7,471
+                           trace theoretical_prefix_cache_hit=96.4%
+                           srv  prefix_cache_hit=32.7% unique_in_srv=3,522,444 kv_usage=55.0% cpu_kv_usage=28.3% queue=35r/0w tput_in_srv=12,489/s tput_out_srv=242/s (records_manager.py:976)
+10:17:09.476 INFO     [realtime 02:37 profiling] rps=0.1 (avg 0.2) tput_in=13467/s tput_out=55/s done=32 ok=32 err=0
+                           ttft p50=2391ms p75=2980ms p95=4670ms p99=5369ms
+                           itl  p50=118ms  p75=153ms  p95=200ms  p99=261ms
+                           e2e  p50=28526ms p75=50465ms p95=84832ms p99=130159ms
+                           intvty p50=9      p75=10     p95=14     p99=15 (1/tpot tok/s)
+                           isl  p50=63,986    p75=89,755    p90=92,609    p99=99,755 (tokens)
+                           osl  p50=211       p75=374       p90=479       p99=638 (tokens)
+                           tot  in=2,096,322      out=8,486
+                           trace theoretical_prefix_cache_hit=96.5%
+                           srv  prefix_cache_hit=34.0% unique_in_srv=3,532,373 kv_usage=68.0% cpu_kv_usage=28.3% queue=46r/0w tput_in_srv=11,906/s tput_out_srv=228/s (records_manager.py:976)
+10:17:39.603 INFO     [realtime 03:07 profiling] rps=0.6 (avg 0.3) tput_in=16627/s tput_out=81/s done=49 ok=49 err=0
+                           ttft p50=2634ms p75=3513ms p95=54665ms p99=61162ms
+                           itl  p50=121ms  p75=158ms  p95=320ms  p99=409ms
+                           e2e  p50=43237ms p75=87494ms p95=152914ms p99=178010ms
+                           intvty p50=8      p75=11     p95=15     p99=16 (1/tpot tok/s)
+                           isl  p50=60,380    p75=89,689    p90=93,546    p99=101,766 (tokens)
+                           osl  p50=229       p75=431       p90=575       p99=1,073 (tokens)
+                           tot  in=3,120,240      out=15,255
+                           trace theoretical_prefix_cache_hit=95.7%
+                           srv  prefix_cache_hit=41.8% unique_in_srv=3,674,195 kv_usage=63.0% cpu_kv_usage=28.8% queue=43r/0w tput_in_srv=13,150/s tput_out_srv=226/s (records_manager.py:976)
+10:18:09.767 INFO     [realtime 03:38 profiling] rps=0.6 (avg 0.3) tput_in=19936/s tput_out=122/s done=68 ok=68 err=0
+                           ttft p50=2578ms p75=3874ms p95=56932ms p99=60815ms
+                           itl  p50=109ms  p75=153ms  p95=266ms  p99=402ms
+                           e2e  p50=43786ms p75=93995ms p95=181114ms p99=196412ms
+                           intvty p50=9      p75=12     p95=15     p99=15 (1/tpot tok/s)
+                           isl  p50=61,951    p75=89,589    p90=93,979    p99=102,924 (tokens)
+                           osl  p50=274       p75=465       p90=961       p99=1,295 (tokens)
+                           tot  in=4,320,524      out=26,442
+                           trace theoretical_prefix_cache_hit=96.0%
+                           srv  prefix_cache_hit=48.0% unique_in_srv=3,935,041 kv_usage=63.0% cpu_kv_usage=29.5% queue=45r/0w tput_in_srv=14,860/s tput_out_srv=236/s (records_manager.py:976)
+10:18:39.974 INFO     [realtime 04:08 profiling] rps=0.7 (avg 0.4) tput_in=22902/s tput_out=145/s done=88 ok=88 err=0
+                           ttft p50=2379ms p75=3401ms p95=56932ms p99=60703ms
+                           itl  p50=103ms  p75=151ms  p95=227ms  p99=395ms
+                           e2e  p50=38579ms p75=96252ms p95=181114ms p99=203572ms
+                           intvty p50=10     p75=12     p95=14     p99=15 (1/tpot tok/s)
+                           isl  p50=63,522    p75=89,755    p90=97,754    p99=102,469 (tokens)
+                           osl  p50=274       p75=518       p90=1,047     p99=1,428 (tokens)
+                           tot  in=5,673,124      out=35,931
+                           trace theoretical_prefix_cache_hit=96.6%
+                           srv  prefix_cache_hit=54.5% unique_in_srv=4,059,795 kv_usage=54.0% cpu_kv_usage=30.5% queue=42r/0w tput_in_srv=16,530/s tput_out_srv=241/s (records_manager.py:976)
+10:19:10.213 INFO     [realtime 04:38 profiling] rps=0.5 (avg 0.4) tput_in=23025/s tput_out=161/s done=102 ok=102 err=0
+                           ttft p50=2271ms p75=3088ms p95=56395ms p99=60501ms
+                           itl  p50=95ms   p75=146ms  p95=211ms  p99=389ms
+                           e2e  p50=36147ms p75=95227ms p95=184379ms p99=202030ms
+                           intvty p50=10     p75=12     p95=13     p99=15 (1/tpot tok/s)
+                           isl  p50=61,951    p75=86,990    p90=97,078    p99=102,131 (tokens)
+                           osl  p50=284       p75=610       p90=1,077     p99=1,465 (tokens)
+                           tot  in=6,347,748      out=44,321
+                           trace theoretical_prefix_cache_hit=96.2%
+                           srv  prefix_cache_hit=56.8% unique_in_srv=4,149,407 kv_usage=60.0% cpu_kv_usage=30.6% queue=43r/0w tput_in_srv=16,844/s tput_out_srv=243/s (records_manager.py:976)
+10:19:40.513 INFO     [realtime 05:08 profiling] rps=0.7 (avg 0.4) tput_in=24771/s tput_out=187/s done=122 ok=122 err=0
+                           ttft p50=2271ms p75=3341ms p95=47460ms p99=60443ms
+                           itl  p50=92ms   p75=134ms  p95=190ms  p99=380ms
+                           e2e  p50=34560ms p75=92916ms p95=192384ms p99=249801ms
+                           intvty p50=11     p75=12     p95=13     p99=15 (1/tpot tok/s)
+                           isl  p50=54,181    p75=78,218    p90=96,744    p99=104,183 (tokens)
+                           osl  p50=288       p75=615       p90=1,096     p99=2,026 (tokens)
+                           tot  in=7,554,726      out=57,005
+                           trace theoretical_prefix_cache_hit=96.5%
+                           srv  prefix_cache_hit=59.8% unique_in_srv=4,346,642 kv_usage=55.0% cpu_kv_usage=30.8% queue=37r/0w tput_in_srv=18,003/s tput_out_srv=252/s (records_manager.py:976)
+10:20:10.884 INFO     [realtime 05:39 profiling] rps=0.6 (avg 0.4) tput_in=26003/s tput_out=206/s done=139 ok=139 err=0
+                           ttft p50=2223ms p75=3094ms p95=47459ms p99=60393ms
+                           itl  p50=90ms   p75=127ms  p95=183ms  p99=373ms
+                           e2e  p50=36830ms p75=94611ms p95=200826ms p99=261051ms
+                           intvty p50=11     p75=12     p95=13     p99=16 (1/tpot tok/s)
+                           isl  p50=63,522    p75=86,391    p90=97,190    p99=104,549 (tokens)
+                           osl  p50=303       p75=657       p90=1,130     p99=2,176 (tokens)
+                           tot  in=8,757,957      out=69,364
+                           trace theoretical_prefix_cache_hit=96.7%
+                           srv  prefix_cache_hit=62.6% unique_in_srv=4,489,388 kv_usage=53.0% cpu_kv_usage=31.0% queue=38r/0w tput_in_srv=19,045/s tput_out_srv=259/s (records_manager.py:976)
+10:20:41.331 INFO     [realtime 06:09 profiling] rps=0.5 (avg 0.4) tput_in=25698/s tput_out=206/s done=153 ok=153 err=0
+                           ttft p50=2215ms p75=3023ms p95=44332ms p99=60352ms
+                           itl  p50=90ms   p75=123ms  p95=181ms  p99=366ms
+                           e2e  p50=35465ms p75=91526ms p95=195850ms p99=259632ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=60,380    p75=79,253    p90=96,479    p99=104,483 (tokens)
+                           osl  p50=295       p75=651       p90=1,138     p99=2,163 (tokens)
+                           tot  in=9,428,254      out=75,406
+                           trace theoretical_prefix_cache_hit=96.7%
+                           srv  prefix_cache_hit=63.7% unique_in_srv=4,607,199 kv_usage=62.0% cpu_kv_usage=31.1% queue=44r/0w tput_in_srv=19,185/s tput_out_srv=256/s (records_manager.py:976)
+10:21:11.789 INFO     [realtime 06:40 profiling] rps=0.5 (avg 0.4) tput_in=26266/s tput_out=206/s done=168 ok=168 err=0
+                           ttft p50=2219ms p75=2980ms p95=38389ms p99=60309ms
+                           itl  p50=91ms   p75=121ms  p95=177ms  p99=359ms
+                           e2e  p50=36610ms p75=88343ms p95=190951ms p99=258113ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=61,952    p75=80,016    p90=95,608    p99=104,412 (tokens)
+                           osl  p50=304       p75=635       p90=1,132     p99=2,148 (tokens)
+                           tot  in=10,428,977     out=81,929
+                           trace theoretical_prefix_cache_hit=96.9%
+                           srv  prefix_cache_hit=65.3% unique_in_srv=4,744,180 kv_usage=63.0% cpu_kv_usage=31.7% queue=44r/0w tput_in_srv=19,791/s tput_out_srv=254/s (records_manager.py:976)
+10:21:42.399 INFO     [realtime 07:10 profiling] rps=0.7 (avg 0.4) tput_in=27375/s tput_out=221/s done=189 ok=189 err=0
+                           ttft p50=2192ms p75=2961ms p95=20980ms p99=60248ms
+                           itl  p50=92ms   p75=119ms  p95=168ms  p99=350ms
+                           e2e  p50=36830ms p75=89400ms p95=190713ms p99=255985ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=59,067    p75=79,990    p90=95,407    p99=104,813 (tokens)
+                           osl  p50=304       p75=656       p90=1,182     p99=2,128 (tokens)
+                           tot  in=11,741,901     out=94,698
+                           trace theoretical_prefix_cache_hit=96.6%
+                           srv  prefix_cache_hit=67.1% unique_in_srv=4,934,279 kv_usage=66.0% cpu_kv_usage=32.3% queue=44r/0w tput_in_srv=20,768/s tput_out_srv=261/s (records_manager.py:976)
+10:22:13.091 INFO     [realtime 07:41 profiling] rps=0.7 (avg 0.5) tput_in=28951/s tput_out=239/s done=211 ok=211 err=0
+                           ttft p50=2180ms p75=2989ms p95=5530ms p99=60139ms
+                           itl  p50=93ms   p75=113ms  p95=165ms  p99=338ms
+                           e2e  p50=36391ms p75=87742ms p95=196063ms p99=263887ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=60,380    p75=80,332    p90=97,086    p99=105,369 (tokens)
+                           osl  p50=312       p75=671       p90=1,181     p99=2,203 (tokens)
+                           tot  in=13,223,548     out=109,201
+                           trace theoretical_prefix_cache_hit=96.8%
+                           srv  prefix_cache_hit=68.6% unique_in_srv=5,171,694 kv_usage=58.0% cpu_kv_usage=33.3% queue=40r/0w tput_in_srv=21,900/s tput_out_srv=270/s (records_manager.py:976)
+10:22:43.879 INFO     [realtime 08:12 profiling] rps=0.5 (avg 0.5) tput_in=28745/s tput_out=242/s done=225 ok=225 err=0
+                           ttft p50=2136ms p75=2960ms p95=5429ms p99=60035ms
+                           itl  p50=93ms   p75=109ms  p95=164ms  p99=330ms
+                           e2e  p50=36830ms p75=86362ms p95=191668ms p99=262469ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=58,680    p75=80,094    p90=97,055    p99=105,280 (tokens)
+                           osl  p50=318       p75=677       p90=1,208     p99=2,190 (tokens)
+                           tot  in=14,017,841     out=117,971
+                           trace theoretical_prefix_cache_hit=96.8%
+                           srv  prefix_cache_hit=69.4% unique_in_srv=5,283,919 kv_usage=62.0% cpu_kv_usage=33.4% queue=43r/0w tput_in_srv=22,057/s tput_out_srv=271/s (records_manager.py:976)
+10:23:14.713 INFO     [realtime 08:43 profiling] rps=0.5 (avg 0.5) tput_in=28882/s tput_out=245/s done=241 ok=241 err=0
+                           ttft p50=2148ms p75=2970ms p95=5447ms p99=59916ms
+                           itl  p50=93ms   p75=109ms  p95=165ms  p99=321ms
+                           e2e  p50=36830ms p75=86362ms p95=192623ms p99=272305ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=57,938    p75=80,094    p90=97,604    p99=105,178 (tokens)
+                           osl  p50=318       p75=679       p90=1,226     p99=2,324 (tokens)
+                           tot  in=15,045,297     out=127,510
+                           trace theoretical_prefix_cache_hit=96.9%
+                           srv  prefix_cache_hit=70.4% unique_in_srv=5,418,658 kv_usage=66.0% cpu_kv_usage=33.5% queue=46r/0w tput_in_srv=22,479/s tput_out_srv=272/s (records_manager.py:976)
+10:23:45.617 INFO     [realtime 09:13 profiling] rps=0.5 (avg 0.5) tput_in=28965/s tput_out=246/s done=256 ok=256 err=0
+                           ttft p50=2119ms p75=2983ms p95=5672ms p99=59804ms
+                           itl  p50=93ms   p75=108ms  p95=160ms  p99=312ms
+                           e2e  p50=35800ms p75=80653ms p95=194343ms p99=283294ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=58,368    p75=80,213    p90=97,345    p99=105,083 (tokens)
+                           osl  p50=320       p75=675       p90=1,204     p99=2,613 (tokens)
+                           tot  in=16,015,246     out=136,247
+                           trace theoretical_prefix_cache_hit=97.0%
+                           srv  prefix_cache_hit=71.3% unique_in_srv=5,520,553 kv_usage=68.0% cpu_kv_usage=33.6% queue=45r/0w tput_in_srv=22,751/s tput_out_srv=272/s (records_manager.py:976)
+10:24:16.644 INFO     [realtime 09:44 profiling] rps=0.5 (avg 0.5) tput_in=29140/s tput_out=250/s done=273 ok=273 err=0
+                           ttft p50=2095ms p75=2961ms p95=5543ms p99=59678ms
+                           itl  p50=93ms   p75=107ms  p95=159ms  p99=302ms
+                           e2e  p50=36830ms p75=77127ms p95=189757ms p99=281007ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=58,263    p75=79,253    p90=97,500    p99=104,974 (tokens)
+                           osl  p50=327       p75=668       p90=1,217     p99=2,532 (tokens)
+                           tot  in=17,004,340     out=145,736
+                           trace theoretical_prefix_cache_hit=96.9%
+                           srv  prefix_cache_hit=71.4% unique_in_srv=5,792,024 kv_usage=66.0% cpu_kv_usage=35.1% queue=42r/0w tput_in_srv=23,133/s tput_out_srv=274/s (records_manager.py:976)
+10:24:47.813 INFO     [realtime 10:16 profiling] rps=0.5 (avg 0.5) tput_in=29365/s tput_out=260/s done=289 ok=289 err=0
+                           ttft p50=2136ms p75=2978ms p95=5477ms p99=59559ms
+                           itl  p50=93ms   p75=106ms  p95=158ms  p99=293ms
+                           e2e  p50=36391ms p75=80144ms p95=194409ms p99=306726ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=57,938    p75=80,094    p90=97,704    p99=104,992 (tokens)
+                           osl  p50=325       p75=677       p90=1,231     p99=2,997 (tokens)
+                           tot  in=18,049,908     out=160,005
+                           trace theoretical_prefix_cache_hit=96.7%
+                           srv  prefix_cache_hit=72.0% unique_in_srv=5,944,062 kv_usage=63.0% cpu_kv_usage=35.6% queue=44r/0w tput_in_srv=23,389/s tput_out_srv=278/s (records_manager.py:976)
+10:25:19.224 INFO     [realtime 10:47 profiling] rps=0.6 (avg 0.5) tput_in=29844/s tput_out=288/s done=307 ok=307 err=0
+                           ttft p50=2148ms p75=2974ms p95=5482ms p99=60168ms
+                           itl  p50=93ms   p75=104ms  p95=158ms  p99=285ms
+                           e2e  p50=36391ms p75=83155ms p95=200654ms p99=444215ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=58,680    p75=80,332    p90=97,554    p99=104,928 (tokens)
+                           osl  p50=338       p75=686       p90=1,368     p99=4,010 (tokens)
+                           tot  in=19,259,274     out=185,921
+                           trace theoretical_prefix_cache_hit=96.6%
+                           srv  prefix_cache_hit=72.9% unique_in_srv=6,103,719 kv_usage=60.0% cpu_kv_usage=36.1% queue=39r/0w tput_in_srv=24,000/s tput_out_srv=298/s (records_manager.py:976)
+10:25:50.796 INFO     [realtime 11:19 profiling] rps=0.6 (avg 0.5) tput_in=30560/s tput_out=307/s done=326 ok=326 err=0
+                           ttft p50=2183ms p75=2995ms p95=5584ms p99=60027ms
+                           itl  p50=93ms   p75=106ms  p95=158ms  p99=285ms
+                           e2e  p50=35800ms p75=85688ms p95=209658ms p99=575376ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=60,326    p75=80,622    p90=97,945    p99=105,308 (tokens)
+                           osl  p50=329       p75=723       p90=1,386     p99=5,406 (tokens)
+                           tot  in=20,627,854     out=206,939
+                           trace theoretical_prefix_cache_hit=96.7%
+                           srv  prefix_cache_hit=73.6% unique_in_srv=6,308,253 kv_usage=55.0% cpu_kv_usage=37.0% queue=37r/0w tput_in_srv=24,636/s tput_out_srv=310/s (records_manager.py:976)
+10:26:22.516 INFO     [realtime 11:50 profiling] rps=0.6 (avg 0.5) tput_in=31161/s tput_out=310/s done=346 ok=346 err=0
+                           ttft p50=2151ms p75=2976ms p95=5841ms p99=59878ms
+                           itl  p50=93ms   p75=106ms  p95=158ms  p99=284ms
+                           e2e  p50=36991ms p75=87211ms p95=201706ms p99=567365ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=61,192    p75=80,931    p90=97,722    p99=105,208 (tokens)
+                           osl  p50=340       p75=744       p90=1,386     p99=5,360 (tokens)
+                           tot  in=21,981,545     out=218,620
+                           trace theoretical_prefix_cache_hit=96.8%
+                           srv  prefix_cache_hit=74.5% unique_in_srv=6,422,867 kv_usage=51.0% cpu_kv_usage=37.2% queue=32r/2w tput_in_srv=25,209/s tput_out_srv=312/s (records_manager.py:976)
+10:26:54.385 INFO     [realtime 12:22 profiling] rps=0.5 (avg 0.5) tput_in=31396/s tput_out=309/s done=363 ok=363 err=0
+                           ttft p50=2095ms p75=2974ms p95=5846ms p99=59752ms
+                           itl  p50=94ms   p75=108ms  p95=158ms  p99=284ms
+                           e2e  p50=38096ms p75=87742ms p95=201909ms p99=560557ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=62,466    p75=81,432    p90=98,554    p99=105,497 (tokens)
+                           osl  p50=338       p75=751       p90=1,380     p99=5,321 (tokens)
+                           tot  in=23,210,515     out=228,769
+                           trace theoretical_prefix_cache_hit=96.7%
+                           srv  prefix_cache_hit=74.8% unique_in_srv=6,658,316 kv_usage=63.0% cpu_kv_usage=38.5% queue=41r/0w tput_in_srv=25,626/s tput_out_srv=313/s (records_manager.py:976)
+10:27:26.404 INFO     [realtime 12:54 profiling] rps=0.5 (avg 0.5) tput_in=31906/s tput_out=308/s done=380 ok=380 err=0
+                           ttft p50=2158ms p75=3040ms p95=5818ms p99=59626ms
+                           itl  p50=94ms   p75=111ms  p95=164ms  p99=354ms
+                           e2e  p50=36307ms p75=84339ms p95=212277ms p99=553748ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=62,742    p75=83,745    p90=98,599    p99=105,596 (tokens)
+                           osl  p50=326       p75=707       p90=1,381     p99=5,282 (tokens)
+                           tot  in=24,473,883     out=235,980
+                           trace theoretical_prefix_cache_hit=96.8%
+                           srv  prefix_cache_hit=75.0% unique_in_srv=6,918,190 kv_usage=62.0% cpu_kv_usage=39.8% queue=38r/0w tput_in_srv=26,050/s tput_out_srv=310/s (records_manager.py:976)
+10:27:58.628 INFO     [realtime 13:26 profiling] rps=0.5 (avg 0.5) tput_in=32122/s tput_out=309/s done=396 ok=396 err=0
+                           ttft p50=2189ms p75=3113ms p95=5857ms p99=59507ms
+                           itl  p50=94ms   p75=114ms  p95=164ms  p99=347ms
+                           e2e  p50=36610ms p75=82900ms p95=212598ms p99=586082ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=63,746    p75=87,500    p90=99,198    p99=105,921 (tokens)
+                           osl  p50=326       p75=691       p90=1,379     p99=5,476 (tokens)
+                           tot  in=25,798,898     out=248,363
+                           trace theoretical_prefix_cache_hit=96.9%
+                           srv  prefix_cache_hit=75.5% unique_in_srv=7,125,243 kv_usage=61.0% cpu_kv_usage=40.8% queue=37r/0w tput_in_srv=26,498/s tput_out_srv=312/s (records_manager.py:976)
+10:28:30.930 INFO     [realtime 13:59 profiling] rps=0.6 (avg 0.5) tput_in=32476/s tput_out=308/s done=414 ok=414 err=0
+                           ttft p50=2206ms p75=3072ms p95=5828ms p99=59144ms
+                           itl  p50=94ms   p75=114ms  p95=161ms  p99=337ms
+                           e2e  p50=36610ms p75=83679ms p95=205597ms p99=580182ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,180    p75=88,436    p90=100,735   p99=106,558 (tokens)
+                           osl  p50=326       p75=711       p90=1,359     p99=5,433 (tokens)
+                           tot  in=27,166,908     out=257,757
+                           trace theoretical_prefix_cache_hit=97.0%
+                           srv  prefix_cache_hit=76.1% unique_in_srv=7,259,977 kv_usage=57.0% cpu_kv_usage=40.9% queue=37r/0w tput_in_srv=26,951/s tput_out_srv=312/s (records_manager.py:976)
+10:29:03.464 INFO     [realtime 14:31 profiling] rps=0.5 (avg 0.5) tput_in=32646/s tput_out=308/s done=431 ok=431 err=0
+                           ttft p50=2198ms p75=3015ms p95=5833ms p99=58719ms
+                           itl  p50=95ms   p75=113ms  p95=159ms  p99=327ms
+                           e2e  p50=36391ms p75=82562ms p95=207120ms p99=573373ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=63,580    p75=87,836    p90=99,392    p99=106,546 (tokens)
+                           osl  p50=325       p75=706       p90=1,361     p99=5,394 (tokens)
+                           tot  in=28,196,890     out=266,292
+                           trace theoretical_prefix_cache_hit=97.0%
+                           srv  prefix_cache_hit=76.6% unique_in_srv=7,374,481 kv_usage=63.0% cpu_kv_usage=41.1% queue=38r/1w tput_in_srv=27,088/s tput_out_srv=310/s (records_manager.py:976)
+10:29:36.201 INFO     [realtime 15:04 profiling] rps=0.5 (avg 0.5) tput_in=32873/s tput_out=312/s done=448 ok=448 err=0
+                           ttft p50=2214ms p75=3011ms p95=5745ms p99=58293ms
+                           itl  p50=95ms   p75=112ms  p95=159ms  p99=317ms
+                           e2e  p50=36307ms p75=82900ms p95=208643ms p99=566564ms
+                           intvty p50=11     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=63,551    p75=88,201    p90=101,110   p99=107,132 (tokens)
+                           osl  p50=325       p75=720       p90=1,383     p99=5,355 (tokens)
+                           tot  in=29,353,990     out=278,549
+                           trace theoretical_prefix_cache_hit=96.8%
+                           srv  prefix_cache_hit=76.8% unique_in_srv=7,565,212 kv_usage=66.0% cpu_kv_usage=41.8% queue=39r/0w tput_in_srv=27,316/s tput_out_srv=312/s (records_manager.py:976)
+10:30:09.168 INFO     [realtime 15:37 profiling] rps=0.7 (avg 0.5) tput_in=33342/s tput_out=307/s done=472 ok=472 err=0
+                           ttft p50=2217ms p75=3089ms p95=5549ms p99=57693ms
+                           itl  p50=96ms   p75=115ms  p95=165ms  p99=321ms
+                           e2e  p50=35800ms p75=82254ms p95=206613ms p99=556952ms
+                           intvty p50=10     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,482    p75=89,149    p90=101,508   p99=107,775 (tokens)
+                           osl  p50=324       p75=685       p90=1,376     p99=5,300 (tokens)
+                           tot  in=31,128,038     out=286,709
+                           trace theoretical_prefix_cache_hit=96.6%
+                           srv  prefix_cache_hit=77.2% unique_in_srv=7,852,585 kv_usage=67.0% cpu_kv_usage=43.0% queue=42r/0w tput_in_srv=28,035/s tput_out_srv=310/s (records_manager.py:976)
+10:30:42.196 INFO     [realtime 16:10 profiling] rps=0.5 (avg 0.5) tput_in=33558/s tput_out=306/s done=487 ok=487 err=0
+                           ttft p50=2220ms p75=3094ms p95=5482ms p99=57317ms
+                           itl  p50=96ms   p75=116ms  p95=165ms  p99=326ms
+                           e2e  p50=35560ms p75=81162ms p95=201638ms p99=550944ms
+                           intvty p50=10     p75=12     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,514    p75=89,506    p90=101,489   p99=107,698 (tokens)
+                           osl  p50=320       p75=682       p90=1,379     p99=5,266 (tokens)
+                           tot  in=32,136,951     out=293,330
+                           trace theoretical_prefix_cache_hit=96.5%
+                           srv  prefix_cache_hit=77.4% unique_in_srv=8,011,991 kv_usage=70.0% cpu_kv_usage=43.5% queue=41r/1w tput_in_srv=28,101/s tput_out_srv=308/s (records_manager.py:976)
+10:31:15.398 INFO     [realtime 16:43 profiling] rps=0.6 (avg 0.5) tput_in=33656/s tput_out=305/s done=506 ok=506 err=0
+                           ttft p50=2233ms p75=3146ms p95=5603ms p99=56962ms
+                           itl  p50=97ms   p75=118ms  p95=165ms  p99=322ms
+                           e2e  p50=36610ms p75=82404ms p95=209658ms p99=540344ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,907    p75=89,656    p90=101,512   p99=108,450 (tokens)
+                           osl  p50=323       p75=688       p90=1,379     p99=5,187 (tokens)
+                           tot  in=33,623,987     out=305,189
+                           trace theoretical_prefix_cache_hit=96.3%
+                           srv  prefix_cache_hit=77.5% unique_in_srv=8,293,238 kv_usage=62.0% cpu_kv_usage=44.7% queue=39r/0w tput_in_srv=28,542/s tput_out_srv=309/s (records_manager.py:976)
+10:31:48.794 INFO     [realtime 17:17 profiling] rps=0.5 (avg 0.5) tput_in=33745/s tput_out=310/s done=522 ok=522 err=0
+                           ttft p50=2227ms p75=3142ms p95=5611ms p99=56946ms
+                           itl  p50=97ms   p75=117ms  p95=165ms  p99=320ms
+                           e2e  p50=36307ms p75=81671ms p95=211689ms p99=576978ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,146    p75=89,656    p90=101,508   p99=108,398 (tokens)
+                           osl  p50=321       p75=683       p90=1,376     p99=5,415 (tokens)
+                           tot  in=34,765,578     out=319,702
+                           trace theoretical_prefix_cache_hit=96.4%
+                           srv  prefix_cache_hit=77.8% unique_in_srv=8,426,512 kv_usage=56.0% cpu_kv_usage=44.9% queue=36r/0w tput_in_srv=28,685/s tput_out_srv=312/s (records_manager.py:976)
+10:32:22.606 INFO     [realtime 17:50 profiling] rps=0.4 (avg 0.5) tput_in=33480/s tput_out=317/s done=535 ok=535 err=0
+                           ttft p50=2243ms p75=3145ms p95=5585ms p99=56933ms
+                           itl  p50=97ms   p75=117ms  p95=164ms  p99=319ms
+                           e2e  p50=38004ms p75=83587ms p95=213822ms p99=594547ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,133    p75=89,252    p90=101,497   p99=108,355 (tokens)
+                           osl  p50=325       p75=724       p90=1,387     p99=5,633 (tokens)
+                           tot  in=35,619,538     out=337,336
+                           trace theoretical_prefix_cache_hit=96.2%
+                           srv  prefix_cache_hit=77.9% unique_in_srv=8,600,251 kv_usage=66.0% cpu_kv_usage=45.9% queue=40r/1w tput_in_srv=28,603/s tput_out_srv=317/s (records_manager.py:976)
+10:32:56.637 INFO     [realtime 18:24 profiling] rps=0.6 (avg 0.5) tput_in=33563/s tput_out=318/s done=554 ok=554 err=0
+                           ttft p50=2257ms p75=3149ms p95=5587ms p99=56913ms
+                           itl  p50=98ms   p75=118ms  p95=165ms  p99=317ms
+                           e2e  p50=38050ms p75=85693ms p95=213825ms p99=591911ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,146    p75=89,656    p90=101,512   p99=108,710 (tokens)
+                           osl  p50=325       p75=744       p90=1,388     p99=5,584 (tokens)
+                           tot  in=36,931,360     out=349,656
+                           trace theoretical_prefix_cache_hit=96.0%
+                           srv  prefix_cache_hit=78.1% unique_in_srv=8,817,115 kv_usage=59.0% cpu_kv_usage=46.9% queue=37r/0w tput_in_srv=28,854/s tput_out_srv=319/s (records_manager.py:976)
+10:33:30.839 INFO     [realtime 18:59 profiling] rps=0.4 (avg 0.5) tput_in=33652/s tput_out=317/s done=569 ok=569 err=0
+                           ttft p50=2254ms p75=3143ms p95=5542ms p99=56898ms
+                           itl  p50=98ms   p75=117ms  p95=164ms  p99=315ms
+                           e2e  p50=38004ms p75=83684ms p95=213160ms p99=589829ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,173    p75=89,556    p90=101,531   p99=108,841 (tokens)
+                           osl  p50=325       p75=734       p90=1,382     p99=5,546 (tokens)
+                           tot  in=37,910,945     out=357,034
+                           trace theoretical_prefix_cache_hit=96.0%
+                           srv  prefix_cache_hit=78.2% unique_in_srv=8,959,673 kv_usage=56.0% cpu_kv_usage=47.4% queue=36r/0w tput_in_srv=28,853/s tput_out_srv=316/s (records_manager.py:976)
+10:34:05.418 INFO     [realtime 19:33 profiling] rps=0.6 (avg 0.5) tput_in=33661/s tput_out=329/s done=589 ok=589 err=0
+                           ttft p50=2254ms p75=3138ms p95=5477ms p99=56878ms
+                           itl  p50=98ms   p75=116ms  p95=162ms  p99=313ms
+                           e2e  p50=38270ms p75=87990ms p95=221438ms p99=605397ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,775    p75=89,689    p90=101,871   p99=109,063 (tokens)
+                           osl  p50=327       p75=754       p90=1,401     p99=5,763 (tokens)
+                           tot  in=39,288,434     out=383,716
+                           trace theoretical_prefix_cache_hit=95.9%
+                           srv  prefix_cache_hit=78.4% unique_in_srv=9,182,637 kv_usage=51.0% cpu_kv_usage=48.2% queue=34r/0w tput_in_srv=29,117/s tput_out_srv=327/s (records_manager.py:976)
+10:34:40.245 INFO     [realtime 20:08 profiling] rps=0.7 (avg 0.5) tput_in=34024/s tput_out=330/s done=612 ok=612 err=0
+                           ttft p50=2272ms p75=3144ms p95=5409ms p99=56015ms
+                           itl  p50=99ms   p75=118ms  p95=165ms  p99=342ms
+                           e2e  p50=37928ms p75=83670ms p95=228906ms p99=644744ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,946    p75=89,689    p90=102,211   p99=108,988 (tokens)
+                           osl  p50=325       p75=735       p90=1,396     p99=6,036 (tokens)
+                           tot  in=40,851,954     out=396,708
+                           trace theoretical_prefix_cache_hit=96.0%
+                           srv  prefix_cache_hit=78.8% unique_in_srv=9,357,339 kv_usage=48.0% cpu_kv_usage=48.7% queue=34r/1w tput_in_srv=29,494/s tput_out_srv=328/s (records_manager.py:976)
+10:35:15.481 INFO     [realtime 20:43 profiling] rps=0.5 (avg 0.5) tput_in=34013/s tput_out=328/s done=630 ok=630 err=0
+                           ttft p50=2282ms p75=3162ms p95=5372ms p99=54622ms
+                           itl  p50=99ms   p75=119ms  p95=164ms  p99=338ms
+                           e2e  p50=38050ms p75=83626ms p95=221350ms p99=635546ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,185    p75=89,531    p90=102,220   p99=109,131 (tokens)
+                           osl  p50=325       p75=712       p90=1,381     p99=5,972 (tokens)
+                           tot  in=41,895,169     out=404,066
+                           trace theoretical_prefix_cache_hit=95.8%
+                           srv  prefix_cache_hit=78.8% unique_in_srv=9,568,890 kv_usage=57.0% cpu_kv_usage=49.6% queue=38r/0w tput_in_srv=29,501/s tput_out_srv=325/s (records_manager.py:976)
+10:35:51.071 INFO     [realtime 21:19 profiling] rps=0.4 (avg 0.5) tput_in=33852/s tput_out=329/s done=646 ok=646 err=0
+                           ttft p50=2290ms p75=3157ms p95=5375ms p99=53384ms
+                           itl  p50=102ms  p75=119ms  p95=163ms  p99=335ms
+                           e2e  p50=38292ms p75=85456ms p95=232187ms p99=627370ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,166    p75=89,689    p90=102,450   p99=109,689 (tokens)
+                           osl  p50=327       p75=728       p90=1,394     p99=5,916 (tokens)
+                           tot  in=43,024,577     out=418,161
+                           trace theoretical_prefix_cache_hit=95.7%
+                           srv  prefix_cache_hit=78.9% unique_in_srv=9,749,823 kv_usage=55.0% cpu_kv_usage=50.4% queue=38r/0w tput_in_srv=29,563/s tput_out_srv=327/s (records_manager.py:976)
+10:36:26.753 INFO     [realtime 21:55 profiling] rps=0.4 (avg 0.5) tput_in=33630/s tput_out=326/s done=661 ok=661 err=0
+                           ttft p50=2303ms p75=3217ms p95=5365ms p99=52223ms
+                           itl  p50=102ms  p75=120ms  p95=160ms  p99=331ms
+                           e2e  p50=38402ms p75=85291ms p95=233943ms p99=619705ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,147    p75=89,556    p90=102,364   p99=109,673 (tokens)
+                           osl  p50=327       p75=702       p90=1,391     p99=5,863 (tokens)
+                           tot  in=43,858,494     out=425,084
+                           trace theoretical_prefix_cache_hit=95.6%
+                           srv  prefix_cache_hit=79.0% unique_in_srv=9,914,397 kv_usage=65.0% cpu_kv_usage=50.9% queue=44r/0w tput_in_srv=29,425/s tput_out_srv=324/s (records_manager.py:976)
+10:37:02.771 INFO     [realtime 22:31 profiling] rps=0.5 (avg 0.5) tput_in=33599/s tput_out=330/s done=680 ok=680 err=0
+                           ttft p50=2297ms p75=3219ms p95=5385ms p99=50753ms
+                           itl  p50=103ms  p75=120ms  p95=160ms  p99=327ms
+                           e2e  p50=38483ms p75=82861ms p95=234105ms p99=651660ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,025    p75=89,482    p90=102,538   p99=109,864 (tokens)
+                           osl  p50=330       p75=690       p90=1,381     p99=6,089 (tokens)
+                           tot  in=45,069,335     out=442,565
+                           trace theoretical_prefix_cache_hit=95.5%
+                           srv  prefix_cache_hit=78.8% unique_in_srv=10,237,371 kv_usage=61.0% cpu_kv_usage=52.6% queue=41r/0w tput_in_srv=29,524/s tput_out_srv=328/s (records_manager.py:976)
+10:37:39.262 INFO     [realtime 23:07 profiling] rps=0.6 (avg 0.5) tput_in=33815/s tput_out=336/s done=702 ok=702 err=0
+                           ttft p50=2297ms p75=3216ms p95=5377ms p99=49111ms
+                           itl  p50=103ms  p75=119ms  p95=159ms  p99=322ms
+                           e2e  p50=39139ms p75=84889ms p95=233592ms p99=656470ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,166    p75=89,531    p90=102,552   p99=110,337 (tokens)
+                           osl  p50=334       p75=701       p90=1,390     p99=6,141 (tokens)
+                           tot  in=46,629,662     out=462,973
+                           trace theoretical_prefix_cache_hit=95.5%
+                           srv  prefix_cache_hit=79.0% unique_in_srv=10,473,886 kv_usage=51.0% cpu_kv_usage=52.9% queue=36r/0w tput_in_srv=29,821/s tput_out_srv=333/s (records_manager.py:976)
+10:38:16.209 INFO     [realtime 23:44 profiling] rps=0.6 (avg 0.5) tput_in=33919/s tput_out=334/s done=723 ok=723 err=0
+                           ttft p50=2297ms p75=3196ms p95=5377ms p99=48761ms
+                           itl  p50=103ms  p75=119ms  p95=158ms  p99=320ms
+                           e2e  p50=39212ms p75=83675ms p95=226439ms p99=655175ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,159    p75=89,689    p90=103,032   p99=110,375 (tokens)
+                           osl  p50=335       p75=700       p90=1,389     p99=6,127 (tokens)
+                           tot  in=48,048,677     out=473,754
+                           trace theoretical_prefix_cache_hit=95.6%
+                           srv  prefix_cache_hit=79.1% unique_in_srv=10,702,358 kv_usage=49.0% cpu_kv_usage=53.6% queue=34r/0w tput_in_srv=30,011/s tput_out_srv=332/s (records_manager.py:976)
+10:38:53.429 INFO     [realtime 24:21 profiling] rps=0.5 (avg 0.5) tput_in=33826/s tput_out=336/s done=740 ok=740 err=0
+                           ttft p50=2299ms p75=3188ms p95=5365ms p99=48477ms
+                           itl  p50=103ms  p75=118ms  p95=158ms  p99=318ms
+                           e2e  p50=39139ms p75=84086ms p95=234105ms p99=654126ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,143    p75=89,149    p90=102,829   p99=110,368 (tokens)
+                           osl  p50=334       p75=705       p90=1,397     p99=6,116 (tokens)
+                           tot  in=49,013,372     out=486,934
+                           trace theoretical_prefix_cache_hit=95.5%
+                           srv  prefix_cache_hit=79.1% unique_in_srv=10,909,247 kv_usage=54.0% cpu_kv_usage=54.4% queue=38r/0w tput_in_srv=29,927/s tput_out_srv=333/s (records_manager.py:976)
+10:39:31.063 INFO     [realtime 24:59 profiling] rps=0.4 (avg 0.5) tput_in=33416/s tput_out=330/s done=754 ok=754 err=0
+                           ttft p50=2290ms p75=3176ms p95=5358ms p99=48244ms
+                           itl  p50=103ms  p75=118ms  p95=158ms  p99=317ms
+                           e2e  p50=38348ms p75=83293ms p95=229376ms p99=653263ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=65,025    p75=88,923    p90=103,018   p99=110,773 (tokens)
+                           osl  p50=334       p75=697       p90=1,395     p99=6,106 (tokens)
+                           tot  in=49,798,905     out=491,741
+                           trace theoretical_prefix_cache_hit=95.4%
+                           srv  prefix_cache_hit=79.2% unique_in_srv=11,040,839 kv_usage=62.0% cpu_kv_usage=55.1% queue=45r/0w tput_in_srv=29,748/s tput_out_srv=328/s (records_manager.py:976)
+10:40:09.136 INFO     [realtime 25:37 profiling] rps=0.6 (avg 0.5) tput_in=33426/s tput_out=338/s done=776 ok=776 err=0
+                           ttft p50=2297ms p75=3152ms p95=5353ms p99=47877ms
+                           itl  p50=102ms  p75=117ms  p95=158ms  p99=315ms
+                           e2e  p50=39064ms p75=85573ms p95=239098ms p99=651906ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,912    p75=88,515    p90=102,991   p99=110,591 (tokens)
+                           osl  p50=335       p75=740       p90=1,413     p99=6,092 (tokens)
+                           tot  in=51,114,754     out=516,211
+                           trace theoretical_prefix_cache_hit=95.3%
+                           srv  prefix_cache_hit=79.3% unique_in_srv=11,247,631 kv_usage=62.0% cpu_kv_usage=55.7% queue=42r/0w tput_in_srv=29,777/s tput_out_srv=332/s (records_manager.py:976)
+10:40:47.581 INFO     [realtime 26:15 profiling] rps=0.4 (avg 0.5) tput_in=33414/s tput_out=339/s done=793 ok=793 err=0
+                           ttft p50=2303ms p75=3175ms p95=5353ms p99=47593ms
+                           itl  p50=102ms  p75=117ms  p95=158ms  p99=313ms
+                           e2e  p50=39232ms p75=86362ms p95=240255ms p99=650858ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,907    p75=88,894    p90=103,090   p99=111,635 (tokens)
+                           osl  p50=341       p75=748       p90=1,426     p99=6,080 (tokens)
+                           tot  in=52,300,817     out=531,052
+                           trace theoretical_prefix_cache_hit=95.2%
+                           srv  prefix_cache_hit=79.3% unique_in_srv=11,477,144 kv_usage=48.0% cpu_kv_usage=56.6% queue=35r/0w tput_in_srv=29,883/s tput_out_srv=336/s (records_manager.py:976)
+10:41:26.485 INFO     [realtime 26:54 profiling] rps=0.5 (avg 0.5) tput_in=33344/s tput_out=338/s done=812 ok=812 err=0
+                           ttft p50=2304ms p75=3214ms p95=5353ms p99=47460ms
+                           itl  p50=102ms  p75=116ms  p95=158ms  p99=309ms
+                           e2e  p50=39243ms p75=86461ms p95=235395ms p99=644744ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,907    p75=88,515    p90=102,913   p99=111,570 (tokens)
+                           osl  p50=341       p75=748       p90=1,435     p99=6,036 (tokens)
+                           tot  in=53,476,296     out=542,881
+                           trace theoretical_prefix_cache_hit=95.2%
+                           srv  prefix_cache_hit=79.4% unique_in_srv=11,673,074 kv_usage=51.0% cpu_kv_usage=57.5% queue=34r/0w tput_in_srv=29,893/s tput_out_srv=336/s (records_manager.py:976)
+10:42:05.404 INFO     [realtime 27:33 profiling] rps=0.4 (avg 0.5) tput_in=33229/s tput_out=339/s done=827 ok=827 err=0
+                           ttft p50=2300ms p75=3170ms p95=5354ms p99=47460ms
+                           itl  p50=101ms  p75=116ms  p95=158ms  p99=305ms
+                           e2e  p50=39232ms p75=86559ms p95=242570ms p99=637079ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,907    p75=88,724    p90=102,977   p99=112,607 (tokens)
+                           osl  p50=341       p75=749       p90=1,439     p99=5,983 (tokens)
+                           tot  in=54,455,556     out=556,168
+                           trace theoretical_prefix_cache_hit=95.2%
+                           srv  prefix_cache_hit=79.5% unique_in_srv=11,810,032 kv_usage=62.0% cpu_kv_usage=57.9% queue=41r/0w tput_in_srv=29,807/s tput_out_srv=336/s (records_manager.py:976)
+10:42:44.783 INFO     [realtime 28:13 profiling] rps=0.5 (avg 0.5) tput_in=33103/s tput_out=339/s done=848 ok=848 err=0
+                           ttft p50=2304ms p75=3210ms p95=5373ms p99=47459ms
+                           itl  p50=101ms  p75=116ms  p95=158ms  p99=300ms
+                           e2e  p50=39139ms p75=86941ms p95=242184ms p99=626348ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,826    p75=88,515    p90=102,964   p99=113,245 (tokens)
+                           osl  p50=341       p75=751       p90=1,430     p99=5,909 (tokens)
+                           tot  in=55,679,715     out=570,591
+                           trace theoretical_prefix_cache_hit=95.2%
+                           srv  prefix_cache_hit=79.5% unique_in_srv=12,082,838 kv_usage=58.0% cpu_kv_usage=59.1% queue=40r/0w tput_in_srv=29,833/s tput_out_srv=336/s (records_manager.py:976)
+10:43:24.730 INFO     [realtime 28:53 profiling] rps=0.5 (avg 0.5) tput_in=33089/s tput_out=340/s done=867 ok=867 err=0
+                           ttft p50=2310ms p75=3214ms p95=5381ms p99=47459ms
+                           itl  p50=101ms  p75=115ms  p95=157ms  p99=295ms
+                           e2e  p50=39254ms p75=87125ms p95=242570ms p99=616639ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,907    p75=88,724    p90=103,075   p99=113,517 (tokens)
+                           osl  p50=345       p75=762       p90=1,439     p99=5,841 (tokens)
+                           tot  in=57,007,427     out=585,597
+                           trace theoretical_prefix_cache_hit=95.2%
+                           srv  prefix_cache_hit=79.7% unique_in_srv=12,246,514 kv_usage=58.0% cpu_kv_usage=59.6% queue=41r/0w tput_in_srv=29,875/s tput_out_srv=337/s (records_manager.py:976)
+10:44:05.261 INFO     [realtime 29:33 profiling] rps=0.5 (avg 0.5) tput_in=33115/s tput_out=342/s done=887 ok=887 err=0
+                           ttft p50=2310ms p75=3211ms p95=5381ms p99=47459ms
+                           itl  p50=101ms  p75=114ms  p95=157ms  p99=289ms
+                           e2e  p50=39460ms p75=87585ms p95=244425ms p99=606419ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,907    p75=88,724    p90=103,075   p99=114,204 (tokens)
+                           osl  p50=348       p75=766       p90=1,483     p99=5,771 (tokens)
+                           tot  in=58,330,028     out=602,133
+                           trace theoretical_prefix_cache_hit=95.3%
+                           srv  prefix_cache_hit=79.6% unique_in_srv=12,535,702 kv_usage=53.0% cpu_kv_usage=60.8% queue=37r/0w tput_in_srv=29,971/s tput_out_srv=339/s (records_manager.py:976)
+10:44:31.673 INFO     Timeout of 1799.999709442s elapsed for event 'profiling phase sending' (runner.py:724)
+10:44:31.673 NOTICE   Phase profiling sending complete | sent=943, completed=904, in_flight=39 | sessions: sent=28, completed=28 | timeout_triggered=True (runner.py:575)
+10:44:31.673 INFO     Waiting for event 'profiling phase credits returned' with timeout of 29.999178709000034s (runner.py:736)
+10:44:31.674 INFO     Sent 943 requests. Waiting for all to complete... (records_manager.py:746)
+10:44:46.042 INFO     [realtime 30:14 profiling] rps=0.4 (avg 0.5) tput_in=33040/s tput_out=338/s done=905 ok=905 err=0
+                           ttft p50=2317ms p75=3217ms p95=5434ms p99=47251ms
+                           itl  p50=101ms  p75=114ms  p95=157ms  p99=285ms
+                           e2e  p50=39460ms p75=86756ms p95=242117ms p99=598879ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,907    p75=88,553    p90=103,120   p99=114,963 (tokens)
+                           osl  p50=349       p75=764       p90=1,441     p99=5,711 (tokens)
+                           tot  in=59,544,291     out=609,870
+                           trace theoretical_prefix_cache_hit=95.3%
+                           srv  prefix_cache_hit=79.7% unique_in_srv=12,727,120 kv_usage=54.0% cpu_kv_usage=61.5% queue=39r/0w tput_in_srv=29,969/s tput_out_srv=336/s (records_manager.py:976)
+10:45:01.673 INFO     Timeout of 29.999178709000034s elapsed for event 'profiling phase credits returned' (runner.py:724)
+10:45:01.674 WARNING  Phase profiling timed out, cancelling all credits. Stats: sent=943, completed=919, cancelled=0, in_flight=24 (runner.py:617)
+10:45:01.675 INFO     Sent cancellation requests for 24 in-flight credits across 21 workers (sticky_router.py:399)
+10:45:01.675 INFO     Waiting for all cancelled credits to be returned for phase profiling. Need 24 more credits. (runner.py:631)
+10:45:01.677 INFO     All cancelled credits returned for phase profiling (runner.py:642)
+10:45:01.677 NOTICE   Phase profiling complete | completed=919, cancelled=24, errors=0 | sessions: completed=28, cancelled=1 | elapsed=1830.00s | grace_period_timeout=True (runner.py:662)
+10:45:01.678 INFO     BranchOrchestrator stats: spawned=6 completed=6 errored=0 suspended=2 resumed=2 parents_failed_due_to_child_error=0 joins_suppressed=0 (branch_orchestrator.py:1152)
+10:45:01.678 NOTICE   All credits completed (phase_orchestrator.py:200)
+10:45:01.678 INFO     Received credits complete from 'timing_manager' (system_controller.py:412)
+10:45:01.679 INFO     Received CREDIT_PHASE_COMPLETE message, Phase complete: PhaseRecordsStats(phase=CreditPhase.PROFILING, start_ns=1780481671672976729, sent_end_ns=1780483471673273429, requests_end_ns=1780483501677878804, total_expected_requests=None, expected_duration_sec=None, expected_num_sessions=None, expected_grace_period_sec=None, final_requests_sent=None, final_requests_completed=919, final_requests_cancelled=24, final_request_errors=0, final_sent_sessions=None, final_completed_sessions=None, final_cancelled_sessions=None, timeout_triggered=True, grace_period_timeout_triggered=True, was_cancelled=False, records_end_ns=None, success_records=919, error_records=0) (records_manager.py:763)
+10:45:01.679 NOTICE   All requests have completed, please wait for the results to be processed (currently 919 of 919 records processed)... (records_manager.py:768)
+10:45:01.679 INFO     Processed 919 valid requests and 0 errors (919 total). (records_manager.py:653)
+10:45:01.679 INFO     Received all records, processing now... (records_manager.py:659)
+10:45:01.679 INFO     All credits complete, please wait for the results to be processed... (records_manager.py:784)
+10:45:01.680 INFO     Server Metrics: Profiling complete, capturing final metrics... (manager.py:246)
+10:45:01.682 INFO     Waiting 2.0s for server metrics flush period... (records_manager.py:709)
+10:45:03.678 INFO     Processing records results... (records_manager.py:1008)
+10:45:27.049 INFO     [realtime 30:30 profiling] rps=0.9 (avg 0.5) tput_in=33084/s tput_out=341/s done=919 ok=919 err=0
+                           ttft p50=2320ms p75=3220ms p95=5389ms p99=46521ms
+                           itl  p50=100ms  p75=114ms  p95=156ms  p99=285ms
+                           e2e  p50=39761ms p75=87833ms p95=243507ms p99=597525ms
+                           intvty p50=10     p75=11     p95=14     p99=16 (1/tpot tok/s)
+                           isl  p50=64,907    p75=88,133    p90=103,105   p99=115,080 (tokens)
+                           osl  p50=352       p75=770       p90=1,448     p99=5,675 (tokens)
+                           tot  in=60,413,461     out=623,055
+                           trace theoretical_prefix_cache_hit=95.4%
+                           srv  prefix_cache_hit=79.7% unique_in_srv=12,914,480 kv_usage=36.0% cpu_kv_usage=62.3% queue=24r/0w tput_in_srv=30,003/s tput_out_srv=338/s (records_manager.py:976)
+10:45:27.069 WARNING  Timeout waiting for 0 pending flush tasks during shutdown. Cancelling tasks and proceeding with cleanup. (buffered_jsonl_writer_mixin.py:181)
+10:45:27.202 WARNING  Detected 6 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'mode': 'prefill_none', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8', 'moe_ep_rank': '0', 'pp_rank': '0', 'tp_rank': '0'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 840.00 (export_stats.py:348)
+10:45:27.205 WARNING  Detected 6 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'mode': 'prefill_compute', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8', 'moe_ep_rank': '0', 'pp_rank': '0', 'tp_rank': '0'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 9753712.00 (export_stats.py:348)
+10:45:27.207 WARNING  Detected 6 counter reset(s) in counter metric with labels {'component': 'tokenizer'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 543.74 (export_stats.py:348)
+10:45:27.455 INFO     Waiting for server metrics results... (system_controller.py:725)
+10:45:27.455 INFO     Waiting for server metrics results... (system_controller.py:725)
+10:45:29.227 WARNING  Detected 18 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'mode': 'decode_none', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8', 'moe_ep_rank': '0', 'pp_rank': '0', 'tp_rank': '2'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 17023.00 (export_stats.py:348)
+10:45:29.229 WARNING  Detected 18 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'mode': 'decode_none', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8', 'moe_ep_rank': '0', 'pp_rank': '0', 'tp_rank': '3'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 17023.00 (export_stats.py:348)
+10:45:29.232 WARNING  Detected 18 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'mode': 'decode_none', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8', 'moe_ep_rank': '0', 'pp_rank': '0', 'tp_rank': '1'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 17023.00 (export_stats.py:348)
+10:45:29.235 WARNING  Detected 16 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'mode': 'decode_none', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8', 'moe_ep_rank': '0', 'pp_rank': '0', 'tp_rank': '0'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 17023.00 (export_stats.py:348)
+10:45:29.261 WARNING  Detected 16 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'mode': 'decode', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8', 'moe_ep_rank': '0', 'pp_rank': '0', 'tp_rank': '0'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 668457.00 (export_stats.py:348)
+10:45:29.357 WARNING  Detected 1 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 60473443.00 (export_stats.py:348)
+10:45:29.359 WARNING  Detected 1 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 634766.00 (export_stats.py:348)
+10:45:29.362 WARNING  Detected 1 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 920.00 (export_stats.py:348)
+10:45:29.364 WARNING  Detected 1 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 920.00 (export_stats.py:348)
+10:45:29.609 WARNING  Detected 5 counter reset(s) in counter metric with labels {'engine_type': 'unified', 'mode': 'prefill_cache', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8', 'moe_ep_rank': '0', 'pp_rank': '0', 'tp_rank': '0'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 52222092.00 (export_stats.py:348)
+10:45:29.612 WARNING  Detected 1 counter reset(s) in counter metric with labels {'cache_source': 'device', 'engine_type': 'unified', 'model_name': 'Qwen/Qwen3.5-397B-A17B-FP8'}. This typically indicates server restart(s) during profiling. Statistics may be inaccurate. Raw delta: 50699117.00 (export_stats.py:348)
+10:45:30.100 INFO     _finalize_and_process_results completed (records_manager.py:716)
+10:45:31.317 INFO     All results received, initiating shutdown (system_controller.py:720)
+10:45:32.243 INFO     Exporting all records (exporter_manager.py:65)
+10:45:32.487 INFO     Scenario 'inferencex-agentx-mvp': setting timing_mode=agentic_replay (was at default request_rate). (validator.py:168)
+10:45:34.264 INFO     Scenario 'inferencex-agentx-mvp': setting timing_mode=agentic_replay (was at default request_rate). (validator.py:168)
+10:45:34.450 INFO     Exporting console data (exporter_manager.py:121)
+
+
+[3m                                                   NVIDIA AIPerf | LLM Metrics: Effective                                                   [0m
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃[1m [0m[1m                              Metric[0m[1m [0m┃[1m [0m[1m         avg[0m[1m [0m┃[1m [0m[1m      min[0m[1m [0m┃[1m [0m[1m         max[0m[1m [0m┃[1m [0m[1m         p99[0m[1m [0m┃[1m [0m[1m         p90[0m[1m [0m┃[1m [0m[1m         p50[0m[1m [0m┃[1m [0m[1m       std[0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│[36m [0m[36m    Effective Concurrency (requests)[0m[36m [0m│[32m [0m[32m       37.75[0m[32m [0m│[32m [0m[32m     1.00[0m[32m [0m│[32m [0m[32m       48.00[0m[32m [0m│[32m [0m[32m       48.00[0m[32m [0m│[32m [0m[32m       45.00[0m[32m [0m│[32m [0m[32m       39.00[0m[32m [0m│[32m [0m[32m      7.39[0m[32m [0m│
+│[36m [0m[36m         Effective Decode Throughput[0m[36m [0m│[32m [0m[32m      333.04[0m[32m [0m│[32m [0m[32m     0.00[0m[32m [0m│[32m [0m[32m   85,761.78[0m[32m [0m│[32m [0m[32m      541.74[0m[32m [0m│[32m [0m[32m      455.78[0m[32m [0m│[32m [0m[32m      329.46[0m[32m [0m│[32m [0m[32m    159.02[0m[32m [0m│
+│[36m [0m[36m                        (tokens/sec)[0m[36m [0m│[32m              [0m│[32m           [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m            [0m│
+│[36m [0m[36m        Effective Prefill Throughput[0m[36m [0m│[32m [0m[32m   33,083.74[0m[32m [0m│[32m [0m[32m     0.00[0m[32m [0m│[32m [0m[32m  294,106.02[0m[32m [0m│[32m [0m[32m  145,267.46[0m[32m [0m│[32m [0m[32m   83,035.69[0m[32m [0m│[32m [0m[32m   25,045.33[0m[32m [0m│[32m [0m[32m 36,570.40[0m[32m [0m│
+│[36m [0m[36m                        (tokens/sec)[0m[36m [0m│[32m              [0m│[32m           [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m            [0m│
+│[36m [0m[36m        Effective Decode Concurrency[0m[36m [0m│[32m [0m[32m       36.15[0m[32m [0m│[32m [0m[32m     0.00[0m[32m [0m│[32m [0m[32m       48.00[0m[32m [0m│[32m [0m[32m       46.00[0m[32m [0m│[32m [0m[32m       44.00[0m[32m [0m│[32m [0m[32m       37.00[0m[32m [0m│[32m [0m[32m      7.26[0m[32m [0m│
+│[36m [0m[36m                          (requests)[0m[36m [0m│[32m              [0m│[32m           [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m            [0m│
+│[36m [0m[36m       Effective Prefill Concurrency[0m[36m [0m│[32m [0m[32m        1.61[0m[32m [0m│[32m [0m[32m     0.00[0m[32m [0m│[32m [0m[32m       12.00[0m[32m [0m│[32m [0m[32m       12.00[0m[32m [0m│[32m [0m[32m        4.00[0m[32m [0m│[32m [0m[32m        1.00[0m[32m [0m│[32m [0m[32m      2.13[0m[32m [0m│
+│[36m [0m[36m                          (requests)[0m[36m [0m│[32m              [0m│[32m           [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m            [0m│
+│[36m [0m[36m          Effective Total Throughput[0m[36m [0m│[32m [0m[32m   33,424.44[0m[32m [0m│[32m [0m[32m    10.33[0m[32m [0m│[32m [0m[32m  294,524.17[0m[32m [0m│[32m [0m[32m  145,651.60[0m[32m [0m│[32m [0m[32m   83,456.44[0m[32m [0m│[32m [0m[32m   25,413.68[0m[32m [0m│[32m [0m[32m 36,563.72[0m[32m [0m│
+│[36m [0m[36m                        (tokens/sec)[0m[36m [0m│[32m              [0m│[32m           [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m            [0m│
+│[36m [0m[36mEffective Decode Throughput Per User[0m[36m [0m│[32m [0m[32m        9.56[0m[32m [0m│[32m [0m[32m     0.00[0m[32m [0m│[32m [0m[32m    5,717.45[0m[32m [0m│[32m [0m[32m       13.93[0m[32m [0m│[32m [0m[32m       11.12[0m[32m [0m│[32m [0m[32m        8.74[0m[32m [0m│[32m [0m[32m     26.29[0m[32m [0m│
+│[36m [0m[36m                   (tokens/sec/user)[0m[36m [0m│[32m              [0m│[32m           [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m            [0m│
+│[36m [0m[36m    Effective Prefill Throughput Per[0m[36m [0m│[32m [0m[32m   18,035.44[0m[32m [0m│[32m [0m[32m     0.00[0m[32m [0m│[32m [0m[32m  162,576.14[0m[32m [0m│[32m [0m[32m   85,203.19[0m[32m [0m│[32m [0m[32m   42,898.64[0m[32m [0m│[32m [0m[32m   15,805.12[0m[32m [0m│[32m [0m[32m 20,255.39[0m[32m [0m│
+│[36m [0m[36m                                User[0m[36m [0m│[32m              [0m│[32m           [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m            [0m│
+│[36m [0m[36m                   (tokens/sec/user)[0m[36m [0m│[32m              [0m│[32m           [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m              [0m│[32m            [0m│
+│[36m [0m[36m           Tokens In Flight (tokens)[0m[36m [0m│[32m [0m[32m2,662,541.11[0m[32m [0m│[32m [0m[32m61,688.30[0m[32m [0m│[32m [0m[32m3,568,684.37[0m[32m [0m│[32m [0m[32m3,451,165.40[0m[32m [0m│[32m [0m[32m3,212,319.94[0m[32m [0m│[32m [0m[32m2,781,373.30[0m[32m [0m│[32m [0m[32m548,371.99[0m[32m [0m│
+│[36m [0m[36m   Effective Latency (CO-aware) (ms)[0m[36m [0m│[32m [0m[32m   75,020.82[0m[32m [0m│[32m [0m[32m 1,528.00[0m[32m [0m│[32m [0m[32m1,286,508.73[0m[32m [0m│[32m [0m[32m  597,529.73[0m[32m [0m│[32m [0m[32m  163,604.94[0m[32m [0m│[32m [0m[32m   39,762.85[0m[32m [0m│[32m [0m[32m113,774.72[0m[32m [0m│
+└──────────────────────────────────────┴──────────────┴───────────┴──────────────┴──────────────┴──────────────┴──────────────┴────────────┘
+[3m                                            NVIDIA AIPerf | LLM Metrics: Active                                             [0m
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃[1m [0m[1m                                Metric[0m[1m [0m┃[1m [0m[1m      avg[0m[1m [0m┃[1m [0m[1m  min[0m[1m [0m┃[1m [0m[1m       max[0m[1m [0m┃[1m [0m[1m       p99[0m[1m [0m┃[1m [0m[1m      p90[0m[1m [0m┃[1m [0m[1m      p50[0m[1m [0m┃[1m [0m[1m      std[0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
+│[36m [0m[36m Active Decode Throughput (tokens/sec)[0m[36m [0m│[32m [0m[32m   333.22[0m[32m [0m│[32m [0m[32m 0.00[0m[32m [0m│[32m [0m[32m 85,761.78[0m[32m [0m│[32m [0m[32m    541.74[0m[32m [0m│[32m [0m[32m   455.78[0m[32m [0m│[32m [0m[32m   329.46[0m[32m [0m│[32m [0m[32m   158.88[0m[32m [0m│
+│[36m [0m[36mActive Prefill Throughput (tokens/sec)[0m[36m [0m│[32m [0m[32m50,977.69[0m[32m [0m│[32m [0m[32m91.50[0m[32m [0m│[32m [0m[32m294,106.02[0m[32m [0m│[32m [0m[32m158,196.53[0m[32m [0m│[32m [0m[32m95,157.94[0m[32m [0m│[32m [0m[32m44,351.54[0m[32m [0m│[32m [0m[32m33,890.36[0m[32m [0m│
+│[36m [0m[36m     Active Decode Throughput Per User[0m[36m [0m│[32m [0m[32m     9.57[0m[32m [0m│[32m [0m[32m 0.00[0m[32m [0m│[32m [0m[32m  5,717.45[0m[32m [0m│[32m [0m[32m     13.93[0m[32m [0m│[32m [0m[32m    11.12[0m[32m [0m│[32m [0m[32m     8.74[0m[32m [0m│[32m [0m[32m    26.29[0m[32m [0m│
+│[36m [0m[36m                     (tokens/sec/user)[0m[36m [0m│[32m           [0m│[32m       [0m│[32m            [0m│[32m            [0m│[32m           [0m│[32m           [0m│[32m           [0m│
+│[36m [0m[36m    Active Prefill Throughput Per User[0m[36m [0m│[32m [0m[32m27,790.24[0m[32m [0m│[32m [0m[32m91.50[0m[32m [0m│[32m [0m[32m162,576.14[0m[32m [0m│[32m [0m[32m 97,541.85[0m[32m [0m│[32m [0m[32m51,494.88[0m[32m [0m│[32m [0m[32m24,063.20[0m[32m [0m│[32m [0m[32m19,002.65[0m[32m [0m│
+│[36m [0m[36m                     (tokens/sec/user)[0m[36m [0m│[32m           [0m│[32m       [0m│[32m            [0m│[32m            [0m│[32m           [0m│[32m           [0m│[32m           [0m│
+│[36m [0m[36m  Active Total Throughput (tokens/sec)[0m[36m [0m│[32m [0m[32m33,424.44[0m[32m [0m│[32m [0m[32m10.33[0m[32m [0m│[32m [0m[32m294,524.17[0m[32m [0m│[32m [0m[32m145,651.60[0m[32m [0m│[32m [0m[32m83,456.44[0m[32m [0m│[32m [0m[32m25,413.68[0m[32m [0m│[32m [0m[32m36,563.72[0m[32m [0m│
+└────────────────────────────────────────┴───────────┴───────┴────────────┴────────────┴───────────┴───────────┴───────────┘
+[3m                                                NVIDIA AIPerf | LLM Metrics: Usage                                                [0m
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃[1m [0m[1m                                Metric[0m[1m [0m┃[1m [0m[1m          avg[0m[1m [0m┃[1m [0m[1m   min[0m[1m [0m┃[1m [0m[1m       max[0m[1m [0m┃[1m [0m[1m       p99[0m[1m [0m┃[1m [0m[1m       p90[0m[1m [0m┃[1m [0m[1m      p50[0m[1m [0m┃[1m [0m[1m      std[0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
+│[36m [0m[36m          Usage Prompt Tokens (tokens)[0m[36m [0m│[32m [0m[32m    65,738.26[0m[32m [0m│[32m [0m[32m405.00[0m[32m [0m│[32m [0m[32m124,752.00[0m[32m [0m│[32m [0m[32m115,080.50[0m[32m [0m│[32m [0m[32m103,105.20[0m[32m [0m│[32m [0m[32m64,907.00[0m[32m [0m│[32m [0m[32m27,384.10[0m[32m [0m│
+│[36m [0m[36m      Usage Completion Tokens (tokens)[0m[36m [0m│[32m [0m[32m       677.97[0m[32m [0m│[32m [0m[32m  4.00[0m[32m [0m│[32m [0m[32m 11,711.00[0m[32m [0m│[32m [0m[32m  5,674.56[0m[32m [0m│[32m [0m[32m  1,448.20[0m[32m [0m│[32m [0m[32m   352.00[0m[32m [0m│[32m [0m[32m 1,052.30[0m[32m [0m│
+│[36m [0m[36m           Usage Total Tokens (tokens)[0m[36m [0m│[32m [0m[32m    66,416.23[0m[32m [0m│[32m [0m[32m423.00[0m[32m [0m│[32m [0m[32m126,478.00[0m[32m [0m│[32m [0m[32m116,609.34[0m[32m [0m│[32m [0m[32m103,758.60[0m[32m [0m│[32m [0m[32m65,402.00[0m[32m [0m│[32m [0m[32m27,478.19[0m[32m [0m│
+│[36m [0m[36m    Total Usage Prompt Tokens (tokens)[0m[36m [0m│[32m [0m[32m60,413,461.00[0m[32m [0m│[32m [0m[32m   [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│
+│[36m [0m[36mTotal Usage Completion Tokens (tokens)[0m[36m [0m│[32m [0m[32m   623,055.00[0m[32m [0m│[32m [0m[32m   [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│
+│[36m [0m[36m     Total Usage Total Tokens (tokens)[0m[36m [0m│[32m [0m[32m61,036,516.00[0m[32m [0m│[32m [0m[32m   [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│
+└────────────────────────────────────────┴───────────────┴────────┴────────────┴────────────┴────────────┴───────────┴───────────┘
+[3m                                                       NVIDIA AIPerf | LLM Metrics                                                        [0m
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃[1m [0m[1m                                       Metric[0m[1m [0m┃[1m [0m[1m      avg[0m[1m [0m┃[1m [0m[1m     min[0m[1m [0m┃[1m [0m[1m         max[0m[1m [0m┃[1m [0m[1m       p99[0m[1m [0m┃[1m [0m[1m       p90[0m[1m [0m┃[1m [0m[1m      p50[0m[1m [0m┃[1m [0m[1m       std[0m[1m [0m┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│[36m [0m[36m                     Time to First Token (ms)[0m[36m [0m│[32m [0m[32m 3,191.43[0m[32m [0m│[32m [0m[32m  312.52[0m[32m [0m│[32m [0m[32m   62,038.31[0m[32m [0m│[32m [0m[32m 46,521.07[0m[32m [0m│[32m [0m[32m  4,452.48[0m[32m [0m│[32m [0m[32m 2,319.65[0m[32m [0m│[32m [0m[32m  5,966.02[0m[32m [0m│
+│[36m [0m[36m                    Time to Second Token (ms)[0m[36m [0m│[32m [0m[32m   991.08[0m[32m [0m│[32m [0m[32m    0.32[0m[32m [0m│[32m [0m[32m   67,006.87[0m[32m [0m│[32m [0m[32m  7,254.27[0m[32m [0m│[32m [0m[32m  2,654.22[0m[32m [0m│[32m [0m[32m   195.41[0m[32m [0m│[32m [0m[32m  2,667.92[0m[32m [0m│
+│[36m [0m[36m              Time to First Output Token (ms)[0m[36m [0m│[32m [0m[32m 3,191.43[0m[32m [0m│[32m [0m[32m  312.52[0m[32m [0m│[32m [0m[32m   62,038.31[0m[32m [0m│[32m [0m[32m 46,521.07[0m[32m [0m│[32m [0m[32m  4,452.48[0m[32m [0m│[32m [0m[32m 2,319.65[0m[32m [0m│[32m [0m[32m  5,966.02[0m[32m [0m│
+│[36m [0m[36m                         Request Latency (ms)[0m[36m [0m│[32m [0m[32m75,011.02[0m[32m [0m│[32m [0m[32m1,526.41[0m[32m [0m│[32m [0m[32m1,286,501.99[0m[32m [0m│[32m [0m[32m597,524.57[0m[32m [0m│[32m [0m[32m163,600.18[0m[32m [0m│[32m [0m[32m39,761.49[0m[32m [0m│[32m [0m[32m113,751.00[0m[32m [0m│
+│[36m [0m[36m                     Inter Token Latency (ms)[0m[36m [0m│[32m [0m[32m   106.80[0m[32m [0m│[32m [0m[32m   50.85[0m[32m [0m│[32m [0m[32m      514.82[0m[32m [0m│[32m [0m[32m    285.09[0m[32m [0m│[32m [0m[32m    134.92[0m[32m [0m│[32m [0m[32m   100.35[0m[32m [0m│[32m [0m[32m     38.02[0m[32m [0m│
+│[36m [0m[36m             Output Token Throughput Per User[0m[36m [0m│[32m [0m[32m    10.04[0m[32m [0m│[32m [0m[32m    1.94[0m[32m [0m│[32m [0m[32m       19.67[0m[32m [0m│[32m [0m[32m     15.96[0m[32m [0m│[32m [0m[32m     12.94[0m[32m [0m│[32m [0m[32m     9.96[0m[32m [0m│[32m [0m[32m      2.31[0m[32m [0m│
+│[36m [0m[36m                            (tokens/sec/user)[0m[36m [0m│[32m           [0m│[32m          [0m│[32m              [0m│[32m            [0m│[32m            [0m│[32m           [0m│[32m            [0m│
+│[36m [0m[36mE2E Output Token Throughput (tokens/sec/user)[0m[36m [0m│[32m [0m[32m     8.84[0m[32m [0m│[32m [0m[32m    0.53[0m[32m [0m│[32m [0m[32m       14.00[0m[32m [0m│[32m [0m[32m     12.93[0m[32m [0m│[32m [0m[32m     11.02[0m[32m [0m│[32m [0m[32m     9.20[0m[32m [0m│[32m [0m[32m      2.09[0m[32m [0m│
+│[36m [0m[36m              Output Sequence Length (tokens)[0m[36m [0m│[32m [0m[32m   677.97[0m[32m [0m│[32m [0m[32m    4.00[0m[32m [0m│[32m [0m[32m   11,711.00[0m[32m [0m│[32m [0m[32m  5,674.56[0m[32m [0m│[32m [0m[32m  1,448.20[0m[32m [0m│[32m [0m[32m   352.00[0m[32m [0m│[32m [0m[32m  1,052.30[0m[32m [0m│
+│[36m [0m[36m               Input Sequence Length (tokens)[0m[36m [0m│[32m [0m[32m65,738.26[0m[32m [0m│[32m [0m[32m  405.00[0m[32m [0m│[32m [0m[32m  124,752.00[0m[32m [0m│[32m [0m[32m115,080.50[0m[32m [0m│[32m [0m[32m103,105.20[0m[32m [0m│[32m [0m[32m64,907.00[0m[32m [0m│[32m [0m[32m 27,384.10[0m[32m [0m│
+│[36m [0m[36m         Output Token Throughput (tokens/sec)[0m[36m [0m│[32m [0m[32m   341.20[0m[32m [0m│[32m [0m[32m     [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m         [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│
+│[36m [0m[36m          Input Token Throughput (tokens/sec)[0m[36m [0m│[32m [0m[32m33,083.74[0m[32m [0m│[32m [0m[32m     [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m         [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│
+│[36m [0m[36m            Request Throughput (requests/sec)[0m[36m [0m│[32m [0m[32m     0.50[0m[32m [0m│[32m [0m[32m     [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m         [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│
+│[36m [0m[36m                     Request Count (requests)[0m[36m [0m│[32m [0m[32m   919.00[0m[32m [0m│[32m [0m[32m     [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m         [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│
+│[36m [0m[36m             Theoretical Prefix Cache Hit (%)[0m[36m [0m│[32m [0m[32m    95.37[0m[32m [0m│[32m [0m[32m     [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m         [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m      [0m[2;32mN/A[0m[32m [0m│[32m [0m[32m       [0m[2;32mN/A[0m[32m [0m│
+└───────────────────────────────────────────────┴───────────┴──────────┴──────────────┴────────────┴────────────┴───────────┴────────────┘
+
+CLI Command: aiperf profile --scenario 'inferencex-agentx-mvp' --url 'http://localhost:8891' 
+--endpoint '/v1/chat/completions' --endpoint-type 'chat' --streaming --model 
+'Qwen/Qwen3.5-397B-A17B-FP8' --concurrency 48 --benchmark-duration 1800 --random-seed 42 
+--failed-request-threshold 0.1 --trajectory-start-min-ratio 0.25 --trajectory-start-max-ratio 0.75 
+--use-server-token-count --tokenizer-trust-remote-code --max-context-length 131072 
+--num-dataset-entries 472 --slice-duration 1.0 --output-artifact-dir 
+'/workspace/results/aiperf_artifacts' --public-dataset 
+'semianalysis_cc_traces_weka_with_subagents_060226'
+Benchmark Duration: 1826.08 sec
+CSV Export: /workspace/results/aiperf_artifacts/profile_export_aiperf.csv
+JSON Export: /workspace/results/aiperf_artifacts/profile_export_aiperf.json
+Server Metrics CSV Export: /workspace/results/aiperf_artifacts/server_metrics_export.csv
+Server Metrics JSON Export: /workspace/results/aiperf_artifacts/server_metrics_export.json
+Timeslice CSV Export: /workspace/results/aiperf_artifacts/profile_export_aiperf_timeslices.csv
+Timeslice JSON Export: /workspace/results/aiperf_artifacts/profile_export_aiperf_timeslices.json
+Log File: /workspace/results/aiperf_artifacts/logs/aiperf.log
+

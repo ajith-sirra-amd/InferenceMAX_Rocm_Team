@@ -1,0 +1,628 @@
+[32;20m[2026-05-30 09:25:33,563] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/usr/local/lib/python3.12/dist-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:59:lmcache)[0m
+[32;20m[2026-05-30 09:25:33,843] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:91:lmcache)[0m
+[32;20m[2026-05-30 09:25:33,845] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:109:lmcache)[0m
+[32;20m[2026-05-30 09:25:36,008] LMCache INFO:[0m Discovered API module: cache_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,011] LMCache INFO:[0m Discovered API module: env_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,012] LMCache INFO:[0m Discovered API module: loglevel_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,013] LMCache INFO:[0m Discovered API module: metrics_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,015] LMCache INFO:[0m Discovered API module: periodic_thread_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,016] LMCache INFO:[0m Discovered API module: run_script_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,017] LMCache INFO:[0m Discovered API module: thread_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,018] LMCache INFO:[0m Discovered API module: common_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,019] LMCache INFO:[0m Discovered API module: conf_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,020] LMCache INFO:[0m Discovered API module: healthcheck_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,021] LMCache INFO:[0m Discovered API module: quota_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,022] LMCache INFO:[0m Discovered API module: root_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,023] LMCache INFO:[0m Discovered API module: status_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,025] LMCache INFO:[0m Discovered API module: version_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-05-30 09:25:36,032] LMCache INFO:[0m Starting LMCache HTTP server on http://127.0.0.1:8080 [3m(http_server.py:149:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Started server process [2385]
+INFO:     Waiting for application startup.
+[32;20m[2026-05-30 09:25:36,041] LMCache INFO:[0m Starting LMCache HTTP server... (accelerator available: True) [3m(http_server.py:60:lmcache.v1.multiprocess.http_server)[0m
+[32;20m[2026-05-30 09:25:36,050] LMCache INFO:[0m OTel MeterProvider initialised with Prometheus fallback (standalone metrics HTTP server disabled; /metrics must be exposed by the caller), resource={'telemetry.sdk.language': 'python', 'telemetry.sdk.name': 'opentelemetry', 'telemetry.sdk.version': '1.40.0', 'service.instance.id': '50d2b06e-250b-494b-8d86-ea3a6cc303eb', 'service.name': 'unknown_service'} [3m(otel_init.py:114:lmcache.v1.mp_observability.otel_init)[0m
+[32;20m[2026-05-30 09:25:39,885] LMCache INFO:[0m Starting L1EvictionController... [3m(eviction_controller.py:52:lmcache.v1.distributed.storage_controllers.eviction_controller)[0m
+[32;20m[2026-05-30 09:25:39,894] LMCache INFO:[0m Starting L2EvictionController... [3m(eviction_controller.py:228:lmcache.v1.distributed.storage_controllers.eviction_controller)[0m
+[32;20m[2026-05-30 09:25:39,894] LMCache INFO:[0m Starting StoreController... [3m(store_controller.py:274:lmcache.v1.distributed.storage_controllers.store_controller)[0m
+[32;20m[2026-05-30 09:25:39,894] LMCache INFO:[0m Starting PrefetchController... [3m(prefetch_controller.py:454:lmcache.v1.distributed.storage_controllers.prefetch_controller)[0m
+[32;20m[2026-05-30 09:25:39,895] LMCache INFO:[0m Using blake3 hash function [3m(token_hasher.py:79:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-05-30 09:25:39,895] LMCache INFO:[0m Computed NONE_HASH=b"~>\xff\x9e\xf7a:P4\x0e\xb1&w\xee\x03\xb8:\xc7Y\xfc\xba\x9b\xb3'\x05\xf0rH\xd5mG;" using hash function [3m(token_hasher.py:172:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-05-30 09:25:39,896] LMCache INFO:[0m TokenHasher initialized: chunk_size=256, hash_algorithm=blake3 [3m(token_hasher.py:67:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-05-30 09:25:39,899] LMCache INFO:[0m LMCache ZMQ cache server is running on tcp://127.0.0.1:5555 [3m(server.py:256:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-05-30 09:25:39,899] LMCache INFO:[0m LMCache cache server is running... [3m(server.py:271:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-05-30 09:25:39,899] LMCache INFO:[0m LMCache HTTP server initialized [3m(http_server.py:97:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:34646 - "GET /healthcheck HTTP/1.1" 200 OK
+[32;20m[2026-05-30 09:25:41,123] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 30720 MB / 640000 MB (4.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:42,282] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 40960 MB / 640000 MB (6.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:43,424] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 51200 MB / 640000 MB (8.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:44,566] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 61440 MB / 640000 MB (9.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:45,862] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 71680 MB / 640000 MB (11.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:47,138] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 81920 MB / 640000 MB (12.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:48,428] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 92160 MB / 640000 MB (14.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:49,704] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 102400 MB / 640000 MB (16.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:50,969] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 112640 MB / 640000 MB (17.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:52,233] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 122880 MB / 640000 MB (19.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:54,861] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 133120 MB / 640000 MB (20.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:56,365] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 143360 MB / 640000 MB (22.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:57,533] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 153600 MB / 640000 MB (24.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:25:58,819] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 163840 MB / 640000 MB (25.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:00,133] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 174080 MB / 640000 MB (27.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:01,456] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 184320 MB / 640000 MB (28.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:02,710] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 194560 MB / 640000 MB (30.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:04,027] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 204800 MB / 640000 MB (32.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:05,294] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 215040 MB / 640000 MB (33.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:06,505] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 225280 MB / 640000 MB (35.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:07,737] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 235520 MB / 640000 MB (36.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:08,960] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 245760 MB / 640000 MB (38.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:10,224] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 256000 MB / 640000 MB (40.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:11,823] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 266240 MB / 640000 MB (41.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:13,211] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 276480 MB / 640000 MB (43.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:14,474] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 286720 MB / 640000 MB (44.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:15,753] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 296960 MB / 640000 MB (46.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:17,017] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 307200 MB / 640000 MB (48.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:18,403] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 317440 MB / 640000 MB (49.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:19,722] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 327680 MB / 640000 MB (51.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:20,973] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 337920 MB / 640000 MB (52.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:22,210] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 348160 MB / 640000 MB (54.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:23,448] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 358400 MB / 640000 MB (56.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:24,701] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 368640 MB / 640000 MB (57.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:26,027] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 378880 MB / 640000 MB (59.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:27,322] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 389120 MB / 640000 MB (60.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:28,549] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 399360 MB / 640000 MB (62.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:29,881] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 409600 MB / 640000 MB (64.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:31,235] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 419840 MB / 640000 MB (65.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:32,575] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 430080 MB / 640000 MB (67.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:33,809] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 440320 MB / 640000 MB (68.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:35,097] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 450560 MB / 640000 MB (70.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:36,378] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 460800 MB / 640000 MB (72.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:37,867] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 471040 MB / 640000 MB (73.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:39,594] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 481280 MB / 640000 MB (75.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:40,829] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 491520 MB / 640000 MB (76.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:42,085] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 501760 MB / 640000 MB (78.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:44,577] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 512000 MB / 640000 MB (80.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:46,168] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 522240 MB / 640000 MB (81.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:47,785] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 532480 MB / 640000 MB (83.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:49,957] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 542720 MB / 640000 MB (84.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:51,608] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 552960 MB / 640000 MB (86.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:53,626] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 563200 MB / 640000 MB (88.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:55,976] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 573440 MB / 640000 MB (89.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:57,881] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 583680 MB / 640000 MB (91.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:26:59,871] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 593920 MB / 640000 MB (92.8%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:27:01,508] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 604160 MB / 640000 MB (94.4%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:27:03,247] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 614400 MB / 640000 MB (96.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:27:04,954] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 624640 MB / 640000 MB (97.6%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:27:06,948] LMCache INFO:[0m LazyMemoryAllocator: Expanded 10240 MB pinned memory, now total is 634880 MB / 640000 MB (99.2%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:27:07,756] LMCache INFO:[0m LazyMemoryAllocator: Expanded 5120 MB pinned memory, now total is 640000 MB / 640000 MB (100.0%) [3m(lazy_memory_allocator.py:259:lmcache.v1.lazy_memory_allocator)[0m
+[32;20m[2026-05-30 09:37:36,247] LMCache INFO:[0m list_depth: 1, tensor_dim: 3 [3m(utils.py:566:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,247] LMCache INFO:[0m GPU KV Cache Dimensions: [61][3640828, 1, 576] [3m(utils.py:577:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,247] LMCache INFO:[0m vLLM KV cache layout: NHD [3m(utils.py:598:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,247] LMCache INFO:[0m GPU KV Format: NL x [NB, BS, HS] [3m(utils.py:428:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,247] LMCache INFO:[0m Currently used by:
+  - vLLM MLA [3m(utils.py:429:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,247] LMCache INFO:[0m Group 0 first-layer tensor: layer_idx=0 shape=(3640828, 1, 576) stride=(576, 576, 1) is_contiguous=True dtype=torch.uint8 device=cuda:2 storage_offset=0 numel=2097116928 storage_nbytes=2097116928 padding_per_block=0 [3m(utils.py:1302:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,247] LMCache INFO:[0m KV layer groups: [KVLayerGroupInfo(layers=61, indices=0-60, shape_desc=(kv=1, nl=61, nb=3640828, bs=1, nh=1, hs=576, element_size=1, block_stride_elems=576), dtype=torch.uint8, compress_ratio=1, physical_chunk_size=256)] [3m(kv_layer_groups.py:266:lmcache.v1.kv_layer_groups)[0m
+[32;20m[2026-05-30 09:37:36,441] LMCache INFO:[0m Registered KV cache for GPU ID 3357 with 61 layers [3m(gpu_transfer.py:274:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:37:36,441] LMCache INFO:[0m Initialized cuda stream on device cuda:2 [3m(gpu_context.py:167:lmcache.v1.multiprocess.gpu_context)[0m
+[32;20m[2026-05-30 09:37:36,457] LMCache INFO:[0m list_depth: 1, tensor_dim: 3 [3m(utils.py:566:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,458] LMCache INFO:[0m GPU KV Cache Dimensions: [61][3640828, 1, 576] [3m(utils.py:577:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,458] LMCache INFO:[0m vLLM KV cache layout: NHD [3m(utils.py:598:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,458] LMCache INFO:[0m GPU KV Format: NL x [NB, BS, HS] [3m(utils.py:428:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,458] LMCache INFO:[0m Currently used by:
+  - vLLM MLA [3m(utils.py:429:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,458] LMCache INFO:[0m Group 0 first-layer tensor: layer_idx=0 shape=(3640828, 1, 576) stride=(576, 576, 1) is_contiguous=True dtype=torch.uint8 device=cuda:1 storage_offset=0 numel=2097116928 storage_nbytes=2097116928 padding_per_block=0 [3m(utils.py:1302:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,458] LMCache INFO:[0m KV layer groups: [KVLayerGroupInfo(layers=61, indices=0-60, shape_desc=(kv=1, nl=61, nb=3640828, bs=1, nh=1, hs=576, element_size=1, block_stride_elems=576), dtype=torch.uint8, compress_ratio=1, physical_chunk_size=256)] [3m(kv_layer_groups.py:266:lmcache.v1.kv_layer_groups)[0m
+[32;20m[2026-05-30 09:37:36,510] LMCache INFO:[0m Registered KV cache for GPU ID 3356 with 61 layers [3m(gpu_transfer.py:274:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:37:36,510] LMCache INFO:[0m Initialized cuda stream on device cuda:1 [3m(gpu_context.py:167:lmcache.v1.multiprocess.gpu_context)[0m
+[32;20m[2026-05-30 09:37:36,526] LMCache INFO:[0m list_depth: 1, tensor_dim: 3 [3m(utils.py:566:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,526] LMCache INFO:[0m GPU KV Cache Dimensions: [61][3640828, 1, 576] [3m(utils.py:577:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,526] LMCache INFO:[0m vLLM KV cache layout: NHD [3m(utils.py:598:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,526] LMCache INFO:[0m GPU KV Format: NL x [NB, BS, HS] [3m(utils.py:428:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,527] LMCache INFO:[0m Currently used by:
+  - vLLM MLA [3m(utils.py:429:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,527] LMCache INFO:[0m Group 0 first-layer tensor: layer_idx=0 shape=(3640828, 1, 576) stride=(576, 576, 1) is_contiguous=True dtype=torch.uint8 device=cuda:3 storage_offset=0 numel=2097116928 storage_nbytes=2097116928 padding_per_block=0 [3m(utils.py:1302:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,527] LMCache INFO:[0m KV layer groups: [KVLayerGroupInfo(layers=61, indices=0-60, shape_desc=(kv=1, nl=61, nb=3640828, bs=1, nh=1, hs=576, element_size=1, block_stride_elems=576), dtype=torch.uint8, compress_ratio=1, physical_chunk_size=256)] [3m(kv_layer_groups.py:266:lmcache.v1.kv_layer_groups)[0m
+[32;20m[2026-05-30 09:37:36,578] LMCache INFO:[0m Registered KV cache for GPU ID 3358 with 61 layers [3m(gpu_transfer.py:274:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:37:36,579] LMCache INFO:[0m Initialized cuda stream on device cuda:3 [3m(gpu_context.py:167:lmcache.v1.multiprocess.gpu_context)[0m
+[32;20m[2026-05-30 09:37:36,595] LMCache INFO:[0m list_depth: 1, tensor_dim: 3 [3m(utils.py:566:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,595] LMCache INFO:[0m GPU KV Cache Dimensions: [61][3640828, 1, 576] [3m(utils.py:577:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,595] LMCache INFO:[0m vLLM KV cache layout: NHD [3m(utils.py:598:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,595] LMCache INFO:[0m GPU KV Format: NL x [NB, BS, HS] [3m(utils.py:428:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,595] LMCache INFO:[0m Currently used by:
+  - vLLM MLA [3m(utils.py:429:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,595] LMCache INFO:[0m Group 0 first-layer tensor: layer_idx=0 shape=(3640828, 1, 576) stride=(576, 576, 1) is_contiguous=True dtype=torch.uint8 device=cuda:0 storage_offset=0 numel=2097116928 storage_nbytes=2097116928 padding_per_block=0 [3m(utils.py:1302:lmcache.v1.gpu_connector.utils)[0m
+[32;20m[2026-05-30 09:37:36,596] LMCache INFO:[0m KV layer groups: [KVLayerGroupInfo(layers=61, indices=0-60, shape_desc=(kv=1, nl=61, nb=3640828, bs=1, nh=1, hs=576, element_size=1, block_stride_elems=576), dtype=torch.uint8, compress_ratio=1, physical_chunk_size=256)] [3m(kv_layer_groups.py:266:lmcache.v1.kv_layer_groups)[0m
+[32;20m[2026-05-30 09:37:36,648] LMCache INFO:[0m Registered KV cache for GPU ID 3355 with 61 layers [3m(gpu_transfer.py:274:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:37:36,649] LMCache INFO:[0m Initialized cuda stream on device cuda:0 [3m(gpu_context.py:167:lmcache.v1.multiprocess.gpu_context)[0m
+[32;20m[2026-05-30 09:44:18,412] LMCache INFO:[0m Stored 256 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:19,719] LMCache INFO:[0m Prefetch request completed (L1+L2): 1/264 prefix hits (1 L1, 0 L2) in 0.9 ms (external_request_id=chatcmpl-f175ca10-cfbd-4b12-a67f-3b3baa571d77-8a178762, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:44:20,045] LMCache INFO:[0m Stored 8192 tokens in 0.016 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:20,325] LMCache INFO:[0m Stored 8192 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:20,767] LMCache INFO:[0m Stored 8192 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:21,314] LMCache INFO:[0m Stored 8192 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:22,028] LMCache INFO:[0m Stored 8192 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:22,884] LMCache INFO:[0m Stored 8192 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:23,874] LMCache INFO:[0m Stored 8192 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:25,013] LMCache INFO:[0m Stored 8192 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:27,162] LMCache INFO:[0m Stored 1792 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:29,616] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:32,506] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:40,588] LMCache INFO:[0m Stored 8192 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:40,903] LMCache INFO:[0m Stored 8192 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:41,313] LMCache INFO:[0m Stored 8192 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:41,852] LMCache INFO:[0m Stored 8192 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:42,539] LMCache INFO:[0m Stored 8192 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:43,383] LMCache INFO:[0m Stored 8192 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:44,375] LMCache INFO:[0m Stored 8192 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:45,507] LMCache INFO:[0m Stored 8192 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:50,022] LMCache INFO:[0m Stored 2048 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:52,394] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:55,856] LMCache INFO:[0m Prefetch request completed (L1+L2): 263/343 prefix hits (263 L1, 0 L2) in 1.1 ms (external_request_id=chatcmpl-371510a6-66d3-4318-b8c1-30620c89878f-bfec23ba, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:44:56,067] LMCache INFO:[0m Stored 8192 tokens in 0.012 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:57,527] LMCache INFO:[0m Stored 8192 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:44:59,213] LMCache INFO:[0m Stored 4096 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:00,776] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:03,683] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:12,275] LMCache INFO:[0m Prefetch request completed (L1+L2): 342/345 prefix hits (342 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-c8b95259-0c85-4c55-9d5f-13498e1c0cea-93515eef, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:45:14,487] LMCache INFO:[0m Stored 768 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:15,800] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:18,711] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:25,875] LMCache INFO:[0m Prefetch request completed (L1+L2): 345/349 prefix hits (345 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-169afea2-ef26-4768-bb22-2039ab14577a-80edab42, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:45:26,130] LMCache INFO:[0m Stored 1024 tokens in 0.011 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:28,919] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:36,085] LMCache INFO:[0m Prefetch request completed (L1+L2): 348/351 prefix hits (348 L1, 0 L2) in 1.8 ms (external_request_id=chatcmpl-698b9d2d-77b9-4fa4-97a7-c68fd1f0e439-9d3bd54d, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:45:36,349] LMCache INFO:[0m Stored 768 tokens in 0.011 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:38,179] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:43,818] LMCache INFO:[0m Prefetch request completed (L1+L2): 351/354 prefix hits (351 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-57fad04d-186d-4994-85bd-867a6ec4b712-938549bb, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:45:44,074] LMCache INFO:[0m Stored 768 tokens in 0.011 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:46,837] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:52,651] LMCache INFO:[0m Prefetch request completed (L1+L2): 353/371 prefix hits (353 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-20040903-dca0-4efc-a013-e50cf0a6ed23-b8dd6dda, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:45:52,917] LMCache INFO:[0m Stored 4608 tokens in 0.012 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:54,452] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:45:57,374] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:01,353] LMCache INFO:[0m Prefetch request completed (L1+L2): 371/395 prefix hits (371 L1, 0 L2) in 1.6 ms (external_request_id=chatcmpl-e97cf825-8bca-4261-a0e5-9ce546c5278f-88cd0bd7, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:46:01,623] LMCache INFO:[0m Stored 6144 tokens in 0.014 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:05,849] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:08,803] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:11,758] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:20,328] LMCache INFO:[0m Prefetch request completed (L1+L2): 394/404 prefix hits (394 L1, 0 L2) in 1.1 ms (external_request_id=chatcmpl-3140f906-34a5-49eb-9c15-407696d34818-a4815641, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:46:20,601] LMCache INFO:[0m Stored 2560 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:23,105] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:27,581] LMCache INFO:[0m Prefetch request completed (L1+L2): 404/405 prefix hits (404 L1, 0 L2) in 1.7 ms (external_request_id=chatcmpl-838feffc-9a93-4c21-8912-b84d982a0e38-837c6cf6, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:46:27,861] LMCache INFO:[0m Stored 256 tokens in 0.012 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:31,889] LMCache INFO:[0m Prefetch request completed (L1+L2): 405/405 prefix hits (405 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-bfae6efd-fc93-4f2a-ae30-8bf9e6b1e8be-a3b7f9d0, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:46:36,043] LMCache INFO:[0m Stored 256 tokens in 0.012 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:38,975] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:47,957] LMCache INFO:[0m Prefetch request completed (L1+L2): 405/408 prefix hits (405 L1, 0 L2) in 1.7 ms (external_request_id=chatcmpl-f2bb813a-4dfa-42d1-a770-58cd947446d8-a31041de, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:46:48,219] LMCache INFO:[0m Stored 768 tokens in 0.012 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:51,469] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:56,316] LMCache INFO:[0m Prefetch request completed (L1+L2): 407/412 prefix hits (407 L1, 0 L2) in 1.7 ms (external_request_id=chatcmpl-57d1d56c-82b6-43be-b00d-b38926e1e6d2-8593a043, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:46:56,588] LMCache INFO:[0m Stored 1280 tokens in 0.014 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:46:57,975] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:03,128] LMCache INFO:[0m Prefetch request completed (L1+L2): 411/414 prefix hits (411 L1, 0 L2) in 1.9 ms (external_request_id=chatcmpl-420c2af0-1da0-4670-bdf7-cc358c2116f3-8ec131e2, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:47:03,404] LMCache INFO:[0m Stored 768 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:04,897] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:07,834] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:10,769] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:13,710] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:16,651] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:19,594] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:22,538] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:25,486] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:38,158] LMCache INFO:[0m Prefetch request completed (L1+L2): 414/420 prefix hits (414 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-fd71578a-bf95-4305-8d8c-98ae821eb9e4-b518a7d6, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:47:38,423] LMCache INFO:[0m Stored 1536 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:39,471] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:43,337] LMCache INFO:[0m Prefetch request completed (L1+L2): 420/423 prefix hits (420 L1, 0 L2) in 1.1 ms (external_request_id=chatcmpl-c40f9608-1f8c-47a6-8a47-85375b06e62d-90740614, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:47:43,600] LMCache INFO:[0m Stored 768 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:50,298] LMCache INFO:[0m Prefetch request completed (L1+L2): 422/426 prefix hits (422 L1, 0 L2) in 1.1 ms (external_request_id=chatcmpl-81ce6f11-50be-44ce-a39e-6b49f1a95069-98d1f271, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:47:50,726] LMCache INFO:[0m Stored 1024 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:52,114] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:55,156] LMCache INFO:[0m Prefetch request completed (L1+L2): 425/430 prefix hits (425 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-0cab00c5-db55-4e50-93f3-b62199413e5b-88865f8a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:47:55,421] LMCache INFO:[0m Stored 1280 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:47:56,286] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:00,130] LMCache INFO:[0m Prefetch request completed (L1+L2): 430/435 prefix hits (430 L1, 0 L2) in 1.5 ms (external_request_id=chatcmpl-36490f61-be23-48e3-8470-18c4cfec8b3f-94ee4a22, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:48:00,405] LMCache INFO:[0m Stored 1280 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:02,132] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:05,081] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:08,032] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:10,982] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:13,934] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:16,887] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:26,590] LMCache INFO:[0m Prefetch request completed (L1+L2): 434/439 prefix hits (434 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-9272135f-f504-44de-877a-a2767b7ff69c-b13e111e, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:48:26,947] LMCache INFO:[0m Stored 1280 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:29,239] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:32,191] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:35,146] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:38,102] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:41,061] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:52,136] LMCache INFO:[0m Prefetch request completed (L1+L2): 438/441 prefix hits (438 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-48a5e092-ebd2-46ca-bb4e-8e5424aa8555-b69ab87b, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:48:52,409] LMCache INFO:[0m Stored 768 tokens in 0.013 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:53,678] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:56,633] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:48:59,590] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:49:02,549] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:49:05,507] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:07,665] LMCache INFO:[0m Prefetch request completed (L1+L2): 440/445 prefix hits (440 L1, 0 L2) in 1.5 ms (external_request_id=chatcmpl-93709184-3cf4-477b-87cd-b19e1d3e49b3-bbb549e2, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:50:07,933] LMCache INFO:[0m Stored 1280 tokens in 0.014 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:09,548] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:12,509] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:15,455] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:18,402] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:21,351] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:24,301] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:31,934] LMCache INFO:[0m Prefetch request completed (L1+L2): 444/464 prefix hits (444 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-d1927dab-1184-415f-9c32-fb0dadae10c4-abe425b5, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:50:32,196] LMCache INFO:[0m Stored 5120 tokens in 0.015 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:34,386] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:37,337] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:40,286] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:43,242] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:46,199] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:49,153] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:52,114] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:55,072] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:50:58,033] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:00,994] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:03,958] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:06,921] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:09,888] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:12,855] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:30,357] LMCache INFO:[0m Prefetch request completed (L1+L2): 464/471 prefix hits (464 L1, 0 L2) in 1.5 ms (external_request_id=chatcmpl-0d7f0655-ccf6-4322-a9d0-e652401efc06-af97ebae, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:51:30,633] LMCache INFO:[0m Stored 1792 tokens in 0.014 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:34,054] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:37,014] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:39,974] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:42,938] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:45,902] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:48,869] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:51,835] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:54,806] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:51:57,763] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:00,720] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:03,677] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:06,635] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:09,595] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:12,555] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:15,516] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:18,480] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:21,446] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:24,414] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:51,586] LMCache INFO:[0m Prefetch request completed (L1+L2): 470/483 prefix hits (470 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-6412e025-d321-4932-8e9b-8fd906278ac6-8e3347f7, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:52:51,850] LMCache INFO:[0m Stored 3328 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:55,514] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:52:58,475] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:01,436] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:04,401] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:07,367] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:10,334] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:13,299] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:16,269] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:31,186] LMCache INFO:[0m Prefetch request completed (L1+L2): 482/494 prefix hits (482 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-f84b9780-88dc-4d3c-ade2-6ec3198b2b20-a711a6af, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:53:31,447] LMCache INFO:[0m Stored 3072 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:33,747] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:36,722] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:39,699] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:49,895] LMCache INFO:[0m Prefetch request completed (L1+L2): 493/498 prefix hits (493 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-97ec764b-dbfe-4ed0-8980-cd3026617183-ba6cbee8, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:53:50,176] LMCache INFO:[0m Stored 1280 tokens in 0.015 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:51,170] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:53:54,148] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:00,428] LMCache INFO:[0m Prefetch request completed (L1+L2): 498/506 prefix hits (498 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-da337dce-7e57-453c-94d7-3279604d6d61-934e9072, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:54:00,698] LMCache INFO:[0m Stored 2048 tokens in 0.015 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:03,595] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:06,586] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:14,726] LMCache INFO:[0m Prefetch request completed (L1+L2): 505/509 prefix hits (505 L1, 0 L2) in 1.0 ms (external_request_id=chatcmpl-83973e3c-c0da-455b-ba14-02b1980d81ed-b295a88a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:54:14,996] LMCache INFO:[0m Stored 1024 tokens in 0.015 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:16,919] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:19,913] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:22,904] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:29,771] LMCache INFO:[0m Prefetch request completed (L1+L2): 508/512 prefix hits (508 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-8adb8249-8c84-4de0-bb1b-0f8998b0bb3f-add98da5, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:54:30,056] LMCache INFO:[0m Stored 1024 tokens in 0.015 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:33,257] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:36,252] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:39,248] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:47,031] LMCache INFO:[0m Prefetch request completed (L1+L2): 511/512 prefix hits (511 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-adac2b4a-6d17-469e-b389-fffd7eb89011-800d1c0f, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:54:47,316] LMCache INFO:[0m Stored 256 tokens in 0.015 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:48,604] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:51,602] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:54:54,597] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:03,103] LMCache INFO:[0m Prefetch request completed (L1+L2): 512/517 prefix hits (512 L1, 0 L2) in 1.0 ms (external_request_id=chatcmpl-77fcf365-eb3b-47b8-9613-a334d7bb872a-9ae35ded, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:55:03,396] LMCache INFO:[0m Stored 1280 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:09,329] LMCache INFO:[0m Prefetch request completed (L1+L2): 517/531 prefix hits (517 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-7d4bf6e4-00f5-4d4e-959f-2af4396db485-8ac1e0a1, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:55:09,634] LMCache INFO:[0m Stored 3584 tokens in 0.016 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:13,276] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:19,771] LMCache INFO:[0m Prefetch request completed (L1+L2): 530/536 prefix hits (530 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-deb8d733-a268-48ee-a3a1-058d65c1b726-83b19b5a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:55:20,069] LMCache INFO:[0m Stored 1536 tokens in 0.016 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:22,768] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:25,875] LMCache INFO:[0m Prefetch request completed (L1+L2): 535/565 prefix hits (535 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-d95cd66b-0e11-4210-9624-abc897c81c2a-854606ef, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:55:26,171] LMCache INFO:[0m Stored 7680 tokens in 0.018 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:30,287] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:33,288] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:36,296] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:39,304] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:42,317] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:45,328] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:48,340] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:55:51,353] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:08,190] LMCache INFO:[0m Prefetch request completed (L1+L2): 564/567 prefix hits (564 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-eb87105f-a310-4d8a-a11a-aa5ca0c78bca-bc20fea6, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:56:08,501] LMCache INFO:[0m Stored 768 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:10,765] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:17,718] LMCache INFO:[0m Prefetch request completed (L1+L2): 567/569 prefix hits (567 L1, 0 L2) in 1.0 ms (external_request_id=chatcmpl-0ac23217-77d5-4bf4-a6c6-2f526e3c8281-b9ba26a0, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:56:17,915] LMCache INFO:[0m Stored 512 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:19,007] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:24,426] LMCache INFO:[0m Prefetch request completed (L1+L2): 568/575 prefix hits (568 L1, 0 L2) in 1.1 ms (external_request_id=chatcmpl-4b6bcb23-acc3-40f0-80ee-91e608cc0391-b8ed4905, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:56:24,727] LMCache INFO:[0m Stored 1792 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:27,129] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:30,126] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:33,133] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:36,136] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:39,139] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:42,144] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:45,153] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:48,159] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:51,167] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:54,177] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:56:57,190] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:00,203] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:03,218] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:21,678] LMCache INFO:[0m Prefetch request completed (L1+L2): 574/578 prefix hits (574 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-b64d1639-16b0-4d1c-938d-6b7243279b54-9c435935, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:57:21,973] LMCache INFO:[0m Stored 1024 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:22,988] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:25,990] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:28,996] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:33,123] LMCache INFO:[0m Prefetch request completed (L1+L2): 578/581 prefix hits (578 L1, 0 L2) in 1.1 ms (external_request_id=chatcmpl-15bed7f6-0f90-43df-9153-141ce5e6cfed-93c1dd4a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:57:33,430] LMCache INFO:[0m Stored 768 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:35,407] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:38,412] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:41,420] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:44,427] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:47,438] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:50,450] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:57:59,529] LMCache INFO:[0m Prefetch request completed (L1+L2): 581/587 prefix hits (581 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-0f472f04-a71f-475d-adca-54f66508e0bb-8f334d3d, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:57:59,827] LMCache INFO:[0m Stored 1536 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:01,018] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:06,985] LMCache INFO:[0m Prefetch request completed (L1+L2): 587/589 prefix hits (587 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-aa8cf991-b61e-4eed-9d7d-2aa33fccfa61-b3bba52a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:58:07,283] LMCache INFO:[0m Stored 512 tokens in 0.017 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:08,329] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:11,345] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:16,135] LMCache INFO:[0m Prefetch request completed (L1+L2): 589/591 prefix hits (589 L1, 0 L2) in 1.2 ms (external_request_id=chatcmpl-422eed50-e481-4916-92db-31b233cb6082-a44cfe01, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:58:16,442] LMCache INFO:[0m Stored 512 tokens in 0.018 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:18,425] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:25,698] LMCache INFO:[0m Prefetch request completed (L1+L2): 591/611 prefix hits (591 L1, 0 L2) in 1.1 ms (external_request_id=chatcmpl-8ed42c3b-337b-4d89-b08c-f8469ce2fe5e-aacb4c61, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:58:26,001] LMCache INFO:[0m Stored 5120 tokens in 0.019 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:29,732] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:32,748] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:35,764] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:45,552] LMCache INFO:[0m Prefetch request completed (L1+L2): 610/614 prefix hits (610 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-ef0db771-2e7a-4d59-a062-2ef844db0254-87347cd7, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 09:58:45,854] LMCache INFO:[0m Stored 1024 tokens in 0.018 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:49,333] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:52,353] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:55,371] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:58:58,391] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:59:01,413] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 09:59:04,437] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:07,489] LMCache INFO:[0m Prefetch request completed (L1+L2): 613/621 prefix hits (613 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-e73d617e-6c5f-4f16-9402-2ab81ee56030-bc512df3, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:00:07,801] LMCache INFO:[0m Stored 2048 tokens in 0.018 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:10,613] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:13,639] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:16,668] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:28,245] LMCache INFO:[0m Prefetch request completed (L1+L2): 620/623 prefix hits (620 L1, 0 L2) in 1.5 ms (external_request_id=chatcmpl-1186da18-eb6e-4f89-a765-a9d3a4fd740e-8a348719, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:00:28,535] LMCache INFO:[0m Stored 768 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:31,489] LMCache INFO:[0m Stored 256 tokens in 0.004 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:37,908] LMCache INFO:[0m Prefetch request completed (L1+L2): 622/629 prefix hits (622 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-bfc50469-548e-406e-986f-de3210507854-a6f88a5a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:00:38,213] LMCache INFO:[0m Stored 1792 tokens in 0.019 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:41,850] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:44,884] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:49,918] LMCache INFO:[0m Prefetch request completed (L1+L2): 628/632 prefix hits (628 L1, 0 L2) in 1.5 ms (external_request_id=chatcmpl-ec73ba09-60f4-456d-9fd6-8bfb85388372-a72ce9fc, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:00:50,231] LMCache INFO:[0m Stored 1024 tokens in 0.018 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:53,887] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:56,926] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:00:59,964] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:03,006] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:06,044] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:09,088] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:12,130] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:26,554] LMCache INFO:[0m Prefetch request completed (L1+L2): 631/639 prefix hits (631 L1, 0 L2) in 1.5 ms (external_request_id=chatcmpl-0719f7ad-52ce-4ff1-81cf-5898e5ef9c62-9dccb3a8, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:01:26,863] LMCache INFO:[0m Stored 2048 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:29,661] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:41,841] LMCache INFO:[0m Prefetch request completed (L1+L2): 638/649 prefix hits (638 L1, 0 L2) in 1.1 ms (external_request_id=chatcmpl-70b57471-fee6-43c1-a110-be218a053cdb-ab136f5d, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:01:42,152] LMCache INFO:[0m Stored 2816 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:46,106] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:49,168] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:52,233] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:55,298] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:01:58,365] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:01,430] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:04,479] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:07,525] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:10,571] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:13,618] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:16,670] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:19,718] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:22,770] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:25,823] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:28,876] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:31,932] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:34,989] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:02:38,046] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:02,544] LMCache INFO:[0m Prefetch request completed (L1+L2): 648/670 prefix hits (648 L1, 0 L2) in 3.2 ms (external_request_id=chatcmpl-7184a476-8a64-4e37-9a49-1408d2242995-8dd6e069, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:03:02,862] LMCache INFO:[0m Stored 5632 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:06,290] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:09,340] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:12,394] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:15,444] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:18,497] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:21,550] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:24,603] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:27,659] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:30,713] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:33,770] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:48,256] LMCache INFO:[0m Prefetch request completed (L1+L2): 670/676 prefix hits (670 L1, 0 L2) in 1.6 ms (external_request_id=chatcmpl-3e2cfb43-8850-47ab-b129-2d742ae733c0-93430c0c, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:03:48,463] LMCache INFO:[0m Stored 1536 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:50,469] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:03:58,944] LMCache INFO:[0m Prefetch request completed (L1+L2): 675/680 prefix hits (675 L1, 0 L2) in 1.6 ms (external_request_id=chatcmpl-991c5115-cf31-4d19-b9fb-2caf5378bbf4-9eafa8d8, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:03:59,257] LMCache INFO:[0m Stored 1280 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:01,625] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:06,692] LMCache INFO:[0m Prefetch request completed (L1+L2): 680/681 prefix hits (680 L1, 0 L2) in 2.5 ms (external_request_id=chatcmpl-eb615e31-6a2b-4ca6-8f5a-dec0a745a973-84d7779e, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:04:07,015] LMCache INFO:[0m Stored 256 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:09,115] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:12,180] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:15,241] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:18,303] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:21,367] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:24,431] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:27,480] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:41,105] LMCache INFO:[0m Prefetch request completed (L1+L2): 680/688 prefix hits (680 L1, 0 L2) in 1.6 ms (external_request_id=chatcmpl-cd883240-2839-470e-84a1-f4f114b29b18-b84c956a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:04:41,435] LMCache INFO:[0m Stored 2048 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:45,081] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:51,792] LMCache INFO:[0m Prefetch request completed (L1+L2): 687/689 prefix hits (687 L1, 0 L2) in 2.4 ms (external_request_id=chatcmpl-e7c23b2b-e86f-4d35-aa9d-ad25349fceb4-91b9bcde, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:04:52,111] LMCache INFO:[0m Stored 512 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:53,564] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:57,606] LMCache INFO:[0m Prefetch request completed (L1+L2): 689/691 prefix hits (689 L1, 0 L2) in 2.3 ms (external_request_id=chatcmpl-860f75ca-96b8-45aa-8ee2-e770a29e9f12-ac3ac035, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:04:57,922] LMCache INFO:[0m Stored 512 tokens in 0.022 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:04:59,202] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:04,659] LMCache INFO:[0m Prefetch request completed (L1+L2): 691/692 prefix hits (691 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-8b35cba7-5dbf-435e-b626-b9c0d4dd60dd-ac1b4848, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:05:04,998] LMCache INFO:[0m Stored 256 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:05,872] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:08,932] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:15,430] LMCache INFO:[0m Prefetch request completed (L1+L2): 692/694 prefix hits (692 L1, 0 L2) in 1.9 ms (external_request_id=chatcmpl-6e0d0a9e-0be9-47fa-9700-ef67934ca77e-88874e83, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:05:15,745] LMCache INFO:[0m Stored 512 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:17,088] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:20,148] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:28,096] LMCache INFO:[0m Prefetch request completed (L1+L2): 694/697 prefix hits (694 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-d4d86467-6b25-4fda-9a53-0c8c58309984-9b6ef4f6, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:05:28,414] LMCache INFO:[0m Stored 768 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:29,342] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:36,903] LMCache INFO:[0m Prefetch request completed (L1+L2): 697/698 prefix hits (697 L1, 0 L2) in 2.1 ms (external_request_id=chatcmpl-b43479e9-e9c1-4a29-8ccd-d98b4744665d-91d2abf3, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:05:37,243] LMCache INFO:[0m Stored 256 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:39,176] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:42,236] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:49,706] LMCache INFO:[0m Prefetch request completed (L1+L2): 698/704 prefix hits (698 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-82748569-6d2a-4a4e-a98d-cfda77cee36f-a997dade, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:05:50,033] LMCache INFO:[0m Stored 1536 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:52,412] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:55,469] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:05:58,530] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:05,262] LMCache INFO:[0m Prefetch request completed (L1+L2): 704/706 prefix hits (704 L1, 0 L2) in 2.3 ms (external_request_id=chatcmpl-c345c3ff-3765-4bc4-9696-135c30b10f20-811a4da7, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:06:05,579] LMCache INFO:[0m Stored 512 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:06,906] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:09,966] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:19,153] LMCache INFO:[0m Prefetch request completed (L1+L2): 705/708 prefix hits (705 L1, 0 L2) in 2.2 ms (external_request_id=chatcmpl-c58ea933-228e-4e4d-b2f9-c689d9bbf0ce-8c91ad89, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:06:19,474] LMCache INFO:[0m Stored 768 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:22,460] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:29,319] LMCache INFO:[0m Prefetch request completed (L1+L2): 707/709 prefix hits (707 L1, 0 L2) in 1.5 ms (external_request_id=chatcmpl-1cc87e3a-787a-4327-9acc-3e1da6352428-9dab4fc0, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:06:29,640] LMCache INFO:[0m Stored 512 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:33,663] LMCache INFO:[0m Prefetch request completed (L1+L2): 709/710 prefix hits (709 L1, 0 L2) in 1.6 ms (external_request_id=chatcmpl-f8b8811f-317b-4be0-809f-495ed2b32ca4-980446a4, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:06:33,995] LMCache INFO:[0m Stored 256 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:35,080] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:38,142] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:41,203] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:44,267] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:47,333] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:06:50,399] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:07:51,326] LMCache INFO:[0m Prefetch request completed (L1+L2): 710/716 prefix hits (710 L1, 0 L2) in 2.4 ms (external_request_id=chatcmpl-1459ad6c-51b2-4243-9a41-407880dd8a6b-92b34298, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:07:51,676] LMCache INFO:[0m Stored 1536 tokens in 0.020 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:07:54,836] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:07:57,905] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:00,975] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:04,031] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:13,688] LMCache INFO:[0m Prefetch request completed (L1+L2): 715/726 prefix hits (715 L1, 0 L2) in 2.2 ms (external_request_id=chatcmpl-8287d7ef-45f7-488d-add1-858104844dd1-87076a81, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:08:14,016] LMCache INFO:[0m Stored 2816 tokens in 0.023 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:15,753] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:21,131] LMCache INFO:[0m Prefetch request completed (L1+L2): 726/745 prefix hits (726 L1, 0 L2) in 2.1 ms (external_request_id=chatcmpl-288b7bee-a9f9-4ac8-a902-b4de4b73044c-a06f6c08, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:08:21,458] LMCache INFO:[0m Stored 4864 tokens in 0.022 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:24,766] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:31,502] LMCache INFO:[0m Prefetch request completed (L1+L2): 744/753 prefix hits (744 L1, 0 L2) in 1.8 ms (external_request_id=chatcmpl-beba593f-d663-4d71-b52d-c1cd5e227bfd-9c7d7582, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:08:31,844] LMCache INFO:[0m Stored 2304 tokens in 0.022 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:34,342] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:38,953] LMCache INFO:[0m Prefetch request completed (L1+L2): 753/765 prefix hits (753 L1, 0 L2) in 2.1 ms (external_request_id=chatcmpl-36c0f6e3-3430-4f3c-9dcc-0e9ff94c4877-ab1eb5a1, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:08:39,293] LMCache INFO:[0m Stored 3072 tokens in 0.022 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:40,896] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:46,241] LMCache INFO:[0m Prefetch request completed (L1+L2): 765/773 prefix hits (765 L1, 0 L2) in 2.5 ms (external_request_id=chatcmpl-a768fc9d-eb87-43f4-a6d3-580aac1dfc5d-99b14cfb, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:08:46,571] LMCache INFO:[0m Stored 2048 tokens in 0.022 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:49,572] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:55,493] LMCache INFO:[0m Prefetch request completed (L1+L2): 772/774 prefix hits (772 L1, 0 L2) in 1.6 ms (external_request_id=chatcmpl-0ebc2719-30c2-4616-998f-2a87adf2361c-b62a30e1, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:08:55,843] LMCache INFO:[0m Stored 512 tokens in 0.021 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:08:58,126] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:04,001] LMCache INFO:[0m Prefetch request completed (L1+L2): 773/777 prefix hits (773 L1, 0 L2) in 1.9 ms (external_request_id=chatcmpl-00494ed9-f089-46e2-9a9b-1c755b1c6269-baf1a95d, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:09:04,350] LMCache INFO:[0m Stored 1024 tokens in 0.022 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:14,993] LMCache INFO:[0m Prefetch request completed (L1+L2): 776/778 prefix hits (776 L1, 0 L2) in 1.8 ms (external_request_id=chatcmpl-cac92c0f-db7f-45d5-80d5-8ba87fd851ff-b686905a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:09:15,334] LMCache INFO:[0m Stored 512 tokens in 0.022 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:17,274] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:21,825] LMCache INFO:[0m Prefetch request completed (L1+L2): 778/782 prefix hits (778 L1, 0 L2) in 2.3 ms (external_request_id=chatcmpl-a2d55ff0-20f0-4693-a849-87d395d3f457-a85753f4, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:09:22,175] LMCache INFO:[0m Stored 1024 tokens in 0.022 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:23,809] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:26,905] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:30,007] LMCache INFO:[0m Stored 256 tokens in 0.005 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:33,108] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:36,214] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:39,321] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:42,428] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:45,538] LMCache INFO:[0m Stored 256 tokens in 0.003 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:48,649] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:51,758] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:09:54,867] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:10,688] LMCache INFO:[0m Prefetch request completed (L1+L2): 782/802 prefix hits (782 L1, 0 L2) in 1.3 ms (external_request_id=chatcmpl-ac232387-8657-4ae9-b212-b82054928004-bdfd3a04, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:10:11,028] LMCache INFO:[0m Stored 5120 tokens in 0.024 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:15,370] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:18,478] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:21,586] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:24,696] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:27,806] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:30,919] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:34,029] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:37,142] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:51,117] LMCache INFO:[0m Prefetch request completed (L1+L2): 801/805 prefix hits (801 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-f02a4d89-160d-4f1d-b77a-865269406bd2-b176e79e, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:10:51,449] LMCache INFO:[0m Stored 1024 tokens in 0.023 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:54,903] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:10:59,156] LMCache INFO:[0m Prefetch request completed (L1+L2): 804/812 prefix hits (804 L1, 0 L2) in 1.4 ms (external_request_id=chatcmpl-6cf55252-224c-4035-afc9-a38bc0072434-832c432a, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:10:59,502] LMCache INFO:[0m Stored 2048 tokens in 0.023 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:02,160] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:05,275] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:08,391] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:11,494] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:14,601] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:17,710] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:20,819] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:23,930] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:27,041] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:30,152] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:33,265] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:36,380] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:39,492] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:42,607] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:45,721] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:48,837] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:51,954] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:55,077] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:11:58,197] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:01,307] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:28,365] LMCache INFO:[0m Prefetch request completed (L1+L2): 812/830 prefix hits (812 L1, 0 L2) in 1.8 ms (external_request_id=chatcmpl-bc443272-ad52-4f7d-afa9-9b086429ba3a-82a07a9e, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:12:28,702] LMCache INFO:[0m Stored 4608 tokens in 0.025 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:31,139] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:34,247] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:37,360] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:40,470] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:43,580] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:56,633] LMCache INFO:[0m Prefetch request completed (L1+L2): 830/841 prefix hits (830 L1, 0 L2) in 2.4 ms (external_request_id=chatcmpl-00d12d37-7354-4ee1-8f0b-2afbc9f334ff-969a5a25, prefetch_request_id=-1) [3m(storage_manager.py:549:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-05-30 10:12:56,979] LMCache INFO:[0m Stored 2816 tokens in 0.025 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:12:59,774] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:02,891] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:06,012] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:09,134] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:12,258] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:15,381] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:18,488] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:21,597] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:24,705] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:27,816] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:30,927] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:34,039] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:37,153] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:40,269] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:43,387] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:46,504] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:49,622] LMCache INFO:[0m Stored 256 tokens in 0.006 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+[32;20m[2026-05-30 10:13:52,739] LMCache INFO:[0m Stored 256 tokens in 0.007 seconds [3m(gpu_transfer.py:468:lmcache.v1.multiprocess.modules.gpu_transfer)[0m
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+[32;20m[2026-05-30 10:14:09,658] LMCache INFO:[0m Shutting down LMCache HTTP server... [3m(http_server.py:102:lmcache.v1.multiprocess.http_server)[0m
+[32;20m[2026-05-30 10:14:10,112] LMCache INFO:[0m LMCache HTTP server stopped [3m(http_server.py:109:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2385]

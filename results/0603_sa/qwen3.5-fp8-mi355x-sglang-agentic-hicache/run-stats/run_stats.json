@@ -1,0 +1,38 @@
+{
+  "h200": {
+    "n_success": 0,
+    "total": 0
+  },
+  "mi325x": {
+    "n_success": 0,
+    "total": 0
+  },
+  "b300": {
+    "n_success": 0,
+    "total": 0
+  },
+  "h100": {
+    "n_success": 0,
+    "total": 0
+  },
+  "gb300": {
+    "n_success": 0,
+    "total": 0
+  },
+  "mi300x": {
+    "n_success": 0,
+    "total": 0
+  },
+  "mi355x": {
+    "n_success": 14,
+    "total": 14
+  },
+  "b200": {
+    "n_success": 0,
+    "total": 0
+  },
+  "gb200": {
+    "n_success": 0,
+    "total": 0
+  }
+}

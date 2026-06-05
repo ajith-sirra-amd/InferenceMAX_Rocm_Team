@@ -1,0 +1,107 @@
+# AIPerf Server Metrics Export (CSV)
+# aiperf_version: 0.8.0
+# schema_version: 1.0
+# benchmark_id: 32aa1362-5f75-48eb-b054-84a4e46d2a77
+# Note: Same benchmark_id and version appear in JSON and Parquet exports
+#
+Endpoint,Type,Metric,Unit,avg,min,max,std,p1,p5,p10,p25,p50,p75,p90,p95,p99,engine,model_name,reason,sleep_state,Description
+localhost:8888,gauge,process_max_fds,,1048576.0000,1048576.0000,1048576.0000,0.0000,1048576.0000,1048576.0000,1048576.0000,1048576.0000,1048576.0000,1048576.0000,1048576.0000,1048576.0000,1048576.0000,,,,,Maximum number of open file descriptors.
+localhost:8888,gauge,process_open_fds,,58.0148,52.0000,61.0000,1.6241,54.0000,55.0000,56.0000,57.0000,58.0000,59.0000,60.0000,61.0000,61.0000,,,,,Number of open file descriptors.
+localhost:8888,gauge,process_resident_memory_bytes,bytes,1799009659.3836,1773322240.0000,1808789504.0000,6630997.3808,1774436352.0000,1786732544.0000,1794113536.0000,1795162112.0000,1797881856.0000,1805643776.0000,1805643776.0000,1808789504.0000,1808789504.0000,,,,,Resident memory size in bytes.
+localhost:8888,gauge,process_start_time_seconds,seconds,1780246773.2800,1780246773.2800,1780246773.2800,0.0000,1780246773.2800,1780246773.2800,1780246773.2800,1780246773.2800,1780246773.2800,1780246773.2800,1780246773.2800,1780246773.2800,1780246773.2800,,,,,Start time of the process since unix epoch in seconds.
+localhost:8888,gauge,process_virtual_memory_bytes,bytes,340332745830.5865,340316622848.0000,340338548736.0000,3294996.1047,340316622848.0000,340326666240.0000,340331974656.0000,340331974656.0000,340331974656.0000,340335304704.0000,340335304704.0000,340338548736.0000,340338548736.0000,,,,,Virtual memory size in bytes.
+localhost:8888,gauge,vllm:kv_cache_usage_perc,ratio,0.1941,0.0000,0.3661,0.0624,0.0317,0.0821,0.1116,0.1566,0.1977,0.2398,0.2718,0.2883,0.3117,0,amd/Kimi-K2.5-MXFP4,,,KV-cache usage. 1 means 100 percent usage.
+localhost:8888,gauge,vllm:num_requests_running,requests,5.3738,0.0000,8.0000,1.6665,1.0000,3.0000,3.0000,4.0000,6.0000,7.0000,7.0000,8.0000,8.0000,0,amd/Kimi-K2.5-MXFP4,,,Number of requests in model execution batches.
+localhost:8888,gauge,vllm:num_requests_waiting,requests,0.4375,0.0000,5.0000,1.0489,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,2.0000,3.0000,5.0000,0,amd/Kimi-K2.5-MXFP4,,,Number of requests waiting to be processed.
+localhost:8888,gauge,vllm:engine_sleep_state,,1.0000,1.0000,1.0000,0.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,0,amd/Kimi-K2.5-MXFP4,,awake,Engine sleep state; awake = 0 means engine is sleeping; awake = 1 means engine is awake; weights_offloaded = 1 means sleep level 1; discard_all = 1 means sleep level 2.
+localhost:8888,gauge,vllm:engine_sleep_state,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,amd/Kimi-K2.5-MXFP4,,discard_all,Engine sleep state; awake = 0 means engine is sleeping; awake = 1 means engine is awake; weights_offloaded = 1 means sleep level 1; discard_all = 1 means sleep level 2.
+localhost:8888,gauge,vllm:engine_sleep_state,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,amd/Kimi-K2.5-MXFP4,,weights_offloaded,Engine sleep state; awake = 0 means engine is sleeping; awake = 1 means engine is awake; weights_offloaded = 1 means sleep level 1; discard_all = 1 means sleep level 2.
+localhost:8888,gauge,vllm:num_requests_waiting_by_reason,requests,0.4375,0.0000,5.0000,1.0489,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,2.0000,3.0000,5.0000,0,amd/Kimi-K2.5-MXFP4,capacity,,"Number of waiting requests by reason. Reason labels: 'capacity' = waiting for scheduling capacity; 'deferred' = deferred by transient constraints (LoRA budget, KV transfer, blocked status). Sum of all reasons equals vllm:num_requests_waiting."
+localhost:8888,gauge,vllm:num_requests_waiting_by_reason,requests,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,amd/Kimi-K2.5-MXFP4,deferred,,"Number of waiting requests by reason. Reason labels: 'capacity' = waiting for scheduling capacity; 'deferred' = deferred by transient constraints (LoRA budget, KV transfer, blocked status). Sum of all reasons equals vllm:num_requests_waiting."
+
+Endpoint,Type,Metric,Unit,total,rate,rate_avg,rate_min,rate_max,rate_std,engine,finished_reason,model_name,source,generation,handler,method,status,Description
+localhost:8888,counter,process_cpu_seconds,seconds,183.7900,0.1004,0.1004,0.0000,1.2500,0.1744,,,,,,,,,Total user and system CPU time spent in seconds.
+localhost:8888,counter,http_requests,requests,459.0000,0.2508,0.2486,0.0000,3.0000,0.5443,,,,,,/v1/chat/completions,POST,2xx,"Total number of requests by method, status and handler."
+localhost:8888,counter,http_requests,requests,5.0000,0.0027,0.0027,0.0000,1.0000,0.0522,,,,,,/v1/chat/completions,POST,5xx,"Total number of requests by method, status and handler."
+localhost:8888,counter,python_gc_collections,,165.0000,0.0902,0.0902,0.0000,2.0000,0.2940,,,,,0,,,,Number of times this generation was collected
+localhost:8888,counter,python_gc_collections,,15.0000,0.0082,0.0082,0.0000,1.0000,0.0902,,,,,1,,,,Number of times this generation was collected
+localhost:8888,counter,python_gc_collections,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,,,,,2,,,,Number of times this generation was collected
+localhost:8888,counter,python_gc_objects_collected,,11263.0000,6.1540,6.1546,0.0000,313.0000,23.0349,,,,,0,,,,Objects collected during gc
+localhost:8888,counter,python_gc_objects_collected,,1786.0000,0.9759,0.9760,0.0000,402.0000,14.5459,,,,,1,,,,Objects collected during gc
+localhost:8888,counter,python_gc_objects_collected,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,,,,,2,,,,Objects collected during gc
+localhost:8888,counter,python_gc_objects_uncollectable,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,,,,,0,,,,Uncollectable objects found during GC
+localhost:8888,counter,python_gc_objects_uncollectable,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,,,,,1,,,,Uncollectable objects found during GC
+localhost:8888,counter,python_gc_objects_uncollectable,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,,,,,2,,,,Uncollectable objects found during GC
+localhost:8888,counter,vllm:estimated_flops_per_gpu,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,,amd/Kimi-K2.5-MXFP4,,,,,,Estimated number of floating point operations per GPU (for Model Flops Utilization calculations).
+localhost:8888,counter,vllm:estimated_read_bytes_per_gpu,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,,amd/Kimi-K2.5-MXFP4,,,,,,Estimated number of bytes read from memory per GPU (for Model Flops Utilization calculations).
+localhost:8888,counter,vllm:estimated_write_bytes_per_gpu,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,,amd/Kimi-K2.5-MXFP4,,,,,,Estimated number of bytes written to memory per GPU (for Model Flops Utilization calculations).
+localhost:8888,counter,vllm:external_prefix_cache_hits,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,,amd/Kimi-K2.5-MXFP4,,,,,,"External prefix cache hits from KV connector cross-instance cache sharing, in terms of number of cached tokens."
+localhost:8888,counter,vllm:external_prefix_cache_queries,,4327617.0000,2364.5743,2364.8180,0.0000,211244.0000,13681.2472,0,,amd/Kimi-K2.5-MXFP4,,,,,,"External prefix cache queries from KV connector cross-instance cache sharing, in terms of number of queried tokens."
+localhost:8888,counter,vllm:generation_tokens,tokens,275511.0000,150.5369,150.5044,0.0000,536.0000,142.0981,0,,amd/Kimi-K2.5-MXFP4,,,,,,Number of generation tokens processed.
+localhost:8888,counter,vllm:mm_cache_hits,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,,amd/Kimi-K2.5-MXFP4,,,,,,"Multi-modal cache hits, in terms of number of cached items."
+localhost:8888,counter,vllm:mm_cache_queries,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,,amd/Kimi-K2.5-MXFP4,,,,,,"Multi-modal cache queries, in terms of number of queried items."
+localhost:8888,counter,vllm:num_preemptions,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,,amd/Kimi-K2.5-MXFP4,,,,,,Cumulative number of preemption from the engine.
+localhost:8888,counter,vllm:prefix_cache_hits,,44804111.0000,24480.5977,24483.1208,0.0000,427953.0000,56715.7349,0,,amd/Kimi-K2.5-MXFP4,,,,,,"Prefix cache hits, in terms of number of cached tokens."
+localhost:8888,counter,vllm:prefix_cache_queries,,49131728.0000,26845.1721,26847.9388,0.0000,429479.0000,59401.5797,0,,amd/Kimi-K2.5-MXFP4,,,,,,"Prefix cache queries, in terms of number of queried tokens."
+localhost:8888,counter,vllm:prompt_tokens,tokens,49131728.0000,26845.1721,26847.9388,0.0000,504534.0000,61687.3740,0,,amd/Kimi-K2.5-MXFP4,,,,,,Number of prefill tokens processed.
+localhost:8888,counter,vllm:prompt_tokens_cached,,44804111.0000,24480.5977,24483.1208,0.0000,427958.0000,57490.4335,0,,amd/Kimi-K2.5-MXFP4,,,,,,Number of cached prompt tokens (local + external).
+localhost:8888,counter,vllm:prompt_tokens_by_source,,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,,amd/Kimi-K2.5-MXFP4,external_kv_transfer,,,,,Number of prompt tokens by source.
+localhost:8888,counter,vllm:prompt_tokens_by_source,,44804111.0000,24480.5977,24483.1208,0.0000,427958.0000,57490.4335,0,,amd/Kimi-K2.5-MXFP4,local_cache_hit,,,,,Number of prompt tokens by source.
+localhost:8888,counter,vllm:prompt_tokens_by_source,,4327617.0000,2364.5743,2364.8180,0.0000,210681.0000,13751.3295,0,,amd/Kimi-K2.5-MXFP4,local_compute,,,,,Number of prompt tokens by source.
+localhost:8888,counter,vllm:request_success,requests,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,abort,amd/Kimi-K2.5-MXFP4,,,,,,Count of successfully processed requests.
+localhost:8888,counter,vllm:request_success,requests,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,error,amd/Kimi-K2.5-MXFP4,,,,,,Count of successfully processed requests.
+localhost:8888,counter,vllm:request_success,requests,455.0000,0.2486,0.2486,0.0000,3.0000,0.5443,0,length,amd/Kimi-K2.5-MXFP4,,,,,,Count of successfully processed requests.
+localhost:8888,counter,vllm:request_success,requests,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,repetition,amd/Kimi-K2.5-MXFP4,,,,,,Count of successfully processed requests.
+localhost:8888,counter,vllm:request_success,requests,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0,stop,amd/Kimi-K2.5-MXFP4,,,,,,Count of successfully processed requests.
+
+Endpoint,Type,Metric,Unit,count,count_rate,sum,sum_rate,avg,p1_estimate,p5_estimate,p10_estimate,p25_estimate,p50_estimate,p75_estimate,p90_estimate,p95_estimate,p99_estimate,engine,model_name,handler,method,Description,buckets
+localhost:8888,histogram,http_request_duration_highr_seconds,seconds,464,0.2535,11293.4579,6.1707,24.3393,0.7076,2.2555,3.5000,5.5473,10.0095,24.9093,59.1401,119.2604,167.2912,,,,,Latency with many buckets but no API specific labels. Made for more accurate percentile calculations.,0.01=0;0.025=0;0.05=0;0.075=0;0.1=0;0.25=0;0.5=0;0.75=5;1.0=10;1.5=16;2.0=18;2.5=25;3.0=38;3.5=45;4.0=55;4.5=71;5.0=86;7.5=166;10.0=220;30.0=370;60.0=417;+Inf=464
+localhost:8888,histogram,http_request_duration_seconds,seconds,464,0.2535,11293.4579,6.1707,24.3393,0.6440,2.3853,4.8240,12.1403,24.3340,36.5277,43.8439,46.2827,48.2337,,,/v1/chat/completions,POST,Latency with only few buckets by handler. Made to be only used if aggregation by handler is important.,0.1=0;0.5=0;1.0=10;+Inf=464
+localhost:8888,histogram,vllm:e2e_request_latency_seconds,seconds,455,0.2486,10349.4073,5.6548,22.7460,0.7332,2.5581,3.5783,5.9170,10.4204,22.1709,55.7240,93.0527,169.3465,0,amd/Kimi-K2.5-MXFP4,,,Histogram of e2e request latency in seconds.,0.3=0;0.5=0;0.8=5;1.0=7;1.5=11;2.0=13;2.5=20;5.0=82;10.0=215;15.0=295;20.0=330;30.0=365;40.0=386;50.0=399;60.0=412;120.0=444;240.0=454;480.0=455;960.0=455;1920.0=455;7680.0=455;+Inf=455
+localhost:8888,histogram,vllm:inter_token_latency_seconds,seconds,275053,150.2867,8853.9058,4.8377,0.0322,0.0109,0.0113,0.0119,0.0137,0.0167,0.0196,0.0214,0.0220,0.5702,0,amd/Kimi-K2.5-MXFP4,,,Histogram of inter-token latency in seconds.,0.01=1201;0.025=265551;0.05=269892;0.075=270199;0.1=270781;0.15=271126;0.2=271263;0.3=271459;0.4=271660;0.5=271951;0.75=272875;1.0=273592;2.5=274811;5.0=275053;7.5=275053;10.0=275053;20.0=275053;40.0=275053;80.0=275053;+Inf=275053
+localhost:8888,histogram,vllm:iteration_tokens_total,tokens,55216,30.1696,49407239.0000,26995.7090,894.7993,0.3643,1.4556,1.8793,3.1504,5.2689,6.8137,7.7245,8.0000,8.0000,0,amd/Kimi-K2.5-MXFP4,,,Histogram of number of tokens per engine_step.,1.0=1652;8.0=54794;16.0=54794;32.0=54794;64.0=54794;128.0=54794;256.0=54794;512.0=54800;1024.0=54800;2048.0=54800;4096.0=54800;8192.0=54800;16384.0=54800;+Inf=55216
+localhost:8888,histogram,vllm:request_decode_time_seconds,seconds,455,0.2486,8011.3646,4.3773,17.6074,0.1382,1.2370,2.1116,3.5334,7.2199,15.3500,44.4486,77.1944,152.8496,0,amd/Kimi-K2.5-MXFP4,,,Histogram of time spent in DECODE phase for request.,0.3=12;0.5=20;0.8=20;1.0=20;1.5=27;2.0=39;2.5=58;5.0=166;10.0=284;15.0=336;20.0=361;30.0=389;40.0=404;50.0=417;60.0=422;120.0=446;240.0=454;480.0=455;960.0=455;1920.0=455;7680.0=455;+Inf=455
+localhost:8888,histogram,vllm:request_generation_tokens,tokens,455,0.2486,249497.0000,136.3231,548.3451,9.0224,56.1967,100.0000,136.2672,257.4272,493.0653,1143.7745,2067.8669,4537.0420,0,amd/Kimi-K2.5-MXFP4,,,Number of generation tokens processed.,1.0=0;2.0=0;5.0=0;10.0=6;20.0=13;50.0=22;100.0=42;200.0=190;500.0=341;1000.0=400;2000.0=430;5000.0=452;10000.0=454;20000.0=455;50000.0=455;100000.0=455;200000.0=455;+Inf=455
+localhost:8888,histogram,vllm:request_inference_time_seconds,seconds,455,0.2486,9202.2373,5.0280,20.2247,0.5555,2.1247,2.8489,4.8750,9.2107,18.2685,50.1244,83.6288,161.5746,0,amd/Kimi-K2.5-MXFP4,,,Histogram of time spent in RUNNING phase for request.,0.3=0;0.5=3;0.8=10;1.0=12;1.5=16;2.0=20;2.5=32;5.0=115;10.0=242;15.0=315;20.0=349;30.0=380;40.0=396;50.0=407;60.0=417;120.0=444;240.0=454;480.0=455;960.0=455;1920.0=455;7680.0=455;+Inf=455
+localhost:8888,histogram,vllm:request_max_num_generation_tokens,tokens,455,0.2486,249497.0000,136.3231,548.3451,9.0224,56.1967,100.0000,136.2672,257.4272,493.0653,1143.7745,2067.8669,4537.0420,0,amd/Kimi-K2.5-MXFP4,,,Histogram of maximum number of requested generation tokens.,1.0=0;2.0=0;5.0=0;10.0=6;20.0=13;50.0=22;100.0=42;200.0=190;500.0=341;1000.0=400;2000.0=430;5000.0=452;10000.0=454;20000.0=455;50000.0=455;100000.0=455;200000.0=455;+Inf=455
+localhost:8888,histogram,vllm:request_params_max_tokens,tokens,455,0.2486,249497.0000,136.3231,548.3451,9.0224,56.1967,100.0000,136.2672,257.4272,493.0653,1143.7745,2067.8669,4537.0420,0,amd/Kimi-K2.5-MXFP4,,,Histogram of the max_tokens request parameter.,1.0=0;2.0=0;5.0=0;10.0=6;20.0=13;50.0=22;100.0=42;200.0=190;500.0=341;1000.0=400;2000.0=430;5000.0=452;10000.0=454;20000.0=455;50000.0=455;100000.0=455;200000.0=455;+Inf=455
+localhost:8888,histogram,vllm:request_params_n,,455,0.2486,455.0000,0.2486,1.0000,0.4111,0.4510,0.5009,0.6505,0.9000,1.0000,1.0000,1.0000,1.0000,0,amd/Kimi-K2.5-MXFP4,,,Histogram of the n request parameter.,1.0=455;2.0=455;5.0=455;10.0=455;20.0=455;+Inf=455
+localhost:8888,histogram,vllm:request_prefill_kv_computed_tokens,tokens,455,0.2486,4546834.0000,2484.3527,9993.0418,0.2095,77.7502,261.5984,470.4143,1000.0000,3955.6293,29857.9572,55337.3459,153138.4241,0,amd/Kimi-K2.5-MXFP4,,,Histogram of new KV tokens computed during prefill (excluding cached tokens).,1.0=22;2.0=22;5.0=22;10.0=22;20.0=22;50.0=23;100.0=23;200.0=30;500.0=120;1000.0=227;2000.0=301;5000.0=355;10000.0=392;20000.0=399;50000.0=423;100000.0=445;200000.0=453;+Inf=455
+localhost:8888,histogram,vllm:request_prefill_time_seconds,seconds,455,0.2486,1190.8727,0.6507,2.6173,0.0634,0.2767,0.4285,0.6767,0.9441,2.1254,4.7601,8.6353,33.0808,0,amd/Kimi-K2.5-MXFP4,,,Histogram of time spent in PREFILL phase for request.,0.3=25;0.5=58;0.8=159;1.0=241;1.5=293;2.0=330;2.5=359;5.0=412;10.0=436;15.0=443;20.0=445;30.0=448;40.0=451;50.0=453;60.0=454;120.0=455;240.0=455;480.0=455;960.0=455;1920.0=455;7680.0=455;+Inf=455
+localhost:8888,histogram,vllm:request_prompt_tokens,tokens,455,0.2486,48807510.0000,26668.0220,107269.2527,453.1726,32748.7342,48286.2065,65992.7050,94804.6806,139506.9608,188242.5367,223584.0531,261485.5047,0,amd/Kimi-K2.5-MXFP4,,,Number of prefill tokens processed.,1.0=0;2.0=0;5.0=0;10.0=0;20.0=0;50.0=0;100.0=0;200.0=0;500.0=7;1000.0=7;2000.0=7;5000.0=7;10000.0=7;20000.0=7;50000.0=47;100000.0=240;200000.0=420;+Inf=455
+localhost:8888,histogram,vllm:request_queue_time_seconds,seconds,455,0.2486,831.0962,0.4541,1.8266,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,2.0734,9.2076,41.1608,0,amd/Kimi-K2.5-MXFP4,,,Histogram of time spent in WAITING phase for request.,0.3=392;0.5=393;0.8=398;1.0=398;1.5=405;2.0=408;2.5=417;5.0=427;10.0=433;15.0=439;20.0=441;30.0=446;40.0=450;50.0=452;60.0=452;120.0=455;240.0=455;480.0=455;960.0=455;1920.0=455;7680.0=455;+Inf=455
+localhost:8888,histogram,vllm:request_time_per_output_token_seconds,seconds,455,0.2486,16.3568,0.0089,0.0359,0.0105,0.0119,0.0137,0.0190,0.0242,0.0368,0.0552,0.0810,0.2641,0,amd/Kimi-K2.5-MXFP4,,,Histogram of time_per_output_token_seconds per request.,0.01=0;0.025=240;0.05=399;0.075=427;0.1=440;0.15=446;0.2=448;0.3=451;0.4=452;0.5=454;0.75=455;1.0=455;2.5=455;5.0=455;7.5=455;10.0=455;20.0=455;40.0=455;80.0=455;+Inf=455
+localhost:8888,histogram,vllm:time_to_first_token_seconds,seconds,458,0.2502,2241.4245,1.2247,4.8939,0.2246,0.5704,0.7840,1.1588,1.8888,3.5940,8.7464,22.0646,56.7902,0,amd/Kimi-K2.5-MXFP4,,,Histogram of time to first token in seconds.,0.001=0;0.005=0;0.01=0;0.02=0;0.04=0;0.06=0;0.08=0;0.1=0;0.25=6;0.5=15;0.75=40;1.0=73;2.5=294;5.0=381;7.5=406;10.0=416;20.0=432;40.0=445;80.0=454;160.0=458;640.0=458;2560.0=458;+Inf=458
+
+Endpoint,Metric,Key,Value,Description
+localhost:8888,python_info,implementation,CPython,Python platform information
+localhost:8888,python_info,major,3,Python platform information
+localhost:8888,python_info,minor,12,Python platform information
+localhost:8888,python_info,patchlevel,13,Python platform information
+localhost:8888,python_info,version,3.12.13,Python platform information
+localhost:8888,vllm:cache_config_info,_block_size_resolved,True,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,block_size,1,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,cache_dtype,fp8,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,calculate_kv_scales,False,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,enable_prefix_caching,True,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,engine,0,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,gpu_memory_utilization,0.9,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,hash_block_size,None,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,is_attention_free,False,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,kv_cache_dtype_skip_layers,[],Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,kv_cache_memory_bytes,None,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,kv_offloading_backend,native,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,kv_offloading_size,None,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,kv_sharing_fast_prefill,False,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,mamba_block_size,None,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,mamba_cache_dtype,auto,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,mamba_cache_mode,none,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,mamba_page_size_padded,None,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,mamba_ssm_cache_dtype,auto,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,num_cpu_blocks,None,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,num_gpu_blocks,3642121,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,num_gpu_blocks_override,None,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,prefix_caching_hash_algo,sha256,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,sliding_window,None,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,user_specified_block_size,True,Information of the LLMEngine CacheConfig
+localhost:8888,vllm:cache_config_info,user_specified_mamba_block_size,False,Information of the LLMEngine CacheConfig
