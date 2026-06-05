@@ -1,1 +1,0 @@
-vllm serve amd/MiniMax-M2.5-MXFP4 --served-model-name amd/MiniMax-M2.5-MXFP4 --host 0.0.0.0 --port 8892 --tensor-parallel-size=1 --gpu-memory-utilization 0.95 --kv-cache-dtype fp8 --block-size=32 --trust-remote-code --attention-backend ROCM_AITER_FA --max-num-seqs 16 
