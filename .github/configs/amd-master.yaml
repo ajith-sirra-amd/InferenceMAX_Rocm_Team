@@ -110,7 +110,7 @@ glm5.1-fp4-mi355x-sglang-agentic-hicache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 2, offloading: hicache,    conc-list: [64] }
+      - { tp: 2, offloading: hicache,    conc-list: [32] }
 #      - { tp: 2, offloading: none,    conc-list: [32, 64, 128] }
 #      - { tp: 2, offloading: hicache, conc-list: [32, 64, 128] }
 
