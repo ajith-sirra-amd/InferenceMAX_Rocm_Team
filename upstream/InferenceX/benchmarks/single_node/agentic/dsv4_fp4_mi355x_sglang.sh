@@ -51,10 +51,43 @@ install_agentic_deps
 
 # Reject anything other than none: this launcher has no SGLang CPU-offload
 # wiring (different surface than vLLM's SimpleCPUOffloadConnector).
+CACHE_ARGS=()
+WARMUP_ARGS=()
+CUDA_GRAPH_MAX_BS="$CONC"
+[ "$CUDA_GRAPH_MAX_BS" -gt 64 ] && CUDA_GRAPH_MAX_BS=64
 case "$OFFLOADING" in
-    none) ;;
+    none)
+        # Leave SGLang's default RadixAttention prefix cache on — agentic
+        # replay needs it; --disable-radix-cache would zero the hit rate.
+        ;;
+    hicache)
+        # DeepSeek V4 HiCache uses ratio-based capacity control, not GB-based.
+        # DSv4 allocates several physical host sub-pools for each logical host
+        # token. MI355X nodes have ~3 TB of host DRAM (similar to B200's 3.8
+        # TiB), so ratio=8 at TP≥8 provides a large useful CPU tier within the
+        # node budget. Lower TP configs use higher ratios to maintain adequate
+        # host token capacity without exceeding DRAM limits.
+        if [ "$TP" -ge 8 ]; then
+            DEFAULT_HICACHE_RATIO=8
+        else
+            DEFAULT_HICACHE_RATIO=16
+        fi
+        HICACHE_RATIO="${HICACHE_RATIO:-$DEFAULT_HICACHE_RATIO}"
+        HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through}"
+        HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
+        HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-page_first_direct}"
+        export SGLANG_ENABLE_UNIFIED_RADIX_TREE=1
+        CACHE_ARGS=(
+            --enable-hierarchical-cache
+            --hicache-ratio "$HICACHE_RATIO"
+            --hicache-write-policy "$HICACHE_WRITE_POLICY"
+            --hicache-io-backend "$HICACHE_IO_BACKEND"
+            --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
+        )
+        echo "HiCache DSv4 CPU tier: ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
+        ;;
     *)
-        echo "Error: dsv4_fp4_mi355x_sglang.sh only supports OFFLOADING=none (got '$OFFLOADING')" >&2
+        echo "Error: unsupported OFFLOADING value '$OFFLOADING' (expected one of: none, hicache)" >&2
         exit 1
         ;;
 esac
@@ -152,7 +185,7 @@ python3 -m sglang.launch_server \
     --trust-remote-code \
     --attention-backend compressed \
     --max-running-requests "$PER_ENGINE_MAX_RUNNING" \
-    --cuda-graph-max-bs "$PER_ENGINE_MAX_RUNNING" \
+    --cuda-graph-max-bs "$CUDA_GRAPH_MAX_BS" \
     --page-size 256 \
     --context-length "$MAX_MODEL_LEN" \
     --chunked-prefill-size 8192 \
@@ -160,7 +193,10 @@ python3 -m sglang.launch_server \
     --tool-call-parser deepseekv4 \
     --reasoning-parser deepseek-v4 \
     --chat-template "$(dirname "$0")/../chat_templates/deepseek_v4_thinking.jinja" \
-    --watchdog-timeout 1800 > "$SERVER_LOG" 2>&1 &
+    --watchdog-timeout 1800 \
+    --enable-metrics \
+    "${CACHE_ARGS[@]}" \
+    "${WARMUP_ARGS[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
