@@ -59,6 +59,7 @@ CACHE_ARGS=()
 WARMUP_ARGS=()
 CUDA_GRAPH_MAX_BS="$CONC"
 [ "$CUDA_GRAPH_MAX_BS" -gt 64 ] && CUDA_GRAPH_MAX_BS=64
+
 case "$OFFLOADING" in
     none)
         # Leave SGLang's default RadixAttention prefix cache on — agentic
@@ -149,6 +150,7 @@ export SGLANG_FORCE_TRITON_MOE_FP8=0
 export SGLANG_HACK_FLASHMLA_BACKEND=tilelang
 export SGLANG_OPT_USE_TILELANG_INDEXER=true
 export SGLANG_OPT_USE_TRITON_SWA_PREPARE=true
+export SGLANG_ENABLE_UNIFIED_RADIX_TREE=1
 
 # ---- Server config ----------------------------------------------------------
 SERVER_LOG="$RESULT_DIR/server.log"
