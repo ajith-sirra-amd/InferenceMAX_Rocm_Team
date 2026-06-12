@@ -192,7 +192,6 @@ python3 -m sglang.launch_server \
     --attention-backend compressed \
     --max-running-requests "$PER_ENGINE_MAX_RUNNING" \
     --cuda-graph-max-bs "$CUDA_GRAPH_MAX_BS" \
-    --page-size 256 \
     --context-length "$MAX_MODEL_LEN" \
     --chunked-prefill-size 8192 \
     --disable-shared-experts-fusion \
