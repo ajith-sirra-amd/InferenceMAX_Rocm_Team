@@ -104,20 +104,21 @@ esac
 # to `deepseek_v3` so AutoConfig.from_pretrained succeeds, and keep
 # architectures=['DeepseekV4ForCausalLM'] so SGLang dispatches to its native
 # DSv4 model class (python/sglang/srt/models/deepseek_v4.py).
-python3 << PYEOF
-import json
-from huggingface_hub import hf_hub_download
-path = hf_hub_download(repo_id="$MODEL", filename="config.json")
-with open(path) as f:
-    config = json.load(f)
-if config.get("model_type") == "deepseek_v4":
-    config["model_type"] = "deepseek_v3"
-    with open(path, "w") as f:
-        json.dump(config, f, indent=2)
-    print(f"Patched {path}: model_type deepseek_v4 -> deepseek_v3")
-else:
-    print(f"No patch needed: model_type is {config.get('model_type')!r}")
-PYEOF
+# (srok) toxic..
+#python3 << PYEOF
+#import json
+#from huggingface_hub import hf_hub_download
+#path = hf_hub_download(repo_id="$MODEL", filename="config.json")
+#with open(path) as f:
+#    config = json.load(f)
+#if config.get("model_type") == "deepseek_v4":
+#    config["model_type"] = "deepseek_v3"
+#    with open(path, "w") as f:
+#        json.dump(config, f, indent=2)
+#    print(f"Patched {path}: model_type deepseek_v4 -> deepseek_v3")
+#else:
+#    print(f"No patch needed: model_type is {config.get('model_type')!r}")
+#PYEOF
 
 # DSv4 FP4-experts path. Mirrors the env block in the fixed-seq-len sibling
 # (benchmarks/single_node/dsv4_fp4_mi355x_sglang.sh), which tracks the active
