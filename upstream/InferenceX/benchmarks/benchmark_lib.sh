@@ -899,6 +899,7 @@ run_eval() {
 INFMAX_CONTAINER_WORKSPACE="${INFMAX_CONTAINER_WORKSPACE:-/workspace}"
 AGENTIC_DIR="${AGENTIC_DIR:-${INFMAX_CONTAINER_WORKSPACE}/utils/agentic-benchmark}"
 AIPERF_DIR="${AIPERF_DIR:-${INFMAX_CONTAINER_WORKSPACE}/utils/aiperf}"
+AIPERF_FAILED_REQUEST_THRESHOLD=0.10
 
 agentic_pip_install() {
     local pip_install=(python3 -m pip install)
@@ -925,16 +926,18 @@ resolve_trace_source() {
     # scenario. Used by recipes whose servers have non-default context
     # caps (e.g. minimaxm2.5 at max_model_len ~256k can't replay the
     # unfiltered corpus and switches to the 256k-capped variant), or
-    # by recipes that want to pin a specific corpus generation rather
-    # than ride the model-prefix-aware default below.
+    # by recipes that want to pin an older corpus generation.
     #
-    # Default (no override) is model-prefix-aware:
-    #   DSv4 recipes      -> 052726 (v5 corpus, the original baseline)
-    #   everything else   -> 060226 (v6 corpus, newer CC versions)
-    # DSv4 stays on 052726 for continuity with prior published baselines.
-    local default_loader="semianalysis_cc_traces_weka_with_subagents_060226"
-    if [[ "${MODEL_PREFIX:-}" == "dsv4" ]]; then
-        default_loader="semianalysis_cc_traces_weka_with_subagents"
+    # Default (no override): the 060826 v6 corpus, selected by model family.
+    # DSv4 (full context) rides the unfiltered base corpus; every non-DSv4
+    # recipe defaults to the 256k-capped variant because those servers run at
+    # max_model_len ~256k and would reject >256k requests. Any recipe can still
+    # pin a specific corpus via WEKA_LOADER_OVERRIDE.
+    local default_loader
+    if [[ "${MODEL_PREFIX:-}" == dsv4* ]]; then
+        default_loader="semianalysis_cc_traces_weka_with_subagents_060826"
+    else
+        default_loader="semianalysis_cc_traces_weka_with_subagents_060826_256k"
     fi
     local loader="${WEKA_LOADER_OVERRIDE:-$default_loader}"
     local dataset
@@ -951,8 +954,20 @@ resolve_trace_source() {
         semianalysis_cc_traces_weka_with_subagents_060226_256k)
             dataset="semianalysisai/cc-traces-weka-with-subagents-060226-256k"
             ;;
+        semianalysis_cc_traces_weka_with_subagents_060526)
+            dataset="semianalysisai/cc-traces-weka-with-subagents-060526"
+            ;;
+        semianalysis_cc_traces_weka_with_subagents_060526_256k)
+            dataset="semianalysisai/cc-traces-weka-with-subagents-060526-256k"
+            ;;
+        semianalysis_cc_traces_weka_with_subagents_060826)
+            dataset="semianalysisai/cc-traces-weka-with-subagents-060826"
+            ;;
+        semianalysis_cc_traces_weka_with_subagents_060826_256k)
+            dataset="semianalysisai/cc-traces-weka-with-subagents-060826-256k"
+            ;;
         *)
-            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k" >&2
+            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k, semianalysis_cc_traces_weka_with_subagents_060526, semianalysis_cc_traces_weka_with_subagents_060526_256k, semianalysis_cc_traces_weka_with_subagents_060826, semianalysis_cc_traces_weka_with_subagents_060826_256k" >&2
             exit 1
             ;;
     esac
@@ -1034,7 +1049,7 @@ build_replay_cmd() {
     # transient low-rate failures from killing long sweeps while still
     # catching malformed payloads or server crashes before they get aggregated
     # as benchmarkable data.
-    REPLAY_CMD+=" --failed-request-threshold 0.10"
+    REPLAY_CMD+=" --failed-request-threshold $AIPERF_FAILED_REQUEST_THRESHOLD"
     # Sample each trajectory's warmup start position uniformly from
     # [25%, 75%] of the trace's turn count (was hardcoded 0%-70% upstream).
     # Avoids starting trajectories right at turn 0 where the KV cache is
@@ -1048,6 +1063,14 @@ build_replay_cmd() {
     # CPU on minimax-m2.5 at high concurrency. Lossless for vLLM (server
     # usage is authoritative).
     REPLAY_CMD+=" --use-server-token-count"
+    # Disable DCGM GPU telemetry collection. aiperf's GpuMetricTimeSeries
+    # freezes its metric schema on the first DCGM scrape, then KeyErrors when
+    # an optional field (xid_errors, power_violation, encoder_utilization)
+    # first appears mid-run. We don't consume the gpu_telemetry artifact in
+    # downstream processing, and the server-metrics path (Prometheus /metrics
+    # from vLLM) is unaffected by this flag and still gives us KV usage,
+    # prefix cache hit rate, etc.
+    REPLAY_CMD+=" --no-gpu-telemetry"
     # aiperf's dataset manager (separate from the inference parser) loads
     # the model's tokenizer for trace-prompt tokenization regardless of
     # --use-server-token-count. Models like kimi (amd/Kimi-K2.5-MXFP4,
@@ -1087,8 +1110,9 @@ build_replay_cmd() {
 
 write_agentic_result_json() {
     # Aggregate aiperf's profile_export.{json,jsonl} + server_metrics_export.json
-    # into $AGENTIC_OUTPUT_DIR/$RESULT_FILENAME.json. The workflow's existing
-    # retry-based existence check is the single success gate.
+    # into $AGENTIC_OUTPUT_DIR/$RESULT_FILENAME.json. The workflow checks that
+    # this file exists; run_agentic_replay_and_write_outputs separately rejects
+    # aggregates whose request error rate exceeds the configured limit.
     local result_dir="$1"
     RESULT_DIR="$result_dir" AGENTIC_OUTPUT_DIR="${AGENTIC_OUTPUT_DIR:-$INFMAX_CONTAINER_WORKSPACE}" \
         python3 "$INFMAX_CONTAINER_WORKSPACE/utils/process_agentic_result.py"
@@ -1102,6 +1126,7 @@ write_agentic_result_json() {
 run_agentic_replay_and_write_outputs() {
     local result_dir="$1"
     local replay_rc
+    local validation_rc
 
     echo "$REPLAY_CMD" > "$result_dir/benchmark_command.txt"
 
@@ -1117,8 +1142,20 @@ run_agentic_replay_and_write_outputs() {
     python3 "$AGENTIC_DIR/scripts/analyze_benchmark_distributions.py" \
         "$result_dir/aiperf_artifacts" -o "$result_dir" 2>&1 || true
 
+    set +e
+    python3 "$INFMAX_CONTAINER_WORKSPACE/utils/validate_agentic_result.py" \
+        "$result_dir/aiperf_artifacts" \
+        --failed-request-threshold "$AIPERF_FAILED_REQUEST_THRESHOLD"
+    validation_rc=$?
+    set -e
+
     if [ "$replay_rc" -ne 0 ]; then
         echo "ERROR: agentic trace replay exited with code $replay_rc after writing available results" >&2
         return "$replay_rc"
+    fi
+
+    if [ "$validation_rc" -ne 0 ]; then
+        echo "ERROR: agentic trace replay produced invalid results after writing available artifacts" >&2
+        return "$validation_rc"
     fi
 }

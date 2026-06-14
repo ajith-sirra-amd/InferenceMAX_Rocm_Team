@@ -1,4 +1,21 @@
 # Start - agenticX 
+
+# (seungrok)
+dsv4-fp4-mi355x-atom-agentic-lmcache:
+  image: rocm/atom-dev:nightly_202606101557
+  model: deepseek-ai/DeepSeek-V4-Pro
+  model-prefix: dsv4
+  runner: mi355x
+  precision: fp4
+  framework: atom
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - duration: 1800
+      search-space:
+      - { tp: 8, ep: 1, offloading: none, conc-list:    [52] }
+      #- { tp: 8, ep: 1, offloading: none, conc-list:    [44, 48, 52, 56, 60] }
+      #- { tp: 8, ep: 1, offloading: lmcache, conc-list:    [44, 48, 52, 56, 60] }
 # (seungrok)
 minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache:
   image: vllm/vllm-openai-rocm:v0.21.0
