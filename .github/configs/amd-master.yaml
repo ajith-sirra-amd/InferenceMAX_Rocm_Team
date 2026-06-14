@@ -2194,7 +2194,7 @@ dsv4-fp4-mi355x-vllm-agentic:
 #      - { tp: 8, ep: 1, conc-start: 4, conc-end: 64, spec-decoding: mtp }
  
 dsv4-fp4-mi355x-sglang-agentic-hicache:
-  image: rocm/sgl-dev:rocm720-mi35x-0363e6c-20260509-DSv4
+  image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260610
   model: deepseek-ai/DeepSeek-V4-Pro
   model-prefix: dsv4
   runner: mi355x
@@ -2205,5 +2205,6 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 8, offloading: none, conc-list: [52] }
-      - { tp: 8, offloading: hicache, conc-list: [52] }
+        #DPA, conc>=64
+      - { tp: 8, dp-attn: false, offloading: none, conc-start: 1 , conc-end: 32 }
+      #- { tp: 8, dp-attn: false, offloading: hicache, conc-start: 1 , conc-end: 32 }
