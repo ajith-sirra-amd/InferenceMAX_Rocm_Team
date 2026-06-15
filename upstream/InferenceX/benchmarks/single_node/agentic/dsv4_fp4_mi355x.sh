@@ -57,6 +57,9 @@ install_agentic_deps
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 
+CACHE_ARGS=()
+WARMUP_ARGS=()
+
 # ---- Hicache config ----------------------------------------------------------
 # Reject anything other than none: this launcher has no SGLang CPU-offload
 # wiring (different surface than vLLM's SimpleCPUOffloadConnector).
@@ -100,7 +103,6 @@ esac
 
 # ---- LLM server config ----------------------------------------------------------
 
-WARMUP_ARGS=()
 CUDA_GRAPH_MAX_BS="$CONC"
 [ "$CUDA_GRAPH_MAX_BS" -gt 64 ] && CUDA_GRAPH_MAX_BS=64
 
@@ -140,13 +142,9 @@ if [ "$DP_ATTENTION" = "true" ]; then
     SGLANG_ROUTER_METRICS_PORT=$((PORT + 10000))
 fi
 
-if [ "${EP_SIZE:-1}" -gt 1 ]; then
-    PARALLEL_ARGS+=(--ep-size "$EP_SIZE")
-fi
-
 PARALLEL_ARGS=(--tensor-parallel-size "$TP")
 METRICS_ARGS=(--enable-metrics)
-MEM_FRACTION_STATIC=0.88
+MEM_FRACTION_STATIC=0.9
 CHUNKED_PREFILL_SIZE=8192
 
 if [ "$DP_ATTENTION" = "true" ]; then
@@ -154,11 +152,14 @@ if [ "$DP_ATTENTION" = "true" ]; then
         --dp "$TP"
         --enable-dp-attention
         --dist-init-addr "127.0.0.1:$((PORT + 2000))"
-        --ep-size "$EP_SIZE"
         --enable-prefill-delayer
     )
     MEM_FRACTION_STATIC=0.88
     CHUNKED_PREFILL_SIZE=16384
+fi
+
+if [ "${EP_SIZE:-1}" -gt 1 ]; then
+    PARALLEL_ARGS+=(--ep-size "$EP_SIZE")
 fi
 
 # --max-running-requests is per-engine. With DP-attn each DP engine handles
@@ -181,12 +182,12 @@ sglang serve \
     --trust-remote-code \
     --disable-radix-cache \
     --attention-backend dsv4 \
-    --max-running-requests ${CONC} \
-    --mem-fraction-static 0.90 \
+    --max-running-requests ${PER_ENGINE_MAX_RUNNING} \
+    --mem-fraction-static ${MEM_FRACTION_STATIC} \
+    --chunked-prefill-size "$CHUNKED_PREFILL_SIZE" \
     --swa-full-tokens-ratio 0.15 \
     --page-size 256 \
     --context-length $MAX_MODEL_LEN \
-    --chunked-prefill-size 8192 \
     --disable-shared-experts-fusion \
     --tool-call-parser deepseekv4 \
     --reasoning-parser deepseek-v4 \
@@ -212,9 +213,12 @@ capture_cache_metrics() {
 
 wait_for_server_ready --port "$SGLANG_BACKEND_PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
+# Server already launched and ready at this point
+# (from the earlier wait_for_server_ready call)
+
 if [ "$USE_SGLANG_ROUTER" = "true" ]; then
     echo "Starting SGLang router on port $PORT for $TP DP ranks..."
-    "$SGLANG_PYTHON" -m sglang_router.launch_router \
+    python3 -m sglang_router.launch_router \
         --worker-urls "http://localhost:$SGLANG_BACKEND_PORT" \
         --policy manual \
         --assignment-mode min_load \
