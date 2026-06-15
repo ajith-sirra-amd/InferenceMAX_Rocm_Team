@@ -57,9 +57,6 @@ install_agentic_deps
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 
-CACHE_ARGS=()
-WARMUP_ARGS=()
-
 # ---- Hicache config ----------------------------------------------------------
 # Reject anything other than none: this launcher has no SGLang CPU-offload
 # wiring (different surface than vLLM's SimpleCPUOffloadConnector).
@@ -77,7 +74,7 @@ case "$OFFLOADING" in
         # node budget. Lower TP configs use higher ratios to maintain adequate
         # host token capacity without exceeding DRAM limits.
         if [ "$TP" -ge 8 ]; then
-            DEFAULT_HICACHE_RATIO=8
+            DEFAULT_HICACHE_RATIO=2
         else
             DEFAULT_HICACHE_RATIO=16
         fi
@@ -103,6 +100,7 @@ esac
 
 # ---- LLM server config ----------------------------------------------------------
 
+WARMUP_ARGS=()
 CUDA_GRAPH_MAX_BS="$CONC"
 [ "$CUDA_GRAPH_MAX_BS" -gt 64 ] && CUDA_GRAPH_MAX_BS=64
 
@@ -132,32 +130,14 @@ export SGLANG_ROCM_USE_MULTI_STREAM=false
 # Parallelism: pure TP, TP+EP, or DEP (DP-attn + EP). Matches the dsv4 b200
 # vllm agentic launcher so the agentic sweep can probe both interactivity and
 # throughput regimes.
-
-USE_SGLANG_ROUTER=false
-SGLANG_BACKEND_PORT="$PORT"
-ROUTER_LOG="$RESULT_DIR/router.log"
-if [ "$DP_ATTENTION" = "true" ]; then
-    USE_SGLANG_ROUTER=true
-    SGLANG_BACKEND_PORT=$((PORT + 1))
-    SGLANG_ROUTER_METRICS_PORT=$((PORT + 10000))
-fi
-
 PARALLEL_ARGS=(--tensor-parallel-size "$TP")
-METRICS_ARGS=(--enable-metrics)
-MEM_FRACTION_STATIC=0.9
-CHUNKED_PREFILL_SIZE=8192
-
 if [ "$DP_ATTENTION" = "true" ]; then
     PARALLEL_ARGS+=(
         --dp "$TP"
         --enable-dp-attention
-        --dist-init-addr "127.0.0.1:$((PORT + 2000))"
         --enable-prefill-delayer
     )
-    MEM_FRACTION_STATIC=0.88
-    CHUNKED_PREFILL_SIZE=16384
 fi
-
 if [ "${EP_SIZE:-1}" -gt 1 ]; then
     PARALLEL_ARGS+=(--ep-size "$EP_SIZE")
 fi
@@ -177,17 +157,16 @@ echo "Starting sglang server..."
 sglang serve \
     --model-path $MODEL \
     --host=0.0.0.0 \
-    --port $SGLANG_BACKEND_PORT \
+    --port $PORT \
     "${PARALLEL_ARGS[@]}" \
     --trust-remote-code \
-    --disable-radix-cache \
     --attention-backend dsv4 \
-    --max-running-requests ${PER_ENGINE_MAX_RUNNING} \
-    --mem-fraction-static ${MEM_FRACTION_STATIC} \
-    --chunked-prefill-size "$CHUNKED_PREFILL_SIZE" \
+    --max-running-requests ${CONC} \
+    --mem-fraction-static 0.90 \
     --swa-full-tokens-ratio 0.15 \
     --page-size 256 \
     --context-length $MAX_MODEL_LEN \
+    --chunked-prefill-size 8192 \
     --disable-shared-experts-fusion \
     --tool-call-parser deepseekv4 \
     --reasoning-parser deepseek-v4 \
@@ -199,45 +178,9 @@ sglang serve \
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
-wait_for_server_ready --port "$SGLANG_BACKEND_PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
-capture_cache_metrics() {
-    {
-        echo "=== SGLang cache metrics snapshot $(date --iso-8601=seconds) ==="
-        curl -fsS "http://localhost:$SGLANG_BACKEND_PORT/metrics" 2>/dev/null \
-            | grep -E '^(sglang:(cache_hit_rate|cached_tokens_total|prompt_tokens_total|hicache_host_used_tokens|hicache_host_total_tokens|token_usage|num_requests_running|num_requests_waiting))' \
-            || true
-        echo "============================================================"
-    } >> "$SERVER_LOG"
-}
-
-if [ "$USE_SGLANG_ROUTER" = "true" ]; then
-    echo "Starting SGLang router on port $PORT for $TP DP ranks..."
-    python3 -m sglang_router.launch_router \
-        --worker-urls "http://localhost:$SGLANG_BACKEND_PORT" \
-        --policy manual \
-        --assignment-mode min_load \
-        --request-id-headers x-correlation-id \
-        --dp-aware \
-        --host 0.0.0.0 \
-        --port "$PORT" \
-        --prometheus-host 127.0.0.1 \
-        --prometheus-port "$SGLANG_ROUTER_METRICS_PORT" \
-        --request-timeout-secs 3600 \
-        --disable-retries > "$ROUTER_LOG" 2>&1 &
-    ROUTER_PID=$!
-    echo "Router PID: $ROUTER_PID"
-    wait_for_server_ready --port "$PORT" --server-log "$ROUTER_LOG" --server-pid "$ROUTER_PID"
-fi
-
-if [ "${#METRICS_ARGS[@]}" -gt 0 ]; then
-    capture_cache_metrics
-    trap capture_cache_metrics EXIT
-fi
+wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 # ---- Run benchmark ----------------------------------------------------------
 build_replay_cmd "$RESULT_DIR"
-if [ "$DP_ATTENTION" = "true" ]; then
-    REPLAY_CMD+=" --server-metrics http://localhost:$SGLANG_BACKEND_PORT/metrics"
-fi
+
 run_agentic_replay_and_write_outputs "$RESULT_DIR"
