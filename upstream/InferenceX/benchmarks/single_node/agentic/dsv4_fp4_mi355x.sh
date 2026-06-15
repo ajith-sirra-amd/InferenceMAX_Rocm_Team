@@ -211,11 +211,6 @@ capture_cache_metrics() {
     } >> "$SERVER_LOG"
 }
 
-wait_for_server_ready --port "$SGLANG_BACKEND_PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
-# Server already launched and ready at this point
-# (from the earlier wait_for_server_ready call)
-
 if [ "$USE_SGLANG_ROUTER" = "true" ]; then
     echo "Starting SGLang router on port $PORT for $TP DP ranks..."
     python3 -m sglang_router.launch_router \
