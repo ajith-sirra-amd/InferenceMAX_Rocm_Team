@@ -155,8 +155,6 @@ if [ "$DP_ATTENTION" = "true" ]; then
         --enable-dp-attention
         --dist-init-addr "127.0.0.1:$((PORT + 2000))"
         --ep-size "$EP_SIZE"
-        --moe-runner-backend flashinfer_mxfp4
-        --disable-flashinfer-autotune
         --enable-prefill-delayer
     )
     MEM_FRACTION_STATIC=0.88
