@@ -176,7 +176,7 @@ echo "Starting sglang server..."
 sglang serve \
     --model-path $MODEL \
     --host=0.0.0.0 \
-    --port $PORT \
+    --port $SGLANG_BACKEND_PORT \
     "${PARALLEL_ARGS[@]}" \
     --trust-remote-code \
     --disable-radix-cache \
@@ -198,7 +198,7 @@ sglang serve \
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
-wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+wait_for_server_ready --port "$SGLANG_BACKEND_PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 capture_cache_metrics() {
     {
