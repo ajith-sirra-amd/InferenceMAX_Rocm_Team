@@ -129,6 +129,12 @@ export SGLANG_EAGER_INPUT_NO_COPY=true
 export SGLANG_OPT_USE_MULTI_STREAM_OVERLAP=false
 export SGLANG_ROCM_USE_MULTI_STREAM=false
 
+# relax timeout 
+export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
+
+# tree modification
+export SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1
+
 # Parallelism: pure TP, TP+EP, or DEP (DP-attn + EP). Matches the dsv4 b200
 # vllm agentic launcher so the agentic sweep can probe both interactivity and
 # throughput regimes.
@@ -155,6 +161,7 @@ else
     PER_ENGINE_MAX_RUNNING=$CONC
 fi
 
+set -x
 echo "Starting sglang server..."
 sglang serve \
     --model-path $MODEL \
