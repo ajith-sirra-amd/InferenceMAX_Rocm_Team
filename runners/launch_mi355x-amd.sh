@@ -5,6 +5,8 @@ elif [[ $RUNNER_TYPE == "mi355x" ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/hf_cache/"
 elif [[ $RUNNER_TYPE == "mi355x-p02-g57" ]]; then
     HF_HUB_CACHE_MOUNT="/mnt/hf_hub_cache/"
+elif [[ $RUNNER_TYPE == "mi355x-do" ]]; then
+    HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"
 fi
 
 MODEL_CODE="${EXP_NAME%%_*}"
