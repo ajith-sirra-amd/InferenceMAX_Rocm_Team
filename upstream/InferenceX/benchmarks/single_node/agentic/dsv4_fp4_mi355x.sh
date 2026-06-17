@@ -135,6 +135,9 @@ export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 # tree modification
 export SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1
 
+# aiter preshuffle paged-MQA 
+export AITER_ENABLE_AOT_GLUON_PA_MQA_LOGITS=1
+
 # Parallelism: pure TP, TP+EP, or DEP (DP-attn + EP). Matches the dsv4 b200
 # vllm agentic launcher so the agentic sweep can probe both interactivity and
 # throughput regimes.
