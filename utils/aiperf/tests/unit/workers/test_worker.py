@@ -15,6 +15,7 @@ from aiperf.common.models import (
     RequestRecord,
     SSEMessage,
     TextResponseData,
+    Turn,
 )
 from aiperf.credit.structs import Credit, CreditContext
 from aiperf.workers.worker import Worker
@@ -45,6 +46,32 @@ async def mock_worker(
 
 @pytest.mark.asyncio
 class TestWorker:
+    async def test_create_request_info_overrides_only_outgoing_turn(self, mock_worker):
+        original = Turn(max_tokens=4096)
+        turns = [original]
+        credit_context = CreditContext(
+            credit=Credit(
+                id=1,
+                phase=CreditPhase.WARMUP,
+                conversation_id="test-conv",
+                x_correlation_id="test-correlation",
+                turn_index=0,
+                num_turns=1,
+                issued_at_ns=0,
+                max_tokens_override=1,
+            ),
+            drop_perf_ns=0,
+        )
+
+        request_info = mock_worker._create_request_info(
+            x_request_id="request-id",
+            credit_context=credit_context,
+            turns=turns,
+        )
+
+        assert request_info.turns[-1].max_tokens == 1
+        assert original.max_tokens == 4096
+
     async def test_process_response(
         self, monkeypatch, mock_worker, sample_request_record
     ):
@@ -433,3 +460,100 @@ class TestProcessCreditFastPathRouting:
         mock_client.get_payload_bytes.assert_called_once()
         execute.assert_not_called()
         session_path.assert_called_once()
+
+
+@pytest.mark.asyncio
+class TestWorkerCreditRecordLockstep:
+    """A credit returned as completed (not cancelled) MUST be accompanied by a
+    record. The RecordsManager completion barrier waits for one record per
+    completed credit with no timeout, so a completed-without-record credit
+    leaves the count permanently short and hangs the run at end-of-phase.
+    """
+
+    async def test_completed_credit_without_record_emits_error_record(
+        self, monkeypatch, mock_worker, sample_credit_context
+    ):
+        """When processing fails before any record is emitted, the worker still
+        emits an error record for the completed credit (lockstep)."""
+        mock_worker._is_payload_bytes = False
+
+        async def boom(*args, **kwargs):
+            raise ValueError("conversation retrieval failed before request sent")
+
+        monkeypatch.setattr(mock_worker, "_process_credit_with_session", boom)
+
+        send_record = AsyncMock()
+        monkeypatch.setattr(mock_worker, "_send_inference_result_message", send_record)
+        credit_send = AsyncMock()
+        monkeypatch.setattr(mock_worker.credit_dealer_client, "send", credit_send)
+
+        await mock_worker._on_credit_drop_message_task(sample_credit_context)
+
+        # Credit is returned as completed, not cancelled...
+        assert sample_credit_context.returned is True
+        assert sample_credit_context.cancelled is False
+        credit_send.assert_awaited_once()
+        # ...so a record MUST be emitted to keep the records-side count in lockstep.
+        send_record.assert_awaited_once()
+        emitted_record = send_record.await_args.args[0]
+        assert emitted_record.error is not None
+        # The synthetic error must also be surfaced on the CreditReturn so
+        # increment_returned(..., errored=...) counts it; otherwise the forwarded
+        # error record is invisible to the phase-complete request_errors log line.
+        assert sample_credit_context.error is not None
+        credit_return = credit_send.await_args.args[0]
+        assert credit_return.error is not None
+
+    async def test_cancelled_credit_does_not_emit_record(
+        self, monkeypatch, mock_worker, sample_credit_context
+    ):
+        """A cancelled credit is excluded from the barrier target, so the worker
+        must NOT fabricate a record for it (which would over-count)."""
+        mock_worker._is_payload_bytes = False
+
+        async def cancel(*args, **kwargs):
+            raise asyncio.CancelledError()
+
+        monkeypatch.setattr(mock_worker, "_process_credit_with_session", cancel)
+
+        send_record = AsyncMock()
+        monkeypatch.setattr(mock_worker, "_send_inference_result_message", send_record)
+        credit_send = AsyncMock()
+        monkeypatch.setattr(mock_worker.credit_dealer_client, "send", credit_send)
+
+        await mock_worker._on_credit_drop_message_task(sample_credit_context)
+
+        assert sample_credit_context.cancelled is True
+        credit_send.assert_awaited_once()
+        send_record.assert_not_awaited()
+
+    async def test_failure_record_emit_raising_still_returns_credit(
+        self, monkeypatch, mock_worker, sample_credit_context
+    ):
+        """The lockstep emit must never abort the credit return. If
+        _emit_credit_failure_record raises, the finally block must still send
+        the CreditReturn and set returned=True -- otherwise the done callback
+        returns the credit as completed-without-record and hangs the barrier
+        (the exact break the lockstep guard exists to prevent)."""
+        mock_worker._is_payload_bytes = False
+
+        async def boom(*args, **kwargs):
+            raise ValueError("processing failed before any record was emitted")
+
+        monkeypatch.setattr(mock_worker, "_process_credit_with_session", boom)
+
+        async def emit_boom(*args, **kwargs):
+            raise RuntimeError("inference results push socket closed")
+
+        monkeypatch.setattr(mock_worker, "_emit_credit_failure_record", emit_boom)
+        credit_send = AsyncMock()
+        monkeypatch.setattr(mock_worker.credit_dealer_client, "send", credit_send)
+
+        # Must not propagate out of the task handler.
+        await mock_worker._on_credit_drop_message_task(sample_credit_context)
+
+        # Credit is still returned (not cancelled) so concurrency accounting and
+        # the done-callback fallback stay consistent.
+        assert sample_credit_context.returned is True
+        assert sample_credit_context.cancelled is False
+        credit_send.assert_awaited_once()

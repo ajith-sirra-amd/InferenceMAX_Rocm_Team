@@ -53,6 +53,16 @@ class Credit(
     url_index: int | None = None
     agent_depth: int = 0
     parent_correlation_id: str | None = None
+    root_correlation_id: str | None = None
+    """x_correlation_id of the depth-0 root of this credit's session TREE.
+
+    Stable across the whole tree: the root carries its own x_correlation_id
+    (left None on the wire when it equals x_correlation_id to keep the struct
+    small), and every descendant (child, subchild, background subagent) inherits
+    the root's id. This is the key used for per-tree session-slot accounting
+    (``SessionTreeRegistry``) — the slot is held until the whole tree drains —
+    and is persisted in the export so analysis groups a tree under one lane.
+    Effective value is ``root_correlation_id or x_correlation_id``."""
     counts_toward_phase_target: bool = True
     """Whether this credit can satisfy the phase's planned send target.
 
@@ -74,9 +84,23 @@ class Credit(
     cache_bust_target: CacheBustTarget = CacheBustTarget.NONE
     """Where (and how) to inject `cache_bust_marker` at request-build time."""
 
+    max_tokens_override: int | None = None
+    """Per-request generation limit override.
+
+    Agentic replay uses this for warmup priming requests so they prefill the
+    recorded context but decode only one token. It is intentionally attached
+    to the credit rather than the dataset turn so profiling retains the
+    recorded output limit.
+    """
+
     @property
     def is_final_turn(self) -> bool:
         return self.turn_index == self.num_turns - 1
+
+    @property
+    def effective_root_correlation_id(self) -> str:
+        """Tree root id, defaulting to this credit's own ``x_correlation_id``."""
+        return self.root_correlation_id or self.x_correlation_id
 
 
 class CreditContext(
@@ -91,6 +115,10 @@ class CreditContext(
         returned: True if the credit was returned after completion.
         first_token_sent: True if the first token was sent before this return.
         error: The error message if the request failed (None on success).
+        record_emitted: True once an inference record has been pushed for this
+            credit. Used to keep the records-side count in lockstep with the
+            credit-side count: a completed (non-cancelled) credit with no
+            record would hang the RecordsManager completion barrier.
     """
 
     credit: Credit
@@ -99,6 +127,7 @@ class CreditContext(
     returned: bool = False
     first_token_sent: bool = False
     error: str | None = None
+    record_emitted: bool = False
 
 
 # =============================================================================
@@ -122,8 +151,23 @@ class TurnToSend(Struct, frozen=True):
     num_turns: int
     agent_depth: int = 0
     parent_correlation_id: str | None = None
+    root_correlation_id: str | None = None
+    """x_correlation_id of the depth-0 root of this turn's session TREE.
+
+    None for a root turn (the root IS its own tree root); set on every
+    descendant to the root's id. Propagated onto the issued ``Credit`` and used
+    for per-tree session-slot accounting. Effective value is
+    ``root_correlation_id or x_correlation_id``."""
     counts_toward_phase_target: bool = True
     """Whether this turn can satisfy the phase's planned send target."""
+    is_session_start: bool = False
+    """True when this credit begins a new root-session occupancy in the phase
+    and must acquire a session slot + bump ``sent_sessions``, even when
+    ``turn_index > 0``. Agentic replay resumes a sampled trajectory mid-trace
+    (warmup at k_i, profiling at k_i+1), so its first credit is a session start
+    despite a non-zero ``turn_index``. ``turn_index == 0`` always implies a
+    session start regardless of this flag. A mid-trace session start can only
+    legitimately occur during a phase's initial dispatch (execute_phase)."""
     has_forks: bool = False
     branch_mode: ConversationBranchMode = ConversationBranchMode.FORK
 
@@ -134,9 +178,17 @@ class TurnToSend(Struct, frozen=True):
     cache_bust_target: CacheBustTarget = CacheBustTarget.NONE
     """Where (and how) to inject `cache_bust_marker` at request-build time."""
 
+    max_tokens_override: int | None = None
+    """Per-request generation limit override; omitted for normal requests."""
+
     @property
     def is_final_turn(self) -> bool:
         return self.turn_index == self.num_turns - 1
+
+    @property
+    def effective_root_correlation_id(self) -> str:
+        """Tree root id, defaulting to this turn's own ``x_correlation_id``."""
+        return self.root_correlation_id or self.x_correlation_id
 
     @classmethod
     def from_previous_credit(
@@ -157,6 +209,7 @@ class TurnToSend(Struct, frozen=True):
             num_turns=credit.num_turns,
             agent_depth=credit.agent_depth,
             parent_correlation_id=credit.parent_correlation_id,
+            root_correlation_id=credit.root_correlation_id,
             counts_toward_phase_target=credit.counts_toward_phase_target,
             has_forks=next_meta.has_forks if next_meta is not None else False,
             branch_mode=credit.branch_mode,
