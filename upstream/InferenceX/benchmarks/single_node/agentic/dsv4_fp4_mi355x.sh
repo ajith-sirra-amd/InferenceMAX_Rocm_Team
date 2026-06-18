@@ -20,10 +20,6 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
 
-if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
-    MAX_MODEL_LEN=1000000
-fi
-
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
@@ -76,7 +72,9 @@ case "$OFFLOADING" in
         # node budget. Lower TP configs use higher ratios to maintain adequate
         # host token capacity without exceeding DRAM limits.
         if [ "$TP" -ge 8 ]; then
-            DEFAULT_HICACHE_RATIO=2
+            #DEFAULT_HICACHE_RATIO=2
+            # (srok) relaxed due to host DRAM cache pressure
+            DEFAULT_HICACHE_RATIO=4
         else
             DEFAULT_HICACHE_RATIO=16
         fi
@@ -135,8 +133,6 @@ export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 # tree modification
 export SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1
 
-# aiter preshuffle paged-MQA 
-export AITER_ENABLE_AOT_GLUON_PA_MQA_LOGITS=1
 
 # Parallelism: pure TP, TP+EP, or DEP (DP-attn + EP). Matches the dsv4 b200
 # vllm agentic launcher so the agentic sweep can probe both interactivity and
@@ -153,43 +149,40 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then
     PARALLEL_ARGS+=(--ep-size "$EP_SIZE")
 fi
 
-# --max-running-requests is per-engine. With DP-attn each DP engine handles
-# only CONC/$TP sequences in steady state (the agentic harness load-balances
-# users across DP ranks), so size the per-engine cap to that.
-# Pure TP is a single engine and sees all CONC sequences itself.
-if [ "$DP_ATTENTION" = "true" ]; then
-    PER_ENGINE_MAX_RUNNING=$(( CONC / TP ))
-    [ "$PER_ENGINE_MAX_RUNNING" -lt 1 ] && PER_ENGINE_MAX_RUNNING=1
-else
-    PER_ENGINE_MAX_RUNNING=$CONC
-fi
-
 set -x
 echo "Starting sglang server..."
 
+MAX_RUNNING_REQUESTS=$CONC
+CUDA_GRAPH_MAX_BS=$CONC
+CUDA_GRAPH_MAX_BS=$(( CUDA_GRAPH_MAX_BS > 64 ? 64 : CUDA_GRAPH_MAX_BS ))
+SWA_FULLlTOKENS_RATIO=0.10 
+MEM_FRACTION_STATIC=0.9
 #image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260610
 #    --page-size 256 \
 #image: lmsysorg/sglang-rocm:v0.5.13.post1-rocm700-mi35x-20260616 
 #    --page-size 1 \
+#       aiter preshuffle paged-MQA 
+#       export AITER_ENABLE_AOT_GLUON_PA_MQA_LOGITS=1
+PAGE_SIZE=256
+
 sglang serve \
     --model-path $MODEL \
     --host=0.0.0.0 \
     --port $PORT \
     "${PARALLEL_ARGS[@]}" \
     --trust-remote-code \
-    --attention-backend dsv4 \
+    --attention-backend compressed \
     --max-running-requests ${CONC} \
-    --mem-fraction-static 0.90 \
-    --swa-full-tokens-ratio 0.15 \
-    --page-size 1 \
-    --context-length $MAX_MODEL_LEN \
+    --cuda-graph-max-bs "$CUDA_GRAPH_MAX_BS"
+    --mem-fraction-static ${MEM_FRACTION_STATIC} \
+    --swa-full-tokens-ratio ${SWA_FULLlTOKENS_RATIO} \
+    --page-size $PAGE_SIZE \
     --chunked-prefill-size 8192 \
     --disable-shared-experts-fusion \
     --tool-call-parser deepseekv4 \
     --reasoning-parser deepseek-v4 \
     --chat-template "$(dirname "$0")/../chat_templates/deepseek_v4_thinking.jinja" \
     --watchdog-timeout 1800 \
-    --enable-metrics \
     "${CACHE_ARGS[@]}" \
     "${WARMUP_ARGS[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
