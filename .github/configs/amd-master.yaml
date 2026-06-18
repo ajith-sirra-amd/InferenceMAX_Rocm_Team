@@ -2205,7 +2205,7 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
   multinode: false
   scenarios:
     agentic-coding:
-    - duration: 1800
+    - duration: 180
       search-space:
         #DPA, conc>=64
       #- { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
