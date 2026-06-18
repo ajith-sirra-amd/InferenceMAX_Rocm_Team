@@ -3,11 +3,14 @@ if [[ $RUNNER_NAME == *gbt350* ]]; then
     HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/actions-runner"
 elif [[ $RUNNER_TYPE == "mi355x" ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/hf_cache/"
+elif [[ $RUNNER_TYPE == "mi355x_ajith" ]]; then
+    HF_HUB_CACHE_MOUNT="/it-share/hf_cache/" #"/mnt/dcgpuval/models/"
 elif [[ $RUNNER_TYPE == "mi355x-p02-g57" ]]; then
     HF_HUB_CACHE_MOUNT="/mnt/hf_hub_cache/"
 elif [[ $RUNNER_TYPE == "mi355x-do" ]]; then
     HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"
 fi
+
 
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
@@ -57,7 +60,7 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 --privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
--v ${GITHUB_WORKSPACE}/upstream/InferenceX:/workspace/ -w /workspace/ \
+-v $GITHUB_WORKSPACE:/workspace/ -w /workspace/upstream/InferenceX \
 -e HF_TOKEN \
 -e HF_HUB_CACHE \
 -e MODEL \
