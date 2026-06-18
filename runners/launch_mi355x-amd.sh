@@ -3,14 +3,11 @@ if [[ $RUNNER_NAME == *gbt350* ]]; then
     HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/actions-runner"
 elif [[ $RUNNER_TYPE == "mi355x" ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/hf_cache/"
-elif [[ $RUNNER_TYPE == "mi355x_ajith" ]]; then
-    HF_HUB_CACHE_MOUNT="/it-share/hf_cache/" #"/mnt/dcgpuval/models/"
 elif [[ $RUNNER_TYPE == "mi355x-p02-g57" ]]; then
     HF_HUB_CACHE_MOUNT="/mnt/hf_hub_cache/"
 elif [[ $RUNNER_TYPE == "mi355x-do" ]]; then
     HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"
 fi
-
 
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
@@ -44,12 +41,12 @@ fi
 
 if [[ "$OFFLOADING" == "cpu" ]] || [[ "$OFFLOADING" == "none" ]] || [[ "$OFFLOADING" == "lmcache" ]] || [[ "$OFFLOADING" == "hicache" ]]; then
     if [[ $FRAMEWORK == "atom" ]]; then
-        BENCHMARK_PATH=benchmarks/${BENCHMARK_SUBDIR}/agentic/${MODEL_CODE}_${PRECISION}_mi355x_atom${SPEC_SUFFIX}.sh
+        BENCHMARK_PATH=upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/agentic/${MODEL_CODE}_${PRECISION}_mi355x_atom${SPEC_SUFFIX}.sh
     else
-        BENCHMARK_PATH=benchmarks/${BENCHMARK_SUBDIR}/agentic/${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
+        BENCHMARK_PATH=upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/agentic/${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
     fi
 else
-    BENCHMARK_PATH=benchmarks/${BENCHMARK_SUBDIR}/${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
+    BENCHMARK_PATH=upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
 fi
 
 export PYTHONDONTWRITEBYTECODE=1
@@ -60,7 +57,7 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 --privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
--v $GITHUB_WORKSPACE:/workspace/ -w /workspace/upstream/InferenceX \
+-v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
 -e HF_TOKEN \
 -e HF_HUB_CACHE \
 -e MODEL \
