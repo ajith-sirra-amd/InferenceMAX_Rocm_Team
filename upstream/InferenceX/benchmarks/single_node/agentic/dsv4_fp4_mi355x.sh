@@ -44,10 +44,8 @@ rocm-smi || true
 amd-smi || true
 
 # ---- Resolve traces and install deps ----------------------------------------
-# https://huggingface.co/datasets/semianalysisai/cc-traces-weka-with-subagents-060826
- export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060826
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_061526
 
-# ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
 install_agentic_deps
 
@@ -173,7 +171,7 @@ sglang serve \
     --trust-remote-code \
     --attention-backend compressed \
     --max-running-requests ${CONC} \
-    --cuda-graph-max-bs "$CUDA_GRAPH_MAX_BS"
+    --cuda-graph-max-bs-decode "$CUDA_GRAPH_MAX_BS" \
     --mem-fraction-static ${MEM_FRACTION_STATIC} \
     --swa-full-tokens-ratio ${SWA_FULLlTOKENS_RATIO} \
     --page-size $PAGE_SIZE \
