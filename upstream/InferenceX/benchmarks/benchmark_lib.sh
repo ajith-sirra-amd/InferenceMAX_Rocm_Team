@@ -16,6 +16,17 @@ mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
 # nothing upstream set it.
 export PORT="${PORT:-8888}"
 
+# Agentic replays must use the model's native context limit. Ignore inherited
+# workflow or shell overrides so neither the server nor AIPerf applies a cap.
+_benchmark_caller="${BASH_SOURCE[1]:-}"
+if [[ "$_benchmark_caller" == */agentic/* ||
+      "$_benchmark_caller" == */agentic_*.sh ||
+      "${IS_AGENTIC:-0}" == "1" ||
+      "${SCENARIO_TYPE:-}" == "agentic-coding" ]]; then
+    unset MAX_MODEL_LEN
+fi
+unset _benchmark_caller
+
 # --------------------------------
 # GPU monitoring helpers
 # --------------------------------
@@ -899,6 +910,14 @@ run_eval() {
 INFMAX_CONTAINER_WORKSPACE="${INFMAX_CONTAINER_WORKSPACE:-/workspace}"
 AGENTIC_DIR="${AGENTIC_DIR:-${INFMAX_CONTAINER_WORKSPACE}/utils/agentic-benchmark}"
 AIPERF_DIR="${AIPERF_DIR:-${INFMAX_CONTAINER_WORKSPACE}/utils/aiperf}"
+AIPERF_RUNTIME_DIR="${AIPERF_RUNTIME_DIR:-${TMPDIR:-/tmp}/inferencex-agentic-${SLURM_JOB_ID:-$$}}"
+AIPERF_VENV="${AIPERF_VENV:-${AIPERF_RUNTIME_DIR}/venv}"
+AIPERF_UV_INSTALL_DIR="${AIPERF_UV_INSTALL_DIR:-${AIPERF_RUNTIME_DIR}/uv/bin}"
+AIPERF_UV_CACHE_DIR="${AIPERF_UV_CACHE_DIR:-${AIPERF_RUNTIME_DIR}/uv-cache}"
+AIPERF_PYTHON="${AIPERF_VENV}/bin/python"
+AIPERF_CLI="${AIPERF_VENV}/bin/aiperf"
+AIPERF_HF_CLI="${AIPERF_VENV}/bin/hf"
+AIPERF_DEPS_READY=0
 AIPERF_FAILED_REQUEST_THRESHOLD=0.10
 
 agentic_pip_install() {
@@ -910,14 +929,62 @@ agentic_pip_install() {
     "${pip_install[@]}" "$@"
 }
 
-ensure_hf_cli() {
-    if command -v hf >/dev/null 2>&1; then
-        return 0
+ensure_agentic_uv() {
+    if command -v uv >/dev/null 2>&1; then
+        AIPERF_UV_BIN="$(command -v uv)"
+        return
     fi
 
-    # Some lean runtime images used by multinode SGLang include Python but not
-    # the Hugging Face CLI. Install just the hub CLI before prefetching traces.
-    agentic_pip_install --quiet "huggingface_hub[cli]>=0.25.0"
+    AIPERF_UV_BIN="${AIPERF_UV_INSTALL_DIR}/uv"
+    if [ ! -x "$AIPERF_UV_BIN" ]; then
+        mkdir -p "$AIPERF_UV_INSTALL_DIR"
+        curl -LsSf https://astral.sh/uv/install.sh |
+            UV_INSTALL_DIR="$AIPERF_UV_INSTALL_DIR" sh
+    fi
+
+    if [ ! -x "$AIPERF_UV_BIN" ]; then
+        echo "ERROR: uv installation did not create $AIPERF_UV_BIN" >&2
+        return 1
+    fi
+}
+
+install_agentic_deps() {
+    if [ "$AIPERF_DEPS_READY" = "1" ]; then
+        return
+    fi
+
+    # AIPerf must not share site-packages with the inference server. Installing
+    # it into vLLM/SGLang's system Python can upgrade FastAPI, Starlette,
+    # transformers, or other packages while the server imports from that same
+    # environment.
+    if ! command -v git >/dev/null 2>&1; then
+        apt-get update && apt-get install -y git
+    fi
+
+    ensure_agentic_uv
+    rm -rf "$AIPERF_VENV"
+    mkdir -p "$AIPERF_UV_CACHE_DIR"
+
+    UV_CACHE_DIR="$AIPERF_UV_CACHE_DIR" \
+        "$AIPERF_UV_BIN" venv --python "$(command -v python3)" "$AIPERF_VENV"
+    UV_CACHE_DIR="$AIPERF_UV_CACHE_DIR" \
+        "$AIPERF_UV_BIN" pip install --python "$AIPERF_PYTHON" \
+        -r "$AGENTIC_DIR/requirements.txt" \
+        -e "$AIPERF_DIR" \
+        "datasets>=4.7.0" \
+        "huggingface_hub[cli]>=0.25.0" \
+        urllib3 \
+        requests
+
+    if [ ! -x "$AIPERF_CLI" ] || [ ! -x "$AIPERF_HF_CLI" ]; then
+        echo "ERROR: isolated AIPerf environment is incomplete at $AIPERF_VENV" >&2
+        return 1
+    fi
+    AIPERF_DEPS_READY=1
+}
+
+ensure_hf_cli() {
+    install_agentic_deps
 }
 
 resolve_trace_source() {
@@ -928,25 +995,25 @@ resolve_trace_source() {
     # unfiltered corpus and switches to the 256k-capped variant), or
     # by recipes that want to pin an older corpus generation.
     #
-    # Default (no override): the 060826 v6 corpus, selected by model family.
+    # Default (no override): the 061526 v7 corpus, selected by model family.
     # DSv4 (full context) rides the unfiltered base corpus; every non-DSv4
     # recipe defaults to the 256k-capped variant because those servers run at
     # max_model_len ~256k and would reject >256k requests. Any recipe can still
     # pin a specific corpus via WEKA_LOADER_OVERRIDE.
     local default_loader
     if [[ "${MODEL_PREFIX:-}" == dsv4* ]]; then
-        default_loader="semianalysis_cc_traces_weka_with_subagents_060826"
+        default_loader="semianalysis_cc_traces_weka_061526"
     else
-        default_loader="semianalysis_cc_traces_weka_with_subagents_060826_256k"
+        default_loader="semianalysis_cc_traces_weka_061526_256k"
     fi
     local loader="${WEKA_LOADER_OVERRIDE:-$default_loader}"
     local dataset
     case "$loader" in
         semianalysis_cc_traces_weka_with_subagents)
-            dataset="semianalysisai/cc-traces-weka-with-subagents-052726"
+            dataset="semianalysisai/cc-traces-weka-061526"
             ;;
         semianalysis_cc_traces_weka_with_subagents_256k)
-            dataset="semianalysisai/cc-traces-weka-with-subagents-052726-256k"
+            dataset="semianalysisai/cc-traces-weka-061526-256k"
             ;;
         semianalysis_cc_traces_weka_with_subagents_060226)
             dataset="semianalysisai/cc-traces-weka-with-subagents-060226"
@@ -966,8 +1033,20 @@ resolve_trace_source() {
         semianalysis_cc_traces_weka_with_subagents_060826_256k)
             dataset="semianalysisai/cc-traces-weka-with-subagents-060826-256k"
             ;;
+        semianalysis_cc_traces_weka_061326)
+            dataset="semianalysisai/cc-traces-weka-061326"
+            ;;
+        semianalysis_cc_traces_weka_061326_256k)
+            dataset="semianalysisai/cc-traces-weka-061326-256k"
+            ;;
+        semianalysis_cc_traces_weka_061526)
+            dataset="semianalysisai/cc-traces-weka-061526"
+            ;;
+        semianalysis_cc_traces_weka_061526_256k)
+            dataset="semianalysisai/cc-traces-weka-061526-256k"
+            ;;
         *)
-            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k, semianalysis_cc_traces_weka_with_subagents_060526, semianalysis_cc_traces_weka_with_subagents_060526_256k, semianalysis_cc_traces_weka_with_subagents_060826, semianalysis_cc_traces_weka_with_subagents_060826_256k" >&2
+            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k, semianalysis_cc_traces_weka_with_subagents_060526, semianalysis_cc_traces_weka_with_subagents_060526_256k, semianalysis_cc_traces_weka_with_subagents_060826, semianalysis_cc_traces_weka_with_subagents_060826_256k, semianalysis_cc_traces_weka_061326, semianalysis_cc_traces_weka_061326_256k, semianalysis_cc_traces_weka_061526, semianalysis_cc_traces_weka_061526_256k" >&2
             exit 1
             ;;
     esac
@@ -977,33 +1056,7 @@ resolve_trace_source() {
     # for model weights) so subsequent runs read from cache instead of
     # re-downloading every job.
     ensure_hf_cli
-    hf download --repo-type dataset "$dataset"
-}
-
-install_agentic_deps() {
-    # vllm/vllm-openai container ships without git. pip needs git to
-    # introspect the aiperf source tree on install. Install on demand;
-    # no-op when git is already present (e.g. AMD images that ship it).
-    if ! command -v git >/dev/null 2>&1; then
-        apt-get update && apt-get install -y git
-    fi
-    agentic_pip_install --quiet urllib3 requests 2>/dev/null || true
-    agentic_pip_install -q -r "$AGENTIC_DIR/requirements.txt"
-    # Editable install of aiperf from the submodule — gives us the
-    # `aiperf` CLI plus the inferencex-agentx-mvp scenario plugin.
-    #
-    # `--ignore-installed` sidesteps the distutils-uninstall error that
-    # vLLM containers hit on apt-managed system packages (blinker, etc.)
-    # when pip's resolver tries to upgrade one of aiperf's transitive
-    # deps. Installing fresh into the user/site location is safe — the
-    # system package stays in place and pip's import order picks up our
-    # newer copy first.
-    agentic_pip_install -q --ignore-installed -e "$AIPERF_DIR"
-    # Force-upgrade datasets: containers often ship an older version without
-    # the `Json` feature type used by the HF traces dataset. `Json` was added
-    # in datasets 4.7.0 (March 2025). Unpinned installs won't upgrade an
-    # already-present package.
-    agentic_pip_install --upgrade "datasets>=4.7.0"
+    "$AIPERF_HF_CLI" download --repo-type dataset "$dataset"
 }
 
 build_replay_cmd() {
@@ -1036,7 +1089,7 @@ build_replay_cmd() {
     # aiperf validates that SERVICE_PROFILE_CONFIGURE_TIMEOUT >=
     # DATASET_CONFIGURATION_TIMEOUT at startup. Bump it in lockstep.
     export AIPERF_SERVICE_PROFILE_CONFIGURE_TIMEOUT=1800
-    REPLAY_CMD="aiperf profile --scenario inferencex-agentx-mvp"
+    REPLAY_CMD="$AIPERF_CLI profile --scenario inferencex-agentx-mvp"
     REPLAY_CMD+=" --url http://localhost:$PORT"
     REPLAY_CMD+=" --endpoint /v1/chat/completions"
     REPLAY_CMD+=" --endpoint-type chat"
@@ -1115,12 +1168,12 @@ write_agentic_result_json() {
     # aggregates whose request error rate exceeds the configured limit.
     local result_dir="$1"
     RESULT_DIR="$result_dir" AGENTIC_OUTPUT_DIR="${AGENTIC_OUTPUT_DIR:-$INFMAX_CONTAINER_WORKSPACE}" \
-        python3 "$INFMAX_CONTAINER_WORKSPACE/utils/process_agentic_result.py"
+        "$AIPERF_PYTHON" "$INFMAX_CONTAINER_WORKSPACE/utils/process_agentic_result.py"
 
     # Generate metrics_plots.png from the same aiperf artifacts. Best-effort:
     # don't fail the launcher if plot generation has trouble (e.g. matplotlib
     # missing in a stripped-down image). The agg JSON is the success gate.
-    python3 "$INFMAX_CONTAINER_WORKSPACE/utils/generate_aiperf_plots.py" "$result_dir" 2>&1 || true
+    "$AIPERF_PYTHON" "$INFMAX_CONTAINER_WORKSPACE/utils/generate_aiperf_plots.py" "$result_dir" 2>&1 || true
 }
 
 run_agentic_replay_and_write_outputs() {
@@ -1139,11 +1192,11 @@ run_agentic_replay_and_write_outputs() {
 
     write_agentic_result_json "$result_dir"
 
-    python3 "$AGENTIC_DIR/scripts/analyze_benchmark_distributions.py" \
+    "$AIPERF_PYTHON" "$AGENTIC_DIR/scripts/analyze_benchmark_distributions.py" \
         "$result_dir/aiperf_artifacts" -o "$result_dir" 2>&1 || true
 
     set +e
-    python3 "$INFMAX_CONTAINER_WORKSPACE/utils/validate_agentic_result.py" \
+    "$AIPERF_PYTHON" "$INFMAX_CONTAINER_WORKSPACE/utils/validate_agentic_result.py" \
         "$result_dir/aiperf_artifacts" \
         --failed-request-threshold "$AIPERF_FAILED_REQUEST_THRESHOLD"
     validation_rc=$?
