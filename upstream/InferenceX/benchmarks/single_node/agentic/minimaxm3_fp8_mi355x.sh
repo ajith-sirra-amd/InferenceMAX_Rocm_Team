@@ -174,7 +174,7 @@ case "$OFFLOADING" in
         LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
         # chunk-size must be a multiple of vLLM --block-size (128 here).
         # 256 = 2 × 128; 32 was not a multiple and caused a RuntimeError.
-        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
+        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-128}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
         export LMCACHE_BLOCKING_TIMEOUT_SECS=120
