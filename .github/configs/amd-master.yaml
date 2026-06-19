@@ -2211,3 +2211,19 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
       #- { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
       - { tp: 8, dp-attn: false, offloading: none, conc-list: [8]  }
       - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [8]  }
+
+
+minimaxm3-fp8-mi355x-vllm-agentic-lmcache:
+  image: vllm/vllm-openai-rocm:minimax-m3
+  model: MiniMaxAI/MiniMax-M3-MXFP8
+  model-prefix: minimaxm3
+  runner: mi355x-do
+  precision: fp8
+  framework: vllm
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - duration: 1800
+      search-space:
+      - { tp: 8, ep: 1, offloading: none, conc-list: [8] }
+      - { tp: 8, ep: 1, offloading: lmcache,  conc-list: [8] }
