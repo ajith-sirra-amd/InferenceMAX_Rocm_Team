@@ -2194,8 +2194,7 @@ dsv4-fp4-mi355x-vllm-agentic:
 #      - { tp: 8, ep: 1, conc-start: 4, conc-end: 64, spec-decoding: mtp }
  
 dsv4-fp4-mi355x-sglang-agentic-hicache:
-  image: lmsysorg/sglang-rocm:v0.5.13-rocm720-mi35x-20260612
-  #image: lmsysorg/sglang-rocm:v0.5.13.post1-rocm700-mi35x-20260616 
+  image: lmsysorg/sglang-rocm:v0.5.13.post1-rocm720-mi35x-20260618
   model: deepseek-ai/DeepSeek-V4-Pro
   model-prefix: dsv4
   runner: mi355x-do
