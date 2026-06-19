@@ -2226,4 +2226,4 @@ minimaxm3-fp8-mi355x-vllm-agentic-lmcache:
     - duration: 1800
       search-space:
       - { tp: 8, ep: 1, offloading: none, conc-list: [16] }
-      - { tp: 8, ep: 1, offloading: lmcache,  conc-list: [16] }
+      # - { tp: 8, ep: 1, offloading: lmcache,  conc-list: [16] }
