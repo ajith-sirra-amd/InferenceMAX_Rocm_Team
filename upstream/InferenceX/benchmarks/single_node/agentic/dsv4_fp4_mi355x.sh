@@ -181,6 +181,7 @@ sglang serve \
     --reasoning-parser deepseek-v4 \
     --chat-template "$(dirname "$0")/../chat_templates/deepseek_v4_thinking.jinja" \
     --watchdog-timeout 1800 \
+    --enable-metrics \
     "${CACHE_ARGS[@]}" \
     "${WARMUP_ARGS[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
