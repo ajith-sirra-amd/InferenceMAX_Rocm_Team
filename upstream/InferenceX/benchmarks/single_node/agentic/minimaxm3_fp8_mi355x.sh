@@ -172,9 +172,9 @@ case "$OFFLOADING" in
         # object present in L1 but no longer readable. Keep the 2.5 TB pool
         # size unchanged and only extend the lookup-to-retrieve lease.
         LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
-        # (srok) check 256 vs 32
-        #LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
-        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-32}"
+        # chunk-size must be a multiple of vLLM --block-size (128 here).
+        # 256 = 2 × 128; 32 was not a multiple and caused a RuntimeError.
+        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
         export LMCACHE_BLOCKING_TIMEOUT_SECS=120
