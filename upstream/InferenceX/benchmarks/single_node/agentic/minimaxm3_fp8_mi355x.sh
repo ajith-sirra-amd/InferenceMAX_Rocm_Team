@@ -16,7 +16,7 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR EP_SIZE DP_ATTENTION
 
-PORT=${PORT:-8888}
+PORT=${PORT:-8765}
 DURATION=${DURATION:-1800}
 EP_SIZE=${EP_SIZE:-1}
 
