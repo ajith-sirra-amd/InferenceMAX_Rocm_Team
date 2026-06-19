@@ -2209,4 +2209,4 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
         #DPA, conc>=64
       #- { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
       #- { tp: 8, dp-attn: false, offloading: hicache, conc-list: [16]  }
-      - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [32]  }
+      - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [24]  }
