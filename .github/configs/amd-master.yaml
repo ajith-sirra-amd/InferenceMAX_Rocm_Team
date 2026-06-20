@@ -2209,15 +2209,16 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
       search-space:
         #DPA, conc>=64
       #- { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
-      - { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
-      - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [16]  }
-
+      - { tp: 8, dp-attn: false, offloading: none, conc-list: [1,8,16,24,32,48,64]  }
+      - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [1,8,16,24,32,48,64]  }
+      - { tp: 4, dp-attn: false, offloading: none, conc-list: [1,8,16,24,32,48,64]  }
+      - { tp: 4, dp-attn: false, offloading: hicache, conc-list: [1,8,16,24,32,48,64]  }
 
 minimaxm3-fp8-mi355x-vllm-agentic-lmcache:
   image: vllm/vllm-openai-rocm:minimax-m3
   model: MiniMaxAI/MiniMax-M3-MXFP8
   model-prefix: minimaxm3
-  runner: mi355x-do
+  runner: mi355x
   precision: fp8
   framework: vllm
   multinode: false
@@ -2225,5 +2226,6 @@ minimaxm3-fp8-mi355x-vllm-agentic-lmcache:
     agentic-coding:
     - duration: 1800
       search-space:
-      # - { tp: 8, ep: 1, offloading: none, conc-list: [16] }
-      - { tp: 8, ep: 1, offloading: lmcache,  conc-list: [16] }
+      - { tp: 8, ep: 1, offloading: none, conc-list: [1,8,16,24,32,48,64] }
+      - { tp: 4, ep: 1, offloading: none, conc-list: [1,8,16,24,32,48,64] }
+      # - { tp: 8, ep: 1, offloading: lmcache,  conc-list: [16] }
