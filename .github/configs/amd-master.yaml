@@ -2211,8 +2211,8 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
       #- { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
       - { tp: 8, dp-attn: false, offloading: none, conc-list: [1,8,16,24,32,48,64]  }
       - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [1,8,16,24,32,48,64]  }
-      - { tp: 4, dp-attn: false, offloading: none, conc-list: [1,8,16,24,32,48,64]  }
-      - { tp: 4, dp-attn: false, offloading: hicache, conc-list: [1,8,16,24,32,48,64]  }
+      # - { tp: 4, dp-attn: false, offloading: none, conc-list: [1,8,16,24,32,48,64]  }
+      # - { tp: 4, dp-attn: false, offloading: hicache, conc-list: [1,8,16,24,32,48,64]  }
 
 minimaxm3-fp8-mi355x-vllm-agentic-lmcache:
   image: vllm/vllm-openai-rocm:minimax-m3
