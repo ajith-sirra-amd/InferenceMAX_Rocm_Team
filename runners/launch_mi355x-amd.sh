@@ -28,6 +28,7 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 
+
 set -x
 docker pull $IMAGE
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
