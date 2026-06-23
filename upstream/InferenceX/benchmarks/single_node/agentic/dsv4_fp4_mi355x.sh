@@ -196,7 +196,7 @@ sglang serve \
     "${PARALLEL_ARGS[@]}" \
     --trust-remote-code \
     --cuda-graph-max-bs-decode "$CUDA_GRAPH_MAX_BS" \
-    --attention-backend dsv4 \
+    --attention-backend compressed \
     --max-running-requests ${PER_ENGINE_MAX_RUNNING} \
     --mem-fraction-static ${MEM_FRACTION_STATIC} \
     --chunked-prefill-size "$CHUNKED_PREFILL_SIZE" \
