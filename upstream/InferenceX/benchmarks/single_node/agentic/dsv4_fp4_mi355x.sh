@@ -156,7 +156,6 @@ PARALLEL_ARGS=(--tensor-parallel-size "$TP")
 METRICS_ARGS=(--enable-metrics)
 MEM_FRACTION_STATIC=0.9
 CHUNKED_PREFILL_SIZE=8192
-MAX_MODEL_LEN=1000000
 MAX_RUNNING_REQUESTS=$CONC
 CUDA_GRAPH_MAX_BS=$CONC
 CUDA_GRAPH_MAX_BS=$(( CUDA_GRAPH_MAX_BS > 64 ? 64 : CUDA_GRAPH_MAX_BS ))
@@ -169,7 +168,7 @@ if [ "$DP_ATTENTION" = "true" ]; then
         --dist-init-addr "127.0.0.1:$((PORT + 2000))"
         --enable-prefill-delayer
     )
-    MEM_FRACTION_STATIC=0.9
+    MEM_FRACTION_STATIC=0.85
     CHUNKED_PREFILL_SIZE=32768
 fi
 
