@@ -202,7 +202,6 @@ sglang serve \
     --chunked-prefill-size "$CHUNKED_PREFILL_SIZE" \
     --swa-full-tokens-ratio $SWA_FULL_TOKENS_RATIO \
     --page-size $PAGE_SIZE \
-    --context-length $MAX_MODEL_LEN \
     --disable-shared-experts-fusion \
     --tool-call-parser deepseekv4 \
     --reasoning-parser deepseek-v4 \
