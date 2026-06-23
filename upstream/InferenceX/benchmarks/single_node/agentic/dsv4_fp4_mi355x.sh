@@ -72,7 +72,7 @@ case "$OFFLOADING" in
         if [ "$TP" -ge 8 ]; then
             #DEFAULT_HICACHE_RATIO=2
             # (srok) relaxed due to host DRAM cache pressure
-            DEFAULT_HICACHE_RATIO=8
+            DEFAULT_HICACHE_RATIO=2
         else
             DEFAULT_HICACHE_RATIO=16
         fi
@@ -139,7 +139,7 @@ export SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1
 #    --page-size 1 \
 #       aiter preshuffle paged-MQA 
 #       export AITER_ENABLE_AOT_GLUON_PA_MQA_LOGITS=1
-PAGE_SIZE=256
+PAGE_SIZE=64
 
 #===========================================================================================
 
