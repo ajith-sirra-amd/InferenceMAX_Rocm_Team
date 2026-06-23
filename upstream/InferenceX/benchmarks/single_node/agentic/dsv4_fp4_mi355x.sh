@@ -169,7 +169,7 @@ if [ "$DP_ATTENTION" = "true" ]; then
         --enable-prefill-delayer
     )
     MEM_FRACTION_STATIC=0.85
-    CHUNKED_PREFILL_SIZE=32768
+    CHUNKED_PREFILL_SIZE=16384
 fi
 
 if [ "${EP_SIZE:-1}" -gt 1 ]; then
