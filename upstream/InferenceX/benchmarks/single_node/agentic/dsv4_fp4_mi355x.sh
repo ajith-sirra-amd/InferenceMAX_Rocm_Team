@@ -72,7 +72,7 @@ case "$OFFLOADING" in
         if [ "$TP" -ge 8 ]; then
             #DEFAULT_HICACHE_RATIO=2
             # (srok) relaxed due to host DRAM cache pressure
-            DEFAULT_HICACHE_RATIO=4
+            DEFAULT_HICACHE_RATIO=8
         else
             DEFAULT_HICACHE_RATIO=16
         fi
@@ -87,6 +87,7 @@ case "$OFFLOADING" in
             --hicache-write-policy "$HICACHE_WRITE_POLICY"
             --hicache-io-backend "$HICACHE_IO_BACKEND"
             --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
+            --hicache-storage-prefetch-policy best_effort
         )
         echo "HiCache DSv4 CPU tier: ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
         ;;
@@ -154,14 +155,14 @@ MAX_RUNNING_REQUESTS=$CONC
 CUDA_GRAPH_MAX_BS=$CONC
 CUDA_GRAPH_MAX_BS=$(( CUDA_GRAPH_MAX_BS > 64 ? 64 : CUDA_GRAPH_MAX_BS ))
 SWA_FULLlTOKENS_RATIO=0.10 
-MEM_FRACTION_STATIC=0.95
+MEM_FRACTION_STATIC=0.9
 #image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260610
 #    --page-size 256 \
 #image: lmsysorg/sglang-rocm:v0.5.13.post1-rocm700-mi35x-20260616 
 #    --page-size 1 \
 #       aiter preshuffle paged-MQA 
 #       export AITER_ENABLE_AOT_GLUON_PA_MQA_LOGITS=1
-PAGE_SIZE=256
+PAGE_SIZE=64
 
 sglang serve \
     --model-path $MODEL \
