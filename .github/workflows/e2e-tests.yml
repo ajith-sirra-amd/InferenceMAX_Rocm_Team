@@ -31,6 +31,7 @@ on:
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm3-fp8-mi355x-vllm-agentic-lmcache"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi350x-do-sglang-agentic-hicache"
                 - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm3-fp8-mi350x-do-vllm-agentic-lmcache"
+                - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang"
             ref:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
