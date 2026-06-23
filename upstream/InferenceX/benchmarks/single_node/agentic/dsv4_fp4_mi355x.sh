@@ -139,7 +139,7 @@ export SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1
 #    --page-size 1 \
 #       aiter preshuffle paged-MQA 
 #       export AITER_ENABLE_AOT_GLUON_PA_MQA_LOGITS=1
-PAGE_SIZE=64
+PAGE_SIZE=256
 
 #===========================================================================================
 
