@@ -44,7 +44,7 @@ rocm-smi || true
 amd-smi || true
 
 # ---- Resolve traces and install deps ----------------------------------------
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_061526
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060826
 
 resolve_trace_source
 install_agentic_deps
@@ -72,7 +72,7 @@ case "$OFFLOADING" in
         if [ "$TP" -ge 8 ]; then
             #DEFAULT_HICACHE_RATIO=2
             # (srok) relaxed due to host DRAM cache pressure
-            DEFAULT_HICACHE_RATIO=2
+            DEFAULT_HICACHE_RATIO=4
         else
             DEFAULT_HICACHE_RATIO=16
         fi
@@ -169,8 +169,8 @@ if [ "$DP_ATTENTION" = "true" ]; then
         --dist-init-addr "127.0.0.1:$((PORT + 2000))"
         --enable-prefill-delayer
     )
-    MEM_FRACTION_STATIC=0.88
-    CHUNKED_PREFILL_SIZE=16384
+    MEM_FRACTION_STATIC=0.9
+    CHUNKED_PREFILL_SIZE=32768
 fi
 
 if [ "${EP_SIZE:-1}" -gt 1 ]; then
