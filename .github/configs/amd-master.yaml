@@ -2026,7 +2026,8 @@ dsv4-fp4-mi355x-sglang:
    - isl: 134530
      osl: 673
      search-space:
-     - { tp: 8, dp-attn: false, conc-start: 16 , conc-end: 16 }
+     - { tp: 8, dp-attn: false, conc-start: 8 , conc-end: 8 }
+     - { tp: 8, dp-attn: false, conc-start: 32 , conc-end: 32 }
   #  - isl: 8192
   #    osl: 1024
   #    search-space:
