@@ -78,6 +78,7 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 -e PORT \
 -e RESULT_DIR \
 -e PYTHONDONTWRITEBYTECODE \
+-e IMAGE \
 --entrypoint=/bin/bash \
 $IMAGE \
 $BENCHMARK_PATH
