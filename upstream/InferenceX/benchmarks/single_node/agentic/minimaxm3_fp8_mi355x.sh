@@ -241,7 +241,7 @@ VLLM_CMD=(
     --port "$PORT"
     "${PARALLEL_ARGS[@]}"
     --block-size 128
-    --gpu-memory-utilization 0.95
+    --gpu-memory-utilization 0.85
     --kv-cache-dtype fp8
     --trust-remote-code
     --language-model-only
