@@ -58,6 +58,7 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
+-e IMAGE \
 -e HF_TOKEN \
 -e HF_HUB_CACHE \
 -e MODEL \
