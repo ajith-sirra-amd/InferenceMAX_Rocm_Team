@@ -14,12 +14,12 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR EP_SIZE DP_ATTENTION
-
 #PORT=${PORT:-8765}
 PORT=8765
 DURATION=${DURATION:-1800}
 EP_SIZE=${EP_SIZE:-1}
+
+check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR EP_SIZE DP_ATTENTION
 
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
@@ -47,11 +47,6 @@ else
 fi
 
 # ---- Resolve traces and install deps ----------------------------------------
-# MiniMax-M2.5 servers run at max_model_len ~256k; the unfiltered 052726
-# corpus has requests up to ~1M proxy tokens that would be rejected.
-# Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
-#export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
-#060226
 export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_061526
 
 resolve_trace_source
@@ -146,9 +141,6 @@ case "$OFFLOADING" in
 
         git clone https://github.com/LMCache/LMCache.git
         cd LMCache
-        # Apply PR #3779: per-engine-group KV format detection for MiniMax-M3.
-        # Fixes IndexError in get_num_heads() when heterogeneous KV tensor ranks
-        # (rank-5 K+V main cache + rank-3 MLA index cache) are present.
         pip install -r requirements/build.txt
         CXX=hipcc BUILD_WITH_HIP=1 pip install -e .   --no-build-isolation
         cd ..
