@@ -166,7 +166,7 @@ case "$OFFLOADING" in
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8080}"
         # LMCacheMPConnector concatenates lmcache.mp.host and port into the
         # ZMQ endpoint. Bind the server to a raw host, but pass the connector a
-        # ZMQ-style host string.
+        # ZMQ-style host string. 
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
         LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB))}"
         LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
