@@ -145,7 +145,7 @@ case "$OFFLOADING" in
         CXX=hipcc BUILD_WITH_HIP=1 pip install -e .   --no-build-isolation
         cd ..
 
-        python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
+        # python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
         # Let the external MP server own the full CPU KV pool so vLLM does not
         # split --kv-offloading-size across TP ranks through the integrated
