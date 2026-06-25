@@ -2214,6 +2214,20 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
       # - { tp: 4, dp-attn: false, offloading: none, conc-list: [1,8,16,24,32,48,64]  }
       # - { tp: 4, dp-attn: false, offloading: hicache, conc-list: [1,8,16,24,32,48,64]  }
 
+dsv4-fp4-mi355x-vllm-agentic-lmcache:
+  image: vllm/vllm-openai-rocm:v0.22.0
+  model: deepseek-ai/DeepSeek-V4-Pro
+  model-prefix: dsv4
+  runner: mi355x
+  precision: fp4
+  framework: vllm
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - duration: 1800
+      search-space:
+      - { tp: 8, ep: 1, dp-attn: false, offloading: lmcache, conc-list: [16]  }
+
 minimaxm3-fp8-mi355x-vllm-agentic-lmcache:
   image: vllm/vllm-openai-rocm:minimax-m3
   model: MiniMaxAI/MiniMax-M3-MXFP8
