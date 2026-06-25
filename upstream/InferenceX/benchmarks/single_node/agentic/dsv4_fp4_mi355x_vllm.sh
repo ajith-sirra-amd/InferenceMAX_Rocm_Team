@@ -167,9 +167,10 @@ case "$OFFLOADING" in
         # object present in L1 but no longer readable. Keep the 2.5 TB pool
         # size unchanged and only extend the lookup-to-retrieve lease.
         LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
-        # chunk-size must be a multiple of vLLM --block-size (128 here).
-        # 256 = 2 × 128; 32 was not a multiple and caused a RuntimeError.
-        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-128}"
+        # chunk-size must be a multiple of vLLM's block size.
+        # vLLM defaults to block-size 256 on MI355X; 128 is not a multiple
+        # of 256 and caused an AssertionError. Use 256 to match the default.
+        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
         export LMCACHE_BLOCKING_TIMEOUT_SECS=120
@@ -232,7 +233,7 @@ VLLM_CMD=(
     "${PARALLEL_ARGS[@]}"
     --async-scheduling
     --distributed-executor-backend mp
-    --block-size 128
+    --block-size 256
     --gpu-memory-utilization 0.8
     --kv-cache-dtype fp8
     --trust-remote-code
