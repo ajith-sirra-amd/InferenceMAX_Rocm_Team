@@ -222,8 +222,8 @@ echo "Starting vllm server..."
 export PYTHONNOUSERSITE=1
 
 export VLLM_ENGINE_READY_TIMEOUT_S=3600
-export VLLM_USE_BREAKABLE_CUDAGRAPH=0
-# export VLLM_ROCM_USE_AITER=1
+# export VLLM_USE_BREAKABLE_CUDAGRAPH=0
+export VLLM_ROCM_USE_AITER=1
 
 VLLM_CMD=(
     vllm serve "$MODEL"
