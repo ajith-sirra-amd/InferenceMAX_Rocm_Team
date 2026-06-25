@@ -232,7 +232,7 @@ VLLM_CMD=(
     "${PARALLEL_ARGS[@]}"
     --async-scheduling
     --distributed-executor-backend mp
-    --block-size 128
+    # --block-size 128
     --gpu-memory-utilization 0.8
     --kv-cache-dtype fp8
     --trust-remote-code
