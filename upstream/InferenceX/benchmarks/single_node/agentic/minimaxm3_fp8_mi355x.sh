@@ -52,7 +52,7 @@ fi
 # Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
 #export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
 #060226
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_062126_256k
 
 resolve_trace_source
 install_agentic_deps
