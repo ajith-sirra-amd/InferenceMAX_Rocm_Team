@@ -2298,3 +2298,18 @@ minimaxm3-fp8-mi350x-do-vllm-agentic-lmcache:
       - { tp: 8, ep: 1, offloading: none, conc-list: [1,32] }
       - { tp: 4, ep: 1, offloading: none, conc-list: [1,32] }
       # - { tp: 8, ep: 1, offloading: lmcache,  conc-list: [16] }
+
+kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
+  image: vllm/vllm-openai-rocm:v0.21.0
+  model: amd/Kimi-K2.7-Code-MXFP4
+  model-prefix: kimik2.7
+  runner: mi355x
+  precision: fp4
+  framework: vllm
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - duration: 1800
+      search-space:
+      - { tp: 8, ep: 1, offloading: none, conc-list: [16] }
+      - { tp: 8, ep: 1, offloading: lmcache, conc-list: [16] }
