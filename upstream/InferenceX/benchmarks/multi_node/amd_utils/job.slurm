@@ -25,6 +25,8 @@ echo ""
 # at runtime, but the CWD remains the submit-time directory (amd_utils/).
 if [[ "$ENGINE" == "vllm-disagg" ]]; then
     MODELS_YAML="$(pwd)/models_vllm.yaml"
+elif [[ "$ENGINE" == "atom-disagg" ]]; then
+    MODELS_YAML="$(pwd)/models_atom.yaml"
 else
     MODELS_YAML="$(pwd)/models.yaml"
 fi
@@ -201,11 +203,41 @@ else
         fi
     }
 
-    if check_model_path "$MODEL_DIR/$MODEL_NAME" "$MODEL_DIR"; then
+    # Extract hf_dir from models.yaml (same as vllm-disagg path above)
+    SGL_DISK_DIR_NAME=$(awk '/^'"$MODEL_NAME"':/{found=1; next}
+        found && /^[^ ]/{exit}
+        found && /hf_dir:/{gsub(/[" ]/, "", $2); print $2; exit}' "$MODELS_YAML")
+    SGL_DISK_DIR_NAME="${SGL_DISK_DIR_NAME:-$MODEL_NAME}"
+
+    # Prefer the caller-supplied MODEL_PATH (recipe scripts set this explicitly);
+    # fall back to MODEL_DIR/hf_dir then MODEL_DIR/MODEL_NAME.
+    if [[ -n "${MODEL_PATH:-}" && "$MODEL_PATH" != "$MODEL_DIR" ]]; then
+        # Caller already resolved the path (e.g. MODEL_PATH=/it-share/hf_cache/models--...)
+        # Use it directly if it exists on all nodes, otherwise try subdirectory combos.
+        if check_model_path "$MODEL_PATH" "MODEL_PATH (caller-supplied)"; then
+            echo "Selected MODEL_PATH: $MODEL_PATH (caller-supplied, available on all nodes)"
+        elif check_model_path "$MODEL_PATH/$SGL_DISK_DIR_NAME" "$MODEL_PATH/$SGL_DISK_DIR_NAME"; then
+            MODEL_PATH="$MODEL_PATH/$SGL_DISK_DIR_NAME"
+            echo "Selected MODEL_PATH: $MODEL_PATH (available on all nodes)"
+        elif check_model_path "$MODEL_PATH/$MODEL_NAME" "$MODEL_PATH/$MODEL_NAME"; then
+            MODEL_PATH="$MODEL_PATH/$MODEL_NAME"
+            echo "Selected MODEL_PATH: $MODEL_PATH (available on all nodes)"
+        else
+            echo "FATAL ERROR: Model '$MODEL_NAME' not found on ALL allocated nodes in:"
+            echo "  - $MODEL_PATH"
+            echo "  - $MODEL_PATH/$SGL_DISK_DIR_NAME"
+            echo "  - $MODEL_PATH/$MODEL_NAME"
+            exit 1
+        fi
+    elif check_model_path "$MODEL_DIR/$SGL_DISK_DIR_NAME" "$MODEL_DIR/$SGL_DISK_DIR_NAME"; then
+        MODEL_PATH="$MODEL_DIR/$SGL_DISK_DIR_NAME"
+        echo "Selected MODEL_PATH: $MODEL_PATH (available on all nodes)"
+    elif check_model_path "$MODEL_DIR/$MODEL_NAME" "$MODEL_DIR"; then
         MODEL_PATH="$MODEL_DIR/$MODEL_NAME"
         echo "Selected MODEL_PATH: $MODEL_PATH (available on all nodes)"
     else
         echo "FATAL ERROR: Model '$MODEL_NAME' not found on ALL allocated nodes in:"
+        echo "  - $MODEL_DIR/$SGL_DISK_DIR_NAME"
         echo "  - $MODEL_DIR/$MODEL_NAME"
         exit 1
     fi
@@ -362,7 +394,6 @@ DOCKER_ENV_COMMON=(
     -e BENCH_NUM_PROMPTS_MULTIPLIER=\$BENCH_NUM_PROMPTS_MULTIPLIER
     -e BENCH_MAX_CONCURRENCY=\$BENCH_MAX_CONCURRENCY
     -e TQDM_MININTERVAL=\$TQDM_MININTERVAL
-    -e DRY_RUN=\$DRY_RUN
     -e BENCHMARK_LOGS_DIR=/benchmark_logs
     -e ENGINE=\$ENGINE
     -e WS_PATH=${WS_PATH}
@@ -378,11 +409,25 @@ DOCKER_ENV_COMMON=(
     -e PREFILL_TP_SIZE=\$PREFILL_TP_SIZE
     -e PREFILL_ENABLE_EP=\$PREFILL_ENABLE_EP
     -e PREFILL_ENABLE_DP=\$PREFILL_ENABLE_DP
+    -e PREFILL_CONTEXT_LENGTH=\${PREFILL_CONTEXT_LENGTH:-}
+    -e PREFILL_CHUNKED_PREFILL_SIZE=\${PREFILL_CHUNKED_PREFILL_SIZE:-}
+    -e SGLANG_AITER_MLA_PERSIST=\${SGLANG_AITER_MLA_PERSIST:-0}
+    -e DISABLE_CUSTOM_ALL_REDUCE=\${DISABLE_CUSTOM_ALL_REDUCE:-0}
+    -e MAX_MODEL_LEN=\${MAX_MODEL_LEN:-}
+    -e DURATION=\${DURATION:-1800}
+    -e IS_AGENTIC=\${IS_AGENTIC:-0}
+    -e OFFLOADING=\${OFFLOADING:-none}
+    -e ENABLE_METRICS=\${ENABLE_METRICS:-0}
+    -e PREFILL_ROUTER_POLICY=\${PREFILL_ROUTER_POLICY:-random}
+    -e DECODE_ROUTER_POLICY=\${DECODE_ROUTER_POLICY:-random}
+    -e MORI_IO_SQ_BACKOFF_TIMEOUT_US=\${MORI_IO_SQ_BACKOFF_TIMEOUT_US:-}
+    -e MORI_IO_QP_MAX_SEND_WR=\${MORI_IO_QP_MAX_SEND_WR:-}
     -e DECODE_TP_SIZE=\$DECODE_TP_SIZE
     -e DECODE_ENABLE_EP=\$DECODE_ENABLE_EP
     -e DECODE_ENABLE_DP=\$DECODE_ENABLE_DP
     -e DECODE_MTP_SIZE=\$DECODE_MTP_SIZE
     -e IS_MULTINODE=\$IS_MULTINODE
+    -e DRY_RUN=\${DRY_RUN:-0}
 )
 
 # Engine-specific env vars
@@ -402,11 +447,54 @@ if [[ "$ENGINE" == "vllm-disagg" ]]; then
         -e VLLM_MORIIO_CONNECTOR_READ_MODE=\${VLLM_MORIIO_CONNECTOR_READ_MODE:-1}
         -e PYTHONPYCACHEPREFIX=/tmp/pycache
     )
+elif [[ "$ENGINE" == "atom-disagg" ]]; then
+    DOCKER_ENV_ENGINE=(
+        -e ATOM_WS_PATH=${WS_PATH}
+        -e PREFILL_PORT=${PREFILL_PORT:-8010}
+        -e DECODE_PORT=${DECODE_PORT:-8020}
+        -e ROUTER_PORT=${ROUTER_PORT:-30000}
+        -e HANDSHAKE_PORT=${HANDSHAKE_PORT:-6301}
+        -e MEM_FRACTION=${MEM_FRACTION:-0.85}
+        -e KV_CACHE_DTYPE=${KV_CACHE_DTYPE:-fp8}
+        -e BLOCK_SIZE=${BLOCK_SIZE:-16}
+        -e MAX_NUM_SEQS=${MAX_NUM_SEQS:-256}
+        -e EXTRA_SERVER_ARGS=\${EXTRA_SERVER_ARGS:-}
+        -e IBDEVICES=${IBDEVICES:-}
+    )
 else
     DOCKER_ENV_ENGINE=(
         -e SGLANG_WS_PATH=${WS_PATH}
     )
 fi
+
+# HiCache / Mooncake settings are delivered via a bind-mounted config file rather
+# than a long list of docker -e flags. Write it once to the shared benchmark-logs
+# dir (already a host path, visible on every node) and mount it read-only at
+# /config/hicache_mc.env, where env.sh sources it before applying its defaults.
+# Empty values are preserved so env.sh's "${VAR:-default}" fallbacks still apply.
+HICACHE_MC_CONFIG="${BENCHMARK_LOGS_DIR}/hicache_mc_${SLURM_JOB_ID}.env"
+cat > "$HICACHE_MC_CONFIG" <<EOF
+HICACHE_RATIO=${HICACHE_RATIO:-}
+HICACHE_HOST_POOL_COUNT=${HICACHE_HOST_POOL_COUNT:-}
+HICACHE_PAGE_SIZE=${HICACHE_PAGE_SIZE:-}
+HICACHE_IO_BACKEND=${HICACHE_IO_BACKEND:-}
+HICACHE_MEM_LAYOUT=${HICACHE_MEM_LAYOUT:-}
+HICACHE_WRITE_POLICY=${HICACHE_WRITE_POLICY:-}
+HICACHE_STORAGE_BACKEND=${HICACHE_STORAGE_BACKEND:-}
+HICACHE_PREFETCH_POLICY=${HICACHE_PREFETCH_POLICY:-}
+MC_PATCH_HOSTPOOL=${MC_PATCH_HOSTPOOL:-}
+MC_MASTER_PORT=${MC_MASTER_PORT:-}
+MC_METADATA_PORT=${MC_METADATA_PORT:-}
+MC_METRICS_PORT=${MC_METRICS_PORT:-}
+MC_MASTER_THREADS=${MC_MASTER_THREADS:-}
+MC_EVICTION_HIGH_WATERMARK=${MC_EVICTION_HIGH_WATERMARK:-}
+MC_PROTOCOL=${MC_PROTOCOL:-}
+MC_GLOBAL_SEG=${MC_GLOBAL_SEG:-}
+MC_DEVICE=${MC_DEVICE:-}
+MC_MASTER_ADDR=${MC_MASTER_ADDR:-}
+MC_METADATA_SERVER=${MC_METADATA_SERVER:-}
+EOF
+echo "[config] wrote HiCache/Mooncake settings -> $HICACHE_MC_CONFIG"
 
 # Engine-specific container filter for pre-clean
 CONT_FILTER="name=^container_${ENGINE}_"
@@ -424,6 +512,84 @@ echo \"Rank \$SLURM_PROCID on \$(hostname)\"
 # Per-node docker privilege detection
 eval \"\$DOCKER_CMD_DETECT\"
 echo \"[docker-detect] rank \$SLURM_PROCID: DOCKER_CMD=\$DOCKER_CMD\"
+
+# Enable out-of-tree RDMA library mounts for atom-disagg (mooncake requires host RDMA stack)
+RDMA_MOUNTS=()
+if [[ "$ENGINE" == "atom-disagg" ]]; then
+
+# When the container base OS differs from the host (e.g. Ubuntu 24.04 image
+# on a 22.04 host), the container's bundled libibverbs/libionic may be
+# ABI-incompatible with the host kernel drivers.  Detect the NIC type and
+# bind-mount the host's out-of-tree RDMA userspace libraries into the
+# container so the RDMA stack always matches the running kernel.
+_detect_nic_type() {
+    if [[ -n \"\${MORI_NIC_TYPE:-}\" ]]; then echo \"\$MORI_NIC_TYPE\"; return; fi
+    local bnxt=0 mlx5=0 ionic=0
+    if [[ -d /sys/class/infiniband ]]; then
+        for dev in /sys/class/infiniband/*; do
+            local name; name=\$(basename \"\$dev\")
+            case \"\$name\" in
+                bnxt_re*) ((bnxt++)) ;; mlx5*) ((mlx5++)) ;; ionic*) ((ionic++)) ;;
+                *)
+                    local drv; drv=\$(basename \"\$(readlink -f \"\$dev/device/driver\" 2>/dev/null)\" 2>/dev/null || true)
+                    case \"\$drv\" in bnxt*) ((bnxt++)) ;; mlx5*) ((mlx5++)) ;; ionic*) ((ionic++)) ;; esac ;;
+            esac
+        done
+    fi
+    if (( bnxt >= mlx5 && bnxt >= ionic && bnxt > 0 )); then echo bnxt
+    elif (( ionic >= mlx5 && ionic > 0 )); then echo ionic
+    else echo mlx5; fi
+}
+
+_find_host_ibverbs() {
+    for c in /usr/lib64/libibverbs.so.1 /lib/x86_64-linux-gnu/libibverbs.so.1 /usr/lib/x86_64-linux-gnu/libibverbs.so.1.14.39.0 /usr/lib/x86_64-linux-gnu/libibverbs.so.1; do
+        local r; r=\$(readlink -f \"\$c\" 2>/dev/null || true)
+        [[ \"\$r\" == *libibverbs.so.1.14.57.0 ]] && continue
+        if [[ -f \"\$r\" ]]; then echo \"\$r\"; return; fi
+    done
+}
+
+_NIC_TYPE=\$(_detect_nic_type)
+echo \"[rdma] NIC type: \${_NIC_TYPE} on \$(hostname)\"
+
+if [[ \"\$_NIC_TYPE\" == \"ionic\" || \"\$_NIC_TYPE\" == \"bnxt\" ]]; then
+    _host_ibv=\$(_find_host_ibverbs)
+    if [[ -n \"\$_host_ibv\" ]]; then
+        RDMA_MOUNTS+=(-v \"\$_host_ibv:/lib/x86_64-linux-gnu/libibverbs.so.1\")
+    fi
+fi
+
+if [[ \"\$_NIC_TYPE\" == \"ionic\" ]]; then
+    for _dir in /usr/local/lib /usr/lib/x86_64-linux-gnu; do
+        for _lib in \"\$_dir\"/libionic*.so; do
+            [[ -f \"\$_lib\" ]] || continue
+            _real=\$(readlink -f \"\$_lib\")
+            [[ -f \"\$_real\" ]] && RDMA_MOUNTS+=(-v \"\$_real:\$_real\")
+            RDMA_MOUNTS+=(-v \"\$_lib:/usr/lib/x86_64-linux-gnu/\$(basename \"\$_lib\")\")
+        done
+    done
+    if [[ -d /usr/lib/x86_64-linux-gnu/libibverbs ]]; then
+        for _lib in /usr/lib/x86_64-linux-gnu/libibverbs/libionic-rdmav*.so; do
+            [[ -f \"\$_lib\" ]] && RDMA_MOUNTS+=(-v \"\$_lib:\$_lib\")
+        done
+    fi
+    [[ -d /etc/libibverbs.d ]] && RDMA_MOUNTS+=(-v /etc/libibverbs.d:/etc/libibverbs.d:ro)
+elif [[ \"\$_NIC_TYPE\" == \"bnxt\" ]]; then
+    for _lib in /usr/local/lib/libbnxt_re-rdmav*.so; do
+        [[ -f \"\$_lib\" ]] && RDMA_MOUNTS+=(-v \"\$_lib:/usr/lib/x86_64-linux-gnu/libibverbs/\$(basename \"\$_lib\")\")
+    done
+    for _lib in /usr/local/lib/libbnxt_re.so; do
+        [[ -f \"\$_lib\" ]] && RDMA_MOUNTS+=(-v \"\$_lib:/usr/lib/x86_64-linux-gnu/\$(basename \"\$_lib\")\")
+    done
+    [[ -d /etc/libibverbs.d ]] && RDMA_MOUNTS+=(-v /etc/libibverbs.d:/etc/libibverbs.d:ro)
+fi
+
+if [[ \${#RDMA_MOUNTS[@]} -gt 0 ]]; then
+    echo \"[rdma] bind-mounts: \${RDMA_MOUNTS[*]}\"
+else
+    echo \"[rdma] no out-of-tree RDMA mounts needed\"
+fi
+fi  # end: if ENGINE == atom-disagg
 
 # Pre-clean (idempotent)
 \$DOCKER_CMD ps -aq --filter \"$CONT_FILTER\" | xargs -r \$DOCKER_CMD rm -f || true
@@ -489,7 +655,9 @@ fi
     -v /tmp:/run_logs \
     -v ${BENCHMARK_LOGS_DIR}:/benchmark_logs \
     -v ${DI_REPO_DIR}:${DOCKER_MOUNT_PATH} \
+    -v ${HICACHE_MC_CONFIG}:/config/hicache_mc.env:ro \
     ${EXTRA_DOCKER_MOUNTS:-} \
+    \${RDMA_MOUNTS[@]+"\${RDMA_MOUNTS[@]}"} \
     ${DOCKER_ENV_COMMON[*]} \
     ${DOCKER_ENV_ENGINE[*]} \
     --name \"$DOCKER_CONT_NAME\" \

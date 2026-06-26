@@ -78,10 +78,10 @@ on:
         type: string
         default: 'none'
       total-cpu-dram-gb:
-        description: "Total CPU DRAM in GB for KV offloading"
+        description: "Configured CPU DRAM capacity in GB for KV offloading"
         required: false
         type: string
-        default: '600'
+        default: '0'
       duration:
         description: "Benchmark duration in seconds"
         required: false
@@ -89,7 +89,7 @@ on:
         default: '1800'
 env:
   RANDOM_RANGE_RATIO: 0.8
-  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  HF_TOKEN: ${{ secrets.INFERENCEX_OFFICIAL_RO_HF_TOKEN }}
   HF_HUB_CACHE: '/mnt/hf_hub_cache/'
   EXP_NAME: ${{ inputs.exp-name }}
   MODEL: ${{ inputs.model }}
@@ -239,7 +239,10 @@ jobs:
           name: agentic_${{ env.RESULT_FILENAME }}
           path: |
             results/server.log
+            results/router.log
             results/lmcache_server.log
+            results/mooncake_master.log
+            results/mooncake_config.json
             results/benchmark.log
             results/config.yaml
             results/lmcache_command.txt
@@ -279,7 +282,10 @@ jobs:
           name: ${{ inputs.eval-only && 'eval_server_logs_' || 'server_logs_' }}${{ env.RESULT_FILENAME }}
           path: |
             ${{ inputs.scenario-type == 'agentic-coding' && 'results/server.log' || 'server.log' }}
+            ${{ inputs.scenario-type == 'agentic-coding' && 'results/router.log' || '' }}
             ${{ inputs.scenario-type == 'agentic-coding' && 'results/lmcache_server.log' || '' }}
+            ${{ inputs.scenario-type == 'agentic-coding' && 'results/mooncake_master.log' || '' }}
+            ${{ inputs.scenario-type == 'agentic-coding' && 'results/mooncake_config.json' || '' }}
           if-no-files-found: ignore
 
       - name: Upload GPU metrics

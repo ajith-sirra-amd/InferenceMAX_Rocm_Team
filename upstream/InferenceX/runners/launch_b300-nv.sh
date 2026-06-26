@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-# System-specific configuration for B300 NV Slurm cluster
+# System-specific configuration for B300 NV Slurm cluster (sa-shared)
 SLURM_PARTITION="batch_1"
 SLURM_ACCOUNT="benchmark"
 
@@ -39,8 +39,14 @@ elif [[ $MODEL_PREFIX == "dsv4" && $PRECISION == "fp4" && $FRAMEWORK == "dynamo-
     fi
     export MODEL_PATH="${SELECTED_MODEL_PATH:-/data/models/dsv4-pro}"
     export SRT_SLURM_MODEL_PREFIX="deepseek-v4-pro"
+elif [[ $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp4" && $FRAMEWORK == "dynamo-vllm" ]]; then
+    export MODEL_PATH="/data/models/MiniMax-M2.5-NVFP4"
+    export SRT_SLURM_MODEL_PREFIX="minimax-m2.5-nvfp4"
+elif [[ $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp8" && $FRAMEWORK == "dynamo-vllm" ]]; then
+    export MODEL_PATH="/data/models/MiniMax-M2.5"
+    export SRT_SLURM_MODEL_PREFIX="minimax-m2.5-fp8"
 else
-    echo "Unsupported model: $MODEL_PREFIX-$PRECISION. Supported models are: dsr1-fp4, dsr1-fp8, dsv4-fp4 with dynamo-vllm"
+    echo "Unsupported model: $MODEL_PREFIX-$PRECISION. Supported models are: dsr1-fp4, dsr1-fp8, dsv4-fp4 with dynamo-vllm, minimaxm2.5-fp4 with dynamo-vllm, minimaxm2.5-fp8 with dynamo-vllm"
     exit 1
 fi
 
@@ -61,6 +67,18 @@ elif [[ $FRAMEWORK == "dynamo-vllm" && $MODEL_PREFIX == "dsv4" ]]; then
     git checkout aflowers/vllm-gb200-v0.20.0
     mkdir -p recipes/vllm/deepseek-v4
     cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/deepseek-v4" recipes/vllm/deepseek-v4
+elif [[ $FRAMEWORK == "dynamo-vllm" && $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp4" ]]; then
+    git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
+    cd "$SRT_REPO_DIR" || exit 1
+    git checkout main
+    mkdir -p recipes/vllm/minimax-m2.5
+    cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/minimax-m2.5-b300" recipes/vllm/minimax-m2.5
+elif [[ $FRAMEWORK == "dynamo-vllm" && $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp8" ]]; then
+    git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
+    cd "$SRT_REPO_DIR" || exit 1
+    git checkout main
+    mkdir -p recipes/vllm/minimax-m2.5-fp8
+    cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/minimax-m2.5-b300-fp8" recipes/vllm/minimax-m2.5-fp8
 else
     git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
     cd "$SRT_REPO_DIR" || exit 1
@@ -321,7 +339,7 @@ else
         export MODEL_PATH="${WRITABLE_MODELS_DIR%/}/${MODEL_BASENAME}"
     fi
 
-    SQUASH_FILE="/data/home/sa-shared/gharunners/squash/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
+    SQUASH_FILE="/data/squash/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
     SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
     # Prefer a framework-tagged script (e.g. dsv4_fp4_b300_sglang.sh) so models
     # with multiple inference engines can coexist; fall back to the historical
@@ -332,6 +350,12 @@ else
     if [[ ! -f "$BENCH_SCRIPT" ]]; then
         LEGACY_FW_SUFFIX=$([[ "$FRAMEWORK" == "trt" ]] && printf '_trt' || printf '')
         BENCH_SCRIPT="${BENCH_BASE}${LEGACY_FW_SUFFIX}${SPEC_SUFFIX}.sh"
+    fi
+
+    # Allow callers (e.g. the speedbench-al.yml AL-collection workflow) to run a
+    # specific script instead of the auto-selected throughput benchmark.
+    if [[ -n "${BENCH_SCRIPT_OVERRIDE:-}" ]]; then
+        BENCH_SCRIPT="$BENCH_SCRIPT_OVERRIDE"
     fi
 
     LOCK_FILE="${SQUASH_FILE}.lock"
@@ -379,7 +403,33 @@ else
         fi
     )
 
-    salloc --partition=$SLURM_PARTITION --account=$SLURM_ACCOUNT -N 1 --gres=gpu:$TP --exclusive --time=180 --no-shell --job-name="$RUNNER_NAME"
+    SALLOC_MEMORY_ARGS=()
+    if [[ "${OFFLOADING:-none}" != "none" ]]; then
+        # Host KV tiers (vLLM Mooncake cpu offload, SGLang HiCache) allocate
+        # multi-TB pinned host pools. Give them the full memory allocation of
+        # the exclusive node instead of Slurm's implicit 2 TB default.
+        SALLOC_MEMORY_ARGS=(--mem=0)
+    fi
+    DEFAULT_SALLOC_TIME_LIMIT=180
+    if [[ "$IS_AGENTIC" == "1" && "$MODEL_PREFIX" == "dsv4" && "${DURATION:-0}" -ge 10800 ]]; then
+        # Three-hour profiles need enough lifecycle headroom for model startup,
+        # warmup, request draining, and CPU-heavy result processing.
+        DEFAULT_SALLOC_TIME_LIMIT=480
+    elif [[ "$IS_AGENTIC" == "1" && "$MODEL_PREFIX" == "dsv4" && "${DURATION:-0}" -ge 5400 ]]; then
+        # A 90-minute profile plus model startup, warmup, request draining,
+        # and result processing can exceed the normal three-hour lifecycle.
+        DEFAULT_SALLOC_TIME_LIMIT=300
+    elif [[ "$IS_AGENTIC" == "1" && "$MODEL_PREFIX" == "dsv4" && "$FRAMEWORK" == "sglang" ]]; then
+        if [[ "$CONC" -ge 512 || ( "$DP_ATTENTION" == "true" && "$CONC" -ge 96 ) ]]; then
+            # C512 and high-concurrency DP replays can spend multiple hours in
+            # long-context warmup before the 30-minute profiling phase.
+            DEFAULT_SALLOC_TIME_LIMIT=300
+        fi
+    fi
+    SALLOC_TIME_LIMIT="${SALLOC_TIME_LIMIT:-$DEFAULT_SALLOC_TIME_LIMIT}"
+    # Default 180 min; AL-matrix collection (16 server starts) needs longer and
+    # overrides via SALLOC_TIME_LIMIT.
+    salloc --partition=$SLURM_PARTITION --account=$SLURM_ACCOUNT -N 1 --gres=gpu:$TP --exclusive "${SALLOC_MEMORY_ARGS[@]}" --time="$SALLOC_TIME_LIMIT" --no-shell --job-name="$RUNNER_NAME"
     JOB_ID=$(squeue --name="$RUNNER_NAME" -u "$USER" -h -o %A | head -n1)
 
     srun --jobid=$JOB_ID \

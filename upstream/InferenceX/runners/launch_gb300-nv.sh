@@ -17,6 +17,14 @@ export ENROOT_ROOTFS_WRITABLE=1
 # write to it.
 export AIPERF_MMAP_CACHE_HOST_PATH="/data/home/sa-shared/gharunners/ai-perf-cache"
 
+# Persistent HF hub cache for the agentic trace datasets — mounted into
+# worker containers at /hf_hub_cache; the agentic recipes set
+# HF_HUB_CACHE=/hf_hub_cache in benchmark.env. Without it the workflow-level
+# HF_HUB_CACHE (/mnt/hf_hub_cache) doesn't exist on these nodes and every
+# run re-downloads the corpus into the ephemeral container overlay.
+export HF_HUB_CACHE_HOST_PATH="/data/home/sa-shared/gharunners/hf-hub-cache"
+mkdir -p "$HF_HUB_CACHE_HOST_PATH"
+
 export MODEL_PATH=$MODEL
 
 if [[ $MODEL_PREFIX == "dsr1" && $PRECISION == "fp4" ]]; then
@@ -45,8 +53,14 @@ elif [[ $MODEL_PREFIX == "glm5" && $PRECISION == "fp4" ]]; then
 elif [[ $MODEL_PREFIX == "glm5" && $PRECISION == "fp8" ]]; then
     export MODEL_PATH=/scratch/models/GLM-5-FP8
     export SRT_SLURM_MODEL_PREFIX="glm-5-fp8"
+elif [[ $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp4" ]]; then
+    export MODEL_PATH=/data/models/MiniMax-M2.5-NVFP4
+    export SRT_SLURM_MODEL_PREFIX="minimax-m2.5-nvfp4"
+elif [[ $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp8" ]]; then
+    export MODEL_PATH=/data/models/MiniMax-M2.5
+    export SRT_SLURM_MODEL_PREFIX="minimax-m2.5-fp8"
 else
-    echo "Unsupported model: $MODEL_PREFIX-$PRECISION. Supported models are: dsr1-fp4, dsr1-fp8, dsv4-fp4, glm5-fp4, glm5-fp8"
+    echo "Unsupported model: $MODEL_PREFIX-$PRECISION. Supported models are: dsr1-fp4, dsr1-fp8, dsv4-fp4, glm5-fp4, glm5-fp8, minimaxm2.5-fp4, minimaxm2.5-fp8"
     exit 1
 fi
 
@@ -137,6 +151,25 @@ elif [[ $FRAMEWORK == "dynamo-sglang" && $MODEL_PREFIX == "glm5" ]]; then
     git checkout sa-submission-q2-2026
     mkdir -p recipes/sglang/glm5
     cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/sglang/glm5" recipes/sglang/glm5
+elif [[ $FRAMEWORK == "dynamo-vllm" && $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp8" ]]; then
+    git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
+    cd "$SRT_REPO_DIR"
+    git checkout main
+    mkdir -p recipes/vllm/minimax-m2.5-fp8
+    cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/minimax-m2.5-fp8" recipes/vllm/minimax-m2.5-fp8
+elif [[ $FRAMEWORK == "dynamo-vllm" && $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp4" ]]; then
+    git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
+    cd "$SRT_REPO_DIR"
+    git checkout main
+    mkdir -p recipes/vllm/minimax-m2.5
+    cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/minimax-m2.5" recipes/vllm/minimax-m2.5
+elif [[ $FRAMEWORK == "dynamo-trt" && $MODEL_PREFIX == "dsv4" ]]; then
+    # DSv4 dynamo-trt recipes use the HuggingFace model ID as model.path,
+    # so override SRT_SLURM_MODEL_PREFIX to match the recipe's model path key.
+    SRT_SLURM_MODEL_PREFIX="deepseek-ai/DeepSeek-V4-Pro"
+    git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
+    cd "$SRT_REPO_DIR"
+    git checkout sa-submission-q2-2026
 else
     git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
     cd "$SRT_REPO_DIR"
@@ -189,6 +222,7 @@ srtctl_root: "${SRTCTL_ROOT}"
 # re-tokenized + re-written every job.
 default_mounts:
   "${AIPERF_MMAP_CACHE_HOST_PATH}": "/aiperf_mmap_cache"
+  "${HF_HUB_CACHE_HOST_PATH}": "/hf_hub_cache"
 
 # Model path aliases
 model_paths:
@@ -370,8 +404,13 @@ if [[ "${RUN_EVAL:-false}" == "true" || "${EVAL_ONLY:-false}" == "true" ]]; then
         shopt -s nullglob
         for eval_file in "$EVAL_DIR"/*; do
             [ -f "$eval_file" ] || continue
-            cp "$eval_file" "$GITHUB_WORKSPACE/"
-            echo "Copied eval artifact: $(basename "$eval_file")"
+            eval_dest="$GITHUB_WORKSPACE/$(basename "$eval_file")"
+            rm -f "$eval_dest"
+            if cp "$eval_file" "$eval_dest"; then
+                echo "Copied eval artifact: $(basename "$eval_file")"
+            else
+                echo "WARNING: Failed to copy eval artifact, continuing: $(basename "$eval_file")"
+            fi
         done
         shopt -u nullglob
     else

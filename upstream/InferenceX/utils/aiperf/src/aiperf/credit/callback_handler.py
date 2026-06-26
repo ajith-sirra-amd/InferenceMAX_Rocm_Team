@@ -20,6 +20,8 @@ from aiperf.common.aiperf_logger import AIPerfLogger
 from aiperf.common.enums import CreditPhase
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from aiperf.credit.messages import CreditReturn, FirstToken
     from aiperf.credit.structs import Credit
     from aiperf.timing.branch_orchestrator import BranchOrchestrator
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
     from aiperf.timing.phase.lifecycle import PhaseLifecycle
     from aiperf.timing.phase.progress_tracker import PhaseProgressTracker
     from aiperf.timing.phase.stop_conditions import StopConditionChecker
+    from aiperf.timing.session_tree import SessionTreeRegistry
     from aiperf.timing.strategies.core import TimingStrategyProtocol
 
 _logger = AIPerfLogger(__name__)
@@ -79,6 +82,8 @@ class CreditCallbackHandler:
         self,
         concurrency_manager: ConcurrencyManager,
         branch_orchestrator: BranchOrchestrator | None = None,
+        session_tree_registry: SessionTreeRegistry | None = None,
+        on_warmup_abort: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """Initialize callback handler.
 
@@ -90,10 +95,52 @@ class CreditCallbackHandler:
                 intercept returns True the strategy dispatch is suppressed (the
                 orchestrator has taken over the next-turn path by spawning
                 children / queuing a join turn).
+            session_tree_registry: Optional per-tree session-slot ledger (agentic
+                replay only). When engaged (PROFILING), the depth-0 root session
+                slot is NOT released on the root's final turn -- it is held until
+                the whole tree drains. The release is deferred to
+                ``registry.on_root_terminal`` (after intercept, so final-turn
+                spawns are counted first); the per-phase teardown releases any
+                still-open trees via the runner's ``release_all``.
+            on_warmup_abort: Optional async callback fired ONCE on the first
+                terminal WARMUP failure. Used by agentic replay to abort the run
+                early (broadcast ProfileCancelCommand) instead of letting warmup
+                drain to teardown -- a degraded trajectory pool means PROFILING
+                must not start, so there is no value in waiting for the rest of
+                the warmup credits to return. ``None`` -> legacy teardown-time
+                abort via the strategy's ``report_warmup_failures`` only.
         """
         self._concurrency_manager = concurrency_manager
         self._branch_orchestrator = branch_orchestrator
+        self._session_tree_registry = session_tree_registry
+        self._on_warmup_abort = on_warmup_abort
+        self._warmup_abort_triggered = False
         self._phase_handlers: dict[CreditPhase, PhaseCallbackContext] = {}
+
+    @property
+    def on_warmup_abort(self) -> Callable[[], Awaitable[None]] | None:
+        """The wired live warmup-abort callback, or None if not enabled.
+
+        When non-None, the live path (first terminal warmup failure ->
+        ProfileCancelCommand) is authoritative and PhaseRunner skips its
+        teardown ``report_warmup_failures`` raise (which is only a backstop for
+        the un-wired case).
+        """
+        return self._on_warmup_abort
+
+    def _tree_registry_engaged(self, credit: Credit) -> bool:
+        """True when per-tree session-slot accounting owns this credit's slot.
+
+        Ownership is determined by whether the registry has an open tree for
+        this credit, not by phase name. Accelerated agentic warmup opens trees
+        during WARMUP, while ordinary one-shot warmup does not.
+        """
+        return (
+            self._session_tree_registry is not None
+            and self._session_tree_registry.has_tree(
+                credit.effective_root_correlation_id
+            )
+        )
 
     def set_branch_orchestrator(self, orchestrator: BranchOrchestrator | None) -> None:
         """Inject the subagent orchestrator post-construction.
@@ -187,6 +234,66 @@ class CreditCallbackHandler:
             del self._phase_handlers[phase]
             _logger.debug(lambda: f"Unregistered callback handler for phase {phase}")
 
+    async def _handle_warmup_failure(
+        self,
+        credit: Credit,
+        credit_return: CreditReturn,
+        context: PhaseCallbackContext,
+        phase: CreditPhase,
+    ) -> None:
+        """Accumulate, and live-abort on, a terminal WARMUP root failure.
+
+        AgenticReplayStrategy exposes ``record_warmup_failure(trace_id)``;
+        PhaseRunner calls ``report_warmup_failures()`` at WARMUP teardown to abort
+        PROFILING if any trajectory burned its only warmup credit on a terminal
+        error or cancellation. Duck-typed: only fires when the active strategy
+        implements the hook, so non-replay strategies are unaffected.
+
+        Do NOT gate on ``credit.is_final_turn``: a WARMUP credit primes the single
+        turn k_i (the last request before t*), and PROFILING resumes the same
+        trajectory at k_i+1, so for a session active at t* the warmed turn is never
+        the trajectory's final turn (k_i < num_turns-1) and ``is_final_turn`` is
+        False. WARMUP dispatches exactly one credit per session and its return is a
+        strategy-level no-op, so every WARMUP root return IS the terminal warmup
+        event for that trajectory -- gating on ``is_final_turn`` made this
+        accumulation dead for the entire normal warmup population, silently letting
+        a degraded pool proceed to PROFILING.
+
+        When ``on_warmup_abort`` is wired, the FIRST terminal failure also aborts
+        the run live (broadcast ProfileCancelCommand) instead of waiting the full
+        warmup drain for the teardown-time ``report_warmup_failures`` raise: a
+        single failure already breaks the contract, and the broadcast cancels
+        in-flight warmup and drives a clean records-manager + system-controller
+        shutdown. Fired at most once.
+        """
+        if not (
+            phase == CreditPhase.WARMUP
+            and credit.agent_depth == 0
+            and (credit_return.error is not None or credit_return.cancelled)
+        ):
+            return
+        record_warmup_failure = getattr(context.strategy, "record_warmup_failure", None)
+        if record_warmup_failure is None:
+            return
+        record_warmup_failure(credit.conversation_id)
+        if self._on_warmup_abort is None or self._warmup_abort_triggered:
+            return
+        self._warmup_abort_triggered = True
+        _logger.warning(
+            lambda: f"Terminal warmup failure for trace {credit.conversation_id}; "
+            f"aborting run early (broadcasting ProfileCancelCommand)."
+        )
+        try:
+            await self._on_warmup_abort()
+        except Exception as exc:  # noqa: BLE001
+            # Mirror the records-side threshold abort: if the broadcast fails,
+            # reset the flag so a later warmup return retries, and the runner's
+            # teardown backstop can still surface the failure.
+            self._warmup_abort_triggered = False
+            _logger.warning(
+                lambda exc=exc: f"Failed to broadcast warmup abort: {exc!r}"
+            )
+
     async def on_credit_return(
         self, worker_id: str, credit_return: CreditReturn
     ) -> None:
@@ -231,6 +338,7 @@ class CreditCallbackHandler:
         is_final_returned = handler.progress.increment_returned(
             credit.is_final_turn,
             credit_return.cancelled,
+            errored=credit_return.error is not None,
             is_child=credit.agent_depth > 0,
         )
 
@@ -296,6 +404,10 @@ class CreditCallbackHandler:
                     f"{credit.x_correlation_id}: {exc}"
                 )
 
+        observe_credit_return = getattr(handler.strategy, "observe_credit_return", None)
+        if observe_credit_return is not None:
+            observe_credit_return(credit)
+
         # 5. Dispatch next turn / DAG spawn.
         #
         # The orchestrator intercept runs FIRST and unconditionally (not gated
@@ -312,7 +424,25 @@ class CreditCallbackHandler:
         if self._branch_orchestrator is not None:
             intercepted = await self._branch_orchestrator.intercept(credit)
             if intercepted:
+                self._signal_all_credits_returned_if_ready(handler)
                 return
+
+        # Per-tree slot release: a root's final-turn return marks its tree's
+        # root token complete. Run AFTER intercept so any children spawned on the
+        # final turn are already registered with the registry (else the tree
+        # could drain a beat too early). The registry releases the session slot
+        # and recycles the freed lane only once every descendant has also
+        # drained -- which may be now (no outstanding descendants) or later (when
+        # the last background subagent finishes). A root that suspends on a gate
+        # (intercepted) is never final, so it never reaches this point.
+        if (
+            credit.is_final_turn
+            and credit.agent_depth == 0
+            and self._tree_registry_engaged(credit)
+        ):
+            self._session_tree_registry.on_root_terminal(
+                credit.effective_root_correlation_id
+            )
 
         # Strategy dispatch (queue next turn of the same session). Normally
         # gated behind ``can_send_any_turn``; however, for DAG-spawned
@@ -328,7 +458,11 @@ class CreditCallbackHandler:
         # observer hooks still need to fire).
         is_child = credit.agent_depth > 0
         if not is_child:
-            if handler.stop_checker.can_send_any_turn():
+            wants_stopped_returns = (
+                getattr(handler.strategy, "wants_returns_after_sending_complete", False)
+                is True
+            )
+            if handler.stop_checker.can_send_any_turn() or wants_stopped_returns:
                 await handler.strategy.handle_credit_return(
                     credit, error=credit_return.error
                 )
@@ -348,23 +482,8 @@ class CreditCallbackHandler:
                     f"{credit.x_correlation_id}: {exc}"
                 )
 
-        # WARMUP terminal-failure accumulation. AgenticReplayStrategy exposes
-        # ``record_warmup_failure(trace_id)``; PhaseRunner calls
-        # ``report_warmup_failures()`` at WARMUP teardown to abort PROFILING
-        # if any trajectory burned its only warmup credit on a terminal error
-        # or cancellation. Duck-typed: only fires when the active strategy
-        # implements the hook, so non-replay strategies are unaffected.
-        if (
-            phase == CreditPhase.WARMUP
-            and credit.is_final_turn
-            and credit.agent_depth == 0
-            and (credit_return.error is not None or credit_return.cancelled)
-        ):
-            record_warmup_failure = getattr(
-                handler.strategy, "record_warmup_failure", None
-            )
-            if record_warmup_failure is not None:
-                record_warmup_failure(credit.conversation_id)
+        # WARMUP terminal-failure accumulation + live early-abort (agentic replay).
+        await self._handle_warmup_failure(credit, credit_return, handler, phase)
 
         # Deferred all-credits-returned check. Runs on EVERY return — root
         # or child — because child returns don't bump the phase counters
@@ -373,11 +492,34 @@ class CreditCallbackHandler:
         # child's evict-and-drain cascade is what clears
         # ``has_pending_branch_work``, at which point this check on the
         # child's own return path fires the event.
+        self._signal_all_credits_returned_if_ready(handler)
+
+    def _signal_all_credits_returned_if_ready(
+        self, handler: PhaseCallbackContext
+    ) -> None:
+        """Complete a drained phase, preserving paused warmup DAG state."""
+        allows_pending_branch_handoff = (
+            getattr(
+                handler.strategy,
+                "allows_pending_branch_handoff_after_sending_complete",
+                False,
+            )
+            is True
+            and handler.lifecycle.is_sending_complete
+        )
+        all_wire_requests_returned = (
+            handler.progress.in_flight == 0
+            if allows_pending_branch_handoff
+            else handler.progress.check_all_returned_or_cancelled()
+        )
         if (
             self._branch_orchestrator is not None
             and not handler.progress.all_credits_returned_event.is_set()
-            and handler.progress.check_all_returned_or_cancelled()
-            and not self._branch_orchestrator.has_pending_branch_work()
+            and all_wire_requests_returned
+            and (
+                allows_pending_branch_handoff
+                or not self._branch_orchestrator.has_pending_branch_work()
+            )
         ):
             handler.progress.all_credits_returned_event.set()
 
@@ -404,18 +546,30 @@ class CreditCallbackHandler:
             handler: Phase callback context.
         """
         concurrency = handler.concurrency_manager
+        tree_engaged = self._tree_registry_engaged(credit)
 
         # Release session slot when a root conversation ends (final turn,
         # whether completed or cancelled). DAG children (agent_depth > 0)
         # inherit the root's session slot via ``issue_credit``'s is_child
         # bypass and therefore never acquired one of their own; releasing
         # here would underflow the session semaphore.
+        #
+        # Under per-tree accounting the slot belongs to the whole TREE, not the
+        # root credit: do NOT release on the root's final turn here. The release
+        # is deferred to ``registry.on_root_terminal`` (called after intercept,
+        # so children spawned on the final turn are counted first), which frees
+        # the slot only once every descendant has also drained.
         if credit.is_final_turn and credit.agent_depth == 0:
-            concurrency.release_session_slot(phase)
+            root_corr = credit.effective_root_correlation_id
+            if not (tree_engaged and self._session_tree_registry.has_tree(root_corr)):
+                concurrency.release_session_slot(phase)
 
         # On phase end, release slots for sessions still in flight.
         # These are sessions that started but whose final turn was never sent/returned.
-        if is_final_returned:
+        # Under per-tree accounting the registry owns every session slot, so the
+        # runner releases any still-open trees at phase cleanup (release_all);
+        # releasing here would race the registry and over-release.
+        if is_final_returned and not tree_engaged:
             in_flight = handler.progress.in_flight_sessions
             if in_flight > 0:
                 _logger.debug(

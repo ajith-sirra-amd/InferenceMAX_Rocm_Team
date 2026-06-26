@@ -8,6 +8,8 @@ INFERENCEX_AGENTX_MVP = ScenarioSpec(
     name="inferencex-agentx-mvp",
     timing_mode=TimingMode.AGENTIC_REPLAY,
     require_ignore_eos=True,
+    require_streaming=True,
+    require_use_end_to_start_delays=True,
     forbid_ignore_trace_delays=True,
     forbid_input_truncation=True,
     require_loader=(
@@ -23,6 +25,8 @@ INFERENCEX_AGENTX_MVP = ScenarioSpec(
         "semianalysis_cc_traces_weka_061326_256k",
         "semianalysis_cc_traces_weka_061526",
         "semianalysis_cc_traces_weka_061526_256k",
+        "semianalysis_cc_traces_weka_062126",
+        "semianalysis_cc_traces_weka_062126_256k",
         "weka_trace",
         "weka_hf",
     ),

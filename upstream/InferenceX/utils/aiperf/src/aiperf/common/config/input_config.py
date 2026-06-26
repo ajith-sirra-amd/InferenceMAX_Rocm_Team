@@ -106,6 +106,17 @@ class InputConfig(BaseConfig):
     @model_validator(mode="after")
     def validate_dataset_type(self) -> Self:
         """Validate the different dataset type configuration."""
+        # --hf-weka-dataset names a HuggingFace repo for the generic weka_hf
+        # loader, so passing it implies --public-dataset weka_hf. Auto-select
+        # it when the user didn't name a dataset, so the repo flag works on its
+        # own instead of erroring with "requires --public-dataset weka_hf".
+        if self.hf_weka_dataset is not None and self.public_dataset is None:
+            if self.custom_dataset_type is not None:
+                raise ValueError(
+                    "--hf-weka-dataset selects --public-dataset weka_hf, which "
+                    "cannot be combined with --custom-dataset-type"
+                )
+            self.public_dataset = PublicDatasetType.WEKA_HF
         if self.public_dataset is not None and self.custom_dataset_type is not None:
             raise ValueError(
                 "The --public-dataset and --custom-dataset-type options cannot be set together"
@@ -374,6 +385,27 @@ class InputConfig(BaseConfig):
         ),
     ] = InputDefaults.USE_THINK_TIME_ONLY
 
+    use_end_to_start_delays: Annotated[
+        bool,
+        Field(
+            description="For weka_trace inputs, emit Turn.delay as the end-to-start "
+            "idle gap `t_curr - (t_prev + api_time_prev)` instead of the start-to-start "
+            "delta `t_curr - t_prev`. The replay dispatches each turn after the previous "
+            "turn COMPLETES, so adding the start-to-start gap (which already contains the "
+            "previous request's server time) double-counts `api_time` and makes each "
+            "stream's clock drift later turn-by-turn, fabricating cross-stream concurrency. "
+            "End-to-start is the faithful inter-turn idle and reproduces the recording's "
+            "concurrency exactly at replay-speed parity. Computed from `t`/`api_time` "
+            "(unlike `--use-think-time-only`, which trusts the recorded `think_time` field "
+            "that can disagree with the timeline). Floors at 0 for recorded overlap. No "
+            "effect on non-weka loaders.",
+        ),
+        CLIParameter(
+            name=("--use-end-to-start-delays",),
+            group=Groups.INPUT,
+        ),
+    ] = InputDefaults.USE_END_TO_START_DELAYS
+
     public_dataset: Annotated[
         PublicDatasetType | None,
         Field(
@@ -395,13 +427,14 @@ class InputConfig(BaseConfig):
         CLIParameter(name=("--hf-subset",), group=Groups.INPUT),
     ] = None
 
-    hf_weka_repo: Annotated[
+    hf_weka_dataset: Annotated[
         str | None,
         Field(
-            description="HuggingFace dataset repo override for `--public-dataset weka_hf` (e.g. `semianalysisai/cc-traces-weka-with-subagents-052726`). "
-            "Only valid with `--public-dataset weka_hf`; pinned Weka public dataset aliases keep their registry-defined repo names.",
+            description="HuggingFace dataset repo for the generic Weka loader (e.g. `semianalysisai/cc-traces-weka-062126`). "
+            "Passing this auto-selects `--public-dataset weka_hf`, so the repo flag works on its own; setting it alongside any other "
+            "`--public-dataset` or `--custom-dataset-type` is an error. Pinned Weka public dataset aliases keep their registry-defined repo names.",
         ),
-        CLIParameter(name=("--hf-weka-repo",), group=Groups.INPUT),
+        CLIParameter(name=("--hf-weka-dataset",), group=Groups.INPUT),
     ] = None
 
     custom_dataset_type: Annotated[

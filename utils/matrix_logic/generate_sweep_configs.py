@@ -2,6 +2,7 @@ import fnmatch
 import json
 import argparse
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 # Ensure sibling modules are importable regardless of how script is invoked
@@ -21,6 +22,10 @@ seq_len_stoi = {
 }
 
 MIN_EVAL_CONC = 16
+MAX_MULTINODE_AGENTIC_CONCURRENCIES_PER_ALLOCATION = 4
+CPU_MEMORY_OFFLOAD_MODES = {"cpu", "lmcache", "lmcache-mp", "hicache"}
+BYTES_PER_MIB = 1024 * 1024
+BYTES_PER_GB = 1_000_000_000
 
 # Reverse mapping for exp-name generation
 seq_len_itos = {v: k for k, v in seq_len_stoi.items()}
@@ -33,6 +38,33 @@ def seq_len_to_str(isl: int, osl: int) -> str:
     otherwise returns 'isl_osl' format.
     """
     return seq_len_itos.get((isl, osl), f"{isl}_{osl}")
+
+
+def agentic_cpu_offload_gb(agentic_config: dict, benchmark: dict) -> int:
+    """Return the aggregate CPU offload budget for a single-node entry."""
+    offloading = benchmark.get(Fields.OFFLOADING.value, "none")
+    if offloading not in CPU_MEMORY_OFFLOAD_MODES:
+        return 0
+
+    explicit_total = benchmark.get(Fields.TOTAL_CPU_DRAM_GB.value, 0)
+    if explicit_total > 0:
+        return explicit_total
+
+    available_mib = agentic_config[Fields.AVAILABLE_CPU_DRAM_MIB.value]
+    utilization = Decimal(str(agentic_config[Fields.CPU_OFFLOAD_UTILIZATION.value]))
+    gpus_per_node = agentic_config[Fields.GPUS_PER_NODE.value]
+    tp = benchmark[Fields.TP.value]
+    proportional_bytes = (
+        Decimal(available_mib) * BYTES_PER_MIB * utilization * tp / gpus_per_node
+    )
+    return int(proportional_bytes / BYTES_PER_GB)
+
+
+def chunk_multinode_agentic_concurrencies(conc_values: list[int]) -> list[list[int]]:
+    """Bound sequential agentic profiles sharing one server allocation."""
+    size = MAX_MULTINODE_AGENTIC_CONCURRENCIES_PER_ALLOCATION
+    return [conc_values[index:index + size] for index in range(0, len(conc_values), size)]
+
 
 def mark_eval_entries(matrix_values: list[dict]) -> list[dict]:
     """Eval selection policy:
@@ -395,6 +427,11 @@ def generate_full_sweep(args, all_config_data, runner_data):
                     ep = bmk.get(Fields.EP.value)
                     dp_attn = bmk.get(Fields.DP_ATTN.value)
                 offloading = bmk.get(Fields.OFFLOADING.value, "none")
+                total_cpu_dram_gb = (
+                    0
+                    if is_multinode
+                    else agentic_cpu_offload_gb(agentic_config, bmk)
+                )
 
                 # Get concurrency values
                 conc_list = bmk.get(Fields.CONC_LIST.value)
@@ -423,9 +460,9 @@ def generate_full_sweep(args, all_config_data, runner_data):
 
                 runners_for_entry = runner_nodes_to_use if runner_nodes_to_use else [runner]
 
-                for conc in conc_values:
+                if is_multinode:
                     for runner_value in runners_for_entry:
-                        if is_multinode:
+                        for conc_batch in chunk_multinode_agentic_concurrencies(conc_values):
                             entry = {
                                 Fields.IMAGE.value: image,
                                 Fields.MODEL.value: model,
@@ -436,16 +473,22 @@ def generate_full_sweep(args, all_config_data, runner_data):
                                 Fields.SPEC_DECODING.value: spec_decoding,
                                 Fields.PREFILL.value: prefill,
                                 Fields.DECODE.value: decode,
-                                Fields.CONC.value: conc,
+                                Fields.CONC.value: conc_batch,
+                                Fields.OFFLOADING.value: offloading,
                                 Fields.DURATION.value: duration,
                                 Fields.EXP_NAME.value: (
                                     f"{model_code}_p{prefill[Fields.NUM_WORKER.value]}x{prefill[Fields.TP.value]}"
-                                    f"_d{decode[Fields.NUM_WORKER.value]}x{decode[Fields.TP.value]}_conc{conc}"
+                                    f"_d{decode[Fields.NUM_WORKER.value]}x{decode[Fields.TP.value]}"
+                                    f"_conc{'x'.join(str(c) for c in conc_batch)}"
                                 ),
                                 Fields.DISAGG.value: disagg,
                                 Fields.SCENARIO_TYPE.value: "agentic-coding",
                             }
-                        else:
+                            validate_agentic_matrix_entry(entry)
+                            matrix_values.append(entry)
+                else:
+                    for conc in conc_values:
+                        for runner_value in runners_for_entry:
                             entry = {
                                 Fields.IMAGE.value: image,
                                 Fields.MODEL.value: model,
@@ -458,13 +501,13 @@ def generate_full_sweep(args, all_config_data, runner_data):
                                 Fields.DP_ATTN.value: dp_attn if dp_attn is not None else False,
                                 Fields.CONC.value: conc,
                                 Fields.OFFLOADING.value: offloading,
+                                Fields.TOTAL_CPU_DRAM_GB.value: total_cpu_dram_gb,
                                 Fields.DURATION.value: duration,
                                 Fields.EXP_NAME.value: f"{model_code}_tp{tp}_conc{conc}_offload{offloading}",
                                 Fields.SCENARIO_TYPE.value: "agentic-coding",
                             }
-
-                        validate_agentic_matrix_entry(entry)
-                        matrix_values.append(entry)
+                            validate_agentic_matrix_entry(entry)
+                            matrix_values.append(entry)
 
     return matrix_values
 
@@ -798,8 +841,9 @@ def generate_test_config_sweep(args, all_config_data, runner_data=None):
         agentic_configs = val[Fields.SCENARIOS.value].get(Fields.AGENTIC_CODING.value, []) if (scenario_filter is None or 'agentic-coding' in scenario_filter) else []
         for agentic_config in agentic_configs:
             duration = agentic_config.get(Fields.DURATION.value, 1800)
+            bmk_space = agentic_config[Fields.SEARCH_SPACE.value]
 
-            for bmk in agentic_config[Fields.SEARCH_SPACE.value]:
+            for bmk in bmk_space:
                 if is_multinode:
                     prefill = bmk[Fields.PREFILL.value]
                     decode = bmk[Fields.DECODE.value]
@@ -809,6 +853,11 @@ def generate_test_config_sweep(args, all_config_data, runner_data=None):
                     ep = bmk.get(Fields.EP.value)
                     dp_attn = bmk.get(Fields.DP_ATTN.value)
                 offloading = bmk.get(Fields.OFFLOADING.value, "none")
+                total_cpu_dram_gb = (
+                    0
+                    if is_multinode
+                    else agentic_cpu_offload_gb(agentic_config, bmk)
+                )
 
                 conc_list = bmk.get(Fields.CONC_LIST.value)
                 if conc_list:
@@ -831,9 +880,9 @@ def generate_test_config_sweep(args, all_config_data, runner_data=None):
                 if not conc_values:
                     continue
 
-                for conc in conc_values:
+                if is_multinode:
                     for runner_value in runners_for_entry:
-                        if is_multinode:
+                        for conc_batch in chunk_multinode_agentic_concurrencies(conc_values):
                             entry = {
                                 Fields.IMAGE.value: image,
                                 Fields.MODEL.value: model,
@@ -844,16 +893,21 @@ def generate_test_config_sweep(args, all_config_data, runner_data=None):
                                 Fields.SPEC_DECODING.value: spec_decoding,
                                 Fields.PREFILL.value: prefill,
                                 Fields.DECODE.value: decode,
-                                Fields.CONC.value: conc,
+                                Fields.CONC.value: conc_batch,
+                                Fields.OFFLOADING.value: offloading,
                                 Fields.DURATION.value: duration,
                                 Fields.EXP_NAME.value: (
                                     f"{model_code}_p{prefill[Fields.NUM_WORKER.value]}x{prefill[Fields.TP.value]}"
-                                    f"_d{decode[Fields.NUM_WORKER.value]}x{decode[Fields.TP.value]}_conc{conc}"
+                                    f"_d{decode[Fields.NUM_WORKER.value]}x{decode[Fields.TP.value]}"
+                                    f"_conc{'x'.join(str(c) for c in conc_batch)}"
                                 ),
                                 Fields.DISAGG.value: disagg,
                                 Fields.SCENARIO_TYPE.value: "agentic-coding",
                             }
-                        else:
+                            matrix_values.append(validate_agentic_matrix_entry(entry))
+                else:
+                    for conc in conc_values:
+                        for runner_value in runners_for_entry:
                             entry = {
                                 Fields.IMAGE.value: image,
                                 Fields.MODEL.value: model,
@@ -866,11 +920,12 @@ def generate_test_config_sweep(args, all_config_data, runner_data=None):
                                 Fields.DP_ATTN.value: dp_attn if dp_attn is not None else False,
                                 Fields.CONC.value: conc,
                                 Fields.OFFLOADING.value: offloading,
+                                Fields.TOTAL_CPU_DRAM_GB.value: total_cpu_dram_gb,
                                 Fields.DURATION.value: duration,
                                 Fields.EXP_NAME.value: f"{model_code}_tp{tp}_conc{conc}_offload{offloading}",
                                 Fields.SCENARIO_TYPE.value: "agentic-coding",
                             }
-                        matrix_values.append(validate_agentic_matrix_entry(entry))
+                            matrix_values.append(validate_agentic_matrix_entry(entry))
 
     return matrix_values
 

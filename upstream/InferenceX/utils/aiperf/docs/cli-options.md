@@ -16,6 +16,14 @@ Install shell completion for this application.
 
 Analyze a mooncake trace file for ISL/OSL distributions and cache hit rates.
 
+### [`analyze swim-lane`](#aiperf-analyze-swim-lane)
+
+Render a per-session swim-lane PNG with concurrency curve underneath.
+
+### [`analyze turn-messages`](#aiperf-analyze-turn-messages)
+
+Render a collapsible HTML viewer of per-turn input messages (needs --export-level raw).
+
 ### [`profile`](#aiperf-profile)
 
 Run the Profile subcommand.
@@ -84,6 +92,61 @@ KV cache block size for analysis (default: 512).
 #### `--output-file` `<str>`
 
 Optional output path for analysis report (JSON).
+
+<hr/>
+
+## `aiperf analyze swim-lane`
+
+Render a per-session swim-lane PNG with concurrency curve underneath.
+
+#### `--run-dirs`, `--empty-run-dirs` `<list>` _(Required)_
+
+One or more AIPerf run directories.
+
+#### `-o`, `--out` `<str>`
+
+Output PNG path. Only valid when a single run directory is given.
+
+#### `-c`, `--concurrency` `<int>`
+
+Target concurrency to draw as a reference line in the concurrency panel.
+
+#### `--ramp` `<float>`
+
+Ramp duration in seconds for the ramp-done marker; overrides the value read from ``profile_export_aiperf.json`` (useful when only the jsonl was exported).
+
+#### `--html`, `--no-html`
+
+Also write an interactive HTML trace viewer (``swim_lane.html``, or the ``--out`` path with an ``.html`` suffix).
+
+<hr/>
+
+## `aiperf analyze turn-messages`
+
+Render a collapsible HTML viewer of per-turn input messages (needs --export-level raw).
+
+#### `--run-dirs`, `--empty-run-dirs` `<list>` _(Required)_
+
+One or more AIPerf run directories.
+
+#### `-o`, `--out` `<str>`
+
+Output HTML path. Only valid when a single run directory is given.
+
+#### `-n`, `--limit-conversations` `<int>`
+
+Max conversations to render (roots first, then by earliest request time).
+<br/>_Default: `40`_
+
+#### `--max-turns` `<int>`
+
+Max turns rendered per conversation; the rest are summarized as a hidden count.
+<br/>_Default: `60`_
+
+#### `--content-cap` `<int>`
+
+Max characters kept per unique message body; longer bodies are truncated with a remaining-chars note. Raise for full fidelity.
+<br/>_Default: `8000`_
 
 <hr/>
 
@@ -203,6 +266,22 @@ Use the legacy 'max_tokens' field instead of 'max_completion_tokens' in request 
 Use server-reported token counts from API usage fields instead of client-side tokenization. When enabled, tokenizers are still loaded (needed for dataset generation) but tokenizer.encode() is not called for computing metrics. Token count fields will be None if the server does not provide usage information. For OpenAI-compatible streaming endpoints (chat/completions), stream_options.include_usage is automatically configured when this flag is enabled. Recommended whenever the AIPerf tokenizer can disagree with the server's tokenizer (e.g. unmatched tokenizer revision, vendor-specific BPE merges, or chat templates that differ from the server) — this most often shows up as an output sequence length (OSL) mismatch even when the server is honoring the request (e.g. with ignore_eos=true).
 <br/>_Flag (no value required)_
 
+#### `--use-dynamo-conv-aware-routing`, `--use-dynamo-session-control`
+
+Emit Dynamo nvext.session_control in OpenAI-compatible request bodies so Dynamo can bind all turns from the same replayed conversation lineage to the same backend worker. This is only intended for Dynamo frontends that implement session_control.
+<br/>_Flag (no value required)_
+
+#### `--use-legacy-dynamo-session-control`
+
+Emit the legacy Dynamo nvext.session_control lifecycle that released Dynamo (v1.2.x) understands: action 'open' on the first turn, session_id only on intermediate turns, and action 'close' on the final turn. Use this when the target Dynamo predates the 'bind' action (added in v1.3.0-dev); otherwise 'bind' is rejected with an HTTP 400. Requires --use-dynamo-conv-aware-routing, and the Dynamo deployment must expose a worker session_control endpoint for 'open' to take effect.
+<br/>_Flag (no value required)_
+
+#### `--dynamo-session-timeout-seconds` `<int>`
+
+Dynamo nvext.session_control timeout in seconds when --use-dynamo-conv-aware-routing is enabled.
+<br/>_Constraints: ≥ 1_
+<br/>_Default: `300`_
+
 #### `--connection-reuse-strategy` `<str>`
 
 Transport connection reuse strategy. 'pooled' (default): connections are pooled and reused across all requests. 'never': new connection for each request, closed after response. 'sticky-user-sessions': connection persists across turns of a multi-turn conversation, closed on final turn (enables sticky load balancing).
@@ -281,18 +360,23 @@ Strip per-turn timestamps and inter-turn delays from trace datasets at load time
 For weka_trace inputs, emit Turn.delay using only the recorded per-request `think_time` (client-side delay before each request) instead of the full `t_curr − t_prev` inter-request delta. Compresses replay wall time against zero-latency mocks because the recorded `api_time` portion of each gap is dropped. Mirrors kv-cache-tester's default `--timing-strategy think-only`. Falls back to the full delta for turns whose recorded `think_time` is null. Mutually exclusive with `--ignore-trace-delays`. No effect on non-weka trace loaders.
 <br/>_Flag (no value required)_
 
+#### `--use-end-to-start-delays`
+
+For weka_trace inputs, emit Turn.delay as the end-to-start idle gap `t_curr - (t_prev + api_time_prev)` instead of the start-to-start delta `t_curr - t_prev`. The replay dispatches each turn after the previous turn COMPLETES, so adding the start-to-start gap (which already contains the previous request's server time) double-counts `api_time` and makes each stream's clock drift later turn-by-turn, fabricating cross-stream concurrency. End-to-start is the faithful inter-turn idle and reproduces the recording's concurrency exactly at replay-speed parity. Computed from `t`/`api_time` (unlike `--use-think-time-only`, which trusts the recorded `think_time` field that can disagree with the timeline). Floors at 0 for recorded overlap. No effect on non-weka loaders.
+<br/>_Flag (no value required)_
+
 #### `--public-dataset` `<str>`
 
 Pre-configured public dataset to download and use for benchmarking (e.g., `sharegpt`). AIPerf automatically downloads and parses these datasets. Mutually exclusive with `--custom-dataset-type`. Run `aiperf plugins public_dataset_loader` to list available datasets. Use `--hf-subset` to override the HuggingFace subset/config for HF-backed datasets.
-<br/>_Choices: [`sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `speed_bench_qualitative`, `speed_bench_coding`, `speed_bench_humanities`, `speed_bench_math`, `speed_bench_multilingual`, `speed_bench_qa`, `speed_bench_rag`, `speed_bench_reasoning`, `speed_bench_roleplay`, `speed_bench_stem`, `speed_bench_summarization`, `speed_bench_writing`, `speed_bench_throughput_1k`, `speed_bench_throughput_2k`, `speed_bench_throughput_8k`, `speed_bench_throughput_16k`, `speed_bench_throughput_32k`, `speed_bench_throughput_1k_low_entropy`, `speed_bench_throughput_1k_mixed`, `speed_bench_throughput_1k_high_entropy`, `speed_bench_throughput_2k_low_entropy`, `speed_bench_throughput_2k_mixed`, `speed_bench_throughput_2k_high_entropy`, `speed_bench_throughput_8k_low_entropy`, `speed_bench_throughput_8k_mixed`, `speed_bench_throughput_8k_high_entropy`, `speed_bench_throughput_16k_low_entropy`, `speed_bench_throughput_16k_mixed`, `speed_bench_throughput_16k_high_entropy`, `speed_bench_throughput_32k_low_entropy`, `speed_bench_throughput_32k_mixed`, `speed_bench_throughput_32k_high_entropy`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `weka_hf`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`]_
+<br/>_Choices: [`sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `speed_bench_qualitative`, `speed_bench_coding`, `speed_bench_humanities`, `speed_bench_math`, `speed_bench_multilingual`, `speed_bench_qa`, `speed_bench_rag`, `speed_bench_reasoning`, `speed_bench_roleplay`, `speed_bench_stem`, `speed_bench_summarization`, `speed_bench_writing`, `speed_bench_throughput_1k`, `speed_bench_throughput_2k`, `speed_bench_throughput_8k`, `speed_bench_throughput_16k`, `speed_bench_throughput_32k`, `speed_bench_throughput_1k_low_entropy`, `speed_bench_throughput_1k_mixed`, `speed_bench_throughput_1k_high_entropy`, `speed_bench_throughput_2k_low_entropy`, `speed_bench_throughput_2k_mixed`, `speed_bench_throughput_2k_high_entropy`, `speed_bench_throughput_8k_low_entropy`, `speed_bench_throughput_8k_mixed`, `speed_bench_throughput_8k_high_entropy`, `speed_bench_throughput_16k_low_entropy`, `speed_bench_throughput_16k_mixed`, `speed_bench_throughput_16k_high_entropy`, `speed_bench_throughput_32k_low_entropy`, `speed_bench_throughput_32k_mixed`, `speed_bench_throughput_32k_high_entropy`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`]_
 
 #### `--hf-subset` `<str>`
 
 HuggingFace dataset subset/config name to override the plugin default (e.g. `sharegpt4o`). Only applies when using `--public-dataset` with a HuggingFace-backed loader. Takes priority over the subset defined in the plugin registry.
 
-#### `--hf-weka-repo` `<str>`
+#### `--hf-weka-dataset` `<str>`
 
-HuggingFace dataset repo override for `--public-dataset weka_hf` (e.g. `semianalysisai/cc-traces-weka-with-subagents-052726`). Only valid with `--public-dataset weka_hf`; pinned Weka public dataset aliases keep their registry-defined repo names.
+HuggingFace dataset repo for the generic Weka loader (e.g. `semianalysisai/cc-traces-weka-062126`). Passing this auto-selects `--public-dataset weka_hf`, so the repo flag works on its own; setting it alongside any other `--public-dataset` or `--custom-dataset-type` is an error. Pinned Weka public dataset aliases keep their registry-defined repo names.
 
 #### `--custom-dataset-type` `<str>`
 
@@ -778,15 +862,20 @@ Abort the run early when (failed_records / total_records) exceeds this ratio. De
 
 #### `--trajectory-start-min-ratio` `<float>`
 
-AGENTIC_REPLAY only: lower bound (inclusive) on the random start position within each trajectory, expressed as a fraction of the trace's total turn count. Sampled per trajectory at trajectory-build time; deterministic given --random-seed. Default 0.0 keeps the prior behavior where every trajectory could start at turn 0.
+AGENTIC_REPLAY only: lower bound (inclusive) on the random start position within each trajectory, expressed as a fraction of the trace's total turn count. Sampled per trajectory at trajectory-build time; deterministic given --random-seed.
 <br/>_Constraints: ≥ 0.0, ≤ 1.0_
-<br/>_Default: `0.0`_
+<br/>_Default: `0.25`_
 
 #### `--trajectory-start-max-ratio` `<float>`
 
-AGENTIC_REPLAY only: upper bound (inclusive) on the random start position within each trajectory, expressed as a fraction of the trace's total turn count. The effective per-trace ceiling is min(int(max_ratio * n), n - 2) so at least one profile turn remains after warmup. Default 0.7 preserves the previously hardcoded value.
+AGENTIC_REPLAY only: upper bound (inclusive) on the random start position within each trajectory, expressed as a fraction of the trace's total turn count. The effective per-trace ceiling is min(int(max_ratio * n), n - 2) so at least one profile turn remains after warmup.
 <br/>_Constraints: ≥ 0.0, ≤ 1.0_
-<br/>_Default: `0.7`_
+<br/>_Default: `0.75`_
+
+#### `--burst-phase-starts`
+
+AGENTIC_REPLAY only: collapse the WARMUP-start and PROFILING-start dispatches into synchronized bursts instead of spreading them by each request's recorded offset from t*. By default (False) the phase starts are SPREAD: WARMUP requests are aligned globally so every trajectory reaches its t* at the same instant (the warmup end), and each lane's first PROFILING request waits out its recorded gap after t* -- reproducing the recorded arrival pattern at both phase boundaries. The rest of the replay (inter-turn delays) is timing-faithful regardless of this flag; it governs ONLY the burst-vs-spread of the two phase starts. Pass --burst-phase-starts to fire each phase's first requests together (faster concurrency ramp, synchronized start), e.g. for a throughput-oriented run rather than a faithful arrival replay.
+<br/>_Flag (no value required)_
 
 #### `--concurrency` `<str>`
 
@@ -835,6 +924,11 @@ The maximum number of warmup requests to send before benchmarking. If not set an
 #### `--warmup-duration` `<float>`
 
 The maximum duration in seconds for the warmup phase. If not set, it will use the `--warmup-request-count` value. If neither are set, no warmup phase will be used.
+<br/>_Constraints: > 0_
+
+#### `--agentic-cache-warmup-duration` `<float>`
+
+Additional agentic replay warmup duration in seconds. After the normal snapshot warmup drains, AIPerf continues the live trajectories without recorded idle delays and with one-token outputs, then drains and resumes profiling from the resulting trajectory state.
 <br/>_Constraints: > 0_
 
 #### `--num-warmup-sessions` `<int>`

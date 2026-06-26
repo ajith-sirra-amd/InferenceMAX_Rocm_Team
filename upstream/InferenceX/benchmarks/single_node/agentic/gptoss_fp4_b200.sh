@@ -11,25 +11,11 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION
 
-if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
-    MAX_MODEL_LEN=131072
-fi
-
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
 
-# `hf download` creates the target dir if missing and is itself idempotent.
-# When MODEL_PATH is unset (stand-alone runs), fall back to the HF_HUB_CACHE
-# Either way, MODEL_PATH is what the server is launched with.
-if [[ -n "${MODEL_PATH:-}" ]]; then
-    if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
-        hf download "$MODEL" --local-dir "$MODEL_PATH"
-    fi
-else
-    hf download "$MODEL"
-    export MODEL_PATH="$MODEL"
-fi
+if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
 nvidia-smi
 
 # ---- Resolve traces and install deps ----------------------------------------
@@ -45,7 +31,6 @@ kv-cache-dtype: fp8
 compilation-config: '{"pass_config":{"fuse_allreduce_rms":true,"eliminate_noops":true}}'
 max-cudagraph-capture-size: 2048
 max-num-batched-tokens: 8192
-max-model-len: $MAX_MODEL_LEN
 EOF
 
 OFFLOAD_ARGS=""
@@ -63,7 +48,7 @@ export TORCH_CUDA_ARCH_LIST="10.0"
 export PYTHONNOUSERSITE=1
 export VLLM_USE_FLASHINFER_MOE_MXFP4_MXFP8=1
 
-vllm serve "$MODEL_PATH" --served-model-name "$MODEL" \
+vllm serve $MODEL \
 --host 0.0.0.0 \
 --port $PORT \
 --config "$RESULT_DIR/config.yaml" \

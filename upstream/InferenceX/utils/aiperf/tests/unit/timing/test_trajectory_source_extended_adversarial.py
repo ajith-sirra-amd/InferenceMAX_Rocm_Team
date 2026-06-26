@@ -53,16 +53,18 @@ def _uniform_dataset(num_traces: int, turns_per_trace: int) -> DatasetMetadata:
 
 
 class _Sampler:
-    """Stub sampler that cycles through the provided ids and raises StopIteration when exhausted."""
+    """Wrapping stub sampler (like the production SequentialSampler): cycles
+    through the provided ids indefinitely; raises StopIteration only when the
+    pool is empty."""
 
     def __init__(self, ids: list[str]) -> None:
         self._ids = list(ids)
         self._i = 0
 
     def next_conversation_id(self) -> str:
-        if self._i >= len(self._ids):
+        if not self._ids:
             raise StopIteration
-        cid = self._ids[self._i]
+        cid = self._ids[self._i % len(self._ids)]
         self._i += 1
         return cid
 
@@ -206,12 +208,12 @@ def test_seed_for_trace_independence_across_traces() -> None:
 
 
 # =============================================================================
-# session_for: fresh correlation_id per call when no override
+# session_for: persistent trajectory correlation_id when no override
 # =============================================================================
 
 
-def test_session_for_returns_fresh_correlation_id_per_call() -> None:
-    """``session_for`` must mint a new UUID each call when no override is passed."""
+def test_session_for_reuses_trajectory_correlation_id_per_call() -> None:
+    """``session_for`` must preserve lane identity when no override is passed."""
     ds = _make_dataset({"trace_0": 4})
     sampler = _Sampler(["trace_0"])
     src = TrajectorySource(
@@ -225,7 +227,8 @@ def test_session_for_returns_fresh_correlation_id_per_call() -> None:
     s1 = src.session_for(trajectory)
     s2 = src.session_for(trajectory)
 
-    assert s1.x_correlation_id != s2.x_correlation_id
+    assert s1.x_correlation_id == trajectory.x_correlation_id
+    assert s2.x_correlation_id == trajectory.x_correlation_id
     assert s1.start_turn_index == trajectory.start_turn_index
     assert s2.start_turn_index == trajectory.start_turn_index
 

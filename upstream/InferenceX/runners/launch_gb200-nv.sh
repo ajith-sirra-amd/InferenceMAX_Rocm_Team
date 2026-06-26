@@ -16,10 +16,10 @@ if [[ $FRAMEWORK == "dynamo-sglang" ]]; then
         export MODEL_PATH="/mnt/lustre01/models/deepseek-r1-0528-fp4-v2/"
         export SRT_SLURM_MODEL_PREFIX="dsr1-fp4"
     elif [[ $MODEL_PREFIX == "dsv4" && $PRECISION == "fp4" ]]; then
-        # Same compute-node-local NVMe path as the dynamo-vllm dsv4
-        # branch — see that branch for rationale. SRT_SLURM_MODEL_PREFIX
-        # matches the model.path alias in our DSV4 sglang recipes.
-        export MODEL_PATH="/mnt/numa1/models/deepseek-v4-pro/"
+        # Lustre-resident weights staged on the GB200 external cluster.
+        # SRT_SLURM_MODEL_PREFIX matches the model.path alias in our
+        # DSV4 sglang recipes.
+        export MODEL_PATH="/mnt/lustre01/models/deepseek-v4-pro"
         export SRT_SLURM_MODEL_PREFIX="deepseek-v4-pro"
     else
         export MODEL_PATH=$MODEL
@@ -49,13 +49,20 @@ elif [[ $FRAMEWORK == "dynamo-vllm" ]]; then
         export MODEL_PATH="/mnt/lustre01/models/kimi-k2.5-nvfp4"
         export SRT_SLURM_MODEL_PREFIX="kimi-k2.5-nvfp4"
     elif [[ $MODEL_PREFIX == "dsv4" && $PRECISION == "fp4" ]]; then
-        # Weights live on compute-node local NVMe (/mnt/numa1) — no Lustre
-        # contention, fast startup. SRT_SLURM_MODEL_PREFIX matches the
-        # model.path alias in our DSV4 recipes.
-        export MODEL_PATH="/mnt/numa1/models/deepseek-v4-pro/"
+        # The FP4 checkpoint is staged on compute-visible Lustre. The former
+        # /mnt/numa1 path is no longer present on watchtower compute nodes;
+        # the lowercase Lustre sibling is the FP8 checkpoint, so keep the
+        # NVFP4 path explicit here.
+        export MODEL_PATH="/mnt/lustre01/models/DeepSeek-V4-Pro-NVFP4/"
         export SRT_SLURM_MODEL_PREFIX="deepseek-v4-pro"
+    elif [[ $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp4" ]]; then
+        export MODEL_PATH="/mnt/lustre01/models/MiniMax-M2.5-NVFP4"
+        export SRT_SLURM_MODEL_PREFIX="minimax-m2.5-nvfp4"
+    elif [[ $MODEL_PREFIX == "minimaxm2.5" && $PRECISION == "fp8" ]]; then
+        export MODEL_PATH="/mnt/lustre01/models/MiniMax-M2.5"
+        export SRT_SLURM_MODEL_PREFIX="minimax-m2.5-fp8"
     else
-        echo "Unsupported model prefix/precision combination: $MODEL_PREFIX/$PRECISION. Supported combinations for dynamo-vllm: kimik2.5/fp4, dsv4/fp4"
+        echo "Unsupported model prefix/precision combination: $MODEL_PREFIX/$PRECISION. Supported combinations for dynamo-vllm: kimik2.5/fp4, dsv4/fp4, minimaxm2.5/fp4, minimaxm2.5/fp8"
         exit 1
     fi
 else
@@ -68,8 +75,59 @@ export SLURM_ACCOUNT="benchmark"
 
 NGINX_IMAGE="nginx:1.27.4"
 
-SQUASH_FILE="/mnt/lustre01/users-public/sa-shared/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
-NGINX_SQUASH_FILE="/mnt/lustre01/users-public/sa-shared/$(echo "$NGINX_IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
+# === Cluster diagnostic probe (minimax only) ===
+# The gb200-nv_* runners may be hosted on different physical clusters
+# (e.g., the legacy NVIDIA Lustre cluster vs Oracle Cloud "watchtower").
+# Print enough info to identify the layout, then pick a writable
+# squash dir on a path that's also visible to compute nodes. Falls
+# back to the legacy sa-shared path so other configs are untouched.
+SQUASH_DIR="/mnt/lustre01/users-public/sa-shared"
+if [[ $MODEL_PREFIX == "minimaxm2.5" ]]; then
+    echo "=== cluster diagnostic (minimax sweep) ==="
+    echo "USER=$(id -un) UID=$(id -u) GID=$(id -g) GROUPS=$(id -Gn)"
+    echo "HOME=$HOME"
+    echo "HOSTNAME=$(hostname -f 2>/dev/null || hostname)"
+    echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+    echo "--- mount summary ---"
+    mount | grep -E 'lustre|nfs|home|shared|/mnt' || true
+    echo "--- /mnt contents ---"
+    ls -ld /mnt/* 2>/dev/null || true
+    echo "--- /mnt/lustre01 user dirs ---"
+    ls -ld /mnt/lustre01/users/* 2>/dev/null || true
+    ls -ld /mnt/lustre01/users-public/* 2>/dev/null || true
+    ls -ld /mnt/lustre01/groups/* 2>/dev/null || true
+    echo "--- /nfs contents (if present) ---"
+    ls -ld /nfs/* 2>/dev/null || true
+    echo "--- /home contents ---"
+    ls -ld /home/* 2>/dev/null || true
+    echo "=== end diagnostic ==="
+
+    # Probe candidate squash dirs in order, pick first writable one.
+    SQUASH_DIR=""
+    for cand in \
+        /mnt/lustre01/users/slurm-shared/squash \
+        /mnt/lustre01/users-public/slurm-shared/squash \
+        /mnt/lustre01/groups/slurm-shared/squash \
+        /mnt/lustre01/users-public/sa-shared \
+        /nfs/slurm-shared/squash \
+        /home/slurm-shared/gharunners/squash
+    do
+        if mkdir -p "$cand" 2>/dev/null && touch "$cand/.write-probe.$$" 2>/dev/null; then
+            rm -f "$cand/.write-probe.$$" 2>/dev/null
+            SQUASH_DIR="$cand"
+            echo "Selected SQUASH_DIR=$SQUASH_DIR (first writable candidate)"
+            break
+        else
+            echo "  not writable: $cand"
+        fi
+    done
+    if [ -z "$SQUASH_DIR" ]; then
+        echo "Error: no writable squash dir candidate found on this cluster" >&2
+        exit 1
+    fi
+fi
+SQUASH_FILE="${SQUASH_DIR}/$(echo "$IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
+NGINX_SQUASH_FILE="${SQUASH_DIR}/$(echo "$NGINX_IMAGE" | sed 's/[\/:@#]/_/g').sqsh"
 
 enroot import -o $SQUASH_FILE docker://$IMAGE
 enroot import -o $NGINX_SQUASH_FILE docker://$NGINX_IMAGE
@@ -141,6 +199,37 @@ fi
 
 echo "Cloning srt-slurm repository..."
 SRT_REPO_DIR="srt-slurm"
+# On the watchtower (Oracle) gb200 cluster, /home/slurm-shared is not
+# cross-mounted to compute nodes. Put the srt-slurm workspace and staged
+# InferenceX checkout on a writable shared-FS path that compute can see.
+# Per-run-unique paths avoid races between parallel sweep jobs.
+if [[ $MODEL_PREFIX == "minimaxm2.5" ]]; then
+    SHARED_BASE=""
+    for cand in \
+        /mnt/lustre01/users-public/sa-shared/gha-runs \
+        /mnt/lustre01/users/slurm-shared/gha-runs \
+        /mnt/lustre01/users-public/slurm-shared/gha-runs \
+        /mnt/lustre01/groups/slurm-shared/gha-runs \
+        /nfs/slurm-shared/gha-runs \
+        /home/slurm-shared/gharunners/gha-runs
+    do
+        if mkdir -p "$cand" 2>/dev/null && touch "$cand/.write-probe.$$" 2>/dev/null; then
+            rm -f "$cand/.write-probe.$$" 2>/dev/null
+            SHARED_BASE="$cand"
+            echo "Selected SHARED_BASE=$SHARED_BASE (first writable candidate)"
+            break
+        else
+            echo "  not writable: $cand"
+        fi
+    done
+    if [ -z "$SHARED_BASE" ]; then
+        echo "Error: no writable shared run directory candidate found on this cluster" >&2
+        exit 1
+    fi
+    RUN_KEY="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-0}-${RUNNER_NAME:-gb200-nv}-$$"
+    SRT_REPO_DIR="${SHARED_BASE}/srt-slurm-${RUN_KEY}"
+    echo "Using shared-FS SRT_REPO_DIR=$SRT_REPO_DIR (compute-visible)"
+fi
 if [ -d "$SRT_REPO_DIR" ]; then
     echo "Removing existing $SRT_REPO_DIR..."
     rm -rf "$SRT_REPO_DIR"
@@ -148,8 +237,21 @@ fi
 
 # TODO(CJQ): make first class upon srt-slurm upstream refactor
 if [[ "$IS_AGENTIC" == "1" ]]; then
-    git clone --branch cam/sa-submission-q2-2026 --single-branch https://github.com/cquil11/srt-slurm-nv.git "$SRT_REPO_DIR"
+    # Agentic multi-node uses the same pinned cquil11/srt-slurm-nv commit as
+    # launch_gb300-nv.sh — everything the agentic recipes need is there:
+    #   - BenchmarkType.CUSTOM + benchmark.command + benchmark.env
+    #     (the hook that hands off to benchmarks/multi_node/agentic_srt.sh)
+    #   - DynamoConfig.wheel (recipes pin the ai-dynamo wheel)
+    #   - srtctl apply --no-preflight (model path /mnt/numa1 is compute-node
+    #     local NVMe, invisible to the login-node runner)
+    #   - benchmark_stage srun_options propagation (container-remap-root
+    #     must reach the agentic_srt.sh srun)
+    git clone https://github.com/cquil11/srt-slurm-nv.git "$SRT_REPO_DIR"
     cd "$SRT_REPO_DIR"
+    git checkout de59739b172e507e15ebf145bfe305f606e82fbf
+    mkdir -p recipes/vllm/deepseek-v4/agentic
+    cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/deepseek-v4/agentic" \
+        recipes/vllm/deepseek-v4/agentic
 elif [[ $FRAMEWORK == "dynamo-vllm" && $MODEL_PREFIX == "dsv4" ]]; then
     git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
     cd "$SRT_REPO_DIR"
@@ -161,15 +263,26 @@ elif [[ $FRAMEWORK == "dynamo-vllm" && $MODEL_PREFIX == "dsv4" ]]; then
     mkdir -p recipes/vllm/deepseek-v4
     cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/deepseek-v4" recipes/vllm/deepseek-v4
 elif [[ $FRAMEWORK == "dynamo-sglang" && $MODEL_PREFIX == "dsv4" ]]; then
-    # Mirrors the dynamo-vllm dsv4 branch above: pin to the q2-2026
-    # NVIDIA srt-slurm (newer srtctl + dynamo-sglang container alias)
-    # and overlay our hand-rolled DSV4 sglang recipes. NVIDIA/srt-slurm
-    # has no upstream sglang DSV4 disagg recipes yet, hence the overlay.
+    # Stay on NVIDIA/srt-slurm:main (default) — submission branch no
+    # longer needed; overlay our hand-rolled DSV4 sglang recipes onto it.
     git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
     cd "$SRT_REPO_DIR"
-    git checkout sa-submission-q2-2026
     mkdir -p recipes/sglang/deepseek-v4
     cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/sglang/deepseek-v4" recipes/sglang/deepseek-v4
+elif [[ $FRAMEWORK == "dynamo-vllm" && $MODEL_PREFIX == "minimaxm2.5" ]]; then
+    git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR" || exit 1
+    cd "$SRT_REPO_DIR" || exit 1
+    git checkout main || exit 1
+    if [[ $PRECISION == "fp8" ]]; then
+        mkdir -p recipes/vllm/minimax-m2.5-gb200-fp8 || exit 1
+        cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/minimax-m2.5-gb200-fp8" recipes/vllm/minimax-m2.5-gb200-fp8 || exit 1
+    elif [[ $PRECISION == "fp4" ]]; then
+        mkdir -p recipes/vllm/minimax-m2.5-gb200 || exit 1
+        cp -rT "$GITHUB_WORKSPACE/benchmarks/multi_node/srt-slurm-recipes/vllm/minimax-m2.5-gb200" recipes/vllm/minimax-m2.5-gb200 || exit 1
+    else
+        echo "Unsupported minimaxm2.5 precision for GB200 dynamo-vllm: $PRECISION" >&2
+        exit 1
+    fi
 elif [[ $FRAMEWORK == "dynamo-vllm" ]]; then
     git clone https://github.com/NVIDIA/srt-slurm.git "$SRT_REPO_DIR"
     cd "$SRT_REPO_DIR"
@@ -187,7 +300,17 @@ echo "Installing srtctl..."
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 
-uv venv
+# Watchtower: the launcher runs on the head node but compute nodes
+# inherit the activated .venv (via VIRTUAL_ENV) through SRT_REPO_DIR
+# which is now on shared FS. If uv's default python install lives
+# under a head-node-only path, .venv/bin/python3 becomes a broken
+# symlink on compute. Pin the venv to /usr/bin/python3 — a system
+# path that exists at the same location on both head and compute.
+if [[ $MODEL_PREFIX == "minimaxm2.5" && -x /usr/bin/python3 ]]; then
+    uv venv --seed --python /usr/bin/python3
+else
+    uv venv --seed
+fi
 source .venv/bin/activate
 uv pip install -e .
 
@@ -200,6 +323,30 @@ echo "Configs available at: $SRT_REPO_DIR/"
 
 # Create srtslurm.yaml for srtctl (used by both frameworks)
 SRTCTL_ROOT="${GITHUB_WORKSPACE}/srt-slurm"
+# Minimax on watchtower: SRT_REPO_DIR was moved to a shared-FS path
+# above so srtctl's outputs/ directory (which lives under
+# SRTCTL_ROOT) is visible to compute nodes.
+if [[ $MODEL_PREFIX == "minimaxm2.5" ]]; then
+    SRTCTL_ROOT="$SRT_REPO_DIR"
+fi
+
+# Agentic runs bind-mount two persistent caches into every worker container
+# (Lustre, shared across nodes): aiperf's content-addressed dataset mmap
+# cache (~65 GB per corpus, re-tokenized from scratch without it) and the
+# HF hub cache holding the trace dataset download. The container-side paths
+# are referenced by the agentic recipes' benchmark.env
+# (AIPERF_DATASET_MMAP_CACHE_DIR=/aiperf_mmap_cache, HF_HUB_CACHE=/hf_hub_cache).
+DEFAULT_MOUNTS_BLOCK=""
+if [[ "$IS_AGENTIC" == "1" ]]; then
+    AIPERF_MMAP_CACHE_HOST_PATH="/mnt/lustre01/users-public/sa-shared/ai-perf-cache"
+    HF_HUB_CACHE_HOST_PATH="/mnt/lustre01/users-public/sa-shared/hf-hub-cache"
+    mkdir -p "$AIPERF_MMAP_CACHE_HOST_PATH" "$HF_HUB_CACHE_HOST_PATH"
+    chmod 777 "$AIPERF_MMAP_CACHE_HOST_PATH" "$HF_HUB_CACHE_HOST_PATH" 2>/dev/null || true
+    DEFAULT_MOUNTS_BLOCK="default_mounts:
+  ${AIPERF_MMAP_CACHE_HOST_PATH}: /aiperf_mmap_cache
+  ${HF_HUB_CACHE_HOST_PATH}: /hf_hub_cache"
+fi
+
 echo "Creating srtslurm.yaml configuration..."
 cat > srtslurm.yaml <<EOF
 # SRT SLURM Configuration for GB200
@@ -224,26 +371,90 @@ containers:
   dynamo-sglang: ${SQUASH_FILE}
   "${IMAGE}": ${SQUASH_FILE}
   nginx-sqsh: ${NGINX_SQUASH_FILE}
+# srtctl defaults this to true, which adds #SBATCH --segment=<total_nodes>.
+# On watchtower the whole batch partition (blue-cn01-18) is a single NVL72
+# rack, so segment contiguity buys nothing for MNNVL — but it DOES make
+# jobs unschedulable when the partition is fragmented: Slurm backfills a
+# non-contiguous node set, fails segment placement at start, and the job
+# dies with "CANCELLED Reason=Resources" at RunTime=0 (hit by the first
+# gb200 agentic run, job 18582). Mirror launch_gb300-nv.sh and disable.
+use_segment_sbatch_directive: false
+${DEFAULT_MOUNTS_BLOCK}
 EOF
 
 echo "Generated srtslurm.yaml:"
 cat srtslurm.yaml
 
 echo "Running make setup..."
-make setup ARCH=aarch64
+make setup ARCH=aarch64 || exit 1
 
 # Export eval-related env vars for srt-slurm post-benchmark eval
 export INFMAX_WORKSPACE="$GITHUB_WORKSPACE"
+# Watchtower: pyxis mounts INFMAX_WORKSPACE into the container, but
+# GITHUB_WORKSPACE is under /home/slurm-shared/ which compute nodes
+# can't see. Stage the relevant subset to shared FS and repoint
+# INFMAX_WORKSPACE there. rsync excludes the srt-slurm clone (already
+# on shared FS) and .git (not needed in container) for speed.
+if [[ $MODEL_PREFIX == "minimaxm2.5" ]]; then
+    SHARED_INFMAX_WORKSPACE="${SHARED_BASE}/infmax-workspace-${RUN_KEY}"
+    mkdir -p "$SHARED_INFMAX_WORKSPACE" || exit 1
+    rsync -a --delete \
+        --exclude='.git/' \
+        --exclude='srt-slurm*/' \
+        --exclude='outputs/' \
+        --exclude='LOGS/' \
+        --exclude='*.sqsh' \
+        "${GITHUB_WORKSPACE}/" "${SHARED_INFMAX_WORKSPACE}/" || exit 1
+    export INFMAX_WORKSPACE="$SHARED_INFMAX_WORKSPACE"
+    echo "Using shared-FS INFMAX_WORKSPACE=$INFMAX_WORKSPACE (compute-visible)"
+fi
 
 echo "Submitting job with srtctl..."
 
-# Override the job name in the config file with the runner name
-sed -i "s/^name:.*/name: \"${RUNNER_NAME}\"/" "${CONFIG_FILE%%:*}"
+# Resolve the recipe path before editing or submitting it.
+CONFIG_PATH="${CONFIG_FILE%%:*}"
+if [[ ! -f "$CONFIG_PATH" ]]; then
+    echo "Error: CONFIG_FILE does not exist after srt-slurm setup: $CONFIG_PATH" >&2
+    echo "Current directory: $(pwd)" >&2
+    exit 1
+fi
+
+# Override the job name with the runner name, prefixed "ifx-": another
+# runner fleet on watchtower (user slurm-shared, uid 1010, with Slurm
+# operator rights) names ITS jobs after the same runner names (gb200-nv_N)
+# and its pre-job cleanup scancels by job name across users — it killed our
+# jobs 18593 and 18599 mid-startup (CANCELLED by 1010). The distinct prefix
+# keeps their --name match away from our jobs; the workflow's own pre-run
+# cleanup scancels both the bare and ifx- prefixed names.
+#
+# NOTE the sed alone is not enough: srtctl's get_job_name() (cli/submit.py)
+# prefers the RUNNER_NAME env var over the recipe name, so the prefixed
+# RUNNER_NAME must be passed to `srtctl apply` itself (R4 job 18599 proved
+# the recipe-name route gets ignored on CI runners).
+sed -i "s/^name:.*/name: \"ifx-${RUNNER_NAME}\"/" "$CONFIG_PATH"
+SRTCTL_RUNNER_NAME="ifx-${RUNNER_NAME}"
+
+# Don't leak the login-node venv to the compute-node orchestrator. sbatch's
+# default --export=ALL propagates VIRTUAL_ENV (set by `source
+# .venv/bin/activate` above) into job_script_minimal.j2, whose
+# `uv run` step then tries to inspect the *active* venv — and dies with
+# "Broken symlink at .venv/bin/python3" because the login-node interpreter
+# path doesn't exist on compute nodes (gb200 agentic R2, job 18587).
+# srtctl itself still resolves through PATH (.venv/bin is on it).
+unset VIRTUAL_ENV
+
+# --no-preflight is only used on the agentic path, where the recipe resolves
+# model.path to /mnt/numa1 (compute-node-only NVMe) that the login-node
+# runner can't see. Fixed-seq-len recipes keep enforcement on.
+PREFLIGHT_ARGS=()
+if [[ "$IS_AGENTIC" == "1" ]]; then
+    PREFLIGHT_ARGS=(--no-preflight)
+fi
 
 if [[ "$FRAMEWORK" == "dynamo-sglang" ]]; then
-    SRTCTL_OUTPUT=$(srtctl apply -f "$CONFIG_FILE" --tags "gb200,${MODEL_PREFIX},${PRECISION},${ISL}x${OSL},infmax-$(date +%Y%m%d)" --setup-script install-torchao.sh 2>&1)
+    SRTCTL_OUTPUT=$(RUNNER_NAME="$SRTCTL_RUNNER_NAME" srtctl apply "${PREFLIGHT_ARGS[@]}" -f "$CONFIG_PATH" --tags "gb200,${MODEL_PREFIX},${PRECISION},${ISL}x${OSL},infmax-$(date +%Y%m%d)" --setup-script install-torchao.sh 2>&1)
 else
-    SRTCTL_OUTPUT=$(srtctl apply -f "$CONFIG_FILE" --tags "gb200,${MODEL_PREFIX},${PRECISION},${ISL}x${OSL},infmax-$(date +%Y%m%d)" 2>&1)
+    SRTCTL_OUTPUT=$(RUNNER_NAME="$SRTCTL_RUNNER_NAME" srtctl apply "${PREFLIGHT_ARGS[@]}" -f "$CONFIG_PATH" --tags "gb200,${MODEL_PREFIX},${PRECISION},${ISL}x${OSL},infmax-$(date +%Y%m%d)" 2>&1)
 fi
 echo "$SRTCTL_OUTPUT"
 

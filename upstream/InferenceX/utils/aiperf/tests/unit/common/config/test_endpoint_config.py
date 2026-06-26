@@ -26,6 +26,18 @@ def test_endpoint_config_defaults():
     assert config.custom_endpoint == EndpointDefaults.CUSTOM_ENDPOINT
     assert config.streaming == EndpointDefaults.STREAMING
     assert config.url == EndpointDefaults.URL
+    assert (
+        config.use_dynamo_conv_aware_routing
+        == EndpointDefaults.USE_DYNAMO_CONV_AWARE_ROUTING
+    )
+    assert (
+        config.use_legacy_dynamo_session_control
+        == EndpointDefaults.USE_LEGACY_DYNAMO_SESSION_CONTROL
+    )
+    assert (
+        config.dynamo_session_timeout_seconds
+        == EndpointDefaults.DYNAMO_SESSION_TIMEOUT_SECONDS
+    )
 
 
 def test_endpoint_config_custom_values():
@@ -49,6 +61,9 @@ def test_endpoint_config_custom_values():
         "urls": ["http://custom-url"],
         "timeout_seconds": 10,
         "api_key": "custom_api_key",
+        "use_dynamo_conv_aware_routing": True,
+        "use_legacy_dynamo_session_control": True,
+        "dynamo_session_timeout_seconds": 123,
     }
     config = EndpointConfig(**custom_values)
     for key, value in custom_values.items():
@@ -209,3 +224,31 @@ class TestWaitForModelValidation:
                 wait_for_model_timeout=60.0,
                 wait_for_model_mode="something-else",  # type: ignore[arg-type]
             )
+
+
+class TestDynamoSessionControlValidation:
+    """Coherence between the conv-aware-routing flag and its legacy modifier."""
+
+    def test_legacy_without_master_flag_rejected(self):
+        """The legacy modifier has no meaning unless routing is enabled."""
+        with pytest.raises(ValueError, match="use-legacy-dynamo-session-control"):
+            EndpointConfig(
+                model_names=["gpt2"],
+                use_legacy_dynamo_session_control=True,
+            )
+
+    def test_legacy_with_master_flag_allowed(self):
+        config = EndpointConfig(
+            model_names=["gpt2"],
+            use_dynamo_conv_aware_routing=True,
+            use_legacy_dynamo_session_control=True,
+        )
+        assert config.use_legacy_dynamo_session_control
+
+    def test_master_flag_alone_allowed(self):
+        """Conv-aware routing without the legacy modifier is the modern default."""
+        config = EndpointConfig(
+            model_names=["gpt2"],
+            use_dynamo_conv_aware_routing=True,
+        )
+        assert not config.use_legacy_dynamo_session_control

@@ -29,7 +29,18 @@ if [ -n "${ROCR_VISIBLE_DEVICES:-}" ]; then
     export HIP_VISIBLE_DEVICES="$ROCR_VISIBLE_DEVICES"
 fi
 
-if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
+# `hf download` creates the target dir if missing and is itself idempotent.
+# When MODEL_PATH is unset (stand-alone runs), fall back to the HF_HUB_CACHE
+# Either way, MODEL_PATH is what the server is launched with.
+if [[ -n "${MODEL_PATH:-}" ]]; then
+    if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
+        hf download "$MODEL" --local-dir "$MODEL_PATH"
+    fi
+else
+    hf download "$MODEL"
+    export MODEL_PATH="$MODEL"
+fi
+
 rocm-smi || true
 amd-smi || true
 
@@ -37,7 +48,9 @@ amd-smi || true
 # MiniMax-M2.5 servers run at max_model_len ~256k; the unfiltered 052726
 # corpus has requests up to ~1M proxy tokens that would be rejected.
 # Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+#export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+#060226
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060226_256k
 
 resolve_trace_source
 install_agentic_deps
@@ -108,7 +121,8 @@ case "$OFFLOADING" in
         # MI355X nodes have ~2.7 TiB of host DRAM available for offload;
         # reserve 2.5 TB for the offload pool (leaves ~200 GB headroom for
         # worker RSS / page cache / slurm cgroup).
-        TOTAL_CPU_DRAM_GB=$((2500 / (8 / TP)))
+        TOTAL_CPU_DRAM_GB=3000
+        TOTAL_CPU_DRAM_PARTITION_GB="${TOTAL_CPU_DRAM_PARTITION_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         # Use vLLM's regular native KV-offload path (OffloadingConnector),
         # NOT the SimpleCPUOffloadConnector. The "native" backend resolves to
         # OffloadingConnector by default; setting VLLM_USE_SIMPLE_KV_OFFLOAD=1
@@ -125,7 +139,7 @@ case "$OFFLOADING" in
         # https://github.com/vllm-project/vllm/blob/0585b5ba2eaa7860d6976bc7ba376bdbca5119fc/vllm/distributed/kv_transfer/kv_connector/factory.py#L56-L60
         OFFLOAD_ARGS=(
             --kv_offloading_backend native
-            --kv_offloading_size "$TOTAL_CPU_DRAM_GB"
+            --kv_offloading_size "$TOTAL_CPU_DRAM_PARTITION_GB"
             --disable-hybrid-kv-cache-manager
         )
         ;;
@@ -139,17 +153,13 @@ case "$OFFLOADING" in
         CXX=hipcc BUILD_WITH_HIP=1 pip install -e .   --no-build-isolation
         cd ..
 
-        # ---- hack ; permission issue, TODO: remove ----------------------------------------------------------
-        set -x
-        chmod -R 777 results/ LMCache
-
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
         # Match the B200 Kimi LMCache setup: keep a 2.5 TB semantic CPU KV
         # pool, but let the external MP server own that pool so vLLM does not
         # split --kv-offloading-size across TP ranks through the integrated
         # LMCache backend.
-        TOTAL_CPU_DRAM_GB=2500
+        TOTAL_CPU_DRAM_GB=3000
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8080}"
@@ -157,7 +167,10 @@ case "$OFFLOADING" in
         # ZMQ endpoint. Bind the server to a raw host, but pass the connector a
         # ZMQ-style host string.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
-        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
+        #LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
+        # (srok)TODO: intentionally increased DRAM size
+        TOTAL_CPU_DRAM_GB=2000
+        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB))}"
         LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
         # LMCache read locks are leases on chunks that lookup has promised
         # vLLM can retrieve. The default 300s TTL is too short for this
@@ -166,7 +179,9 @@ case "$OFFLOADING" in
         # object present in L1 but no longer readable. Keep the 2.5 TB pool
         # size unchanged and only extend the lookup-to-retrieve lease.
         LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
-        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
+        # (srok) check 256 vs 32
+        #LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
+        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-32}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
         export LMCACHE_BLOCKING_TIMEOUT_SECS=120
@@ -229,7 +244,7 @@ export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 
 { set +x; } 2>/dev/null
 VLLM_CMD=(
-    vllm serve "$MODEL"
+    vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
     --port "$PORT"
     --tensor-parallel-size="$TP"
@@ -255,8 +270,3 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 build_replay_cmd "$RESULT_DIR"
 
 run_agentic_replay_and_write_outputs "$RESULT_DIR"
-
-# ---- hack ; permission issue, TODO: remove ----------------------------------------------------------
-set -x
-chmod -R 777 results/ LMCache
-chmod -R 777 *

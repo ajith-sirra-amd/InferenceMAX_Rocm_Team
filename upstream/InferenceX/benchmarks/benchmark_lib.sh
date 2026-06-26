@@ -24,6 +24,14 @@ if [[ "$_benchmark_caller" == */agentic/* ||
       "${IS_AGENTIC:-0}" == "1" ||
       "${SCENARIO_TYPE:-}" == "agentic-coding" ]]; then
     unset MAX_MODEL_LEN
+    case "${OFFLOADING:-none}" in
+        cpu|lmcache|lmcache-mp|hicache)
+            if [[ ! "${TOTAL_CPU_DRAM_GB:-}" =~ ^[1-9][0-9]*$ ]]; then
+                echo "Error: CPU KV offloading requires a positive configured TOTAL_CPU_DRAM_GB capacity" >&2
+                exit 1
+            fi
+            ;;
+    esac
 fi
 unset _benchmark_caller
 
@@ -908,7 +916,7 @@ run_eval() {
 # --------------------------------
 
 INFMAX_CONTAINER_WORKSPACE="${INFMAX_CONTAINER_WORKSPACE:-/workspace}"
-AGENTIC_DIR="${AGENTIC_DIR:-${INFMAX_CONTAINER_WORKSPACE}/upstream/InferenceX/utils/agentic-benchmark}"
+AGENTIC_DIR="${AGENTIC_DIR:-${INFMAX_CONTAINER_WORKSPACE}/utils/agentic-benchmark}"
 AIPERF_DIR="${AIPERF_DIR:-${INFMAX_CONTAINER_WORKSPACE}/utils/aiperf}"
 AIPERF_RUNTIME_DIR="${AIPERF_RUNTIME_DIR:-${TMPDIR:-/tmp}/inferencex-agentic-${SLURM_JOB_ID:-$$}}"
 AIPERF_VENV="${AIPERF_VENV:-${AIPERF_RUNTIME_DIR}/venv}"
@@ -995,16 +1003,16 @@ resolve_trace_source() {
     # unfiltered corpus and switches to the 256k-capped variant), or
     # by recipes that want to pin an older corpus generation.
     #
-    # Default (no override): the 061526 v7 corpus, selected by model family.
+    # Default (no override): the 062126 v7 corpus, selected by model family.
     # DSv4 (full context) rides the unfiltered base corpus; every non-DSv4
     # recipe defaults to the 256k-capped variant because those servers run at
     # max_model_len ~256k and would reject >256k requests. Any recipe can still
     # pin a specific corpus via WEKA_LOADER_OVERRIDE.
     local default_loader
     if [[ "${MODEL_PREFIX:-}" == dsv4* ]]; then
-        default_loader="semianalysis_cc_traces_weka_061526"
+        default_loader="semianalysis_cc_traces_weka_062126"
     else
-        default_loader="semianalysis_cc_traces_weka_061526_256k"
+        default_loader="semianalysis_cc_traces_weka_062126_256k"
     fi
     local loader="${WEKA_LOADER_OVERRIDE:-$default_loader}"
     local dataset
@@ -1045,8 +1053,14 @@ resolve_trace_source() {
         semianalysis_cc_traces_weka_061526_256k)
             dataset="semianalysisai/cc-traces-weka-061526-256k"
             ;;
+        semianalysis_cc_traces_weka_062126)
+            dataset="semianalysisai/cc-traces-weka-062126"
+            ;;
+        semianalysis_cc_traces_weka_062126_256k)
+            dataset="semianalysisai/cc-traces-weka-062126-256k"
+            ;;
         *)
-            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k, semianalysis_cc_traces_weka_with_subagents_060526, semianalysis_cc_traces_weka_with_subagents_060526_256k, semianalysis_cc_traces_weka_with_subagents_060826, semianalysis_cc_traces_weka_with_subagents_060826_256k, semianalysis_cc_traces_weka_061326, semianalysis_cc_traces_weka_061326_256k, semianalysis_cc_traces_weka_061526, semianalysis_cc_traces_weka_061526_256k" >&2
+            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k, semianalysis_cc_traces_weka_with_subagents_060526, semianalysis_cc_traces_weka_with_subagents_060526_256k, semianalysis_cc_traces_weka_with_subagents_060826, semianalysis_cc_traces_weka_with_subagents_060826_256k, semianalysis_cc_traces_weka_061326, semianalysis_cc_traces_weka_061326_256k, semianalysis_cc_traces_weka_061526, semianalysis_cc_traces_weka_061526_256k, semianalysis_cc_traces_weka_062126, semianalysis_cc_traces_weka_062126_256k" >&2
             exit 1
             ;;
     esac
@@ -1109,6 +1123,14 @@ build_replay_cmd() {
     # cold and skews early steady-state samples.
     REPLAY_CMD+=" --trajectory-start-min-ratio 0.25"
     REPLAY_CMD+=" --trajectory-start-max-ratio 0.75"
+    # Optional cache-pressure warmup for long agentic traces. AIPerf first
+    # completes its normal t* snapshot warmup, then continues those exact
+    # trajectories with one-token outputs and no idle delays for this many
+    # seconds. Profiling begins only after those requests drain and resumes
+    # from the resulting live trajectory state.
+    if [ -n "${AIPERF_AGENTIC_CACHE_WARMUP_DURATION:-}" ]; then
+        REPLAY_CMD+=" --agentic-cache-warmup-duration $AIPERF_AGENTIC_CACHE_WARMUP_DURATION"
+    fi
     # Use server-reported usage fields (prompt_tokens / completion_tokens) for
     # ISL/OSL instead of client-side tokenizer.encode(). Auto-enables
     # stream_options.include_usage on the OpenAI chat endpoint. Skips the
@@ -1116,6 +1138,19 @@ build_replay_cmd() {
     # CPU on minimax-m2.5 at high concurrency. Lossless for vLLM (server
     # usage is authoritative).
     REPLAY_CMD+=" --use-server-token-count"
+    # Dynamo's KV router needs an explicit conversation session binding to
+    # keep later turns on the prefill worker that owns their prefix blocks.
+    # X-Correlation-ID is useful tracing metadata but does not establish that
+    # binding by itself. AIPerf emits nvext.session_control bind/close actions
+    # keyed by the stable conversation correlation ID when this flag is set.
+    if [[ "${FRAMEWORK:-}" == dynamo-* ]]; then
+        REPLAY_CMD+=" --use-dynamo-conv-aware-routing"
+        # The upstream 300s affinity TTL is shorter than an overloaded
+        # high-concurrency agentic request. Keep bindings alive across long
+        # prefills, generation, and capped inter-turn delay. This controls the
+        # router's inactivity lease; it does not relax HTTP/request failures.
+        REPLAY_CMD+=" --dynamo-session-timeout-seconds ${AIPERF_DYNAMO_SESSION_TIMEOUT_SECONDS:-3600}"
+    fi
     # Disable DCGM GPU telemetry collection. aiperf's GpuMetricTimeSeries
     # freezes its metric schema on the first DCGM scrape, then KeyErrors when
     # an optional field (xid_errors, power_violation, encoder_utilization)
@@ -1139,10 +1174,10 @@ build_replay_cmd() {
         REPLAY_CMD+=" --max-context-length $MAX_MODEL_LEN"
     fi
     # Default --num-dataset-entries is 100; the with-subagents Weka corpus
-    # has 472. Cap at 472 so all unique traces are loaded (the loader treats
+    # has 393. Cap at 393 so all unique traces are loaded (the loader treats
     # this as a ``min(cap, available)`` ceiling, not a target — see
     # semianalysis_cc_traces_weka.py).
-    REPLAY_CMD+=" --num-dataset-entries 472"
+    REPLAY_CMD+=" --num-dataset-entries 393"
     # 1-second timeslices on the server-metrics scrape so the post-run
     # plotter has per-window time series (KV usage, cache hit rate,
     # throughput, etc.). Matches kv-cache-tester's poll_interval=1.0
@@ -1150,6 +1185,24 @@ build_replay_cmd() {
     # Without this, aiperf only emits aggregate stats and the 6x2 panels
     # collapse to flat lines.
     REPLAY_CMD+=" --slice-duration 1.0"
+    # Multi-node launchers can provide the Prometheus endpoints for every
+    # inference worker as a comma-separated list. AIPerf accepts multiple
+    # values after one --server-metrics flag and preserves endpoint_url on
+    # every exported series. The inference frontend's automatically detected
+    # /metrics endpoint remains enabled as well.
+    if [ -n "${AIPERF_SERVER_METRICS_URLS:-}" ]; then
+        local metrics_url
+        local -a metrics_urls
+        IFS=',' read -r -a metrics_urls <<< "$AIPERF_SERVER_METRICS_URLS"
+        REPLAY_CMD+=" --server-metrics"
+        for metrics_url in "${metrics_urls[@]}"; do
+            if [ -z "$metrics_url" ] || [[ "$metrics_url" == *[[:space:]]* ]]; then
+                echo "ERROR: AIPERF_SERVER_METRICS_URLS must be a comma-separated list of non-empty URLs" >&2
+                return 1
+            fi
+            REPLAY_CMD+=" $metrics_url"
+        done
+    fi
     REPLAY_CMD+=" --output-artifact-dir $result_dir/aiperf_artifacts"
     # The inferencex-agentx-mvp scenario enforces a 900s minimum
     # benchmark duration. For smoke tests with shorter durations, opt

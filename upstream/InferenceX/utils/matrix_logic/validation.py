@@ -51,6 +51,10 @@ class Fields(Enum):
 
     # Agentic coding fields
     OFFLOADING = 'offloading'
+    TOTAL_CPU_DRAM_GB = 'total-cpu-dram-gb'
+    AVAILABLE_CPU_DRAM_MIB = 'available-cpu-dram-mib'
+    CPU_OFFLOAD_UTILIZATION = 'cpu-offload-utilization'
+    GPUS_PER_NODE = 'gpus-per-node'
     DURATION = 'duration'
 
     # Matrix entry fields
@@ -159,6 +163,7 @@ class SingleNodeAgenticMatrixEntry(BaseModel):
     offloading: Literal["none", "cpu", "ssd", "lmcache", "lmcache-mp", "hicache"] = Field(
         alias=Fields.OFFLOADING.value
     )
+    total_cpu_dram_gb: int = Field(alias=Fields.TOTAL_CPU_DRAM_GB.value, ge=0)
     duration: int = Field(default=1800, alias=Fields.DURATION.value)
     exp_name: str = Field(alias=Fields.EXP_NAME.value)
     scenario_type: str = Field(alias=Fields.SCENARIO_TYPE.value)
@@ -179,7 +184,10 @@ class MultiNodeAgenticMatrixEntry(BaseModel):
     runner: str
     prefill: WorkerConfig
     decode: WorkerConfig
-    conc: int
+    conc: list[int]
+    offloading: Literal["none", "cpu", "ssd", "lmcache", "lmcache-mp", "hicache"] = Field(
+        default="none", alias=Fields.OFFLOADING.value
+    )
     duration: int = Field(default=1800, alias=Fields.DURATION.value)
     exp_name: str = Field(alias=Fields.EXP_NAME.value)
     disagg: bool
@@ -343,6 +351,7 @@ class AgenticCodingSearchSpaceEntry(BaseModel):
     offloading: Literal["none", "cpu", "ssd", "lmcache", "lmcache-mp", "hicache"] = Field(
         default="none", alias=Fields.OFFLOADING.value
     )
+    total_cpu_dram_gb: int = Field(default=0, alias=Fields.TOTAL_CPU_DRAM_GB.value, ge=0)
     conc_start: Optional[int] = Field(default=None, alias=Fields.CONC_START.value)
     conc_end: Optional[int] = Field(default=None, alias=Fields.CONC_END.value)
     conc_list: Optional[List[int]] = Field(default=None, alias=Fields.CONC_LIST.value)
@@ -364,13 +373,64 @@ class AgenticCodingSearchSpaceEntry(BaseModel):
             raise ValueError("Agentic search-space entries must specify either tp or both prefill and decode")
         return self
 
-
 class AgenticCodingConfig(BaseModel):
     """Agentic coding scenario configuration for trace replay benchmarks."""
     model_config = ConfigDict(extra='forbid', populate_by_name=True)
 
     search_space: List[AgenticCodingSearchSpaceEntry] = Field(alias=Fields.SEARCH_SPACE.value)
+    available_cpu_dram_mib: Optional[int] = Field(
+        default=None, alias=Fields.AVAILABLE_CPU_DRAM_MIB.value, gt=0
+    )
+    cpu_offload_utilization: Optional[float] = Field(
+        default=None, alias=Fields.CPU_OFFLOAD_UTILIZATION.value, gt=0, le=1
+    )
+    gpus_per_node: Optional[int] = Field(
+        default=None, alias=Fields.GPUS_PER_NODE.value, gt=0
+    )
     duration: int = Field(default=1800, alias=Fields.DURATION.value)
+
+    @model_validator(mode='after')
+    def validate_cpu_offload_capacity(self):
+        cpu_backends = {"cpu", "lmcache", "lmcache-mp", "hicache"}
+        has_node_capacity = (
+            self.available_cpu_dram_mib is not None
+            and self.cpu_offload_utilization is not None
+            and self.gpus_per_node is not None
+        )
+        has_partial_node_capacity = (
+            self.available_cpu_dram_mib is not None
+            or self.cpu_offload_utilization is not None
+            or self.gpus_per_node is not None
+        )
+        if has_partial_node_capacity and not has_node_capacity:
+            raise ValueError(
+                "available-cpu-dram-mib, cpu-offload-utilization, and "
+                "gpus-per-node must be set together"
+            )
+        for entry in self.search_space:
+            if (
+                self.gpus_per_node is not None
+                and entry.tp is not None
+                and entry.tp > self.gpus_per_node
+            ):
+                raise ValueError(
+                    f"tp={entry.tp} exceeds gpus-per-node={self.gpus_per_node}"
+                )
+            if entry.offloading not in cpu_backends:
+                continue
+            if entry.total_cpu_dram_gb > 0 and has_node_capacity:
+                raise ValueError(
+                    "CPU offload capacity must use either total-cpu-dram-gb or "
+                    "scenario-level available-cpu-dram-mib, cpu-offload-utilization, "
+                    "and gpus-per-node"
+                )
+            if entry.total_cpu_dram_gb <= 0 and not has_node_capacity:
+                raise ValueError(
+                    f"offloading={entry.offloading!r} requires total-cpu-dram-gb or "
+                    "scenario-level available-cpu-dram-mib, cpu-offload-utilization, "
+                    "and gpus-per-node"
+                )
+        return self
 
 
 class SingleNodeScenarios(BaseModel):

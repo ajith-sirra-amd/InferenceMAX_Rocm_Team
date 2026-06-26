@@ -77,8 +77,16 @@ if [[ "$IS_MULTINODE" == "true" ]]; then
     fi
 
     SCRIPT_NAME="${EXP_NAME%%_*}_${PRECISION}_mi355x_${FRAMEWORK}.sh"
-    if [[ "$FRAMEWORK" == "sglang-disagg" ]] || [[ "$FRAMEWORK" == "vllm-disagg" ]]; then
-        BENCHMARK_SUBDIR="multi_node"
+    if [[ "$FRAMEWORK" == "sglang-disagg" ]] || [[ "$FRAMEWORK" == "vllm-disagg" ]] || [[ "$FRAMEWORK" == "atom-disagg" ]]; then
+        # Agentic recipes live under multi_node/agentic/ and export the
+        # HiCache tunables (page-size, io-backend, ...); fixed-seq-len recipes
+        # live at the multi_node/ root. Honor SCENARIO_SUBDIR so agentic-coding
+        # configs pick the agentic recipe instead of the root one.
+        if [[ "${SCENARIO_SUBDIR}" == "agentic/" ]]; then
+            BENCHMARK_SUBDIR="multi_node/agentic"
+        else
+            BENCHMARK_SUBDIR="multi_node"
+        fi
     else
         BENCHMARK_SUBDIR="single_node/fixed_seq_len"
     fi
@@ -126,7 +134,7 @@ if [[ "$IS_MULTINODE" == "true" ]]; then
     # search for "FRAMEWORK_DIFF_IF_STATEMENT #3" for this if-statement
     # Find the latest log directory that contains the data
 
-    if [[ "${EVAL_ONLY:-false}" != "true" ]]; then
+    if [[ "${EVAL_ONLY:-false}" != "true" && "${IS_AGENTIC:-0}" != "1" ]]; then
         cat > collect_latest_results.py <<'PY'
 import os, sys
 job_dir, isl, osl, nexp, framework = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
@@ -181,6 +189,47 @@ PY
         fi
     fi
 
+    # Stage agentic raw artifacts + server logs for the CI upload steps.
+    # server_sglang.sh copies /run_logs/slurm_job-<id> to
+    # $BENCHMARK_LOGS_DIR/logs/slurm_job-<id> on shared storage, and
+    # trace_replay.sh writes the aiperf artifacts under agentic/ (flat for a
+    # single concurrency, like agentic_srt.sh; nested conc<N>/ for local
+    # multi-conc sweeps). benchmark-multinode-tmpl.yml expects them under
+    # $GITHUB_WORKSPACE/LOGS/agentic/ (the agentic_* bundle) plus a
+    # multinode_server_logs.tar.gz, so mirror that layout before the logs
+    # dir is removed below. The agg result JSON is already written straight
+    # to the mounted workspace by process_agentic_result.py.
+    if [[ "${IS_AGENTIC:-0}" == "1" ]]; then
+        JOB_LOGS_DIR="$BENCHMARK_LOGS_DIR/logs/slurm_job-${JOB_ID}"
+        if [ -d "$JOB_LOGS_DIR" ]; then
+            # trace_replay.sh writes a single concurrency flat into agentic/
+            # (mirroring agentic_srt.sh); local multi-conc sweeps nest under
+            # agentic/conc<N>/. Prefer the flat layout, else pick the newest
+            # conc<N> dir.
+            AGENTIC_SRC="$JOB_LOGS_DIR/agentic"
+            if [ ! -e "$AGENTIC_SRC/benchmark.log" ] && [ ! -d "$AGENTIC_SRC/aiperf_artifacts" ]; then
+                AGENTIC_CONC_DIR=$(find "$AGENTIC_SRC" -mindepth 1 -maxdepth 1 -type d -name 'conc*' 2>/dev/null | sort | tail -1)
+                [ -n "$AGENTIC_CONC_DIR" ] && AGENTIC_SRC="$AGENTIC_CONC_DIR"
+            fi
+            if [ -d "$AGENTIC_SRC" ]; then
+                echo "Staging agentic raw artifacts from $AGENTIC_SRC"
+                mkdir -p "$GITHUB_WORKSPACE/LOGS/agentic"
+                cp -r "$AGENTIC_SRC"/. "$GITHUB_WORKSPACE/LOGS/agentic/"
+                ls -la "$GITHUB_WORKSPACE/LOGS/agentic"
+            else
+                echo "WARNING: no agentic artifacts found under $JOB_LOGS_DIR/agentic"
+            fi
+            # Server/router/prefill/decode logs for the multinode_server_logs_* artifact.
+            if tar czf "$GITHUB_WORKSPACE/multinode_server_logs.tar.gz" -C "$JOB_LOGS_DIR" . 2>/dev/null; then
+                echo "Created multinode_server_logs.tar.gz"
+            else
+                echo "WARNING: failed to create multinode_server_logs.tar.gz"
+            fi
+        else
+            echo "WARNING: agentic staging skipped; $JOB_LOGS_DIR not found"
+        fi
+    fi
+
     echo "All result files processed"
     # Use sync scancel to ensure nfs file handle is released in time
     set +x
@@ -210,7 +259,7 @@ else
     #   mia1-p01-g09: pyxis broken (persistently fails to create container filesystem)
     #   mia1-p01-g11: docker.sock permissions denied (cluster-cleanup step fails)
     # Both have been root-caused via #1431/#1432/#1440/#1441/#1443 sweep failures.
-    salloc --partition=$PARTITION --exclude=mia1-p01-g09,mia1-p01-g11 --gres=gpu:$TP --exclusive --cpus-per-task=128 --time=500 --no-shell --job-name="$RUNNER_NAME"
+    salloc --partition=$PARTITION --exclude=mia1-p01-g09,mia1-p01-g11,mia1-p01-g37 --gres=gpu:$TP --exclusive --cpus-per-task=128 --time=500 --no-shell --job-name="$RUNNER_NAME"
     JOB_ID=$(squeue --name="$RUNNER_NAME" -h -o %A | head -n1)
 
     srun --jobid=$JOB_ID bash -c "docker stop \$(docker ps -a -q)"
@@ -238,6 +287,12 @@ else
 
     # to prevent reading outdated saved model. use a fresh model from hf repo
     if [[ ("$FRAMEWORK" == "vllm" || "$FRAMEWORK" == "atom") ]] && [[ "$MODEL" == "deepseek-ai/DeepSeek-V4-Pro" ]]; then
+        export HF_HUB_CACHE_MOUNT="/it-share/hf-hub-cache/"
+    fi
+
+    # MiniMax-M3 weights are not staged on the node-local /var/lib NVMe cache;
+    # they are pre-downloaded once to the NFS share instead.
+    if [[ "$MODEL" == MiniMaxAI/MiniMax-M3* ]]; then
         export HF_HUB_CACHE_MOUNT="/it-share/hf-hub-cache/"
     fi
 

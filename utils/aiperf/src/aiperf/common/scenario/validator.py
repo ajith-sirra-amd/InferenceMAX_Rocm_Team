@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 _AGENTX_SCENARIO = "inferencex-agentx-mvp"
-_AGENTX_WEKA_HF_REPO = "semianalysisai/cc-traces-weka-061526"
+_AGENTX_WEKA_HF_REPO = "semianalysisai/cc-traces-weka-062126"
 
 
 @dataclass
@@ -214,6 +214,48 @@ def validate_scenario(
                 user_config.input.use_think_time_only = True
                 _logger.info(
                     "Scenario %r: forcing --use-think-time-only=true (was unset).",
+                    spec.name,
+                )
+
+    if spec.require_use_end_to_start_delays:
+        explicit = "use_end_to_start_delays" in user_config.input.model_fields_set
+        if not user_config.input.use_end_to_start_delays:
+            if explicit:
+                violations.append(
+                    ScenarioViolation(
+                        flag="--use-end-to-start-delays",
+                        current_value=False,
+                        required_value=True,
+                        message=f"scenario {spec.name!r} requires --use-end-to-start-delays=true",
+                    )
+                )
+            else:
+                user_config.input.use_end_to_start_delays = True
+                _logger.info(
+                    "Scenario %r: forcing --use-end-to-start-delays=true (was unset).",
+                    spec.name,
+                )
+
+    if spec.require_streaming:
+        explicit = getattr(user_config.endpoint, "_streaming_explicitly_set", False)
+        if not user_config.endpoint.streaming:
+            if explicit:
+                violations.append(
+                    ScenarioViolation(
+                        flag="--streaming",
+                        current_value=False,
+                        required_value=True,
+                        message=(
+                            f"scenario {spec.name!r} requires --streaming; the "
+                            "per-token latency metrics (TTFT, ITL) are core to "
+                            "this benchmark and need streaming responses"
+                        ),
+                    )
+                )
+            else:
+                user_config.endpoint.streaming = True
+                _logger.info(
+                    "Scenario %r: forcing --streaming=true (was unset).",
                     spec.name,
                 )
 

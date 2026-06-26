@@ -11,27 +11,11 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION
 
-# Agentic matrix entries don't set max-model-len, so the workflow passes 0.
-# ${:-DEFAULT} only fires on unset/empty, so handle 0 explicitly.
-if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
-    MAX_MODEL_LEN=131072
-fi
-
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
 
-# `hf download` creates the target dir if missing and is itself idempotent.
-# When MODEL_PATH is unset (stand-alone runs), fall back to the HF_HUB_CACHE
-# Either way, MODEL_PATH is what the server is launched with.
-if [[ -n "${MODEL_PATH:-}" ]]; then
-    if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
-        hf download "$MODEL" --local-dir "$MODEL_PATH"
-    fi
-else
-    hf download "$MODEL"
-    export MODEL_PATH="$MODEL"
-fi
+if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
 rocm-smi
 amd-smi || true
 
@@ -75,7 +59,7 @@ esac
 
 echo "Starting vllm server..."
 
-vllm serve "$MODEL_PATH" --served-model-name "$MODEL" \
+vllm serve $MODEL \
 --host 0.0.0.0 \
 --port $PORT \
 --attention-backend ROCM_AITER_UNIFIED_ATTN \
@@ -83,7 +67,6 @@ vllm serve "$MODEL_PATH" --served-model-name "$MODEL" \
 -cc.use_inductor_graph_partition=True \
 --tensor-parallel-size=$TP \
 --gpu-memory-utilization 0.85 \
---max-model-len $MAX_MODEL_LEN \
 --max-num-seqs $CONC \
 --block-size=64 \
 --kv-cache-dtype fp8 \

@@ -7,6 +7,7 @@ from validation import (
     MultiNodeMatrixEntry,
     WorkerConfig,
     SingleNodeSearchSpaceEntry,
+    AgenticCodingConfig,
     AgenticCodingSearchSpaceEntry,
     MultiNodeSearchSpaceEntry,
     SingleNodeSeqLenConfig,
@@ -328,6 +329,7 @@ class TestAgenticMatrixEntries:
             "dp-attn": False,
             "conc": 1,
             "offloading": "lmcache-mp",
+            "total-cpu-dram-gb": 2949,
             "duration": 1800,
             "exp-name": "dsv4_tp8_conc1_offloadlmcache-mp",
             "scenario-type": "agentic-coding",
@@ -339,6 +341,7 @@ class TestAgenticMatrixEntries:
         entry = AgenticCodingSearchSpaceEntry(**{
             "tp": 8,
             "offloading": "lmcache-mp",
+            "total-cpu-dram-gb": 1000,
             "conc-list": [1, 2],
         })
         assert entry.offloading == "lmcache-mp"
@@ -348,6 +351,7 @@ class TestAgenticMatrixEntries:
         entry = AgenticCodingSearchSpaceEntry(**{
             "tp": 8,
             "offloading": "lmcache",
+            "total-cpu-dram-gb": 1000,
             "conc-list": [1, 2],
         })
         assert entry.offloading == "lmcache"
@@ -357,9 +361,59 @@ class TestAgenticMatrixEntries:
         entry = AgenticCodingSearchSpaceEntry(**{
             "tp": 8,
             "offloading": "hicache",
+            "total-cpu-dram-gb": 1000,
             "conc-list": [1, 2],
         })
         assert entry.offloading == "hicache"
+
+    def test_cpu_offloading_requires_explicit_capacity(self):
+        with pytest.raises(Exception, match="total-cpu-dram-gb"):
+            AgenticCodingConfig(**{
+                "search-space": [{
+                    "tp": 4,
+                    "offloading": "cpu",
+                    "conc-list": [16],
+                }],
+            })
+
+    def test_cpu_offloading_accepts_node_capacity(self):
+        config = AgenticCodingConfig(**{
+            "available-cpu-dram-mib": 2964436,
+            "cpu-offload-utilization": 0.80,
+            "gpus-per-node": 8,
+            "search-space": [{
+                "tp": 4,
+                "offloading": "cpu",
+                "conc-list": [16],
+            }],
+        })
+        assert config.available_cpu_dram_mib == 2964436
+        assert config.cpu_offload_utilization == 0.80
+        assert config.gpus_per_node == 8
+
+    def test_node_capacity_fields_must_be_paired(self):
+        with pytest.raises(Exception, match="must be set together"):
+            AgenticCodingConfig(**{
+                "available-cpu-dram-mib": 2964436,
+                "search-space": [{
+                    "tp": 4,
+                    "offloading": "none",
+                    "conc-list": [16],
+                }],
+            })
+
+    def test_tp_cannot_exceed_gpus_per_node(self):
+        with pytest.raises(Exception, match="exceeds gpus-per-node"):
+            AgenticCodingConfig(**{
+                "available-cpu-dram-mib": 2964436,
+                "cpu-offload-utilization": 0.80,
+                "gpus-per-node": 4,
+                "search-space": [{
+                    "tp": 8,
+                    "offloading": "cpu",
+                    "conc-list": [16],
+                }],
+            })
 
 
 # =============================================================================

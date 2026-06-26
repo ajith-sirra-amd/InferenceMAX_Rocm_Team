@@ -103,6 +103,46 @@ def test_init_turn_0_with_tool_and_system_prefix_split():
     assert sum(len(s.tokens) for s in r._segments) == 500
 
 
+def test_init_turn_0_prefix_block_rounding_overshoot_clamps_to_budget():
+    """Regression: a declared prefix whose BLOCK count exceeds the prompt's own
+    covered-block count must clamp the system segment, not emit a negative
+    block_count / over-budget tokens.
+
+    in=170 (m_full=2), tool=130 -> prefix_blocks=ceil(130/64)=3 > m_full=2, with
+    3 recorded hash blocks so the hash-availability guard does not fire. Without
+    the clamp user_blocks = covered(2) - cursor(3) = -1 and the system segment
+    holds 3*64=192 tokens (> in_tokens), breaking sum == in_tokens.
+    """
+    r = _make_recon()
+    r.init_turn_0(
+        hash_ids=[1, 2, 3], in_tokens=170, tool_tokens=130, system_tokens=0, seed="t:0"
+    )
+    segs = r._segments
+    assert all(s.block_count >= 0 for s in segs), [s.block_count for s in segs]
+    sys_seg = next(s for s in segs if s.role == "system")
+    assert sys_seg.block_count == 2  # clamped from 3 to floor(170/64)
+    assert sum(len(s.tokens) for s in segs) == 170
+
+
+def test_init_turn_0_prefix_exceeding_input_tokens_clamps_to_budget():
+    """Regression: a prefix that outright exceeds the whole turn-0 input must
+    clamp rather than produce a negative-block_count segment.
+
+    in=100 (m_full=1), tool=130 -> prefix_blocks=ceil(130/64)=3, hash_ids has 3
+    blocks (guard passes). covered_blocks=min(1,3)=1, so the system segment
+    clamps to 1 block and the user tail carries the partial remainder.
+    """
+    r = _make_recon()
+    r.init_turn_0(
+        hash_ids=[1, 2, 3], in_tokens=100, tool_tokens=130, system_tokens=0, seed="t:0"
+    )
+    segs = r._segments
+    assert all(s.block_count >= 0 for s in segs), [s.block_count for s in segs]
+    sys_seg = next(s for s in segs if s.role == "system")
+    assert sys_seg.block_count == 1
+    assert sum(len(s.tokens) for s in segs) == 100
+
+
 def test_init_turn_0_partial_tail_appended_to_user_content():
     r = _make_recon()
     r.init_turn_0(
@@ -344,7 +384,6 @@ def test_truncate_at_boundary_strips_partial_tail():
         target_blocks=block_count,
         block_size=bs,
         decode_tokens_to_text=_stub_decode_tokens_to_text,
-        prev_partial_tail=partial_tail,
     )
     assert len(segs) == 1
     seg = segs[0]
@@ -373,7 +412,6 @@ def test_truncate_at_boundary_no_partial_tail_keeps_all_tokens():
         target_blocks=block_count,
         block_size=bs,
         decode_tokens_to_text=_stub_decode_tokens_to_text,
-        prev_partial_tail=0,
     )
     assert len(segs) == 1
     seg = segs[0]
@@ -412,41 +450,29 @@ def test_advance_pattern_a_clean_append():
 
 
 def test_advance_pattern_b_trailing_block_churn():
-    """LCP == M_prev - 1 (trailing-block recomposition)."""
+    """LCP == M_prev - 1 (trailing-block recomposition).
+
+    ``curr_hash_ids`` has 5 entries while ``curr_in_tokens=300`` covers only
+    ``300 // 64 = 4`` full blocks -- the 5th hash is a partial last block
+    (300 % 64 = 44 tokens). ``_advance_to_turn`` clamps the new region to the
+    covered-block budget (``min(m_curr, m_curr_full)``), exactly mirroring
+    ``init_turn_0``'s ``covered_blocks = min(m_full, len(hash_ids))``, so the
+    byte-exact invariant ``sum(seg.tokens) == curr_in_tokens`` holds rather
+    than overshooting by ~bs tokens.
+    """
     r = _make_recon()
     r.init_turn_0(
         hash_ids=[1, 2, 3], in_tokens=180, tool_tokens=0, system_tokens=0, seed="s0"
     )
-    # turn-0 user holds 2*64 + 52 = 180 tokens, block_count=2.
-    # Wait: in=180, m_full = 180 // 64 = 2, partial_tail = 52.
-    # So turn-0 user: block_count=2, len(tokens)=180.
+    # turn-0 user: in=180, m_full=2, partial_tail=52 -> block_count=2, 180 tokens.
     #
-    # turn k: LCP=2. prev_partial_tail = 180 % 64 = 52.
-    # truncate at LCP=2: boundary cut on turn-0 user (block_count=2, target=2).
-    # Strip 52 partial-tail tokens -> turn-0 user shrinks to 128 tokens.
-    # new_region = 3*64 + (300 mod 64) = 192 + 44 = 236 tokens.
+    # turn k: LCP=2, m_curr=5, m_curr_full=300//64=4 -> m_curr_covered=4.
+    # truncate at LCP=2 strips turn-0 user's 52-token partial tail -> 128 tokens.
+    # new_region = (m_curr_covered - lcp)=2 covered blocks * 64 + (300 % 64)=44
+    #            = 128 + 44 = 172 tokens (the partial 5th hash is the tail).
     # out=50 -> asst_blocks = ceil(50/64) = 1 -> asst_tokens = 64.
-    # user_blocks = 3 - 1 = 2 -> user_tokens = 64*2 + 44 = 172.
-    # sum = 128 + 64 + 172 = 364... but in_tokens=300?
-    # Wait, recheck: m_curr = 5, lcp = 2, new_blocks_count = 3.
-    # new_region tokens = 3*64 + 44 = 236. asst takes 64, user takes 172.
-    # turn-0 user (after truncate at LCP=2) = 128. Total = 128+64+172 = 364.
-    # But curr_in_tokens=300. That's wrong!
-    #
-    # Aha — the issue is curr_in_tokens IS lcp*bs + new_blocks*bs + partial_tail
-    # only if the kept blocks before LCP held no partial tail. Here lcp=2 means
-    # 2*64 = 128 tokens of kept blocks, then new_region with 3 blocks + 44 tail
-    # = 236. Total 128+236 = 364, but curr_in=300. So the test setup is
-    # internally inconsistent — there are extra tokens from the new region that
-    # don't fit. That's fine: the sum is what the algorithm produces; the
-    # mismatch with curr_in is a test-fixture artifact (not real data shape).
-    #
-    # Re-derive: in=300, m_curr = 300 // 64 = 4, partial_tail = 300 % 64 = 44.
-    # But curr_hash_ids has 5 entries! The test originally chose curr_hash_ids
-    # of length 5 for a 300-token in. m_curr=len(curr_hash_ids)=5. That's a
-    # malformed input (should be 4 blocks for 300 in). The algorithm uses
-    # m_curr from len(curr_hash_ids) so it tiles 5 blocks + tail — yielding
-    # 364 total. We assert what the algorithm produces.
+    # user_k = 172 - 64 = 108 tokens, block_count = (m_curr_covered-lcp)-asst = 1.
+    # sum = 128 + 64 + 108 = 300 == curr_in_tokens (exact).
     r.advance_turn(
         prev_hash_ids=[1, 2, 3],
         prev_in_tokens=180,
@@ -463,9 +489,11 @@ def test_advance_pattern_b_trailing_block_churn():
     # asst: ceil(50/64)*64 = 64.
     assert r._segments[1].content_token_count == 64
     assert r._segments[1].block_count == 1
-    # user_k: 2 remaining blocks * 64 + 44 partial_tail = 172.
-    assert r._segments[2].content_token_count == 172
-    assert r._segments[2].block_count == 2
+    # user_k: 1 remaining covered block * 64 + 44 partial_tail = 108.
+    assert r._segments[2].content_token_count == 108
+    assert r._segments[2].block_count == 1
+    # Byte-exact: total equals the recorded input length.
+    assert sum(len(s.tokens) for s in r._segments) == 300
 
 
 def test_advance_pattern_c_pull_back():
@@ -592,6 +620,37 @@ def test_advance_zero_user_skips_user_segment():
     assert roles == ["user", "assistant"]
 
 
+def test_advance_boundary_cut_strips_missing_block_overhang():
+    """A boundary cut on the trailing segment strips its ENTIRE overhang past
+    ``block_count * bs`` — missing-block synth tokens AND the partial tail.
+    Stripping only the partial tail leaves stale synth tokens behind, so the
+    rebuilt context exceeds ``curr_in_tokens`` and reset re-emissions drift.
+
+    Shape: a truncated hash recording (hash_ids shorter than
+    ``in_tokens // bs``) puts missing-block synth tokens on the trailing
+    user segment; the next turn's pure-growth LCP cut lands exactly on its
+    covered-block boundary."""
+    r = _make_recon()
+    # in=242, hash covers 2 of floor(242/64)=3 blocks -> user seg holds
+    # 2*64 block tokens + (64 missing + 50 tail) = 242 tokens.
+    r.init_turn_0(
+        hash_ids=[1, 2], in_tokens=242, tool_tokens=0, system_tokens=0, seed="s0"
+    )
+    assert sum(len(s.tokens) for s in r._segments) == 242
+    # Pure growth: LCP=2 is a boundary cut at the trailing user segment.
+    r.advance_turn(
+        prev_hash_ids=[1, 2],
+        prev_in_tokens=242,
+        prev_out_tokens=0,
+        curr_hash_ids=[1, 2, 3],
+        curr_in_tokens=300,
+        seed="s1",
+    )
+    assert sum(len(s.tokens) for s in r._segments) == 300
+    # The surviving turn-0 segment holds exactly its covered block content.
+    assert r._segments[0].tokens == _stub_decode_block_tokens([1, 2])
+
+
 def test_advance_token_level_slicing_asst_user_split():
     """Block-aligned slicing puts the first asst_blocks*bs tokens in the
     assistant segment and the remaining new_region tokens in the user segment."""
@@ -704,22 +763,16 @@ def test_byte_exact_sum_matches_recorded_advance_turn():
         prev_in_tokens=128,
         prev_out_tokens=50,
         curr_hash_ids=[1, 2, 3, 4],
-        curr_in_tokens=200,  # 3 blocks + 8 partial_tail
+        curr_in_tokens=200,  # 3 full blocks + 8 partial_tail; hash 4 is partial
         seed="s1",
     )
     # lcp=2 boundary, prev_partial_tail=0 (128 % 64 = 0) -> turn-0 user kept (128).
-    # new_region=2*64+8=136. asst=ceil(50/64)*64=64. user=72.
-    # sum = 128 + 64 + 72 = 264. But curr_in=200. The block-aligned asst
-    # over-claims 64-50=14 tokens. New region has only 200-128=72 tokens of
-    # actual recorded content; we emit 64+72=136. The 14-token asst over-claim
-    # is structural (block-alignment up of asst). curr_in_tokens = 200 doesn't
-    # equal sum here because asst is block-aligned UP, which is the accepted
-    # trade-off ("recorded asst content is local; reconstructor emits
-    # block-aligned content"). In the prev-turn-tail-aligned case (the
-    # everyday case where prev_in is already block-aligned via init_turn_0
-    # block-aligning everything), the over-claim shows up only on asst.
-    # We assert what the algorithm produces.
-    assert sum(len(s.tokens) for s in r3._segments) == 264
+    # m_curr=4, m_curr_full=200//64=3 -> m_curr_covered=3: the 4th hash is the
+    # partial last block, so the new region is clamped to the covered budget.
+    # new_region = (3-2) covered block * 64 + (200 % 64)=8 = 72 tokens.
+    # asst = ceil(50/64)*64 = 64. user = 72 - 64 = 8.
+    # sum = 128 + 64 + 8 = 200 == curr_in_tokens (exact byte-exact contract).
+    assert sum(len(s.tokens) for s in r3._segments) == 200
 
 
 def test_hash_content_stability_across_segments():
@@ -1237,3 +1290,39 @@ def test_advance_turn_with_full_curr_hash_ids_unchanged():
     assert sentinel_n == 0, (
         f"non-truncated curr_hash_ids must NOT produce sentinel tokens; got {sentinel_n}"
     )
+
+
+def test_advance_turn_partial_last_hashed_block_clamps_to_budget():
+    """Regression: a hashed-but-partial last block (len(curr_hash_ids) >
+    curr_in_tokens // bs) must clamp to the covered-block budget instead of
+    decoding the partial block as full AND appending the partial tail.
+
+    This mirrors ``init_turn_0``'s ``covered_blocks = min(m_full,
+    len(hash_ids))`` clamp. Before the fix, ``_advance_to_turn`` used
+    ``m_curr = len(curr_hash_ids)`` unclamped, so a turn like in=250 with
+    hash_ids=[..,4] at bs=64 emitted block 4 as a full 64-token block AND an
+    extra ``250 % 64 = 58`` synth tail -- overshooting curr_in_tokens by ~bs
+    and breaking the byte-exact ``sum(seg.tokens) == in_tokens`` contract
+    (this is exactly the shape in tests/fixtures/weka_traces/simple.json
+    turn 1, which the byte-exact ISL drift contract enforces).
+    """
+    r = _make_recon()
+    # turn 0: in=200, hash_ids=[1,2,3] (3 full blocks + 8 partial tail).
+    r.init_turn_0(
+        hash_ids=[1, 2, 3], in_tokens=200, tool_tokens=0, system_tokens=0, seed="t:0"
+    )
+    assert sum(len(s.tokens) for s in r._segments) == 200
+    # turn 1: in=250, hash_ids=[1,2,3,4]; m_curr_full = 250 // 64 = 3 < 4, so
+    # hash 4 is a partial last block contributing only 250 % 64 = 58 tokens.
+    r.advance_turn(
+        prev_hash_ids=[1, 2, 3],
+        prev_in_tokens=200,
+        prev_out_tokens=30,
+        curr_hash_ids=[1, 2, 3, 4],
+        curr_in_tokens=250,
+        seed="t:1",
+    )
+    # Byte-exact: the reconstructed prefix is exactly the recorded input length,
+    # not 250 + bs.
+    assert sum(len(s.tokens) for s in r._segments) == 250
+    assert all(s.block_count >= 0 for s in r._segments)

@@ -423,6 +423,20 @@ class DatasetManager(ReplyClientMixin, BaseComponentService):
         if self.user_config.input.prompt.cache_bust.target != CacheBustTarget.NONE:
             return
 
+        # DAG datasets (any FORK/SPAWN branch) are delta-compressed and
+        # accumulate context across the tree: FORK children sticky-seed their
+        # turn_list from the parent's live session, so the parent must be
+        # created and pinned on the worker, and no turn's wire body is fully
+        # determined at compose time. The PAYLOAD_BYTES fast path ships
+        # pre-encoded per-turn bytes and skips session creation entirely, which
+        # is fundamentally incompatible with that accumulation (a preformatted
+        # FORK parent never gets a session, so every child fails the
+        # sticky-routing invariant "parent session not found on this worker").
+        # agentx is delta-compressed and must never use payload_bytes -- bail to
+        # the structured-turns path whenever the dataset declares any branch.
+        if any(conv.branches for conv in conversations):
+            return
+
         needs_formatting = False
         for conv in conversations:
             if all(t.raw_payload is not None for t in conv.turns):
@@ -505,6 +519,20 @@ class DatasetManager(ReplyClientMixin, BaseComponentService):
                 "verbatim and bypasses the per-credit cache-bust marker "
                 "injection. Either remove --cache-bust, or use a dataset "
                 "type that produces structured turns "
+                "(e.g. single_turn / multi_turn / dag_jsonl)."
+            )
+        if (
+            has_payload_bytes
+            and self.user_config is not None
+            and self.user_config.endpoint.use_dynamo_conv_aware_routing
+        ):
+            raise ValueError(
+                "--use-dynamo-conv-aware-routing is incompatible with the "
+                "PAYLOAD_BYTES mmap fast path. The selected dataset (raw_payload "
+                "/ inputs_json / mooncake_trace with payload field) ships "
+                "pre-encoded bytes verbatim, so nvext.session_control cannot be "
+                "injected. Either disable Dynamo conversation-aware routing, or "
+                "use a dataset type that produces structured turns "
                 "(e.g. single_turn / multi_turn / dag_jsonl)."
             )
         return (

@@ -27,6 +27,22 @@ class ScenarioSpec(AIPerfBaseModel):
         default=False,
         description="Force --use-think-time-only=true to exclude response time from inter-turn delays.",
     )
+    require_use_end_to_start_delays: bool = Field(
+        default=False,
+        description="Force --use-end-to-start-delays=true so inter-turn delays are the "
+        "end-to-start idle gap (t_curr - (t_prev + api_time_prev)), not the "
+        "start-to-start delta. Prevents per-stream clock drift that fabricates "
+        "cross-stream concurrency on completion-gated replay.",
+    )
+    require_streaming: bool = Field(
+        default=False,
+        description=(
+            "Force --streaming=true (auto-enabled when unset; error on explicit "
+            "--no-streaming). Streaming is required for the per-token latency "
+            "metrics (TTFT, ITL) that are core to this benchmark; without it a "
+            "run would silently report no first-token signal."
+        ),
+    )
     forbid_ignore_trace_delays: bool = Field(
         default=False,
         description=(

@@ -35,13 +35,6 @@ fi
 nvidia-smi
 
 # ---- Resolve traces and install deps ----------------------------------------
-# Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
-# unfiltered 060226 corpus whose ~1M-token traces get rejected and add no perf
-# signal at high concurrency.
-#export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060226_256k
-
-# ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
 install_agentic_deps
 
@@ -106,12 +99,6 @@ case "$OFFLOADING" in
     none)
         ;;
     cpu)
-        # B200 DGXC nodes have ~2.7 TiB host DRAM; reserve 2.5 TB for the
-        # simple offload connector and leave ~200 GB headroom for worker
-        # RSS + page cache. Eager mode (the shortcut form default) is
-        # intentional here per user request — Kimi FP4 on B200 has cleared
-        # the full eager sweep before.
-        TOTAL_CPU_DRAM_GB=2500
         export VLLM_USE_SIMPLE_KV_OFFLOAD=1
         OFFLOAD_ARGS=(
             --kv_offloading_backend native
@@ -126,12 +113,11 @@ case "$OFFLOADING" in
         agentic_pip_install --quiet --no-cache-dir lmcache
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
-        # Keep the semantic CPU KV pool at 2.5 TB for every TP shape. MP mode
-        # owns that pool in the external LMCache server instead of passing
+        # MP mode owns the configured CPU pool in the external LMCache
+        # server instead of passing
         # --kv-offloading-size through vLLM's integrated LMCache convenience
         # path, which divides the value by TP and then hits a large single-shot
         # cudaHostAlloc in LMCache 0.4.5's single-process local CPU backend.
-        TOTAL_CPU_DRAM_GB=2500
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8080}"
@@ -140,8 +126,11 @@ case "$OFFLOADING" in
         # includes the tcp:// scheme. Keep the server bind host raw, but pass
         # a ZMQ-style host string to the connector.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
-        #LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$TOTAL_CPU_DRAM_GB}"
-        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
+        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$TOTAL_CPU_DRAM_GB}"
+        if [ "$LMCACHE_L1_SIZE_GB" -gt "$TOTAL_CPU_DRAM_GB" ]; then
+            echo "Error: LMCACHE_L1_SIZE_GB=$LMCACHE_L1_SIZE_GB exceeds configured capacity $TOTAL_CPU_DRAM_GB" >&2
+            exit 1
+        fi
         # Initial allocation is deliberately small; --l1-size-gb above is the
         # actual pool capacity and grows lazily as the run fills the cache.
         LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"

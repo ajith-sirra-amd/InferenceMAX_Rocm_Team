@@ -116,6 +116,40 @@ def mock_results_factory(sample_records):
 
 class TestMetricsJsonExporter:
     @pytest.mark.asyncio
+    async def test_json_export_includes_public_dataset_provenance(
+        self, mock_results, mock_user_config
+    ):
+        mock_user_config.input.public_dataset = (
+            "semianalysis_cc_traces_weka_with_subagents"
+        )
+        mock_user_config.input.conversation.num_dataset_entries = 393
+        mock_user_config.input.conversation.model_fields_set.add("num_dataset_entries")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            mock_user_config.output.artifact_directory = output_dir
+            exporter = MetricsJsonExporter(
+                ExporterConfig(
+                    results=mock_results,
+                    user_config=mock_user_config,
+                    service_config=ServiceConfig(),
+                    telemetry_results=None,
+                )
+            )
+            await exporter.export()
+
+            with open(output_dir / OutputDefaults.PROFILE_EXPORT_AIPERF_JSON_FILE) as f:
+                raw = json.load(f)
+
+        assert raw["metadata"]["dataset"] == {
+            "source_type": "public_dataset",
+            "loader": "semianalysis_cc_traces_weka_with_subagents",
+            "hf_dataset_name": "semianalysisai/cc-traces-weka-062126",
+            "hf_split": "train",
+            "num_dataset_entries": 393,
+        }
+
+    @pytest.mark.asyncio
     async def test_metrics_json_exporter_creates_expected_json(
         self, mock_results, mock_user_config
     ):
@@ -217,6 +251,66 @@ class TestMetricsJsonExporter:
                 raw = json.load(f)
 
         assert raw["context_overflow_count"] == {"unit": "requests", "avg": 3.0}
+
+    async def _export_scenario_run(self, mock_user_config, *, was_cancelled: bool):
+        """Export a scenario-stamped run and return the parsed JSON.
+
+        Patches validate_scenario so the bare test UserConfig passes the
+        scenario lock when JsonExportData revalidates input_config; the
+        exporter itself reads the (clean) outcome off the original config.
+        """
+        from aiperf.common.scenario.validator import ValidationOutcome
+
+        cancelled = was_cancelled
+
+        class _Results:
+            records = []
+            start_ns = None
+            end_ns = None
+            was_cancelled = cancelled
+            error_summary = []
+
+        mock_user_config.scenario = "inferencex-agentx-mvp"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            mock_user_config.output.artifact_directory = output_dir
+            exporter_config = ExporterConfig(
+                results=_Results(),
+                user_config=mock_user_config,
+                service_config=ServiceConfig(),
+                telemetry_results=None,
+            )
+            exporter = MetricsJsonExporter(exporter_config)
+            with patch(
+                "aiperf.common.scenario.validator.validate_scenario",
+                return_value=ValidationOutcome(submission_valid=True),
+            ):
+                await exporter.export()
+
+            with open(output_dir / OutputDefaults.PROFILE_EXPORT_AIPERF_JSON_FILE) as f:
+                return json.load(f)
+
+    @pytest.mark.asyncio
+    async def test_json_export_cancelled_scenario_run_stamps_submission_valid_false(
+        self, mock_user_config
+    ):
+        raw = await self._export_scenario_run(mock_user_config, was_cancelled=True)
+
+        assert raw["was_cancelled"] is True
+        md = raw["metadata"]
+        assert md["scenario"] == "inferencex-agentx-mvp"
+        assert md["submission_valid"] is False
+        assert "run_cancelled" in md["submission_invalid_reasons"]
+
+    @pytest.mark.asyncio
+    async def test_json_export_clean_scenario_run_stamps_submission_valid_true(
+        self, mock_user_config
+    ):
+        raw = await self._export_scenario_run(mock_user_config, was_cancelled=False)
+
+        md = raw["metadata"]
+        assert md["submission_valid"] is True
+        assert "submission_invalid_reasons" not in md
 
     @pytest.mark.asyncio
     async def test_json_export_count_sum_per_metric_type(self, mock_user_config):

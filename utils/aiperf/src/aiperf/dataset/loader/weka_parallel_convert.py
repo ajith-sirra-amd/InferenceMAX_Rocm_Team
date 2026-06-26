@@ -19,11 +19,13 @@ Output is byte-identical to the in-process serial path; tests in
 from __future__ import annotations
 
 import hashlib
+import math
 import multiprocessing as mp
 import os
 import time
 from collections import defaultdict
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from multiprocessing import shared_memory
 from typing import TypeAlias, TypedDict
@@ -40,11 +42,21 @@ from aiperf.dataset.loader._delay_cap import DelayCapTracker
 _JOIN_EPSILON_SECONDS = 1e-6
 
 
+def _api_time_ms(api_time: float | None) -> float | None:
+    """Per-turn server-processing duration in ms (mirrors weka_trace._api_time_ms).
+
+    Kept local to avoid a circular import (weka_trace imports this module)."""
+    if api_time is None or not math.isfinite(api_time):
+        return None
+    return max(0.0, api_time) * 1000.0
+
+
 class _WekaParentTurnDict(TypedDict):
     """One reconstructed turn (parent or child) shipped from worker -> orchestrator."""
 
     timestamp: float | None
     delay: float | None
+    api_time_ms: float | None
     model: str
     max_tokens: int
     prompt: str
@@ -97,6 +109,7 @@ class _WekaNormalRequestPayload(TypedDict):
     model: str
     t: float
     think_time: float | None
+    api_time: NotRequired[float | None]
     # Turn classification computed in the orchestrator (one source of truth in
     # weka_trace._classify_turn_input); workers copy it into the turn dict.
     input_kind: NotRequired[str | None]
@@ -423,6 +436,9 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
             {
                 "timestamp": None if task.ignore_delays else t_ms,
                 "delay": None if task.ignore_delays else delay_ms,
+                "api_time_ms": None
+                if task.ignore_delays
+                else _api_time_ms(req.get("api_time")),
                 "model": task.model_map.get(req["model"], req["model"]),
                 "max_tokens": req["capped_output_length"],
                 "raw_messages": parent_delta.delta_messages,
@@ -645,6 +661,9 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
                 {
                     "timestamp": None if task.ignore_delays else t_ms,
                     "delay": None if task.ignore_delays else child_delay_ms,
+                    "api_time_ms": None
+                    if task.ignore_delays
+                    else _api_time_ms(creq.get("api_time")),
                     "model": task.model_map.get(creq["model"], creq["model"]),
                     # Flat-chain children carry capped_output_length (their
                     # rows were top-level and honor --max-osl); subagent
@@ -777,4 +796,5 @@ def run_parallel_weka_reconstruction(
         return results
     finally:
         shm.close()
-        shm.unlink()
+        with suppress(FileNotFoundError):
+            shm.unlink()

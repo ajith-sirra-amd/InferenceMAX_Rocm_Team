@@ -237,6 +237,7 @@ class BranchOrchestrator:
         cache_bust_target: CacheBustTarget = CacheBustTarget.NONE,
         session_tree_registry=None,
         cache_bust_ledger=None,
+        allow_accelerated_warmup: bool = False,
     ) -> None:
         self._cs = conversation_source
         self._issuer = credit_issuer
@@ -255,6 +256,9 @@ class BranchOrchestrator:
         # the slot happens in the credit issuer; the orchestrator only adjusts
         # the per-tree outstanding count.
         self._session_tree_registry = session_tree_registry
+        self._allow_accelerated_warmup = allow_accelerated_warmup
+        self._accelerated_warmup_started = False
+        self._handoff_snapshot_taken = False
         # child x_correlation_id -> its tree's root_correlation_id, so the
         # terminal-completion / rollback paths can decrement the right tree.
         self._child_root: dict[str, str] = {}
@@ -275,6 +279,7 @@ class BranchOrchestrator:
         # children are not dispatched a second time when the parent's
         # turn 0 credit returns.
         self._pre_dispatched_branches: set[tuple[str, str]] = set()
+        self._overlap_dispatched_branches: set[tuple[str, str]] = set()
         self._fail_fast = Environment.DAG.FAIL_FAST
         self._cleaning_up: bool = False
         # SPAWN children whose recorded first request starts after the branch
@@ -318,6 +323,39 @@ class BranchOrchestrator:
         # ``(branch_id, gated_turn_idx)`` tuple must not appear twice — that
         # would mean two identical prereq entries were authored.
         self._build_prereq_index()
+
+    def start_accelerated_warmup(self) -> None:
+        """Enable normal DAG interception during accelerated warmup replay."""
+        if self._allow_accelerated_warmup:
+            self._accelerated_warmup_started = True
+
+    def close_replay_root(self, root_correlation_id: str) -> None:
+        """Discard per-instance overlap markers after a tree drains."""
+        self._overlap_dispatched_branches = {
+            item
+            for item in self._overlap_dispatched_branches
+            if item[0] != root_correlation_id
+        }
+
+    def snapshot_annotations(
+        self,
+    ) -> tuple[dict[str, int], dict[str, tuple[str | None, int | None]]]:
+        """Return blocked-parent and child-join metadata for phase handoff."""
+        self._handoff_snapshot_taken = True
+        blocked = {
+            correlation_id: pending.gated_turn_index
+            for correlation_id, pending in self._active_joins.items()
+            if pending.gated_turn_index is not None
+        }
+        children: dict[str, tuple[str | None, int | None]] = {}
+        for correlation_id, entries in self._child_to_join.items():
+            entry = next((item for item in entries if item.prereq_key), None)
+            if entry is None:
+                children[correlation_id] = (None, None)
+                continue
+            branch_id = entry.prereq_key.split(":", 1)[1]
+            children[correlation_id] = (branch_id, entry.gated_turn_index)
+        return blocked, children
 
     def _build_prereq_index(self) -> None:
         dataset_meta = getattr(self._cs, "dataset_metadata", None)
@@ -364,6 +402,44 @@ class BranchOrchestrator:
         if credit.turn_index >= len(meta.turns):
             return []
         return list(meta.turns[credit.turn_index].branch_ids)
+
+    async def on_credit_issued(self, credit) -> None:
+        """Start branches that overlapped their spawning request in the capture."""
+        if self._cleaning_up or credit.agent_depth > 0:
+            return
+        if credit.phase == CreditPhase.WARMUP and not self._accelerated_warmup_started:
+            return
+        parent_meta = self._cs.get_metadata(credit.conversation_id)
+        if getattr(parent_meta, "replay_scope_id", None) is None:
+            return
+        if credit.turn_index >= len(parent_meta.turns):
+            return
+        turn_meta = parent_meta.turns[credit.turn_index]
+        parent_start_ms = _as_timestamp_ms(turn_meta.timestamp_ms)
+        parent_api_ms = _as_timestamp_ms(turn_meta.api_time_ms)
+        if parent_start_ms is None or parent_api_ms is None or parent_api_ms <= 0:
+            return
+        parent_end_ms = parent_start_ms + parent_api_ms
+        branches_by_id = {branch.branch_id: branch for branch in parent_meta.branches}
+        overlapping = [
+            branch_id
+            for branch_id in turn_meta.branch_ids
+            if (branch := branches_by_id.get(branch_id)) is not None
+            and (branch_start := self._branch_start_timestamp_ms(branch)) is not None
+            and branch_start < parent_end_ms
+        ]
+        if not overlapping:
+            return
+        parent_corr = credit.x_correlation_id
+        async with self._parent_locks[parent_corr]:
+            await self._spawn_children_and_register_gates(
+                credit,
+                overlapping,
+                dispatch_origin_ms=parent_start_ms,
+            )
+            self._overlap_dispatched_branches.update(
+                (parent_corr, branch_id) for branch_id in overlapping
+            )
 
     def _marker_for_root(self, root_correlation_id: str | None) -> str | None:
         """Resolve the tree-root cache-bust marker for a spawned descendant.
@@ -664,7 +740,7 @@ class BranchOrchestrator:
         # child continuation turns. Spawning here leaks _descendant_counts
         # (children never reach is_final_turn) and wedges
         # all_credits_returned_event. DAG dispatch runs in PROFILING.
-        if credit.phase == CreditPhase.WARMUP:
+        if credit.phase == CreditPhase.WARMUP and not self._accelerated_warmup_started:
             return False
 
         # Child path: handled by the callback handler directly (child leaf /
@@ -682,7 +758,11 @@ class BranchOrchestrator:
             return self._maybe_suspend_parent(credit)
 
     async def _spawn_children_and_register_gates(
-        self, credit, branch_ids: list[str]
+        self,
+        credit,
+        branch_ids: list[str],
+        *,
+        dispatch_origin_ms: float | None = None,
     ) -> None:
         """Resolve branches, start children, and register future joins.
 
@@ -723,6 +803,11 @@ class BranchOrchestrator:
             # are recorded in _pre_dispatched_branches; skip them on the
             # parent's turn-0 return to avoid double-dispatch.
             if (credit.conversation_id, b_id) in self._pre_dispatched_branches:
+                continue
+            if (
+                dispatch_origin_ms is None
+                and (parent_corr, b_id) in self._overlap_dispatched_branches
+            ):
                 continue
             branch_gates = gate_for_branch.get(branch.branch_id, [])
             # Background branches never gate the parent even if the dataset
@@ -767,7 +852,10 @@ class BranchOrchestrator:
                 per_child_branch_mode[child_corr] = branch.mode
                 per_child_gates[child_corr] = list(branch_gates)
                 dispatch_offset_by_corr[child_corr] = self._child_dispatch_offset_ms(
-                    branch_start_ms, child
+                    dispatch_origin_ms
+                    if dispatch_origin_ms is not None
+                    else branch_start_ms,
+                    child,
                 )
                 all_children.append(child)
 
@@ -844,6 +932,8 @@ class BranchOrchestrator:
         immediate_children: list = []
         for child in all_children:
             offset_ms = dispatch_offset_by_corr.get(child.x_correlation_id, 0.0)
+            if self._accelerated_warmup_started:
+                offset_ms = 0.0
             if offset_ms > 0.0:
                 self._start_delayed_first_turn(child, offset_ms, parent_corr)
             else:
@@ -856,7 +946,7 @@ class BranchOrchestrator:
         for child, result in zip(immediate_children, results, strict=True):
             if result is not True:
                 self._rollback_failed_first_turn(child, result, parent_corr)
-        self._finalize_failed_dispatches(parent_corr)
+        await self._finalize_failed_dispatches(parent_corr)
 
     def _rollback_failed_first_turn(self, child, result, parent_corr: str) -> None:
         """Undo per-child bookkeeping for a turn-0 dispatch that didn't land.
@@ -924,13 +1014,14 @@ class BranchOrchestrator:
             self.stats.children_errored += 1
         self.stats.children_spawned -= 1
 
-    def _finalize_failed_dispatches(self, parent_corr: str) -> None:
+    async def _finalize_failed_dispatches(self, parent_corr: str) -> None:
         """Drain end-game after one or more turn-0 dispatch rollbacks.
 
-        Pops vestigial gates, releases a fully-drained parent, and notifies
-        the drain observer (no credit return follows a rollback to do it).
-        Runs after the immediate gather settles and after each delayed
-        dispatch settles; a no-op when nothing rolled back.
+        Pops vestigial gates, dispatches a satisfied gate that the parent is
+        already suspended on, releases a fully-drained parent, and notifies the
+        drain observer (no credit return follows a rollback to do it). Runs
+        after the immediate gather settles and after each delayed dispatch
+        settles; a no-op when nothing rolled back.
         """
         # If no children at all landed (all failed), pop gates that are now
         # zero-outstanding so the parent is not left suspended on a join
@@ -949,6 +1040,18 @@ class BranchOrchestrator:
                 # handler fell through to handle_credit_return ->
                 # _dispatch_next_turn for the identical turn_index.
                 self._pop_future_join(parent_corr, gated_idx)
+        # A gate already promoted into _active_joins (the parent suspended on
+        # it in a prior intercept) is never in _future_joins, so the scan above
+        # cannot see it. A rollback that empties such a gate (a delayed SPAWN
+        # child refused after the parent suspended) leaves the satisfied active
+        # gate with no child-leaf decrement to fire it -> the suspended parent
+        # deadlocks until drain-timeout. Pop and dispatch it here so the parent
+        # resumes; the parent stays suspended otherwise (intercept returned True
+        # for the gate), so this is the only path that advances it.
+        active = self._active_joins.get(parent_corr)
+        drained_active = None
+        if active is not None and active.is_satisfied:
+            drained_active = self._active_joins.pop(parent_corr, None)
         # If no successful children AND no gated turns, release the
         # reserved parent state so the parent can drain.
         #
@@ -967,6 +1070,14 @@ class BranchOrchestrator:
         ):
             self._release_slot(parent_corr)
             del self._descendant_counts[parent_corr]
+        # Dispatch the drained active gate's join turn. The gate was satisfied
+        # with zero outstanding children (every child rolled back), so no
+        # child-leaf decrement will ever fire it; without this the suspended
+        # parent's gated turn is orphaned -> a hang. ``_release_slot`` above only
+        # evicts the parent lock dict entry (the held lock is unaffected), so
+        # dispatching after it is safe.
+        if drained_active is not None:
+            await self._release_blocked_join(drained_active)
         self._notify_drain()  # all-children-rolled-back path: no credit return follows
 
     def _branch_start_timestamp_ms(self, branch) -> float | None:
@@ -1049,7 +1160,7 @@ class BranchOrchestrator:
                 result = exc
             if result is not True:
                 self._rollback_failed_first_turn(child, result, parent_corr)
-                self._finalize_failed_dispatches(parent_corr)
+                await self._finalize_failed_dispatches(parent_corr)
 
     def _ensure_future_join(
         self,
@@ -1436,7 +1547,9 @@ class BranchOrchestrator:
             s.children_delayed,
         )
         leaked = self._iter_pending_joins()
-        if leaked or self._child_to_join or self._descendant_counts:
+        if not self._handoff_snapshot_taken and (
+            leaked or self._child_to_join or self._descendant_counts
+        ):
             logger.warning(
                 "BranchOrchestrator leaked state at cleanup: "
                 "%d active_joins, %d future_joins, %d tracked children, "
@@ -1465,6 +1578,7 @@ class BranchOrchestrator:
         self._descendant_counts.clear()
         self._parent_locks.clear()
         self._pre_dispatched_branches.clear()
+        self._overlap_dispatched_branches.clear()
 
 
 def any_child_tracked_for_parent(

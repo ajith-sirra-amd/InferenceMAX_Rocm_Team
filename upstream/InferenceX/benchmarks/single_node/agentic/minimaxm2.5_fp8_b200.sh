@@ -11,10 +11,6 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 
-if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
-    MAX_MODEL_LEN=131072
-fi
-
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
@@ -33,10 +29,10 @@ fi
 nvidia-smi
 
 # ---- Resolve traces and install deps ----------------------------------------
-# MiniMax-M2.5 servers run at max_model_len ~256k; the unfiltered 052726
+# MiniMax-M2.5 servers run at max_model_len ~256k; the unfiltered 061526
 # corpus has requests up to ~1M proxy tokens that would be rejected.
-# Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+# Switch to the 256k-capped variant (232 traces, max in+out <= 256k).
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_061526_256k
 
 resolve_trace_source
 install_agentic_deps
@@ -49,9 +45,6 @@ OFFLOAD_ARGS=""
 case "$OFFLOADING" in
     none) ;;
     cpu)
-        # B200-dgxc nodes have substantial DRAM; override workflow default (600 GB)
-        # so we offload up to 1.5 TB of KV cache (1.95x HBM total at tp=4).
-        TOTAL_CPU_DRAM_GB=1500
         export VLLM_USE_SIMPLE_KV_OFFLOAD=1
         OFFLOAD_ARGS="--kv_offloading_backend native --kv_offloading_size $TOTAL_CPU_DRAM_GB --disable-hybrid-kv-cache-manager"
         ;;
@@ -78,7 +71,6 @@ vllm serve "$MODEL_PATH" --served-model-name "$MODEL" \
 --tensor-parallel-size=$TP \
 $EP \
 --gpu-memory-utilization 0.90 \
---max-model-len $MAX_MODEL_LEN \
 --block-size=32 \
 --kv-cache-dtype fp8 \
 --max-cudagraph-capture-size 2048 \

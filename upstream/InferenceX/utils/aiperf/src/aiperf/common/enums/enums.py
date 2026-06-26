@@ -104,6 +104,24 @@ class CommandType(CaseInsensitiveStrEnum):
     START_REALTIME_TELEMETRY = "start_realtime_telemetry"
 
 
+class ProfileCancelReason(CaseInsensitiveStrEnum):
+    """Why a ProfileCancelCommand was issued; controls run exit semantics.
+
+    A USER cancel (Ctrl+C) exits 0 -- the user chose to stop. ABORT reasons
+    exit non-zero: the run broke a contract and its results are invalid, so an
+    automation/CI caller must see a failure, not a clean exit.
+    """
+
+    USER = "user"
+    WARMUP_FAILURE = "warmup_failure"
+    FAILED_REQUEST_THRESHOLD = "failed_request_threshold"
+
+    @property
+    def is_abort(self) -> bool:
+        """True for contract-violation aborts (non-zero exit); False for user cancel."""
+        return self is not ProfileCancelReason.USER
+
+
 class CommandResponseStatus(CaseInsensitiveStrEnum):
     ACKNOWLEDGED = "acknowledged"
     FAILURE = "failure"
@@ -130,6 +148,24 @@ class ConversationBranchMode(CaseInsensitiveStrEnum):
 
     SPAWN = "spawn"
     """Child gets a fresh context; free routing (no sticky pin to parent)."""
+
+
+class TurnInputKind(CaseInsensitiveStrEnum):
+    """What produced a turn's new input content, for trace replays that record it.
+
+    Classified by trace loaders from the recorded per-request content-block
+    types (``input_types``) and assistant stop reasons (``stop``). Lets
+    downstream consumers distinguish machine-paced agentic-loop continuations
+    from human-paced input turns.
+    """
+
+    USER_INPUT = "user_input"
+    """Genuine user/agent text (or multimodal) input arriving at a yield point
+    (the previous assistant turn ended without calling a tool)."""
+
+    TOOL_RESULT = "tool_result"
+    """Tool output fed back after the assistant stopped with ``tool_use`` --
+    an immediate machine-paced continuation, not human input."""
 
 
 class PrerequisiteKind(CaseInsensitiveStrEnum):

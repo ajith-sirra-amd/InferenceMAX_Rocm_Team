@@ -106,8 +106,15 @@ class MultiRunOrchestrator:
         Stamped here after the strategy has produced ``aggregate`` and
         before export.
 
-        No-op when ``user_config.scenario`` is None.
+        Dataset provenance is stamped for every public-dataset run. Scenario
+        submission carrier keys remain conditional on an active scenario.
         """
+        from aiperf.dataset.provenance import public_dataset_provenance
+
+        dataset = public_dataset_provenance(user_config)
+        if dataset is not None:
+            aggregate.metadata["dataset"] = dataset
+
         if user_config.scenario is None:
             return
 
@@ -135,6 +142,9 @@ class MultiRunOrchestrator:
         )
         aggregate.metadata["_total_responses"] = total_responses
         aggregate.metadata["_context_overflow_count"] = context_overflow_count
+        aggregate.metadata["_was_cancelled"] = any(
+            bool(r.metadata.get("was_cancelled")) for r in results
+        )
 
     def execute(
         self, base_config: UserConfig, strategy: ExecutionStrategy | None = None
@@ -459,6 +469,7 @@ class MultiRunOrchestrator:
                 success=True,
                 summary_metrics=summary_metrics,
                 artifacts_path=artifact_path,
+                metadata={"was_cancelled": self._extract_was_cancelled(config)},
             )
         except Exception as e:
             logger.exception(f"Error executing run {label}")
@@ -513,3 +524,31 @@ class MultiRunOrchestrator:
         except Exception:
             logger.exception(f"Error extracting metrics from {json_file}")
             return {}
+
+    @staticmethod
+    def _extract_was_cancelled(config: "UserConfig") -> bool:
+        """Read the top-level ``was_cancelled`` flag from the run's profile export JSON.
+
+        A run that exits 0 after a graceful Ctrl+C still writes its export
+        file (with partial metrics) and marks it ``was_cancelled: true``;
+        scenario submissions must treat such runs as invalid.
+
+        Args:
+            config: UserConfig for the completed run.
+
+        Returns:
+            True when the run was cancelled early, False otherwise
+            (including when the export file is missing or unreadable).
+        """
+        json_file = config.output.profile_export_json_file
+
+        if not json_file.exists():
+            return False
+
+        try:
+            with open(json_file, "rb") as f:
+                data = orjson.loads(f.read())
+            return bool(data.get("was_cancelled", False))
+        except Exception:
+            logger.exception(f"Error extracting was_cancelled from {json_file}")
+            return False

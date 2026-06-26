@@ -2,18 +2,30 @@
 set -euo pipefail
 set -x
 
-# Agentic trace replay benchmark for GLM-5.1 FP4 on MI355X using SGLang.
+# Agentic trace replay benchmark for Qwen3.5 FP8 on MI300X using SGLang.
+#
+# Base server recipe follows the upstream MI300X reference
+# (benchmarks/single_node/qwen3.5_fp8_mi300x.sh, the "AMD Andy" recipe):
+# aiter attention backend, aiter allreduce fusion, mem-fraction 0.75.
+# The agentic harness (resolve_trace_source / build_replay_cmd /
+# run_agentic_replay_and_write_outputs) replaces run_benchmark_serving, and
+# --disable-radix-cache is dropped because agentic replay needs prefix reuse.
 #
 # Required env vars:
-#   MODEL, TP, CONC, RESULT_DIR
+#   MODEL, TP, CONC, OFFLOADING, TOTAL_CPU_DRAM_GB, RESULT_DIR, DURATION, EP_SIZE
+#
+# OFFLOADING values:
+#   none    - SGLang GPU KV with the default RadixAttention prefix cache.
+#   hicache - SGLang HiCache with a local CPU hierarchical cache on top of radix.
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL TP CONC RESULT_DIR DURATION
+check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR EP_SIZE DP_ATTENTION
 
-if [ -z "${MAX_MODEL_LEN:-}" ] || [ "$MAX_MODEL_LEN" = "0" ]; then
-    MAX_MODEL_LEN=131072
-fi
+PORT=${PORT:-8888}
+DURATION=${DURATION:-1800}
+EP_SIZE=${EP_SIZE:-1}
+
 
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
@@ -30,14 +42,16 @@ else
     hf download "$MODEL"
     export MODEL_PATH="$MODEL"
 fi
+
 rocm-smi || true
 amd-smi || true
 # ---- Resolve traces and install deps ----------------------------------------
 # Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
 # unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
 # signal at high concurrency.
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
-
+#export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
+#060226
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060226_256k
 
 # ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
@@ -66,7 +80,7 @@ case "$OFFLOADING" in
         # GLM-5.1 FP4 uses a standard transformer (no hybrid Mamba path),
         # so one HiCache host pool per TP rank is sufficient.
         # The node-total DRAM budget divides by TP and host-pool count.
-        TOTAL_CPU_DRAM_GB="${HICACHE_TOTAL_CPU_DRAM_GB:-${TOTAL_CPU_DRAM_GB}}"
+        TOTAL_CPU_DRAM_GB=3000
         HICACHE_HOST_POOL_COUNT="${HICACHE_HOST_POOL_COUNT:-1}"
         HICACHE_MAX_SIZE_GB_PER_RANK_POOL="${HICACHE_MAX_SIZE_GB_PER_RANK_POOL:-${HICACHE_MAX_SIZE_GB_PER_RANK:-500}}"
         HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
@@ -112,10 +126,7 @@ esac
 echo "Starting SGLang server..."
 export PYTHONNOUSERSITE=1
 
-#    --nsa-prefill-backend tilelang \
-#    --nsa-decode-backend tilelang \
-
-
+pip install -U transformers
 python3 -m sglang.launch_server \
     --model-path "$MODEL_PATH" \
     --served-model-name "$MODEL" \
@@ -123,16 +134,14 @@ python3 -m sglang.launch_server \
     --port $PORT \
     --tensor-parallel-size $TP \
     --trust-remote-code \
-    --cuda-graph-max-bs $CUDA_GRAPH_MAX_BS \
+    --cuda-graph-max-bs $CONC \
     --max-running-requests $CONC \
-    --context-length $MAX_MODEL_LEN \
     --mem-fraction-static 0.85 \
     --tool-call-parser glm47 \
     --reasoning-parser glm45 \
     --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}' \
-    --dsa-prefill-backend tilelang \
-    --dsa-decode-backend tilelang \
-    --chunked-prefill-size 131072 \
+    --nsa-prefill-backend tilelang \
+    --nsa-decode-backend tilelang \
     --watchdog-timeout 1200 \
     --kv-cache-dtype fp8_e4m3 \
     --tokenizer-worker-num $((TP*2)) \
