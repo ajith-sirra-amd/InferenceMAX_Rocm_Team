@@ -2210,3 +2210,19 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
       #- { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
       #- { tp: 8, dp-attn: false, offloading: hicache, conc-list: [16]  }
       - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [24]  }
+
+kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
+  image: vllm/vllm-openai-rocm:v0.21.0
+  model: amd/Kimi-K2.7-Code-MXFP4
+  model-prefix: kimik2.7
+  runner: mi355x
+  precision: fp4
+  framework: vllm
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - duration: 1800
+      search-space:
+      - { tp: 8, ep: 1, offloading: none, conc-list: [16] }
+      - { tp: 8, ep: 1, offloading: lmcache, conc-list: [16] }
+
