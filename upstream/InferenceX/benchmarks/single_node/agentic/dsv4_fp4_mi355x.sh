@@ -37,6 +37,9 @@ amd-smi || true
 # `hf download` creates the target dir if missing and is itself idempotent.
 # When MODEL_PATH is unset (stand-alone runs), fall back to the HF_HUB_CACHE
 # Either way, MODEL_PATH is what the server is launched with.
+
+rm -rf /mnt/hf_hub_cache/models--deepseek-ai--DeepSeek-V4-Pro 
+
 if [[ -n "${MODEL_PATH:-}" ]]; then
     if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
         hf download "$MODEL" --local-dir "$MODEL_PATH"
@@ -238,7 +241,6 @@ VLLM_CMD=(
     --kv-cache-dtype fp8
     --trust-remote-code
     --moe-backend triton_unfused
-    --quantization deepseek_v4_fp4
     --tokenizer-mode deepseek_v4
     --reasoning-parser deepseek_v4
     --compilation-config '{"mode":3,"cudagraph_mode":"FULL_AND_PIECEWISE"}'

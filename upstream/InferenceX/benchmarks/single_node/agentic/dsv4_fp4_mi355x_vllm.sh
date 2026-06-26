@@ -238,6 +238,7 @@ VLLM_CMD=(
     --kv-cache-dtype fp8
     --trust-remote-code
     --moe-backend triton_unfused
+    --quantization deepseek_v4_fp4
     --tokenizer-mode deepseek_v4
     --reasoning-parser deepseek_v4
     --compilation-config '{"mode":3,"cudagraph_mode":"FULL_AND_PIECEWISE"}'
