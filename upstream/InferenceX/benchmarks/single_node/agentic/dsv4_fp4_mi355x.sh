@@ -237,7 +237,7 @@ VLLM_CMD=(
     --gpu-memory-utilization 0.8
     --kv-cache-dtype fp8
     --trust-remote-code
-    --moe-backend triton_unfused
+    --moe-backend aiter
     --tokenizer-mode deepseek_v4
     --reasoning-parser deepseek_v4
     --compilation-config '{"mode":3,"cudagraph_mode":"FULL_AND_PIECEWISE"}'
