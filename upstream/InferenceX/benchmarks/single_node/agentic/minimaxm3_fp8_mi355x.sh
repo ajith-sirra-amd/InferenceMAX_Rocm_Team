@@ -52,7 +52,7 @@ fi
 # Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
 #export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
 #060226
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_061526
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
 
 resolve_trace_source
 install_agentic_deps
@@ -166,7 +166,7 @@ case "$OFFLOADING" in
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8080}"
         # LMCacheMPConnector concatenates lmcache.mp.host and port into the
         # ZMQ endpoint. Bind the server to a raw host, but pass the connector a
-        # ZMQ-style host string. 
+        # ZMQ-style host string.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
         LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB))}"
         LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
