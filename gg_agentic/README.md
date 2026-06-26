@@ -91,6 +91,31 @@ python gg_agentic/chat.py
 
 Type `exit` or press `Ctrl-C` to quit.
 
+### Input modes
+
+**Single line** — the default:
+```
+You> mostrami le ultime 5 run di e2e-tests.yml
+```
+
+**Block mode** — for pasting log excerpts, error messages, or long text.
+Open and close the block with `"""` on its own line:
+```
+You> """
+  [paste anything here — multiple lines, blank lines, special characters]
+  ERROR: container exited with code 1
+  ...
+"""
+```
+The entire block is sent as a single message once the closing `"""` is typed.
+
+**Line continuation** — for long messages typed manually.
+End a line with `\` to continue on the next:
+```
+You> analizza il job "agentic" della run 14823 \
+...  e dimmi perche' ha fallito
+```
+
 ### Example prompts
 
 ```
