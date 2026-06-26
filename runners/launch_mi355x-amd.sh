@@ -9,6 +9,14 @@ elif [[ $RUNNER_TYPE == "mi355x-do" ]]; then
     HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"
 fi
 
+# smci355-ccs-aus-m15-17 has a persistent process bound to 127.0.0.1:8888,
+# preventing vllm/sglang from binding the default port. Pin a free port; the
+# runner already forwards -e PORT into the container and benchmark_lib.sh reads
+# $PORT. Gate on the runner name so other mi355x hosts are unaffected.
+if [[ $RUNNER_NAME == *m15-17* ]]; then
+    export PORT=8911
+fi
+
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
     FRAMEWORK_SUFFIX="_vllm"
