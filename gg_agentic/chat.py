@@ -293,6 +293,52 @@ def _display_result(console: TeeConsole, name: str, result_text: str) -> None:
     console._write_log(f"TOOL RESULT [{name}]: {result_text[:2000]}")
 
 
+def _read_user_input(console: TeeConsole) -> str | None:
+    """Read one user turn, supporting multiline input.
+
+    Modes:
+      - Normal:       single line (default)
+      - Block mode:   first line is exactly `\"\"\"` → read lines until a line
+                      that is exactly `\"\"\"` closes the block.
+      - Continuation: any line ending with `\\` is joined to the next line
+                      (the backslash is removed).
+
+    Returns the assembled string, or None on EOF/Ctrl-C.
+    """
+    try:
+        first = console.input("[bold yellow]You>[/bold yellow] ")
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+    # --- block mode ---
+    if first.strip() == '"""':
+        console.print(
+            '[dim]  (multiline mode — paste text, then type [bold]"""[/bold] on its own line to send)[/dim]'
+        )
+        lines: list[str] = []
+        while True:
+            try:
+                line = console.input("")
+            except (KeyboardInterrupt, EOFError):
+                break
+            if line.strip() == '"""':
+                break
+            lines.append(line)
+        return "\n".join(lines)
+
+    # --- line continuation mode ---
+    parts = [first]
+    while parts[-1].endswith("\\"):
+        parts[-1] = parts[-1][:-1]   # strip trailing backslash
+        try:
+            next_line = console.input("[bold yellow]...[/bold yellow] ")
+        except (KeyboardInterrupt, EOFError):
+            break
+        parts.append(next_line)
+
+    return "\n".join(parts)
+
+
 def main() -> None:
     _set_title("InferenceMAX Orchestrator")
     console = TeeConsole(log_path=cfg.CHAT_SESSION_LOG)
@@ -303,18 +349,22 @@ def main() -> None:
         f"[dim]Repo:[/dim] {cfg.GITHUB_REPO}  |  "
         f"[dim]Log:[/dim] {cfg.CHAT_SESSION_LOG}"
     )
-    console.print("[dim]Type 'exit' or Ctrl-C to quit.[/dim]\n")
+    console.print(
+        '[dim]Type [bold]exit[/bold] to quit. '
+        'Use [bold]"""[/bold] on its own line to open/close a multiline block. '
+        'End a line with [bold]\\\\[/bold] to continue on the next.[/dim]\n'
+    )
 
     client = cfg.make_anthropic_client()
     history: list[dict] = []
 
     while True:
-        try:
-            user_input = console.input("[bold yellow]You>[/bold yellow] ").strip()
-        except (KeyboardInterrupt, EOFError):
+        user_input = _read_user_input(console)
+        if user_input is None:
             console.print("\n[dim]Goodbye.[/dim]")
             break
 
+        user_input = user_input.strip()
         if not user_input:
             continue
         if user_input.lower() in {"exit", "quit", "q"}:
