@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------------------
+# run_and_watch.py — default configuration
+#
+# Loaded automatically when no --config argument is passed.
+# All values can be overridden on the command line.
+# ---------------------------------------------------------------------------
+
+# GitHub Actions workflow to dispatch
+workflow: e2e-tests.yml
+
+# Branch / SHA to run on.
+# Leave empty ("") to use the current git branch at runtime.
+ref: chore/giovanni_agentx-v0.4
+
+# Config file passed to generate-cli-command
+config-files: .github/configs/amd-master.yaml
+
+# Config key(s) — space-separated list accepted
+config-keys: kimik2.7-fp4-mi355x-vllm-agentic-lmcache
+
+# Runner label used for the availability check before dispatch
+runner: mi355x
+
+# Monitoring settings
+poll-interval: 30          # seconds between polls
+job-filter: ""             # leave empty to monitor all jobs
+                           # e.g. "agentic" to follow only the agentic job

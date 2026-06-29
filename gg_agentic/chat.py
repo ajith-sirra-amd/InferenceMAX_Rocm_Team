@@ -95,6 +95,30 @@ class TeeConsole:
 # ---------------------------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).parent))
 import config as cfg
+from pathlib import Path as _Path
+
+def _load_run_config() -> dict:
+    """Load gg_agentic/run_config.yaml for use in the system prompt."""
+    cfg_file = _Path(__file__).parent / "run_config.yaml"
+    if not cfg_file.exists():
+        return {}
+    try:
+        import yaml  # type: ignore
+        with open(cfg_file, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except ImportError:
+        result = {}
+        with open(cfg_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.split("#")[0].strip()
+                if not line or ":" not in line:
+                    continue
+                k, _, v = line.partition(":")
+                result[k.strip()] = v.strip().strip("'\"")
+        return result
+
+_RUN_CFG = _load_run_config()
+
 from tools.gh_actions import (
     list_workflow_runs,
     get_run_status,
@@ -296,6 +320,18 @@ Workflow IDs you know about:
   • run-sweep.yml       — full sweep benchmarks
   • benchmark-tmpl.yml  — single-node benchmark template
   • profile.yml         — profiling runs
+
+Default launch configuration (from run_config.yaml):
+  • workflow   : {_RUN_CFG.get("workflow", "e2e-tests.yml")}
+  • ref        : {_RUN_CFG.get("ref", "(current branch)")}
+  • config-files: {_RUN_CFG.get("config-files", ".github/configs/amd-master.yaml")}
+  • config-keys : {_RUN_CFG.get("config-keys", "kimik2.7-fp4-mi355x-vllm-agentic-lmcache")}
+  • runner     : {_RUN_CFG.get("runner", "mi355x")}
+
+When the user says "lancia il default", "lancia kimik2.7", "usa la config di default"
+or similar, use the values above without asking for clarification.
+The generate-cli-command input must be formatted as:
+  test-config --config-files <config-files> --config-keys <config-keys>
 
 Guidelines:
   - Respond in the same language the user writes in.
