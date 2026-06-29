@@ -160,10 +160,13 @@ case "$OFFLOADING" in
         { set +x; } 2>/dev/null
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
 
+        # Pin to last commit compatible with vLLM 0.21 (before KVCacheSpecKind was introduced in #3613)
+        LMCACHE_REF="${LMCACHE_REF:-4bbfd11b0f7b57af61fa0868b444d41ce14f401b}"
         git clone https://github.com/LMCache/LMCache.git
         cd LMCache
-        pip install -r requirements/build.txt 
-        CXX=hipcc BUILD_WITH_HIP=1 pip install -e .   --no-build-isolation
+        git checkout "$LMCACHE_REF"
+        pip install -r requirements/build.txt
+        CXX=hipcc BUILD_WITH_HIP=1 pip install -e . --no-build-isolation
         cd ..
 
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null

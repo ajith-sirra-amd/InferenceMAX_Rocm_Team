@@ -2214,7 +2214,7 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
 kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
   image: vllm/vllm-openai-rocm:v0.21.0
   model: amd/Kimi-K2.7-Code-MXFP4
-  model-prefix: kimik2.7-code
+  model-prefix: kimik2.7-code  # was "kimik2.7" — fixed to match benchmark script filename kimik2.7-code_fp4_mi355x.sh
   runner: mi355x
   precision: fp4
   framework: vllm
