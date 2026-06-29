@@ -52,7 +52,7 @@ fi
 # Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
 #export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
 #060226
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_061526
+export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_062126_256k
 
 resolve_trace_source
 install_agentic_deps
@@ -160,7 +160,7 @@ case "$OFFLOADING" in
         # Let the external MP server own the full CPU KV pool so vLLM does not
         # split --kv-offloading-size across TP ranks through the integrated
         # LMCache backend.
-        TOTAL_CPU_DRAM_GB=2000
+        TOTAL_CPU_DRAM_GB=2500
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8080}"
