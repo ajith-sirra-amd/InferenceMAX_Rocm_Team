@@ -16,8 +16,7 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR EP_SIZE DP_ATTENTION
 
-#PORT=${PORT:-8765}
-PORT=8765
+PORT=${PORT:-8888}
 DURATION=${DURATION:-1800}
 EP_SIZE=${EP_SIZE:-1}
 
@@ -52,7 +51,7 @@ fi
 # Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
 #export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
 #060226
-export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_062126_256k
+# export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060226_256k
 
 resolve_trace_source
 install_agentic_deps
@@ -123,7 +122,7 @@ case "$OFFLOADING" in
         # MI355X nodes have ~2.7 TiB of host DRAM available for offload;
         # reserve 2.5 TB for the offload pool (leaves ~200 GB headroom for
         # worker RSS / page cache / slurm cgroup).
-        TOTAL_CPU_DRAM_GB=3000
+        TOTAL_CPU_DRAM_GB="${TOTAL_CPU_DRAM_GB:-3000}"
         TOTAL_CPU_DRAM_PARTITION_GB="${TOTAL_CPU_DRAM_PARTITION_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         # Use vLLM's regular native KV-offload path (OffloadingConnector),
         # NOT the SimpleCPUOffloadConnector. The "native" backend resolves to
@@ -160,7 +159,8 @@ case "$OFFLOADING" in
         # Let the external MP server own the full CPU KV pool so vLLM does not
         # split --kv-offloading-size across TP ranks through the integrated
         # LMCache backend.
-        TOTAL_CPU_DRAM_GB=2500
+        TOTAL_CPU_DRAM_GB="${TOTAL_CPU_DRAM_GB:-3000}"
+        TOTAL_CPU_DRAM_PARTITION_GB="${TOTAL_CPU_DRAM_PARTITION_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8080}"
@@ -168,7 +168,7 @@ case "$OFFLOADING" in
         # ZMQ endpoint. Bind the server to a raw host, but pass the connector a
         # ZMQ-style host string.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
-        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_GB))}"
+        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_PARTITION_GB))}"
         LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
         # LMCache read locks are leases on chunks that lookup has promised
         # vLLM can retrieve. The default 300s TTL is too short for this
@@ -177,9 +177,9 @@ case "$OFFLOADING" in
         # object present in L1 but no longer readable. Keep the 2.5 TB pool
         # size unchanged and only extend the lookup-to-retrieve lease.
         LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
-        # chunk-size must be a multiple of vLLM --block-size (128 here).
-        # 256 = 2 × 128; 32 was not a multiple and caused a RuntimeError.
-        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-128}"
+        # (srok) check 256 vs 32
+        #LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-32}"
+        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
         export LMCACHE_BLOCKING_TIMEOUT_SECS=120
