@@ -142,6 +142,42 @@ con input generate-cli-command="test-config --config-files
 | `get_job_logs` | Download logs for a single job (lighter than the full run ZIP) |
 | `trigger_workflow` | Dispatch a `workflow_dispatch` event — always asks for confirmation |
 | `interpret_logs` | Ask Claude to summarize or answer a question about log text |
+| `watch_run` | **Monitor a running workflow live.** Polls every N seconds, downloads per-job logs, filters relevant lines, and asks Claude to interpret each update in real-time. Ctrl-C to stop. |
+
+### Live monitoring
+
+Invoke by asking Claude to "monitor", "watch", "follow", "ascolta i log", etc.
+Claude will call `watch_run` automatically with the appropriate `run_id`.
+
+```
+You> lancia e2e-tests.yml con config kimik2.7-fp4-mi355x-vllm-agentic-lmcache e monitoralo
+```
+
+Output streams live to the terminal:
+```
+[watch_run] Monitoring run #15042 — polling every 30s. Ctrl-C to stop.
+
+  ⏳ [get-jobs] QUEUED
+  🔄 [get-jobs] IN_PROGRESS
+── get-jobs (new log lines) ──
+  Generating matrix for kimik2.7-fp4-mi355x-vllm-agentic-lmcache…
+
+  🤖 Claude:
+  • Matrix generation started — no validation errors
+  • 1 job queued: agentic
+
+  ✅ [get-jobs] COMPLETED → success
+  🔄 [agentic] IN_PROGRESS
+── agentic (new log lines) ──
+  Pulling image vllm/vllm-openai-rocm:v0.21.0 ...
+  …
+```
+
+You can also watch an already-running or already-dispatched run:
+```
+You> monitora la run 15042
+You> monitora la run 15042, solo il job "agentic"
+```
 
 ---
 

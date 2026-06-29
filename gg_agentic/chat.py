@@ -102,6 +102,7 @@ from tools.gh_actions import (
     get_job_logs,
     trigger_workflow,
     interpret_logs,
+    watch_run,
 )
 
 TOOLS_SCHEMA: list[dict] = [
@@ -227,6 +228,39 @@ TOOLS_SCHEMA: list[dict] = [
             "required": ["log_text"],
         },
     },
+    {
+        "name": "watch_run",
+        "description": (
+            "Monitor a GitHub Actions run in real-time until it completes. "
+            "Polls every poll_interval seconds, downloads logs for each job as "
+            "it progresses, filters relevant lines, and asks Claude to interpret "
+            "them. Prints live updates and returns a final summary. "
+            "Use this after triggering a workflow or when the user asks to 'monitor' or 'watch' a run."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "run_id": {
+                    "type": "integer",
+                    "description": "Numeric GitHub Actions run ID to monitor.",
+                },
+                "poll_interval": {
+                    "type": "integer",
+                    "description": "Seconds between polls (default 30).",
+                    "default": 30,
+                },
+                "job_filter": {
+                    "type": "string",
+                    "description": (
+                        "Optional substring: only monitor jobs whose name "
+                        "contains this string (case-insensitive). "
+                        "E.g. 'agentic', 'get-jobs'."
+                    ),
+                },
+            },
+            "required": ["run_id"],
+        },
+    },
 ]
 
 TOOL_FN: dict[str, Any] = {
@@ -236,6 +270,7 @@ TOOL_FN: dict[str, Any] = {
     "get_job_logs": get_job_logs,
     "trigger_workflow": trigger_workflow,
     "interpret_logs": interpret_logs,
+    "watch_run": watch_run,  # print_fn injected at call time via _execute_tool
 }
 
 # ---------------------------------------------------------------------------
@@ -249,6 +284,9 @@ You help the user:
   1. Launch and monitor GitHub Actions workflows (e2e-tests.yml, run-sweep.yml, …).
   2. Fetch, display, and interpret workflow logs to diagnose failures.
   3. Understand benchmark results and CI pipeline structure.
+  4. Watch a running workflow live with `watch_run` — use it whenever the user
+     says "monitor", "watch", "follow", "ascolta i log", or similar phrases,
+     or right after triggering a workflow if the user asked to monitor it.
 
 Conda environment on the host machine: `{cfg.CONDA_ENV}`.
 GitHub repo: `{cfg.GITHUB_REPO}`.
@@ -270,11 +308,14 @@ Guidelines:
 # Main chat loop
 # ---------------------------------------------------------------------------
 
-def _execute_tool(name: str, inputs: dict) -> str:
+def _execute_tool(name: str, inputs: dict, console: "TeeConsole | None" = None) -> str:
     fn = TOOL_FN.get(name)
     if fn is None:
         return f"[error] unknown tool: {name}"
     try:
+        # Inject live print function for watch_run so output goes to TeeConsole
+        if name == "watch_run" and console is not None:
+            inputs = {**inputs, "print_fn": console.print}
         result = fn(**inputs)
         if isinstance(result, (dict, list)):
             return json.dumps(result, indent=2, ensure_ascii=False)
@@ -410,7 +451,7 @@ def main() -> None:
                     f"[cyan]{tool_name}[/cyan] "
                     f"[dim]{json.dumps(tool_inputs, ensure_ascii=False)[:200]}[/dim]"
                 )
-                result_text = _execute_tool(tool_name, tool_inputs)
+                result_text = _execute_tool(tool_name, tool_inputs, console=console)
                 _display_result(console, tool_name, result_text)
                 tool_results.append({
                     "type": "tool_result",
