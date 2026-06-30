@@ -57,19 +57,24 @@ fi
 
 if [[ "$_server_reused" == "0" ]]; then
     # Cleanup: force-remove any stale server container.
-    # Kill first (in case the container is still running and rm -f is slow to stop it),
-    # then remove. Wait up to 60 s for Docker to finish removing it.
+    # Large containers (--shm-size=128g, 8 GPUs, 40+ GB VRAM) can take several
+    # minutes to be fully torn down by Docker. We retry docker rm -f every 5 s
+    # and wait up to 300 s total before aborting.
     docker kill $server_name 2>/dev/null || true
     docker rm -f $server_name 2>/dev/null || true
-    for _ in $(seq 1 60); do
-        docker ps -aq -f "name=^${server_name}$" | grep -q . || break
-        sleep 1
+    _cleanup_wait=0
+    while docker ps -aq -f "name=^${server_name}$" | grep -q .; do
+        if [[ "$_cleanup_wait" -ge 300 ]]; then
+            echo "ERROR: container ${server_name} still exists after 300 s cleanup — aborting." >&2
+            exit 1
+        fi
+        echo "  Waiting for ${server_name} removal... (${_cleanup_wait}s elapsed)"
+        sleep 5
+        _cleanup_wait=$((_cleanup_wait + 5))
+        # Retry rm -f in case the container got stuck in Exited state.
+        docker rm -f $server_name 2>/dev/null || true
     done
-    # Abort if the container is still listed after the wait; don't proceed to docker run.
-    if docker ps -aq -f "name=^${server_name}$" | grep -q .; then
-        echo "ERROR: container ${server_name} still exists after 60 s cleanup — aborting." >&2
-        exit 1
-    fi
+    echo "Container ${server_name} removed after ${_cleanup_wait}s."
     # Wait for the ROCm/HIP driver to fully release GPU memory after container teardown.
     # Large models (40+ GB/GPU) can leave VRAM occupied for 10-30 s after the container
     # exits; starting a new vLLM instance too quickly causes HIP OOM at KV cache init.
