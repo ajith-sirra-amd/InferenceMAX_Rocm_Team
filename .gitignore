@@ -5,3 +5,4 @@ gg_agentic_session.log
 gg_agentic/__pycache__/
 gg_agentic/tools/__pycache__/
 .env
+results/
