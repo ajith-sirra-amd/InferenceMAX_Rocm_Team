@@ -29,6 +29,10 @@ if [ -n "${ROCR_VISIBLE_DEVICES:-}" ]; then
     export HIP_VISIBLE_DEVICES="$ROCR_VISIBLE_DEVICES"
 fi
 
+if [[ "$MODEL" != /* ]]; then hf download "$MODEL"; fi
+rocm-smi || true
+amd-smi || true
+
 # `hf download` creates the target dir if missing and is itself idempotent.
 # When MODEL_PATH is unset (stand-alone runs), fall back to the HF_HUB_CACHE
 # Either way, MODEL_PATH is what the server is launched with.
@@ -41,37 +45,16 @@ else
     export MODEL_PATH="$MODEL"
 fi
 
-rocm-smi || true
-amd-smi || true
-
 # ---- Resolve traces and install deps ----------------------------------------
-# Cap the replay corpus at 256k (470 traces, max in+out <= 256k) instead of the
-# unfiltered 052726 corpus whose ~1M-token traces get rejected and add no perf
-# signal at high concurrency.
+# MiniMax-M2.5 servers run at max_model_len ~256k; the unfiltered 052726
+# corpus has requests up to ~1M proxy tokens that would be rejected.
+# Switch to the 256k-capped variant (470 traces, max in+out <= 256k).
 #export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_256k
 #060226
-#export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060226_256k
+# export WEKA_LOADER_OVERRIDE=semianalysis_cc_traces_weka_with_subagents_060226_256k
 
-# ---- Resolve traces and install deps ----------------------------------------
 resolve_trace_source
 install_agentic_deps
-
-# Install amd-quark for MXFP4 (manual install due to ROCm vLLM bug)
-pip install amd-quark
-
-# Disable AITER RMSNorm for TP < 8 due to accuracy issues
-if [ "${TP}" -lt 8 ]; then
-  export VLLM_ROCM_USE_AITER_RMSNORM=0
-fi
-
-# Workaround for MEC FW <177 RCCL memory reclaim issue
-version=$(rocm-smi --showfw 2>/dev/null | grep MEC | head -n 1 | awk '{print $NF}')
-if [[ "$version" == "" || ${version:-0} -lt 177 ]]; then
-    export HSA_NO_SCRATCH_RECLAIM=1
-fi
-
-export VLLM_ROCM_USE_AITER=1
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
 
 # ---- Server config ----------------------------------------------------------
 SERVER_LOG="$RESULT_DIR/server.log"
@@ -139,8 +122,7 @@ case "$OFFLOADING" in
         # MI355X nodes have ~2.7 TiB of host DRAM available for offload;
         # reserve 2.5 TB for the offload pool (leaves ~200 GB headroom for
         # worker RSS / page cache / slurm cgroup).
-        #TODO: fix
-        TOTAL_CPU_DRAM_GB=3000
+        TOTAL_CPU_DRAM_GB="${TOTAL_CPU_DRAM_GB:-2418}"
         TOTAL_CPU_DRAM_PARTITION_GB="${TOTAL_CPU_DRAM_PARTITION_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         # Use vLLM's regular native KV-offload path (OffloadingConnector),
         # NOT the SimpleCPUOffloadConnector. The "native" backend resolves to
@@ -150,36 +132,35 @@ case "$OFFLOADING" in
         # used. The shortcut --kv_offloading_backend native + --kv_offloading_size
         # form constructs the KVTransferConfig at engine startup
         # (vllm/config/vllm.py:662).
+
+        # Remove --disable-hybrid-kv-cache-manager and enable hybrid kv cache manager (default)
+        # This gives extra cache hit than disabling hybrid kv cache manager
         OFFLOAD_ARGS=(
             --kv_offloading_backend native
             --kv_offloading_size "$TOTAL_CPU_DRAM_PARTITION_GB"
-            --disable-hybrid-kv-cache-manager
         )
         ;;
     lmcache)
-        { set +x; } 2>/dev/null
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
 
-        # Pin to last commit compatible with vLLM 0.21 (before KVCacheSpecKind was introduced in #3613)
-        LMCACHE_REF="${LMCACHE_REF:-4bbfd11b0f7b57af61fa0868b444d41ce14f401b}"
-        echo "[lmcache] Pinning to commit: $LMCACHE_REF"
-        git clone --depth 1 https://github.com/LMCache/LMCache.git
+        git clone https://github.com/LMCache/LMCache.git
         cd LMCache
-        git fetch --depth 1 origin "$LMCACHE_REF"
-        git checkout FETCH_HEAD
-        echo "[lmcache] Active commit: $(git log --oneline -1)"
+        # Apply PR #3779: per-engine-group KV format detection for MiniMax-M3.
+        # Fixes IndexError in get_num_heads() when heterogeneous KV tensor ranks
+        # (rank-5 K+V main cache + rank-3 MLA index cache) are present.
+        # git fetch origin pull/3779/head:pr-3779
+        # git merge --no-edit pr-3779
         pip install -r requirements/build.txt
-        CXX=hipcc BUILD_WITH_HIP=1 pip install -e . --no-build-isolation
+        CXX=hipcc BUILD_WITH_HIP=1 pip install -e .   --no-build-isolation
         cd ..
 
         python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
 
-        # Match the B200 Kimi LMCache setup: keep a 2.5 TB semantic CPU KV
-        # pool, but let the external MP server own that pool so vLLM does not
+        # Let the external MP server own the full CPU KV pool so vLLM does not
         # split --kv-offloading-size across TP ranks through the integrated
         # LMCache backend.
-        #TODO: fix
-        TOTAL_CPU_DRAM_GB=3000
+        TOTAL_CPU_DRAM_GB="${TOTAL_CPU_DRAM_GB:-3000}"
+        TOTAL_CPU_DRAM_PARTITION_GB="${TOTAL_CPU_DRAM_PARTITION_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8080}"
@@ -187,11 +168,7 @@ case "$OFFLOADING" in
         # ZMQ endpoint. Bind the server to a raw host, but pass the connector a
         # ZMQ-style host string.
         LMCACHE_CONNECT_HOST="${LMCACHE_CONNECT_HOST:-tcp://$LMCACHE_HOST}"
-        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$TOTAL_CPU_DRAM_GB}"
-        if [ "$LMCACHE_L1_SIZE_GB" -gt "$TOTAL_CPU_DRAM_GB" ]; then
-            echo "Error: LMCACHE_L1_SIZE_GB=$LMCACHE_L1_SIZE_GB exceeds configured capacity $TOTAL_CPU_DRAM_GB" >&2
-            exit 1
-        fi
+        LMCACHE_L1_SIZE_GB="${LMCACHE_L1_SIZE_GB:-$((TOTAL_CPU_DRAM_PARTITION_GB))}"
         LMCACHE_L1_INIT_SIZE_GB="${LMCACHE_L1_INIT_SIZE_GB:-20}"
         # LMCache read locks are leases on chunks that lookup has promised
         # vLLM can retrieve. The default 300s TTL is too short for this
@@ -200,6 +177,8 @@ case "$OFFLOADING" in
         # object present in L1 but no longer readable. Keep the 2.5 TB pool
         # size unchanged and only extend the lookup-to-retrieve lease.
         LMCACHE_L1_READ_TTL_SECONDS="${LMCACHE_L1_READ_TTL_SECONDS:-7200}"
+        # (srok) check 256 vs 32
+        #LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-32}"
         LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
         LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
@@ -227,37 +206,30 @@ case "$OFFLOADING" in
         wait_for_lmcache_ready
 
         PREFIX_CACHE_ARGS=(--enable-prefix-caching)
+        # Remove --disable-hybrid-kv-cache-manager and enable hybrid kv cache manager (default)
+        # This gives extra cache hit than disabling hybrid kv cache manager
         OFFLOAD_ARGS=(
             --kv-transfer-config
             "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"lmcache.integration.vllm.lmcache_mp_connector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"$LMCACHE_CONNECT_HOST\",\"lmcache.mp.port\":$LMCACHE_PORT}}"
-            --disable-hybrid-kv-cache-manager
         )
         ;;
     *) echo "Error: unsupported OFFLOADING value '$OFFLOADING'" >&2; exit 1 ;;
 esac
 
 # ---- LLM server config ----------------------------------------------------------
-EP_ARGS=()
-if [ "$EP_SIZE" -gt 1 ]; then
-    EP_ARGS=(--enable-expert-parallel)
+PARALLEL_ARGS=(--tensor-parallel-size "$TP")
+if [ "${DP_ATTENTION}" = "true" ]; then
+    PARALLEL_ARGS=(
+        --tensor-parallel-size 1
+        --data-parallel-size "$TP"
+        --enable-expert-parallel
+    )
+elif [ "$EP_SIZE" -gt 1 ]; then
+    PARALLEL_ARGS+=(--enable-expert-parallel)
 fi
 
 echo "Starting vllm server..."
 export PYTHONNOUSERSITE=1
-
-# Install amd-quark for MXFP4 (manual install due to ROCm vLLM bug)
-pip install amd-quark
-
-# Disable AITER RMSNorm for TP < 8 due to accuracy issues
-if [ "${TP}" -lt 8 ]; then
-  export VLLM_ROCM_USE_AITER_RMSNORM=0
-fi
-
-# Workaround for MEC FW <177 RCCL memory reclaim issue
-version=$(rocm-smi --showfw 2>/dev/null | grep MEC | head -n 1 | awk '{print $NF}')
-if [[ "$version" == "" || ${version:-0} -lt 177 ]]; then
-    export HSA_NO_SCRATCH_RECLAIM=1
-fi
 
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4

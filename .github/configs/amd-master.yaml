@@ -2211,10 +2211,11 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
       #- { tp: 8, dp-attn: false, offloading: hicache, conc-list: [16]  }
       - { tp: 8, dp-attn: false, offloading: hicache, total-cpu-dram-gb: 2500, conc-list: [24]  }
 
+
 kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
-  image: vllm/vllm-openai-rocm:v0.21.0
+  image: vllm/vllm-openai-rocm:v0.23.0
   model: amd/Kimi-K2.7-Code-MXFP4
-  model-prefix: kimik2.7-code  # was "kimik2.7" — fixed to match benchmark script filename kimik2.7-code_fp4_mi355x.sh
+  model-prefix: kimik2.7
   runner: mi355x
   precision: fp4
   framework: vllm
@@ -2223,6 +2224,15 @@ kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 8, ep: 1, offloading: none, conc-list: [1, 2, 4, 8, 16, 32, 64, 128] }
-      #- { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2500, conc-list: [16] }
-
+      - { tp: 8, ep: 1, offloading: none, conc-list: [64] }
+      - { tp: 8, ep: 1, offloading: cpu, conc-list: [64] }
+      - { tp: 8, ep: 1, offloading: lmcache, conc-list: [64] }
+      # - { tp: 8, ep: 1, offloading: none, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
+      # - { tp: 8, ep: 1, offloading: cpu, total-cpu-dram-gb: 2418, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
+      # - { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
+      # - { tp: 4, ep: 1, offloading: none, conc-list: [64] }
+      # - { tp: 4, ep: 1, offloading: cpu, conc-list: [64] }
+      # - { tp: 4, ep: 1, offloading: lmcache, conc-list: [64] }
+      # - { tp: 4, ep: 1, offloading: none, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
+      # - { tp: 4, ep: 1, offloading: cpu, total-cpu-dram-gb: 2418, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
+      # - { tp: 4, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }

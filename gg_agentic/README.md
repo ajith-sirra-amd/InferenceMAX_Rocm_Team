@@ -38,7 +38,7 @@ Esempio di prompt:
 ```
 lancia il default e monitoralo
 
-lancia kimik2.7 e monitoralo
+lancia kimik2.7-code e monitoralo
 
 Lancia e2e-tests.yml sul branch chore/giovanni_agentx-v0.4 \
 con config kimik2.7-fp4-mi355x-vllm-agentic-lmcache e monitoralo
@@ -46,6 +46,66 @@ con config kimik2.7-fp4-mi355x-vllm-agentic-lmcache e monitoralo
 monitora la run 15042
 
 ```
+
+---
+
+## Analisi risultati benchmark
+
+Dopo il completamento di un run, gli artifact vengono scaricati localmente (tipicamente in `results/`).
+Questi script convertono i raw artifact in un json aggregato e generano il grafico Pareto.
+
+### 1. Estrai `agg_bmk.json` da un run (o più run)
+
+```bash
+# Run singolo
+python gg_agentic/extract_agg_bmk.py \
+    --results-dir results/ \
+    --hw mi355x \
+    --model-prefix kimik2.7-code
+# output: results/results_bmk/agg_bmk.json
+
+# Più run (none + lmcache) → json combinato
+python gg_agentic/extract_agg_bmk.py \
+    --results-dir results_none/ results_lmcache/ \
+    --hw mi355x \
+    --model-prefix kimik2.7-code \
+    --output results_combined/results_bmk/agg_bmk.json
+```
+
+Argomenti obbligatori: `--results-dir`, `--hw`, `--model-prefix`.
+Opzionali: `--precision` (auto-rilevato dal nome modello), `--image`, `--output`.
+
+Lo script legge automaticamente:
+- `vllm_command.txt` / `sglang_command.txt` → tp, conc, model, offloading, ep, framework
+- `benchmark_command.txt` → concurrency (verifica), durata, dataset
+- `aiperf_artifacts/profile_export_aiperf.json` → tutte le metriche latenza/throughput
+- `aiperf_artifacts/server_metrics_export.json` → breakdown token per cache source (vllm e sglang)
+
+### 2. Genera il grafico Pareto a 3 pannelli
+
+```bash
+python gg_agentic/pareto_chart_kimik27.py
+# output: gg_agentic/pareto_chart_kimik27.png
+```
+
+Il grafico mostra, per ogni json in `INPUT_FILES`:
+- **Pannello sinistra** — Pareto frontier: asse X = p90 E2E latency (s), asse Y = throughput/GPU (tok/s)
+- **Pannello centro** — TTFT bar: asse X = concurrency, asse Y = p90 TTFT (s)
+- **Pannello destra** — Cache stacked bar: asse X = concurrency, asse Y = prompt token per source (local compute / cache hit / ext KV)
+
+Per aggiungere nuovi punti (es. run lmcache o nuove concurrency):
+1. Riesegui `extract_agg_bmk.py` con tutti i `--results-dir` necessari
+2. Riesegui `pareto_chart_kimik27.py`
+
+### File generati
+
+| File | Contenuto |
+|---|---|
+| `results/results_bmk/agg_bmk.json` | Metriche aggregate (un oggetto per run) |
+| `gg_agentic/pareto_chart_kimik27.png` | Grafico a 3 pannelli |
+| `gg_agentic/GG_KimiK2.7code.md` | Guida alla configurazione del benchmark |
+
+---
 
 Convenience launchers in the project root:
 
