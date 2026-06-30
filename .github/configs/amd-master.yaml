@@ -2223,6 +2223,6 @@ kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 8, ep: 1, offloading: none, conc-list: [16] }
-      - { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2500, conc-list: [16] }
+      - { tp: 8, ep: 1, offloading: none, conc-list: conc-list: [1, 2, 4, 8, 16, 32, 64, 128] }
+      #- { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2500, conc-list: [16] }
 
