@@ -2227,9 +2227,9 @@ kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
       # - { tp: 8, ep: 1, offloading: none, conc-list: [64] }
       # - { tp: 8, ep: 1, offloading: cpu, total-cpu-dram-gb: 2418, conc-list: [64] }
       # - { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [64] }
-      - { tp: 8, ep: 1, offloading: none, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
+      #- { tp: 8, ep: 1, offloading: none, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
       - { tp: 8, ep: 1, offloading: cpu, total-cpu-dram-gb: 2418, total-cpu-dram-gb: 2418, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
-      - { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
+      #- { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [1, 4, 8, 16, 24, 32, 48, 56, 64, 96, 128 ] }
       # - { tp: 4, ep: 1, offloading: none, conc-list: [64] }
       # - { tp: 4, ep: 1, offloading: cpu, total-cpu-dram-gb: 2418, conc-list: [64] }
       # - { tp: 4, ep: 1, offloading: lmcache, conc-list: [64] }
