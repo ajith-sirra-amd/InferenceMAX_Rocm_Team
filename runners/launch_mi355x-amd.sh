@@ -29,12 +29,48 @@ SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
 server_name="bmk-server"
 
-# Cleanup: force-remove any stale server container.
-docker rm -f $server_name 2>/dev/null || true
-for _ in $(seq 1 30); do
-    docker ps -aq -f "name=^${server_name}$" | grep -q . || break
-    sleep 1
-done
+# ---------------------------------------------------------------------------
+# REUSE_SERVER=1 — skip container restart when server is already healthy.
+#
+# Use this for concurrency sweeps where the same model/offloading config is
+# tested at multiple CONC values sequentially on the same runner:
+#
+#   First job (or default):  REUSE_SERVER=0 (default) — full start + cleanup
+#   Subsequent jobs:         REUSE_SERVER=1 — benchmark only, server stays up
+#   Last job:                REUSE_SERVER=0 — benchmark + teardown
+#
+# Condition for reuse: REUSE_SERVER=1 AND the vLLM/sglang health endpoint
+# responds on http://localhost:$PORT/health within 5 s.
+# If the health check fails the script falls back to a full restart.
+# ---------------------------------------------------------------------------
+_port="${PORT:-8888}"
+_server_reused=0
+
+if [[ "${REUSE_SERVER:-0}" == "1" ]]; then
+    if curl --silent --fail --max-time 5 "http://localhost:${_port}/health" >/dev/null 2>&1; then
+        echo "[REUSE_SERVER] Server on port ${_port} is healthy — skipping container restart."
+        _server_reused=1
+    else
+        echo "[REUSE_SERVER] No healthy server on port ${_port} — falling back to full start."
+    fi
+fi
+
+if [[ "$_server_reused" == "0" ]]; then
+    # Cleanup: force-remove any stale server container.
+    # Kill first (in case the container is still running and rm -f is slow to stop it),
+    # then remove. Wait up to 60 s for Docker to finish removing it.
+    docker kill $server_name 2>/dev/null || true
+    docker rm -f $server_name 2>/dev/null || true
+    for _ in $(seq 1 60); do
+        docker ps -aq -f "name=^${server_name}$" | grep -q . || break
+        sleep 1
+    done
+    # Abort if the container is still listed after the wait; don't proceed to docker run.
+    if docker ps -aq -f "name=^${server_name}$" | grep -q .; then
+        echo "ERROR: container ${server_name} still exists after 60 s cleanup — aborting." >&2
+        exit 1
+    fi
+fi
 
 set -x
 docker pull $IMAGE
@@ -59,42 +95,59 @@ fi
 
 export PYTHONDONTWRITEBYTECODE=1
 
-docker run --rm --init --network host --shm-size=128g --name=$server_name \
---ipc=host \
---ulimit memlock=-1 --ulimit stack=67108864 --pull always \
---privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
---cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
--v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
--v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
--e IMAGE \
--e HF_TOKEN \
--e HF_HUB_CACHE \
--e MODEL \
--e TP \
--e CONC \
--e ISL \
--e OSL \
--e MAX_MODEL_LEN \
--e RANDOM_RANGE_RATIO \
--e RESULT_FILENAME \
--e EP_SIZE \
--e DP_ATTENTION \
--e RUN_EVAL \
--e OFFLOADING \
--e TOTAL_CPU_DRAM_GB \
--e DURATION \
--e PORT \
--e RESULT_DIR \
--e PYTHONDONTWRITEBYTECODE \
---entrypoint=/bin/bash \
-$IMAGE \
-$BENCHMARK_PATH
+# Common docker flags used in both full-start and client-only modes.
+_DOCKER_COMMON=(
+    --rm --init --network host
+    --shm-size=128g --ipc=host
+    --ulimit memlock=-1 --ulimit stack=67108864
+    --privileged --cap-add=CAP_SYS_ADMIN
+    --device=/dev/kfd --device=/dev/dri --device=/dev/mem
+    --cap-add=SYS_PTRACE --security-opt seccomp=unconfined
+    -v "$HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE"
+    -v "$GITHUB_WORKSPACE:/workspace/" -w /workspace/
+    -e IMAGE -e HF_TOKEN -e HF_HUB_CACHE
+    -e MODEL -e TP -e CONC -e ISL -e OSL
+    -e MAX_MODEL_LEN -e RANDOM_RANGE_RATIO -e RESULT_FILENAME
+    -e EP_SIZE -e DP_ATTENTION -e RUN_EVAL -e OFFLOADING
+    -e TOTAL_CPU_DRAM_GB -e DURATION -e PORT -e RESULT_DIR
+    -e PYTHONDONTWRITEBYTECODE
+    --entrypoint=/bin/bash
+)
+
+if [[ "$_server_reused" == "0" ]]; then
+    # Full start: server + benchmark inside a single named container.
+    docker rm -f $server_name 2>/dev/null || true
+    docker run "${_DOCKER_COMMON[@]}" \
+        --pull always \
+        --name="$server_name" \
+        "$IMAGE" \
+        "$BENCHMARK_PATH"
+else
+    # Reuse mode: server stays up; run only the benchmark client in an
+    # ephemeral container (no --name, no --pull always to save time).
+    # Sources benchmark_lib.sh so resolve_trace_source / install_agentic_deps
+    # / build_replay_cmd / run_agentic_replay_and_write_outputs are available.
+    docker run "${_DOCKER_COMMON[@]}" \
+        "$IMAGE" -c '
+            set -euo pipefail
+            cd /workspace
+            source upstream/InferenceX/benchmarks/benchmark_lib.sh
+            resolve_trace_source
+            install_agentic_deps
+            build_replay_cmd "$RESULT_DIR"
+            run_agentic_replay_and_write_outputs "$RESULT_DIR"
+        '
+fi
 
 if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
   rm -f gpucore.*
 fi
 
-# Cleanup: stop server container
-docker stop $server_name 2>/dev/null || true
-docker rm $server_name 2>/dev/null || true
+if [[ "$_server_reused" == "0" ]]; then
+    # Cleanup: stop server container (only when we own it).
+    docker stop $server_name 2>/dev/null || true
+    docker rm $server_name 2>/dev/null || true
+else
+    echo "[REUSE_SERVER] Server container kept alive for next sweep run."
+fi

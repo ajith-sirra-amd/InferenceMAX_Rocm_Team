@@ -81,7 +81,45 @@ Lo script legge automaticamente:
 - `aiperf_artifacts/profile_export_aiperf.json` → tutte le metriche latenza/throughput
 - `aiperf_artifacts/server_metrics_export.json` → breakdown token per cache source (vllm e sglang)
 
-### 2. Genera il grafico Pareto a 3 pannelli
+### 2. Appendi una riga alla tabella riassuntiva CSV
+
+```bash
+# Run singolo (crea il file se non esiste, altrimenti appende)
+python gg_agentic/bmk_table.py ^
+    --results-dir results/ ^
+    --hw mi355x ^
+    --model-prefix kimik2.7-code
+# output: results/results_bmk/benchmark_table.csv
+
+# Più run in un comando solo (una riga per directory, in ordine)
+python gg_agentic/bmk_table.py ^
+    --results-dir results/results_bmk_offload_none results_lmcache/results_bmk_offload_lmcache ^
+    --hw mi355x ^
+    --model-prefix kimik2.7-code ^
+    --output results_combined/results_bmk/benchmark_table.csv
+```
+
+Argomenti obbligatori: `--results-dir`, `--hw`, `--model-prefix`.
+Opzionali: `--precision`, `--output`.
+
+Colonne generate:
+
+| Colonna | Descrizione |
+|---|---|
+| TPUT/GPU (tok/s) | Throughput totale diviso per numero GPU (TP) |
+| GPU Cache Hit % | `local_cache_hit / total_prompt_tokens × 100` |
+| Ext KV Hit % | `external_kv_transfer / total_prompt_tokens × 100` |
+| GPU KV Usage % | Utilizzo medio KV cache GPU (`vllm:kv_cache_usage_perc`) |
+| mean TTFT (s) | Latenza media al primo token |
+| p90 TTFT (s) | Latenza p90 al primo token |
+| mean TPOT (ms) | Mean inter-token latency (`mean_itl`) |
+| p90 E2EL (s) | Latenza end-to-end p90 |
+| Requests OK | Numero di richieste completate con successo |
+
+Il CSV può essere aperto direttamente in Excel / LibreOffice Calc.
+Ogni esecuzione successiva **appende** nuove righe senza sovrascrivere quelle esistenti.
+
+### 3. Genera il grafico Pareto a 3 pannelli
 
 ```bash
 python gg_agentic/pareto_chart_kimik27.py
@@ -96,12 +134,14 @@ Il grafico mostra, per ogni json in `INPUT_FILES`:
 Per aggiungere nuovi punti (es. run lmcache o nuove concurrency):
 1. Riesegui `extract_agg_bmk.py` con tutti i `--results-dir` necessari
 2. Riesegui `pareto_chart_kimik27.py`
+3. (opzionale) Riesegui `bmk_table.py` per aggiornare il CSV riassuntivo
 
 ### File generati
 
 | File | Contenuto |
 |---|---|
 | `results/results_bmk/agg_bmk.json` | Metriche aggregate (un oggetto per run) |
+| `results/results_bmk/benchmark_table.csv` | Tabella riassuntiva (una riga per run, appendibile) |
 | `gg_agentic/pareto_chart_kimik27.png` | Grafico a 3 pannelli |
 | `gg_agentic/GG_KimiK2.7code.md` | Guida alla configurazione del benchmark |
 
