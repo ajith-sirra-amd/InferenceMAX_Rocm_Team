@@ -70,6 +70,29 @@ if [[ "$_server_reused" == "0" ]]; then
         echo "ERROR: container ${server_name} still exists after 60 s cleanup — aborting." >&2
         exit 1
     fi
+    # Wait for the ROCm/HIP driver to fully release GPU memory after container teardown.
+    # Large models (40+ GB/GPU) can leave VRAM occupied for 10-30 s after the container
+    # exits; starting a new vLLM instance too quickly causes HIP OOM at KV cache init.
+    _vram_wait=0
+    echo "Waiting for GPU memory release..."
+    while true; do
+        # rocm-smi --showmeminfo vram --noheader prints lines like:
+        #   GPU[0] : Used Memory (VRAM): 123 MB
+        # We sum all "Used" values; threshold is 1024 MB (1 GB) meaning GPUs are idle.
+        _used_mb=$(rocm-smi --showmeminfo vram --noheader 2>/dev/null \
+                   | grep -i 'Used Memory' | awk '{sum += $(NF-1)} END {print sum+0}')
+        if [[ "$_used_mb" -lt 1024 ]]; then
+            echo "GPU VRAM cleared (${_used_mb} MB used). Proceeding."
+            break
+        fi
+        if [[ "$_vram_wait" -ge 60 ]]; then
+            echo "WARNING: GPU VRAM still ${_used_mb} MB after 60 s — proceeding anyway." >&2
+            break
+        fi
+        echo "  GPU VRAM still in use: ${_used_mb} MB — waiting..."
+        sleep 5
+        _vram_wait=$((_vram_wait + 5))
+    done
 fi
 
 set -x
