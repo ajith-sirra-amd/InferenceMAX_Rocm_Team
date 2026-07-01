@@ -162,7 +162,7 @@ case "$OFFLOADING" in
         # Let the external MP server own the full CPU KV pool so vLLM does not
         # split --kv-offloading-size across TP ranks through the integrated
         # LMCache backend.
-        TOTAL_CPU_DRAM_GB="${TOTAL_CPU_DRAM_GB:-3000}"
+        TOTAL_CPU_DRAM_GB="${TOTAL_CPU_DRAM_GB:-2418}"
         TOTAL_CPU_DRAM_PARTITION_GB="${TOTAL_CPU_DRAM_PARTITION_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         LMCACHE_HOST="${LMCACHE_HOST:-127.0.0.1}"
         LMCACHE_PORT="${LMCACHE_PORT:-5555}"
