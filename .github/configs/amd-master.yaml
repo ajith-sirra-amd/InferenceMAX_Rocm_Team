@@ -2246,7 +2246,7 @@ minimaxm3-fp8-mi355x-vllm-agentic-lmcache:
       - { tp: 4, ep: 1, offloading: lmcache, conc-list: [48] }
 
 minimaxm3-fp4-mi355x-vllm-agentic-lmcache:
-  image: vllm/vllm-openai-rocm:nightly-3f5a1e1733200760169ff31ebe60a271072b199e
+  image: vllm/vllm-openai-rocm:nightly-4559c43a9526597c00cbcc4f59979496500268d1
   model: amd/MiniMax-M3-MXFP4
   model-prefix: minimaxm3
   runner: mi355x
@@ -2261,42 +2261,6 @@ minimaxm3-fp4-mi355x-vllm-agentic-lmcache:
       # - { tp: 4, ep: 1, offloading: none, conc-list: [1,32] }
       - { tp: 4, ep: 1, offloading: lmcache, conc-list: [32] }
 
-dsv4-fp4-mi350x-do-sglang-agentic-hicache:
-  image: lmsysorg/sglang-rocm:v0.5.13-rocm720-mi35x-20260612
-  #image: lmsysorg/sglang-rocm:v0.5.13.post1-rocm700-mi35x-20260616 
-  model: deepseek-ai/DeepSeek-V4-Pro
-  model-prefix: dsv4
-  runner: mi350x_ajith_do
-  #runner: mi355x
-  precision: fp4
-  framework: sglang
-  multinode: false
-  scenarios:
-    agentic-coding:
-    - duration: 1800
-      search-space:
-        #DPA, conc>=64
-      #- { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
-      - { tp: 8, dp-attn: false, offloading: none, conc-list: [1,8,16,32]  }
-      - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [1,8,16,32]  }
-      # - { tp: 4, dp-attn: false, offloading: none, conc-list: [1,8,16,24,32,48,64]  }
-      # - { tp: 4, dp-attn: false, offloading: hicache, conc-list: [1,8,16,24,32,48,64]  }
-
-minimaxm3-fp8-mi350x-do-vllm-agentic-lmcache:
-  image: vllm/vllm-openai-rocm:minimax-m3
-  model: MiniMaxAI/MiniMax-M3-MXFP8
-  model-prefix: minimaxm3
-  runner: mi350x_ajith_do
-  precision: fp8
-  framework: vllm
-  multinode: false
-  scenarios:
-    agentic-coding:
-    - duration: 1800
-      search-space:
-      - { tp: 8, ep: 1, offloading: none, conc-list: [1,32] }
-      - { tp: 4, ep: 1, offloading: none, conc-list: [1,32] }
-      # - { tp: 8, ep: 1, offloading: lmcache,  conc-list: [16] }
 
 kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
   image: vllm/vllm-openai-rocm:v0.23.0

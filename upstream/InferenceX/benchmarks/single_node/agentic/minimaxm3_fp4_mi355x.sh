@@ -56,13 +56,14 @@ fi
 resolve_trace_source
 install_agentic_deps
 
+# export AIPERF_AGENTIC_CACHE_WARMUP_DURATION=1200
+
 # ---- Server config ----------------------------------------------------------
 SERVER_LOG="$RESULT_DIR/server.log"
 LMCACHE_LOG="$RESULT_DIR/lmcache_server.log"
 mkdir -p "$RESULT_DIR"
 
 OFFLOAD_ARGS=()
-PREFIX_CACHE_ARGS=()
 
 # ---- Lmcache config ----------------------------------------------------------
 LMCACHE_PID=""
@@ -116,13 +117,15 @@ wait_for_lmcache_ready() {
 }
 
 case "$OFFLOADING" in
-    none) ;;
+    none)
+        OFFLOAD_ARGS=(--no-enable-prefix-caching)
+        ;;
     cpu)
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
         # MI355X nodes have ~2.7 TiB of host DRAM available for offload;
         # reserve 2.5 TB for the offload pool (leaves ~200 GB headroom for
         # worker RSS / page cache / slurm cgroup).
-        TOTAL_CPU_DRAM_GB="${TOTAL_CPU_DRAM_GB:-2418}"
+        TOTAL_CPU_DRAM_GB="${TOTAL_CPU_DRAM_GB:-3000}"
         TOTAL_CPU_DRAM_PARTITION_GB="${TOTAL_CPU_DRAM_PARTITION_GB:-$((TOTAL_CPU_DRAM_GB / (8 / TP)))}"
         # Use vLLM's regular native KV-offload path (OffloadingConnector),
         # NOT the SimpleCPUOffloadConnector. The "native" backend resolves to
@@ -180,9 +183,9 @@ case "$OFFLOADING" in
         # (srok) check 256 vs 32
         #LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-32}"
         LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-256}"
-        LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$TP}"
+        LMCACHE_MAX_WORKERS="${LMCACHE_MAX_WORKERS:-$((TP * 2))}"
         export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
-        export LMCACHE_BLOCKING_TIMEOUT_SECS=120
+        export LMCACHE_BLOCKING_TIMEOUT_SECS=60
 
         echo "Starting LMCache MP server..."
         LMCACHE_CMD=(
@@ -205,7 +208,6 @@ case "$OFFLOADING" in
         echo "LMCache server PID: $LMCACHE_PID"
         wait_for_lmcache_ready
 
-        PREFIX_CACHE_ARGS=(--enable-prefix-caching)
         # Remove --disable-hybrid-kv-cache-manager and enable hybrid kv cache manager (default)
         # This gives extra cache hit than disabling hybrid kv cache manager
         OFFLOAD_ARGS=(
@@ -233,7 +235,9 @@ export PYTHONNOUSERSITE=1
 
 export VLLM_ENGINE_READY_TIMEOUT_S=3600
 export VLLM_USE_BREAKABLE_CUDAGRAPH=0
-# export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_USE_AITER_MOE=1
+export VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS=1
 
 VLLM_CMD=(
     vllm serve "$MODEL"
@@ -246,11 +250,11 @@ VLLM_CMD=(
     --trust-remote-code
     --language-model-only
     --attention-backend TRITON_ATTN
+    --moe-backend aiter
     --tool-call-parser minimax_m3
     --reasoning-parser minimax_m3
     --enable-auto-tool-choice
     --max-num-seqs "$CONC"
-    "${PREFIX_CACHE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
 )
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
