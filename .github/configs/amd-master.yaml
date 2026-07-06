@@ -2072,6 +2072,29 @@ dsv4-fp4-mi355x-vllm-agentic:
 #      search-space:
 #      - { tp: 8, conc-start: 4, conc-end: 512 }
 #
+# DeepSeek-V4-Pro FP4 MI355X vLLM with the P1-P5 decode-path patches applied on
+# top of the official vllm-openai-rocm nightly-09663abde base (python-only, zero
+# ATOM code): P1 e8m0 weight-scale upcast cache, P2 PR#44527 ROCm dead-fill
+# removal, P3 PR#47518 fused mHC post+pre, P4 bpreshuffle blockscale GEMM, P5
+# aiter MoE gating topk. Local c64 1k/1k measurement: median TPOT 45.0ms ->
+# 37.9ms (-15.8%), output tput 1366 -> 1613 tok/s vs the unpatched native base.
+# Image is a public Docker Hub build; TP8 sweep conc 4-64 mirrors the validated
+# local scenario. See jiahcao/vllm-deepseek-v4:p1-p5-09663abde.
+dsv4-fp4-mi355x-vllm-patched:
+  image: jiahcao/vllm-deepseek-v4:p1-p5-09663abde
+  model: deepseek-ai/DeepSeek-V4-Pro
+  model-prefix: dsv4
+  runner: mi355x
+  precision: fp4
+  framework: vllm
+  multinode: false
+  scenarios:
+    fixed-seq-len:
+    - isl: 1024
+      osl: 1024
+      search-space:
+      - { tp: 8, conc-start: 4, conc-end: 64 }
+
 ## Day-0 single-sequence marker for DeepSeek-V4 on ATOM (ROCm/ATOM#650).
 ## PR1 of the ATOM DSv4 series still uses torch sparse-attention fallbacks
 ## that OOM once warmup/prefill batches multiple requests; keep CONC=1 until
