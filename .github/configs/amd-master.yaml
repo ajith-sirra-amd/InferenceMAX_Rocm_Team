@@ -2267,7 +2267,7 @@ kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
   image: vllm/vllm-openai-rocm:nightly-4559c43a9526597c00cbcc4f59979496500268d1
   model: amd/Kimi-K2.7-Code-MXFP4
   model-prefix: kimik2.7
-  runner: mi350x
+  runner: mi355x
   precision: fp4
   framework: vllm
   multinode: false
