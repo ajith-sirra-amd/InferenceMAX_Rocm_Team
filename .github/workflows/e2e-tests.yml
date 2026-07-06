@@ -60,7 +60,7 @@ on:
 
 jobs:
     get-jobs:
-        runs-on: ubuntu-latest
+        runs-on: utility
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}
             multi-node-config: ${{ steps.get-jobs.outputs.multi-node-config }}
