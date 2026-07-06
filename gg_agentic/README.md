@@ -93,7 +93,7 @@ python gg_agentic/bmk_table.py ^
 
 # Più run in un comando solo (una riga per directory, in ordine)
 python gg_agentic/bmk_table.py ^
-    --results-dir results/results_bmk_offload_none results_lmcache/results_bmk_offload_lmcache ^
+    --results-dir results/results_bmk_offload_none results/results_bmk_offload_lmcache ^
     --hw mi355x ^
     --model-prefix kimik2.7-code ^
     --output results_combined/results_bmk/benchmark_table.csv
