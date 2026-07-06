@@ -69,19 +69,12 @@ jobs:
             agentic-config: ${{ steps.get-jobs.outputs.agentic-config }}
             multi-node-agentic-config: ${{ steps.get-jobs.outputs.multi-node-agentic-config }}
         steps:
-            - name: Checkout code (ref)
-              if: ${{ inputs.ref && inputs.ref != '' }}
+            - name: Checkout code
               uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
               with:
-                ref: ${{ inputs.ref }}
-                token: ${{ secrets.REPO_PAT || github.token }}
-
-            - name: Checkout code (default)
-              if: ${{ !inputs.ref || inputs.ref == '' }}
-              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-              with:
-                ref: ${{ github.sha }}
-                token: ${{ secrets.REPO_PAT || github.token }}
+                ref: ${{ inputs.ref || github.sha }}
+                token: ${{ secrets.REPO_PAT }}
+                fetch-depth: 0
 
             - id: get-jobs
               run: |
