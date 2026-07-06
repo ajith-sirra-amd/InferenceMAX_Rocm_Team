@@ -3862,6 +3862,6 @@
   description:
     - "Add DeepSeek-V4-Pro FP4 MI355X vLLM benchmark using the P1-P5 decode-path patches (python-only, zero ATOM code) on top of the official vllm-openai-rocm nightly-09663abde base: P1 e8m0 weight-scale upcast cache, P2 PR#44527 ROCm dead-fill removal, P3 PR#47518 fused mHC post+pre, P4 bpreshuffle blockscale GEMM, P5 aiter MoE gating topk"
     - "Local c64 1k/1k measurement vs the unpatched native base: median TPOT 45.0ms -> 37.9ms (-15.8%), output throughput 1366 -> 1613 tok/s"
-    - "New config: dsv4-fp4-mi355x-vllm-patched (TP8, ISL 1024/OSL 1024, conc 4-64)"
+    - "New config: dsv4-fp4-mi355x-vllm-patched (TP8, ISL 1024/OSL 1024 and ISL 8192/OSL 1024, conc 4-512)"
     - "Image: public Docker Hub build jiahcao/vllm-deepseek-v4:p1-p5-09663abde"
   pr-link: https://github.com/ROCm/InferenceMAX_rocm/pull/18
