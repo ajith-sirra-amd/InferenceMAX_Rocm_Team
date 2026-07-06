@@ -1,4 +1,4 @@
 # Model,HW,Framework,Precision,TP,CONC,Offloading,TPUT/GPU (tok/s),GPU Cache Hit %,Ext KV Hit %,GPU KV Usage %,mean TTFT (s),p90 TTFT (s),mean TPOT (ms),p90 E2EL (s),Requests OK
 model_prefix,hw,framework,precision,tp,conc,offloading,tput_per_gpu,gpu_cache_hit_pct,ext_kv_hit_pct,gpu_kv_usage_pct,mean_ttft_s,p90_ttft_s,mean_tpot_ms,p90_e2el_s,requests_ok
 kimik2.7-code,mi355x,vllm,fp4,8,64,none,1496.7,14.8,,99.6,431.774,615.674,337.93,839.667,398
-kimik2.7-code,mi355x,vllm,fp4,8,64,lmcache,5376.7,3.5,91.4,100.0,92.868,119.254,122.95,284.109,1100
+kimik2.7-code,mi355x,vllm,fp4,8,64,lmcache,5376.7,3.5,91.4,100,92.868,119.254,122.95,284.109,1100
