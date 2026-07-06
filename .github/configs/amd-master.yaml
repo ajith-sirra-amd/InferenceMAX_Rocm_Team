@@ -15,7 +15,7 @@ dsv4-fp4-mi355x-atom-agentic-lmcache:
       search-space:
       - { tp: 8, ep: 1, offloading: none, conc-list:    [52] }
       #- { tp: 8, ep: 1, offloading: none, conc-list:    [44, 48, 52, 56, 60] }
-      #- { tp: 8, ep: 1, offloading: lmcache, conc-list:    [44, 48, 52, 56, 60] }
+      #- { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list:    [44, 48, 52, 56, 60] }
 # (seungrok)
 minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache:
   image: vllm/vllm-openai-rocm:v0.21.0
@@ -49,7 +49,7 @@ minimaxm2.5-fp8-mi355x-vllm-agentic-lmcache:
     - duration: 1800
       search-space:
       - { tp: 2, ep: 1, offloading: none, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
-      - { tp: 2, ep: 1, offloading: lmcache, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
+      - { tp: 2, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
 
 # Diverged from kimik2.5-fp4-mi355x-vllm (agentic-coding sibling). Reasons below;
 # the original kimik2.5-fp4-mi355x-vllm entry is left identical to origin/main so
@@ -69,7 +69,7 @@ kimik2.5-fp4-mi355x-vllm-agentic-lmcache:
     - duration: 1800
       search-space:
       - { tp: 4, ep: 1, offloading: none, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
-      - { tp: 4, ep: 1, offloading: lmcache, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
+      - { tp: 4, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [1, 2, 4, 8, 16, 32, 40, 48, 56, 64] }
 
 # (giovanni/ajith)
 qwen3.5-fp8-mi355x-sglang-agentic-hicache:
@@ -85,11 +85,11 @@ qwen3.5-fp8-mi355x-sglang-agentic-hicache:
     - duration: 1800
       search-space:
       - { tp: 4, ep: 1, offloading: none, conc-list: [64, 128] }
-      - { tp: 4, ep: 1, offloading: hicache, conc-list: [64, 128] }
+      - { tp: 4, ep: 1, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [64, 128] }
       - { tp: 2, ep: 1, offloading: none, conc-list: [64, 128] }
-      - { tp: 2, ep: 1, offloading: hicache, conc-list: [64, 128] }
+      - { tp: 2, ep: 1, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [64, 128] }
       # - { tp: 8, ep: 1, offloading: none, conc-list: [64, 128] }
-      # - { tp: 8, ep: 1, offloading: hicache, conc-list: [64, 128] }
+      # - { tp: 8, ep: 1, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [64, 128] }
 
 # (giovanni/ajith)
 qwen3.5-fp4-mi355x-sglang-agentic-hicache:
@@ -105,9 +105,9 @@ qwen3.5-fp4-mi355x-sglang-agentic-hicache:
     - duration: 1800
       search-space:
       - { tp: 4, ep: 1, offloading: none, conc-list: [64, 128] }
-      - { tp: 4, ep: 1, offloading: hicache, conc-list: [64, 128] }
+      - { tp: 4, ep: 1, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [64, 128] }
       - { tp: 8, ep: 1, offloading: none, conc-list: [4, 8, 16, 32, 48, 64, 96, 128] }
-      - { tp: 8, ep: 1, offloading: hicache, conc-list: [4, 8, 16, 32, 48, 64, 96, 128] }      
+      - { tp: 8, ep: 1, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [4, 8, 16, 32, 48, 64, 96, 128] }      
 
 # Diverged from glm5.1-fp4-mi355x-sglang (agentic-coding sibling). Metadata is
 # identical to origin/main's glm5.1-fp4-mi355x-sglang; the split exists because this
@@ -127,9 +127,9 @@ glm5.1-fp4-mi355x-sglang-agentic-hicache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 2, offloading: hicache,    conc-list: [32] }
+      - { tp: 2, offloading: hicache, total-cpu-dram-gb: 2418,    conc-list: [32] }
 #      - { tp: 2, offloading: none,    conc-list: [32, 64, 128] }
-#      - { tp: 2, offloading: hicache, conc-list: [32, 64, 128] }
+#      - { tp: 2, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [32, 64, 128] }
 
 glm5.1-fp8-mi355x-sglang-agentic-hicache:
   image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi35x-20260531
@@ -143,9 +143,9 @@ glm5.1-fp8-mi355x-sglang-agentic-hicache:
     agentic-coding:
     - duration: 1800
       search-space:
-      - { tp: 4, ep: 1, offloading: hicache, conc-list: [32, 64, 128] }
+      - { tp: 4, ep: 1, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [32, 64, 128] }
 #      - { tp: 4, ep: 1, offloading: none,    conc-list: [32, 64, 128] }
-#      - { tp: 4, ep: 1, offloading: hicache, conc-list: [32, 64, 128] }
+#      - { tp: 4, ep: 1, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [32, 64, 128] }
 
 
 glm5.1-fp8-mi300x-sglang-agentic:
@@ -175,7 +175,7 @@ glm5.1-fp8-mi300x-sglang-agentic-hicache:
     - duration: 1800
       search-space:
       - { tp: 8, ep: 1, offloading: none,    conc-list: [1, 2, 4, 8, 16, 32, 64, 128] }
-      - { tp: 8, ep: 1, offloading: hicache, conc-list: [1, 2, 4, 8, 16, 32, 64, 128] }
+      - { tp: 8, ep: 1, offloading: hicache, total-cpu-dram-gb: 907, conc-list: [1, 2, 4, 8, 16, 32, 64, 128] }
 
 # Smoke variant: single conc=16 A/B (none vs hicache), 2 cells. For quick
 # end-to-end validation of the mi300x runner + launcher before the full sweep.
@@ -192,7 +192,7 @@ glm5.1-fp8-mi300x-sglang-agentic-smoke:
     - duration: 1800
       search-space:
       - { tp: 8, ep: 1, offloading: none,    conc-list: [16] }
-      - { tp: 8, ep: 1, offloading: hicache, conc-list: [16] }
+      - { tp: 8, ep: 1, offloading: hicache, total-cpu-dram-gb: 907, conc-list: [16] }
 
 qwen3.5-fp8-mi300x-sglang-agentic:
   image: lmsysorg/sglang-rocm:v0.5.12.post1-rocm720-mi30x-20260603
@@ -221,7 +221,7 @@ qwen3.5-fp8-mi300x-sglang-agentic-hicache:
     - duration: 1800
       search-space:
       - { tp: 8, ep: 1, offloading: none,    conc-list: [1, 2, 4, 8, 16, 32, 64, 128] }
-      - { tp: 8, ep: 1, offloading: hicache, conc-list: [1, 2, 4, 8, 16, 32, 64, 128] }
+      - { tp: 8, ep: 1, offloading: hicache, total-cpu-dram-gb: 907, conc-list: [1, 2, 4, 8, 16, 32, 64, 128] }
 
 # Smoke variant: single conc=16 A/B (none vs hicache), 2 cells. For quick
 # end-to-end validation of the mi300x runner + launcher before the full sweep.
@@ -238,7 +238,7 @@ qwen3.5-fp8-mi300x-sglang-agentic-smoke:
     - duration: 1800
       search-space:
       - { tp: 8, ep: 1, offloading: none,    conc-list: [64] }
-      - { tp: 8, ep: 1, offloading: hicache, conc-list: [64] }
+      - { tp: 8, ep: 1, offloading: hicache, total-cpu-dram-gb: 907, conc-list: [64] }
 
 # Diverged from minimaxm2.5-fp8-mi300x-vllm (agentic-coding sibling). Reasons below;
 # the original minimaxm2.5-fp8-mi300x-vllm entry is left identical to origin/main so
@@ -262,7 +262,7 @@ minimaxm2.5-fp8-mi300x-vllm-agentic-lmcache:
     - duration: 1800
       search-space:
       - { tp: 4, offloading: none, conc-list: [16] }
-      - { tp: 4, offloading: lmcache,  conc-list: [16] }
+      - { tp: 4, offloading: lmcache, total-cpu-dram-gb: 907, conc-list: [16] }
 
 # Diverged from minimaxm2.5-fp8-mi325x-vllm (agentic-coding sibling). Reasons below;
 # the original minimaxm2.5-fp8-mi325x-vllm entry is left identical to origin/main so
@@ -287,7 +287,7 @@ minimaxm2.5-fp8-mi325x-vllm-agentic-lmcache:
     - duration: 1800
       search-space:
       - { tp: 4, offloading: none, conc-list: [16] }
-      - { tp: 4, offloading: lmcache,  conc-list: [16] }
+      - { tp: 4, offloading: lmcache, total-cpu-dram-gb: 1207, conc-list: [16] }
 
 # Diverged from dsv4-fp4-mi355x-sglang (agentic-coding sibling). Reasons below;
 # the original dsv4-fp4-mi355x-sglang entry is left identical to origin/main so
@@ -2235,5 +2235,5 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
       search-space:
         #DPA, conc>=64
       #- { tp: 8, dp-attn: false, offloading: none, conc-list: [16]  }
-      #- { tp: 8, dp-attn: false, offloading: hicache, conc-list: [16]  }
-      - { tp: 8, dp-attn: false, offloading: hicache, conc-list: [24]  }
+      #- { tp: 8, dp-attn: false, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [16]  }
+      - { tp: 8, dp-attn: false, offloading: hicache, total-cpu-dram-gb: 2418, conc-list: [24]  }
