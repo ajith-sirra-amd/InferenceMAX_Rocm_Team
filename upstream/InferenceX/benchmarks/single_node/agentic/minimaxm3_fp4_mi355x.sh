@@ -251,8 +251,8 @@ VLLM_CMD=(
     --language-model-only
     --attention-backend TRITON_ATTN
     --moe-backend aiter
-    --tool-call-parser minimax_m3
-    --reasoning-parser minimax_m3
+    --tool-call-parser minimax_m2
+    --reasoning-parser minimax_m2
     --enable-auto-tool-choice
     --max-num-seqs "$CONC"
     "${OFFLOAD_ARGS[@]}"
