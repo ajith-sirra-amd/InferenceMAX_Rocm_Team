@@ -2277,7 +2277,7 @@ kimik2.7-fp4-mi355x-vllm-agentic-lmcache:
       search-space:
       # - { tp: 8, ep: 1, offloading: none, conc-list: [16] }
       # - { tp: 8, ep: 1, offloading: cpu, conc-list: [16 ] }
-      # - { tp: 8, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [16 ] }
+      # - { tp: 8, ep: 1, offloading: lmcache, conc-list: [16 ] }
       # - { tp: 4, ep: 1, offloading: none, conc-list: [16] }
       - { tp: 4, ep: 1, offloading: cpu, conc-list: [16 ] }
-      # - { tp: 4, ep: 1, offloading: lmcache, total-cpu-dram-gb: 2418, conc-list: [16 ] }
+      # - { tp: 4, ep: 1, offloading: lmcache, conc-list: [16 ] }
