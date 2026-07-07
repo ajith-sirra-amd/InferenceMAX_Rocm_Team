@@ -2246,7 +2246,7 @@ minimaxm3-fp8-mi355x-vllm-agentic-lmcache:
       - { tp: 4, ep: 1, offloading: lmcache, conc-list: [48] }
 
 minimaxm3-fp4-mi355x-vllm-agentic-lmcache:
-  image: vllm/vllm-openai-rocm:nightly-4559c43a9526597c00cbcc4f59979496500268d1
+  image: vllm/vllm-openai-rocm:v0.23.0
   model: amd/MiniMax-M3-MXFP4
   model-prefix: minimaxm3
   runner: mi355x
