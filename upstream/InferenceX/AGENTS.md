@@ -18,7 +18,7 @@ Run `ls` for details. Key paths:
 - `utils/matrix_logic/` - `generate_sweep_configs.py`, `validation.py` Pydantic schemas, tests.
 - `utils/bench_serving/` - `benchmark_serving.py` and backends.
 - `utils/evals/` - lm-eval task configs, thresholds, `validate_scores.py` (see `EVALS.md`).
-- `utils/` - `process_result.py`, `process_changelog.py` (incl. `trim_conc`), `summarize.py`, `collect_*.py`, `compare_results.py`.
+- `utils/` - `process_result.py`, `process_changelog.py` (incl. `trim_conc`), `collect_*.py`, `compare_results.py`.
 - `experimental/` - non-core experiments.
 
 ## Terminology
@@ -33,14 +33,14 @@ Generate configs:
 
 ```bash
 python utils/matrix_logic/generate_sweep_configs.py full-sweep \
-  --config-files .github/configs/nvidia-master.yaml \
+  --config-files configs/nvidia-master.yaml \
   [--model-prefix dsr1|gptoss|dsv4|...] \
   [--framework sglang|trt|vllm|atom|dynamo-trt|dynamo-sglang] \
   [--precision fp4|fp8|...] \
   [--runner-type b200|h100|h200|gb200|...]
 ```
 
-Process results: `python utils/process_result.py && python utils/summarize.py`.
+Process results: `python utils/process_result.py`.
 
 ## Supported Configuration Values
 
@@ -55,19 +55,25 @@ YAML: kebab-case field names (`model-prefix`, `conc-start`, `dp-attn`). Master c
 
 Bash: source shared utilities via `source benchmark_lib.sh` (`check_env_vars`, `wait_for_server_ready`, `run_benchmark_serving`, `run_eval`, `append_lm_eval_summary`); parameters passed via env vars. **MTP scripts MUST pass `--use-chat-template` to `run_benchmark_serving`** - EAGLE-style spec decoding is trained against chat-formatted inputs; benchmarking against raw prompts silently regresses acceptance rate. Applies to every `*_mtp.sh`.
 
-Git: conventional commit messages. `[skip-sweep]` in commit message skips benchmarks (push-to-main only). Changes to `perf-changelog.yaml` trigger benchmark runs.
+Git: conventional commit messages. `[skip-sweep]` in the latest PR head commit skips that PR's benchmark setup after changelog validation. It is ignored on pushes to `main`. Changes to `perf-changelog.yaml` trigger benchmark runs.
+
+Docs: the README is bilingual — `README.md` (English, default) and `README_zh.md` (Simplified Chinese), with an `English | 中文` switcher under the badges. **Any edit to `README.md` MUST be mirrored in `README_zh.md`, and vice versa** — keep the two in sync (same sections, links, badges, images) and update both in the same PR.
 
 ### Pull Request Sweep Labels
 
-PRs do not run the sweep automatically - `run-sweep.yml` is gated on a label. Pick exactly one; setting multiple sweep labels is rejected by the workflow's `setup` job.
+PRs do not run the sweep automatically - `run-sweep.yml` is gated on a primary sweep label. Pick exactly one of the five primary labels below; setting multiple primary labels is rejected by the workflow.
 
 - `sweep-enabled` - runs the sweep with `--trim-conc` (each parallelism config reduced to its single lowest concurrency). Default for most PRs.
 - `full-sweep-enabled` - runs the full intermediate concurrency sweep behind a sequential single-node canary gate. Use when intermediate points matter (e.g. a recipe change shifts the throughput/latency curve, not just its endpoints).
 - `non-canary-full-sweep-enabled` - runs the full intermediate concurrency sweep without the canary gate. Use when the canary is flaky or not representative of the affected configuration.
+- `full-sweep-fail-fast` - runs the full intermediate concurrency sweep behind the same sequential single-node canary gate as `full-sweep-enabled` (so a globally broken change burns one job, not the whole fan-out), and with `strategy.fail-fast` enabled on every matrix: the first failure in a matrix cancels that matrix's remaining jobs. Fail-fast is matrix-scoped, so the other matrices (1k1k vs 8k1k vs agentic vs evals) keep running and self-terminate on their own first failure; their completed results remain valid. The failing job keeps its red *failure* conclusion and the run concludes failed. Use when a failure means the rest of that matrix is wasted GPU time (e.g. new image bring-up). Note one flaky job kills its matrix's in-flight results.
+- `full-sweep-fail-fast-no-canary` - same as `full-sweep-fail-fast` but without the canary gate: all matrices fan out immediately. Use when the canary is flaky or not representative of the affected configuration but you still want per-matrix fail-fast.
 
-**The sweep does not trigger while the PR has merge conflicts.** Even with `sweep-enabled`, `full-sweep-enabled`, or `non-canary-full-sweep-enabled` applied, the `run-sweep.yml` workflow will not start until the PR cleanly merges into main — a stale claude/* or update-* branch with a `perf-changelog.yaml` conflict (the common case) will sit in NO_SWEEP / NO_SUCCESS until rebased. Resolution recipe is documented in `KLAUD_DEBUG.md §1.1`: `git merge origin/main`, then `git checkout origin/main -- perf-changelog.yaml`, then re-append the PR's own changelog entry at the tail. Don't 3-way merge `perf-changelog.yaml`; whitespace edits silently re-trigger the deletion check.
+`all-evals` and `evals-only` are optional modifier labels. Combine either or both with one primary sweep label. `all-evals` expands eval selection to every generated fixed-sequence configuration without changing throughput. `evals-only` suppresses throughput while keeping the default eval subset; combining both runs every eval and no throughput. `all-evals` remains eligible for artifact reuse when paired with an eligible full-sweep label. Runs with `evals-only`, including runs with both modifiers, are not eligible.
 
-Push-to-main always runs the full untrimmed sweep unless `[skip-sweep]` is in the commit message. Trim logic lives in `trim_conc()` in `utils/process_changelog.py`: single-node entries are grouped by every non-`conc` field and only the lowest-`conc` entry per group is kept; multi-node entries have their `conc` list collapsed to `[min(conc)]`.
+**The sweep does not trigger while the PR has merge conflicts.** Even with a sweep label applied, the `run-sweep.yml` workflow will not start until the PR cleanly merges into main — a stale claude/* or update-* branch with a `perf-changelog.yaml` conflict (the common case) will sit in NO_SWEEP / NO_SUCCESS until rebased. Resolution recipe is documented in `KLAUD_DEBUG.md §1.1`: `git merge origin/main`, then `git checkout origin/main -- perf-changelog.yaml`, then re-append the PR's own changelog entry at the tail. Don't 3-way merge `perf-changelog.yaml`; whitespace edits silently re-trigger the deletion check.
+
+Push-to-main always enters sweep setup: it either reuses approved full-sweep artifacts or runs the full untrimmed sweep. `[skip-sweep]` never suppresses a main-branch sweep. For PR runs, the marker in the latest head commit skips benchmark setup while still allowing changelog validation and reuse authorization checks. Trim logic lives in `trim_conc()` in `utils/process_changelog.py`: single-node entries are grouped by every non-`conc` field and only the lowest-`conc` entry per group is kept; multi-node entries have their `conc` list collapsed to `[min(conc)]`.
 
 ## Common Tasks
 
@@ -81,7 +87,7 @@ gh api -X POST \
   -f ref='main' \
   -f 'inputs[ref]=my-feature-branch' \
   -f 'inputs[test-name]=DSR1 fp8 H200 sglang smoke' \
-  -f 'inputs[generate-cli-command]=full-sweep --config-files .github/configs/nvidia-master.yaml --model-prefix dsr1 --framework sglang --runner-type h200 --min-conc 4 --max-conc 4 --seq-lens 1k1k' \
+  -f 'inputs[generate-cli-command]=full-sweep --config-files configs/nvidia-master.yaml --model-prefix dsr1 --framework sglang --runner-type h200 --min-conc 4 --max-conc 4 --seq-lens 1k1k' \
   -f 'inputs[duration-override]='
 ```
 
@@ -103,11 +109,11 @@ Artifacts: see "Fetching GitHub Actions Benchmark Results" below.
 
 ### Adding a benchmark configuration
 
-Add entry to `.github/configs/nvidia-master.yaml` or `amd-master.yaml`, append to `perf-changelog.yaml`, validate with `generate_sweep_configs.py full-sweep`.
+Add entries to `configs/nvidia-master.yaml` or `amd-master.yaml` (agentic-coding entries live in the Agentic benchmark configurations section at the bottom), append to `perf-changelog.yaml`, then validate with `generate_sweep_configs.py full-sweep`.
 
 ### Adding a runner
 
-Add to `.github/configs/runners.yaml`, create launcher in `runners/`, add the runner type to the relevant master config.
+Add to `configs/runners.yaml`, create launcher in `runners/`, add the runner type to the relevant master config.
 
 ### Registering recipes from srtslurm
 
@@ -117,7 +123,7 @@ Multi-node srt-slurm changes must edit the recipe yaml AND `nvidia-master.yaml` 
 
 ### Updating Docker images
 
-Update the image tag in the relevant `.github/configs/*-master.yaml` and/or `benchmarks/*.sh`, update any related env vars / config params, and append a `perf-changelog.yaml` entry (required - triggers benchmarks):
+Update the image tag in the relevant `configs/*-master.yaml` and/or `benchmarks/*.sh`, update any related env vars / config params, and append a `perf-changelog.yaml` entry (required - triggers benchmarks):
 
 ```yaml
 - config-keys:
@@ -132,11 +138,11 @@ Update the image tag in the relevant `.github/configs/*-master.yaml` and/or `ben
 
 Optional accuracy checks ensuring inference optimizations do not degrade outputs. See `utils/evals/EVALS.md` for the full reference.
 
-Eval selection is marked by `mark_eval_entries()` in `utils/matrix_logic/generate_sweep_configs.py`; evals run by default on the 8k1k subset. Workflow jobs run separately from throughput jobs in `EVAL_ONLY=true` mode. Flags on `generate_sweep_configs.py full-sweep`: `--no-evals` to skip, `--evals-only` for the eval subset only. Aggregated output produced by `utils/collect_eval_results.py`.
+Eval selection is marked by `mark_eval_entries()` in `utils/matrix_logic/generate_sweep_configs.py`; evals run by default on the 8k1k subset. Workflow jobs run separately from throughput jobs in `EVAL_ONLY=true` mode. Flags on `generate_sweep_configs.py`: `--no-evals` to skip, `--evals-only` for the selected eval subset only, and `--all-evals` to expand eval-only selection across every generated fixed-sequence config. For multi-node configs, `--all-evals` creates one eval job per engine topology and runs every distinct value in its `conc-list` sequentially against that same engine. `--all-evals` composes with `--evals-only` and remains a standalone shorthand. Changelog `all-evals: true` suppresses throughput for that entry. The PR modifier label `all-evals` only expands selection, while the PR modifier label `evals-only` suppresses throughput across appended entries. Aggregated output produced by `utils/collect_eval_results.py`.
 
 ## Key Files
 
-`utils/matrix_logic/validation.py` (config schemas), `generate_sweep_configs.py` (config generation), `utils/bench_serving/benchmark_serving.py` (benchmark client), `.github/configs/nvidia-master.yaml` (NVIDIA benchmark definitions), `.github/workflows/run-sweep.yml` (main CI/CD), `.github/workflows/collect-evals.yml` (eval collection), `benchmarks/benchmark_lib.sh` (shared utilities), `utils/evals/` (eval task definitions), `utils/collect_eval_results.py` (aggregator).
+`utils/matrix_logic/validation.py` (config schemas), `generate_sweep_configs.py` (config generation), `utils/bench_serving/benchmark_serving.py` (benchmark client), `configs/nvidia-master.yaml` / `configs/amd-master.yaml` (benchmark definitions, with agentic sections at the bottom), `.github/workflows/run-sweep.yml` (main CI/CD), `.github/workflows/collect-evals.yml` (eval collection), `benchmarks/benchmark_lib.sh` (shared utilities), `utils/evals/` (eval task definitions), `utils/collect_eval_results.py` (aggregator).
 
 ## Important Notes
 

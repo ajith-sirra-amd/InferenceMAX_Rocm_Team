@@ -9,7 +9,7 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION
+check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION
 
 
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
@@ -38,17 +38,10 @@ SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 
 OFFLOAD_ARGS=""
-case "$OFFLOADING" in
-    none) ;;
-    cpu)
-        # B200 nodes have ~1.8 TiB of host DRAM available for offload;
-        # override the workflow default (600 GB) to use the full envelope.
-        TOTAL_CPU_DRAM_GB=1800
-        export VLLM_USE_SIMPLE_KV_OFFLOAD=1
-        OFFLOAD_ARGS="--kv_offloading_backend native --kv_offloading_size $TOTAL_CPU_DRAM_GB --disable-hybrid-kv-cache-manager"
-        ;;
-    *) echo "Error: unsupported OFFLOADING value '$OFFLOADING'" >&2; exit 1 ;;
-esac
+if require_agentic_kv_offload_backend native; then
+    export VLLM_USE_SIMPLE_KV_OFFLOAD=1
+    OFFLOAD_ARGS="--kv_offloading_backend native --kv_offloading_size $TOTAL_CPU_DRAM_GB --disable-hybrid-kv-cache-manager"
+fi
 
 echo "Starting vllm server..."
 export TORCH_CUDA_ARCH_LIST="10.0"

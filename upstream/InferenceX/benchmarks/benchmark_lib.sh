@@ -16,6 +16,57 @@ mkdir -p "$PYTHONPYCACHEPREFIX" 2>/dev/null || true
 # nothing upstream set it.
 export PORT="${PORT:-8888}"
 
+agentic_kv_offload_enabled() {
+    if [[ -z "${KV_OFFLOADING+x}" || -z "$KV_OFFLOADING" ]]; then
+        echo "Error: KV_OFFLOADING must be set for agentic benchmarks" >&2
+        exit 1
+    fi
+    [[ "$KV_OFFLOADING" != "none" ]]
+}
+
+require_agentic_kv_offload_none() {
+    if agentic_kv_offload_enabled; then
+        echo "Error: expected KV_OFFLOADING=none, got '$KV_OFFLOADING'" >&2
+        exit 1
+    fi
+    if [[ -n "${KV_OFFLOAD_BACKEND:-}" ]]; then
+        echo "Error: KV_OFFLOAD_BACKEND must be empty when KV_OFFLOADING=none" >&2
+        exit 1
+    fi
+}
+
+require_agentic_kv_offload_backend() {
+    local expected_backend="$1"
+    if [[ -z "${KV_OFFLOADING+x}" || -z "$KV_OFFLOADING" ]]; then
+        echo "Error: KV_OFFLOADING must be set for agentic benchmarks" >&2
+        exit 1
+    fi
+    case "$KV_OFFLOADING" in
+        none)
+            if [[ -n "${KV_OFFLOAD_BACKEND:-}" ]]; then
+                echo "Error: KV_OFFLOAD_BACKEND must be empty when KV_OFFLOADING=none" >&2
+                exit 1
+            fi
+            return 1
+            ;;
+        dram)
+            if [[ "${KV_OFFLOAD_BACKEND:-}" != "$expected_backend" ]]; then
+                echo "Error: expected KV_OFFLOAD_BACKEND=$expected_backend when KV_OFFLOADING=dram, got '${KV_OFFLOAD_BACKEND:-}'" >&2
+                exit 1
+            fi
+            if [[ ! "${TOTAL_CPU_DRAM_GB:-}" =~ ^[1-9][0-9]*$ ]]; then
+                echo "Error: DRAM KV offloading requires a positive TOTAL_CPU_DRAM_GB capacity" >&2
+                exit 1
+            fi
+            return 0
+            ;;
+        *)
+            echo "Error: unsupported KV_OFFLOADING value '$KV_OFFLOADING' (expected one of: none, dram)" >&2
+            exit 1
+            ;;
+    esac
+}
+
 # Agentic replays must use the model's native context limit. Ignore inherited
 # workflow or shell overrides so neither the server nor AIPerf applies a cap.
 _benchmark_caller="${BASH_SOURCE[1]:-}"
@@ -24,6 +75,32 @@ if [[ "$_benchmark_caller" == */agentic/* ||
       "${IS_AGENTIC:-0}" == "1" ||
       "${SCENARIO_TYPE:-}" == "agentic-coding" ]]; then
     unset MAX_MODEL_LEN
+    if [[ -z "${KV_OFFLOADING+x}" || -z "$KV_OFFLOADING" ]]; then
+        echo "Error: KV_OFFLOADING must be set for agentic benchmarks" >&2
+        exit 1
+    fi
+    case "$KV_OFFLOADING" in
+        none)
+            if [[ -n "${KV_OFFLOAD_BACKEND:-}" ]]; then
+                echo "Error: KV_OFFLOAD_BACKEND must be empty when KV_OFFLOADING=none" >&2
+                exit 1
+            fi
+            ;;
+        dram)
+            if [[ -z "${KV_OFFLOAD_BACKEND:-}" || "${KV_OFFLOAD_BACKEND:-}" == "none" ]]; then
+                echo "Error: KV_OFFLOAD_BACKEND is required when KV_OFFLOADING=dram" >&2
+                exit 1
+            fi
+            if [[ ! "${TOTAL_CPU_DRAM_GB:-}" =~ ^[1-9][0-9]*$ ]]; then
+                echo "Error: DRAM KV offloading requires a positive configured TOTAL_CPU_DRAM_GB capacity" >&2
+                exit 1
+            fi
+            ;;
+        *)
+            echo "Error: unsupported KV_OFFLOADING value '$KV_OFFLOADING' (expected one of: none, dram)" >&2
+            exit 1
+            ;;
+    esac
 fi
 unset _benchmark_caller
 
@@ -84,6 +161,71 @@ stop_gpu_monitor() {
         fi
     fi
     GPU_MONITOR_PID=""
+}
+
+# Return success only while a PID exists and is not a zombie waiting to be
+# reaped. `kill -0` alone treats zombies as live processes.
+_background_process_is_running() {
+    local pid="$1"
+    local state
+    kill -0 "$pid" 2>/dev/null || return 1
+    state=$(ps -o stat= -p "$pid" 2>/dev/null) || return 1
+    [[ -n "$state" && "${state:0:1}" != "Z" ]]
+}
+
+_background_process_descendants() {
+    local parent_pid="$1"
+    local child_pid
+    while read -r child_pid; do
+        [[ -n "$child_pid" ]] || continue
+        echo "$child_pid"
+        _background_process_descendants "$child_pid"
+    done < <(pgrep -P "$parent_pid" 2>/dev/null || true)
+}
+
+# Stop a background service and every process that descended from it. Capture
+# descendants before terminating the root because orphaned workers are
+# reparented and can otherwise keep a Slurm step alive after the benchmark
+# script exits.
+stop_background_process_tree() {
+    local root_pid="${1:-}"
+    local label="${2:-background process}"
+    local grace_seconds="${3:-30}"
+
+    if [[ ! "$root_pid" =~ ^[1-9][0-9]*$ ]] || ! _background_process_is_running "$root_pid"; then
+        return 0
+    fi
+
+    local descendants
+    local child_pid
+    descendants=$(_background_process_descendants "$root_pid")
+
+    echo "Stopping $label (PID=$root_pid)..."
+    kill -TERM "$root_pid" 2>/dev/null || true
+
+    local deadline=$((SECONDS + grace_seconds))
+    while _background_process_is_running "$root_pid" && [[ $SECONDS -lt $deadline ]]; do
+        sleep 1
+    done
+
+    local forced_stop=false
+    while read -r child_pid; do
+        [[ -n "$child_pid" ]] || continue
+        if _background_process_is_running "$child_pid"; then
+            if [[ "$forced_stop" == "false" ]]; then
+                echo "Force-stopping remaining $label processes."
+                forced_stop=true
+            fi
+            echo "  PID=$child_pid"
+            kill -KILL "$child_pid" 2>/dev/null || true
+        fi
+    done <<EOF
+$root_pid
+$descendants
+EOF
+
+    wait "$root_pid" 2>/dev/null || true
+    echo "Stopped $label."
 }
 
 # Check if required environment variables are set
@@ -726,8 +868,11 @@ run_lm_eval() {
         esac
     done
 
-    _install_lm_eval_deps
-    _patch_lm_eval
+    if [ "${INFERENCEX_LM_EVAL_RUNTIME_READY:-false}" != "true" ]; then
+        _install_lm_eval_deps
+        _patch_lm_eval
+        export INFERENCEX_LM_EVAL_RUNTIME_READY=true
+    fi
 
     local openai_server_base="http://0.0.0.0:${port}"
     local openai_chat_base="${openai_server_base}/v1/chat/completions"
@@ -756,20 +901,123 @@ run_lm_eval() {
     return $eval_exit
 }
 
-append_lm_eval_summary() {
-    local results_dir="${EVAL_RESULT_DIR}"
-    if [ -z "${results_dir}" ]; then
-        echo "WARN: EVAL_RESULT_DIR is empty; skipping artifact collection" >&2
-        return 1
-    fi
-    local out_dir="${results_dir}"
-    if [ ! -d "${out_dir}" ]; then
-        echo "WARN: EVAL_RESULT_DIR='${out_dir}' does not exist; skipping artifact collection" >&2
+_stage_lm_eval_artifacts() {
+    local results_dir="$1"
+    local eval_conc="$2"
+    local moved=0
+    local failed=0
+    local jf base stem extension target suffix
+
+    if [ ! -d "${results_dir}" ]; then
+        echo "WARN: eval result directory '${results_dir}' does not exist" >&2
         return 1
     fi
 
+    while IFS= read -r -d '' jf; do
+        base=$(basename "$jf")
+        case "$base" in
+            meta_env.json)
+                continue
+                ;;
+            *.jsonl)
+                stem="${base%.jsonl}"
+                extension=".jsonl"
+                ;;
+            *.json)
+                stem="${base%.json}"
+                extension=".json"
+                ;;
+            *)
+                continue
+                ;;
+        esac
+
+        target="./${stem}_conc${eval_conc}${extension}"
+        suffix=2
+        while [ -e "$target" ]; do
+            target="./${stem}_conc${eval_conc}_${suffix}${extension}"
+            suffix=$((suffix + 1))
+        done
+
+        if mv -f "$jf" "$target"; then
+            moved=1
+        else
+            echo "WARN: failed to stage eval artifact ${jf}" >&2
+            failed=1
+        fi
+    done < <(
+        find "${results_dir}" -type f \
+            \( -name "*.json" -o -name "*.jsonl" \) -print0 2>/dev/null
+    )
+
+    rm -rf --one-file-system "${results_dir}" 2>/dev/null \
+        || rm -rf "${results_dir}" \
+        || true
+
+    if [ "$moved" -eq 0 ]; then
+        echo "WARN: no eval artifacts were produced for concurrency ${eval_conc}" >&2
+        return 1
+    fi
+    return "$failed"
+}
+
+_eval_concs_to_json() {
+    local values="$1"
+    local value
+    local joined=""
+
+    for value in $values; do
+        if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
+            echo "ERROR: invalid eval concurrency '${value}'" >&2
+            return 1
+        fi
+        if [ -n "$joined" ]; then
+            joined="${joined}, "
+        fi
+        joined="${joined}${value}"
+    done
+
+    printf '[%s]' "$joined"
+}
+
+append_lm_eval_summary() {
+    local batch_concs="${EVAL_BATCHED_CONCS:-}"
+    local results_dir="${EVAL_RESULT_DIR:-}"
+    local out_dir="${results_dir}"
+    local meta_json
+    local metadata_conc="${CONC:-1}"
+    local batch_metadata=""
+
+    if [ -n "$batch_concs" ]; then
+        meta_json="./meta_env.json"
+        metadata_conc="${batch_concs%% *}"
+
+        local eval_concs_json completed_concs_json failed_concs_json
+        eval_concs_json=$(_eval_concs_to_json "$batch_concs") || return 1
+        completed_concs_json=$(
+            _eval_concs_to_json "${EVAL_BATCHED_COMPLETED_CONCS:-}"
+        ) || return 1
+        failed_concs_json=$(
+            _eval_concs_to_json "${EVAL_BATCHED_FAILED_CONCS:-}"
+        ) || return 1
+        printf -v batch_metadata \
+            '  "eval_concs": %s,\n  "completed_eval_concs": %s,\n  "failed_eval_concs": %s,\n' \
+            "$eval_concs_json" \
+            "$completed_concs_json" \
+            "$failed_concs_json"
+    else
+        if [ -z "${results_dir}" ]; then
+            echo "WARN: EVAL_RESULT_DIR is empty; skipping artifact collection" >&2
+            return 1
+        fi
+        if [ ! -d "${out_dir}" ]; then
+            echo "WARN: EVAL_RESULT_DIR='${out_dir}' does not exist; skipping artifact collection" >&2
+            return 1
+        fi
+        meta_json="${out_dir}/meta_env.json"
+    fi
+
     # Write minimal meta for collectors that expect it
-    local meta_json="${out_dir}/meta_env.json"
     local model_name="${MODEL_NAME:-$MODEL}"
     local is_multinode_json="false"
     if [ "${IS_MULTINODE:-false}" = "true" ]; then
@@ -826,8 +1074,8 @@ append_lm_eval_summary() {
   "precision": "${prec:-unknown}",
   "spec_decoding": "${SPEC_DECODING}",
   "tp": ${TP:-1},
-  "conc": ${CONC:-1},
-  "ep": ${EP_SIZE:-1},
+  "conc": ${metadata_conc},
+${batch_metadata}  "ep": ${EP_SIZE:-1},
   "dp_attention": ${dp_json},
   "prefill_tp": ${prefill_tp},
   "prefill_ep": ${prefill_ep},
@@ -844,6 +1092,11 @@ append_lm_eval_summary() {
   "osl": "${OSL:-0}"
 }
 META
+
+    if [ -n "$batch_concs" ]; then
+        echo "Prepared batched eval artifacts in: $(pwd)"
+        return 0
+    fi
 
     # Move eval artifacts into PWD (no new directories in workspace)
     if [ -f "${meta_json}" ]; then
@@ -886,6 +1139,69 @@ run_eval() {
         compute_eval_context_length "$MODEL" "${MAX_MODEL_LEN:-0}" > /dev/null
     fi
 
+    unset EVAL_BATCHED_CONCS
+    unset EVAL_BATCHED_COMPLETED_CONCS
+    unset EVAL_BATCHED_FAILED_CONCS
+
+    local requested_concs="${EVAL_CONCURRENT_REQUESTS:-}"
+    local eval_concs=()
+    if [ -n "$requested_concs" ]; then
+        read -r -a eval_concs <<< "$requested_concs"
+    fi
+
+    if [ "${#eval_concs[@]}" -gt 1 ]; then
+        if [[ "$framework" != "lm-eval" && "$framework" != "lm_eval" ]]; then
+            echo "ERROR: batched eval concurrency is only supported for lm-eval" >&2
+            return 1
+        fi
+
+        local eval_conc results_dir eval_rc stage_rc
+        local completed_concs=()
+        local failed_concs=()
+
+        for eval_conc in "${eval_concs[@]}"; do
+            if [[ ! "$eval_conc" =~ ^[1-9][0-9]*$ ]]; then
+                echo "ERROR: invalid eval concurrency '${eval_conc}'" >&2
+                return 1
+            fi
+
+            if ! results_dir=$(mktemp -d /tmp/eval_out-conc"${eval_conc}"-XXXXXX); then
+                echo "ERROR: failed to create eval output directory for concurrency ${eval_conc}" >&2
+                failed_concs+=("$eval_conc")
+                continue
+            fi
+
+            echo "Running lm-eval at concurrency ${eval_conc} using the existing engine"
+            export EVAL_CONCURRENT_REQUESTS="$eval_conc"
+            export CONC="$eval_conc"
+            eval_rc=0
+            stage_rc=0
+            run_lm_eval "${forwarded[@]}" --results-dir "$results_dir" \
+                || eval_rc=$?
+            _stage_lm_eval_artifacts "$results_dir" "$eval_conc" \
+                || stage_rc=$?
+
+            if [ "$eval_rc" -eq 0 ] && [ "$stage_rc" -eq 0 ]; then
+                completed_concs+=("$eval_conc")
+            else
+                echo "ERROR: lm-eval failed at concurrency ${eval_conc} (eval_rc=${eval_rc}, stage_rc=${stage_rc})" >&2
+                failed_concs+=("$eval_conc")
+            fi
+        done
+
+        export EVAL_CONCURRENT_REQUESTS="$requested_concs"
+        export EVAL_RESULT_DIR=""
+        export EVAL_BATCHED_CONCS="${eval_concs[*]}"
+        export EVAL_BATCHED_COMPLETED_CONCS="${completed_concs[*]}"
+        export EVAL_BATCHED_FAILED_CONCS="${failed_concs[*]}"
+
+        if [ "${#failed_concs[@]}" -gt 0 ]; then
+            echo "ERROR: batched eval failed for concurrency: ${failed_concs[*]}" >&2
+            echo "Deferring failure until post-upload score validation preserves all artifacts" >&2
+        fi
+        return 0
+    fi
+
     local eval_rc=0
     case "$framework" in
         lm-eval|lm_eval) run_lm_eval "${forwarded[@]}" || eval_rc=$? ;;
@@ -908,7 +1224,7 @@ run_eval() {
 # --------------------------------
 
 INFMAX_CONTAINER_WORKSPACE="${INFMAX_CONTAINER_WORKSPACE:-/workspace}"
-AGENTIC_DIR="${AGENTIC_DIR:-${INFMAX_CONTAINER_WORKSPACE}/upstream/InferenceX/utils/agentic-benchmark}"
+AGENTIC_DIR="${AGENTIC_DIR:-${INFMAX_CONTAINER_WORKSPACE}/utils/agentic-benchmark}"
 AIPERF_DIR="${AIPERF_DIR:-${INFMAX_CONTAINER_WORKSPACE}/utils/aiperf}"
 AIPERF_RUNTIME_DIR="${AIPERF_RUNTIME_DIR:-${TMPDIR:-/tmp}/inferencex-agentic-${SLURM_JOB_ID:-$$}}"
 AIPERF_VENV="${AIPERF_VENV:-${AIPERF_RUNTIME_DIR}/venv}"
@@ -918,7 +1234,7 @@ AIPERF_PYTHON="${AIPERF_VENV}/bin/python"
 AIPERF_CLI="${AIPERF_VENV}/bin/aiperf"
 AIPERF_HF_CLI="${AIPERF_VENV}/bin/hf"
 AIPERF_DEPS_READY=0
-AIPERF_FAILED_REQUEST_THRESHOLD=0.10
+AIPERF_FAILED_REQUEST_THRESHOLD="${AIPERF_FAILED_REQUEST_THRESHOLD:-0.10}"
 
 agentic_pip_install() {
     local pip_install=(python3 -m pip install)
@@ -995,16 +1311,16 @@ resolve_trace_source() {
     # unfiltered corpus and switches to the 256k-capped variant), or
     # by recipes that want to pin an older corpus generation.
     #
-    # Default (no override): the 061526 v7 corpus, selected by model family.
+    # Default (no override): the 062126 v7 corpus, selected by model family.
     # DSv4 (full context) rides the unfiltered base corpus; every non-DSv4
     # recipe defaults to the 256k-capped variant because those servers run at
     # max_model_len ~256k and would reject >256k requests. Any recipe can still
     # pin a specific corpus via WEKA_LOADER_OVERRIDE.
     local default_loader
     if [[ "${MODEL_PREFIX:-}" == dsv4* ]]; then
-        default_loader="semianalysis_cc_traces_weka_061526"
+        default_loader="semianalysis_cc_traces_weka_062126"
     else
-        default_loader="semianalysis_cc_traces_weka_061526_256k"
+        default_loader="semianalysis_cc_traces_weka_062126_256k"
     fi
     local loader="${WEKA_LOADER_OVERRIDE:-$default_loader}"
     local dataset
@@ -1045,8 +1361,14 @@ resolve_trace_source() {
         semianalysis_cc_traces_weka_061526_256k)
             dataset="semianalysisai/cc-traces-weka-061526-256k"
             ;;
+        semianalysis_cc_traces_weka_062126)
+            dataset="semianalysisai/cc-traces-weka-062126"
+            ;;
+        semianalysis_cc_traces_weka_062126_256k)
+            dataset="semianalysisai/cc-traces-weka-062126-256k"
+            ;;
         *)
-            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k, semianalysis_cc_traces_weka_with_subagents_060526, semianalysis_cc_traces_weka_with_subagents_060526_256k, semianalysis_cc_traces_weka_with_subagents_060826, semianalysis_cc_traces_weka_with_subagents_060826_256k, semianalysis_cc_traces_weka_061326, semianalysis_cc_traces_weka_061326_256k, semianalysis_cc_traces_weka_061526, semianalysis_cc_traces_weka_061526_256k" >&2
+            echo "Error: unknown WEKA_LOADER_OVERRIDE='$loader'. Allowed: semianalysis_cc_traces_weka_with_subagents, semianalysis_cc_traces_weka_with_subagents_256k, semianalysis_cc_traces_weka_with_subagents_060226, semianalysis_cc_traces_weka_with_subagents_060226_256k, semianalysis_cc_traces_weka_with_subagents_060526, semianalysis_cc_traces_weka_with_subagents_060526_256k, semianalysis_cc_traces_weka_with_subagents_060826, semianalysis_cc_traces_weka_with_subagents_060826_256k, semianalysis_cc_traces_weka_061326, semianalysis_cc_traces_weka_061326_256k, semianalysis_cc_traces_weka_061526, semianalysis_cc_traces_weka_061526_256k, semianalysis_cc_traces_weka_062126, semianalysis_cc_traces_weka_062126_256k" >&2
             exit 1
             ;;
     esac
@@ -1070,7 +1392,7 @@ build_replay_cmd() {
     # session.
     #
     # The scenario plugin locks: --cache-bust first_turn_prefix and
-    # --trace-idle-gap-cap-seconds 60 (per-trace idle-gap compression
+    # --trace-idle-gap-cap-seconds 10 (per-trace idle-gap compression
     # against parent + subagent request-start timestamps; supersedes the
     # legacy --use-think-time-only / --inter-turn-delay-cap-seconds path),
     # and auto-injects them — so we do not pass them. See
@@ -1104,11 +1426,18 @@ build_replay_cmd() {
     # as benchmarkable data.
     REPLAY_CMD+=" --failed-request-threshold $AIPERF_FAILED_REQUEST_THRESHOLD"
     # Sample each trajectory's warmup start position uniformly from
-    # [25%, 75%] of the trace's turn count (was hardcoded 0%-70% upstream).
-    # Avoids starting trajectories right at turn 0 where the KV cache is
-    # cold and skews early steady-state samples.
+    # [25%, 75%] of the trace's turn count, clamped by AIPerf to leave at
+    # least one profile turn after warmup.
     REPLAY_CMD+=" --trajectory-start-min-ratio 0.25"
     REPLAY_CMD+=" --trajectory-start-max-ratio 0.75"
+    # Optional cache-pressure warmup for long agentic traces. AIPerf first
+    # completes its normal t* snapshot warmup, then continues those exact
+    # trajectories with one-token outputs and no idle delays for this many
+    # seconds. Profiling begins only after those requests drain and resumes
+    # from the resulting live trajectory state.
+    if [ -n "${AIPERF_AGENTIC_CACHE_WARMUP_DURATION:-}" ]; then
+        REPLAY_CMD+=" --agentic-cache-warmup-duration $AIPERF_AGENTIC_CACHE_WARMUP_DURATION"
+    fi
     # Use server-reported usage fields (prompt_tokens / completion_tokens) for
     # ISL/OSL instead of client-side tokenizer.encode(). Auto-enables
     # stream_options.include_usage on the OpenAI chat endpoint. Skips the
@@ -1116,6 +1445,19 @@ build_replay_cmd() {
     # CPU on minimax-m2.5 at high concurrency. Lossless for vLLM (server
     # usage is authoritative).
     REPLAY_CMD+=" --use-server-token-count"
+    # Dynamo's KV router needs an explicit conversation session binding to
+    # keep later turns on the prefill worker that owns their prefix blocks.
+    # X-Correlation-ID is useful tracing metadata but does not establish that
+    # binding by itself. AIPerf emits nvext.session_control bind/close actions
+    # keyed by the stable conversation correlation ID when this flag is set.
+    if [[ "${FRAMEWORK:-}" == dynamo-* ]]; then
+        REPLAY_CMD+=" --use-dynamo-conv-aware-routing"
+        # The upstream 300s affinity TTL is shorter than an overloaded
+        # high-concurrency agentic request. Keep bindings alive across long
+        # prefills, generation, and capped inter-turn delay. This controls the
+        # router's inactivity lease; it does not relax HTTP/request failures.
+        REPLAY_CMD+=" --dynamo-session-timeout-seconds ${AIPERF_DYNAMO_SESSION_TIMEOUT_SECONDS:-3600}"
+    fi
     # Disable DCGM GPU telemetry collection. aiperf's GpuMetricTimeSeries
     # freezes its metric schema on the first DCGM scrape, then KeyErrors when
     # an optional field (xid_errors, power_violation, encoder_utilization)
@@ -1139,10 +1481,10 @@ build_replay_cmd() {
         REPLAY_CMD+=" --max-context-length $MAX_MODEL_LEN"
     fi
     # Default --num-dataset-entries is 100; the with-subagents Weka corpus
-    # has 472. Cap at 472 so all unique traces are loaded (the loader treats
+    # has 393. Cap at 393 so all unique traces are loaded (the loader treats
     # this as a ``min(cap, available)`` ceiling, not a target — see
     # semianalysis_cc_traces_weka.py).
-    REPLAY_CMD+=" --num-dataset-entries 472"
+    REPLAY_CMD+=" --num-dataset-entries 393"
     # 1-second timeslices on the server-metrics scrape so the post-run
     # plotter has per-window time series (KV usage, cache hit rate,
     # throughput, etc.). Matches kv-cache-tester's poll_interval=1.0
@@ -1150,6 +1492,24 @@ build_replay_cmd() {
     # Without this, aiperf only emits aggregate stats and the 6x2 panels
     # collapse to flat lines.
     REPLAY_CMD+=" --slice-duration 1.0"
+    # Multi-node launchers can provide the Prometheus endpoints for every
+    # inference worker as a comma-separated list. AIPerf accepts multiple
+    # values after one --server-metrics flag and preserves endpoint_url on
+    # every exported series. The inference frontend's automatically detected
+    # /metrics endpoint remains enabled as well.
+    if [ -n "${AIPERF_SERVER_METRICS_URLS:-}" ]; then
+        local metrics_url
+        local -a metrics_urls
+        IFS=',' read -r -a metrics_urls <<< "$AIPERF_SERVER_METRICS_URLS"
+        REPLAY_CMD+=" --server-metrics"
+        for metrics_url in "${metrics_urls[@]}"; do
+            if [ -z "$metrics_url" ] || [[ "$metrics_url" == *[[:space:]]* ]]; then
+                echo "ERROR: AIPERF_SERVER_METRICS_URLS must be a comma-separated list of non-empty URLs" >&2
+                return 1
+            fi
+            REPLAY_CMD+=" $metrics_url"
+        done
+    fi
     REPLAY_CMD+=" --output-artifact-dir $result_dir/aiperf_artifacts"
     # The inferencex-agentx-mvp scenario enforces a 900s minimum
     # benchmark duration. For smoke tests with shorter durations, opt
@@ -1167,8 +1527,11 @@ write_agentic_result_json() {
     # this file exists; run_agentic_replay_and_write_outputs separately rejects
     # aggregates whose request error rate exceeds the configured limit.
     local result_dir="$1"
-    RESULT_DIR="$result_dir" AGENTIC_OUTPUT_DIR="${AGENTIC_OUTPUT_DIR:-$INFMAX_CONTAINER_WORKSPACE}" \
-        "$AIPERF_PYTHON" "$INFMAX_CONTAINER_WORKSPACE/utils/process_agentic_result.py"
+    (
+        cd "$INFMAX_CONTAINER_WORKSPACE"
+        RESULT_DIR="$result_dir" AGENTIC_OUTPUT_DIR="${AGENTIC_OUTPUT_DIR:-$INFMAX_CONTAINER_WORKSPACE}" \
+            "$AIPERF_PYTHON" -m utils.agentic.aggregation.process_agentic_result
+    )
 
     # Generate metrics_plots.png from the same aiperf artifacts. Best-effort:
     # don't fail the launcher if plot generation has trouble (e.g. matplotlib
@@ -1196,9 +1559,12 @@ run_agentic_replay_and_write_outputs() {
         "$result_dir/aiperf_artifacts" -o "$result_dir" 2>&1 || true
 
     set +e
-    "$AIPERF_PYTHON" "$INFMAX_CONTAINER_WORKSPACE/utils/validate_agentic_result.py" \
-        "$result_dir/aiperf_artifacts" \
-        --failed-request-threshold "$AIPERF_FAILED_REQUEST_THRESHOLD"
+    (
+        cd "$INFMAX_CONTAINER_WORKSPACE"
+        "$AIPERF_PYTHON" -m utils.agentic.validation.validate_agentic_result \
+            "$result_dir/aiperf_artifacts" \
+            --failed-request-threshold "$AIPERF_FAILED_REQUEST_THRESHOLD"
+    )
     validation_rc=$?
     set -e
 
