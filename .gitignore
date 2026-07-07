@@ -1,2 +1,8 @@
 history.txt
 scripts/
+.env
+GG_README.md
+gg_agentic/
+gg_agentic_session.log
+results/
+standalone/
