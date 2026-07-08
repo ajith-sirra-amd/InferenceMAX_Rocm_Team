@@ -14,7 +14,7 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL TP CONC OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR EP_SIZE DP_ATTENTION
+check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
 
 PORT=${PORT:-8888}
 DURATION=${DURATION:-1800}
@@ -116,11 +116,11 @@ wait_for_lmcache_ready() {
     exit 1
 }
 
-case "$OFFLOADING" in
+case "$KV_OFFLOAD_BACKEND" in
     none)
         OFFLOAD_ARGS=(--no-enable-prefix-caching)
         ;;
-    cpu)
+    native)
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
         # MI355X nodes have ~2.7 TiB of host DRAM available for offload;
         # reserve 2.5 TB for the offload pool (leaves ~200 GB headroom for
@@ -238,22 +238,29 @@ export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS=1
+# INT4 quantized all-reduce for the (~1.5 MB) decode all-reduces, which are the
+# single biggest decode kernel at high concurrency. The MIN_SIZE_KB override is
+# required: vLLM's default INT4 quick-reduce size gate for (bf16, TP4) is 16 MB,
+# so it never fires for decode-sized tensors without it.
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=INT4
+export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16=0
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB=256
 
 VLLM_CMD=(
     vllm serve "$MODEL"
     --host 0.0.0.0
     --port "$PORT"
     "${PARALLEL_ARGS[@]}"
+    --trust-remote-code
     --block-size 128
     --gpu-memory-utilization 0.85
-    --kv-cache-dtype fp8
-    --trust-remote-code
     --language-model-only
     --attention-backend TRITON_ATTN
     --moe-backend aiter
+    --kv-cache-dtype fp8
     --tool-call-parser minimax_m3
-    --reasoning-parser minimax_m3
     --enable-auto-tool-choice
+    --reasoning-parser minimax_m3
     --max-num-seqs "$CONC"
     "${OFFLOAD_ARGS[@]}"
 )
