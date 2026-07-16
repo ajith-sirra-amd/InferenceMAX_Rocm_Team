@@ -111,6 +111,13 @@ class Video(Media):
     media_type: ClassVar[MediaTypeT] = MediaType.VIDEO
 
 
+class ReplayTurnReference(AIPerfBaseModel):
+    """Dataset-stable reference to one request in a replay dependency graph."""
+
+    conversation_id: str = Field(description="Referenced conversation ID.")
+    turn_index: int = Field(ge=0, description="Referenced turn index.")
+
+
 class TurnMetadata(AIPerfBaseModel):
     """Metadata of a turn."""
 
@@ -121,6 +128,57 @@ class TurnMetadata(AIPerfBaseModel):
     delay_ms: int | float | None = Field(
         default=None,
         description="The delay of the turn in the conversation (in milliseconds).",
+    )
+    api_time_ms: int | float | None = Field(
+        default=None,
+        description=(
+            "Recorded server processing duration of this turn in milliseconds "
+            "(the capture's per-request api_time). With timestamp_ms it gives the "
+            "turn's recorded interval [timestamp_ms, timestamp_ms + api_time_ms], "
+            "which happens-before completion gating uses to derive cross-turn "
+            "predecessors and the end-to-start residual. A duration, not warped "
+            "(only inter-request idle gaps are compressed). None for loaders "
+            "without per-request timing."
+        ),
+    )
+    source_trace_id: str | None = Field(
+        default=None,
+        description=(
+            "Original trace/conversation id that produced this reconstructed turn. "
+            "Set by trace loaders when replay conversations are split or reshaped."
+        ),
+    )
+    source_outer_idx: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Zero-based index of the original top-level source request within "
+            "source_trace_id. Set by Weka trace loaders for turns that map to a "
+            "raw top-level request."
+        ),
+    )
+    source_inner_idx: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Zero-based index within the nested source request list identified "
+            "by source_outer_idx. Set by Weka trace loaders for subagent child "
+            "requests."
+        ),
+    )
+    source_kind: str | None = Field(
+        default=None,
+        description=(
+            "Loader-specific source classification for the reconstructed turn "
+            "(for example weka_main or weka_flat)."
+        ),
+    )
+    replay_predecessors: list["ReplayTurnReference"] = Field(
+        default_factory=list,
+        description=(
+            "Cross-stream requests that reached a recorded terminal outcome before "
+            "this request began and must complete before agentic replay may issue it."
+        ),
     )
     branch_ids: list[str] = Field(
         default_factory=list,
@@ -185,6 +243,55 @@ class Turn(AIPerfBaseModel):
     delay: int | float | None = Field(
         default=None,
         description="The delay of the turn in the conversation (in milliseconds).",
+    )
+    api_time_ms: int | float | None = Field(
+        default=None,
+        description=(
+            "Recorded server processing duration of this turn in milliseconds "
+            "(capture per-request api_time). Pairs with timestamp to give the "
+            "recorded interval used by happens-before completion gating. A "
+            "duration (not warped). None for loaders without per-request timing."
+        ),
+    )
+    source_trace_id: str | None = Field(
+        default=None,
+        description=(
+            "Original trace/conversation id that produced this reconstructed turn. "
+            "Set by trace loaders when replay conversations are split or reshaped."
+        ),
+    )
+    source_outer_idx: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Zero-based index of the original top-level source request within "
+            "source_trace_id. Set by Weka trace loaders for turns that map to a "
+            "raw top-level request."
+        ),
+    )
+    source_inner_idx: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Zero-based index within the nested source request list identified "
+            "by source_outer_idx. Set by Weka trace loaders for subagent child "
+            "requests."
+        ),
+    )
+    source_kind: str | None = Field(
+        default=None,
+        description=(
+            "Loader-specific source classification for the reconstructed turn "
+            "(for example weka_main or weka_flat)."
+        ),
+    )
+    replay_predecessors: list["ReplayTurnReference"] = Field(
+        default_factory=list,
+        exclude=True,
+        description=(
+            "Explicit cross-stream completion frontier inferred from recorded "
+            "request intervals by trace-aware loaders."
+        ),
     )
     max_tokens: int | None = Field(
         default=None, description="Maximum number of tokens to generate for this turn."
@@ -287,6 +394,12 @@ class Turn(AIPerfBaseModel):
         return TurnMetadata(
             timestamp_ms=self.timestamp,
             delay_ms=self.delay,
+            api_time_ms=self.api_time_ms,
+            source_trace_id=self.source_trace_id,
+            source_outer_idx=self.source_outer_idx,
+            source_inner_idx=self.source_inner_idx,
+            source_kind=self.source_kind,
+            replay_predecessors=self.replay_predecessors,
             branch_ids=self.branch_ids,
             prerequisites=self.prerequisites,
             raw_messages_count=None
@@ -349,6 +462,13 @@ class ConversationMetadata(AIPerfBaseModel):
     parent_conversation_id: str | None = Field(
         default=None,
         description="For DAG children: the parent conversation ID.",
+    )
+    replay_scope_id: str | None = Field(
+        default=None,
+        description=(
+            "Logical agent/subagent scope whose request intervals participate in "
+            "one replay dependency graph. Independent scopes are never joined."
+        ),
     )
     accuracy_ground_truth: str | None = Field(
         default=None,
@@ -477,6 +597,13 @@ class Conversation(AIPerfBaseModel):
         default=None,
         description="For DAG children: the parent conversation ID.",
     )
+    replay_scope_id: str | None = Field(
+        default=None,
+        exclude=True,
+        description=(
+            "Logical agent/subagent scope used to infer cross-stream replay barriers."
+        ),
+    )
     accuracy_ground_truth: str | None = Field(
         default=None,
         description="Ground-truth answer for this conversation (accuracy mode only). "
@@ -512,6 +639,7 @@ class Conversation(AIPerfBaseModel):
             agent_depth=self.agent_depth,
             subagent_type=self.subagent_type,
             parent_conversation_id=self.parent_conversation_id,
+            replay_scope_id=self.replay_scope_id,
             accuracy_ground_truth=self.accuracy_ground_truth,
             accuracy_task=self.accuracy_task,
         )
@@ -532,6 +660,7 @@ class Conversation(AIPerfBaseModel):
             agent_depth=self.agent_depth,
             subagent_type=self.subagent_type,
             parent_conversation_id=self.parent_conversation_id,
+            replay_scope_id=self.replay_scope_id,
             accuracy_ground_truth=self.accuracy_ground_truth,
             accuracy_task=self.accuracy_task,
         )

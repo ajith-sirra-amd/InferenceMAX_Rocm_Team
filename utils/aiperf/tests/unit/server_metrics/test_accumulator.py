@@ -289,6 +289,104 @@ class TestServerMetricsResultsProcessor:
         assert snapshot["input_token_throughput_srv"] == pytest.approx(1_000_000.0)
         assert snapshot["output_token_throughput_srv"] == pytest.approx(5_000.0)
 
+    async def test_realtime_snapshots_keep_workers_separate(
+        self, mock_user_config: UserConfig
+    ) -> None:
+        """The iterative srv rows should retain per-worker values and roles."""
+        processor = ServerMetricsAccumulator(mock_user_config)
+        endpoint_samples = {
+            "http://prefill-0:8081/metrics": (
+                "prefill",
+                (
+                    (0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 1.0, 0.65),
+                    (80.0, 100.0, 100.0, 10.0, 1.0, 3.0, 2.0, 0.70),
+                ),
+            ),
+            "http://decode-0:8083/metrics": (
+                "backend",
+                (
+                    (0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.30),
+                    (45.0, 50.0, 50.0, 500.0, 2.0, 4.0, 5.0, 0.40),
+                ),
+            ),
+        }
+
+        for endpoint_url, (component, samples) in endpoint_samples.items():
+            for timestamp_ns, values in zip(
+                (1_000_000_000, 2_000_000_000), samples, strict=True
+            ):
+                hits, queries, prompt, generation, preemptions, running, waiting, kv = (
+                    values
+                )
+                metrics = {
+                    name: MetricFamily(
+                        type=metric_type,
+                        description=name,
+                        samples=[
+                            MetricSample(
+                                labels={"dynamo_component": component}, value=value
+                            )
+                        ],
+                    )
+                    for name, metric_type, value in (
+                        ("vllm:prefix_cache_hits", PrometheusMetricType.COUNTER, hits),
+                        (
+                            "vllm:prefix_cache_queries",
+                            PrometheusMetricType.COUNTER,
+                            queries,
+                        ),
+                        ("vllm:prompt_tokens", PrometheusMetricType.COUNTER, prompt),
+                        (
+                            "vllm:generation_tokens",
+                            PrometheusMetricType.COUNTER,
+                            generation,
+                        ),
+                        (
+                            "vllm:num_preemptions",
+                            PrometheusMetricType.COUNTER,
+                            preemptions,
+                        ),
+                        (
+                            "vllm:num_requests_running",
+                            PrometheusMetricType.GAUGE,
+                            running,
+                        ),
+                        (
+                            "vllm:num_requests_waiting",
+                            PrometheusMetricType.GAUGE,
+                            waiting,
+                        ),
+                        ("vllm:kv_cache_usage_perc", PrometheusMetricType.GAUGE, kv),
+                    )
+                }
+                await processor.process_server_metrics_record(
+                    ServerMetricsRecord(
+                        endpoint_url=endpoint_url,
+                        timestamp_ns=timestamp_ns,
+                        metrics=metrics,
+                    )
+                )
+
+        snapshots = processor.realtime_snapshots()
+
+        assert list(snapshots) == ["decode 0", "prefill 0"]
+        assert snapshots["prefill 0"]["prefix_cache_hit_rate"] == pytest.approx(80.0)
+        assert snapshots["prefill 0"]["unique_input_tokens_srv"] == pytest.approx(20.0)
+        assert snapshots["prefill 0"]["kv_cache_usage_pct"] == pytest.approx(70.0)
+        assert snapshots["prefill 0"]["num_running"] == pytest.approx(3.0)
+        assert snapshots["prefill 0"]["num_waiting"] == pytest.approx(2.0)
+        assert snapshots["prefill 0"]["input_token_throughput_srv"] == pytest.approx(
+            100.0
+        )
+        assert snapshots["decode 0"]["prefix_cache_hit_rate"] == pytest.approx(90.0)
+        assert snapshots["decode 0"]["kv_cache_usage_pct"] == pytest.approx(40.0)
+        assert snapshots["decode 0"]["num_running"] == pytest.approx(4.0)
+        assert snapshots["decode 0"]["num_waiting"] == pytest.approx(5.0)
+        assert snapshots["decode 0"]["num_preemptions"] == pytest.approx(2.0)
+        assert snapshots["decode 0"]["output_token_throughput_srv"] == pytest.approx(
+            500.0
+        )
+
     async def test_realtime_snapshot_falls_back_to_sglang_gauge_when_counters_absent(
         self, mock_user_config: UserConfig
     ) -> None:
@@ -443,6 +541,52 @@ vllm:generation_tokens_total{model_name="m"} 5000.0
         assert "http://node1:8081/metrics" in result.endpoints_successful
         assert result.endpoint_summaries is not None
         assert len(result.endpoint_summaries) == 1
+
+    async def test_export_results_includes_warmup_endpoint_summaries(
+        self,
+        mock_user_config: UserConfig,
+    ) -> None:
+        """Test export_results computes separate profiling and warmup summaries."""
+        processor = ServerMetricsAccumulator(mock_user_config)
+
+        for timestamp_ns, value in (
+            (1_000_000_000, 0.1),
+            (1_500_000_000, 0.2),
+            (2_500_000_000, 0.8),
+        ):
+            gauge = MetricFamily(
+                type=PrometheusMetricType.GAUGE,
+                description="KV cache usage",
+                samples=[MetricSample(labels=None, value=value)],
+            )
+            record = ServerMetricsRecord(
+                endpoint_url="http://node1:8081/metrics",
+                timestamp_ns=timestamp_ns,
+                endpoint_latency_ns=5_000_000,
+                metrics={"cache_usage": gauge},
+            )
+            await processor.process_server_metrics_record(record)
+
+        result = await processor.export_results(
+            start_ns=2_000_000_000,
+            end_ns=3_000_000_000,
+            warmup_start_ns=1_000_000_000,
+            warmup_end_ns=2_000_000_000,
+        )
+
+        assert result is not None
+        assert result.endpoint_summaries is not None
+        assert result.warmup_endpoint_summaries is not None
+        assert result.warmup_start_ns == 1_000_000_000
+        assert result.warmup_end_ns == 2_000_000_000
+
+        endpoint_key = next(iter(result.endpoint_summaries))
+        profiling_summary = result.endpoint_summaries[endpoint_key]
+        warmup_summary = result.warmup_endpoint_summaries[endpoint_key]
+        profiling_avg = profiling_summary.metrics["cache_usage"].series[0].stats.avg
+        warmup_avg = warmup_summary.metrics["cache_usage"].series[0].stats.avg
+        assert profiling_avg == pytest.approx(0.8)
+        assert warmup_avg == pytest.approx(0.15)
 
     async def test_export_results_with_error_summary(
         self,

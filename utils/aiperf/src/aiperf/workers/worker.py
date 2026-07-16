@@ -858,6 +858,10 @@ class Worker(BaseComponentService, ProcessHealthMixin):
             # Skipped for DAG descendants (agent_depth > 0) so their turn_list
             # goes through session_manager — FORK children need parent-seeded
             # accumulation and all multi-turn children need session state.
+            # (FORK *parents* are kept off this fast path upstream: the dataset
+            # manager refuses to preformat any DAG dataset that declares
+            # branches, so a FORK parent's conversation is served structured —
+            # with branches — and its session is created and pinned here.)
             context_mode_requires_session = credit_context.credit.agent_depth > 0
             if (
                 self._is_payload_bytes
@@ -1078,6 +1082,7 @@ class Worker(BaseComponentService, ProcessHealthMixin):
                 *turns[:-1],
                 turns[-1].model_copy(update={"max_tokens": credit.max_tokens_override}),
             ]
+        source_turn = turns[-1] if turns else None
         return RequestInfo(
             model_endpoint=self.model_endpoint,
             credit_num=credit.id,
@@ -1091,6 +1096,10 @@ class Worker(BaseComponentService, ProcessHealthMixin):
             if session
             else credit.conversation_id,
             turn_index=session.turn_index if session else credit.turn_index,
+            source_trace_id=source_turn.source_trace_id if source_turn else None,
+            source_outer_idx=source_turn.source_outer_idx if source_turn else None,
+            source_inner_idx=source_turn.source_inner_idx if source_turn else None,
+            source_kind=source_turn.source_kind if source_turn else None,
             turns=turns,
             drop_perf_ns=credit_context.drop_perf_ns,
             credit_issued_ns=credit.issued_at_ns,

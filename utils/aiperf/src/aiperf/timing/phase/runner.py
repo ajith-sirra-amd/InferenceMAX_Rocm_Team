@@ -9,6 +9,7 @@ Owns the LoopScheduler and all per-phase components (lifecycle, progress, stop_c
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -25,6 +26,7 @@ from aiperf.timing.phase.lifecycle import PhaseLifecycle
 from aiperf.timing.phase.progress_tracker import PhaseProgressTracker
 from aiperf.timing.phase.stop_conditions import StopConditionChecker
 from aiperf.timing.ramping import RampConfig, Ramper, RampType
+from aiperf.timing.replay_dependencies import ReplayBarrierCoordinator
 from aiperf.timing.strategies.core import RateSettableProtocol
 from aiperf.timing.trajectory_source import TrajectorySource
 from aiperf.timing.url_samplers import URLSelectionStrategyProtocol
@@ -114,6 +116,10 @@ class PhaseRunner(TaskManagerMixin):
         self._conversation_source = conversation_source
         self._user_config = user_config
         self._session_tree_registry = session_tree_registry
+        cache_warmup_enabled = isinstance(
+            getattr(config, "agentic_cache_warmup_duration_sec", None),
+            int | float,
+        )
 
         # For FIXED_SCHEDULE mode, use actual dataset size instead of config values.
         # Config values may reflect pre-filtered file size, but dataset_metadata
@@ -142,6 +148,7 @@ class PhaseRunner(TaskManagerMixin):
             config.timing_mode == TimingMode.AGENTIC_REPLAY
             and config.phase == CreditPhase.WARMUP
             and isinstance(conversation_source, TrajectorySource)
+            and not cache_warmup_enabled
         ):
             trajectory_count = conversation_source.warmup_credit_count
             if (
@@ -167,6 +174,11 @@ class PhaseRunner(TaskManagerMixin):
             lifecycle=self._lifecycle,
             counter=self._progress.counter,
         )
+        self._replay_barrier = (
+            ReplayBarrierCoordinator(self._conversation_source.dataset_metadata)
+            if self._config.timing_mode == TimingMode.AGENTIC_REPLAY
+            else None
+        )
         self._credit_issuer = CreditIssuer(
             phase=self._config.phase,
             stop_checker=self._stop_checker,
@@ -177,6 +189,10 @@ class PhaseRunner(TaskManagerMixin):
             lifecycle=self._lifecycle,
             url_selection_strategy=url_selection_strategy,
             session_tree_registry=self._session_tree_registry,
+            session_tree_registry_enabled=(
+                self._config.phase == CreditPhase.PROFILING or cache_warmup_enabled
+            ),
+            replay_barrier=self._replay_barrier,
         )
         self._branch_orchestrator = BranchOrchestrator(
             conversation_source=self._conversation_source,
@@ -196,7 +212,15 @@ class PhaseRunner(TaskManagerMixin):
             cache_bust_ledger=getattr(
                 self._conversation_source, "cache_bust_ledger", None
             ),
+            allow_accelerated_warmup=(cache_warmup_enabled),
         )
+        self._credit_issuer.replay_gate.set_child_refused(
+            self._branch_orchestrator.on_child_stopped
+        )
+        if self._replay_barrier is not None:
+            self._credit_issuer.replay_gate.set_credit_issued(
+                self._branch_orchestrator.on_credit_issued
+            )
         self._callback_handler.set_branch_orchestrator(self._branch_orchestrator)
 
         # Execution state
@@ -260,6 +284,29 @@ class PhaseRunner(TaskManagerMixin):
 
         if self._on_phase_complete:
             self._on_phase_complete()
+
+    def _should_fire_warmup_backstop(self, strategy: TimingStrategyProtocol) -> bool:
+        """Whether the teardown warmup-failure raise (a BACKSTOP) should fire.
+
+        Only AgenticReplayStrategy exposes ``report_warmup_failures`` (duck-typed);
+        raising it aborts the benchmark via run()'s except handler so PROFILING
+        never starts with a degraded trajectory pool.
+
+        In production this is a backstop, not the primary path: when the live
+        warmup early-abort is wired (``callback_handler.on_warmup_abort`` is not
+        None), the FIRST terminal failure already broadcast ProfileCancelCommand
+        and cancelled this runner, so raising here too is unnecessary and would
+        double-fire. We therefore fire only when the live path is NOT wired (and
+        the runner was not otherwise cancelled). Gating on ``on_warmup_abort is
+        None`` -- a synchronous check -- also avoids the race where the async
+        cancel round-trip has not yet set ``_was_cancelled`` at teardown.
+        """
+        return (
+            getattr(strategy, "report_warmup_failures", None) is not None
+            and self._config.phase == CreditPhase.WARMUP
+            and self._callback_handler.on_warmup_abort is None
+            and not self._was_cancelled
+        )
 
     async def run(
         self,
@@ -339,7 +386,7 @@ class PhaseRunner(TaskManagerMixin):
 
             self._execution_task = self.execute_async(strategy.execute_phase())
 
-            await self._wait_for_sending_complete()
+            await self._wait_for_sending_complete(strategy)
 
             if self._was_cancelled:
                 if not self._lifecycle.is_complete:
@@ -366,31 +413,27 @@ class PhaseRunner(TaskManagerMixin):
             #     Progress task continues in background until phase complete
             if self._config.seamless and not is_final_phase:
                 self._return_wait_task = self.execute_async(
-                    self._wait_for_returning_complete()
+                    self._wait_for_returning_complete(strategy)
                 )
                 self._return_wait_task.add_done_callback(self._on_return_wait_complete)
             else:
-                await self._wait_for_returning_complete()
+                await self._wait_for_returning_complete(strategy)
                 self._progress_task.cancel()
 
             for ramper in self._rampers:
                 ramper.stop()
             self._scheduler.cancel_all()
+            finalize_phase = getattr(strategy, "finalize_phase", None)
+            if finalize_phase is not None:
+                await finalize_phase()
+            if self._preserve_replay_gate_until_finalize(strategy):
+                await self._credit_issuer.replay_gate.cancel(notify_refused=False)
             self._branch_orchestrator.cleanup()
             self._release_tree_slots()
 
-            # Strategy-specific phase teardown. Currently only AgenticReplayStrategy
-            # uses this hook (to surface accumulated WARMUP terminal failures
-            # before PROFILING starts). Duck-typed because the protocol does not
-            # require a teardown method; raising here intentionally aborts the
-            # benchmark via the outer except handler so PROFILING never starts
-            # with a degraded trajectory pool.
-            report_warmup_failures = getattr(strategy, "report_warmup_failures", None)
-            if (
-                report_warmup_failures is not None
-                and self._config.phase == CreditPhase.WARMUP
-            ):
-                report_warmup_failures()
+            # Strategy-specific phase teardown BACKSTOP (see _should_fire_warmup_backstop).
+            if self._should_fire_warmup_backstop(strategy):
+                strategy.report_warmup_failures()
 
             return self._progress.create_stats(self._lifecycle)
 
@@ -579,7 +622,71 @@ class PhaseRunner(TaskManagerMixin):
         ]
         return " | ".join(parts)
 
-    async def _wait_for_sending_complete(self) -> None:
+    def _preserve_replay_gate_until_finalize(
+        self, strategy: TimingStrategyProtocol
+    ) -> bool:
+        return self._config.phase == CreditPhase.WARMUP and getattr(
+            strategy,
+            "allows_pending_branch_handoff_after_sending_complete",
+            False,
+        )
+
+    async def _wait_for_accelerated_warmup_wire_drain(self) -> None:
+        while self._progress.in_flight > 0:
+            await asyncio.sleep(0.1)
+
+    async def _cancel_accelerated_warmup_drain(self, *, timeout: float | None) -> None:
+        stats = self._progress.create_stats(self._lifecycle)
+        self.warning(
+            "Accelerated warmup drain timed out"
+            + (f" after {timeout:.1f}s" if timeout is not None else "")
+            + "; cancelling all in-flight warmup credits. "
+            f"Stats: sent={stats.requests_sent}, "
+            f"completed={stats.requests_completed}, "
+            f"cancelled={stats.requests_cancelled}, "
+            f"in_flight={stats.in_flight_requests}"
+        )
+        await self._credit_router.cancel_all_credits()
+        drain_timeout = Environment.TIMING.CANCEL_DRAIN_TIMEOUT
+        try:
+            await asyncio.wait_for(
+                self._wait_for_accelerated_warmup_wire_drain(),
+                timeout=drain_timeout,
+            )
+            self.info("All cancelled accelerated-warmup credits returned")
+        except asyncio.TimeoutError:
+            self.error(
+                f"Timeout waiting {drain_timeout}s for cancelled accelerated-warmup "
+                "credits to return. Forcing phase completion."
+            )
+            self._release_stuck_slots()
+        self._progress.all_credits_returned_event.set()
+
+    async def _wait_for_accelerated_warmup_handoff(self) -> None:
+        timeout = self._config.grace_period_sec
+        if timeout is None or math.isinf(timeout):
+            await self._wait_for_accelerated_warmup_wire_drain()
+        else:
+            try:
+                await asyncio.wait_for(
+                    self._wait_for_accelerated_warmup_wire_drain(),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError as exc:
+                await self._cancel_accelerated_warmup_drain(timeout=timeout)
+                raise TimeoutError(
+                    "Accelerated warmup drain timed out before all wire "
+                    "requests returned"
+                ) from exc
+        self.info(
+            "All accelerated-warmup wire requests returned; "
+            "preserving paused DAG work for profiling handoff."
+        )
+        self._progress.all_credits_returned_event.set()
+
+    async def _wait_for_sending_complete(
+        self, strategy: TimingStrategyProtocol
+    ) -> None:
         """Wait for phase to send all credits (with timeout).
 
         Uses lifecycle.time_left_in_seconds() for timeout duration.
@@ -607,12 +714,19 @@ class PhaseRunner(TaskManagerMixin):
                 self._scheduler.cancel_all_pending()
                 self._progress.all_credits_sent_event.set()
 
+            if not self._preserve_replay_gate_until_finalize(strategy):
+                await self._credit_issuer.replay_gate.cancel(
+                    notify_refused=self._config.phase == CreditPhase.PROFILING
+                )
+
             stats = self._progress.create_stats(self._lifecycle)
             self.notice(self._format_phase_sending_complete(stats))
             await self._phase_publisher.publish_progress(stats)
             await self._phase_publisher.publish_phase_sending_complete(stats)
 
-    async def _wait_for_returning_complete(self) -> None:
+    async def _wait_for_returning_complete(
+        self, strategy: TimingStrategyProtocol
+    ) -> None:
         """Wait for all credits to return (with grace period).
 
         Multi-stage process on timeout:
@@ -630,14 +744,32 @@ class PhaseRunner(TaskManagerMixin):
             # return True the moment the last root returns even while
             # children are still in flight. Consult the orchestrator to
             # avoid declaring the phase complete mid-DAG.
-            if (
-                self._progress.check_all_returned_or_cancelled()
-                and not self._branch_orchestrator.has_pending_branch_work()
+            allows_pending_branch_handoff = (
+                getattr(
+                    strategy,
+                    "allows_pending_branch_handoff_after_sending_complete",
+                    False,
+                )
+                is True
+                and self._lifecycle.is_sending_complete
+            )
+            all_wire_requests_returned = (
+                self._progress.in_flight == 0
+                if allows_pending_branch_handoff
+                else self._progress.check_all_returned_or_cancelled()
+            )
+            if all_wire_requests_returned and (
+                allows_pending_branch_handoff
+                or not self._branch_orchestrator.has_pending_branch_work()
             ):
                 self.info(
                     "All credits already returned. Setting all_credits_returned_event."
                 )
                 self._progress.all_credits_returned_event.set()
+                return
+
+            if allows_pending_branch_handoff:
+                await self._wait_for_accelerated_warmup_handoff()
                 return
 
             timeout = self._lifecycle.time_left_in_seconds(include_grace_period=True)
@@ -668,6 +800,8 @@ class PhaseRunner(TaskManagerMixin):
                     f"Waiting for all cancelled credits to be returned for "
                     f"phase {self._config.phase}. Need {need} more credits."
                 )
+                if need <= 0:
+                    self._progress.all_credits_returned_event.set()
                 # Wait with timeout to avoid hanging indefinitely
                 drain_timeout = Environment.TIMING.CANCEL_DRAIN_TIMEOUT
                 try:

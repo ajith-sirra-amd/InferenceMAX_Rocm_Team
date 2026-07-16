@@ -26,15 +26,19 @@ def _user_config(
     hf_weka_dataset: str | None = None,
     benchmark_duration: float | None = 900.0,
     inter_turn_delay_cap_seconds: float | None = None,
-    trace_idle_gap_cap_seconds: float | None = 60.0,
+    trace_idle_gap_cap_seconds: float | None = 10.0,
     random_seed: int | None = 42,
     unsafe_override: bool = False,
     cache_bust_target: CacheBustTarget = CacheBustTarget.FIRST_TURN_PREFIX,
+    streaming: bool = True,
+    streaming_explicitly_set: bool = False,
 ) -> MagicMock:
     cfg = MagicMock()
     cfg.scenario = scenario
     cfg.unsafe_override = unsafe_override
     cfg.timing_mode = timing_mode
+    cfg.endpoint.streaming = streaming
+    cfg.endpoint._streaming_explicitly_set = streaming_explicitly_set
     cfg.input.extra_inputs_parsed = extra_inputs if extra_inputs is not None else {}
     cfg.input.use_think_time_only = use_think_time_only
     cfg.input.ignore_trace_delays = ignore_trace_delays
@@ -109,6 +113,63 @@ def test_absent_ignore_eos_injects_and_logs(caplog: pytest.LogCaptureFixture) ->
     assert any("ignore_eos" in r.message for r in caplog.records)
 
 
+def test_explicit_no_streaming_raises() -> None:
+    cfg = _user_config(
+        streaming=False,
+        streaming_explicitly_set=True,
+        extra_inputs={"ignore_eos": True},
+    )
+    with pytest.raises(ScenarioLockError) as exc:
+        validate_scenario(cfg)
+    assert "--streaming" in str(exc.value)
+
+
+def test_absent_streaming_auto_enabled_and_logs(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    cfg = _user_config(
+        streaming=False,
+        streaming_explicitly_set=False,
+        extra_inputs={"ignore_eos": True},
+    )
+    with caplog.at_level("INFO"):
+        outcome = validate_scenario(cfg)
+    assert outcome.violations == []
+    assert cfg.endpoint.streaming is True
+    assert any("--streaming" in r.message for r in caplog.records)
+
+
+def test_streaming_on_no_violation() -> None:
+    cfg = _user_config(streaming=True, extra_inputs={"ignore_eos": True})
+    outcome = validate_scenario(cfg)
+    assert outcome.violations == []
+    assert outcome.submission_valid is True
+
+
+def test_require_streaming_against_real_endpoint_config() -> None:
+    """Run validate_scenario with a real ``EndpointConfig`` (not a MagicMock) at
+    ``user_config.endpoint``. An explicit ``--no-streaming`` must surface as a
+    ``--streaming`` violation, confirming the validator reads a path that exists
+    on the production config — if ``EndpointConfig.streaming`` or its
+    explicit-set flag is renamed/relocated, this fails loudly."""
+    from aiperf.common.config.endpoint_config import EndpointConfig
+
+    cfg = _user_config(extra_inputs={"ignore_eos": True}, unsafe_override=True)
+    # streaming=False explicitly provided -> chat supports streaming, so it is
+    # left False and recorded as explicitly set.
+    cfg.endpoint = EndpointConfig(model_names=["m"], type="chat", streaming=False)
+    assert cfg.endpoint.streaming is False
+    assert cfg.endpoint._streaming_explicitly_set is True
+
+    outcome = validate_scenario(cfg)
+    flags = [v.flag for v in outcome.violations]
+    assert "--streaming" in flags, (
+        "validator did not flag --streaming on a real EndpointConfig "
+        "— the attribute path likely drifted; check validator.py and "
+        "EndpointConfig.streaming / _streaming_explicitly_set"
+    )
+
+
 def test_use_think_time_only_false_explicit_does_not_raise() -> None:
     """AgentX MVP no longer locks --use-think-time-only; trace_idle_gap_cap_seconds
     supersedes think-time-based delays in the weka loader."""
@@ -135,7 +196,7 @@ def test_agentx_allows_generic_weka_hf_loader_for_explicit_weka_repo() -> None:
     cfg = _user_config(
         loader="weka_hf",
         public_dataset="weka_hf",
-        hf_weka_dataset="semianalysisai/cc-traces-weka-061526",
+        hf_weka_dataset="semianalysisai/cc-traces-weka-062126",
         extra_inputs={"ignore_eos": True},
     )
 
@@ -170,7 +231,7 @@ def test_agentx_rejects_generic_weka_hf_loader_for_arbitrary_repo() -> None:
     with pytest.raises(ScenarioLockError) as exc_info:
         validate_scenario(cfg)
 
-    assert "semianalysisai/cc-traces-weka-061526" in str(exc_info.value)
+    assert "semianalysisai/cc-traces-weka-062126" in str(exc_info.value)
 
 
 @pytest.mark.parametrize(
@@ -180,6 +241,8 @@ def test_agentx_rejects_generic_weka_hf_loader_for_arbitrary_repo() -> None:
         "semianalysis_cc_traces_weka_061326_256k",
         "semianalysis_cc_traces_weka_061526",
         "semianalysis_cc_traces_weka_061526_256k",
+        "semianalysis_cc_traces_weka_062126",
+        "semianalysis_cc_traces_weka_062126_256k",
         "semianalysis_cc_traces_weka_with_subagents",
         "semianalysis_cc_traces_weka_with_subagents_256k",
         "semianalysis_cc_traces_weka_with_subagents_060826",
@@ -247,7 +310,7 @@ def test_trace_idle_gap_cap_unset_auto_filled(
     with caplog.at_level("INFO"):
         outcome = validate_scenario(cfg)
     assert outcome.violations == []
-    assert cfg.loadgen.trace_idle_gap_cap_seconds == 60.0
+    assert cfg.loadgen.trace_idle_gap_cap_seconds == 10.0
 
 
 def test_unsafe_override_converts_errors_to_warnings(
@@ -350,8 +413,11 @@ class _ReadOnlyTimingModeConfig:
         self.loadgen.benchmark_duration = 900.0
         self.loadgen.inter_turn_delay_cap_seconds = None
         self.loadgen._inter_turn_delay_cap_explicitly_set = False
-        self.loadgen.trace_idle_gap_cap_seconds = 60.0
+        self.loadgen.trace_idle_gap_cap_seconds = 10.0
         self.loadgen._trace_idle_gap_cap_explicitly_set = False
+        self.endpoint = MagicMock()
+        self.endpoint.streaming = True
+        self.endpoint._streaming_explicitly_set = False
         self.prompt = MagicMock()
         self.input.prompt.cache_bust.target = CacheBustTarget.FIRST_TURN_PREFIX
 
@@ -507,7 +573,7 @@ def test_forbid_input_truncation_against_real_user_config() -> None:
 # =============================================================================
 #
 # The agentx MVP scenario auto-fills --benchmark-duration=1800 when unset and
-# pins the trajectory start ratios to [0.25, 0.75] unless the user explicitly
+# pins the trajectory start ratios to [0.0, 1.0] unless the user explicitly
 # overrides them. Explicit user values are honored without violations.
 
 
@@ -533,15 +599,15 @@ def test_trajectory_start_ratios_auto_filled_when_unset(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     cfg = _user_config(extra_inputs={"ignore_eos": True})
-    cfg.loadgen.trajectory_start_min_ratio = 0.0
+    cfg.loadgen.trajectory_start_min_ratio = 0.2
     cfg.loadgen.trajectory_start_max_ratio = 0.7
     cfg.loadgen._trajectory_start_min_ratio_explicitly_set = False
     cfg.loadgen._trajectory_start_max_ratio_explicitly_set = False
     with caplog.at_level("INFO"):
         outcome = validate_scenario(cfg)
     assert outcome.violations == []
-    assert cfg.loadgen.trajectory_start_min_ratio == 0.25
-    assert cfg.loadgen.trajectory_start_max_ratio == 0.75
+    assert cfg.loadgen.trajectory_start_min_ratio == 0.0
+    assert cfg.loadgen.trajectory_start_max_ratio == 1.0
     assert any("--trajectory-start-min-ratio" in r.message for r in caplog.records)
     assert any("--trajectory-start-max-ratio" in r.message for r in caplog.records)
 
@@ -572,9 +638,9 @@ def test_scenario_defaults_apply_to_real_loadgen_config() -> None:
 
     assert outcome.violations == []
     assert cfg.loadgen.benchmark_duration == 1800.0
-    assert cfg.loadgen.trajectory_start_min_ratio == 0.25
-    assert cfg.loadgen.trajectory_start_max_ratio == 0.75
-    assert cfg.loadgen.trace_idle_gap_cap_seconds == 60.0
+    assert cfg.loadgen.trajectory_start_min_ratio == 0.0
+    assert cfg.loadgen.trajectory_start_max_ratio == 1.0
+    assert cfg.loadgen.trace_idle_gap_cap_seconds == 10.0
 
 
 def test_real_loadgen_config_records_explicit_ratio_flags() -> None:

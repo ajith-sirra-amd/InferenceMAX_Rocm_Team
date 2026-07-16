@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -24,6 +25,7 @@ from aiperf.common.enums import (
     CommandType,
     CreditPhase,
     MessageType,
+    ProfileCancelReason,
 )
 from aiperf.common.environment import Environment
 from aiperf.common.hooks import background_task, on_command, on_message, on_pull_message
@@ -145,7 +147,7 @@ def _render_realtime_block(
     metric_results: list[MetricResult],
     phase_stats: PhaseRecordsStats,
     prev_snapshot: tuple[int, float] | None,
-    server_snapshot: dict[str, float] | None = None,
+    server_snapshot: dict[str, float] | dict[str, dict[str, float]] | None = None,
 ) -> str:
     """Render a compact realtime stats block for the aiperf logger.
 
@@ -295,39 +297,47 @@ def _render_realtime_block(
     # present, so e.g. cpu_kv / ext_cache_hit show up only on offload=cpu
     # runs.
     if server_snapshot:
+        if all(isinstance(value, dict) for value in server_snapshot.values()):
+            labeled_snapshots = server_snapshot.items()
+        else:
+            labeled_snapshots = [("", server_snapshot)]
+
+    else:
+        labeled_snapshots = []
+
+    for server_label, snapshot in labeled_snapshots:
         srv_parts: list[str] = []
-        if "prefix_cache_hit_rate" in server_snapshot:
+        if "prefix_cache_hit_rate" in snapshot:
             srv_parts.append(
-                f"prefix_cache_hit={server_snapshot['prefix_cache_hit_rate']:.1f}%"
+                f"prefix_cache_hit={snapshot['prefix_cache_hit_rate']:.1f}%"
             )
-        if "unique_input_tokens_srv" in server_snapshot:
+        if "unique_input_tokens_srv" in snapshot:
             srv_parts.append(
-                f"unique_in_srv={int(round(server_snapshot['unique_input_tokens_srv'])):,}"
+                f"unique_in_srv={int(round(snapshot['unique_input_tokens_srv'])):,}"
             )
-        if "external_prefix_cache_hit_rate" in server_snapshot:
+        if "external_prefix_cache_hit_rate" in snapshot:
             srv_parts.append(
-                f"ext_cache_hit={server_snapshot['external_prefix_cache_hit_rate']:.1f}%"
+                f"ext_cache_hit={snapshot['external_prefix_cache_hit_rate']:.1f}%"
             )
-        if "kv_cache_usage_pct" in server_snapshot:
-            srv_parts.append(f"kv_usage={server_snapshot['kv_cache_usage_pct']:.1f}%")
-        if "cpu_kv_cache_usage_pct" in server_snapshot:
-            srv_parts.append(
-                f"cpu_kv_usage={server_snapshot['cpu_kv_cache_usage_pct']:.1f}%"
-            )
-        if "num_running" in server_snapshot or "num_waiting" in server_snapshot:
-            running = int(server_snapshot.get("num_running", 0))
-            waiting = int(server_snapshot.get("num_waiting", 0))
+        if "kv_cache_usage_pct" in snapshot:
+            srv_parts.append(f"kv_usage={snapshot['kv_cache_usage_pct']:.1f}%")
+        if "cpu_kv_cache_usage_pct" in snapshot:
+            srv_parts.append(f"cpu_kv_usage={snapshot['cpu_kv_cache_usage_pct']:.1f}%")
+        if "num_running" in snapshot or "num_waiting" in snapshot:
+            running = int(snapshot.get("num_running", 0))
+            waiting = int(snapshot.get("num_waiting", 0))
             srv_parts.append(f"queue={running}r/{waiting}w")
-        if "input_token_throughput_srv" in server_snapshot:
+        if "input_token_throughput_srv" in snapshot:
             srv_parts.append(
-                f"tput_in_srv={int(round(server_snapshot['input_token_throughput_srv'])):,}/s"
+                f"tput_in_srv={int(round(snapshot['input_token_throughput_srv'])):,}/s"
             )
-        if "output_token_throughput_srv" in server_snapshot:
+        if "output_token_throughput_srv" in snapshot:
             srv_parts.append(
-                f"tput_out_srv={int(round(server_snapshot['output_token_throughput_srv'])):,}/s"
+                f"tput_out_srv={int(round(snapshot['output_token_throughput_srv'])):,}/s"
             )
         if srv_parts:
-            rows.append(f"{indent}{'srv':<{label_w}} {' '.join(srv_parts)}")
+            row_label = "srv" if not server_label else f"srv {server_label}"
+            rows.append(f"{indent}{row_label:<{label_w}} {' '.join(srv_parts)}")
 
     return "\n".join([header, *rows])
 
@@ -400,13 +410,19 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         self._error_tracker = ErrorTracker()
 
         self._previous_realtime_records: int | None = None
-        self._previous_realtime_server_snapshot: dict[str, float] | None = None
+        self._previous_realtime_server_snapshot: (
+            dict[str, float] | dict[str, dict[str, float]] | None
+        ) = None
         self._prev_realtime_snapshot: tuple[int, float] | None = None
 
         self._telemetry_state = ErrorTrackingState()
         self._server_metrics_state = ErrorTrackingState()
         self._metric_state = ErrorTrackingState()
         self._skipped_context_overflow_count = 0
+        self._skipped_context_overflow_counts_by_phase: dict[CreditPhase, int] = {
+            CreditPhase.WARMUP: 0,
+            CreditPhase.PROFILING: 0,
+        }
 
         # Orchestrator-emitted DAG sub-agent stats, received via
         # CreditPhaseCompleteMessage. Keyed by phase so ProfileResults for the
@@ -474,14 +490,6 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         if self.is_trace_enabled:
             self.trace(f"Received metric records: {message}")
 
-        if message.metadata.benchmark_phase != CreditPhase.PROFILING:
-            self.debug(
-                lambda: (
-                    f"Skipping non-profiling record: {message.metadata.benchmark_phase}"
-                )
-            )
-            return
-
         record_data = message.to_data()
 
         # Context-overflow records in AGENTIC_REPLAY scenarios bypass normal
@@ -489,8 +497,14 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         # success counter so the completion barrier converges. Keep only a
         # narrow aggregate side-channel count for runtime submission validation.
         if getattr(record_data.metadata, "context_overflow_skip", False):
-            self._skipped_context_overflow_count += 1
             phase = record_data.metadata.benchmark_phase
+            if not hasattr(self, "_skipped_context_overflow_counts_by_phase"):
+                self._skipped_context_overflow_counts_by_phase = {}
+            self._skipped_context_overflow_counts_by_phase[phase] = (
+                self._skipped_context_overflow_counts_by_phase.get(phase, 0) + 1
+            )
+            if phase == CreditPhase.PROFILING:
+                self._skipped_context_overflow_count += 1
             phase_tracker = self._records_tracker._get_phase_tracker(phase)
             phase_tracker.increment_success_records()
             phase_tracker.increment_worker_success_records(
@@ -560,7 +574,12 @@ class RecordsManager(PullClientMixin, BaseComponentService):
             "Broadcasting ProfileCancelCommand to terminate the run."
         )
         try:
-            await self.publish(ProfileCancelCommand(service_id=self.service_id))
+            await self.publish(
+                ProfileCancelCommand(
+                    service_id=self.service_id,
+                    reason=ProfileCancelReason.FAILED_REQUEST_THRESHOLD,
+                )
+            )
         except Exception as exc:  # noqa: BLE001
             # Publish failure must not abort the per-record path; if the
             # broadcast doesn't land, the run will continue and the
@@ -935,17 +954,23 @@ class RecordsManager(PullClientMixin, BaseComponentService):
 
     def _collect_realtime_server_snapshot(
         self, start_ns: int | None = None
-    ) -> dict[str, float]:
+    ) -> dict[str, float] | dict[str, dict[str, float]]:
         """Return the current live server metrics snapshot, if available."""
-        server_snapshot: dict[str, float] = {}
+        server_snapshot: dict[str, float] | dict[str, dict[str, float]] = {}
         if self._server_metrics_accumulator is None:
             return server_snapshot
         try:
             snapshot_fn = getattr(
                 self._server_metrics_accumulator,
-                "realtime_snapshot",
+                "realtime_snapshots",
                 None,
             )
+            if not callable(snapshot_fn):
+                snapshot_fn = getattr(
+                    self._server_metrics_accumulator,
+                    "realtime_snapshot",
+                    None,
+                )
             if callable(snapshot_fn):
                 server_snapshot = snapshot_fn(start_ns=start_ns) or {}
         except Exception as exc:  # noqa: BLE001
@@ -955,7 +980,7 @@ class RecordsManager(PullClientMixin, BaseComponentService):
     def _has_realtime_update(
         self,
         phase_stats: PhaseRecordsStats,
-        server_snapshot: dict[str, float],
+        server_snapshot: dict[str, float] | dict[str, dict[str, float]],
     ) -> bool:
         """Return whether realtime metrics need rebuilding for the current tick."""
         return (
@@ -965,7 +990,7 @@ class RecordsManager(PullClientMixin, BaseComponentService):
 
     async def _report_realtime_metrics(
         self,
-        server_snapshot: dict[str, float] | None = None,
+        server_snapshot: dict[str, float] | dict[str, dict[str, float]] | None = None,
     ) -> bool:
         """Report inference metrics (used by command handler).
 
@@ -1054,10 +1079,17 @@ class RecordsManager(PullClientMixin, BaseComponentService):
             timeslices,
             error_results,
         ) = await self._summarize_all_accumulators(phase=phase, cancelled=cancelled)
+        warmup_records_results: list[MetricResult] | None = None
+        summarize_warmup = getattr(self, "_summarize_warmup_metric_records", None)
+        if callable(summarize_warmup):
+            maybe_warmup_records_results = summarize_warmup()
+            if inspect.isawaitable(maybe_warmup_records_results):
+                warmup_records_results = await maybe_warmup_records_results
         await self._finalize_stream_exporters()
 
         result = build_process_records_result(
             records_results=records_results,
+            warmup_records_results=warmup_records_results,
             timeslices=timeslices,
             error_results=error_results,
             tracker=self._records_tracker,
@@ -1126,7 +1158,15 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         name = accumulator.__class__.__name__
         self.debug(f"Starting summarize for accumulator {acc_type}: {name}")
         try:
-            if hasattr(accumulator, "summarize"):
+            if accumulator.__class__.__name__ in {
+                "MetricsAccumulator",
+                "TheoreticalPrefixCacheAccumulator",
+            } and hasattr(accumulator, "export_results"):
+                res = await asyncio.wait_for(
+                    accumulator.export_results(ctx),
+                    timeout=Environment.RECORD.PROCESS_RECORDS_TIMEOUT,
+                )
+            elif hasattr(accumulator, "summarize"):
                 res = await asyncio.wait_for(
                     accumulator.summarize(),
                     timeout=Environment.RECORD.PROCESS_RECORDS_TIMEOUT,
@@ -1181,6 +1221,7 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         *,
         phase: CreditPhase,
         cancelled: bool,
+        accumulators: dict[AccumulatorType, AccumulatorProtocol] | None = None,
     ) -> tuple[
         list[MetricResult],
         list[TimesliceResult],
@@ -1199,7 +1240,11 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         timeslices: list[TimesliceResult] = []
         error_results: list[ErrorDetails] = []
 
-        if not self._accumulators:
+        selected_accumulators = (
+            accumulators if accumulators is not None else self._accumulators
+        )
+
+        if not selected_accumulators:
             self.debug("No accumulators configured, returning empty result")
             return (
                 records_results,
@@ -1211,6 +1256,7 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         ctx = ExportContext(
             start_ns=phase_stats.start_ns,
             end_ns=phase_stats.requests_end_ns,
+            phase=phase,
             error_summary=self._error_tracker.get_error_summary_for_phase(phase),
             cancelled=cancelled,
         )
@@ -1218,7 +1264,7 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         summaries = await asyncio.gather(
             *[
                 self._summarize_one_accumulator(acc_type, accumulator, ctx)
-                for acc_type, accumulator in self._accumulators.items()
+                for acc_type, accumulator in selected_accumulators.items()
             ],
             return_exceptions=False,
         )
@@ -1235,6 +1281,56 @@ class RecordsManager(PullClientMixin, BaseComponentService):
             timeslices,
             error_results,
         )
+
+    def _has_records_for_phase(self, phase: CreditPhase) -> bool:
+        phase_trackers = getattr(self._records_tracker, "_phase_trackers", {})
+        if not isinstance(phase_trackers, dict):
+            return False
+        tracker = phase_trackers.get(phase)
+        if tracker is None:
+            return False
+        return tracker.total_records > 0
+
+    def _metric_record_accumulator_map(
+        self,
+    ) -> dict[AccumulatorType, AccumulatorProtocol]:
+        metric_record_accumulators = {
+            id(acc) for acc in getattr(self, "_metric_record_accumulators", [])
+        }
+        return {
+            acc_type: accumulator
+            for acc_type, accumulator in self._accumulators.items()
+            if id(accumulator) in metric_record_accumulators
+        }
+
+    async def _summarize_warmup_metric_records(self) -> list[MetricResult] | None:
+        """Return warmup-only inference metrics, or None when no warmup records exist."""
+        if not self._has_records_for_phase(CreditPhase.WARMUP):
+            return None
+
+        records_results, _, error_results = await self._summarize_all_accumulators(
+            phase=CreditPhase.WARMUP,
+            cancelled=self._records_tracker.was_phase_cancelled(CreditPhase.WARMUP),
+            accumulators=self._metric_record_accumulator_map(),
+        )
+        if error_results:
+            for error in error_results:
+                self.error(f"Warmup metric summary error: {error}")
+
+        warmup_context_overflow_count = (
+            self._skipped_context_overflow_counts_by_phase.get(CreditPhase.WARMUP, 0)
+        )
+        if warmup_context_overflow_count:
+            records_results.append(
+                MetricResult(
+                    tag="context_overflow_count",
+                    header="Context Overflow Count",
+                    unit="requests",
+                    avg=float(warmup_context_overflow_count),
+                    count=1,
+                )
+            )
+        return records_results or None
 
     async def _finalize_stream_exporters(self) -> None:
         """Flush all stream exporters concurrently; log per-exporter errors.
@@ -1363,12 +1459,17 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         )
         profiling_start_ns = phase_stats.start_ns or time.time_ns()
         profiling_end_ns = phase_stats.requests_end_ns or time.time_ns()
+        warmup_phase_stats = self._records_tracker.create_stats_for_phase(
+            CreditPhase.WARMUP
+        )
 
         server_metrics_export_data = (
             await self._server_metrics_accumulator.export_results(
                 start_ns=profiling_start_ns,
                 end_ns=profiling_end_ns,
                 error_summary=error_summary,
+                warmup_start_ns=warmup_phase_stats.start_ns,
+                warmup_end_ns=warmup_phase_stats.requests_end_ns,
             )
         )
 
@@ -1382,7 +1483,11 @@ class RecordsManager(PullClientMixin, BaseComponentService):
         self.debug(
             "_publish_server_metrics_results: calling _process_server_metrics_results..."
         )
-        server_metrics_result = await self._process_server_metrics_results()
+        try:
+            server_metrics_result = await self._process_server_metrics_results()
+        except Exception as e:  # noqa: BLE001
+            self.exception(f"Failed to process server metrics results: {e!r}")
+            server_metrics_result = ProcessServerMetricsResult(results=None)
         self.debug(
             "_publish_server_metrics_results: publishing ProcessServerMetricsResultMessage..."
         )

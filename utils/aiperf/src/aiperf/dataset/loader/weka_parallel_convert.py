@@ -19,11 +19,13 @@ Output is byte-identical to the in-process serial path; tests in
 from __future__ import annotations
 
 import hashlib
+import math
 import multiprocessing as mp
 import os
 import time
 from collections import defaultdict
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from multiprocessing import shared_memory
 from typing import TypeAlias, TypedDict
@@ -40,11 +42,25 @@ from aiperf.dataset.loader._delay_cap import DelayCapTracker
 _JOIN_EPSILON_SECONDS = 1e-6
 
 
+def _api_time_ms(api_time: float | None) -> float | None:
+    """Per-turn server-processing duration in ms (mirrors weka_trace._api_time_ms).
+
+    Kept local to avoid a circular import (weka_trace imports this module)."""
+    if api_time is None or not math.isfinite(api_time):
+        return None
+    return max(0.0, api_time) * 1000.0
+
+
 class _WekaParentTurnDict(TypedDict):
     """One reconstructed turn (parent or child) shipped from worker -> orchestrator."""
 
     timestamp: float | None
     delay: float | None
+    api_time_ms: float | None
+    source_trace_id: str | None
+    source_outer_idx: int | None
+    source_inner_idx: int | None
+    source_kind: str | None
     model: str
     max_tokens: int
     prompt: str
@@ -97,9 +113,14 @@ class _WekaNormalRequestPayload(TypedDict):
     model: str
     t: float
     think_time: float | None
+    api_time: NotRequired[float | None]
     # Turn classification computed in the orchestrator (one source of truth in
     # weka_trace._classify_turn_input); workers copy it into the turn dict.
     input_kind: NotRequired[str | None]
+    source_trace_id: NotRequired[str | None]
+    source_outer_idx: NotRequired[int | None]
+    source_inner_idx: NotRequired[int | None]
+    source_kind: NotRequired[str | None]
     # Only present in parent normals (not in child requests):
     capped_output_length: NotRequired[int]
     # Present when --trace-idle-gap-cap-seconds has rewritten the per-trace
@@ -344,6 +365,7 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
     assert _worker_state is not None
     from aiperf.dataset.loader.weka_synth_buf import (
         ConversationReconstructor,
+        compute_asst_block_caps,
     )
 
     state = _worker_state
@@ -369,6 +391,10 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
     parent_turns: list[_WekaParentTurnDict] = []
     outer_to_turn_pos: dict[int, int] = {}
     normals: list[tuple[int, _WekaNormalRequestPayload]] = parent["normals"]
+    parent_asst_block_caps = compute_asst_block_caps(
+        [(r["hash_ids"], r["input_length"]) for _, r in normals],
+        bs,
+    )
     for k, (outer_idx, req) in enumerate(normals):
         seed = f"{task.trace_id}:turn_{k}:partial_tail"
         is_tool_result = req.get("input_kind") == "tool_result"
@@ -391,6 +417,7 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
                 curr_in_tokens=req["input_length"],
                 seed=seed,
                 is_tool_result=is_tool_result,
+                max_asst_blocks=parent_asst_block_caps[k],
             )
 
         if "effective_t" in req:
@@ -423,6 +450,13 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
             {
                 "timestamp": None if task.ignore_delays else t_ms,
                 "delay": None if task.ignore_delays else delay_ms,
+                "api_time_ms": None
+                if task.ignore_delays
+                else _api_time_ms(req.get("api_time")),
+                "source_trace_id": task.trace_id,
+                "source_outer_idx": outer_idx,
+                "source_inner_idx": None,
+                "source_kind": "weka_main",
                 "model": task.model_map.get(req["model"], req["model"]),
                 "max_tokens": req["capped_output_length"],
                 "raw_messages": parent_delta.delta_messages,
@@ -601,6 +635,10 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
 
         child_turns: list[_WekaParentTurnDict] = []
         creqs: list[_WekaNormalRequestPayload] = cp["requests"]
+        child_asst_block_caps = compute_asst_block_caps(
+            [(r["hash_ids"], r["input_length"]) for r in creqs],
+            bs,
+        )
         for k, creq in enumerate(creqs):
             seed = f"{cp['session_id']}:turn_{k}:partial_tail"
             is_tool_result = creq.get("input_kind") == "tool_result"
@@ -623,6 +661,7 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
                     curr_in_tokens=creq["input_length"],
                     seed=seed,
                     is_tool_result=is_tool_result,
+                    max_asst_blocks=child_asst_block_caps[k],
                 )
             if "effective_t" in creq:
                 t_ms = creq["effective_t"] * 1000.0
@@ -645,6 +684,15 @@ def _process_task(task: _WekaTraceTask) -> _WekaProcessTaskResult:
                 {
                     "timestamp": None if task.ignore_delays else t_ms,
                     "delay": None if task.ignore_delays else child_delay_ms,
+                    "api_time_ms": None
+                    if task.ignore_delays
+                    else _api_time_ms(creq.get("api_time")),
+                    "source_trace_id": creq.get(
+                        "source_trace_id", cp["parent_trace_id"]
+                    ),
+                    "source_outer_idx": creq.get("source_outer_idx"),
+                    "source_inner_idx": creq.get("source_inner_idx"),
+                    "source_kind": creq.get("source_kind", "weka_subagent"),
                     "model": task.model_map.get(creq["model"], creq["model"]),
                     # Flat-chain children carry capped_output_length (their
                     # rows were top-level and honor --max-osl); subagent
@@ -777,4 +825,5 @@ def run_parallel_weka_reconstruction(
         return results
     finally:
         shm.close()
-        shm.unlink()
+        with suppress(FileNotFoundError):
+            shm.unlink()

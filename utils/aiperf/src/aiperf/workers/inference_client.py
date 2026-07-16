@@ -76,6 +76,15 @@ class InferenceClient(AIPerfLifecycleMixin):
         # Resolved by the worker via record payload-retention auto-detection.
         self.strip_record_payload_bytes = strip_record_payload_bytes
 
+        # Legacy Dynamo session_control only: session_ids this worker has already
+        # sent an 'open' for. 'open' is not idempotent and must be sent exactly
+        # once on the first request the worker makes for a session -- which under
+        # agentic replay is the WARMUP turn (k_i), not turn_index 0. The
+        # StickyCreditRouter pins every turn of a session (warmup + profiling) to
+        # one worker, so this per-process set sees them all. Entries are dropped
+        # on 'close' to bound the set to in-flight sessions.
+        self._dynamo_opened_sessions: set[str] = set()
+
         # Detect and set transport type if not explicitly set
         if not model_endpoint.transport:
             model_endpoint.transport = detect_transport_from_url(
@@ -119,18 +128,9 @@ class InferenceClient(AIPerfLifecycleMixin):
         request_info.endpoint_params = self.endpoint.get_endpoint_params(request_info)
         if request_info.payload_bytes is not None:
             # PAYLOAD_BYTES fast path: bytes were validated at dataset-load time
-            # by the mmap loader / DatasetManager. Defensive guard against any
-            # invalid bytes that bypass upstream validation — round-trip
-            # through orjson.loads so a malformed payload turns into an error
-            # RequestRecord rather than reaching the wire. Body-mutating features
+            # by the mmap loader / DatasetManager, and body-mutating features
             # (cache-bust, Dynamo session_control) are refused against this
             # verbatim-bytes path at dataset load, so nothing is injected here.
-            try:
-                orjson.loads(request_info.payload_bytes)
-            except (orjson.JSONDecodeError, ValueError, TypeError) as e:
-                raise ValueError(
-                    f"invalid JSON in pre-serialised payload_bytes: {e}"
-                ) from e
             formatted_payload = request_info.payload_bytes
         else:
             current_turn = request_info.turns[-1] if request_info.turns else None
@@ -145,13 +145,24 @@ class InferenceClient(AIPerfLifecycleMixin):
             # excluded by the dataset-load guard, so it is not handled here.
             endpoint = self.model_endpoint.endpoint
             if endpoint.use_dynamo_conv_aware_routing:
+                session_id = request_info.x_correlation_id
+                legacy = endpoint.use_legacy_dynamo_session_control
+                session_control = build_session_control(
+                    session_id=session_id,
+                    is_final_turn=request_info.is_final_turn,
+                    timeout_seconds=endpoint.dynamo_session_timeout_seconds,
+                    legacy=legacy,
+                    already_opened=session_id in self._dynamo_opened_sessions,
+                )
+                # Track the open/close lifecycle so legacy 'open' is sent exactly
+                # once per session (modern 'bind' is stateless and ignores this).
+                if legacy:
+                    if session_control.get("action") == "open":
+                        self._dynamo_opened_sessions.add(session_id)
+                    elif request_info.is_final_turn:
+                        self._dynamo_opened_sessions.discard(session_id)
                 formatted_payload = merge_session_control(
-                    formatted_payload,
-                    build_session_control(
-                        session_id=request_info.x_correlation_id,
-                        is_final_turn=request_info.is_final_turn,
-                        timeout_seconds=endpoint.dynamo_session_timeout_seconds,
-                    ),
+                    formatted_payload, session_control
                 )
         # Canonicalise to bytes and stash on request_info. Two wins: (1) the
         # transport skips its own orjson.dumps on the dict path, (2) the
@@ -280,6 +291,10 @@ class InferenceClient(AIPerfLifecycleMixin):
             credit_phase=request_info.credit_phase,
             conversation_id=request_info.conversation_id,
             turn_index=request_info.turn_index,
+            source_trace_id=request_info.source_trace_id,
+            source_outer_idx=request_info.source_outer_idx,
+            source_inner_idx=request_info.source_inner_idx,
+            source_kind=request_info.source_kind,
             x_request_id=request_info.x_request_id,
             x_correlation_id=request_info.x_correlation_id,
             credit_issued_ns=request_info.credit_issued_ns,

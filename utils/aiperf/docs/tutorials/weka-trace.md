@@ -22,7 +22,7 @@ Each trace file is a single JSON object describing one coding conversation:
 AIPerf maps the format directly onto its DAG datastructure:
 
 - One root `Conversation` per trace file.
-- One or more child `Conversation`s per `type: "subagent"` entry. The same hash-id LCP chain detection used for flat top-level fan-outs (see below) runs nested on each subagent's inner requests: the subagent's own thread keeps session id `<trace_id>::sa:<agent_id>`, and every detected inner chain (a one-shot disjoint call, a parallel fork of the subagent's context, or a flattened worker thread) becomes a sibling child with `<trace_id>::sa:<agent_id>:fa:000`, `:fa:001`, ... (or `:wg:`/`:aux:`/`:aux:red:` per the classification below) — each dispatched at its recorded offset from the spawn. Inner requests without `hash_ids` stay on the subagent's main chain in time order.
+- One or more child `Conversation`s per `type: "subagent"` entry. The same hash-id LCP chain detection used for flat top-level fan-outs (see below) runs nested on each subagent's inner requests: the subagent's own thread keeps session id `<trace_id>::sa:<agent_id>`, and every detected inner chain (a one-shot disjoint call, a parallel fork of the subagent's context, or a flattened worker thread) becomes a sibling child with `<trace_id>::sa:<agent_id>:fa:000`, `:fa:001`, ... (or `:wg:`/`:aux:` per the classification below) — each dispatched at its recorded offset from the spawn. Inner requests without `hash_ids` stay on the subagent's main chain in time order.
 - A `SPAWN` branch on the parent's preceding turn; a `SPAWN_JOIN` prerequisite on the parent's following turn. Three nuances: (a) subagents with no preceding parent turn are dropped (logged at load time); (b) subagents with no following parent turn become `is_background=True` branches with no `SPAWN_JOIN` prerequisite (the parent doesn't wait); (c) adjacent subagents sharing the same `(preceding, following)` anchors collapse into one multi-child branch.
 
 ---
@@ -71,8 +71,10 @@ Standard trace filters apply:
 If you don't already have the trace corpus on disk, SemiAnalysis-published HuggingFace mirrors are available and can be pulled directly by AIPerf with a single flag:
 
 - [`semianalysisai/cc-traces-weka-no-subagents-051826`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-no-subagents-051826) — pinned no-subagents current corpus: 98 traces, **main-agent only** (all `WekaSubagentEntry` blocks stripped at publication time). This is also the legacy/default target for the plain `semianalysis_cc_traces_weka` alias.
-- [`semianalysisai/cc-traces-weka-061526`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-061526) — pinned current full-context corpus (alias `semianalysis_cc_traces_weka_061526`): 233 v7 traces with full subagent fan-out (parent + child SPAWN/JOIN topology). This is the canonical AgentX MVP corpus.
-- [`semianalysisai/cc-traces-weka-061526-256k`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-061526-256k) — 232-trace 256k-capped sibling (alias `semianalysis_cc_traces_weka_061526_256k`). Requests over the cap are filtered while surviving relative timestamps and subagent overlap are preserved.
+- [`semianalysisai/cc-traces-weka-061526`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-061526) — pinned historical full-context corpus (alias `semianalysis_cc_traces_weka_061526`): 233 v7 traces with full subagent fan-out.
+- [`semianalysisai/cc-traces-weka-061526-256k`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-061526-256k) — 232-trace historical 256k-capped sibling (alias `semianalysis_cc_traces_weka_061526_256k`).
+- [`semianalysisai/cc-traces-weka-062126`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126) — pinned current full-context corpus (alias `semianalysis_cc_traces_weka_062126`): 393 v7 traces with full subagent fan-out (parent + child SPAWN/JOIN topology). This is the canonical AgentX MVP corpus.
+- [`semianalysisai/cc-traces-weka-062126-256k`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126-256k) — 393-trace 256k-capped sibling (alias `semianalysis_cc_traces_weka_062126_256k`). Requests over the cap are filtered while surviving relative timestamps and subagent overlap are preserved.
 
 ```bash
 aiperf profile \
@@ -100,9 +102,9 @@ The HuggingFace path and the file-based `--input-file` path produce **byte-ident
 | `--input-file <dir-or-file>` (file-based) | You already have a local trace directory, you need offline runs (no outbound network), or you're developing/debugging the loader against a specific subset of traces. |
 | `--public-dataset semianalysis_cc_traces_weka_no_subagents` (HuggingFace, no subagents) | Pinned no-subagents current corpus for benchmarks where you want a single linear agent stream per trace and don't care about parent/child fan-out. 98 traces. |
 | `--public-dataset semianalysis_cc_traces_weka` (HuggingFace, legacy/default no-subagents alias) | Legacy/default pinned alias for the same current no-subagents corpus as `semianalysis_cc_traces_weka_no_subagents`. |
-| `--public-dataset semianalysis_cc_traces_weka_with_subagents` (HuggingFace, with subagents) | Rolling with-subagents alias tracking the current default corpus (061526) for zero-setup runs with full subagent SPAWN/JOIN topology. 233 traces. |
+| `--public-dataset semianalysis_cc_traces_weka_with_subagents` (HuggingFace, with subagents) | Rolling with-subagents alias tracking the current default corpus (062126) for zero-setup runs with full subagent SPAWN/JOIN topology. 393 traces. |
 
-Existing Weka tunables work identically in both paths: `--synthesis-max-isl`, `--synthesis-max-osl`, `--inter-turn-delay-cap-seconds`, `--trace-idle-gap-cap-seconds`, `--ignore-trace-delays`, `--use-think-time-only`, `--cache-bust`, the per-trace model rewriting rules below — same flags, same behavior, same output bytes on the wire. For `--scenario inferencex-agentx-mvp`, the validator accepts the with-subagents alias, an explicit local `weka_trace` loader, or `weka_hf` constrained to `semianalysisai/cc-traces-weka-061526`; it does not accept the no-subagents aliases.
+Existing Weka tunables work identically in both paths: `--synthesis-max-isl`, `--synthesis-max-osl`, `--inter-turn-delay-cap-seconds`, `--trace-idle-gap-cap-seconds`, `--ignore-trace-delays`, `--use-think-time-only`, `--cache-bust`, the per-trace model rewriting rules below — same flags, same behavior, same output bytes on the wire. For `--scenario inferencex-agentx-mvp`, the validator accepts the with-subagents alias, an explicit local `weka_trace` loader, or `weka_hf` constrained to `semianalysisai/cc-traces-weka-062126`; it does not accept the no-subagents aliases.
 
 For newly published compatible HuggingFace Weka trace corpora, pass `--hf-weka-dataset <repo>` — it auto-selects the neutral `weka_hf` loader (passing `--public-dataset weka_hf` explicitly is equivalent):
 
@@ -110,12 +112,12 @@ For newly published compatible HuggingFace Weka trace corpora, pass `--hf-weka-d
 aiperf profile \
     --model Qwen/Qwen3-0.6B \
     --endpoint-type chat \
-    --hf-weka-dataset semianalysisai/cc-traces-weka-061526 \
+    --hf-weka-dataset semianalysisai/cc-traces-weka-062126 \
     --streaming \
     --url localhost:8000
 ```
 
-Use the pinned `semianalysis_cc_traces_weka...` aliases, including the plain `semianalysis_cc_traces_weka` alias, when you want the exact corpus named by that alias. Use `weka_hf` when testing a new compatible `semianalysisai/cc-traces-weka-*` release before deciding whether it deserves a pinned alias. For AgentX MVP runs, generic `weka_hf` is valid only with `--hf-weka-dataset semianalysisai/cc-traces-weka-061526`; other `weka_hf` repos are rejected by the scenario validator.
+Use the pinned `semianalysis_cc_traces_weka...` aliases, including the plain `semianalysis_cc_traces_weka` alias, when you want the exact corpus named by that alias. Use `weka_hf` when testing a new compatible `semianalysisai/cc-traces-weka-*` release before deciding whether it deserves a pinned alias. For AgentX MVP runs, generic `weka_hf` is valid only with `--hf-weka-dataset semianalysisai/cc-traces-weka-062126`; other `weka_hf` repos are rejected by the scenario validator.
 
 A tokenizer is required in both paths (the prompt is reconstructed from `hash_ids`); pass `--tokenizer <name-or-path>` if your `--model` doesn't resolve a default tokenizer.
 
@@ -218,7 +220,7 @@ The loader detects these hidden agents from `hash_ids` longest-common-prefix (LC
   - `<trace_id>::fa:NNN` — a solo agent (the default).
   - `<trace_id>::wg:{group}_{member}` — a **parallel worker-group** member: a coordinated parallel fan-out requires BOTH a shared spawned context AND actual concurrency. Workers that forked from shared context (`fork.depth > 0`) are scoped by their fork point (`fork.parent_chain` + `fork.fork_outer_idx`), then within each scope split into connected components of **overlapping active `[t0, t1)` intervals**; a component with at least `AIPERF_DATASET_WEKA_WORKER_GROUP_MIN` (default 3) members is one group. `group` = the concurrent fan-out, `member` = index within it by start time. Both gates matter: the fork-point scope keeps unrelated fan-outs apart (pure interval overlap would bridge a busy trace into one blob), and the overlap split drops members that share the fork point but never actually run concurrently. Keying instead on the first context block would be wrong — block-0 is the shallow common root (~system prompt) shared by nearly every worker in a session.
   - `<trace_id>::aux:NNN` — an **auxiliary sidecar**: a short one-shot (at most `WEKA_AUX_MAX_REQUESTS` requests) from a small fresh context, or on a different model than the main agent (e.g. a Haiku WebFetch summary under an Opus agent). A tool-issued call, not an agent.
-  - `<trace_id>::aux:red:NNN` — a **reduction**: a same-model single large-input / short-output one-shot (context compaction, subagent-result summary, or tool-output digest). Auxiliary, but distinguished from fetch sidecars; governed by `WEKA_AUX_REDUCTION_OSL_MAX` / `WEKA_AUX_REDUCTION_RATIO`.
+  - Reduction sidecars — same-model single large-input / short-output one-shots (context compaction, subagent-result summary, or tool-output digest) are emitted as ordinary `<trace_id>::aux:NNN` conversations; governed by `WEKA_AUX_REDUCTION_OSL_MAX` / `WEKA_AUX_REDUCTION_RATIO`.
 
   Precedence is auxiliary > reduction > worker-group > solo agent. Set `WEKA_AUX_MAX_REQUESTS=0`, `WEKA_AUX_REDUCTION_OSL_MAX=0`, or `WEKA_WORKER_GROUP_MIN=0` to disable each arm (matching chains fall back to `::fa:`).
 
@@ -227,7 +229,7 @@ The loader detects these hidden agents from `hash_ids` longest-common-prefix (LC
 The same detection runs **nested** on every `type: "subagent"` entry's inner requests, because real captures flatten fan-outs inside subagents too (on the 060826 corpus, 615 subagent entries hide ~3.1k distinct context chains — mostly one-shot disjoint utility calls, plus genuine parallel forks and compaction seams). Per entry:
 
 - The chain containing the subagent's first retained request keeps the `<trace_id>::sa:<agent_id>` session id and the entry's declared `tool_tokens`/`system_tokens`.
-- Every spawned inner chain becomes a sibling child `<trace_id>::sa:<agent_id>:fa:000`, `:fa:001`, ... under the subagent's existing SPAWN branch, sharing its SPAWN_JOIN anchor. The same classification as the top level applies, so a spawned inner chain may instead carry `:wg:NNN` (worker-group), `:aux:NNN` (sidecar), or `:aux:red:NNN` (reduction). A spawned chain inherits the declared tool/system prefix only when its first request provably starts with the same declared-prefix blocks as the main chain (the system role is never fabricated).
+- Every spawned inner chain becomes a sibling child `<trace_id>::sa:<agent_id>:fa:000`, `:fa:001`, ... under the subagent's existing SPAWN branch, sharing its SPAWN_JOIN anchor. The same classification as the top level applies, so a spawned inner chain may instead carry `:wg:NNN` (worker-group) or `:aux:NNN` (sidecar, including reductions). A spawned chain inherits the declared tool/system prefix only when its first request provably starts with the same declared-prefix blocks as the main chain (the system role is never fabricated).
 - Each chain child **dispatches at its recorded offset from the spawn** (chain start offsets reach minutes on real corpora; the branch orchestrator sleeps them out — see [DAG Benchmarking](../benchmark-modes/dag.md)). Recorded parallelism is preserved structurally: a chain can never contain two temporally overlapping requests, so concurrent recorded requests always land in separate sibling sessions.
 - Inner requests without `hash_ids` carry no LCP evidence and ride the main chain in time order — a fully evidence-less subagent is exactly one sequential child.
 

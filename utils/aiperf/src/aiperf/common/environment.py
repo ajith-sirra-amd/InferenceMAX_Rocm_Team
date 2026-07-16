@@ -425,8 +425,8 @@ class _DatasetSettings(BaseSettings):
         "same-model and large. The bound separates a bounded summary from "
         "generative agent output (a real agent emits long completions); corpus "
         "reductions cap well below 4k output across every capture. Reductions "
-        "are emitted as ::aux:red: (still aux, distinguishable from fetch/size "
-        "sidecars). Set to 0 to disable the reduction arm. Only applies when "
+        "are emitted as ordinary ::aux: sidecars. Set to 0 to disable the "
+        "reduction arm. Only applies when "
         "WEKA_SPLIT_FLATTENED_AGENTS is True.",
     )
     WEKA_AUX_REDUCTION_RATIO: float = Field(
@@ -679,6 +679,11 @@ class _HTTPSettings(BaseSettings):
         default=False,
         description="Also send X-Session-ID with the stable X-Correlation-ID value. "
         "Use this when an external router requires a session-affinity header.",
+    )
+    X_SMG_ROUTING_KEY_FROM_CORRELATION_ID: bool = Field(
+        default=False,
+        description="Also send X-SMG-Routing-Key with the stable X-Correlation-ID value. "
+        "Use this with the SGLang Model Gateway manual routing policy.",
     )
     VIDEO_POLL_INTERVAL: float = Field(
         ge=0.001,

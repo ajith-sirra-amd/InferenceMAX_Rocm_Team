@@ -27,12 +27,14 @@ def test_inferencex_agentx_mvp_registered():
         "semianalysis_cc_traces_weka_061326_256k",
         "semianalysis_cc_traces_weka_061526",
         "semianalysis_cc_traces_weka_061526_256k",
+        "semianalysis_cc_traces_weka_062126",
+        "semianalysis_cc_traces_weka_062126_256k",
         "weka_trace",
         "weka_hf",
     )
     assert spec.min_benchmark_duration_seconds == 900
     assert spec.inter_turn_delay_cap_seconds is None
-    assert spec.trace_idle_gap_cap_seconds == 60.0
+    assert spec.trace_idle_gap_cap_seconds == 10.0
 
 
 def test_get_scenario_returns_spec():
