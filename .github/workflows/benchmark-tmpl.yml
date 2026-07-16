@@ -91,7 +91,7 @@ on:
         description: "Total CPU DRAM in GB for KV offloading"
         required: false
         type: string
-        default: '2500'
+        default: '1199'
       duration:
         description: "Benchmark duration in seconds"
         required: false
