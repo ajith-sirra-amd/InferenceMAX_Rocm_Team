@@ -47,8 +47,8 @@ else
 fi
 
 # MODEL_PATH: where the model weights live inside the container
-MODEL_NAME="${MODEL##*/}"
-MODEL_PATH="${HF_HUB_CACHE}/${MODEL_NAME}"
+export MODEL_NAME="${MODEL##*/}"
+export MODEL_PATH="${HF_HUB_CACHE%/}/${MODEL_NAME}"
 
 export PYTHONDONTWRITEBYTECODE=1
 
