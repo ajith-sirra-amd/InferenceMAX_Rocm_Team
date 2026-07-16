@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 if [[ $RUNNER_NAME == *gbt350* ]]; then
     HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/actions-runner"
-elif [[ $RUNNER_TYPE == "mi355x" ]]; then
+elif [[ $RUNNER_TYPE == *mi355x* ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/models"
 elif [[ $RUNNER_TYPE == "mi355x-p02-g57" ]]; then
     HF_HUB_CACHE_MOUNT="/mnt/hf_hub_cache/"
