@@ -1,5 +1,5 @@
 labels:
-  mi355x:
+  cluster:mi355x-amds:
     - mi355x-amd_m15_17_ajith
 hardware:
   cluster:mi300x-tw:
