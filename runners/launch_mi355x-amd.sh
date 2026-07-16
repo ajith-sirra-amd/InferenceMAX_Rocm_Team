@@ -46,16 +46,6 @@ else
     BENCHMARK_PATH=upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/${SCENARIO_SUBDIR}${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
 fi
 
-# Derive KV_OFFLOADING and KV_OFFLOAD_BACKEND from OFFLOADING env var
-# OFFLOADING format: "<type>-<backend>" e.g. "dram-lmcache", "none", "cpu-hicache"
-if [[ -z "${OFFLOADING:-}" || "$OFFLOADING" == "none" ]]; then
-    KV_OFFLOADING="none"
-    KV_OFFLOAD_BACKEND=""
-else
-    KV_OFFLOADING="${OFFLOADING%%-*}"       # e.g. "dram" from "dram-lmcache"
-    KV_OFFLOAD_BACKEND="${OFFLOADING#*-}"  # e.g. "lmcache" from "dram-lmcache"
-fi
-
 # MODEL_PATH: where the model weights live inside the container
 MODEL_NAME="${MODEL##*/}"
 MODEL_PATH="${HF_HUB_CACHE}/${MODEL_NAME}"
