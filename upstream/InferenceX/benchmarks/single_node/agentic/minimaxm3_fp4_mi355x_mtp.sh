@@ -97,7 +97,7 @@ wait_for_lmcache_ready() {
 }
 
 case "$KV_OFFLOAD_BACKEND" in
-    native)
+    vllm-simple)
         unset VLLM_USE_SIMPLE_KV_OFFLOAD
         # Use vLLM's regular native KV-offload path (OffloadingConnector),
         # NOT the SimpleCPUOffloadConnector. The "native" backend resolves to
