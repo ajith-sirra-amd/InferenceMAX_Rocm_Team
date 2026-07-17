@@ -10,7 +10,7 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL MODEL_PATH TP CONC KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
+check_env_vars MODEL TP CONC KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
 
 echo "MODEL=$MODEL TP=$TP CONC=$CONC KV_OFFLOADING=$KV_OFFLOADING TOTAL_CPU_DRAM_GB=$TOTAL_CPU_DRAM_GB RESULT_DIR=$RESULT_DIR DURATION=$DURATION EP_SIZE=$EP_SIZE DP_ATTENTION=$DP_ATTENTION"
 
@@ -31,6 +31,9 @@ amd-smi || true
 if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
     hf download "$MODEL" --local-dir "$MODEL_PATH"
 fi
+
+DRAFT_MODEL="Inferact/MiniMax-M3-EAGLE3"
+NUM_SPEC_TOKENS=3
 
 resolve_trace_source
 install_agentic_deps
@@ -218,6 +221,7 @@ VLLM_CMD=(
     --attention-backend TRITON_ATTN
     --moe-backend aiter
     --kv-cache-dtype fp8
+    --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS}" \
     --tool-call-parser minimax_m3
     --enable-auto-tool-choice
     --reasoning-parser minimax_m3
