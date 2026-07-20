@@ -33,7 +33,7 @@ if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
 fi
 
 DRAFT_MODEL="Inferact/MiniMax-M3-EAGLE3"
-NUM_SPEC_TOKENS=3
+NUM_SPEC_TOKENS=4
 
 resolve_trace_source
 install_agentic_deps
