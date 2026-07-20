@@ -215,12 +215,11 @@ VLLM_CMD=(
     --port "$PORT"
     "${PARALLEL_ARGS[@]}"
     --trust-remote-code
-    --block-size 64
+    --block-size 128
     --gpu-memory-utilization 0.85
     --language-model-only
     --attention-backend TRITON_ATTN
     --moe-backend aiter
-    --kv-cache-dtype fp8
     --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS}" \
     --tool-call-parser minimax_m3
     --enable-auto-tool-choice
