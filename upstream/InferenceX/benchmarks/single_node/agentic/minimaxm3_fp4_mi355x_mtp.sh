@@ -220,7 +220,7 @@ VLLM_CMD=(
     --language-model-only
     --attention-backend TRITON_ATTN
     --moe-backend aiter
-    --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS}" \
+    # --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS}" \
     --tool-call-parser minimax_m3
     --enable-auto-tool-choice
     --reasoning-parser minimax_m3
