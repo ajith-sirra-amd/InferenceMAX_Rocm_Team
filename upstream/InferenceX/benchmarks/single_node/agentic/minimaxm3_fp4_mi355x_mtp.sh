@@ -215,7 +215,7 @@ VLLM_CMD=(
     --port "$PORT"
     "${PARALLEL_ARGS[@]}"
     --trust-remote-code
-    --block-size 1
+    --block-size 128
     --gpu-memory-utilization 0.85
     --language-model-only
     --attention-backend TRITON_ATTN
