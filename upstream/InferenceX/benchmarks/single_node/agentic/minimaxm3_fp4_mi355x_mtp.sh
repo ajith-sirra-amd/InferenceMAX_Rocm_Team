@@ -33,7 +33,7 @@ if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
 fi
 
 DRAFT_MODEL="Inferact/MiniMax-M3-EAGLE3"
-NUM_SPEC_TOKENS=4
+NUM_SPEC_TOKENS=3
 
 resolve_trace_source
 install_agentic_deps
@@ -220,7 +220,7 @@ VLLM_CMD=(
     --language-model-only
     --attention-backend TRITON_ATTN
     --moe-backend aiter
-    --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS}" \
+    --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS, \"attention_backend\": \"TRITON_ATTN\"}"
     --tool-call-parser minimax_m3
     --enable-auto-tool-choice
     --reasoning-parser minimax_m3
