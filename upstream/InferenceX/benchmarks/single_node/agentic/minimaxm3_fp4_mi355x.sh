@@ -32,6 +32,8 @@ if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
     hf download "$MODEL" --local-dir "$MODEL_PATH"
 fi
 
+export WEKA_LOADER_OVERRIDE="semianalysis_cc_traces_weka_062126"
+
 resolve_trace_source
 install_agentic_deps
 
