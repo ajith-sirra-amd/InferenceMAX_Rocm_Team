@@ -3221,7 +3221,8 @@ minimaxm3-fp4-mi355x-vllm-agentic:
     - dram-utilization: 0.80
       search-space:
       # - { tp: 4, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.1" }, conc-list: [32] }
-      - { tp: 4, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [28] }
+      # - { tp: 4, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [28] }
+      - { tp: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [56] }
 
 # EAGLE3 speculative-decoding variant of minimaxm3-fp4-mi355x-vllm. Pair the
 # amd/MiniMax-M3-MXFP4 target with Inferact/MiniMax-M3-EAGLE3 and three draft
