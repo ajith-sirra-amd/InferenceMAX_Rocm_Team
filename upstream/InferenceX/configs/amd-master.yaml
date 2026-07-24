@@ -3240,4 +3240,4 @@ minimaxm3-fp4-mi355x-vllm-mtp-agentic:
     - dram-utilization: 0.80
       search-space:
       # - { tp: 4, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.1" }, conc-list: [4], spec-decoding: mtp }
-      - { tp: 4, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20, 24], spec-decoding: mtp }
+      - { tp: 4, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [28], spec-decoding: mtp }
