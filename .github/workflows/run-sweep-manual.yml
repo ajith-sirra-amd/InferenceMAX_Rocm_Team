@@ -72,132 +72,15 @@ on:
                 type: choice
                 default: "false"
                 options: ["false", "true"]
-            priority-multi-node:
-                description: "Priority criterion: multi-node"
+            priority-criteria:
+                description: >-
+                    Comma-separated priority criteria. Valid values: multi-node, agentic,
+                    eval-only, fp4, mtp, eagle, eagle3, sglang, vllm, dynamo-sglang,
+                    dynamo-vllm, glm5, glm5.1, kimik2.5, kimik3, dsv4, minimaxm3, qwen3.5,
+                    dsr1, checklist-complete, patchwork
                 required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-agentic:
-                description: "Priority criterion: agentic"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-eval-only:
-                description: "Priority criterion: eval-only"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-fp4:
-                description: "Priority criterion: fp4"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-mtp:
-                description: "Priority criterion: mtp"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-eagle:
-                description: "Priority criterion: eagle"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-eagle3:
-                description: "Priority criterion: eagle3"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-sglang:
-                description: "Priority criterion: sglang"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-vllm:
-                description: "Priority criterion: vllm"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-dynamo-sglang:
-                description: "Priority criterion: dynamo-sglang"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-dynamo-vllm:
-                description: "Priority criterion: dynamo-vllm"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-glm5:
-                description: "Priority criterion: glm5"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-glm5-1:
-                description: "Priority criterion: glm5.1"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-kimik2-5:
-                description: "Priority criterion: kimik2.5"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-kimik3:
-                description: "Priority criterion: kimik3"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-dsv4:
-                description: "Priority criterion: dsv4"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-minimaxm3:
-                description: "Priority criterion: minimaxm3"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-qwen3-5:
-                description: "Priority criterion: qwen3.5"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-dsr1:
-                description: "Priority criterion: dsr1"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-checklist-complete:
-                description: "Priority criterion: checklist-complete"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
-            priority-patchwork:
-                description: "Priority criterion: patchwork"
-                required: false
-                type: choice
-                default: "false"
-                options: ["false", "true"]
+                type: string
+                default: ""
 
 jobs:
     setup:
@@ -224,27 +107,7 @@ jobs:
                   ENGINE_PATCH: ${{ inputs.engine-patch }}
                   CI_PATCHWORK_WAIVED: ${{ inputs.ci-patchwork-waived }}
                   CI_CHECKLIST_COMPLETE: ${{ inputs.ci-checklist-complete }}
-                  PRIORITY_MULTI_NODE: ${{ inputs.priority-multi-node }}
-                  PRIORITY_AGENTIC: ${{ inputs.priority-agentic }}
-                  PRIORITY_EVAL_ONLY: ${{ inputs.priority-eval-only }}
-                  PRIORITY_FP4: ${{ inputs.priority-fp4 }}
-                  PRIORITY_MTP: ${{ inputs.priority-mtp }}
-                  PRIORITY_EAGLE: ${{ inputs.priority-eagle }}
-                  PRIORITY_EAGLE3: ${{ inputs.priority-eagle3 }}
-                  PRIORITY_SGLANG: ${{ inputs.priority-sglang }}
-                  PRIORITY_VLLM: ${{ inputs.priority-vllm }}
-                  PRIORITY_DYNAMO_SGLANG: ${{ inputs.priority-dynamo-sglang }}
-                  PRIORITY_DYNAMO_VLLM: ${{ inputs.priority-dynamo-vllm }}
-                  PRIORITY_GLM5: ${{ inputs.priority-glm5 }}
-                  PRIORITY_GLM5_1: ${{ inputs.priority-glm5-1 }}
-                  PRIORITY_KIMIK2_5: ${{ inputs.priority-kimik2-5 }}
-                  PRIORITY_KIMIK3: ${{ inputs.priority-kimik3 }}
-                  PRIORITY_DSV4: ${{ inputs.priority-dsv4 }}
-                  PRIORITY_MINIMAXM3: ${{ inputs.priority-minimaxm3 }}
-                  PRIORITY_QWEN3_5: ${{ inputs.priority-qwen3-5 }}
-                  PRIORITY_DSR1: ${{ inputs.priority-dsr1 }}
-                  PRIORITY_CHECKLIST_COMPLETE: ${{ inputs.priority-checklist-complete }}
-                  PRIORITY_PATCHWORK: ${{ inputs.priority-patchwork }}
+                  PRIORITY_CRITERIA_INPUT: ${{ inputs.priority-criteria }}
               run: |
 
                   BASE_REF="${{ inputs.base-ref }}"
@@ -253,35 +116,8 @@ jobs:
                       HEAD_REF="${{ github.sha }}"
                   fi
 
-                  declare -A PRIORITY_FLAGS=(
-                      [multi-node]="$PRIORITY_MULTI_NODE"
-                      [agentic]="$PRIORITY_AGENTIC"
-                      [eval-only]="$PRIORITY_EVAL_ONLY"
-                      [fp4]="$PRIORITY_FP4"
-                      [mtp]="$PRIORITY_MTP"
-                      [eagle]="$PRIORITY_EAGLE"
-                      [eagle3]="$PRIORITY_EAGLE3"
-                      [sglang]="$PRIORITY_SGLANG"
-                      [vllm]="$PRIORITY_VLLM"
-                      [dynamo-sglang]="$PRIORITY_DYNAMO_SGLANG"
-                      [dynamo-vllm]="$PRIORITY_DYNAMO_VLLM"
-                      [glm5]="$PRIORITY_GLM5"
-                      [glm5.1]="$PRIORITY_GLM5_1"
-                      [kimik2.5]="$PRIORITY_KIMIK2_5"
-                      [kimik3]="$PRIORITY_KIMIK3"
-                      [dsv4]="$PRIORITY_DSV4"
-                      [minimaxm3]="$PRIORITY_MINIMAXM3"
-                      [qwen3.5]="$PRIORITY_QWEN3_5"
-                      [dsr1]="$PRIORITY_DSR1"
-                      [checklist-complete]="$PRIORITY_CHECKLIST_COMPLETE"
-                      [patchwork]="$PRIORITY_PATCHWORK"
-                  )
-                  PRIORITY_CRITERIA="[]"
-                  for name in "${!PRIORITY_FLAGS[@]}"; do
-                      if [ "${PRIORITY_FLAGS[$name]}" = "true" ]; then
-                          PRIORITY_CRITERIA=$(jq -c --arg name "$name" '. + [$name]' <<<"$PRIORITY_CRITERIA")
-                      fi
-                  done
+                  PRIORITY_CRITERIA=$(jq -cn --arg csv "$PRIORITY_CRITERIA_INPUT" \
+                      '[$csv | split(",") | .[] | gsub("^\\s+|\\s+$";"") | select(length > 0)]')
 
                   # Labels that downstream sweep/canary jobs and ci_priority.py key off of
                   LABELS_JSON=$(jq -cn \
