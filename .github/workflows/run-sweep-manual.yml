@@ -1,5 +1,5 @@
-name: "Run Sweep (Manual)"
-run-name: Run Sweep (Manual) - ${{ inputs.sweep-mode }}
+name: "SA Run Sweep Replica"
+run-name: SA Run Sweep Replica - ${{ inputs.sweep-mode }}
 
 concurrency:
     group: sweep-manual-${{ github.run_id }}
