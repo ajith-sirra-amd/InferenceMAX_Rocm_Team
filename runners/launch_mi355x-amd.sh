@@ -63,7 +63,6 @@ docker run --rm --init --network host --shm-size=128g --name=$server_name \
 -e HF_HUB_CACHE \
 -e MODEL \
 -e MODEL_PATH \
--e MODEL_NAME \
 -e TP \
 -e CONC \
 -e ISL \
