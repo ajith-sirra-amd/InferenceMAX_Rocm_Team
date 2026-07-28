@@ -81,8 +81,56 @@ on:
                 required: false
                 type: string
                 default: ""
+            e2e-test-config:
+                description: "Optional: also run e2e-tests.yml with this generate-cli-command. 'none' skips it."
+                required: false
+                type: choice
+                default: "none"
+                options:
+                    - "none"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-atom-agentic-lmcache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi355x-vllm-agentic-lmcache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys kimik2.5-fp4-mi355x-vllm-agentic-lmcache"
+                    - "test-config --config-files .github/configs/nvidia-master.yaml --config-keys kimik2.5-fp4-b200-vllm-agentic-lmcache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi355x-sglang-agentic-hicache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp4-mi355x-sglang-agentic-hicache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp4-mi355x-sglang-agentic-hicache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi355x-sglang-agentic-hicache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic-hicache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic-smoke"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic-hicache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic-smoke"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi300x-vllm-agentic-lmcache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi325x-vllm-agentic-lmcache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-vllm-agentic-lmcache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys kimik2.7-fp4-mi355x-vllm-agentic-lmcache"
+                    - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm3-fp8-mi355x-vllm-agentic-lmcache"
+                    - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys minimaxm3-fp4-mi355x-vllm-agentic"
+                    - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys minimaxm3-fp4-mi355x-vllm-mtp-agentic"
+            e2e-duration-override:
+                description: "Override matrix.config.duration (seconds) for the e2e test job. Empty = use config value."
+                required: false
+                type: string
+                default: ""
 
 jobs:
+    e2e-tests:
+        if: ${{ inputs.e2e-test-config != 'none' }}
+        uses: ./.github/workflows/e2e-tests.yml
+        name: e2e /
+        secrets: inherit
+        with:
+            generate-cli-command: ${{ inputs.e2e-test-config }}
+            test-name: "SA Run Sweep Replica"
+            ref: ${{ inputs.head-ref }}
+            duration-override: ${{ inputs.e2e-duration-override }}
+
     setup:
         runs-on: ubuntu-latest
         outputs:
