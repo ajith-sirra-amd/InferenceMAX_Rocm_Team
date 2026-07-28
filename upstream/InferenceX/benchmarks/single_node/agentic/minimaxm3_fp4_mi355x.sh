@@ -14,8 +14,8 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 # Validating the reasoning-parser fix (interleaved <mm:think> round-trip) on the
 # two instances that previously degenerated into command-repeat loops. Remove
 # these two exports to restore a full 300-instance sweep.
-export SWEBENCH_AGENT_FILTER='django__django-(11630|15498)$'
-export SWEBENCH_EXPECTED_INSTANCES=2
+# export SWEBENCH_AGENT_FILTER='django__django-(11630|15498)$'
+# export SWEBENCH_EXPECTED_INSTANCES=2
 # -----------------------------------------------------------------------------
 
 check_env_vars MODEL TP CONC KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
@@ -141,6 +141,7 @@ echo "Server PID: $SERVER_PID"
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 # ---- Run benchmark ----------------------------------------------------------
+EVAL_ONLY="true"
 if [ "${EVAL_ONLY}" = "true" ]; then
     run_eval --port "$PORT"
 else
