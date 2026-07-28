@@ -17,6 +17,7 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 # export SWEBENCH_AGENT_FILTER='django__django-(11630|15498)$'
 # export SWEBENCH_EXPECTED_INSTANCES=2
 # -----------------------------------------------------------------------------
+export EVAL_FRAMEWORK="lm-eval"
 
 check_env_vars MODEL TP CONC KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
 
