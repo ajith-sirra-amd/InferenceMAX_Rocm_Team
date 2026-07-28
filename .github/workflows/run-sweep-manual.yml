@@ -12,7 +12,7 @@ on:
                 description: "Diff base ref for perf-changelog.yaml"
                 required: false
                 type: string
-                default: "origin/main"
+                default: "chore/sa-agentx-v1.0"
             head-ref:
                 description: "Diff head ref for perf-changelog.yaml (blank = current commit)"
                 required: false
