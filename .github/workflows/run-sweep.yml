@@ -18,7 +18,7 @@ on:
         branches:
             - main
         paths:
-            - "perf-changelog.yaml"
+            - "upstream/InferenceX/perf-changelog.yaml"
     pull_request:
         branches:
             - main
@@ -28,7 +28,7 @@ on:
             - labeled
             - unlabeled
         paths:
-            - "perf-changelog.yaml"
+            - "upstream/InferenceX/perf-changelog.yaml"
 
 jobs:
     check-newline:
@@ -47,7 +47,7 @@ jobs:
 
             - name: Check perf-changelog.yaml ends with newline
               run: |
-                  if [ -n "$(tail -c 1 perf-changelog.yaml)" ]; then
+                  if [ -n "$(tail -c 1 upstream/InferenceX/perf-changelog.yaml)" ]; then
                       echo "::error::perf-changelog.yaml must end with a newline character"
                       echo "Please add a newline at the end of the file to avoid diff issues in subsequent PRs."
                       exit 1
@@ -116,8 +116,8 @@ jobs:
                   fi
 
                   CMD=(
-                      python3 "${GITHUB_WORKSPACE}/utils/process_changelog.py"
-                      --changelog-file "${GITHUB_WORKSPACE}/perf-changelog.yaml"
+                      python3 "${GITHUB_WORKSPACE}/upstream/InferenceX/utils/process_changelog.py"
+                      --changelog-file "${GITHUB_WORKSPACE}/upstream/InferenceX/perf-changelog.yaml"
                       --base-ref "$BASE_REF"
                       --head-ref "$HEAD_REF"
                   )
@@ -128,7 +128,7 @@ jobs:
                   CONFIG_JSON=$("${CMD[@]}")
 
                   echo "search-space-config=$CONFIG_JSON" >> "$GITHUB_OUTPUT"
-                  python3 "${GITHUB_WORKSPACE}/utils/find_reusable_sweep_run.py" \
+                  python3 "${GITHUB_WORKSPACE}/upstream/InferenceX/utils/find_reusable_sweep_run.py" \
                     --repo "${{ github.repository }}" \
                     --commit-sha "${{ github.sha }}" \
                     --event-name "${{ github.event_name }}" \
@@ -453,7 +453,7 @@ jobs:
                   cat <<'CONFIGEOF' > _full_config.json
                   ${{ needs.setup.outputs.search-space-config }}
                   CONFIGEOF
-                  python3 utils/validate_reusable_sweep_artifacts.py \
+                  python3 upstream/InferenceX/utils/validate_reusable_sweep_artifacts.py \
                     --config-json _full_config.json \
                     --artifacts-dir source-artifacts
 
@@ -508,7 +508,7 @@ jobs:
               run: pip install PyGithub
 
             - name: Calculate success rate
-              run: python3 utils/calc_success_rate.py "$STATS_FILENAME"
+              run: python3 upstream/InferenceX/utils/calc_success_rate.py "$STATS_FILENAME"
 
             - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
@@ -543,7 +543,7 @@ jobs:
               run: pip install psycopg2-binary tabulate
 
             - name: Compare results against main
-              run: python3 utils/compare_results.py results/ >> "$GITHUB_STEP_SUMMARY"
+              run: python3 upstream/InferenceX/utils/compare_results.py results/ >> "$GITHUB_STEP_SUMMARY"
 
     trigger-ingest:
         needs:

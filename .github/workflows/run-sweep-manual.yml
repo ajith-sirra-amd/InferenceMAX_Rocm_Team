@@ -1,0 +1,893 @@
+name: "Run Sweep (Manual)"
+run-name: Run Sweep (Manual) - ${{ inputs.sweep-mode }}
+
+concurrency:
+    group: sweep-manual-${{ github.run_id }}
+    cancel-in-progress: true
+
+on:
+    workflow_dispatch:
+        inputs:
+            base-ref:
+                description: "Diff base ref for perf-changelog.yaml"
+                required: false
+                type: string
+                default: "origin/main"
+            head-ref:
+                description: "Diff head ref for perf-changelog.yaml (blank = current commit)"
+                required: false
+                type: string
+                default: ""
+            sweep-mode:
+                description: "Sweep mode (mirrors the mutually-exclusive PR sweep labels)"
+                required: true
+                type: choice
+                default: "sweep-enabled"
+                options:
+                    - "none"
+                    - "sweep-enabled"
+                    - "full-sweep-enabled"
+                    - "non-canary-full-sweep-enabled"
+                    - "full-sweep-fail-fast"
+                    - "full-sweep-fail-fast-no-canary"
+            all-evals:
+                description: "Label: all-evals"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            evals-only:
+                description: "Label: evals-only"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            skip-queue:
+                description: "Label: skip_queue"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            ci-patchwork:
+                description: "Label: ci-patchwork"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            engine-patch:
+                description: "Label: engine-patch"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            ci-patchwork-waived:
+                description: "Label: ci-patchwork-waived"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            ci-checklist-complete:
+                description: "Label: ci-checklist-complete"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-multi-node:
+                description: "Priority criterion: multi-node"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-agentic:
+                description: "Priority criterion: agentic"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-eval-only:
+                description: "Priority criterion: eval-only"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-fp4:
+                description: "Priority criterion: fp4"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-mtp:
+                description: "Priority criterion: mtp"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-eagle:
+                description: "Priority criterion: eagle"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-eagle3:
+                description: "Priority criterion: eagle3"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-sglang:
+                description: "Priority criterion: sglang"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-vllm:
+                description: "Priority criterion: vllm"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-dynamo-sglang:
+                description: "Priority criterion: dynamo-sglang"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-dynamo-vllm:
+                description: "Priority criterion: dynamo-vllm"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-glm5:
+                description: "Priority criterion: glm5"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-glm5-1:
+                description: "Priority criterion: glm5.1"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-kimik2-5:
+                description: "Priority criterion: kimik2.5"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-kimik3:
+                description: "Priority criterion: kimik3"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-dsv4:
+                description: "Priority criterion: dsv4"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-minimaxm3:
+                description: "Priority criterion: minimaxm3"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-qwen3-5:
+                description: "Priority criterion: qwen3.5"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-dsr1:
+                description: "Priority criterion: dsr1"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-checklist-complete:
+                description: "Priority criterion: checklist-complete"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+            priority-patchwork:
+                description: "Priority criterion: patchwork"
+                required: false
+                type: choice
+                default: "false"
+                options: ["false", "true"]
+
+jobs:
+    setup:
+        runs-on: ubuntu-latest
+        outputs:
+            search-space-config: ${{ steps.setup.outputs.search-space-config }}
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              with:
+                  fetch-depth: 0
+
+            - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+            - id: setup
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  TRIM_CONC: ${{ inputs.sweep-mode == 'sweep-enabled' }}
+                  ALL_EVALS: ${{ inputs.all-evals }}
+                  EVALS_ONLY: ${{ inputs.evals-only }}
+                  SWEEP_MODE: ${{ inputs.sweep-mode }}
+                  SKIP_QUEUE: ${{ inputs.skip-queue }}
+                  CI_PATCHWORK: ${{ inputs.ci-patchwork }}
+                  ENGINE_PATCH: ${{ inputs.engine-patch }}
+                  CI_PATCHWORK_WAIVED: ${{ inputs.ci-patchwork-waived }}
+                  CI_CHECKLIST_COMPLETE: ${{ inputs.ci-checklist-complete }}
+                  PRIORITY_MULTI_NODE: ${{ inputs.priority-multi-node }}
+                  PRIORITY_AGENTIC: ${{ inputs.priority-agentic }}
+                  PRIORITY_EVAL_ONLY: ${{ inputs.priority-eval-only }}
+                  PRIORITY_FP4: ${{ inputs.priority-fp4 }}
+                  PRIORITY_MTP: ${{ inputs.priority-mtp }}
+                  PRIORITY_EAGLE: ${{ inputs.priority-eagle }}
+                  PRIORITY_EAGLE3: ${{ inputs.priority-eagle3 }}
+                  PRIORITY_SGLANG: ${{ inputs.priority-sglang }}
+                  PRIORITY_VLLM: ${{ inputs.priority-vllm }}
+                  PRIORITY_DYNAMO_SGLANG: ${{ inputs.priority-dynamo-sglang }}
+                  PRIORITY_DYNAMO_VLLM: ${{ inputs.priority-dynamo-vllm }}
+                  PRIORITY_GLM5: ${{ inputs.priority-glm5 }}
+                  PRIORITY_GLM5_1: ${{ inputs.priority-glm5-1 }}
+                  PRIORITY_KIMIK2_5: ${{ inputs.priority-kimik2-5 }}
+                  PRIORITY_KIMIK3: ${{ inputs.priority-kimik3 }}
+                  PRIORITY_DSV4: ${{ inputs.priority-dsv4 }}
+                  PRIORITY_MINIMAXM3: ${{ inputs.priority-minimaxm3 }}
+                  PRIORITY_QWEN3_5: ${{ inputs.priority-qwen3-5 }}
+                  PRIORITY_DSR1: ${{ inputs.priority-dsr1 }}
+                  PRIORITY_CHECKLIST_COMPLETE: ${{ inputs.priority-checklist-complete }}
+                  PRIORITY_PATCHWORK: ${{ inputs.priority-patchwork }}
+              run: |
+
+                  BASE_REF="${{ inputs.base-ref }}"
+                  HEAD_REF="${{ inputs.head-ref }}"
+                  if [ -z "$HEAD_REF" ]; then
+                      HEAD_REF="${{ github.sha }}"
+                  fi
+
+                  declare -A PRIORITY_FLAGS=(
+                      [multi-node]="$PRIORITY_MULTI_NODE"
+                      [agentic]="$PRIORITY_AGENTIC"
+                      [eval-only]="$PRIORITY_EVAL_ONLY"
+                      [fp4]="$PRIORITY_FP4"
+                      [mtp]="$PRIORITY_MTP"
+                      [eagle]="$PRIORITY_EAGLE"
+                      [eagle3]="$PRIORITY_EAGLE3"
+                      [sglang]="$PRIORITY_SGLANG"
+                      [vllm]="$PRIORITY_VLLM"
+                      [dynamo-sglang]="$PRIORITY_DYNAMO_SGLANG"
+                      [dynamo-vllm]="$PRIORITY_DYNAMO_VLLM"
+                      [glm5]="$PRIORITY_GLM5"
+                      [glm5.1]="$PRIORITY_GLM5_1"
+                      [kimik2.5]="$PRIORITY_KIMIK2_5"
+                      [kimik3]="$PRIORITY_KIMIK3"
+                      [dsv4]="$PRIORITY_DSV4"
+                      [minimaxm3]="$PRIORITY_MINIMAXM3"
+                      [qwen3.5]="$PRIORITY_QWEN3_5"
+                      [dsr1]="$PRIORITY_DSR1"
+                      [checklist-complete]="$PRIORITY_CHECKLIST_COMPLETE"
+                      [patchwork]="$PRIORITY_PATCHWORK"
+                  )
+                  PRIORITY_CRITERIA="[]"
+                  for name in "${!PRIORITY_FLAGS[@]}"; do
+                      if [ "${PRIORITY_FLAGS[$name]}" = "true" ]; then
+                          PRIORITY_CRITERIA=$(jq -c --arg name "$name" '. + [$name]' <<<"$PRIORITY_CRITERIA")
+                      fi
+                  done
+
+                  # Labels that downstream sweep/canary jobs and ci_priority.py key off of
+                  LABELS_JSON=$(jq -cn \
+                      --arg sweepMode "$SWEEP_MODE" \
+                      --argjson skipQueue "$SKIP_QUEUE" \
+                      --argjson ciPatchwork "$CI_PATCHWORK" \
+                      --argjson enginePatch "$ENGINE_PATCH" \
+                      --argjson ciPatchworkWaived "$CI_PATCHWORK_WAIVED" \
+                      --argjson ciChecklistComplete "$CI_CHECKLIST_COMPLETE" \
+                      '[$sweepMode] + (if $skipQueue then ["skip_queue"] else [] end)
+                        + (if $ciPatchwork then ["ci-patchwork"] else [] end)
+                        + (if $enginePatch then ["engine-patch"] else [] end)
+                        + (if $ciPatchworkWaived then ["ci-patchwork-waived"] else [] end)
+                        + (if $ciChecklistComplete then ["ci-checklist-complete"] else [] end)
+                        | map(select(. != "none"))')
+
+                  CMD=(
+                      uv run --no-project --with pydantic --with pyyaml --python 3.12 \
+                      "${GITHUB_WORKSPACE}/upstream/InferenceX/utils/process_changelog.py"
+                      --changelog-file "${GITHUB_WORKSPACE}/upstream/InferenceX/perf-changelog.yaml"
+                      --base-ref "$BASE_REF"
+                      --head-ref "$HEAD_REF"
+                  )
+                  if [ "$TRIM_CONC" = "true" ]; then
+                      CMD+=(--trim-conc)
+                  fi
+                  if [ "$ALL_EVALS" = "true" ]; then
+                      CMD+=(--all-evals)
+                  fi
+                  if [ "$EVALS_ONLY" = "true" ]; then
+                      CMD+=(--evals-only)
+                  fi
+
+                  CONFIG_JSON=$("${CMD[@]}")
+                  CONFIG_JSON=$(printf '%s' "$CONFIG_JSON" | uv run --no-project --with pyyaml --python 3.12 \
+                    "${GITHUB_WORKSPACE}/upstream/InferenceX/utils/ci_priority.py" \
+                    --event-name "workflow_dispatch" \
+                    --queue-namespace "${{ github.run_id }}:${{ github.run_attempt }}" \
+                    --labels-json "$LABELS_JSON" \
+                    --pr-number 0 \
+                    --criteria-json "$PRIORITY_CRITERIA")
+
+                  echo "search-space-config=$CONFIG_JSON" >> "$GITHUB_OUTPUT"
+
+    canary-select:
+        needs: setup
+        if: ${{ inputs.sweep-mode == 'full-sweep-enabled' || inputs.sweep-mode == 'full-sweep-fail-fast' }}
+        runs-on: ubuntu-latest
+        outputs:
+            canary-config: ${{ steps.pick.outputs.canary-config }}
+            remaining-search-space-config: ${{ steps.pick.outputs.remaining-search-space-config }}
+        steps:
+            - id: pick
+              env:
+                  SEARCH_SPACE: ${{ needs.setup.outputs.search-space-config }}
+              run: |
+                  selection=$(jq -c '
+                    def remove_one($needle):
+                      if $needle == null then .
+                      else
+                        (index($needle)) as $idx
+                        | if $idx == null then . else del(.[$idx]) end
+                      end;
+
+                    # Canary is a benchmark-only smoke test — exclude entries
+                    # whose primary purpose is eval (run-eval == true) so the
+                    # picked canary never runs an eval pass.
+                    (((.single_node["1k1k"] // []) + (.single_node["8k1k"] // []))
+                      | map(select(.["run-eval"] != true))) as $candidates
+                    | (if ($candidates | length) == 0 then null else ($candidates | min_by(.conc)) end) as $canary
+                    | {
+                        canary: (if $canary == null then [] else [$canary] end),
+                        remaining: (
+                          .
+                          | .single_node = (.single_node // {})
+                          | .single_node["1k1k"] = ((.single_node["1k1k"] // []) | remove_one($canary))
+                          | .single_node["8k1k"] = ((.single_node["8k1k"] // []) | remove_one($canary))
+                        )
+                      }
+                  ' <<<"$SEARCH_SPACE")
+                  echo "canary-config=$(jq -c '.canary' <<<"$selection")" >> "$GITHUB_OUTPUT"
+                  echo "remaining-search-space-config=$(jq -c '.remaining' <<<"$selection")" >> "$GITHUB_OUTPUT"
+
+    canary-sweep:
+        needs: canary-select
+        if: ${{ needs.canary-select.outputs.canary-config != '' && needs.canary-select.outputs.canary-config != '[]' }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: canary /
+        strategy:
+            fail-fast: false
+            matrix:
+                config: ${{ fromJson(needs.canary-select.outputs.canary-config) }}
+        secrets: inherit
+        with:
+            exp-name: ${{ matrix.config.exp-name }}
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            priority: ${{ matrix.config.priority }}
+            queue-token: ${{ matrix.config['queue-token'] }}
+            skip-queue-pr: ${{ matrix.config['skip-queue-pr'] || '' }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            router: ${{ matrix.config.router && toJson(matrix.config.router) || '' }}
+            kv-p2p-transfer: ${{ matrix.config['kv-p2p-transfer'] || '' }}
+            tp: ${{ matrix.config.tp }}
+            pp: ${{ matrix.config.pp }}
+            dcp-size: ${{ matrix.config.dcp-size }}
+            pcp-size: ${{ matrix.config.pcp-size }}
+            ep: ${{ matrix.config.ep }}
+            dp-attn: ${{ matrix.config.dp-attn }}
+            conc: ${{ matrix.config.conc }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            run-eval: false
+
+    sweep-multi-node-1k1k:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).multi_node['1k1k']) != 'null'
+            }}
+        uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+        name: multi-node 1k1k /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson(needs.setup.outputs.search-space-config).multi_node['1k1k'] }}
+        secrets: inherit
+        with: &multi-node-inputs
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            priority: ${{ matrix.config.priority }}
+            queue-token: ${{ matrix.config['queue-token'] }}
+            skip-queue-pr: ${{ matrix.config['skip-queue-pr'] || '' }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            router: ${{ matrix.config.router && toJson(matrix.config.router) || '' }}
+            kv-p2p-transfer: ${{ matrix.config['kv-p2p-transfer'] || '' }}
+            exp-name: ${{ matrix.config.exp-name }}
+            conc-list: ${{ toJson(matrix.config.conc) }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            prefill-hardware: ${{ matrix.config.prefill.hardware }}
+            decode-hardware: ${{ matrix.config.decode.hardware }}
+
+            prefill-num-worker: ${{ matrix.config.prefill.num-worker }}
+            prefill-tp: ${{ matrix.config.prefill.tp }}
+            prefill-pp: ${{ matrix.config.prefill.pp }}
+            prefill-dcp-size: ${{ matrix.config.prefill.dcp-size }}
+            prefill-pcp-size: ${{ matrix.config.prefill.pcp-size }}
+            prefill-ep: ${{ matrix.config.prefill.ep }}
+            prefill-dp-attn: ${{ matrix.config.prefill.dp-attn }}
+            prefill-additional-settings: ${{ toJson(matrix.config.prefill.additional-settings) }}
+
+            decode-num-worker: ${{ matrix.config.decode.num-worker }}
+            decode-tp: ${{ matrix.config.decode.tp }}
+            decode-pp: ${{ matrix.config.decode.pp }}
+            decode-dcp-size: ${{ matrix.config.decode.dcp-size }}
+            decode-pcp-size: ${{ matrix.config.decode.pcp-size }}
+            decode-ep: ${{ matrix.config.decode.ep }}
+            decode-dp-attn: ${{ matrix.config.decode.dp-attn }}
+            decode-additional-settings: ${{ toJson(matrix.config.decode.additional-settings) }}
+            run-eval: false
+
+    sweep-multi-node-8k1k:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).multi_node['8k1k']) != 'null'
+            }}
+        uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+        name: multi-node 8k1k /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson(needs.setup.outputs.search-space-config).multi_node['8k1k'] }}
+        secrets: inherit
+        with: *multi-node-inputs
+
+    sweep-single-node-1k1k:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson((needs.canary-sweep.result == 'success' && needs.canary-select.outputs.remaining-search-space-config) || needs.setup.outputs.search-space-config).single_node['1k1k']) != 'null' &&
+              toJson(fromJson((needs.canary-sweep.result == 'success' && needs.canary-select.outputs.remaining-search-space-config) || needs.setup.outputs.search-space-config).single_node['1k1k']) != '[]'
+            }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: single-node 1k1k /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson((needs.canary-sweep.result == 'success' && needs.canary-select.outputs.remaining-search-space-config) || needs.setup.outputs.search-space-config).single_node['1k1k'] }}
+        secrets: inherit
+        with: &single-node-inputs
+            exp-name: ${{ matrix.config.exp-name }}
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            priority: ${{ matrix.config.priority }}
+            queue-token: ${{ matrix.config['queue-token'] }}
+            skip-queue-pr: ${{ matrix.config['skip-queue-pr'] || '' }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            router: ${{ matrix.config.router && toJson(matrix.config.router) || '' }}
+            kv-p2p-transfer: ${{ matrix.config['kv-p2p-transfer'] || '' }}
+            tp: ${{ matrix.config.tp }}
+            pp: ${{ matrix.config.pp }}
+            dcp-size: ${{ matrix.config.dcp-size }}
+            pcp-size: ${{ matrix.config.pcp-size }}
+            ep: ${{ matrix.config.ep }}
+            dp-attn: ${{ matrix.config.dp-attn }}
+            conc: ${{ matrix.config.conc }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            run-eval: ${{ matrix.config.run-eval }}
+
+    sweep-single-node-8k1k:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson((needs.canary-sweep.result == 'success' && needs.canary-select.outputs.remaining-search-space-config) || needs.setup.outputs.search-space-config).single_node['8k1k']) != 'null' &&
+              toJson(fromJson((needs.canary-sweep.result == 'success' && needs.canary-select.outputs.remaining-search-space-config) || needs.setup.outputs.search-space-config).single_node['8k1k']) != '[]'
+            }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: single-node 8k1k /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson((needs.canary-sweep.result == 'success' && needs.canary-select.outputs.remaining-search-space-config) || needs.setup.outputs.search-space-config).single_node['8k1k'] }}
+        secrets: inherit
+        with: *single-node-inputs
+
+    sweep-agentic:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).single_node['agentic']) != 'null'
+            }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: agentic /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson(needs.setup.outputs.search-space-config).single_node['agentic'] }}
+        secrets: inherit
+        with:
+            exp-name: ${{ matrix.config.exp-name }}
+            runner: ${{ matrix.config.runner }}
+            priority: ${{ matrix.config.priority }}
+            queue-token: ${{ matrix.config['queue-token'] }}
+            skip-queue-pr: ${{ matrix.config['skip-queue-pr'] || '' }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            router: ${{ matrix.config.router && toJson(matrix.config.router) || '' }}
+            kv-p2p-transfer: ${{ matrix.config['kv-p2p-transfer'] || '' }}
+            tp: ${{ matrix.config.tp }}
+            pp: ${{ matrix.config.pp }}
+            dcp-size: ${{ matrix.config.dcp-size }}
+            pcp-size: ${{ matrix.config.pcp-size }}
+            ep: ${{ matrix.config.ep }}
+            dp-attn: ${{ matrix.config.dp-attn }}
+            conc: ${{ matrix.config.conc }}
+            kv-offloading: ${{ matrix.config.kv-offloading }}
+            kv-offload-backend: ${{ matrix.config['kv-offload-backend'].name }}
+            kv-offload-backend-metadata: ${{ matrix.config['kv-offload-backend'] && toJson(matrix.config['kv-offload-backend']) || '' }}
+            total-cpu-dram-gb: ${{ matrix.config.total-cpu-dram-gb }}
+            duration: ${{ matrix.config.duration }}
+            isl: '0'
+            osl: '0'
+            max-model-len: '0'
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ 'false' }}
+            run-eval: false
+            scenario-type: agentic-coding
+
+    sweep-multi-node-agentic:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).multi_node['agentic']) != 'null'
+            }}
+        uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+        name: multi-node agentic /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson(needs.setup.outputs.search-space-config).multi_node['agentic'] }}
+        secrets: inherit
+        with:
+            exp-name: ${{ matrix.config.exp-name }}
+            isl: '0'
+            osl: '0'
+            max-model-len: '0'
+            runner: ${{ matrix.config.runner }}
+            priority: ${{ matrix.config.priority }}
+            queue-token: ${{ matrix.config['queue-token'] }}
+            skip-queue-pr: ${{ matrix.config['skip-queue-pr'] || '' }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            router: ${{ matrix.config.router && toJson(matrix.config.router) || '' }}
+            kv-p2p-transfer: ${{ matrix.config['kv-p2p-transfer'] || '' }}
+            conc-list: ${{ toJson(matrix.config.conc) }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            prefill-hardware: ${{ matrix.config.prefill.hardware }}
+            decode-hardware: ${{ matrix.config.decode.hardware }}
+            prefill-num-worker: ${{ matrix.config.prefill.num-worker }}
+            prefill-tp: ${{ matrix.config.prefill.tp }}
+            prefill-pp: ${{ matrix.config.prefill.pp }}
+            prefill-dcp-size: ${{ matrix.config.prefill.dcp-size }}
+            prefill-pcp-size: ${{ matrix.config.prefill.pcp-size }}
+            prefill-ep: ${{ matrix.config.prefill.ep }}
+            prefill-dp-attn: ${{ matrix.config.prefill.dp-attn }}
+            prefill-additional-settings: ${{ toJson(matrix.config.prefill.additional-settings) }}
+            decode-num-worker: ${{ matrix.config.decode.num-worker }}
+            decode-tp: ${{ matrix.config.decode.tp }}
+            decode-pp: ${{ matrix.config.decode.pp }}
+            decode-dcp-size: ${{ matrix.config.decode.dcp-size }}
+            decode-pcp-size: ${{ matrix.config.decode.pcp-size }}
+            decode-ep: ${{ matrix.config.decode.ep }}
+            decode-dp-attn: ${{ matrix.config.decode.dp-attn }}
+            decode-additional-settings: ${{ toJson(matrix.config.decode.additional-settings) }}
+            conc: ${{ matrix.config.conc[0] }}
+            kv-offloading: ${{ matrix.config.kv-offloading }}
+            kv-offload-backend: ${{ matrix.config['kv-offload-backend'].name }}
+            kv-offload-backend-metadata: ${{ matrix.config['kv-offload-backend'] && toJson(matrix.config['kv-offload-backend']) || '' }}
+            total-cpu-dram-gb: ${{ matrix.config['total-cpu-dram-gb'] }}
+            duration: ${{ matrix.config.duration }}
+            run-eval: false
+            scenario-type: agentic-coding
+
+    sweep-evals:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).evals) != '[]' &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).evals) != 'null'
+            }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: eval /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson(needs.setup.outputs.search-space-config).evals }}
+        secrets: inherit
+        with:
+            exp-name: ${{ matrix.config.exp-name }}
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            priority: ${{ matrix.config.priority }}
+            queue-token: ${{ matrix.config['queue-token'] }}
+            skip-queue-pr: ${{ matrix.config['skip-queue-pr'] || '' }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            router: ${{ matrix.config.router && toJson(matrix.config.router) || '' }}
+            kv-p2p-transfer: ${{ matrix.config['kv-p2p-transfer'] || '' }}
+            tp: ${{ matrix.config.tp }}
+            pp: ${{ matrix.config.pp }}
+            dcp-size: ${{ matrix.config.dcp-size }}
+            pcp-size: ${{ matrix.config.pcp-size }}
+            ep: ${{ matrix.config.ep }}
+            dp-attn: ${{ matrix.config.dp-attn }}
+            conc: ${{ matrix.config.conc }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            run-eval: true
+            eval-only: true
+
+    sweep-agentic-evals:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).agentic_evals) != '[]' &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).agentic_evals) != 'null'
+            }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: agentic eval /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson(needs.setup.outputs.search-space-config).agentic_evals }}
+        secrets: inherit
+        with:
+            exp-name: ${{ matrix.config.exp-name }}
+            runner: ${{ matrix.config.runner }}
+            priority: ${{ matrix.config.priority }}
+            queue-token: ${{ matrix.config['queue-token'] }}
+            skip-queue-pr: ${{ matrix.config['skip-queue-pr'] || '' }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            router: ${{ matrix.config.router && toJson(matrix.config.router) || '' }}
+            kv-p2p-transfer: ${{ matrix.config['kv-p2p-transfer'] || '' }}
+            tp: ${{ matrix.config.tp }}
+            pp: ${{ matrix.config.pp }}
+            dcp-size: ${{ matrix.config.dcp-size }}
+            pcp-size: ${{ matrix.config.pcp-size }}
+            ep: ${{ matrix.config.ep }}
+            dp-attn: ${{ matrix.config.dp-attn }}
+            conc: ${{ matrix.config.conc }}
+            kv-offloading: ${{ matrix.config.kv-offloading }}
+            kv-offload-backend: ${{ matrix.config['kv-offload-backend'].name }}
+            kv-offload-backend-metadata: ${{ matrix.config['kv-offload-backend'] && toJson(matrix.config['kv-offload-backend']) || '' }}
+            total-cpu-dram-gb: ${{ matrix.config.total-cpu-dram-gb }}
+            duration: ${{ matrix.config.duration }}
+            isl: '0'
+            osl: '0'
+            max-model-len: '0'
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ 'false' }}
+            run-eval: true
+            eval-only: true
+            scenario-type: agentic-coding
+
+    sweep-multi-node-evals:
+        needs: [setup, canary-select, canary-sweep]
+        if: >-
+            ${{
+              !cancelled() &&
+              needs.setup.result == 'success' &&
+              (needs.canary-sweep.result == 'success' || needs.canary-sweep.result == 'skipped') &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).multinode_evals) != '[]' &&
+              toJson(fromJson(needs.setup.outputs.search-space-config).multinode_evals) != 'null'
+            }}
+        uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+        name: multi-node eval /
+        strategy:
+            fail-fast: ${{ inputs.sweep-mode == 'full-sweep-fail-fast' || inputs.sweep-mode == 'full-sweep-fail-fast-no-canary' }}
+            matrix:
+                config: ${{ fromJson(needs.setup.outputs.search-space-config).multinode_evals }}
+        secrets: inherit
+        with:
+            exp-name: ${{ matrix.config.exp-name }}
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            priority: ${{ matrix.config.priority }}
+            queue-token: ${{ matrix.config['queue-token'] }}
+            skip-queue-pr: ${{ matrix.config['skip-queue-pr'] || '' }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            router: ${{ matrix.config.router && toJson(matrix.config.router) || '' }}
+            kv-p2p-transfer: ${{ matrix.config['kv-p2p-transfer'] || '' }}
+            conc-list: ${{ toJson(matrix.config.conc) }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            prefill-hardware: ${{ matrix.config.prefill.hardware }}
+            decode-hardware: ${{ matrix.config.decode.hardware }}
+            prefill-num-worker: ${{ matrix.config.prefill.num-worker }}
+            prefill-tp: ${{ matrix.config.prefill.tp }}
+            prefill-pp: ${{ matrix.config.prefill.pp }}
+            prefill-dcp-size: ${{ matrix.config.prefill.dcp-size }}
+            prefill-pcp-size: ${{ matrix.config.prefill.pcp-size }}
+            prefill-ep: ${{ matrix.config.prefill.ep }}
+            prefill-dp-attn: ${{ matrix.config.prefill.dp-attn }}
+            prefill-additional-settings: ${{ toJson(matrix.config.prefill.additional-settings) }}
+            decode-num-worker: ${{ matrix.config.decode.num-worker }}
+            decode-tp: ${{ matrix.config.decode.tp }}
+            decode-pp: ${{ matrix.config.decode.pp }}
+            decode-dcp-size: ${{ matrix.config.decode.dcp-size }}
+            decode-pcp-size: ${{ matrix.config.decode.pcp-size }}
+            decode-ep: ${{ matrix.config.decode.ep }}
+            decode-dp-attn: ${{ matrix.config.decode.dp-attn }}
+            decode-additional-settings: ${{ toJson(matrix.config.decode.additional-settings) }}
+            run-eval: true
+            eval-only: true
+            eval-conc: ${{ matrix.config['eval-all-concs'] && join(matrix.config.conc, ' ') || matrix.config['eval-conc'] }}
+
+    collect-results:
+        needs:
+            [
+                canary-sweep,
+                sweep-single-node-1k1k,
+                sweep-single-node-8k1k,
+                sweep-agentic,
+                sweep-multi-node-1k1k,
+                sweep-multi-node-8k1k,
+                sweep-multi-node-agentic,
+                setup,
+            ]
+        if: >-
+            ${{
+              always() &&
+              needs.setup.result == 'success' &&
+              (
+                needs.canary-sweep.result == 'success' ||
+                needs.sweep-single-node-1k1k.result != 'skipped' ||
+                needs.sweep-single-node-8k1k.result != 'skipped' ||
+                needs.sweep-multi-node-1k1k.result != 'skipped' ||
+                needs.sweep-multi-node-8k1k.result != 'skipped'
+              )
+            }}
+        uses: ./.github/workflows/collect-results.yml
+        secrets: inherit
+        with:
+            result-prefix: "bmk"
+
+    collect-evals:
+        needs: [sweep-evals, sweep-agentic-evals, sweep-multi-node-evals, setup]
+        if: ${{ always() && needs.setup.result != 'skipped' && (needs.sweep-evals.result != 'skipped' || needs.sweep-agentic-evals.result != 'skipped' || needs.sweep-multi-node-evals.result != 'skipped') }}
+        uses: ./.github/workflows/collect-evals.yml
+        secrets: inherit
+
+    upload-changelog-metadata:
+        needs: [setup, collect-results]
+        if: ${{ always() && needs.setup.result == 'success' }}
+        runs-on: ubuntu-latest
+        steps:
+            - name: Extract and save changelog metadata
+              run: |
+                  cat <<'CONFIGEOF' > _full_config.json
+                  ${{ needs.setup.outputs.search-space-config }}
+                  CONFIGEOF
+                  jq '.changelog_metadata' _full_config.json > changelog_metadata.json
+                  rm -f _full_config.json
+
+            - name: Upload changelog artifact
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: changelog-metadata
+                  path: changelog_metadata.json
+
+    calc-success-rate:
+        needs: collect-results
+        if: ${{ always() && needs.collect-results.result != 'skipped'}}
+        runs-on: ubuntu-latest
+
+        env:
+            RESULTS_DIR: "results/"
+            STATS_FILENAME: "run_stats"
+            GITHUB_TOKEN: ${{ secrets.REPO_PAT }}
+
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              with:
+                  token: ${{ secrets.REPO_PAT }}
+                  fetch-depth: 0
+
+            - name: Download results artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  path: ${{ env.RESULTS_DIR }}
+                  pattern: results_*
+
+            - name: Install python dependencies
+              run: pip install PyGithub
+
+            - name: Calculate success rate
+              run: python3 utils/calc_success_rate.py "$STATS_FILENAME"
+
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: "run-stats"
+                  path: ${{ env.STATS_FILENAME }}.json
