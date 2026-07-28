@@ -80,7 +80,7 @@ on:
                     dsr1, checklist-complete, patchwork
                 required: false
                 type: string
-                default: ""
+                default: "minimaxm3,agentic"
             e2e-test-config:
                 description: "Optional: also run e2e-tests.yml with this generate-cli-command. 'none' skips it."
                 required: false
