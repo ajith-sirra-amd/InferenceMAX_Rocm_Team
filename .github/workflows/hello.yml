@@ -1,0 +1,22 @@
+name: Hello World Workflow
+
+# Defines what events trigger the pipeline
+on:
+  push:
+    branches:
+      - chore/sa-agentx-v1.0  # Runs automatically when you push code here
+  workflow_dispatch:          # Adds a manual "Run workflow" button in GitHub Actions UI
+
+# Defines the execution steps
+jobs:
+  say-hello:
+    runs-on: ubuntu-latest    # Uses a standard Linux environment
+    
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Print a greeting message
+        run: |
+          echo "Hello World!"
+          echo "GitHub Actions is working perfectly on your branch!"
