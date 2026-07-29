@@ -2353,3 +2353,28 @@ dsv4-fp8-mi325x-vllm-mtp:
       # is 55.8%. conc128 passed cleanly on the memory-tightest SKU (MI300X);
       # cap 8k1k MTP at 128 (normal holds 256, 1k1k holds 512).
       - { tp: 8, conc-start: 4, conc-end: 128, spec-decoding: mtp }
+
+glm5.2-fp4-mi355x-sglang-agentic:
+  image: lmsysorg/sglang-rocm:v0.5.16-rocm720-mi35x-20260728
+  model: amd/GLM-5.2-MXFP4
+  model-prefix: glm5.2
+  runner: cluster:mi355x-amds
+  precision: fp4
+  framework: sglang
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - dram-utilization: 0.80
+      search-space:
+      # DP-attention arm (tp8/dp8/ep8, conc >= 32) is BLOCKED upstream: the
+      # DSA DP path hangs a collective under long-context prefill on ROCm
+      # v0.5.14 - 0/96 storm completions until the watchdog kills the
+      # scheduler, reproduced on two nodes with hicache ratios 1.5/1/0.5,
+      # with the DSv4 DP collective envs, and with hicache fully disabled
+      # (short prompts work; the hang is prefill-load-specific). The
+      # benchmark script keeps dormant DEP support for when upstream fixes
+      # it; until then the TP arm extends to conc 64 for high-conc coverage.
+      # TEMPORARY single-point matrix while cluster capacity is constrained
+      # (2026-07-21): full list was [1, 2, 4, 8, 16, 24, 32, 48, 64].
+      # Restore before merge.
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: mooncake }, conc-list: [8] }
