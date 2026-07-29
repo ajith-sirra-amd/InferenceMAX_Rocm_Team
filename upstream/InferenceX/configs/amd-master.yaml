@@ -2364,7 +2364,7 @@ glm5.2-fp4-mi355x-sglang-agentic:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.80
+    - dram-utilization: 0.85
       search-space:
       # DP-attention arm (tp8/dp8/ep8, conc >= 32) is BLOCKED upstream: the
       # DSA DP path hangs a collective under long-context prefill on ROCm
@@ -2377,4 +2377,4 @@ glm5.2-fp4-mi355x-sglang-agentic:
       # TEMPORARY single-point matrix while cluster capacity is constrained
       # (2026-07-21): full list was [1, 2, 4, 8, 16, 24, 32, 48, 64].
       # Restore before merge.
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: mooncake }, conc-list: [8] }
+      - { tp: 4, ep: 1, kv-offloading: dram, kv-offload-backend: { name: mooncake }, conc-list: [16, 24, 32] }
