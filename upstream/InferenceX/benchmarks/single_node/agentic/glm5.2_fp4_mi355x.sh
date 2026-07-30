@@ -66,19 +66,24 @@ export SGLANG_TIMEOUT_KEEP_ALIVE=900
 # runs DSA models the same way).
 export SGLANG_OPT_USE_TOPK_V2=false
 
-# HiCache L2 + Mooncake L3 on every point (sizing rationale in the header).
-# Per-arm L2 ratio, both measured on-node. TP arm (182.7 GB/rank device
-# pool): the working set oversubscribes the device pool ~3x at conc 32, so
-# the host tier is what carries the radix hits - ratio 1.5 (~2.9 TB pinned
-# incl. sidecars) validates through the conc-24 long-context storm. The
-# DP-attention arm (159.4 GB/rank) only runs at conc >= 32, where each DP
-# rank's ~8 sessions nearly fit in its own device pool (~1.5-1.6M of 1.7M
-# tokens at conc 64) and the host tier just absorbs overflow - ratio 1.5
-# boots but the host OOM killer takes the server mid-storm at conc 48, so
-# it runs ratio 0.5 (~1.2 TB pinned, ~1.8 TB of load headroom) at
-# negligible hit-rate cost.
+# HiCache L2 (host DRAM), optionally extended with Mooncake L3.
+# KV_OFFLOADING=dram requires KV_OFFLOAD_BACKEND=hicache or mooncake.
+#
+# Per-arm L2 ratio (sizing rationale below) applies to both backends unless
+# overridden via HICACHE_RATIO. TP arm (182.7 GB/rank device pool): the
+# working set oversubscribes the device pool ~3x at conc 32, so the host
+# tier is what carries the radix hits - ratio 1.5 (~2.9 TB pinned incl.
+# sidecars) validates through the conc-24 long-context storm for the
+# mooncake arm. The DP-attention arm (159.4 GB/rank) only runs at conc >=
+# 32, where each DP rank's ~8 sessions nearly fit in its own device pool
+# (~1.5-1.6M of 1.7M tokens at conc 64) and the host tier just absorbs
+# overflow - ratio 1.5 boots but the host OOM killer takes the server
+# mid-storm at conc 48, so it runs ratio 0.5 (~1.2 TB pinned, ~1.8 TB of
+# load headroom) at negligible hit-rate cost. The hicache-only arm has no
+# L3 to fall back on, so these ratios are unvalidated there - override with
+# HICACHE_RATIO if the host OOMs or hit-rate is poor.
 CACHE_ARGS=()
-if require_agentic_kv_offload_backend mooncake; then
+if agentic_kv_offload_enabled; then
     if [ "$DP_ATTENTION" = "true" ]; then
         HICACHE_RATIO="${HICACHE_RATIO:-0.5}"
     else
@@ -87,12 +92,24 @@ if require_agentic_kv_offload_backend mooncake; then
     HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through}"
     HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
     HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-page_first_direct}"
-    L3_PER_RANK_GB="${L3_PER_RANK_GB:-40}"
-    python3 -c "from mooncake.store import MooncakeDistributedStore" >/dev/null
-    MOONCAKE_MASTER_PORT=$((PORT + 12000))
-    MOONCAKE_MASTER_LOG="$RESULT_DIR/mooncake_master.log"
-    MOONCAKE_CONFIG_PATH="$RESULT_DIR/mooncake_config.json"
-    cat > "$MOONCAKE_CONFIG_PATH" <<EOF
+    case "$KV_OFFLOAD_BACKEND" in
+        hicache)
+            echo "HiCache (GPU+host DRAM only): ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
+            CACHE_ARGS=(
+                --enable-hierarchical-cache
+                --hicache-ratio "$HICACHE_RATIO"
+                --hicache-write-policy "$HICACHE_WRITE_POLICY"
+                --hicache-io-backend "$HICACHE_IO_BACKEND"
+                --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
+            )
+            ;;
+        mooncake)
+            L3_PER_RANK_GB="${L3_PER_RANK_GB:-40}"
+            python3 -c "from mooncake.store import MooncakeDistributedStore" >/dev/null
+            MOONCAKE_MASTER_PORT=$((PORT + 12000))
+            MOONCAKE_MASTER_LOG="$RESULT_DIR/mooncake_master.log"
+            MOONCAKE_CONFIG_PATH="$RESULT_DIR/mooncake_config.json"
+            cat > "$MOONCAKE_CONFIG_PATH" <<EOF
 {
   "local_hostname": "127.0.0.1",
   "metadata_server": "P2PHANDSHAKE",
@@ -103,25 +120,31 @@ if require_agentic_kv_offload_backend mooncake; then
   "device_name": ""
 }
 EOF
-    export SGLANG_HICACHE_MOONCAKE_CONFIG_PATH="$MOONCAKE_CONFIG_PATH"
-    mooncake_master --port "$MOONCAKE_MASTER_PORT" \
-        --default_kv_lease_ttl=120s \
-        --eviction_high_watermark_ratio=0.80 \
-        --eviction_ratio=0.10 > "$MOONCAKE_MASTER_LOG" 2>&1 &
-    MOONCAKE_MASTER_PID=$!
-    sleep 2
-    kill -0 "$MOONCAKE_MASTER_PID"
-    echo "HiCache+Mooncake: ratio=$HICACHE_RATIO, l3_per_rank=${L3_PER_RANK_GB} GB, dram_budget=${TOTAL_CPU_DRAM_GB} GB"
-    CACHE_ARGS=(
-        --enable-hierarchical-cache
-        --hicache-ratio "$HICACHE_RATIO"
-        --hicache-size 0
-        --hicache-write-policy "$HICACHE_WRITE_POLICY"
-        --hicache-io-backend "$HICACHE_IO_BACKEND"
-        --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
-        --hicache-storage-backend mooncake
-        --hicache-storage-prefetch-policy wait_complete
-    )
+            export SGLANG_HICACHE_MOONCAKE_CONFIG_PATH="$MOONCAKE_CONFIG_PATH"
+            mooncake_master --port "$MOONCAKE_MASTER_PORT" \
+                --default_kv_lease_ttl=120s \
+                --eviction_high_watermark_ratio=0.80 \
+                --eviction_ratio=0.10 > "$MOONCAKE_MASTER_LOG" 2>&1 &
+            MOONCAKE_MASTER_PID=$!
+            sleep 2
+            kill -0 "$MOONCAKE_MASTER_PID"
+            echo "HiCache+Mooncake: ratio=$HICACHE_RATIO, l3_per_rank=${L3_PER_RANK_GB} GB, dram_budget=${TOTAL_CPU_DRAM_GB} GB"
+            CACHE_ARGS=(
+                --enable-hierarchical-cache
+                --hicache-ratio "$HICACHE_RATIO"
+                --hicache-size 0
+                --hicache-write-policy "$HICACHE_WRITE_POLICY"
+                --hicache-io-backend "$HICACHE_IO_BACKEND"
+                --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
+                --hicache-storage-backend mooncake
+                --hicache-storage-prefetch-policy wait_complete
+            )
+            ;;
+        *)
+            echo "Error: unsupported KV_OFFLOAD_BACKEND '$KV_OFFLOAD_BACKEND' (expected: hicache or mooncake)" >&2
+            exit 1
+            ;;
+    esac
 fi
 
 # Arm selection. TP arm keeps the FP8 sibling's cookbook batch-shaping
