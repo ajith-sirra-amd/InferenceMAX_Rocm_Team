@@ -93,6 +93,12 @@ if agentic_kv_offload_enabled; then
     HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
     HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-page_first_direct}"
     case "$KV_OFFLOAD_BACKEND" in
+        hicache-kernel)
+            # Experiment: replace the default 'direct' memcpy backend with the
+            # kernel-based async backend, which can overlap transfers across the
+            # 8 TP ranks and reduce the host→GPU restore latency visible in TTFT.
+            HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-kernel}"
+            ;&  # fall through to hicache
         hicache)
             echo "HiCache (GPU+host DRAM only): ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
             CACHE_ARGS=(
@@ -141,7 +147,7 @@ EOF
             )
             ;;
         *)
-            echo "Error: unsupported KV_OFFLOAD_BACKEND '$KV_OFFLOAD_BACKEND' (expected: hicache or mooncake)" >&2
+            echo "Error: unsupported KV_OFFLOAD_BACKEND '$KV_OFFLOAD_BACKEND' (expected: hicache, hicache-kernel, or mooncake)" >&2
             exit 1
             ;;
     esac
