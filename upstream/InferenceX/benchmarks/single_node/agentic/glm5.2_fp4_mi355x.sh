@@ -93,6 +93,27 @@ if agentic_kv_offload_enabled; then
     HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
     HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-page_first_direct}"
     case "$KV_OFFLOAD_BACKEND" in
+        hicache-mooncake-store)
+            # Experiment: keep HiCache L2 (host DRAM) but attach Mooncake as the
+            # storage backend with wait_complete prefetch policy. This gives the
+            # host->GPU transfer the same async prefetch pipeline that Mooncake uses
+            # natively, without enabling the full Mooncake L3 tier (hicache-size=0
+            # keeps the L2 pool as-is; only the prefetch mechanism changes).
+            # Hypothesis: the wait_complete policy triggers the host->GPU transfer
+            # earlier in the pipeline (at accept time, not schedule time), hiding
+            # most of the restore latency that causes HiCache's 11s TTFT vs 1.4s.
+            echo "HiCache+Mooncake-store (async prefetch): ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
+            CACHE_ARGS=(
+                --enable-hierarchical-cache
+                --hicache-ratio "$HICACHE_RATIO"
+                --hicache-size 0
+                --hicache-write-policy "$HICACHE_WRITE_POLICY"
+                --hicache-io-backend "$HICACHE_IO_BACKEND"
+                --hicache-mem-layout "$HICACHE_MEM_LAYOUT"
+                --hicache-storage-backend mooncake
+                --hicache-storage-prefetch-policy wait_complete
+            )
+            ;;
         hicache)
             echo "HiCache (GPU+host DRAM only): ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
             CACHE_ARGS=(
@@ -141,7 +162,7 @@ EOF
             )
             ;;
         *)
-            echo "Error: unsupported KV_OFFLOAD_BACKEND '$KV_OFFLOAD_BACKEND' (expected: hicache or mooncake)" >&2
+            echo "Error: unsupported KV_OFFLOAD_BACKEND '$KV_OFFLOAD_BACKEND' (expected: hicache, hicache-mooncake-store, or mooncake)" >&2
             exit 1
             ;;
     esac

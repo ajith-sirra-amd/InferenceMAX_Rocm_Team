@@ -2368,6 +2368,25 @@ glm5.2-fp4-mi355x-sglang-agentic:
       search-space:
       - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [12] }
 
+# Experiment: HiCache + Mooncake as async storage backend (wait_complete prefetch).
+# Hypothesis: attaching Mooncake as the prefetch layer (hicache-size=0 keeps host
+# DRAM as L2; no Mooncake L3) triggers the host->GPU transfer earlier in the
+# pipeline, hiding most of the restore latency behind scheduling rather than on
+# the critical path of TTFT. Compared to plain hicache at conc=8: 11s vs 1.4s TTFT.
+glm5.2-fp4-mi355x-sglang-agentic-hicache-prefetch-wait:
+  image: lmsysorg/sglang-rocm:v0.5.16-rocm720-mi35x-20260728
+  model: amd/GLM-5.2-MXFP4
+  model-prefix: glm5.2
+  runner: cluster:mi355x-amds
+  precision: fp4
+  framework: sglang
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - dram-utilization: 0.85
+      search-space:
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: hicache-mooncake-store }, conc-list: [8] }
+
 glm5.2-fp4-mi355x-sglang-agentic-mtp:
   image: lmsysorg/sglang-rocm:v0.5.16-rocm720-mi35x-20260728
   model: amd/GLM-5.2-MXFP4
