@@ -205,6 +205,7 @@ SGLANG_CMD=(
     --port "$SGLANG_BACKEND_PORT"
     --trust-remote-code
     "${PARALLEL_ARGS[@]}"
+    --kv-cache-dtype fp8_e4m3
     --dsa-prefill-backend tilelang
     --dsa-decode-backend tilelang
     # GLM-5.2 emits the GLM-4.7-style tool-call format; glm47 is required for
