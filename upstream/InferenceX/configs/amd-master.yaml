@@ -2366,7 +2366,7 @@ glm5.2-fp4-mi355x-sglang-agentic:
     agentic-coding:
     - dram-utilization: 0.85
       search-space:
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: mooncake }, conc-list: [16] }
+      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: mooncake }, conc-list: [16] }
       # - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [16] }
 
 glm5.2-fp4-mi355x-sglang-agentic-mtp:
