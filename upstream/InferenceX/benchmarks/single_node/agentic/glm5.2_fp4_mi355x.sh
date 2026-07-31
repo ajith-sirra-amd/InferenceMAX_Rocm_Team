@@ -93,6 +93,12 @@ if agentic_kv_offload_enabled; then
     HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
     HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-page_first_direct}"
     case "$KV_OFFLOAD_BACKEND" in
+        hicache-memfrac088)
+            # Experiment: raise MEM_FRACTION_STATIC to 0.88 (vs default 0.85 at
+            # conc<=16) to give the GPU KV pool more headroom, trading activation
+            # space for fewer host evictions. Override applied after the conc-arm
+            # block sets the default value.
+            ;&  # fall through to hicache
         hicache)
             echo "HiCache (GPU+host DRAM only): ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
             CACHE_ARGS=(
@@ -192,6 +198,15 @@ elif [ "$CONC" -le 16 ]; then
 else
     CHUNKED_PREFILL_SIZE=32768
     export AGENTIC_WARMUP_GRACE_PERIOD=3600
+fi
+# Backend-encoded overrides applied after the conc-based arm selection.
+if [ "$KV_OFFLOAD_BACKEND" = "hicache-memfrac088" ]; then
+    # Raise GPU KV pool headroom to 0.88 (conc<=16 arm defaults to 0.85).
+    # The comment above notes 0.85 OOMs at conc<=16 with 131072-chunk;
+    # here we keep 131072-chunk unchanged and only test whether 0.88 fits
+    # (activation peak at 131072 tokens/rank is ~7 GiB, device pool at
+    # 0.85 = ~183 GB/rank vs 0.88 = ~190 GB/rank on a 218-GB-pool MI355X).
+    MEM_FRACTION_STATIC=0.88
 fi
 MAX_RUNNING_REQUESTS=$((1 * CONC))
 [ "$MAX_RUNNING_REQUESTS" -gt 256 ] && MAX_RUNNING_REQUESTS=256
