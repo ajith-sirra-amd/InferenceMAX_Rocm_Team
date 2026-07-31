@@ -123,6 +123,9 @@ if agentic_kv_offload_enabled; then
 }
 EOF
             export SGLANG_HICACHE_MOONCAKE_CONFIG_PATH="$MOONCAKE_CONFIG_PATH"
+            # MooncakeStore (hicache storage backend) calls load_from_env() which
+            # reads MOONCAKE_MASTER (host:port), not SGLANG_HICACHE_MOONCAKE_CONFIG_PATH.
+            export MOONCAKE_MASTER="127.0.0.1:$MOONCAKE_MASTER_PORT"
             mooncake_master --port "$MOONCAKE_MASTER_PORT" \
                 --default_kv_lease_ttl=120s \
                 --eviction_high_watermark_ratio=0.80 \
