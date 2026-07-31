@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # if [[ $RUNNER_NAME == *mi355* ]]; then
 #     HF_HUB_CACHE_MOUNT="/data/models"
-if [[ $RUNNER_NAME == *mi355* ]]; then
+if [[ $RUNNER_NAME == *gbt* ]]; then
     HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
-elif [[ $RUNNER_TYPE == *mi355x* ]]; then
+elif [[ $RUNNER_NAME == *m15_g17* ]]; then
+    HF_HUB_CACHE_MOUNT="/data/models"
+elif [[ $RUNNER_NAME == *p02_g17* ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/models"
-elif [[ $RUNNER_TYPE == "mi355x-p02-g57" ]]; then
-    HF_HUB_CACHE_MOUNT="/mnt/hf_hub_cache/"
-elif [[ $RUNNER_TYPE == "mi350x_ajith_do" ]]; then
-    HF_HUB_CACHE_MOUNT="/data/hf_hub_cache/"
 fi
 
 MODEL_CODE="${EXP_NAME%%_*}"
