@@ -93,6 +93,12 @@ if agentic_kv_offload_enabled; then
     HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
     HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-page_first_direct}"
     case "$KV_OFFLOAD_BACKEND" in
+        hicache-chunk32k)
+            # Experiment: force CHUNKED_PREFILL_SIZE=32768 even at conc<=16 to
+            # narrow prefill chunks and reduce restore-blocking TTFT. The conc-arm
+            # block below sets 131072 for conc<=16; the override after that block
+            # resets it to 32768 when this backend is active.
+            ;&  # fall through to hicache
         hicache)
             echo "HiCache (GPU+host DRAM only): ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
             CACHE_ARGS=(
@@ -192,6 +198,13 @@ elif [ "$CONC" -le 16 ]; then
 else
     CHUNKED_PREFILL_SIZE=32768
     export AGENTIC_WARMUP_GRACE_PERIOD=3600
+fi
+# Backend-encoded overrides applied after the conc-based arm selection.
+if [ "$KV_OFFLOAD_BACKEND" = "hicache-chunk32k" ]; then
+    # Force narrow prefill chunks regardless of CONC band (conc<=16 arm sets
+    # 131072 by default; 32768 matches the high-conc arm to test whether
+    # smaller chunks reduce restore-blocking TTFT).
+    CHUNKED_PREFILL_SIZE=32768
 fi
 MAX_RUNNING_REQUESTS=$((1 * CONC))
 [ "$MAX_RUNNING_REQUESTS" -gt 256 ] && MAX_RUNNING_REQUESTS=256
