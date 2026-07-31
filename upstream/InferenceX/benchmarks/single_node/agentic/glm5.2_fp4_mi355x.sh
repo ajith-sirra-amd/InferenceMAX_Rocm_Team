@@ -102,6 +102,34 @@ if agentic_kv_offload_enabled; then
             # Hypothesis: the wait_complete policy triggers the host->GPU transfer
             # earlier in the pipeline (at accept time, not schedule time), hiding
             # most of the restore latency that causes HiCache's 11s TTFT vs 1.4s.
+            #
+            # Mooncake's storage backend still requires a running mooncake_master
+            # for client coordination even when not used as an L3 storage tier.
+            # Use a minimal global_segment_size (4 GB) since no KV data is stored
+            # in Mooncake — it is only the transfer/prefetch mechanism that matters.
+            python3 -c "from mooncake.store import MooncakeDistributedStore" >/dev/null
+            MOONCAKE_MASTER_PORT=$((PORT + 12000))
+            MOONCAKE_MASTER_LOG="$RESULT_DIR/mooncake_master.log"
+            MOONCAKE_CONFIG_PATH="$RESULT_DIR/mooncake_config.json"
+            cat > "$MOONCAKE_CONFIG_PATH" <<EOF
+{
+  "local_hostname": "127.0.0.1",
+  "metadata_server": "P2PHANDSHAKE",
+  "master_server_address": "127.0.0.1:$MOONCAKE_MASTER_PORT",
+  "global_segment_size": "4gb",
+  "local_buffer_size": "4gb",
+  "protocol": "tcp",
+  "device_name": ""
+}
+EOF
+            export SGLANG_HICACHE_MOONCAKE_CONFIG_PATH="$MOONCAKE_CONFIG_PATH"
+            mooncake_master --port "$MOONCAKE_MASTER_PORT" \
+                --default_kv_lease_ttl=120s \
+                --eviction_high_watermark_ratio=0.80 \
+                --eviction_ratio=0.10 > "$MOONCAKE_MASTER_LOG" 2>&1 &
+            MOONCAKE_MASTER_PID=$!
+            sleep 2
+            kill -0 "$MOONCAKE_MASTER_PID"
             echo "HiCache+Mooncake-store (async prefetch): ratio=$HICACHE_RATIO, write_policy=$HICACHE_WRITE_POLICY, io_backend=$HICACHE_IO_BACKEND, mem_layout=$HICACHE_MEM_LAYOUT"
             CACHE_ARGS=(
                 --enable-hierarchical-cache
