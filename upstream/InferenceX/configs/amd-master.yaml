@@ -2364,9 +2364,9 @@ glm5.2-fp4-mi355x-sglang-agentic:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.85
+    - dram-utilization: 0.80
       search-space:
-      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [12] }
+      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [8, 12, 16] }
 
 glm5.2-fp4-mi355x-sglang-agentic-mtp:
   image: lmsysorg/sglang-rocm:v0.5.16-rocm720-mi35x-20260728
@@ -2378,7 +2378,6 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.85
+    - dram-utilization: 0.80
       search-space:
-      - { tp: 4, ep: 1, kv-offloading: dram, kv-offload-backend: { name: mooncake }, conc-list: [8, 16, 24], spec-decoding: mtp }
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: mooncake }, conc-list: [8, 16, 24], spec-decoding: mtp }
+      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [4, 8, 12, 16], spec-decoding: mtp }
