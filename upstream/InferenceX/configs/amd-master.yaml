@@ -2380,4 +2380,4 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp:
     agentic-coding:
     - dram-utilization: 0.85
       search-space:
-      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [8, 12], spec-decoding: mtp }
+      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [12], spec-decoding: mtp }
