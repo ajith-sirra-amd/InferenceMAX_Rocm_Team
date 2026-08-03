@@ -27,6 +27,7 @@ fi
 rocm-smi || true
 amd-smi || true
 
+PORT=8765
 
 # A server killed on this node minutes earlier (previous job, crashed run)
 # can still be draining its ~1.4 TB of HBM: KFD reclaim takes minutes, and
