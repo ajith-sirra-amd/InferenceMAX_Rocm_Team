@@ -185,7 +185,7 @@ VLLM_CMD=(
     --host 0.0.0.0
     --port "$PORT"
     "${PARALLEL_ARGS[@]}"
-    --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS}"
+    --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS, \"attention_backend\": \"TRITON_ATTN\"}"
     --trust-remote-code
     --block-size 128
     --gpu-memory-utilization 0.80
