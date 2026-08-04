@@ -2378,6 +2378,6 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.85
+    - dram-utilization: 0.8
       search-space:
       - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [14], spec-decoding: mtp }

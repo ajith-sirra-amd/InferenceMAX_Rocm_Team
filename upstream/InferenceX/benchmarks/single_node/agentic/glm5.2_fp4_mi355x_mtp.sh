@@ -165,7 +165,7 @@ fi
 USE_SGLANG_ROUTER=false
 SGLANG_BACKEND_PORT="$PORT"
 PARALLEL_ARGS=(--tp "$TP" --ep-size "$EP_SIZE")
-MEM_FRACTION_STATIC=0.85
+MEM_FRACTION_STATIC=0.80
 if [ "$DP_ATTENTION" = "true" ]; then
     USE_SGLANG_ROUTER=true
     export AIPERF_HTTP_X_SMG_ROUTING_KEY_FROM_CORRELATION_ID=true
@@ -189,7 +189,7 @@ elif [ "$CONC" -le 16 ]; then
     # like the FP8 sibling's low-conc band (0.85 OOMs the device mid-replay:
     # "Tried to allocate 6.86 GiB ... 5.15 GiB is free", run 29751563205).
     CHUNKED_PREFILL_SIZE=131072
-    MEM_FRACTION_STATIC=0.85
+    MEM_FRACTION_STATIC=0.80
 else
     CHUNKED_PREFILL_SIZE=32768
     export AGENTIC_WARMUP_GRACE_PERIOD=3600
