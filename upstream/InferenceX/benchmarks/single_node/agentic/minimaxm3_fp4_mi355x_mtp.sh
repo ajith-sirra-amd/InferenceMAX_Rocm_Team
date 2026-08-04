@@ -39,6 +39,7 @@ else
 fi
 
 DRAFT_MODEL="Inferact/MiniMax-M3-EAGLE3"
+NUM_SPEC_TOKENS=5
 
 resolve_trace_source
 install_agentic_deps
