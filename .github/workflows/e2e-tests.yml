@@ -32,7 +32,7 @@ on:
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys kimik2.7-fp4-mi355x-vllm-agentic-lmcache"               
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm3-fp8-mi355x-vllm-agentic-lmcache"
-                # - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys minimaxm3-fp4-mi355x-vllm-agentic"
+                - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys minimaxm3-fp4-mi355x-vllm-agentic"
                 - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic"
                 - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic-mtp"
                 - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic-mtp-dpa"
