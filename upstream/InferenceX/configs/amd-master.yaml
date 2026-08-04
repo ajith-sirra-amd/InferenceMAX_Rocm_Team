@@ -2397,7 +2397,7 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp-dpa:
       - { tp: 4, ep: 4, dp-attn: true, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [10], spec-decoding: mtp }
 
 minimaxm3-fp4-mi355x-vllm-agentic:
-  image: vllm/vllm-openai-rocm:latest-base
+  image: vllm/vllm-openai-rocm:v0.25.1
   model: amd/MiniMax-M3-MXFP4
   model-prefix: minimaxm3
   runner: cluster:mi355x-amds
