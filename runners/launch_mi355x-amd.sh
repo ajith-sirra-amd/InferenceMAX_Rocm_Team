@@ -54,7 +54,7 @@ export MODEL_PATH="${HF_HUB_CACHE%/}/${MODEL_NAME}"
 
 export PYTHONDONTWRITEBYTECODE=1
 
-docker run --rm --init --network host --shm-size=128g --name=$server_name \
+docker run --rm --init --network host --shm-size=512g --name=$server_name \
 --ipc=host \
 --ulimit memlock=-1 --ulimit stack=67108864 --pull always \
 --privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
