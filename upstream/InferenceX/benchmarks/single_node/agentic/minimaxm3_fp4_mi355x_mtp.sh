@@ -125,6 +125,7 @@ VLLM_CMD=(
     --block-size 128
     --gpu-memory-utilization 0.85
     --language-model-only
+    --enable-prefix-caching
     --attention-backend TRITON_ATTN
     --moe-backend aiter
     --kv-cache-dtype fp8
