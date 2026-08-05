@@ -11,6 +11,8 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
+EVAL_ONLY="false"
+
 # Force the eval framework to lm-eval for this recipe. run_eval derives its
 # default as swebench for agentic scenarios (scenario_default=swebench when
 # IS_AGENTIC/SCENARIO_TYPE=agentic-coding), but EVAL_FRAMEWORK takes precedence
