@@ -21,7 +21,9 @@ check_env_vars MODEL TP CONC KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB 
 
 echo "MODEL=$MODEL TP=$TP CONC=$CONC KV_OFFLOADING=$KV_OFFLOADING TOTAL_CPU_DRAM_GB=$TOTAL_CPU_DRAM_GB RESULT_DIR=$RESULT_DIR DURATION=$DURATION EP_SIZE=$EP_SIZE DP_ATTENTION=$DP_ATTENTION"
 
-PORT=8888
+DRAFT_MODEL="Inferact/MiniMax-M3-EAGLE3-GQA"
+NUM_SPEC_TOKENS=3
+SYNTHETIC_ACCEPT_LEN=2.78
 
 if [[ -n "${SLURM_JOB_ID+x}" ]]; then
     echo "JOB $SLURM_JOB_ID running on $SLURMD_NODENAME"
@@ -46,9 +48,6 @@ amd-smi || true
 
 resolve_trace_source
 install_agentic_deps
-
-DRAFT_MODEL="Inferact/MiniMax-M3-EAGLE3"
-NUM_SPEC_TOKENS=5
 
 # ---- Server config ----------------------------------------------------------
 SERVER_LOG="$RESULT_DIR/server.log"
@@ -90,6 +89,12 @@ elif [ "$EP_SIZE" -gt 1 ]; then
     PARALLEL_ARGS+=(--enable-expert-parallel)
 fi
 
+if [ "${EVAL_ONLY}" = "true" ]; then
+    SPEC_CONFIG="{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS, \"attention_backend\": \"TRITON_ATTN\"}"
+else
+    SPEC_CONFIG="{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS, \"attention_backend\": \"TRITON_ATTN\", \"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
+fi
+
 echo "Starting vllm server..."
 export PYTHONNOUSERSITE=1
 
@@ -98,6 +103,8 @@ export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS=1
+
+export VLLM_ROCM_SHUFFLE_KV_CACHE_LAYOUT=0
 # INT4 quantized all-reduce for the (~1.5 MB) decode all-reduces, which are the
 # single biggest decode kernel at high concurrency. The MIN_SIZE_KB override is
 # required: vLLM's default INT4 quick-reduce size gate for (bf16, TP4) is 16 MB,
@@ -112,17 +119,18 @@ VLLM_CMD=(
     --host 0.0.0.0
     --port "$PORT"
     "${PARALLEL_ARGS[@]}"
-    --speculative-config "{\"method\": \"eagle3\", \"model\": \"$DRAFT_MODEL\", \"num_speculative_tokens\": $NUM_SPEC_TOKENS, \"attention_backend\": \"TRITON_ATTN\"}"
     --trust-remote-code
     --block-size 128
-    --gpu-memory-utilization 0.80
+    --gpu-memory-utilization 0.85
     --language-model-only
     --attention-backend TRITON_ATTN
     --moe-backend aiter
     --kv-cache-dtype fp8
     --tool-call-parser minimax_m3
     --enable-auto-tool-choice
+    --default-chat-template-kwargs '{"thinking_mode":"enabled"}'
     --max-num-seqs "$CONC"
+    --speculative-config "$SPEC_CONFIG"
     "${OFFLOAD_ARGS[@]}"
 )
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
