@@ -10,13 +10,11 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-# ---- DEBUG: restrict this run to just two SWE-bench instances ----------------
-# Validating the reasoning-parser fix (interleaved <mm:think> round-trip) on the
-# two instances that previously degenerated into command-repeat loops. Remove
-# these two exports to restore a full 300-instance sweep.
-# export SWEBENCH_AGENT_FILTER='django__django-(11630|15498)$'
-# export SWEBENCH_EXPECTED_INSTANCES=2
-# -----------------------------------------------------------------------------
+# Force the eval framework to lm-eval for this recipe. run_eval derives its
+# default as swebench for agentic scenarios (scenario_default=swebench when
+# IS_AGENTIC/SCENARIO_TYPE=agentic-coding), but EVAL_FRAMEWORK takes precedence
+# over that default (benchmark_lib.sh: framework=${EVAL_FRAMEWORK:-...}), so
+# setting it here makes the effective framework always lm-eval, never swebench.
 export EVAL_FRAMEWORK="lm-eval"
 
 check_env_vars MODEL TP CONC KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
@@ -142,7 +140,6 @@ echo "Server PID: $SERVER_PID"
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 # ---- Run benchmark ----------------------------------------------------------
-EVAL_ONLY="true"
 if [ "${EVAL_ONLY}" = "true" ]; then
     run_eval --port "$PORT"
 else

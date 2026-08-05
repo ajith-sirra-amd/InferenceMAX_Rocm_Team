@@ -13,6 +13,7 @@ concurrency:
           github.event.label.name != 'full-sweep-fail-fast-no-canary' &&
           github.event.label.name != 'all-evals' &&
           github.event.label.name != 'evals-only' &&
+          github.event.label.name != 'agentx-fast' &&
           github.event.label.name != 'skip_queue' &&
           github.event.label.name != 'ci-patchwork' &&
           github.event.label.name != 'engine-patch' &&
@@ -55,6 +56,7 @@ jobs:
               github.event.label.name == 'full-sweep-fail-fast-no-canary' ||
               github.event.label.name == 'all-evals' ||
               github.event.label.name == 'evals-only' ||
+              github.event.label.name == 'agentx-fast' ||
               github.event.label.name == 'skip_queue' ||
               github.event.label.name == 'ci-patchwork' ||
               github.event.label.name == 'engine-patch' ||
@@ -136,6 +138,7 @@ jobs:
             github.event.action == 'synchronize' &&
             !github.event.pull_request.draft &&
             !contains(github.event.pull_request.labels.*.name, 'evals-only') &&
+            !contains(github.event.pull_request.labels.*.name, 'agentx-fast') &&
             (
               contains(github.event.pull_request.labels.*.name, 'full-sweep-enabled') ||
               contains(github.event.pull_request.labels.*.name, 'non-canary-full-sweep-enabled') ||
@@ -187,6 +190,7 @@ jobs:
               (
                 github.event_name == 'pull_request' &&
                 !github.event.pull_request.draft &&
+                github.event.pull_request.head.repo.full_name == github.repository &&
                 needs.check-changelog.outputs.skip-pr-sweep != 'true' &&
                 (
                   contains(github.event.pull_request.labels.*.name, 'sweep-enabled') ||
@@ -204,6 +208,7 @@ jobs:
                   github.event.label.name == 'full-sweep-fail-fast-no-canary' ||
                   github.event.label.name == 'all-evals' ||
                   github.event.label.name == 'evals-only' ||
+                  github.event.label.name == 'agentx-fast' ||
                   github.event.label.name == 'skip_queue' ||
                   github.event.label.name == 'ci-patchwork' ||
                   github.event.label.name == 'engine-patch' ||
@@ -622,6 +627,7 @@ jobs:
             disagg: ${{ 'false' }}
             run-eval: false
             scenario-type: agentic-coding
+            agentx-fast: ${{ contains(github.event.pull_request.labels.*.name, 'agentx-fast') }}
 
     sweep-multi-node-agentic:
         needs: [setup, canary-select, canary-sweep]
@@ -685,6 +691,7 @@ jobs:
             duration: ${{ matrix.config.duration }}
             run-eval: false
             scenario-type: agentic-coding
+            agentx-fast: ${{ contains(github.event.pull_request.labels.*.name, 'agentx-fast') }}
 
     sweep-evals:
         needs: [setup, canary-select, canary-sweep]
@@ -732,7 +739,7 @@ jobs:
             run-eval: true
             eval-only: true
 
-    # Agentic (SWE-bench) eval rows carry the agentic input shape, so they are
+    # Agentic GSM8K eval rows carry the agentic input shape, so they are
     # dispatched with sweep-agentic's inputs rather than sweep-evals' fixed-seq-len
     # inputs (isl/osl/max-model-len, which agentic rows don't have).
     sweep-agentic-evals:
@@ -1097,7 +1104,8 @@ jobs:
               github.event.label.name == 'full-sweep-fail-fast' ||
               github.event.label.name == 'full-sweep-fail-fast-no-canary' ||
               github.event.label.name == 'all-evals' ||
-              github.event.label.name == 'evals-only'
+              github.event.label.name == 'evals-only' ||
+              github.event.label.name == 'agentx-fast'
             )
         runs-on: ubuntu-latest
         permissions:

@@ -13,8 +13,10 @@ GIN (GPU-Initiated Networking) inter-node — with two algorithms selected per c
 Because both map exactly onto the two combine contracts CollectiveX already models, the
 scale_up_domain two-level combine oracle in ep_harness applies unchanged.
 
-BF16 only. NCCL EP's FP8 machinery exists but RELEASE.md lists it unsupported/untested this
-release, so this adapter does not override the FP8 encode hooks (SUPPORTED_PRECISIONS=("bf16",)).
+BF16 only: `contrib/nccl_ep/RELEASE.md` says "No FP8 support", so this adapter does not
+override the FP8 encode hooks (SUPPORTED_PRECISIONS=("bf16",)). Re-test before trusting that
+note — the C library at our pinned commit reads `inputs->scales` and switches on e4m3/e5m2,
+and the two documented FP8 exclusions are expert-major layouts we do not use.
 
 Communicator bootstrap: NCCL EP forms its OWN NCCL communicator (separate from PyTorch's
 process group) via ``Communicator.init(nranks, rank, unique_id)``. Upstream broadcasts the
@@ -65,6 +67,7 @@ _UNIQUE_ID_MAX_BYTES = 256
 
 class NCCLEPBackend(EPBackend):
     name = "nccl-ep"
+    maturity = "candidate"  # NVIDIA's library, but no engine exposes an NCCL-EP selector
     # One library, two algorithms selected by args.mode. kernel_generation and the combine
     # semantics are switched to their LL values in __init__ (mirrors ep_deepep_v2).
     #   normal      -> HT / FLAT layout / unweighted-rank-sum combine.
@@ -73,6 +76,7 @@ class NCCLEPBackend(EPBackend):
     SUPPORTED_MODES = ("normal", "low-latency")
     SUPPORTED_PRECISIONS = ("bf16",)
     stage_device_work = False
+    combine_input_attr = "combine_input_t"  # this adapter's combine reads combine_input_t
     combine_needs_redispatch = False
     dispatch_needs_combine_cleanup = False
     combine_weight_semantics = "unweighted-rank-sum"
@@ -100,8 +104,7 @@ class NCCLEPBackend(EPBackend):
         # NCCL EP's handle is explicitly reusable across dispatch/combine cycles (ep_test.py
         # cached mode redispatches and recombines on one handle), so — unlike DeepEP's legacy
         # low-latency Buffer — no timed component needs a fresh dispatch or a draining combine;
-        # both modes keep combine_needs_redispatch / dispatch_needs_combine_cleanup False. If
-        # on-metal bring-up ever shows LL result-tensor aliasing, flip both to True for LL.
+        # both modes keep combine_needs_redispatch / dispatch_needs_combine_cleanup False.
         self._algorithm = Algorithm.LOW_LATENCY if self._ll else Algorithm.HIGH_THROUGHPUT
         self._layout = Layout.EXPERT_MAJOR if self._ll else Layout.FLAT
         # send_only=0 on every dispatch/combine (no staged execution). Handle.complete() is
@@ -113,6 +116,9 @@ class NCCLEPBackend(EPBackend):
         self._combine_cfg = CombineConfig(send_only=0)
         self._comm = None
         self._ep_group = None
+        # Exactly ONE handle per group, rebound per problem shape — see _ensure_handle.
+        self._handle = None
+        self._bound = None
 
     def buffer_cap(self, args):
         if self._ll:
@@ -155,7 +161,7 @@ class NCCLEPBackend(EPBackend):
         # the internode DevComm with ginForceEnable + a RAIL connection type, so we do NOT force
         # NCCL_GIN_TYPE here — forcing GDAKI(3) can prevent NCCL from selecting a fabric-supported
         # GIN transport and trips an illegal-memory-access in the GIN dispatch kernel (on-metal
-        # checkpoint; still under cross-node bring-up). Set NCCL_GIN_TYPE in the launcher env if a
+        # checkpoint). Set NCCL_GIN_TYPE in the launcher env if a
         # specific transport must be pinned.
         length = torch.zeros(1, dtype=torch.int64, device=self.device)
         payload = torch.zeros(_UNIQUE_ID_MAX_BYTES, dtype=torch.uint8, device=self.device)
@@ -237,15 +243,34 @@ class NCCLEPBackend(EPBackend):
             self._ht_disp_counts_t = self._t(self._ht_disp_counts)
 
     def _ensure_handle(self, p):
-        """Create (once, cached on the problem) the reusable per-step handle for p's routing.
+        """Bind the group's single handle to p's routing, creating it on first use.
 
-        create_handle is collective and, in HT, performs the metadata exchange that fixes the
-        received-token count — so it must run in the same order on every rank. It first runs
-        inside Pass 1's untimed warm (ladder order, identical across ranks); the timed passes
-        then reuse the cached handle and never enter a collective here.
+        ONE handle per group, rebound per shape — never one handle per shape. `buffer_idx`, the
+        LL double-buffer parity selector, is per-HANDLE state, but the buffers it selects are
+        offsets into the per-GROUP rdma_buffer: two handles built from the same group config
+        resolve to the SAME parity-0/parity-1 count+flag slots and advance their parity
+        independently, so one handle's "next buffer, safe to clean" is the other's "current
+        buffer, in flight". Interleaving handles therefore corrupts the signalling even when it
+        does not hang outright, which makes every latency drawn from such a run suspect. Filed
+        upstream as NVIDIA/nccl#2303; reproduced on a stock wheel by ladder [1] (one handle,
+        clean) vs ladder [1, 2] (two handles, 64 dispatch + 6 combine receive timeouts -> 719).
+
+        `ncclEpInitHandle` takes no token count and `ncclEpUpdateHandle` is documented as a
+        "per-step collective: prepare the handle for the given top-k routing decisions", so
+        rebinding IS the intended lifecycle. This also matches the other three backends, which
+        each allocate one object sized to the ladder maximum and vary the token count per call.
+
+        Both create_handle and update are collective, and HT additionally performs the metadata
+        exchange that fixes the received-token count, so they must run in the same order on
+        every rank. They only ever run on a shape CHANGE, and every timed component is preceded
+        by an untimed warm() on its own problem — so the collective always lands in warm (or in
+        the oracle passes), never inside a timed window. Re-entering with the already-bound
+        problem returns immediately without a collective or a sync.
         """
         cached = getattr(p, "_nccl", None)
         if cached is not None:
+            if self._bound is not cached:
+                self._rebind(cached)
             return cached
         stream = self._stream()
         topk_idx_t = self._t(p.topk_idx)
@@ -270,18 +295,45 @@ class NCCLEPBackend(EPBackend):
                 expert_counters=self._t(h.recv_experts),
                 recv_total_counter=self._t(h.recv_total),
             )
-        h.handle = self._ep_group.create_handle(
-            self._layout,
-            topk_idx_t,
-            layout_info=ht_layout_info,
-            config=HandleConfig(),
-            stream=stream,
+        # LL takes layout_info only on dispatch (the API forbids it on create/update); HT needs
+        # it here so this problem's counters receive its own metadata-exchange results.
+        h.layout_info = ht_layout_info
+        if self._handle is None:
+            self._handle = self._ep_group.create_handle(
+                self._layout,
+                topk_idx_t,
+                layout_info=ht_layout_info,
+                config=HandleConfig(),
+                stream=stream,
+            )
+            h.handle = self._handle
+            torch.cuda.synchronize()
+            if not self._ll:
+                h.count = int(h.recv_total.item())
+            self._bound = h
+        else:
+            h.handle = self._handle
+            self._rebind(h)
+        p._nccl = h
+        return h
+
+    def _rebind(self, h):
+        """Point the single handle at h's routing (collective; untimed callers only).
+
+        Rebinding does not reallocate: `Handle.update` only swaps in the new top-k indices.
+        HT re-reads its received-token count because the metadata exchange recomputes it for
+        this routing; the value is deterministic per problem, so a later rebind to the same
+        problem reproduces it.
+        """
+        self._handle.update(
+            h.topk_idx_t,
+            layout_info=None if self._ll else h.layout_info,
+            stream=self._stream(),
         )
         torch.cuda.synchronize()
         if not self._ll:
             h.count = int(h.recv_total.item())
-        p._nccl = h
-        return h
+        self._bound = h
 
     # ---- transport contract ------------------------------------------------------------------
 
@@ -463,8 +515,11 @@ class NCCLEPBackend(EPBackend):
         return rc
 
     def _destroy_handles(self):
-        # Per-problem handles are cached on the problem namespaces; the group keeps no registry,
-        # so there is nothing to walk here. Handles are released when their problems are GC'd
-        # (Handle.destroy runs in the binding's __del__); the group/comm destroy below reclaims
-        # the device buffers. Kept as a seam in case bring-up needs explicit handle teardown.
-        return
+        # One handle for the whole group, so teardown is a single explicit destroy rather than
+        # waiting on per-problem GC. The problem namespaces still hold a reference to it for
+        # their dispatch/combine calls; dropping _bound first keeps a late rebind from touching
+        # a destroyed handle. The group/comm destroy below reclaims the device buffers.
+        self._bound = None
+        if self._handle is not None:
+            self._handle.destroy()
+            self._handle = None

@@ -163,6 +163,30 @@ stop_gpu_monitor() {
     GPU_MONITOR_PID=""
 }
 
+# Block until the GPUs have released a prior job's memory before starting a run.
+# Polls rocm-smi VRAM% every 10s for up to 15 minutes; succeeds once the busiest
+# GPU is at <=10% VRAM, otherwise returns 1 so the caller aborts rather than
+# starting a benchmark on GPUs still draining the previous run's memory.
+wait_for_amd_gpu_clean() {
+    local gpu_clean=false vram_max i
+    for i in $(seq 1 90); do
+        vram_max=$(rocm-smi --showmemuse 2>/dev/null \
+            | grep -oE "GPU Memory Allocated \(VRAM%\): [0-9]+" \
+            | awk '{if ($NF > m) m = $NF} END {print m+0}')
+        if [ "${vram_max:-0}" -le 10 ]; then
+            echo "GPUs clean (vram%max=$vram_max after $((i * 10))s)"
+            gpu_clean=true
+            break
+        fi
+        echo "waiting for prior-job GPU memory reclaim: vram%max=$vram_max"
+        sleep 10
+    done
+    if [ "$gpu_clean" != "true" ]; then
+        echo "Error: GPUs still draining prior job's memory after 15min" >&2
+        return 1
+    fi
+}
+
 # Return success only while a PID exists and is not a zombie waiting to be
 # reaped. `kill -0` alone treats zombies as live processes.
 _background_process_is_running() {
@@ -1213,11 +1237,6 @@ env.update({
     "timeout": int(os.environ.get("SWEBENCH_AGENT_CMD_TIMEOUT", "300")),
     # Limit billing if cleanup misses a sandbox.
     "runtime_timeout": float(os.environ.get("SWEBENCH_AGENT_RUNTIME_TIMEOUT", "3600")),
-    # Modal sandbox hard lifetime. Must exceed the agent's total run time
-    # (step_limit x per-step latency); otherwise Modal reaps the sandbox
-    # mid-run and every later command fails with "Cannot connect to host
-    # ...modal.host", producing an empty patch even when the fix was correct.
-    "deployment_timeout": float(os.environ.get("SWEBENCH_AGENT_DEPLOYMENT_TIMEOUT", "3600")),
 })
 agent_cpu = os.environ.get("SWEBENCH_AGENT_SANDBOX_CPU", "")
 if agent_cpu:
@@ -1249,23 +1268,15 @@ PYGEN
         slice_args=(--slice "0:${EVAL_LIMIT}")
     fi
 
-    # Optional instance-ID regex filter (re.match anchored at start).
-    # Set SWEBENCH_AGENT_FILTER to run only a subset of instances.
-    local filter_args=()
-    if [ -n "${SWEBENCH_AGENT_FILTER:-}" ]; then
-        filter_args=(--filter "$SWEBENCH_AGENT_FILTER")
-    fi
-
     export MSWEA_COST_TRACKING=ignore_errors
     local expected="${EVAL_LIMIT:-${SWEBENCH_EXPECTED_INSTANCES:-300}}"
-    echo "[swebench-agentic] mini-swe-agent: workers=${SWEBENCH_AGENT_WORKERS:-${CONC:-64}} step_limit=${SWEBENCH_AGENT_STEP_LIMIT:-250} slice=${EVAL_LIMIT:-full} filter=${SWEBENCH_AGENT_FILTER:-none} expected=$expected"
+    echo "[swebench-agentic] mini-swe-agent: workers=${SWEBENCH_AGENT_WORKERS:-${CONC:-64}} step_limit=${SWEBENCH_AGENT_STEP_LIMIT:-250} slice=${EVAL_LIMIT:-full} expected=$expected"
     local agen_rc=0
     mini-extra swebench \
         -c "$cfg" \
         --subset lite --split test \
         --environment-class swerex_modal \
         "${slice_args[@]}" \
-        "${filter_args[@]}" \
         -w "${SWEBENCH_AGENT_WORKERS:-${CONC:-64}}" \
         -o "$gen_dir/agent_out" &
     local mini_pid=$!
@@ -1477,7 +1488,6 @@ run_eval() {
     local scenario_default="lm-eval"
     local scenario_is_agentic=0
     if [ "${IS_AGENTIC:-0}" = "1" ] || [ "${SCENARIO_TYPE:-}" = "agentic-coding" ]; then
-        scenario_default="swebench"
         scenario_is_agentic=1
     fi
 
@@ -1590,6 +1600,7 @@ AIPERF_CLI="${AIPERF_VENV}/bin/aiperf"
 AIPERF_HF_CLI="${AIPERF_VENV}/bin/hf"
 AIPERF_DEPS_READY=0
 AIPERF_FAILED_REQUEST_THRESHOLD="${AIPERF_FAILED_REQUEST_THRESHOLD:-0.10}"
+AIPERF_TRACE_IDLE_GAP_CAP_SECONDS="${AIPERF_TRACE_IDLE_GAP_CAP_SECONDS:-300}"
 
 agentic_pip_install() {
     local pip_install=(python3 -m pip install)
@@ -1637,7 +1648,7 @@ install_agentic_deps() {
     mkdir -p "$AIPERF_UV_CACHE_DIR"
 
     UV_CACHE_DIR="$AIPERF_UV_CACHE_DIR" \
-        "$AIPERF_UV_BIN" venv --python "$(command -v python3)" "$AIPERF_VENV"
+        "$AIPERF_UV_BIN" venv --python "${AIPERF_PYTHON_VERSION:-3.11}" "$AIPERF_VENV"
     UV_CACHE_DIR="$AIPERF_UV_CACHE_DIR" \
         "$AIPERF_UV_BIN" pip install --python "$AIPERF_PYTHON" \
         -r "$AGENTIC_DIR/requirements.txt" \
@@ -1749,14 +1760,21 @@ build_replay_cmd() {
     # the worker threads the server's live assistant response back into the
     # session.
     #
-    # The scenario plugin locks: --cache-bust first_turn_prefix and
-    # --trace-idle-gap-cap-seconds 10 (per-trace idle-gap compression
-    # against parent + subagent request-start timestamps; supersedes the
-    # legacy --use-think-time-only / --inter-turn-delay-cap-seconds path),
-    # and auto-injects them — so we do not pass them. See
+    # The scenario plugin locks --cache-bust first_turn_prefix and a 10-second
+    # whole-system idle cap. InferenceX also applies a 300-second per-trajectory
+    # runtime idle cap below. Source end-to-start delays remain intact; either
+    # cap advances pending timers only while its scope is idle. See
     # utils/aiperf/docs/tutorials/agentx-mvp.md.
     local result_dir="$1"
     local duration="$DURATION"
+    local warmup_requests_per_lane="${AIPERF_WARMUP_REQUESTS_PER_LANE:-10}"
+
+    # Fast mode minimizes setup by advancing each trajectory lane only once
+    # and shortens profiling to 20 minutes.
+    if [[ "${AIPERF_EXPERIMENTAL_FAST:-0}" == "1" ]]; then
+        duration=1200
+        warmup_requests_per_lane=1
+    fi
 
     export AIPERF_DATASET_WEKA_LIVE_ASSISTANT_RESPONSES="${AIPERF_DATASET_WEKA_LIVE_ASSISTANT_RESPONSES:-0}"
     # Dataset configuration (load + reconstruct + inputs.json + mmap)
@@ -1769,6 +1787,9 @@ build_replay_cmd() {
     # aiperf validates that SERVICE_PROFILE_CONFIGURE_TIMEOUT >=
     # DATASET_CONFIGURATION_TIMEOUT at startup. Bump it in lockstep.
     export AIPERF_SERVICE_PROFILE_CONFIGURE_TIMEOUT=1800
+    # Headless realtime metrics are opt-in on current AIPerf main. Enable the
+    # rolling TTFT/ITL/throughput block and emit it every 30 seconds.
+    export AIPERF_UI_REALTIME_METRICS_ENABLED=true
     REPLAY_CMD="$AIPERF_CLI profile --scenario inferencex-agentx-mvp"
     REPLAY_CMD+=" --url http://localhost:$PORT"
     REPLAY_CMD+=" --endpoint /v1/chat/completions"
@@ -1777,6 +1798,7 @@ build_replay_cmd() {
     REPLAY_CMD+=" --model $MODEL"
     REPLAY_CMD+=" --concurrency $CONC"
     REPLAY_CMD+=" --benchmark-duration $duration"
+    REPLAY_CMD+=" --stats-interval 30"
     REPLAY_CMD+=" --random-seed 42"
     # Fail runs once more than 10% of requests error. This keeps known
     # transient low-rate failures from killing long sweeps while still
@@ -1788,10 +1810,17 @@ build_replay_cmd() {
     # least one profile turn after warmup.
     REPLAY_CMD+=" --trajectory-start-min-ratio 0.25"
     REPLAY_CMD+=" --trajectory-start-max-ratio 0.75"
-    # After the normal t* snapshot warmup, continue those exact trajectories
-    # with one-token outputs and no idle delays for 10 minutes. Profiling begins
-    # only after those requests drain and resumes from the resulting live state.
-    REPLAY_CMD+=" --agentic-cache-warmup-duration 600"
+    # After the normal t* snapshot primers, advance every trajectory lane by
+    # this many additional one-token requests with no idle delay. Profiling
+    # begins after those requests drain and resumes from the resulting live
+    # state. Do not pass --burst-phase-starts: AIPerf main's spread default
+    # preserves each lane's recorded phase-start offset.
+    REPLAY_CMD+=" --warmup-requests-per-lane $warmup_requests_per_lane"
+    # Limit observed end-to-start idle time across each complete trajectory
+    # tree, including root and subagent streams. AIPerf advances that tree's
+    # pending timers uniformly without bypassing spawn/join dependencies or
+    # changing request order.
+    REPLAY_CMD+=" --trace-idle-gap-cap-seconds $AIPERF_TRACE_IDLE_GAP_CAP_SECONDS"
     # Give long-context warmup requests up to 30 minutes to drain before
     # declaring warmup failed. Recipes whose saturation arms carry a larger
     # in-flight working set may override via AGENTIC_WARMUP_GRACE_PERIOD
@@ -1814,7 +1843,11 @@ build_replay_cmd() {
     # aiperf's conv-aware routing emits nvext.session_control, a removed POC field
     # (dynamo #9920 / v1.3.0-dev) that current dynamo builds reject with a 400
     # (they moved to router/routing_constraints/agent_context). Default stays on.
-    if [[ "${FRAMEWORK:-}" == dynamo-* && "${AIPERF_USE_DYNAMO_CONV_AWARE_ROUTING:-1}" != "0" ]]; then
+    # New recipes instead set AIPERF_HTTP_X_DYNAMO_SESSION_ID_FROM_CORRELATION_ID=true
+    # to route by X-Dynamo-Session-ID header, which needs no routing CLI flag.
+    if [[ "${FRAMEWORK:-}" == dynamo-* \
+          && "${AIPERF_USE_DYNAMO_CONV_AWARE_ROUTING:-1}" != "0" \
+          && "${AIPERF_HTTP_X_DYNAMO_SESSION_ID_FROM_CORRELATION_ID:-false}" != "true" ]]; then
         REPLAY_CMD+=" --use-dynamo-conv-aware-routing"
         # The upstream 300s affinity TTL is shorter than an overloaded
         # high-concurrency agentic request. Keep bindings alive across long
