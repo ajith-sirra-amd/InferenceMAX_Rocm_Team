@@ -8,6 +8,8 @@ set -x
 #   MODEL, MODEL_PATH, TP, CONC, KV_OFFLOADING, KV_OFFLOAD_BACKEND,
 #   TOTAL_CPU_DRAM_GB, RESULT_DIR, DURATION, EP_SIZE, DP_ATTENTION
 
+EVAL_ONLY="false"
+
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
 # Force the eval framework to lm-eval for this recipe. run_eval derives its
