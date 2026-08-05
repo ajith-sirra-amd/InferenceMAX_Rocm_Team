@@ -1,0 +1,3 @@
+[submodule "upstream/InferenceX/utils/aiperf"]
+	path = upstream/InferenceX/utils/aiperf
+	url = https://github.com/SemiAnalysisAI/aiperf.git
