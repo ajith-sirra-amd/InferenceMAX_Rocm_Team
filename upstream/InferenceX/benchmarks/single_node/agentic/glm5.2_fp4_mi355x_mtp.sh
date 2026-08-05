@@ -172,7 +172,7 @@ if [ "$DP_ATTENTION" = "true" ]; then
     SGLANG_BACKEND_PORT=$((PORT + 1))
     SGLANG_ROUTER_METRICS_PORT=$((PORT + 10000))
     SGLANG_ROUTER_CMD=(python3 -m sglang_router.launch_router)
-    PARALLEL_ARGS+=(--dp "$TP" --enable-dp-attention)
+    PARALLEL_ARGS=(--tp 1 --dp "$TP" --enable-dp-attention)
     CHUNKED_PREFILL_SIZE=32768
     export AGENTIC_WARMUP_GRACE_PERIOD=3600
     # Swap the DP gather collectives to gatherv/reduce-scatter on ROCm
