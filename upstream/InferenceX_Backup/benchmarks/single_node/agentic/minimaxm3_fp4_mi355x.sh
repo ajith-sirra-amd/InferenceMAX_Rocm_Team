@@ -10,7 +10,16 @@ set -x
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
-check_env_vars MODEL MODEL_PATH TP CONC KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
+# ---- DEBUG: restrict this run to just two SWE-bench instances ----------------
+# Validating the reasoning-parser fix (interleaved <mm:think> round-trip) on the
+# two instances that previously degenerated into command-repeat loops. Remove
+# these two exports to restore a full 300-instance sweep.
+# export SWEBENCH_AGENT_FILTER='django__django-(11630|15498)$'
+# export SWEBENCH_EXPECTED_INSTANCES=2
+# -----------------------------------------------------------------------------
+export EVAL_FRAMEWORK="lm-eval"
+
+check_env_vars MODEL TP CONC KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
 
 echo "MODEL=$MODEL TP=$TP CONC=$CONC KV_OFFLOADING=$KV_OFFLOADING TOTAL_CPU_DRAM_GB=$TOTAL_CPU_DRAM_GB RESULT_DIR=$RESULT_DIR DURATION=$DURATION EP_SIZE=$EP_SIZE DP_ATTENTION=$DP_ATTENTION"
 
@@ -25,14 +34,17 @@ if [[ -n "${ROCR_VISIBLE_DEVICES+x}" ]]; then
     export HIP_VISIBLE_DEVICES="$ROCR_VISIBLE_DEVICES"
 fi
 
-rocm-smi || true
-amd-smi || true
-
-if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
-    hf download "$MODEL" --local-dir "$MODEL_PATH"
+if [[ -n "${MODEL_PATH:-}" ]]; then
+    if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
+        hf download "$MODEL" --local-dir "$MODEL_PATH"
+    fi
+else
+    hf download "$MODEL"
+    export MODEL_PATH="$MODEL"
 fi
 
-export WEKA_LOADER_OVERRIDE="semianalysis_cc_traces_weka_062126"
+rocm-smi || true
+amd-smi || true
 
 resolve_trace_source
 install_agentic_deps
@@ -43,57 +55,6 @@ LMCACHE_LOG="$RESULT_DIR/lmcache_server.log"
 mkdir -p "$RESULT_DIR"
 
 OFFLOAD_ARGS=(--no-enable-prefix-caching)
-
-# ---- Lmcache config ----------------------------------------------------------
-LMCACHE_PID=""
-
-cleanup_lmcache_server() {
-    if [[ -n "$LMCACHE_PID" ]] && kill -0 "$LMCACHE_PID" 2>/dev/null; then
-        kill "$LMCACHE_PID" 2>/dev/null || true
-        wait "$LMCACHE_PID" 2>/dev/null || true
-    fi
-}
-
-trap cleanup_lmcache_server EXIT
-
-wait_for_lmcache_ready() {
-    { set +x; } 2>/dev/null
-    local attempts=120
-    local tail_pid=""
-
-    while [ ! -f "$LMCACHE_LOG" ]; do
-        if [[ -n "$LMCACHE_PID" ]] && ! kill -0 "$LMCACHE_PID" 2>/dev/null; then
-            echo "LMCache server died before creating log file. Exiting." >&2
-            exit 1
-        fi
-        sleep 1
-    done
-
-    tail -f -n +1 "$LMCACHE_LOG" &
-    tail_pid=$!
-
-    for ((i = 1; i <= attempts; i++)); do
-        if curl --output /dev/null --silent --fail "http://127.0.0.1:${LMCACHE_HTTP_PORT}/healthcheck"; then
-            kill "$tail_pid" 2>/dev/null || true
-            wait "$tail_pid" 2>/dev/null || true
-            return 0
-        fi
-        if [[ -n "$LMCACHE_PID" ]] && ! kill -0 "$LMCACHE_PID" 2>/dev/null; then
-            echo "LMCache server died before becoming healthy. Log follows:" >&2
-            kill "$tail_pid" 2>/dev/null || true
-            wait "$tail_pid" 2>/dev/null || true
-            cat "$LMCACHE_LOG" >&2 || true
-            exit 1
-        fi
-        sleep 1
-    done
-
-    echo "Timed out waiting for LMCache server healthcheck. Log follows:" >&2
-    kill "$tail_pid" 2>/dev/null || true
-    wait "$tail_pid" 2>/dev/null || true
-    cat "$LMCACHE_LOG" >&2 || true
-    exit 1
-}
 
 case "$KV_OFFLOAD_BACKEND" in
     vllm-simple)
@@ -112,69 +73,6 @@ case "$KV_OFFLOAD_BACKEND" in
         OFFLOAD_ARGS=(
             --kv_offloading_backend native
             --kv_offloading_size "$TOTAL_CPU_DRAM_GB"
-        )
-        ;;
-    lmcache)
-        unset VLLM_USE_SIMPLE_KV_OFFLOAD
-
-        git clone https://github.com/LMCache/LMCache.git
-        cd LMCache
-        pip install -r requirements/build.txt
-        CXX=hipcc BUILD_WITH_HIP=1 pip install -e .   --no-build-isolation
-        cd ..
-
-        python3 -c "import lmcache.integration.vllm.lmcache_mp_connector" >/dev/null
-
-        # Let the external MP server own the full CPU KV pool so vLLM does not
-        # split --kv-offloading-size across TP ranks through the integrated
-        # LMCache backend.
-        LMCACHE_HOST=127.0.0.1
-        LMCACHE_PORT=5555
-        LMCACHE_HTTP_PORT=8080
-        # LMCacheMPConnector concatenates lmcache.mp.host and port into the
-        # ZMQ endpoint. Bind the server to a raw host, but pass the connector a
-        # ZMQ-style host string.
-        LMCACHE_CONNECT_HOST="tcp://$LMCACHE_HOST"
-        LMCACHE_L1_SIZE_GB="$TOTAL_CPU_DRAM_GB"
-        LMCACHE_L1_INIT_SIZE_GB=20
-        # LMCache read locks are leases on chunks that lookup has promised
-        # vLLM can retrieve. The default 300s TTL is too short for this
-        # long-context agentic queue: TP8/conc32 can spend >300s between
-        # lookup and retrieve while GPU KV is saturated, which leaves the
-        # object present in L1 but no longer readable. Keep the 2.5 TB pool
-        # size unchanged and only extend the lookup-to-retrieve lease.
-        LMCACHE_L1_READ_TTL_SECONDS=7200
-        LMCACHE_CHUNK_SIZE=256
-        LMCACHE_MAX_WORKERS=$((TP * 2))
-        export PYTHONHASHSEED=0
-        export LMCACHE_BLOCKING_TIMEOUT_SECS=60
-
-        echo "Starting LMCache MP server..."
-        LMCACHE_CMD=(
-            lmcache server
-            --host "$LMCACHE_HOST"
-            --port "$LMCACHE_PORT"
-            --http-host "$LMCACHE_HOST"
-            --http-port "$LMCACHE_HTTP_PORT"
-            --l1-size-gb "$LMCACHE_L1_SIZE_GB"
-            --l1-init-size-gb "$LMCACHE_L1_INIT_SIZE_GB"
-            --l1-read-ttl-seconds "$LMCACHE_L1_READ_TTL_SECONDS"
-            --chunk-size "$LMCACHE_CHUNK_SIZE"
-            --max-workers "$LMCACHE_MAX_WORKERS"
-            --eviction-policy LRU
-        )
-        printf '%q ' "${LMCACHE_CMD[@]}" > "$RESULT_DIR/lmcache_command.txt"
-        printf '\n' >> "$RESULT_DIR/lmcache_command.txt"
-        "${LMCACHE_CMD[@]}" > "$LMCACHE_LOG" 2>&1 &
-        LMCACHE_PID=$!
-        echo "LMCache server PID: $LMCACHE_PID"
-        wait_for_lmcache_ready
-
-        # Remove --disable-hybrid-kv-cache-manager and enable hybrid kv cache manager (default)
-        # This gives extra cache hit than disabling hybrid kv cache manager
-        OFFLOAD_ARGS=(
-            --kv-transfer-config
-            "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"lmcache.integration.vllm.lmcache_mp_connector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.host\":\"$LMCACHE_CONNECT_HOST\",\"lmcache.mp.port\":$LMCACHE_PORT}}"
         )
         ;;
 esac
@@ -222,7 +120,16 @@ VLLM_CMD=(
     --kv-cache-dtype fp8
     --tool-call-parser minimax_m3
     --enable-auto-tool-choice
-    --reasoning-parser minimax_m3
+    # NOTE: --reasoning-parser minimax_m3 is intentionally OMITTED.
+    # MiniMax-M3 is an interleaved-thinking model: its <mm:think>...</mm:think>
+    # block MUST be round-tripped back into the conversation history every turn
+    # or multi-turn quality collapses (the model loses its plan and degenerates
+    # into repeating the same command until the step limit -> empty patch).
+    # The reasoning parser moves <mm:think> out of message.content into the
+    # response-only reasoning_content field, which the mini-swe-agent/litellm
+    # OpenAI client does NOT resend. Leaving the parser off keeps the think block
+    # inline in message.content, so the client preserves it across turns. The
+    # tool-call parser above still extracts tool calls from the full output.
     --max-num-seqs "$CONC"
     "${OFFLOAD_ARGS[@]}"
 )
@@ -235,6 +142,10 @@ echo "Server PID: $SERVER_PID"
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 # ---- Run benchmark ----------------------------------------------------------
-build_replay_cmd "$RESULT_DIR"
-
-run_agentic_replay_and_write_outputs "$RESULT_DIR"
+EVAL_ONLY="true"
+if [ "${EVAL_ONLY}" = "true" ]; then
+    run_eval --port "$PORT"
+else
+    build_replay_cmd "$RESULT_DIR"
+    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+fi
