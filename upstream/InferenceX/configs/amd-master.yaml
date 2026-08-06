@@ -1840,7 +1840,7 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp:
     agentic-coding:
     - dram-utilization: 0.8
       search-space:
-      - { tp: 4, ep: 4, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [10], spec-decoding: mtp }
+      - { tp: 4, ep: 4, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [1, 2, 4, 8, 10, 12, 16], spec-decoding: mtp }
 
 minimaxm3-fp4-mi355x-vllm-agentic-mtp:
   image: vllm/vllm-openai-rocm:nightly-5e35a6f4f9bbc217c599692157ca985c894373f7
