@@ -1688,7 +1688,7 @@ resolve_trace_source() {
             default_loader="semianalysis_cc_traces_weka_062126"
             ;;
         *)
-            default_loader="semianalysis_cc_traces_weka_062126_256k"
+            default_loader="semianalysis_cc_traces_weka_062126"
             ;;
     esac
     local loader="${WEKA_LOADER_OVERRIDE:-$default_loader}"
