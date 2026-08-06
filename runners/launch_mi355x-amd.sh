@@ -85,6 +85,8 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e PYTHONDONTWRITEBYTECODE \
 -e IMAGE \
 -e MODEL_PREFIX \
+-e "AIPERF_DIR=/workspace/upstream/InferenceX/utils/aiperf" \
+-e "AGENTIC_DIR=/workspace/upstream/InferenceX/utils/agentic-benchmark" \
 --entrypoint=/bin/bash \
 $IMAGE \
 $BENCHMARK_PATH
