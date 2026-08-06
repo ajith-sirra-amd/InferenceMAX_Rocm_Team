@@ -139,23 +139,27 @@ VLLM_CMD=(
     --port "$PORT"
     "${PARALLEL_ARGS[@]}"
     --trust-remote-code
+    --mm-encoder-tp-mode data
+    --mm-encoder-attn-backend ROCM_AITER_FA
     --block-size 128
     --gpu-memory-utilization 0.85
     --enable-chunked-prefill
-    --max-num-batched-tokens 32768
+    --max-num-batched-tokens 16384
     --language-model-only
     --enable-prefix-caching
     --attention-backend TRITON_ATTN
     --moe-backend aiter
     --kv-cache-dtype fp8
+    --reasoning-parser minimax_m3
     --tool-call-parser minimax_m3
     --enable-auto-tool-choice
     --default-chat-template-kwargs '{"thinking_mode":"enabled"}'
     --max-num-seqs "$CONC"
     --stream-interval 20
     --hf-overrides '{"text_config": {"use_index_cache": true, "index_topk_freq": 4}}'
+    --kv-transfer-config '{"kv_connector":"SimpleCPUOffloadConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use_per_rank":20132659200,"lazy_offload":false}}'
     # --speculative-config "$SPEC_CONFIG"
-    "${OFFLOAD_ARGS[@]}"
+    # "${OFFLOAD_ARGS[@]}"
 )
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
