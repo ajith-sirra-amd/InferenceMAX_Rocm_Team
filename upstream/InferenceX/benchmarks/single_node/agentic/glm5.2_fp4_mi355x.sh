@@ -183,6 +183,10 @@ if [ "$DP_ATTENTION" = "true" ]; then
     export SGLANG_DP_USE_GATHERV=1
     export SGLANG_DP_USE_REDUCE_SCATTER=1
     export GPU_MAX_HW_QUEUES=5
+    # DSA tilelang collective hangs under long-context prefill with DP-attention
+    # on ROCm v0.5.16 (confirmed: fa3 missing flash_attn_with_kvcache, aiter
+    # also fails). No working --dsa-prefill-backend alternative found; DP-attention
+    # path remains dormant until upstream fixes the collective hang.
 elif [ "$CONC" -le 16 ]; then
     # A full 131072-token prefill chunk needs ~7 GiB/rank of activation
     # headroom on top of the static pool; pair it with mem-fraction 0.80
@@ -207,7 +211,9 @@ SGLANG_CMD=(
     --trust-remote-code
     "${PARALLEL_ARGS[@]}"
     --kv-cache-dtype fp8_e4m3
-    --dsa-prefill-backend tilelang
+    # DSA tilelang collective hangs under long-context prefill with DP-attention
+    # on ROCm v0.5.16 (same as v0.5.14 bug). Use triton as workaround for DP-attn arm.
+    --dsa-prefill-backend "${DSA_PREFILL_BACKEND:-tilelang}"
     --dsa-decode-backend tilelang
     # GLM-5.2 emits the GLM-4.7-style tool-call format; glm47 is required for
     # structured message.tool_calls (SWE-bench agentic evals die without it).
