@@ -184,8 +184,9 @@ if [ "$DP_ATTENTION" = "true" ]; then
     export SGLANG_DP_USE_REDUCE_SCATTER=1
     export GPU_MAX_HW_QUEUES=5
     # DSA tilelang collective still hangs under long-context prefill with
-    # DP-attention on ROCm v0.5.16. Switch to triton backend for prefill.
-    DSA_PREFILL_BACKEND=triton
+    # DP-attention on ROCm v0.5.16. Switch to fa3 (FlashAttention 3) for
+    # prefill to bypass the DSA collective path entirely.
+    DSA_PREFILL_BACKEND=fa3
 elif [ "$CONC" -le 16 ]; then
     # A full 131072-token prefill chunk needs ~7 GiB/rank of activation
     # headroom on top of the static pool; pair it with mem-fraction 0.80
