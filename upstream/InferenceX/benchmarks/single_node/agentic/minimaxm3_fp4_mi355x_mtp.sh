@@ -8,6 +8,7 @@ set -x
 # Required env vars:
 #   MODEL, MODEL_PATH, TP, CONC, KV_OFFLOADING,
 #   TOTAL_CPU_DRAM_GB, RESULT_DIR, DURATION, EP_SIZE, DP_ATTENTION
+EVAL_ONLY="false"
 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
