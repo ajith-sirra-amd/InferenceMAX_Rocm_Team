@@ -1854,7 +1854,10 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp-dpa:
     agentic-coding:
     - dram-utilization: 0.8
       search-space:
-      - { tp: 4, ep: 4, dp-attn: true, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [10], spec-decoding: mtp }
+      # FASE 1: smoke test TP=8 dp-attn, no MTP, conc=16
+      # Geometria verde verificata su DSv4: --tp 8 --dp 8 --enable-dp-attention
+      - { tp: 8, ep: 1, dp-attn: true, kv-offloading: dram,
+          kv-offload-backend: { name: hicache }, conc-list: [16] }
 
 minimaxm3-fp4-mi355x-vllm-agentic-mtp:
   image: vllm/vllm-openai-rocm:nightly-5e35a6f4f9bbc217c599692157ca985c894373f7
