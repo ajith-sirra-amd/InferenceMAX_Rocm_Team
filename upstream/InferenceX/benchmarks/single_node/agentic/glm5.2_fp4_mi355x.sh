@@ -183,11 +183,10 @@ if [ "$DP_ATTENTION" = "true" ]; then
     export SGLANG_DP_USE_GATHERV=1
     export SGLANG_DP_USE_REDUCE_SCATTER=1
     export GPU_MAX_HW_QUEUES=5
-    # DSA tilelang collective still hangs under long-context prefill with
-    # DP-attention on ROCm v0.5.16. fa3 unavailable (flash_attn_with_kvcache
-    # not defined in ROCm build). Switch to aiter (AMD precompiled HIP ops in
-    # sgl-kernel) to bypass the DSA tilelang collective path entirely.
-    DSA_PREFILL_BACKEND=aiter
+    # DSA tilelang collective hangs under long-context prefill with DP-attention
+    # on ROCm v0.5.16 (confirmed: fa3 missing flash_attn_with_kvcache, aiter
+    # also fails). No working --dsa-prefill-backend alternative found; DP-attention
+    # path remains dormant until upstream fixes the collective hang.
 elif [ "$CONC" -le 16 ]; then
     # A full 131072-token prefill chunk needs ~7 GiB/rank of activation
     # headroom on top of the static pool; pair it with mem-fraction 0.80
