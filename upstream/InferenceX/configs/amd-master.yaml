@@ -1842,6 +1842,22 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp:
       search-space:
       - { tp: 4, ep: 4, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [1, 2, 4, 8, 10, 12, 16, 24, 32], spec-decoding: mtp }
 
+# Smoke test: retest DP-attention with image 20260729 (one day newer than 20260728 where
+# the tilelang collective hang was confirmed). Single config, low conc to verify prefill passes.
+glm5.2-fp4-mi355x-sglang-agentic-dpa-smoketest:
+  image: lmsysorg/sglang-rocm:v0.5.16-rocm720-mi35x-20260729
+  model: amd/GLM-5.2-MXFP4
+  model-prefix: glm5.2
+  runner: cluster:mi355x-amds
+  precision: fp4
+  framework: sglang
+  multinode: false
+  scenarios:
+    agentic-coding:
+    - dram-utilization: 0.8
+      search-space:
+      - { tp: 8, ep: 1, dp-attn: true, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [4] }
+
 minimaxm3-fp4-mi355x-vllm-agentic-mtp:
   image: vllm/vllm-openai-rocm:nightly-5e35a6f4f9bbc217c599692157ca985c894373f7
   model: amd/MiniMax-M3-MXFP4
