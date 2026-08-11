@@ -157,8 +157,8 @@ VLLM_CMD=(
     --max-num-seqs "$CONC"
     --stream-interval 20
     --hf-overrides '{"text_config": {"use_index_cache": true, "index_topk_freq": 4}}'
-    --kv-transfer-config '{"kv_connector":"SimpleCPUOffloadConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use_per_rank":20132659200,"lazy_offload":false}}'
-    # --speculative-config "$SPEC_CONFIG"
+    --kv-transfer-config '{"kv_connector":"SimpleCPUOffloadConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use_per_rank":549755813888,"lazy_offload":false}}'
+    --speculative-config "$SPEC_CONFIG"
     # "${OFFLOAD_ARGS[@]}"
 )
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
