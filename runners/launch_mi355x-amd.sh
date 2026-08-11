@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-if [[ $RUNNER_NAME == *mi355* ]]; then
+if [[ $RUNNER_NAME == *mi355x* ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/models"
 elif [[ $RUNNER_NAME == *gbt* ]]; then
     HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
@@ -9,7 +9,7 @@ elif [[ $RUNNER_NAME == *p02_g17* ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/models"
 fi
 
-HF_HUB_CACHE_MOUNT="/it-share/models"
+HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
 
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then

@@ -143,7 +143,7 @@ VLLM_CMD=(
     --mm-encoder-tp-mode data
     --mm-encoder-attn-backend ROCM_AITER_FA
     --block-size 128
-    --gpu-memory-utilization 0.85
+    --gpu-memory-utilization 0.9
     --enable-chunked-prefill
     --max-num-batched-tokens 16384
     --language-model-only

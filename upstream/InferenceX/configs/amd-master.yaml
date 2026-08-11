@@ -1840,7 +1840,8 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp:
     agentic-coding:
     - dram-utilization: 0.8
       search-space:
-      - { tp: 4, ep: 4, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [1, 2, 4, 8, 10, 12, 16, 24, 32], spec-decoding: mtp }
+      - { tp: 4, ep: 4, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [8, 10], spec-decoding: mtp }
+      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [1, 2, 4], spec-decoding: mtp }
 
 # Smoke test: retest DP-attention with image 20260729 (one day newer than 20260728 where
 # the tilelang collective hang was confirmed). Single config, low conc to verify prefill passes.
