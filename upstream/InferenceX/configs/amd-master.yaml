@@ -1840,7 +1840,7 @@ glm5.2-fp4-mi355x-sglang-agentic-mtp:
     agentic-coding:
     - dram-utilization: 0.8
       search-space:
-      - { tp: 4, ep: 4, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [8, 10], spec-decoding: mtp }
+      - { tp: 4, ep: 4, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [8, 10, 12, 16], spec-decoding: mtp }
       - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [1, 2, 4], spec-decoding: mtp }
 
 # Smoke test: retest DP-attention with image 20260729 (one day newer than 20260728 where
@@ -1872,4 +1872,4 @@ minimaxm3-fp4-mi355x-vllm-agentic-mtp:
     - dram-utilization: 0.4
       search-space:
       # - { tp: 4, spec-decoding: mtp, kv-offloading: none, conc-list: [24] }
-      - { tp: 4, spec-decoding: mtp, kv-offloading: dram, kv-offload-backend: { name: vllm-native }, conc-list: [28] }
+      - { tp: 4, spec-decoding: mtp, kv-offloading: dram, kv-offload-backend: { name: vllm-native }, conc-list: [28, 36] }
