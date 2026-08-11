@@ -47,8 +47,8 @@ else
     export MODEL_PATH="$MODEL"
 fi
 
-hf download "$MODEL"
-export MODEL_PATH="$MODEL"
+# hf download "$MODEL"
+# export MODEL_PATH="$MODEL"
 hf download "$DRAFT_MODEL"
 
 rocm-smi || true
