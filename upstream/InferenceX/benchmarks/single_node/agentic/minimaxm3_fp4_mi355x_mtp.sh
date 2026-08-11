@@ -128,6 +128,7 @@ export VLLM_ENGINE_READY_TIMEOUT_S=3600
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1800
 export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_USE_AITER_UNIFIED_ATTENTION=1
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS=1
 export VLLM_ROCM_SHUFFLE_KV_CACHE_LAYOUT=1
@@ -150,7 +151,7 @@ VLLM_CMD=(
     --max-num-batched-tokens 32768
     --language-model-only
     --enable-prefix-caching
-    --attention-backend TRITON_ATTN
+    --attention-backend ROCM_AITER_FA
     --moe-backend aiter
     --kv-cache-dtype fp8
     --reasoning-parser minimax_m3
