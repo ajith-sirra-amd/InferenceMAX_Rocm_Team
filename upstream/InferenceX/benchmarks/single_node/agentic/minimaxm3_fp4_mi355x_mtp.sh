@@ -47,8 +47,6 @@ else
     export MODEL_PATH="$MODEL"
 fi
 
-# hf download "$MODEL"
-# export MODEL_PATH="$MODEL"
 hf download "$DRAFT_MODEL"
 
 rocm-smi || true
@@ -123,12 +121,10 @@ fi
 echo "Starting vllm server..."
 export PYTHONNOUSERSITE=1
 
-export VLLM_USE_V1=1
 export VLLM_ENGINE_READY_TIMEOUT_S=3600
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1800
 export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export VLLM_ROCM_USE_AITER=1
-export VLLM_ROCM_USE_AITER_UNIFIED_ATTENTION=1
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS=1
 export VLLM_ROCM_SHUFFLE_KV_CACHE_LAYOUT=1
@@ -148,7 +144,7 @@ VLLM_CMD=(
     --block-size 128
     --gpu-memory-utilization 0.85
     --enable-chunked-prefill
-    --max-num-batched-tokens 32768
+    --max-num-batched-tokens 16384
     --language-model-only
     --enable-prefix-caching
     --attention-backend TRITON_ATTN
