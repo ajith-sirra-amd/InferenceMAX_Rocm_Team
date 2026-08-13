@@ -95,6 +95,14 @@ install_agentic_deps
 # touching anything, and self-disables once the image ships a fixed aiter.
 bash "$(dirname "$0")/apply_aiter_pybind11_fix.sh" || true
 
+# ---- DSpark FULL-cudagraph fix ----------------------------------------------
+# TritonMLA declares _cudagraph_support=UNIFORM_SINGLE_TOKEN_DECODE, which forces
+# FULL_AND_PIECEWISE -> PIECEWISE under spec-decode and then silently gives the
+# DSpark drafter CUDAGraphMode.NONE (fully eager). Measured on 8x MI355X, single
+# stream 600-token generations: 14.05 -> 77.65 tok/s, ITL 71.16 -> 12.88 ms (5.52x),
+# output verified correct. Idempotent; no-op if already patched.
+bash "$(dirname "$0")/apply_triton_mla_cudagraph_fix.sh" || true
+
 # ---- Reference env block ----------------------------------------------------
 # Keep ALL of these. Commenting them out does not avoid the AITER FMHA crash:
 # that crash is gated on VLLM_ROCM_USE_AITER alone (AiterFlashAttnPrefillBackend

@@ -96,14 +96,23 @@ EOF
 fi
 
 # Drop JIT artifacts built against the wrong pybind11 so they rebuild.
-JITDIR=$(dirname "$(dirname "$(dirname "$TARGET")")")
-for so in "$JITDIR"/module_fmha_fwd_bf16_opus.so; do
-    [ -e "$so" ] || continue
-    if strings "$so" 2>/dev/null | grep -q "__pybind11_internals_v12"; then
+# Ask aiter for its jit dir: it honours AITER_JIT_DIR and falls back to ~/.aiter
+# when dist-packages is not writable, so deriving it from $TARGET is wrong.
+JITDIR=$($PY -c 'from aiter.jit.core import get_user_jit_dir; print(get_user_jit_dir())' 2>/dev/null || true)
+if [ -z "$JITDIR" ] || [ ! -d "$JITDIR" ]; then
+    JITDIR=$(dirname "$(dirname "$TARGET")")
+fi
+echo "[aiter-fix] jit dir: $JITDIR"
+# Sweep every module, not just the one we happened to hit first: any module
+# JIT-built before the patch carries the wrong internals id.
+shopt -s nullglob
+for so in "$JITDIR"/*.so; do
+    if grep -qa "__pybind11_internals_v12" "$so" 2>/dev/null; then
         rm -f "$so"
         rm -rf "$JITDIR/build/$(basename "${so%.so}")"
         echo "[aiter-fix] removed stale v12 module: $(basename "$so")"
     fi
 done
+shopt -u nullglob
 
 echo "[aiter-fix] done."
