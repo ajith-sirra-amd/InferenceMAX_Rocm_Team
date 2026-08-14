@@ -197,6 +197,30 @@ else
     )
 fi
 
+# ---- Async scheduling / KV block-pool stability ------------------------------
+# DSpark is the ONLY spec method exempted from vLLM's async-scheduling disable
+# list (config/vllm.py:1181), so async_scheduling resolves True here. That gives
+# max_concurrent_batches = pp_size + 1 = 2 (vllm.py:563-569), and with
+# kv_role=kv_both (is_kv_consumer=True) the scheduler sets defer_block_free=True
+# (sched/scheduler.py:155-157). Its own comment: "a step may still be writing a
+# freed request's KV blocks. A consumer KV Connector can reallocate and fill
+# those blocks via a load that isn't ordered against that write."
+#
+# That limbo state matches our crash signature exactly -- the engine dies with
+#   block_pool.py:667  assert block.ref_cnt == 0
+# i.e. a block sitting on the FREE list that is still referenced. Crash time
+# scales inversely with concurrency: c10 survived 3612 s, c12 died at 487 s,
+# c16 at 354 s. Note vLLM already disables async scheduling for ROCm DeepEP DBO
+# because "that combination can corrupt" state.
+#
+# Setting max_concurrent_batches back to 1 makes defer_block_free unreachable.
+# Cost: async scheduling exists to fill GPU-utilisation gaps, so expect to give
+# some throughput back. Set ASYNC_SCHEDULING=1 to restore the default.
+ASYNC_SCHED_ARGS=()
+if [ "${ASYNC_SCHEDULING:-0}" != "1" ]; then
+    ASYNC_SCHED_ARGS=(--no-async-scheduling)
+fi
+
 # ---- MLA prefill backend -----------------------------------------------------
 # On ROCm the prefill priority is [ROCM_AITER_FA, FLASH_ATTN]. ROCM_AITER_FA
 # JIT-builds module_fmha_fwd_bf16_opus at runtime; that module registers its own
@@ -253,6 +277,7 @@ VLLM_CMD=(
     --max-model-len 1048576
     --enable-prefix-caching
     --kv-cache-dtype "fp8"
+    "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
     "${SPEC_ARGS[@]}"
