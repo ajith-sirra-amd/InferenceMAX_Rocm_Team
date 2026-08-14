@@ -103,6 +103,16 @@ bash "$(dirname "$0")/apply_aiter_pybind11_fix.sh" || true
 # output verified correct. Idempotent; no-op if already patched.
 bash "$(dirname "$0")/apply_triton_mla_cudagraph_fix.sh" || true
 
+# ---- KV block-pool free-list fix --------------------------------------------
+# allocate_external_computed_blocks() (single_type_kv_cache_manager.py:321) can
+# call get_new_blocks() with a NEGATIVE count, which silently inflates
+# FreeKVCacheBlockQueue.num_free_blocks without touching the list. A later pop
+# then walks past the tail and the engine dies mid-run on
+#   assert curr_block is not None   /   assert block.ref_cnt == 0
+# Observed crash times: c10 3612 s, c12 487 s, c16 354 s. --no-async-scheduling
+# was tested and did NOT help (c12 died at 490 s). Idempotent.
+bash "$(dirname "$0")/apply_kv_blockpool_fix.sh" || true
+
 # ---- Reference env block ----------------------------------------------------
 # Keep ALL of these. Commenting them out does not avoid the AITER FMHA crash:
 # that crash is gated on VLLM_ROCM_USE_AITER alone (AiterFlashAttnPrefillBackend
