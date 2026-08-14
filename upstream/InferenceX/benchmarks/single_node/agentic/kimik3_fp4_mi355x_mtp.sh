@@ -193,6 +193,18 @@ else
     )
 fi
 
+# ---- Chunked prefill sizing --------------------------------------------------
+# Chunked prefill is ON by default and max_num_batched_tokens defaults to 16384
+# (confirmed in the c12 server log; neither was previously set by this recipe).
+# With ~99k-token mean inputs that is ~6 prefill chunks per request.
+# 8192 doubles that to ~12 smaller chunks: finer interleaving with decode, at the
+# cost of more per-chunk boundaries. Note vLLM PR #51862 (in the new image) exists
+# specifically to remove a per-chunk KDA prefill stall, so more chunks may cut
+# against that gain -- this run measures which effect dominates.
+# B300 does not set this flag at all, so we are moving off their config here.
+MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS")
+
 # ---- Async scheduling / KV block-pool stability ------------------------------
 # DSpark is the ONLY spec method exempted from vLLM's async-scheduling disable
 # list (config/vllm.py:1181), so async_scheduling resolves True here. That gives
@@ -273,6 +285,7 @@ VLLM_CMD=(
     --max-model-len 1048576
     --enable-prefix-caching
     --kv-cache-dtype "fp8"
+    "${CHUNKED_PREFILL_ARGS[@]}"
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
