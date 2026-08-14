@@ -255,9 +255,29 @@ if [ -n "$MLA_PREFILL_BACKEND" ]; then
 fi
 
 # ---- HIP graph ------------------------------------------------------------
-MAX_NUM_SEQS=20
-MAX_CUDAGRAPH_CAPTURE_SIZE=60
+# max_num_seqs scales with concurrency, matching what the B300 reference actually
+# does (read out of its vllm_command.txt): conc 1/2/4/8/16 -> max_num_seqs
+# 2/4/8/16/32, i.e. 2 x CONC. We had this hardcoded at 20 for every conc, which
+# was tight at c16 and over-provisioned at c1 -- neither like-for-like.
+#
+# Headroom matters because in-flight sequences EXCEED nominal concurrency: the
+# agentic harness branches, and c12 was measured at peak 14 running vs nominal
+# 12 (1.17x). 2x covers that comfortably.
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 2 ))}"
+
+# INVARIANT: with DSpark a decode step is num_seqs * (1 + num_speculative_tokens)
+# = num_seqs * 3 tokens, so the capture ceiling must be >= 3 * max_num_seqs or
+# large decode batches fall out of the captured graphs and attention runs eager
+# every step (the get_mla_metadata_v1 host bubble, ~75 ms ITL).
+# NOTE: 3 * CONC would be WRONG here -- at c12 that is 36, but the real peak was
+# 14 seqs = 42 tokens, which would have escaped capture. Derive from
+# max_num_seqs, not from CONC.
+# The list is dense, so every 3*C is an exact captured size (no rounding up) and
+# there is no need to hand-add sizes the way a sparse ladder would.
+# Cost measured on this recipe: 1.07 GiB and ~54 s to capture, so headroom is cheap.
+MAX_CUDAGRAPH_CAPTURE_SIZE="${MAX_CUDAGRAPH_CAPTURE_SIZE:-$(( MAX_NUM_SEQS * 3 ))}"
 CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"
+echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE (3x max_num_seqs)"
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 GPU_MEM_UTIL="0.9"
