@@ -208,7 +208,10 @@ patch_kv_blockpool() {
     if [ -z "$target" ] || [ ! -f "$target" ]; then
         echo "[$label] target not found; skipping."; return 0
     fi
-    if grep -q "num_new_blocks = max(" "$target"; then
+    # NB: the marker must be unique to OUR patch. "num_new_blocks = max(" is NOT
+    # -- stock already has it at three other call sites (lines ~208/1511/1601),
+    # so using it silently skipped the patch on a clean image.
+    if grep -q "KIMI-PATCH-KV-BLOCKPOOL" "$target"; then
         echo "[$label] already patched."; return 0
     fi
     cp -n "$target" "$target.orig" 2>/dev/null || true
@@ -221,8 +224,8 @@ old = """        req_blocks = self.req_to_blocks[request_id]
             cdiv(num_total_computed_tokens, self.block_size) - len(req_blocks)
         )"""
 new = """        req_blocks = self.req_to_blocks[request_id]
-        # PATCHED: clamp to >= 0; a negative count silently inflates
-        # FreeKVCacheBlockQueue.num_free_blocks and corrupts the free list.
+        # KIMI-PATCH-KV-BLOCKPOOL: clamp to >= 0; a negative count silently
+        # inflates FreeKVCacheBlockQueue.num_free_blocks and corrupts the free list.
         num_new_blocks = max(
             0, cdiv(num_total_computed_tokens, self.block_size) - len(req_blocks)
         )
