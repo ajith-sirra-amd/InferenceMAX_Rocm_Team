@@ -46,7 +46,14 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 wait_for_amd_gpu_clean
 
-EVAL_ONLY="false"
+# ACCURACY RUN. Set to "false" to go back to the throughput/agentic-replay arm.
+# Note EVAL_ONLY=true also flips the speculative config from
+# rejection_sample_method "synthetic" to "block" (see the SPEC_ARGS branch
+# below), i.e. draft tokens are actually verified against the target, so this
+# is the only arm whose generated text is valid. It therefore doubles as the
+# correctness check for the triton_mla cudagraph patch.
+EVAL_ONLY="true"
+export EVAL_FRAMEWORK="lm-eval"
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 
