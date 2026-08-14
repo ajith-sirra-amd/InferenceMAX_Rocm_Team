@@ -90,35 +90,14 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-# ---- AITER pybind11 fix ------------------------------------------------------
-# The image's prebuilt aiter .so files are compiled against torch's bundled
-# pybind11 (PYBIND11_INTERNALS_VERSION 11), but aiter's JIT builder injects the
-# standalone pybind11 3.1.0 (version 12) as a -I flag, which outranks the
-# -isystem path holding torch's copy. pybind11 keeps a SEPARATE type registry
-# per internals id, so a JIT-built module cannot see aiter_tensor_t registered
-# by the prebuilt core, and the first call dies during model warmup with:
-#   TypeError: fmha_fwd_bf16_opus_fwd(): incompatible function arguments
-# The script below is idempotent, verifies the mismatch actually exists before
-# touching anything, and self-disables once the image ships a fixed aiter.
-bash "$(dirname "$0")/apply_aiter_pybind11_fix.sh" || true
-
-# ---- DSpark FULL-cudagraph fix ----------------------------------------------
-# TritonMLA declares _cudagraph_support=UNIFORM_SINGLE_TOKEN_DECODE, which forces
-# FULL_AND_PIECEWISE -> PIECEWISE under spec-decode and then silently gives the
-# DSpark drafter CUDAGraphMode.NONE (fully eager). Measured on 8x MI355X, single
-# stream 600-token generations: 14.05 -> 77.65 tok/s, ITL 71.16 -> 12.88 ms (5.52x),
-# output verified correct. Idempotent; no-op if already patched.
-bash "$(dirname "$0")/apply_triton_mla_cudagraph_fix.sh" || true
-
-# ---- KV block-pool free-list fix --------------------------------------------
-# allocate_external_computed_blocks() (single_type_kv_cache_manager.py:321) can
-# call get_new_blocks() with a NEGATIVE count, which silently inflates
-# FreeKVCacheBlockQueue.num_free_blocks without touching the list. A later pop
-# then walks past the tail and the engine dies mid-run on
-#   assert curr_block is not None   /   assert block.ref_cnt == 0
-# Observed crash times: c10 3612 s, c12 487 s, c16 354 s. --no-async-scheduling
-# was tested and did NOT help (c12 died at 490 s). Idempotent.
-bash "$(dirname "$0")/apply_kv_blockpool_fix.sh" || true
+# ---- In-container patches ----------------------------------------------------
+# Three fixes, all confined to this container's site-packages, all idempotent
+# and all self-disabling once the image ships them:
+#   [1] aiter pybind11 internals mismatch  -> unblocks ROCM_AITER_FA prefill
+#   [2] TritonMLA cudagraph support        -> FULL cudagraphs for DSpark (5.52x TPOT)
+#   [3] KV block-pool negative-count clamp -> stops the mid-run engine crash
+# Set SKIP_KIMI_PATCHES=1 to run stock.
+bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
 
 # ---- Reference env block ----------------------------------------------------
 # Keep ALL of these. Commenting them out does not avoid the AITER FMHA crash:
@@ -248,7 +227,7 @@ fi
 # Pinning FLASH_ATTN keeps every AITER MoE kernel (and its throughput) while
 # skipping only the broken FMHA prefill path.
 # UPDATE: the AITER packaging issue is now fixed at source by
-# apply_aiter_pybind11_fix.sh (run above), so ROCM_AITER_FA is usable again and
+# apply_kimi_k3_patches.sh (run above), so ROCM_AITER_FA is usable again and
 # is the default. Measured on 8x MI355X / Kimi-K3 MXFP4 TP8, cold prefill:
 #   ~24k ctx  FLASH_ATTN 12,953 -> AITER 13,524 tok/s  (+4.4%)
 #   ~93k ctx  FLASH_ATTN 11,174 -> AITER 13,423 tok/s  (+20.1%)
