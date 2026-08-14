@@ -52,7 +52,7 @@ wait_for_amd_gpu_clean
 # below), i.e. draft tokens are actually verified against the target, so this
 # is the only arm whose generated text is valid. It therefore doubles as the
 # correctness check for the triton_mla cudagraph patch.
-EVAL_ONLY="true"
+EVAL_ONLY="false"
 export EVAL_FRAMEWORK="lm-eval"
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
