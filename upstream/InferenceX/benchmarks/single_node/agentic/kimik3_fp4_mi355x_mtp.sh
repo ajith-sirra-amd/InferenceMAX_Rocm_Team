@@ -46,7 +46,14 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 wait_for_amd_gpu_clean
 
+# ACCURACY RUN. Set to "false" to go back to the throughput/agentic-replay arm.
+# Note EVAL_ONLY=true also flips the speculative config from
+# rejection_sample_method "synthetic" to "block" (see the SPEC_ARGS branch
+# below), i.e. draft tokens are actually verified against the target, so this
+# is the only arm whose generated text is valid. It therefore doubles as the
+# correctness check for the triton_mla cudagraph patch.
 EVAL_ONLY="false"
+export EVAL_FRAMEWORK="lm-eval"
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 
@@ -83,12 +90,20 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
+# ---- In-container patches ----------------------------------------------------
+# Three fixes, all confined to this container's site-packages, all idempotent
+# and all self-disabling once the image ships them:
+#   [1] aiter pybind11 internals mismatch  -> unblocks ROCM_AITER_FA prefill
+#   [2] TritonMLA cudagraph support        -> FULL cudagraphs for DSpark (5.52x TPOT)
+#   [3] KV block-pool negative-count clamp -> stops the mid-run engine crash
+# Set SKIP_KIMI_PATCHES=1 to run stock.
+bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
+
 # ---- Reference env block ----------------------------------------------------
 # Keep ALL of these. Commenting them out does not avoid the AITER FMHA crash:
 # that crash is gated on VLLM_ROCM_USE_AITER alone (AiterFlashAttnPrefillBackend
 # .is_available() consults only rocm_aiter_ops.is_enabled()), so disabling the
-# others just loses the MoE kernels while keeping the failure. The crash is
-# avoided by pinning the MLA prefill backend in VLLM_CMD below.
+# others just loses the MoE kernels while keeping the failure.
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
 export SAFETENSORS_FAST_GPU=1
@@ -178,6 +193,42 @@ else
     )
 fi
 
+# ---- Chunked prefill sizing --------------------------------------------------
+# Chunked prefill is ON by default and max_num_batched_tokens defaults to 16384
+# (confirmed in the c12 server log; neither was previously set by this recipe).
+# With ~99k-token mean inputs that is ~6 prefill chunks per request.
+# 8192 doubles that to ~12 smaller chunks: finer interleaving with decode, at the
+# cost of more per-chunk boundaries. Note vLLM PR #51862 (in the new image) exists
+# specifically to remove a per-chunk KDA prefill stall, so more chunks may cut
+# against that gain -- this run measures which effect dominates.
+# B300 does not set this flag at all, so we are moving off their config here.
+MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS")
+
+# ---- Async scheduling / KV block-pool stability ------------------------------
+# DSpark is the ONLY spec method exempted from vLLM's async-scheduling disable
+# list (config/vllm.py:1181), so async_scheduling resolves True here. That gives
+# max_concurrent_batches = pp_size + 1 = 2 (vllm.py:563-569), and with
+# kv_role=kv_both (is_kv_consumer=True) the scheduler sets defer_block_free=True
+# (sched/scheduler.py:155-157). Its own comment: "a step may still be writing a
+# freed request's KV blocks. A consumer KV Connector can reallocate and fill
+# those blocks via a load that isn't ordered against that write."
+#
+# That limbo state matches our crash signature exactly -- the engine dies with
+#   block_pool.py:667  assert block.ref_cnt == 0
+# i.e. a block sitting on the FREE list that is still referenced. Crash time
+# scales inversely with concurrency: c10 survived 3612 s, c12 died at 487 s,
+# c16 at 354 s. Note vLLM already disables async scheduling for ROCm DeepEP DBO
+# because "that combination can corrupt" state.
+#
+# Setting max_concurrent_batches back to 1 makes defer_block_free unreachable.
+# Cost: async scheduling exists to fill GPU-utilisation gaps, so expect to give
+# some throughput back. Set ASYNC_SCHEDULING=1 to restore the default.
+ASYNC_SCHED_ARGS=()
+if [ "${ASYNC_SCHEDULING:-0}" != "1" ]; then
+    ASYNC_SCHED_ARGS=(--no-async-scheduling)
+fi
+
 # ---- MLA prefill backend -----------------------------------------------------
 # On ROCm the prefill priority is [ROCM_AITER_FA, FLASH_ATTN]. ROCM_AITER_FA
 # JIT-builds module_fmha_fwd_bf16_opus at runtime; that module registers its own
@@ -187,9 +238,14 @@ fi
 # during compile_or_warm_up_model -> _dummy_run, before the server binds.
 # Pinning FLASH_ATTN keeps every AITER MoE kernel (and its throughput) while
 # skipping only the broken FMHA prefill path.
-# Set MLA_PREFILL_BACKEND=ROCM_AITER_FA to restore stock behaviour once the
-# AITER packaging issue is fixed upstream.
-MLA_PREFILL_BACKEND="${MLA_PREFILL_BACKEND:-FLASH_ATTN}"
+# UPDATE: the AITER packaging issue is now fixed at source by
+# apply_kimi_k3_patches.sh (run above), so ROCM_AITER_FA is usable again and
+# is the default. Measured on 8x MI355X / Kimi-K3 MXFP4 TP8, cold prefill:
+#   ~24k ctx  FLASH_ATTN 12,953 -> AITER 13,524 tok/s  (+4.4%)
+#   ~93k ctx  FLASH_ATTN 11,174 -> AITER 13,423 tok/s  (+20.1%)
+# This workload averages ~99k input tokens, so the ~93k figure is the relevant
+# one. Set MLA_PREFILL_BACKEND=FLASH_ATTN to fall back if AITER regresses.
+MLA_PREFILL_BACKEND="${MLA_PREFILL_BACKEND:-ROCM_AITER_FA}"
 MLA_PREFILL_ARGS=()
 if [ -n "$MLA_PREFILL_BACKEND" ]; then
     MLA_PREFILL_ARGS=(
@@ -199,9 +255,29 @@ if [ -n "$MLA_PREFILL_BACKEND" ]; then
 fi
 
 # ---- HIP graph ------------------------------------------------------------
-MAX_NUM_SEQS=20
-MAX_CUDAGRAPH_CAPTURE_SIZE=60
+# max_num_seqs scales with concurrency, matching what the B300 reference actually
+# does (read out of its vllm_command.txt): conc 1/2/4/8/16 -> max_num_seqs
+# 2/4/8/16/32, i.e. 2 x CONC. We had this hardcoded at 20 for every conc, which
+# was tight at c16 and over-provisioned at c1 -- neither like-for-like.
+#
+# Headroom matters because in-flight sequences EXCEED nominal concurrency: the
+# agentic harness branches, and c12 was measured at peak 14 running vs nominal
+# 12 (1.17x). 2x covers that comfortably.
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 2 ))}"
+
+# INVARIANT: with DSpark a decode step is num_seqs * (1 + num_speculative_tokens)
+# = num_seqs * 3 tokens, so the capture ceiling must be >= 3 * max_num_seqs or
+# large decode batches fall out of the captured graphs and attention runs eager
+# every step (the get_mla_metadata_v1 host bubble, ~75 ms ITL).
+# NOTE: 3 * CONC would be WRONG here -- at c12 that is 36, but the real peak was
+# 14 seqs = 42 tokens, which would have escaped capture. Derive from
+# max_num_seqs, not from CONC.
+# The list is dense, so every 3*C is an exact captured size (no rounding up) and
+# there is no need to hand-add sizes the way a sparse ladder would.
+# Cost measured on this recipe: 1.07 GiB and ~54 s to capture, so headroom is cheap.
+MAX_CUDAGRAPH_CAPTURE_SIZE="${MAX_CUDAGRAPH_CAPTURE_SIZE:-$(( MAX_NUM_SEQS * 3 ))}"
 CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"
+echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE (3x max_num_seqs)"
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 GPU_MEM_UTIL="0.9"
@@ -229,6 +305,8 @@ VLLM_CMD=(
     --max-model-len 1048576
     --enable-prefix-caching
     --kv-cache-dtype "fp8"
+    "${CHUNKED_PREFILL_ARGS[@]}"
+    "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
     "${SPEC_ARGS[@]}"

@@ -1406,7 +1406,7 @@ qwen3.5-fp8-mi355x-sglang-agentic-hicache:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.80
+    - dram-utilization: 0.65
       search-space:
       - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1, 2, 4, 8, 16, 32] }
       - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: hicache }, conc-list: [16, 32, 48, 64] }
@@ -1578,7 +1578,7 @@ dsv4-fp4-mi355x-sglang-agentic-hicache:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.80
+    - dram-utilization: 0.65
       search-space:
       - { tp: 8, kv-offloading: none, conc-list: [1, 2, 4, 8] }
       - { tp: 8, dp-attn: true, kv-offloading: none, conc-list: [16, 32, 48, 64] }
@@ -1650,7 +1650,7 @@ minimaxm3-fp8-mi300x-vllm-agentic:
     # measured BF16 cache budget gives about 2.76M active tokens on MI300X;
     # the June-21 service-time-weighted request is 269k tokens, so sample every
     # integer around the expected conc-10 cliff rather than geometric jumps.
-    - dram-utilization: 0.80
+    - dram-utilization: 0.65
       search-space:
       - { tp: 8, kv-offloading: none, conc-list: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20] }
       - { tp: 8, ep: 8, kv-offloading: none, conc-list: [2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20] }
@@ -1672,7 +1672,7 @@ minimaxm3-fp8-mi325x-vllm-agentic:
     # active request, their expected cliffs are conc 6, 18, and 47. Use dense
     # bands around each cliff; Mooncake rows overlap those bands because host
     # storage improves prefix retention but does not hold active decode KV.
-    - dram-utilization: 0.80
+    - dram-utilization: 0.65
       search-space:
       - { tp: 4, kv-offloading: none, conc-list: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16] }
       - { tp: 4, ep: 4, kv-offloading: none, conc-list: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16] }
@@ -1693,7 +1693,7 @@ minimaxm3-fp4-mi355x-vllm-agentic:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.80
+    - dram-utilization: 0.65
       search-space:
       - { tp: 4, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [1, 4, 8, 16] }
 
@@ -1709,7 +1709,7 @@ dsv4-fp4-mi355x-sglang-disagg-agentic-hicache:
   disagg: true
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.80
+    - dram-utilization: 0.65
       search-space:
       - spec-decoding: "none"
         conc-list: [ 2,4,8,16,32 ]
@@ -1884,7 +1884,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.50
+    - dram-utilization: 0.65
       search-space:
       # - { tp: 8, kv-offloading: none, conc-list: [1, 4, 8] , spec-decoding: mtp}
       - { tp: 8, ep: 8, kv-offloading: none, conc-list: [1, 4, 8, 10, 16, 20, 24], spec-decoding: mtp }

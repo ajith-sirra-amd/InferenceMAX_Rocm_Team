@@ -1,0 +1,259 @@
+================================================================================
+Kimi-K3 MXFP4 / 8x MI355X (gfx950) — What Worked, What Didn't, With Numbers
+================================================================================
+Date    : 2026-08-13
+Model   : moonshotai/Kimi-K3 MXFP4, TP=8, ~1.5 TB checkpoint
+Image   : vllm/vllm-openai-rocm:nightly-3ee2df30337a301164c46ae444b76ee67e71c106
+vLLM    : 0.26.1rc1.dev668+g3ee2df303.rocm723   AITER: amd-aiter 0.1.19
+Bench   : agentic-coding trace replay (semianalysis cc-traces), DSpark spec decode
+Target  : beat NVIDIA B300 run SemiAnalysisAI/InferenceX #31509160691
+
+METRIC NOTES
+  TTFT   = time to first token (prefill latency)
+  TPOT   = time per output token (== ITL here)
+  E2E    = end-to-end request latency
+  tok/s/GPU = total (or output) throughput / 8
+  "synthetic" acceptance is used by BOTH us and B300, so all speculative
+  speedups on both sides are simulated, not measured. Comparisons are fair
+  to each other but are NOT real-world numbers.
+
+================================================================================
+1. FULL BENCHMARK RUNS (CI, agentic replay) — THE NUMBERS THAT COUNT
+================================================================================
+
+                          OURS conc10   OURS conc16    B300 conc8    B300 conc16
+                          (ep=1)        (ep=8)
+  ----------------------- ------------  ------------   -----------   -----------
+  Success rate            73.5%         28.2%          91.6%         87.0%
+    requests ok/total     438/596       73/259         1006/1098     1193/1371
+  TTFT mean (s)           3.33          19.45          0.97          7.26
+  TPOT / ITL mean (s)     0.0904        0.1092         0.0042        0.0077
+  E2E mean (s)            57.14         n/a            n/a           n/a
+  Input tok/s             18,791        10,748         35,774        41,983
+  Output tok/s            104.6         56.2           293.4         347.9
+  Total tok/s             18,896        10,804         36,067        42,331
+  Total tok/s/GPU         2,362         1,351          4,508         5,291
+  Output tok/s/GPU        13.07         7.03           36.68         43.49
+  Run duration (s)        2,219         498            —             —
+  Outcome                 CRASHED @60m  CRASHED @8m    completed     completed
+
+  Gap vs B300 (nearest conc): total tput 1.91x behind, output tput 2.81x
+  behind, TPOT 22x worse, TTFT 3.4x worse.
+
+  CRITICAL: output_actual vs output_expected
+    conc10: 550 / 1,715 tokens  = 32% of expected emitted
+    conc16: 459 / 1,926 tokens  = 24% of expected emitted
+  Requests are being truncated by the engine crash. Throughput numbers are
+  therefore deflated by roughly 3x before any kernel consideration.
+
+  WHERE THE WALL-CLOCK GOES (conc10) — this reframes everything:
+    TTFT   3.33 s   =  5.8% of E2E
+    decode 49.72 s  = 87.0% of E2E   (550 tok x 90.4 ms)
+    E2E    57.14 s
+  Token COUNT says prefill dominates (input 18,791 vs output 105 tok/s).
+  Wall CLOCK says decode dominates. TPOT is the limiter, not prefill.
+
+================================================================================
+2. WHAT WORKED
+================================================================================
+
+[W1] AITER FMHA prefill crash — FIXED, root-caused
+  Symptom: server died in compile_or_warm_up_model, before binding:
+    TypeError: fmha_fwd_bf16_opus_fwd(): incompatible function arguments
+  Cause: aiter/jit/utils/cpp_extension.py:1664 injected standalone pybind11
+    3.1.0 (PYBIND11_INTERNALS_VERSION 12) via -I, outranking the -isystem path
+    with torch's bundled pybind11 3.0 (version 11). The 117 prebuilt aiter .so
+    files use v11. pybind11 keeps a SEPARATE type registry per internals id, so
+    the JIT module could not see aiter_tensor_t from the v11 core.
+  Proof after fix: rebuilt module reports __pybind11_internals_v11 and its
+    signature resolves to aiter.jit.module_aiter_core.aiter_tensor_t (was a
+    bare, unqualified aiter_tensor_t from its own registry).
+  Deliverables: /home/asirra/aiter-pybind11-internals.patch
+                /home/asirra/apply_aiter_pybind11_fix.sh (idempotent)
+  MEASURED cold prefill (single request, no cache):
+    context ~24k : FLASH_ATTN 12,953 -> AITER 13,524 tok/s   (+4.4%)
+    context ~93k : FLASH_ATTN 11,174 -> AITER 13,423 tok/s   (+20.1%)
+  IMPACT ON E2E: small. Prefill is 5.8% of wall clock, so +20% prefill is
+    ~1% E2E. Worth shipping, NOT the lever that closes the gap.
+
+[W2] MLA prefill backend pin — unblocked CI
+  --attention-config '{"mla_prefill_backend":"FLASH_ATTN"}' let the server boot
+  while AITER FMHA was broken, keeping ALL AITER MoE kernels.
+  Throughput with pin: 17.0-17.8 tok/s generation vs ~3 tok/s on the
+  EMULATION MXFP4 path. Verified in CI job 94402537049 (server reached
+  "Application startup complete", engine init 188.75 s, no AITER crash).
+
+[W3] EVAL_ONLY unbound variable — FIXED
+  kimik3_fp4_mi355x_mtp.sh used bare "${EVAL_ONLY}" under `set -u` while
+  launch_mi355x-amds.sh never exports it. Killed a 40-minute run AFTER the
+  server was already healthy:
+    line 243: EVAL_ONLY: unbound variable
+  Fix: "${EVAL_ONLY:-false}". Confirmed by the next run getting past it.
+
+[W4] AITER MoE kernels confirmed active
+  With the full env block: flydsl_moe1_afp8_wfp4_bf16_* / "FlyDSL MoE".
+  Without VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1 you fall back to
+  "Using 'EMULATION' Mxfp4 MoE backend" at ~3 tok/s. Keep all exports.
+
+[W5] Prefix caching works — earlier "0 hits" was OUR misconfiguration
+  Missing PYTHONHASHSEED=42 (needed for identical block keys across the 8
+  ranks under SimpleCPUOffloadConnector). With it set: 15,360 hits /
+  145,919 queries. A repeated 24k prompt went 12.11 s -> 0.90 s on cache hit.
+  NOT a vLLM bug. Retracted.
+
+================================================================================
+3. WHAT DID NOT WORK
+================================================================================
+
+[F1] Commenting out the AITER export block — WRONG FIX
+  Leaves VLLM_ROCM_USE_AITER=1 (the sole crash trigger, since
+  AiterFlashAttnPrefillBackend.is_available() consults only
+  rocm_aiter_ops.is_enabled()) while discarding the MoE kernels and
+  VLLM_USE_BREAKABLE_CUDAGRAPH=0. Same crash, worse performance.
+  Also: VLLM_ROCM_USE_AITER_MHA=0 does NOT disable the AITER prefill path.
+
+[F2] rejection_sample_method "synthetic" — CORRUPTS OUTPUT
+  Commits draft tokens WITHOUT verifying against the target.
+  On the EMULATION path: ~1500 tokens of "-2-3-2-2-" garbage.
+  On the AITER path: fluent but wrong — dropped/incorrect words, e.g.
+    "designed to tasks that typically require intelligence"
+    "b displacement" / "a tool with patterns from patterns"
+  Reported acceptance merely echoes the hardcoded constant (mean 2.46-2.53 vs
+  configured 2.51; per-position acceptance pinned at exactly 1.000).
+  With "standard" or "block": clean text, finish_reason stop.
+  The repo already uses "block" when EVAL_ONLY=true. The agentic replay
+  depends on parseable tool calls, so this arm is running on invalid output.
+
+[F3] conc16 + ep8 — MAJOR REGRESSION
+  28.2% success vs 73.5%; output 56.2 vs 104.6 tok/s; TTFT 19.45 vs 3.33 s;
+  crashed after 498 s instead of 2,219 s.
+  Confound: this run changed TWO variables (conc 10->16 AND ep 1->8), so the
+  regression cannot be attributed to either alone.
+
+[F4] KV block-pool corruption — UNFIXED, THE REAL BOTTLENECK
+  Two distinct asserts, same underlying area (prefix cache + CPU offload):
+    conc10: kv_cache_utils.py:292  assert curr_block is not None
+            (free-list shorter than num_free_blocks claims — counter desync)
+    conc16: block_pool.py:667      assert block.ref_cnt == 0
+            (block on the FREE list still referenced — refcount corruption)
+  Both reached via allocate_slots -> ...allocate_*_blocks -> get_new_blocks.
+  Effect: engine dies mid-run, 26.5%-71.8% of requests fail, and surviving
+  requests emit only 24-32% of expected tokens.
+  This costs more throughput than every kernel optimisation combined.
+
+[F5] FP8 prefill query quantization — NOT AVAILABLE ON ROCm
+  B300 uses --attention-config '{"use_prefill_query_quantization":true}'.
+  backend_supports_prefill_query_quantization() requires device capability
+  100 (GB200/Blackwell) and only FlashInfer / TRT-LLM Ragged backends.
+  Structurally unreachable on MI355X. Part of B300's prefill lead is not
+  closable by configuration.
+
+================================================================================
+4. IDENTIFIED BUT NOT YET VALIDATED
+================================================================================
+
+[P1] FULL cudagraphs downgraded -> drafter runs FULLY EAGER  *** BIGGEST WIN ***
+  All 8 workers logged:
+    "CUDAGraphMode.FULL_AND_PIECEWISE is not supported with spec-decode for
+     attention backend TritonMLABackend ... setting cudagraph_mode=PIECEWISE"
+  Gate at config/compilation.py:1443 needs min_cg_support >= UNIFORM_BATCH:
+    TritonMLA       _cudagraph_support = UNIFORM_SINGLE_TOKEN_DECODE (1)  FAIL
+    ROCM_AITER_MLA  _cudagraph_support = UNIFORM_BATCH (2)
+    FLASHINFER_MLA  _cudagraph_support = UNIFORM_BATCH (2)   <- B300 uses this
+
+  CONFIG FIX ATTEMPTED AND REJECTED:
+    speculative-config "attention_backend": TRITON_MLA -> ROCM_AITER_MLA gives
+      ValueError: Selected backend ROCM_AITER_MLA is not valid for this
+      configuration. Reason: ['non-causal attention not supported']
+    The DSpark draft is non-causal; TRITON_MLA is the ONLY ROCm MLA backend
+    with supports_non_causal_multi_token_decode = True. So the backend cannot
+    be swapped by configuration on ROCm.
+
+  THE HIDDEN COST (found by review, not in any log):
+    v1/worker/gpu/spec_decode/dflash/speculator.py:110-127 -- once the target
+    is downgraded to PIECEWISE, wants_full is False and the DSpark drafter is
+    given CUDAGraphMode.NONE, i.e. FULLY EAGER. No warning is emitted. Every
+    draft layer, the Markov head and the per-step sampling loop dispatch
+    kernel-by-kernel from Python on every decode step.
+
+  IN-CONTAINER SOURCE PATCH (validated):
+    vllm/v1/attention/backends/mla/triton_mla.py
+      _cudagraph_support: UNIFORM_SINGLE_TOKEN_DECODE -> UNIFORM_BATCH
+    Justified by the file's own existing comment, which raises the reorder
+    threshold "so full-cudagraph capture admits it", and by
+    supports_non_causal_multi_token_decode = True already being set.
+
+  MEASURED (single stream, 600-token generations, block sampling, AITER prefill):
+    downgrade warning : GONE
+    graph capture     : succeeded in 42 s
+    correctness       : "17*23" -> 391, finish_reason stop  (output valid)
+    decode            : 76.2 / 78.2 / 78.5 tok/s
+    ITL               : 13.12 / 12.78 / 12.74 ms
+  For reference the CI conc10 run measured ITL 90.4 ms (at concurrency 10, so
+  not a like-for-like comparison). A same-config unpatched baseline is being
+  measured to quantify the delta rigorously.
+
+[P2] KV offload DRAM budget
+  B300: 236,125,000,000 B/rank (~1,889 GB). Ours: 187,375,000,000 (1,499 GB),
+  from dram-utilization 0.50. Host has 3,023 GB. More offload capacity should
+  raise prefix-cache hit rate on agentic traces with large shared prefixes.
+
+[P3] cudagraph_capture_sizes shape alignment
+  Ours: 1..60 (mode 3, FULL_AND_PIECEWISE, custom_ops).
+  B300: [3,6,...,48] only — multiples of (1 + num_speculative_tokens).
+  Ours covers those values, but the elaborate config may be buying nothing
+  once FULL is downgraded to PIECEWISE anyway.
+
+[P4] max_num_seqs 20 (ours) vs 16 (B300).
+
+================================================================================
+5. CHANGES SHIPPED TO THE REPO
+================================================================================
+Repo   : ajith-sirra-amd/InferenceMAX_Rocm_Team, branch chore/sa-agentx-v1.0
+Commit : 8ab2c295
+Scope  : kimi files only, as instructed
+  added    upstream/InferenceX/benchmarks/single_node/agentic/apply_aiter_pybind11_fix.sh
+  modified upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+             - calls the AITER fix before launching
+             - MLA_PREFILL_BACKEND default FLASH_ATTN -> ROCM_AITER_FA
+  modified upstream/InferenceX/configs/amd-master.yaml   (kimi agentic block only)
+             - ep: 8 -> 1, conc-list: [16] -> [10]
+
+Run 31708941072 was dispatched on this commit and then CANCELLED: it tested
+the prefill fix only, worth ~1% of E2E, and was not worth 2 hours of runner
+time versus going after TPOT.
+
+================================================================================
+6. THROUGHPUT MODEL (from review) — CORRECTS EARLIER CLAIMS
+================================================================================
+  output_tok/s = C x U / ITL   (C = concurrency, U = decode duty cycle)
+
+                    C     ITL       ideal C/ITL   measured   U
+    ours  c10      10    0.0904        110.6       104.6     0.946
+    ours  c16      16    0.1092        146.5        56.2     0.384
+    B300  c8        8    0.0042       1904.8       293.4     0.154
+    B300  c16      16    0.0077       2077.9       347.9     0.167
+
+  Run A is already at 94.6% of what its own per-token speed permits.
+  => Fixing the KV block-pool crash is worth only ~5.7% of throughput DIRECTLY.
+     I previously called it the dominant lever. That was WRONG. Its real value
+     is as the GATE on running higher concurrency.
+  => AITER prefill is worth ~0.97% of E2E (prefill is 5.8% of wall clock).
+     Also previously overstated.
+  => The entire 2.8x gap is per-token speed. 227 ms/step is ~20x more than
+     HBM bandwidth can explain, so we are launch/CPU-bound, not memory-bound.
+     That is exactly the signature of an eager drafter.
+
+  Measured concurrency scaling from our own two points: throughput ~ C^0.598.
+
+================================================================================
+7. RANKED NEXT ACTIONS (revised)
+================================================================================
+1. [P1] cudagraph patch — validated, ITL 12.7-13.1 ms single stream. Ship it.
+2. Raise concurrency / max_num_seqs (~2x by C^0.598), gated on the crash.
+3. Raise dram-utilization 0.50 -> higher; pure enabler for (2).
+4. Fix the KV block-pool corruption [F4] — the gate, ~5.7% direct.
+5. lazy_offload=true — cheap, config-only, untested.
+6. Move the non-eval arm off "synthetic" [F2] so results are valid at all.
+7. AITER prefill [W1] — real but <1% of E2E. Lowest priority of the fixes.
+================================================================================
