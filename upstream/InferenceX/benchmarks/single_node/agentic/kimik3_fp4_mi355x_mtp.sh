@@ -352,12 +352,31 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # and DISABLE_SPEC removes the drafter entirely.
     CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,48,64,96,128,160,192,256,320,384,512"
     MAX_CUDAGRAPH_CAPTURE_SIZE=512
-    echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS SPARSE ladder (DCP mode), capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE"
+    # Run 32005837765: PIECEWISE capture DEADLOCKED at graph 3/17 for 30 min, then
+    #   query = self.group.all_gather(query, dim=...)
+    #   DistBackendError: NCCL error ... unhandled cuda error, NCCL version 2.27.7
+    # That is the DCP query-gather for MLA. On NVIDIA this runs as "direct
+    # symmetric-memory DCP query gather"; on ROCm no backend implements it, so it
+    # degrades to a plain RCCL all_gather -- and capturing a collective in a HIP
+    # graph hangs. rocm.py's FULL->PIECEWISE downgrade is not enough, because
+    # PIECEWISE still captures. NONE is the only mode that avoids capture entirely.
+    # Cost is real but bounded here: this workload is ~99% prefill by token count
+    # (B300 c70: 99,539 input tok/s vs 698 output tok/s) and prefill does not use
+    # decode cudagraphs anyway.
+    CUDAGRAPH_MODE_OVERRIDE="NONE"
+    echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS DCP mode -> cudagraph_mode=NONE (RCCL all_gather cannot be graph-captured)"
 else
     CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"
     echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE (3x max_num_seqs)"
 fi
-COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
+CUDAGRAPH_MODE="${CUDAGRAPH_MODE_OVERRIDE:-FULL_AND_PIECEWISE}"
+if [ "$CUDAGRAPH_MODE" = "NONE" ]; then
+    # No capture, so the size list is meaningless -- omit it rather than ship a
+    # list vLLM will ignore.
+    COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"NONE\",\"custom_ops\":[\"+fused_rms_norm_gated\"]}")
+else
+    COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
+fi
 
 GPU_MEM_UTIL="0.9"
 
