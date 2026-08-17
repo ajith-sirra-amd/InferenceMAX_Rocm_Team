@@ -1875,7 +1875,7 @@ minimaxm3-fp4-mi355x-vllm-agentic-mtp:
       - { tp: 4, ep: 1, spec-decoding: mtp, kv-offloading: dram, kv-offload-backend: { name: vllm-native }, conc-list: [32] }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp:
-  image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
+  image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
@@ -1887,7 +1887,9 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
     - dram-utilization: 0.50
       search-space:
       # - { tp: 8, kv-offloading: none, conc-list: [1, 4, 8] , spec-decoding: mtp}
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1, 4, 8, 10, 16, 20, 24], spec-decoding: mtp }
+      # SMOKE TEST: sweep narrowed to a single point; restore the full list below after.
+      # - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1, 4, 8, 10, 16, 20, 24], spec-decoding: mtp }
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [4], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
