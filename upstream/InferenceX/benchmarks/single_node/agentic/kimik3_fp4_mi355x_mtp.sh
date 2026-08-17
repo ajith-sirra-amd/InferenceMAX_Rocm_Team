@@ -246,6 +246,18 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     #   RuntimeError: Decode Context Parallelism (DCP) requires attention
     #   implementations to return the softmax LSE during decode, but
     #   AiterMLAImpl does not.
+    # ISOLATION (route A) for run 32012699807, which died ~10 min in with
+    #   HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware
+    #   exception. code: 0x1016
+    # on all 8 queues. The GPU coredump failed to write, so the faulting kernel
+    # is unattributed. The only variable between that run and 32009028600 (which
+    # did not fault) is AITER. Neither MLA prefill backend has ANY DCP awareness
+    # -- 0 references to dcp/context_parallel in aiter_flash_attn.py and
+    # flash_attn.py -- yet under DCP they receive tensors whose context length
+    # and head count are scaled by dcp_world_size. So: fall back to FLASH_ATTN
+    # prefill while KEEPING AITER for MoE. If this survives, the fault is in
+    # ROCM_AITER_FA under DCP. Set DCP_PREFILL_BACKEND=ROCM_AITER_FA to undo.
+    MLA_PREFILL_BACKEND="${DCP_PREFILL_BACKEND:-FLASH_ATTN}"
     # (hard assert at v1/worker/cp_utils.py:46). DCP splits the sequence across
     # ranks, so merging each rank's partial attention needs the per-shard
     # log-sum-exp; the AITER MLA ASM kernel does not emit it. Not a config gap --
