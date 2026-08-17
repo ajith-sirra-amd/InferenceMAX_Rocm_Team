@@ -281,14 +281,20 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # fault we get the fast prefill path too -- still a clean A/B against
     # 32012699807, which had identical settings minus the six new vars.
     MLA_PREFILL_BACKEND="${DCP_PREFILL_BACKEND:-ROCM_AITER_FA}"
-    # (hard assert at v1/worker/cp_utils.py:46). DCP splits the sequence across
-    # ranks, so merging each rank's partial attention needs the per-shard
-    # log-sum-exp; the AITER MLA ASM kernel does not emit it. Not a config gap --
-    # ROCM_AITER_MLA and DCP are mutually exclusive. AITER still covers MoE and
-    # prefill, which is where this prefill-dominated workload spends its time.
+    # Decode is now ROCM_AITER_MLA, not TRITON_MLA. The claim above -- that
+    # "ROCM_AITER_MLA and DCP are mutually exclusive" because the ASM kernel
+    # cannot emit a per-shard log-sum-exp -- was wrong. aiter's mla_decode_fwd
+    # has taken return_lse/cp_world_size/cp_rank/g_kv_indptr all along and
+    # gfx950 ships the CP round-robin kernels; only vLLM's wrapper was missing.
+    # apply_kimi_k3_patches.sh patch [4] (KIMI-PATCH-DCP-LSE) plumbs it through,
+    # which both clears the cp_utils.py:46 assert and sidesteps the TRITON_MLA
+    # HSA 0x1016 fault entirely. Set DCP_ATTN_BACKEND=TRITON_MLA to go back.
+    #
+    # The patch hard-requires qlen==1 under DCP (aiter has no gqa=64 CP kernel
+    # past qseqlen 1), which the DISABLE_SPEC=1 above already gives us.
     CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
              --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}"
-             --attention-backend "${DCP_ATTN_BACKEND:-TRITON_MLA}")
+             --attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
     echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a}"
     echo "DCP: expect a PIECEWISE downgrade warning from platforms/rocm.py -- that is the known ROCm gate."
 fi
