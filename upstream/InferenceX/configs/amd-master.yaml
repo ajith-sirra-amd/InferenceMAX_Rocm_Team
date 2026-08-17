@@ -1875,11 +1875,18 @@ minimaxm3-fp4-mi355x-vllm-agentic-mtp:
       - { tp: 4, ep: 1, spec-decoding: mtp, kv-offloading: dram, kv-offload-backend: { name: vllm-native }, conc-list: [32] }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp:
-  # Back to the best-measured stack: ROCM_AITER_MLA decode + ROCM_AITER_FA
-  # prefill + full cudagraphs + DSpark, and 57.26 GiB KV/rank (vs 49.57 on the
-  # nightly). DCP is parked -- it faults with HSA_STATUS_ERROR_EXCEPTION 0x1016
-  # and needs AMD kernel fixes, not script changes.
-  image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
+  # DCP is UNPARKED. The old claim here -- that DCP "needs AMD kernel fixes" --
+  # was wrong: aiter's mla_decode_fwd already takes return_lse/cp_world_size/
+  # cp_rank/g_kv_indptr and gfx950 ships the CP round-robin kernels; only vLLM's
+  # wrapper was missing. apply_kimi_k3_patches.sh patch [4] plumbs it through,
+  # moving DCP decode from TRITON_MLA to ROCM_AITER_MLA and sidestepping the
+  # HSA_STATUS_ERROR_EXCEPTION 0x1016 fault rather than fixing it.
+  #
+  # Pinned to the nightly the patch was validated against, NOT the unified
+  # image: the LSE convention, kernel selection and 96-head merge were all
+  # measured on ac7509e2b. This gives up the unified image's KV headroom
+  # (49.57 vs 57.26 GiB/rank) -- which is the thing DCP exists to win back.
+  image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
@@ -1893,14 +1900,18 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
     - dram-utilization: 0.65
       search-space:
       # - { tp: 8, kv-offloading: none, conc-list: [1, 4, 8] , spec-decoding: mtp}
-      # Measured curve on this stack: c12=4431, c16=4749, c20=5022 tok/s/GPU --
-      # still climbing, and the c24 sweep was cancelled before it ran. So our own
-      # peak is unmeasured. Push past it.
-      # KV budget: 57.26 GiB/rank ~= 2.97M tokens; at ~132k mean ISL that is ~22
-      # requests resident, so c24 fits in GPU KV and c32/c40 lean on CPU offload.
-      # Watch c40: max_num_seqs=80 gives a dense capture ladder of 1..240, which
-      # costs both capture time and memory.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [24, 32, 40], spec-decoding: mtp }
+      # Straddles DCP_AUTO_CONC_THRESHOLD=64 in the launcher, so this one list
+      # measures both regimes and gives a clean A/B across the threshold:
+      #   c40      -> no DCP, MTP on   (extends the 4431/4749/5022 curve, which
+      #                                 was still climbing at c20)
+      #   c64, c72 -> DCP=8, spec off  (the patch [4] path; c72 is the closest
+      #                                 comparison to B300's c70 + DCP=8)
+      # KV budget without DCP: ~49.57 GiB/rank on this nightly, ~22 resident
+      # requests at ~132k mean ISL -- which is the wall DCP is meant to remove.
+      # NOTE c64/c72 give up spec decoding: aiter has no gqa=64 CP kernel past
+      # qseqlen 1, so the DCP path keeps DISABLE_SPEC=1. Judge DCP on
+      # tok/s/GPU, not on acceptance rate.
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [40, 64, 72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

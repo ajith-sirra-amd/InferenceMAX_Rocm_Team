@@ -52,7 +52,10 @@ wait_for_amd_gpu_clean
 # below), i.e. draft tokens are actually verified against the target, so this
 # is the only arm whose generated text is valid. It therefore doubles as the
 # correctness check for the triton_mla cudagraph patch.
-EVAL_ONLY="false"
+# Env-overridable so the accuracy arm can be selected per-run (EVAL_ONLY=true)
+# without editing this file -- the DCP/LSE work needs to flip between the
+# throughput and correctness arms repeatedly.
+EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
@@ -258,6 +261,10 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
 DCP_SIZE="${DCP_SIZE:-1}"
+# fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
+# every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
+# non-DCP arms must stay bit-for-bit unchanged.
+KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
 CP_ARGS=()
 if [ "$DCP_SIZE" -gt 1 ]; then
     # Decode MUST be TRITON_MLA under DCP. Run 32011858320 died at init with
@@ -292,6 +299,16 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     #
     # The patch hard-requires qlen==1 under DCP (aiter has no gqa=64 CP kernel
     # past qseqlen 1), which the DISABLE_SPEC=1 above already gives us.
+    #
+    # DCP also forces a bf16 KV cache. Every CP round-robin row in aiter's
+    # kernel table (aiter_meta/hsa/gfx950/mla/mla_asm.csv) is bf16/bf16 -- there
+    # is simply no cprr kernel for an fp8 KV cache, and a table miss aborts the
+    # process rather than raising. This is a REAL COST, not a formality: bf16
+    # doubles the bytes per KV token, so DCP=8 buys 8x/2 = 4x effective KV
+    # capacity over the fp8 non-DCP baseline, not the 8x a naive reading gives.
+    # Set DCP_KV_CACHE_DTYPE=fp8 to observe the guard fire.
+    KV_CACHE_DTYPE="${DCP_KV_CACHE_DTYPE:-auto}"
+    echo "DCP: kv-cache-dtype=$KV_CACHE_DTYPE (fp8 has no CP kernel in aiter)"
     CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
              --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}"
              --attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
@@ -558,7 +575,7 @@ VLLM_CMD=(
     --reasoning-parser kimi_k3
     --max-model-len 1048576
     --enable-prefix-caching
-    --kv-cache-dtype "fp8"
+    --kv-cache-dtype "$KV_CACHE_DTYPE"
     "${CHUNKED_PREFILL_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${UNIFIED_ARGS[@]}"

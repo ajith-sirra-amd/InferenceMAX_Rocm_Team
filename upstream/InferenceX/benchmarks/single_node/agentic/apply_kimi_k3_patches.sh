@@ -476,10 +476,12 @@ edits.append(("mla", """        rocm_aiter_ops.mla_decode_fwd(
                     "schedule (aiter serves CP round-robin only from ps=1 "
                     "kernels), but has_persistent_metadata is False."
                 )
-            if is_quantized_kv_cache(self._kv_cache_dtype_str):
+            # NB: _kv_cache_dtype_str lives on the metadata BUILDER, not on the
+            # impl -- reaching for it here is an AttributeError at first decode.
+            if is_quantized_kv_cache(self.kv_cache_dtype):
                 raise RuntimeError(
                     "DCP on ROCM_AITER_MLA requires a bf16 KV cache; aiter ships "
-                    f"no CP kernel for kv_cache_dtype={self._kv_cache_dtype_str}."
+                    f"no CP kernel for kv_cache_dtype={self.kv_cache_dtype}."
                 )
             if decode.max_qo_len != 1:
                 raise RuntimeError(
