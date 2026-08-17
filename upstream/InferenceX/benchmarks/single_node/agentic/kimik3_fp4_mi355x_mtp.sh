@@ -287,14 +287,102 @@ export PYTHONNOUSERSITE=1
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS="${VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS:-1200}"
 
 { set +x; } 2>/dev/null
+# ---- Unified-image mode (aigmkt/k3-unified-v2-from-cb810) --------------------
+# Self-detecting: the unified image ships /opt/aiter-local with a merged tuned
+# GEMM table. On the stock nightly that path does not exist and this whole block
+# is skipped, so the working recipe is untouched.
+#
+# Everything below mirrors validate_live_graph_capture.sh from the image's own
+# build context. Do NOT mix these with our in-container patches -- the image
+# already carries the PR2585 bundle, and our ROCM_AITER_FA prefill pin is exactly
+# what made the first smoke test die with
+#   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...
+#               Reason: ['required dependencies not available']
+# (the image ships a different Triton, so triton_kernels.matmul_ogs is absent).
+UNIFIED_GEMM_CSV=/opt/aiter-local/aiter/configs/merged_bf16_tuned_gemm.csv
+if [ -f "$UNIFIED_GEMM_CSV" ]; then
+    echo "=== unified image detected: applying its documented runtime config ==="
+    export GPU_ARCHS=gfx950
+    export VLLM_ROCM_USE_AITER=1
+    export VLLM_ROCM_USE_AITER_MOE=1
+    export AITER_SITUV2_A8W4=1
+    export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
+    export AITER_BF16_FP8_MOE_BOUND=0
+    export VLLM_USE_BREAKABLE_CUDAGRAPH=0
+    export SAFETENSORS_FAST_GPU=1
+    export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
+    export AITER_CONFIG_GEMM_BF16="$UNIFIED_GEMM_CSV"
+    export HSA_NO_SCRATCH_RECLAIM=1
+    export VLLM_K3_KDA_SAFE_STAGES=1
+    export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
+
+    # apply_dspark_fp8asm.sh step 2/7 forces the DSpark draft causal so that
+    # ROCM_AITER_MLA is a legal draft backend (otherwise vLLM rejects it with
+    # "non-causal attention not supported"). Their script hardcodes
+    # /dev/shm/hf-cache, which does not exist here, so it would silently no-op
+    # and leave the draft non-causal. Search the real cache instead.
+    python3 - <<'PYFORCE'
+import glob, json, os, shutil
+roots = [os.environ.get("HF_HUB_CACHE",""), os.environ.get("HF_HOME",""),
+         "/mnt/hf_hub_cache", "/home/models", "/dev/shm/hf-cache", "/root/.cache/huggingface/hub"]
+pats = []
+for r in roots:
+    if r:
+        pats += [f"{r}/models--Inferact--Kimi-K3-DSpark/snapshots/*/config.json",
+                 f"{r}/**/models--Inferact--Kimi-K3-DSpark/snapshots/*/config.json"]
+hits = []
+for p in pats:
+    hits += glob.glob(p, recursive=True)
+if not hits:
+    print("  !! DSpark draft config NOT found -- draft stays non-causal; "
+          "ROCM_AITER_MLA will be rejected for the draft")
+for f in sorted(set(hits)):
+    c = json.load(open(f))
+    d = c.setdefault("dflash_config", {})
+    if d.get("causal") is True:
+        print("  draft already causal:", f)
+    else:
+        if not os.path.exists(f + ".orig.bak"):
+            shutil.copy2(f, f + ".orig.bak")
+        d["causal"] = True
+        json.dump(c, open(f, "w"), indent=2)
+        print("  forced causal:", f)
+PYFORCE
+
+    # Their serve flags. ROCM_AITER_MLA everywhere; no separate prefill pin.
+    MLA_PREFILL_ARGS=()
+    ASYNC_SCHED_ARGS=(--async-scheduling)
+    CHUNKED_PREFILL_ARGS=()
+    UNIFIED_ARGS=(
+        --attention-backend ROCM_AITER_MLA
+        --distributed-executor-backend mp
+        --enable-prompt-tokens-details
+        --no-disable-hybrid-kv-cache-manager
+        --disable-uvicorn-access-log
+    )
+    UNIFIED_MOE_BACKEND=aiter
+    UNIFIED_LOAD_FORMAT=auto
+    SPEC_ARGS=(
+        --speculative-config
+        "{\"method\":\"dspark\",\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":2,\"attention_backend\":\"ROCM_AITER_MLA\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"synthetic\",\"synthetic_acceptance_length\":2.51}"
+    )
+    # Their capture ladder (sparse, to 384) rather than our dense 1..N.
+    CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,12,16,24,32,36,40,48,56,64,72,80,88,96,104,112,120,128,136,144,152,160,168,176,184,192,200,208,216,224,232,240,248,256,272,288,304,320,336,352,368,384"
+    COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
+else
+    UNIFIED_ARGS=()
+    UNIFIED_MOE_BACKEND=auto
+    UNIFIED_LOAD_FORMAT=fastsafetensors
+fi
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
     --port "$PORT"
     --trust-remote-code
-    --moe-backend auto
+    --moe-backend "$UNIFIED_MOE_BACKEND"
     --tensor-parallel-size "$TP"
-    --load-format fastsafetensors
+    --load-format "$UNIFIED_LOAD_FORMAT"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
@@ -305,6 +393,7 @@ VLLM_CMD=(
     --enable-prefix-caching
     --kv-cache-dtype "fp8"
     "${CHUNKED_PREFILL_ARGS[@]}"
+    "${UNIFIED_ARGS[@]}"
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
