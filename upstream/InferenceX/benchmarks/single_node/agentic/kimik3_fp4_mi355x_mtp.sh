@@ -215,6 +215,10 @@ DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-64}"
 if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     DCP_SIZE="${DCP_SIZE:-8}"
     DISABLE_SPEC="${DISABLE_SPEC:-1}"
+    # Run 32005332130 died at init on all 8 ranks: this nightly has no
+    # triton_kernels.matmul_ogs, so the ROCM_AITER_FA prefill pin is invalid.
+    # Empty = let vLLM auto-select (the "-" default at the pin below preserves it).
+    MLA_PREFILL_BACKEND="${MLA_PREFILL_BACKEND-}"
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
 DCP_SIZE="${DCP_SIZE:-1}"
@@ -300,7 +304,13 @@ fi
 #   ~93k ctx  FLASH_ATTN 11,174 -> AITER 13,423 tok/s  (+20.1%)
 # This workload averages ~99k input tokens, so the ~93k figure is the relevant
 # one. Set MLA_PREFILL_BACKEND=FLASH_ATTN to fall back if AITER regresses.
-MLA_PREFILL_BACKEND="${MLA_PREFILL_BACKEND:-ROCM_AITER_FA}"
+# Note "-" not ":-": an explicitly-empty MLA_PREFILL_BACKEND means "let vLLM
+# auto-select" and must survive. Newer images (the unified one, and nightly
+# 311b3513) ship a Triton without triton_kernels.matmul_ogs, so pinning
+# ROCM_AITER_FA there dies at init with
+#   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid for
+#   this configuration. Reason: ['required dependencies not available']
+MLA_PREFILL_BACKEND="${MLA_PREFILL_BACKEND-ROCM_AITER_FA}"
 MLA_PREFILL_ARGS=()
 if [ -n "$MLA_PREFILL_BACKEND" ]; then
     MLA_PREFILL_ARGS=(
