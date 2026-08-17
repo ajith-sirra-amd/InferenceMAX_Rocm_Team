@@ -97,7 +97,11 @@ install_agentic_deps
 #   [2] TritonMLA cudagraph support        -> FULL cudagraphs for DSpark (5.52x TPOT)
 #   [3] KV block-pool negative-count clamp -> stops the mid-run engine crash
 # Set SKIP_KIMI_PATCHES=1 to run stock.
-# bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
+# Only meaningful on the stock ROCm nightly. The unified image already carries
+# the PR2585 bundle and a different vLLM, so the anchors would not match there.
+if [ ! -f /opt/aiter-local/aiter/configs/merged_bf16_tuned_gemm.csv ]; then
+    bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
+fi
 
 # ---- Reference env block ----------------------------------------------------
 # Keep ALL of these. Commenting them out does not avoid the AITER FMHA crash:
@@ -177,11 +181,62 @@ if [ "$EP_SIZE" -gt 1 ]; then
     EP_ARGS=(--enable-expert-parallel)
 fi
 
+# ---- Decode context parallel (DCP) ------------------------------------------
+# OFF by default (DCP_SIZE=1): everything below is inert unless explicitly asked
+# for, so the working DSpark recipe is untouched.
+#
+# Why it is interesting: MLA has ONE latent KV head, so TP cannot shard the KV
+# cache -- every TP rank holds a full copy. DCP shards KV along the sequence
+# dimension instead, making the pool the sum of all 8 GPUs. The B300 reference
+# (run 31893747354, c70) measures the effect exactly:
+#     ours  TP8, no DCP : GPU KV  2,646,487 tokens ->  2.52x max-model-len
+#     B300  TP8, DCP=8  : GPU KV 21,564,193 tokens -> 20.57x
+# i.e. 8.2x more KV, which is the wall we hit every time concurrency scales.
+#
+# THREE ROCm-SPECIFIC CATCHES, all verified at nightly commit 311b3513:
+#  1. platforms/rocm.py:905 force-downgrades cudagraph_mode to PIECEWISE when
+#     DCP>1. platforms/cuda.py has NO such gate -- this is ROCm-only, and it
+#     silently undoes the FULL cudagraph win the triton_mla patch buys us.
+#  2. mla/triton_mla.py:61 sets supports_draft_decode_metadata_update to
+#     (dcp_world_size == 1), so at DCP=8 fused multi-step draft decode is off
+#     and attention metadata is rebuilt between every draft step.
+#  3. dcp_comm_backend is read only by flashinfer.py / flash_attn.py (CUDA-only).
+#     Neither rocm_aiter_mla.py nor triton_mla.py references it, so "a2a" is a
+#     no-op for us and the generic ag_rs path is what actually runs. We still
+#     pass it to stay literally comparable with the B300 command.
+# All three are about the drafter, which is why the B300 run turned spec
+# decoding OFF at c70 (NUM_SPEC_TOKENS=0, speculative_config=None). DISABLE_SPEC
+# below mirrors that: it is the config that actually produced their number.
+# Auto-enable only at concurrencies no existing config uses (our conc-list tops
+# out at 24), so every current run is bit-for-bit unaffected. The B300 script
+# gates the same way -- it disables spec decode above conc 16, which is how c70
+# ended up with NUM_SPEC_TOKENS=0.
+DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-64}"
+if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
+    DCP_SIZE="${DCP_SIZE:-8}"
+    DISABLE_SPEC="${DISABLE_SPEC:-1}"
+    echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
+fi
+DCP_SIZE="${DCP_SIZE:-1}"
+CP_ARGS=()
+if [ "$DCP_SIZE" -gt 1 ]; then
+    CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
+             --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}")
+    echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a}"
+    echo "DCP: expect a PIECEWISE downgrade warning from platforms/rocm.py -- that is the known ROCm gate."
+fi
+
 # ---- Speculative ------------------------------------------------------------
 SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-2}"
 SYNTHETIC_ACCEPT_LEN=2.51
 
-if [ "${EVAL_ONLY:-false}" = "true" ]; then
+if [ "${DISABLE_SPEC:-0}" = "1" ]; then
+    # Mirrors the B300 c70 path, which fell through to NUM_SPEC_TOKENS=0.
+    # Note this makes throughput real rather than synthetic: with no drafter
+    # there is no rejection_sample_method="synthetic" inflating the token count.
+    SPEC_ARGS=()
+    echo "spec decoding: DISABLED (DISABLE_SPEC=1) -- matches the B300 c70 reference"
+elif [ "${EVAL_ONLY:-false}" = "true" ]; then
     SPEC_ARGS=(
         --speculative-config
         "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"block\"}"
@@ -276,8 +331,22 @@ MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 2 ))}"
 # there is no need to hand-add sizes the way a sparse ladder would.
 # Cost measured on this recipe: 1.07 GiB and ~54 s to capture, so headroom is cheap.
 MAX_CUDAGRAPH_CAPTURE_SIZE="${MAX_CUDAGRAPH_CAPTURE_SIZE:-$(( MAX_NUM_SEQS * 3 ))}"
-CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"
-echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE (3x max_num_seqs)"
+
+if [ "$DCP_SIZE" -gt 1 ]; then
+    # Sparse ladder, as the B300 reference uses (max_num_seqs 140 with
+    # [1,2,...,128,256,...,8192] rather than a dense list). The dense 1..3N list
+    # above is only affordable because N is small: at c72 it would be 1..432,
+    # which is minutes of capture for sizes a decode batch never actually hits.
+    # The dense list also exists to guarantee every 3*C is an exact captured
+    # size for the DSpark drafter -- irrelevant here, since DCP forces PIECEWISE
+    # and DISABLE_SPEC removes the drafter entirely.
+    CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,48,64,96,128,160,192,256,320,384,512"
+    MAX_CUDAGRAPH_CAPTURE_SIZE=512
+    echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS SPARSE ladder (DCP mode), capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE"
+else
+    CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"
+    echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE (3x max_num_seqs)"
+fi
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 GPU_MEM_UTIL="0.9"
@@ -393,6 +462,7 @@ VLLM_CMD=(
     --enable-prefix-caching
     --kv-cache-dtype "fp8"
     "${CHUNKED_PREFILL_ARGS[@]}"
+    "${CP_ARGS[@]}"
     "${UNIFIED_ARGS[@]}"
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
