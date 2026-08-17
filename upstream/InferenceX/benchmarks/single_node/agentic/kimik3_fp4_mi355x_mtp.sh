@@ -55,7 +55,7 @@ wait_for_amd_gpu_clean
 # Env-overridable so the accuracy arm can be selected per-run (EVAL_ONLY=true)
 # without editing this file -- the DCP/LSE work needs to flip between the
 # throughput and correctness arms repeatedly.
-EVAL_ONLY="${EVAL_ONLY:-false}"
+EVAL_ONLY="${EVAL_ONLY:-true}"   # T6: DCP correctness gate (GSM8K, baseline 0.9651). Flip back to false after.
 export EVAL_FRAMEWORK="lm-eval"
 
 # Fast iteration mode. benchmark_lib.sh's run_agentic_replay honours
