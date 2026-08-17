@@ -247,7 +247,26 @@ fi
 # ended up with NUM_SPEC_TOKENS=0.
 DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-64}"
 if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
-    DCP_SIZE="${DCP_SIZE:-8}"
+    # DCP=4, not 8. Run 32025696861 died with HSA_STATUS_ERROR_EXCEPTION 0x1016
+    # on all 8 queues, and the crash dump pins it exactly:
+    #   num_computed_tokens=126720, num_scheduled_tokens=7680, num_output_tokens=0
+    # i.e. a chunked-PREFILL continuation, no decode in flight. vLLM narrows every
+    # DCP block table to max_model_len/dcp_world_size
+    # (kv_cache_interface.py:253-256 and :293-295), so at DCP=8 the budget is
+    #   1048576 / 8 = 131072 tokens
+    # and that request crossed it: 126720 fits, 126720+7680 = 134400 does not.
+    # A group replicated across ranks rather than sharded then indexes past its
+    # block table -> OOB read -> 0x1016. vllm-project/vllm#51705 fixes this
+    # properly with cp_exempt_groups; it is still OPEN and not in any nightly.
+    # DCP=4 raises the budget to 1048576/4 = 262144, clear of our ~134k
+    # sequences. It masks the bug rather than fixing it -- revisit at DCP=8 once
+    # #51705 lands. max_model_len cannot go the other way: mpe is 1048576 and
+    # DCP=8 would need >= 1075200.
+    # Verified locally that the 48-head gathered shape (12 local x DCP4) still
+    # resolves a CP+LSE kernel -- mla_a16w16_qh64_qseqlen1_gqaratio64_lse_cprr_v3_ps
+    # -- and merges to rel 3.1e-03, despite gqa=48 being excluded from aiter's
+    # first normalization branch.
+    DCP_SIZE="${DCP_SIZE:-4}"
     DISABLE_SPEC="${DISABLE_SPEC:-1}"
     # NOTE: run 32005332130 died with
     #   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...

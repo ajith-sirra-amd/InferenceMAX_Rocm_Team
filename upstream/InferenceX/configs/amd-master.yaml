@@ -1882,11 +1882,16 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # moving DCP decode from TRITON_MLA to ROCM_AITER_MLA and sidestepping the
   # HSA_STATUS_ERROR_EXCEPTION 0x1016 fault rather than fixing it.
   #
-  # Pinned to the nightly the patch was validated against, NOT the unified
-  # image: the LSE convention, kernel selection and 96-head merge were all
-  # measured on ac7509e2b. This gives up the unified image's KV headroom
-  # (49.57 vs 57.26 GiB/rank) -- which is the thing DCP exists to win back.
-  image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
+  # Nightly, not the unified image: DCP needs patch [4], and the LSE convention,
+  # kernel selection and gathered-head merge were all measured on a nightly.
+  # Bumped ac7509e2b (2026-08-14) -> 311b3513 (2026-08-17). ac7509e2b's bundled
+  # aiter caps Gluon MLA at "nhead <= 16 or nhead in (64,128)", so the 96 heads a
+  # TP8/DCP8 gather produces have no Gluon kernel there -- ROCm/aiter#4412
+  # ("support nhead=96 for MLA", merged 2026-07-29) was not picked up despite the
+  # image post-dating it. That is why this recipe drives the ASM cprr path rather
+  # than Gluon. Whether 311b3513 ships a newer aiter is exactly what this run
+  # answers; the ASM path does not depend on it either way.
+  image: vllm/vllm-openai-rocm:nightly-311b3513af33bc29b4acb2fde2e9313e5e9966a0
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds

@@ -406,6 +406,37 @@ edits.append(("ops", """            reduce_final_map=reduce_final_map,
     @staticmethod
     def per_tensor_quant(""", "4d wrapper call"))
 
+# --- [4d2] the persistent SCHEDULE must be sized for the gathered head count ---
+# Caught by comparing against vllm-project/vllm#52248 (closed as overlapping
+# with #51705). Patching only the impl's forward path leaves the builder sizing
+# get_mla_metadata_info_v1 / get_mla_metadata_v1 for max(16, 12) = 16 heads while
+# the kernel is actually invoked with 96 -- a work/reduce schedule built for the
+# wrong shape. Prime suspect for the local GSM8K stall at request 1318/1319.
+# Read the DCP size from vllm_config rather than self.* so this cannot depend on
+# __init__ ordering inside the builder.
+edits.append(("mla", """        # For num_attention_heads < 16 (e.g. kimi-k2.5 head=8 with TP8),
+        # make sure get_mla_metadata_info_v1 / get_mla_metadata_v1 are consistent
+        # with the actual tensor shape passed to mla_decode_fwd.
+        self._num_attention_heads = max(16, self.num_heads)""",
+"""        # For num_attention_heads < 16 (e.g. kimi-k2.5 head=8 with TP8),
+        # make sure get_mla_metadata_info_v1 / get_mla_metadata_v1 are consistent
+        # with the actual tensor shape passed to mla_decode_fwd.
+        # KIMI-PATCH-DCP-LSE: under DCP the query is all-gathered along the head
+        # dim before decode, so the schedule must be built for the GATHERED count
+        # (12*8=96 at TP8/DCP8), not the local TP shard. Identity when DCP is off.
+        _dcp_size = vllm_config.parallel_config.decode_context_parallel_size
+        self._decode_num_heads = self.num_heads * _dcp_size
+        self._num_attention_heads = max(16, self._decode_num_heads)""",
+"4d2 builder head count"))
+
+# The persistent-metadata gate must ask the same question of the same head
+# count, or the builder skips the schedule that the asm decode then requires.
+edits.append(("mla", """                self.num_heads >= AiterMLAHelper._AITER_MIN_MLA_HEADS
+                or max_qo_len <= AiterMLAHelper._ASM_PADDED_MAX_PS_QLEN""",
+"""                self._decode_num_heads >= AiterMLAHelper._AITER_MIN_MLA_HEADS
+                or max_qo_len <= AiterMLAHelper._ASM_PADDED_MAX_PS_QLEN""",
+"4d3 persistent gate head count"))
+
 # --- [4e] gluon has no LSE output and skips persistent metadata -> not DCP-safe ---
 edits.append(("mla", """    @staticmethod
     def use_gluon_decode(num_heads: int, max_qo_len: int, kv_cache_dtype: str) -> bool:""",
