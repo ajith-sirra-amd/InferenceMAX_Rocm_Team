@@ -108,13 +108,26 @@ fi
 # that crash is gated on VLLM_ROCM_USE_AITER alone (AiterFlashAttnPrefillBackend
 # .is_available() consults only rocm_aiter_ops.is_enabled()), so disabling the
 # others just loses the MoE kernels while keeping the failure.
-# export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
-# export VLLM_ROCM_USE_AITER=1
-# export SAFETENSORS_FAST_GPU=1
-# export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
-# export AITER_BF16_FP8_MOE_BOUND=0
-# # REQUIRED on ROCm per the upstream recipe: the build auto-enables this to 1.
-# export VLLM_USE_BREAKABLE_CUDAGRAPH=0
+#
+# These were commented out when we moved to the unified image, which exports its
+# own equivalents from the block further down. But on the STOCK NIGHTLY nothing
+# sets them, and run 32009028600 showed exactly what the comment above warns
+# about -- AITER was off end to end:
+#     Using 'EMULATION' Mxfp4 MoE backend    <- MXFP4 dequantized to generic GEMMs
+#     Using TRITON_MLA backend               <- not ROCM_AITER_MLA
+#     Using FLASH_ATTN MLA prefill backend   <- not ROCM_AITER_FA
+# EMULATION on a MoE model is catastrophic and is why warmup crawled at 9/796.
+# So: export them whenever the unified image is NOT present.
+if [ ! -f /opt/aiter-local/aiter/configs/merged_bf16_tuned_gemm.csv ]; then
+    export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
+    export VLLM_ROCM_USE_AITER=1
+    export SAFETENSORS_FAST_GPU=1
+    export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
+    export AITER_BF16_FP8_MOE_BOUND=0
+    # REQUIRED on ROCm per the upstream recipe: the build auto-enables this to 1.
+    export VLLM_USE_BREAKABLE_CUDAGRAPH=0
+    echo "AITER env: enabled (stock nightly path)"
+fi
 
 # Workaround for MEC FW <177 RCCL memory reclaim issue (shared with the other
 # gfx950 recipes in this tree).
@@ -215,10 +228,15 @@ DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-64}"
 if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     DCP_SIZE="${DCP_SIZE:-8}"
     DISABLE_SPEC="${DISABLE_SPEC:-1}"
-    # Run 32005332130 died at init on all 8 ranks: this nightly has no
-    # triton_kernels.matmul_ogs, so the ROCM_AITER_FA prefill pin is invalid.
-    # Empty = let vLLM auto-select (the "-" default at the pin below preserves it).
-    MLA_PREFILL_BACKEND="${MLA_PREFILL_BACKEND-}"
+    # NOTE: run 32005332130 died with
+    #   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...
+    #   Reason: ['required dependencies not available']
+    # and I wrongly blamed a missing triton_kernels.matmul_ogs in the image.
+    # The real cause: aiter_flash_attn.py:42 is_available() returns
+    # rocm_aiter_ops.is_enabled(), i.e. VLLM_ROCM_USE_AITER -- which was unset
+    # because the reference env block above was commented out. base.py:105 then
+    # reports the generic "required dependencies not available". With the env
+    # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
 DCP_SIZE="${DCP_SIZE:-1}"
