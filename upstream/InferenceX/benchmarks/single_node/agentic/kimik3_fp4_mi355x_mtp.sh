@@ -66,7 +66,13 @@ export EVAL_FRAMEWORK="lm-eval"
 # a working day. Fast mode brings that to ~40 min. Numbers from fast runs are
 # directionally valid for tok/s but come from a 20-minute profile, so the
 # headline result must be reproduced with AIPERF_EXPERIMENTAL_FAST=0.
-export AIPERF_EXPERIMENTAL_FAST="${AIPERF_EXPERIMENTAL_FAST:-1}"
+# T12: keep the SHORT WARMUP but restore the FULL PROFILE. FAST=1 does both
+# (warmup 10->1 per lane AND duration->1200 s), and the 1200 s window is too
+# short for this trace: TTFT alone averages ~163 s and e2e ~400 s, so few
+# requests complete inside the profile and throughput is understated. Setting
+# the warmup knob directly gives ~20 min of warmup plus the matrix duration.
+export AIPERF_EXPERIMENTAL_FAST="${AIPERF_EXPERIMENTAL_FAST:-0}"
+export AIPERF_WARMUP_REQUESTS_PER_LANE="${AIPERF_WARMUP_REQUESTS_PER_LANE:-1}"
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 
