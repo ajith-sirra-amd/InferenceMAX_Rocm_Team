@@ -1875,10 +1875,11 @@ minimaxm3-fp4-mi355x-vllm-agentic-mtp:
       - { tp: 4, ep: 1, spec-decoding: mtp, kv-offloading: dram, kv-offload-backend: { name: vllm-native }, conc-list: [32] }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp:
-  # DCP SMOKE TEST: latest AMD ROCm nightly (vLLM commit 311b3513, 2026-08-17).
-  # Restore aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1 for the
-  # normal DSpark sweep.
-  image: vllm/vllm-openai-rocm:nightly-311b3513af33bc29b4acb2fde2e9313e5e9966a0
+  # Back to the best-measured stack: ROCM_AITER_MLA decode + ROCM_AITER_FA
+  # prefill + full cudagraphs + DSpark, and 57.26 GiB KV/rank (vs 49.57 on the
+  # nightly). DCP is parked -- it faults with HSA_STATUS_ERROR_EXCEPTION 0x1016
+  # and needs AMD kernel fixes, not script changes.
+  image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
@@ -1887,17 +1888,19 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   multinode: false
   scenarios:
     agentic-coding:
-    - dram-utilization: 0.50
+    # 0.50 -> 0.65 buys CPU-offload headroom for the higher concurrencies below.
+    # 0.80 was tried previously and OOM'd the host; 0.65 is the known-safe ceiling.
+    - dram-utilization: 0.65
       search-space:
       # - { tp: 8, kv-offloading: none, conc-list: [1, 4, 8] , spec-decoding: mtp}
-      # Normal DSpark sweep -- restore this line after the DCP experiment:
-      # - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1, 8, 16, 20, 24], spec-decoding: mtp }
-      # c72 crosses DCP_AUTO_CONC_THRESHOLD=64, so the script switches to the
-      # B300-style config: DCP=8, a2a, spec decode off, sparse capture ladder.
-      # The number we are after is the startup line
-      #   "GPU KV cache size: N tokens, Maximum concurrency ...: X.XXx"
-      # ours today = 2.52x; B300 with DCP=8 = 20.57x.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [72], spec-decoding: mtp }
+      # Measured curve on this stack: c12=4431, c16=4749, c20=5022 tok/s/GPU --
+      # still climbing, and the c24 sweep was cancelled before it ran. So our own
+      # peak is unmeasured. Push past it.
+      # KV budget: 57.26 GiB/rank ~= 2.97M tokens; at ~132k mean ISL that is ~22
+      # requests resident, so c24 fits in GPU KV and c32/c40 lean on CPU offload.
+      # Watch c40: max_num_seqs=80 gives a dense capture ladder of 1..240, which
+      # costs both capture time and memory.
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [24, 32, 40], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
