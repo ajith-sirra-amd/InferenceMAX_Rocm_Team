@@ -126,7 +126,25 @@ if [ ! -f /opt/aiter-local/aiter/configs/merged_bf16_tuned_gemm.csv ]; then
     export AITER_BF16_FP8_MOE_BOUND=0
     # REQUIRED on ROCm per the upstream recipe: the build auto-enables this to 1.
     export VLLM_USE_BREAKABLE_CUDAGRAPH=0
-    echo "AITER env: enabled (stock nightly path)"
+    # --- parity with the unified image's own env block (validate_live_graph_capture.sh)
+    # This path was setting only 6 of its 13 vars. Two look load-bearing:
+    #  * HSA_NO_SCRATCH_RECLAIM=1 disables ROCm scratch-memory reclaim, a known
+    #    source of HSA_STATUS_ERROR_EXCEPTION -- which is exactly how run
+    #    32012699807 died (code 0x1016 on all 8 queues).
+    #  * AITER_SITUV2_A8W4 + VLLM_ROCM_USE_AITER_MOE: we set only the
+    #    VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4 spelling, and that run selected
+    #    'AITER_MXFP4_BF16' MoE (BF16 activations) rather than the A8W4 path.
+    # VLLM_K3_KDA_SAFE_STAGES matters because Kimi-K3's hybrid KDA layers are
+    # where DCP sharding is least exercised.
+    # Not copied: AITER_CONFIG_GEMM_BF16, which points at the unified image's
+    # merged tuned-GEMM table and has no equivalent file here.
+    export GPU_ARCHS=gfx950
+    export VLLM_ROCM_USE_AITER_MOE=1
+    export AITER_SITUV2_A8W4=1
+    export HSA_NO_SCRATCH_RECLAIM=1
+    export VLLM_K3_KDA_SAFE_STAGES=1
+    export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
+    echo "AITER env: enabled (stock nightly path, unified-parity set)"
 fi
 
 # Workaround for MEC FW <177 RCCL memory reclaim issue (shared with the other
@@ -257,7 +275,12 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # and head count are scaled by dcp_world_size. So: fall back to FLASH_ATTN
     # prefill while KEEPING AITER for MoE. If this survives, the fault is in
     # ROCM_AITER_FA under DCP. Set DCP_PREFILL_BACKEND=ROCM_AITER_FA to undo.
-    MLA_PREFILL_BACKEND="${DCP_PREFILL_BACKEND:-FLASH_ATTN}"
+    # Route A (FLASH_ATTN isolation) is superseded: HSA_NO_SCRATCH_RECLAIM=1 is a
+    # much stronger candidate for a hardware exception than the prefill backend,
+    # and it was missing. Keep ROCM_AITER_FA so that if the env parity fixes the
+    # fault we get the fast prefill path too -- still a clean A/B against
+    # 32012699807, which had identical settings minus the six new vars.
+    MLA_PREFILL_BACKEND="${DCP_PREFILL_BACKEND:-ROCM_AITER_FA}"
     # (hard assert at v1/worker/cp_utils.py:46). DCP splits the sequence across
     # ranks, so merging each rank's partial attention needs the per-shard
     # log-sum-exp; the AITER MLA ASM kernel does not emit it. Not a config gap --
