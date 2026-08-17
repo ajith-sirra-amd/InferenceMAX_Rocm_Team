@@ -637,6 +637,78 @@ patch_pr51705() {
     rm -f "$d"
 }
 
+# -----------------------------------------------------------------------------
+# [6] vLLM: size DCP block tables for the FULL sequence, not the local shard
+# -----------------------------------------------------------------------------
+# THE 0x1016 FIX. initialize_kv_cache sizes each group's block table to
+#   cdiv(block_table_max_model_len, block_size * dcp_size)
+# i.e. max_model_len/dcp tokens' worth of ROWS. block_table_max_model_len is the
+# undivided max_model_len (model_runner.py:492), so at 1M/DCP8 the table can
+# only index 131072 tokens. Chunked prefill then walks a longer request past the
+# end of the table -> OOB read -> HSA_STATUS_ERROR_EXCEPTION 0x1016.
+#
+# Measured across three runs; the boundary tracks max_model_len/dcp exactly:
+#   DCP8 bf16  budget 131072  last chunk fit 119040  faulted crossing 134400
+#   DCP4 bf16  budget 262144  last chunk fit 254976  faulted crossing 262656
+#   DCP8 fp8   budget 131072  last chunk fit 119808  faulted crossing 135168
+# Halving DCP doubled both budget and fault point; fp8 vs bf16 changed nothing,
+# so this is block COUNT, not bytes. All three were pure prefill
+# (num_output_tokens=0), which is why swapping decode backends never helped.
+#
+# PR #51705 addresses the same narrowing but only exempts groups with
+# spec.non_causal_multi_token_decode (the DSpark draft group). With
+# speculative_config=None there is no such group, cp_exempt_groups is empty and
+# nothing changes -- confirmed by run 32042030173, which failed at 135168 with
+# the PR applied.
+#
+# Row count and slot mapping are deliberately decoupled here. Sharded groups
+# still need CP_SIZE=dcp_size for correct position->slot math, so this touches
+# ONLY the row count and leaves group_cp_size / cp_exempt_groups alone.
+# Over-allocating rows costs int32 indices -- at 1M/64B blocks x 128 reqs that
+# is ~8 MB per group -- while under-allocating is the bug above.
+#
+# Anchors on either the stock line or PR #51705's rewritten one, so it applies
+# with or without patch [5].
+patch_dcp_blocktable() {
+    local label="dcp-blocktable"
+    local target; target=$(_modfile vllm.v1.worker.gpu.model_runner)
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+        echo "[$label] target not found; skipping."; return 0
+    fi
+    if grep -q "KIMI-PATCH-DCP-BLOCKTABLE" "$target"; then
+        echo "[$label] already patched."; return 0
+    fi
+    cp -n "$target" "$target.orig" 2>/dev/null || true
+    $PY - "$target" <<'EOF' || echo "[dcp-blocktable] patch failed; unchanged." >&2
+import sys, io
+p = sys.argv[1]
+src = io.open(p, encoding="utf-8").read()
+NEW = """            # KIMI-PATCH-DCP-BLOCKTABLE: size the block table for the FULL
+            # sequence. Dividing the ROW COUNT by dcp_size caps indexing at
+            # max_model_len/dcp (131072 at 1M/DCP8); chunked prefill then reads
+            # past the end of the table -> OOB -> HSA 0x1016. Slot mapping is
+            # untouched: sharded groups still need CP_SIZE=dcp_size.
+            max_num_blocks = cdiv(block_table_max_model_len, spec.block_size)"""
+# PR #51705 form first, then stock -- they are mutually exclusive.
+CANDS = [
+"""            max_num_blocks = cdiv(
+                block_table_max_model_len, spec.block_size * group_cp_size
+            )""",
+"""            max_num_blocks = cdiv(
+                block_table_max_model_len, spec.block_size * self.dcp_size
+            )""",
+]
+for old in CANDS:
+    if src.count(old) == 1:
+        io.open(p, "w", encoding="utf-8").write(src.replace(old, NEW, 1))
+        print("[dcp-blocktable] patched", p)
+        break
+else:
+    sys.stderr.write("[dcp-blocktable] no unique anchor found; aborting.\n")
+    sys.exit(1)
+EOF
+}
+
 # Per-patch switches, so a single patch can be isolated without disabling the
 # others. Note patch [1] is load-bearing: without it ROCM_AITER_FA prefill dies
 # at warmup with the fmha_fwd_bf16_opus TypeError, so skipping it does not give
@@ -679,5 +751,11 @@ if [ "$SKIP_PATCH_PR51705" = "1" ]; then
     echo "[pr51705] SKIPPED via SKIP_PATCH_PR51705=1"
 else
     patch_pr51705 || true
+fi
+# [6] applies on top of [5] (or on stock) and is the actual 0x1016 fix.
+if [ "${SKIP_PATCH_BLOCKTABLE:-0}" = "1" ]; then
+    echo "[dcp-blocktable] SKIPPED via SKIP_PATCH_BLOCKTABLE=1"
+else
+    patch_dcp_blocktable || true
 fi
 echo "[kimi-patches] done."
