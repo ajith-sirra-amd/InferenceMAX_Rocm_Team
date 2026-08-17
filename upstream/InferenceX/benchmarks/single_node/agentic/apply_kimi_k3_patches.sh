@@ -736,12 +736,15 @@ fi
 # [4] and [5] are mutually exclusive -- both rewrite AiterMLAImpl's decode call
 # site. PR51705 wins by default while we evaluate upstream's design; set
 # SKIP_PATCH_PR51705=1 SKIP_PATCH_DCPLSE=0 to go back to our own patch.
-SKIP_PATCH_PR51705="${SKIP_PATCH_PR51705:-0}"
-if [ "$SKIP_PATCH_PR51705" = "1" ]; then
-    SKIP_PATCH_DCPLSE="${SKIP_PATCH_DCPLSE:-0}"
-else
-    SKIP_PATCH_DCPLSE="${SKIP_PATCH_DCPLSE:-1}"
-fi
+# DCP arm is parked: T5/T7 showed DCP costs ~6.5x throughput on this
+# prefill-dominated trace and cudagraphs cannot recover it. For the non-DCP
+# baseline every DCP patch is off, because [5] also rewrites speculative.py and
+# kimi_gdn_linear_attn.py, which are live even at dcp_size=1 -- and T9 died on
+# an RCCL collective timeout with spec decoding active.
+# To go back to the DCP arm: SKIP_PATCH_PR51705=0 (or SKIP_PATCH_DCPLSE=0 for
+# our own patch) plus SKIP_PATCH_BLOCKTABLE=0, and raise conc to >= 64.
+SKIP_PATCH_PR51705="${SKIP_PATCH_PR51705:-1}"
+SKIP_PATCH_DCPLSE="${SKIP_PATCH_DCPLSE:-1}"
 if [ "${SKIP_PATCH_DCPLSE:-0}" = "1" ]; then
     echo "[dcp-lse] SKIPPED via SKIP_PATCH_DCPLSE=1"
 else
@@ -753,7 +756,7 @@ else
     patch_pr51705 || true
 fi
 # [6] applies on top of [5] (or on stock) and is the actual 0x1016 fix.
-if [ "${SKIP_PATCH_BLOCKTABLE:-0}" = "1" ]; then
+if [ "${SKIP_PATCH_BLOCKTABLE:-1}" = "1" ]; then
     echo "[dcp-blocktable] SKIPPED via SKIP_PATCH_BLOCKTABLE=1"
 else
     patch_dcp_blocktable || true
