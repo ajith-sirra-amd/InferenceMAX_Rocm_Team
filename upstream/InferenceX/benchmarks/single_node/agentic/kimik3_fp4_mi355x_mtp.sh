@@ -55,7 +55,7 @@ wait_for_amd_gpu_clean
 # Env-overridable so the accuracy arm can be selected per-run (EVAL_ONLY=true)
 # without editing this file -- the DCP/LSE work needs to flip between the
 # throughput and correctness arms repeatedly.
-EVAL_ONLY="${EVAL_ONLY:-true}"   # T6: DCP correctness gate (GSM8K, baseline 0.9651). Flip back to false after.
+EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
 
 # Fast iteration mode. benchmark_lib.sh's run_agentic_replay honours
@@ -500,8 +500,23 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # Cost is real but bounded here: this workload is ~99% prefill by token count
     # (B300 c70: 99,539 input tok/s vs 698 output tok/s) and prefill does not use
     # decode cudagraphs anyway.
-    CUDAGRAPH_MODE_OVERRIDE="NONE"
-    echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS DCP mode -> cudagraph_mode=NONE (RCCL all_gather cannot be graph-captured)"
+    # T7: NONE was costing us everything on decode. Trial 5 measured TPOT 663 ms
+    # and trial 6's GSM8K could not finish -- the server generated at 3.5-6.8
+    # tok/s with one request in flight, so 1319 questions would take ~15 h.
+    # Patch [2]'s own measurement was 14.05 -> 77.65 tok/s (ITL 71.16 -> 12.88 ms)
+    # from cudagraphs alone, so eager decode plausibly explains most of the gap.
+    #
+    # The historical objection was run 32005837765, where PIECEWISE capture
+    # deadlocked at graph 3/17 in dcp_utils' all_gather(query). Since then we
+    # export VLLM_USE_DIRECT_DCP_{A2A,Q_GATHER,KV_GATHER}=0 and
+    # VLLM_DCP_Q_REPLICATE=0 from PR #52248, whose author ran PIECEWISE under
+    # DCP8 to completion, as did the colleague recipe. Small capture ladder to
+    # keep capture time bounded and to stay near their cap of 16.
+    # Set DCP_CUDAGRAPH_MODE=NONE to revert if capture hangs again.
+    CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,48,64"
+    MAX_CUDAGRAPH_CAPTURE_SIZE=64
+    CUDAGRAPH_MODE_OVERRIDE="${DCP_CUDAGRAPH_MODE:-PIECEWISE}"
+    echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS DCP mode -> cudagraph_mode=$CUDAGRAPH_MODE_OVERRIDE capture<=64"
 else
     CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"
     echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE (3x max_num_seqs)"
