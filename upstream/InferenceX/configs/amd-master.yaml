@@ -1922,7 +1922,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # served), so it is the arm most likely to actually return a number.
       # c72 -- the closer comparison to B300's c70 + DCP=8 -- and the c40
       # non-DCP control are follow-up runs, not this one.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [64], spec-decoding: mtp }
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [32], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
