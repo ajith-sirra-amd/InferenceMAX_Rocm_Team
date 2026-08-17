@@ -58,6 +58,16 @@ wait_for_amd_gpu_clean
 EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
 
+# Fast iteration mode. benchmark_lib.sh's run_agentic_replay honours
+# AIPERF_EXPERIMENTAL_FAST=1 by advancing each trajectory lane only once
+# (warmup_requests_per_lane 10 -> 1) and capping profiling at 1200 s.
+# Trial 4 (32043813560) showed full-fidelity warmup is 707 requests and was
+# only 189 done after 54 min -- ~4 h per trial, which allows two experiments in
+# a working day. Fast mode brings that to ~40 min. Numbers from fast runs are
+# directionally valid for tok/s but come from a 20-minute profile, so the
+# headline result must be reproduced with AIPERF_EXPERIMENTAL_FAST=0.
+export AIPERF_EXPERIMENTAL_FAST="${AIPERF_EXPERIMENTAL_FAST:-1}"
+
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
