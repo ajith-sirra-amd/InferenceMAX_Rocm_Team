@@ -242,8 +242,18 @@ fi
 DCP_SIZE="${DCP_SIZE:-1}"
 CP_ARGS=()
 if [ "$DCP_SIZE" -gt 1 ]; then
+    # Decode MUST be TRITON_MLA under DCP. Run 32011858320 died at init with
+    #   RuntimeError: Decode Context Parallelism (DCP) requires attention
+    #   implementations to return the softmax LSE during decode, but
+    #   AiterMLAImpl does not.
+    # (hard assert at v1/worker/cp_utils.py:46). DCP splits the sequence across
+    # ranks, so merging each rank's partial attention needs the per-shard
+    # log-sum-exp; the AITER MLA ASM kernel does not emit it. Not a config gap --
+    # ROCM_AITER_MLA and DCP are mutually exclusive. AITER still covers MoE and
+    # prefill, which is where this prefill-dominated workload spends its time.
     CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
-             --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}")
+             --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}"
+             --attention-backend "${DCP_ATTN_BACKEND:-TRITON_MLA}")
     echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a}"
     echo "DCP: expect a PIECEWISE downgrade warning from platforms/rocm.py -- that is the known ROCm gate."
 fi
