@@ -1911,7 +1911,9 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # NOTE c64/c72 give up spec decoding: aiter has no gqa=64 CP kernel past
       # qseqlen 1, so the DCP path keeps DISABLE_SPEC=1. Judge DCP on
       # tok/s/GPU, not on acceptance rate.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [40, 64, 72], spec-decoding: mtp }
+      # DCP arms FIRST -- they are what this branch exists to measure, and the
+      # list runs in order, so a trailing c40 would delay them by a full arm.
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [64, 72, 40], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
