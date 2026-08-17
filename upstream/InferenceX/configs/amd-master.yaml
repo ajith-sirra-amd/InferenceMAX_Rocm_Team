@@ -1911,9 +1911,13 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # NOTE c64/c72 give up spec decoding: aiter has no gqa=64 CP kernel past
       # qseqlen 1, so the DCP path keeps DISABLE_SPEC=1. Judge DCP on
       # tok/s/GPU, not on acceptance rate.
-      # DCP arms FIRST -- they are what this branch exists to measure, and the
-      # list runs in order, so a trailing c40 would delay them by a full arm.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [64, 72, 40], spec-decoding: mtp }
+      # Single DCP arm. c64 is the lowest concurrency that crosses
+      # DCP_AUTO_CONC_THRESHOLD, and it is the exact config brought up locally
+      # on 8x MI355X (kernel selected, 17,014,182 KV tokens, 1318/1319 requests
+      # served), so it is the arm most likely to actually return a number.
+      # c72 -- the closer comparison to B300's c70 + DCP=8 -- and the c40
+      # non-DCP control are follow-up runs, not this one.
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [64], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
