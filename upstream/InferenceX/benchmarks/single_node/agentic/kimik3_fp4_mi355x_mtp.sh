@@ -266,7 +266,10 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # resolves a CP+LSE kernel -- mla_a16w16_qh64_qseqlen1_gqaratio64_lse_cprr_v3_ps
     # -- and merges to rel 3.1e-03, despite gqa=48 being excluded from aiter's
     # first normalization branch.
-    DCP_SIZE="${DCP_SIZE:-4}"
+    # Back to 8 under PR #51705, which is supposed to fix the block-table
+    # narrowing that forced DCP=4. If 0x1016 returns at 1048576/8 = 131072 the
+    # PR's cp_exempt_groups did not cover our (spec-off) group set.
+    DCP_SIZE="${DCP_SIZE:-8}"
     DISABLE_SPEC="${DISABLE_SPEC:-1}"
     # NOTE: run 32005332130 died with
     #   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...
@@ -326,12 +329,31 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # doubles the bytes per KV token, so DCP=8 buys 8x/2 = 4x effective KV
     # capacity over the fp8 non-DCP baseline, not the 8x a naive reading gives.
     # Set DCP_KV_CACHE_DTYPE=fp8 to observe the guard fire.
-    KV_CACHE_DTYPE="${DCP_KV_CACHE_DTYPE:-auto}"
+    # fp8, per PR #52248's tested config. The bf16 requirement belongs to OUR
+    # patch [4], which drives aiter's bf16-only cprr kernels; PR #51705 calls
+    # mla_decode_fwd without cp_world_size/g_kv_indptr, so it uses the plain LSE
+    # kernels, which do have fp8 variants. Doubles KV capacity vs bf16.
+    KV_CACHE_DTYPE="${DCP_KV_CACHE_DTYPE:-fp8}"
     echo "DCP: kv-cache-dtype=$KV_CACHE_DTYPE (fp8 has no CP kernel in aiter)"
     CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
              --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}"
              --attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
-    echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a}"
+    # Env from vllm-project/vllm#52248's tested DCP config. The four
+    # VLLM_USE_DIRECT_DCP_* / VLLM_DCP_Q_REPLICATE disables turn off the
+    # symmetric-memory direct DCP paths; that is very likely why upstream could
+    # capture cudagraphs under DCP where dcp_utils' all_gather(query) deadlocked
+    # for us. AITER_DISABLE_FMHA_OPUS avoids the fmha_fwd_bf16_opus path.
+    export VLLM_ROCM_USE_AITER_MLA=1
+    export AITER_SITUV2_A8W4=1
+    export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
+    export AITER_BF16_FP8_MOE_BOUND=0
+    export AITER_DISABLE_FMHA_OPUS=1
+    export VLLM_USE_DIRECT_DCP_A2A=0
+    export VLLM_USE_DIRECT_DCP_Q_GATHER=0
+    export VLLM_USE_DIRECT_DCP_KV_GATHER=0
+    export VLLM_DCP_Q_REPLICATE=0
+    CP_ARGS+=(--cp-kv-cache-interleave-size 1)
+    echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a} kv=$KV_CACHE_DTYPE"
     echo "DCP: expect a PIECEWISE downgrade warning from platforms/rocm.py -- that is the known ROCm gate."
 fi
 
@@ -594,6 +616,7 @@ VLLM_CMD=(
     --reasoning-parser kimi_k3
     --max-model-len 1048576
     --enable-prefix-caching
+    --enable-prompt-tokens-details
     --kv-cache-dtype "$KV_CACHE_DTYPE"
     "${CHUNKED_PREFILL_ARGS[@]}"
     "${CP_ARGS[@]}"
