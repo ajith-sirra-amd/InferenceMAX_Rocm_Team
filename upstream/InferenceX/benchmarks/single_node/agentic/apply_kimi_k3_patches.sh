@@ -718,17 +718,17 @@ EOF
 #   SKIP_PATCH_BLOCKPOOL=1  skip [3] KV block-pool clamp
 #   SKIP_PATCH_DCPLSE=1     skip [4] DCP/LSE plumbing for ROCM_AITER_MLA
 echo "[kimi-patches] applying in-container patches..."
-if [ "${SKIP_PATCH_AITER:-1}" = "1" ]; then
+if [ "${SKIP_PATCH_AITER:-0}" = "1" ]; then
     echo "[aiter-pybind11] SKIPPED via SKIP_PATCH_AITER=1"
 else
     patch_aiter_pybind11 || true
 fi
-if [ "${SKIP_PATCH_CUDAGRAPH:-1}" = "1" ]; then
+if [ "${SKIP_PATCH_CUDAGRAPH:-0}" = "1" ]; then
     echo "[triton-mla-cudagraph] SKIPPED via SKIP_PATCH_CUDAGRAPH=1"
 else
     patch_triton_mla_cudagraph || true
 fi
-if [ "${SKIP_PATCH_BLOCKPOOL:-1}" = "1" ]; then
+if [ "${SKIP_PATCH_BLOCKPOOL:-0}" = "1" ]; then
     echo "[kv-blockpool] SKIPPED via SKIP_PATCH_BLOCKPOOL=1"
 else
     patch_kv_blockpool || true
