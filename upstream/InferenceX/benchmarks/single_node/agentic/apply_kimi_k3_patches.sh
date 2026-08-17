@@ -238,6 +238,319 @@ print("[kv-blockpool] patched", p)
 EOF
 }
 
+# -----------------------------------------------------------------------------
+# [4] vLLM: plumb softmax LSE + round-robin CP through the AITER MLA decode
+# -----------------------------------------------------------------------------
+# Unblocks DCP on ROCM_AITER_MLA. aiter already implements everything needed --
+# mla_decode_fwd takes return_lse/cp_world_size/cp_rank/g_kv_indptr and gfx950
+# ships the CP kernels -- but vLLM never wired any of it through, so
+# AiterMLAImpl returns (o, None) and cp_utils.py's
+#   assert layer_impl.need_to_return_lse_for_decode
+# rejects DCP before the first forward.
+#
+# Verified locally on vllm/vllm-openai-rocm:nightly-ac7509e2b (8x MI355X):
+#   * dcp_lse_probe.py     -- aiter LSE is NATURAL log with sm_scale folded in,
+#                             shape [B,H] fp32, max|lse-ln_ref| 9.5e-07. That is
+#                             already DCP's layout, so no transpose (unlike
+#                             flashattn_mla.py:367, which returns [H,B]).
+#   * dcp_persistent_probe.py -- 96 heads, W=8 round-robin shard + the standard
+#                             merge LSE=logsumexp_s(LSE_s), O=sum_s O_s*exp(LSE_s-LSE)
+#                             reproduces unsharded attention to rel 2.4e-03
+#                             (bf16 noise floor); merged LSE exact to 9.5e-07.
+#
+# THREE constraints the aiter kernel table imposes (aiter_meta/.../mla/mla_asm.csv).
+# Kernel selection is an exact match on all nine columns with NO fallback, and a
+# miss calls AITER_CHECK(false) -- which ABORTS THE PROCESS (SIGABRT, core dump),
+# it does not raise. Every cprr row is:
+#   * ps=1        -> persistent scheduling REQUIRED. asm_mla.cu also gates
+#                    lse_flag on `persistent`, so the non-persistent split-K path
+#                    can serve neither CP nor LSE. Hence the gluon suppression
+#                    below: gluon skips persistent metadata AND has no LSE out.
+#   * bf16/bf16   -> no CP kernel exists for an fp8 KV cache.
+#   * (Gqa=32,qSeqLen=4) or (Gqa=64,qSeqLen=1) -> qlen>1 (MTP verify) has no
+#                    gqa=64 CP kernel, so the DCP path must keep DISABLE_SPEC=1.
+# The guard below turns each of these into an explicit RuntimeError, because the
+# native failure is an unattributed core dump 10-25 min into warmup.
+#
+# The head-count fix is the subtle one. Under DCP, mla_attention.py:939 all-gathers
+# the query along the head dim, so _forward_decode sees num_heads*dcp_world_size
+# (12*8=96 at TP8) while self.num_heads stays 12. Padding against the LOCAL 12
+# takes the num_heads<16 branch of get_mla_padded_q and tiles the 96-head tensor
+# back down to 16 -- silently dropping 5/6 of the heads, with no crash and
+# plausible-looking output. That is why EVAL_ONLY=true / GSM8K (baseline 0.9651)
+# is mandatory before quoting any DCP throughput number.
+patch_dcp_lse() {
+    local label="dcp-lse"
+    local f_ops; f_ops=$(_modfile vllm._aiter_ops)
+    local f_mla; f_mla=$(_modfile vllm.v1.attention.backends.mla.rocm_aiter_mla)
+    if [ -z "$f_ops" ] || [ ! -f "$f_ops" ] || [ -z "$f_mla" ] || [ ! -f "$f_mla" ]; then
+        echo "[$label] target not found; skipping."; return 0
+    fi
+    if grep -q "KIMI-PATCH-DCP-LSE" "$f_ops" && grep -q "KIMI-PATCH-DCP-LSE" "$f_mla"; then
+        echo "[$label] already patched."; return 0
+    fi
+    cp -n "$f_ops" "$f_ops.orig" 2>/dev/null || true
+    cp -n "$f_mla" "$f_mla.orig" 2>/dev/null || true
+    # Two files, so every anchor is verified BEFORE anything is written -- a
+    # half-applied patch across _aiter_ops and rocm_aiter_mla would be a
+    # signature mismatch at the first decode.
+    $PY - "$f_ops" "$f_mla" <<'EOF' || echo "[dcp-lse] patch failed; unchanged." >&2
+import sys, io
+
+p_ops, p_mla = sys.argv[1], sys.argv[2]
+src_ops = io.open(p_ops, encoding="utf-8").read()
+src_mla = io.open(p_mla, encoding="utf-8").read()
+
+edits = []  # (which, old, new, tag)
+
+# --- [4a] _rocm_aiter_mla_decode_fwd_impl: accept + forward the CP/LSE args ---
+# Anchored on the `from aiter.mla import` line, which is unique to the real impl
+# (the _fake below has an identical parameter list ending in `) -> None: pass`).
+edits.append(("ops", """    reduce_partial_map: torch.Tensor | None = None,
+) -> None:
+    from aiter.mla import mla_decode_fwd
+""", """    reduce_partial_map: torch.Tensor | None = None,
+    # KIMI-PATCH-DCP-LSE: decode-context-parallel + softmax LSE passthrough.
+    lse: torch.Tensor | None = None,
+    cp_world_size: int = 1,
+    cp_rank: int = 0,
+    g_kv_indptr: torch.Tensor | None = None,
+) -> None:
+    from aiter.mla import mla_decode_fwd
+""", "4a impl signature"))
+
+edits.append(("ops", """    mla_decode_fwd(
+        q,
+        kv_buffer.view(-1, 1, 1, q.shape[-1]),
+        o,
+        qo_indptr,
+        kv_indptr,
+        kv_indices,
+        kv_last_page_lens,
+        max_seqlen_qo,
+        **kwargs,
+    )""", """    # KIMI-PATCH-DCP-LSE: ask aiter for the LSE and, under DCP, tell it the local
+    # KV is a round-robin shard (global pos p -> rank p % W) so the kernel can
+    # rebuild global positions as g(j) = j*W + r for the causal mask.
+    if lse is not None:
+        kwargs["return_lse"] = True
+    if cp_world_size > 1:
+        kwargs["cp_world_size"] = cp_world_size
+        kwargs["cp_rank"] = cp_rank
+        kwargs["g_kv_indptr"] = g_kv_indptr
+
+    ret = mla_decode_fwd(
+        q,
+        kv_buffer.view(-1, 1, 1, q.shape[-1]),
+        o,
+        qo_indptr,
+        kv_indptr,
+        kv_indices,
+        kv_last_page_lens,
+        max_seqlen_qo,
+        **kwargs,
+    )
+    if lse is not None:
+        # aiter returns (splitData, lse) with lse [B,H] float32 -- already DCP's
+        # layout. This op mutates its outputs rather than returning them, so the
+        # LSE has to be copied into the caller's buffer.
+        assert ret is not None, "return_lse=True but aiter returned None"
+        lse.copy_(ret[-1].reshape(lse.shape))""", "4a impl body"))
+
+# --- [4b] the fake impl must mirror the signature or torch.compile diverges ---
+edits.append(("ops", """    reduce_partial_map: torch.Tensor | None = None,
+) -> None:
+    pass""", """    reduce_partial_map: torch.Tensor | None = None,
+    # KIMI-PATCH-DCP-LSE: mirror the real impl's signature.
+    lse: torch.Tensor | None = None,
+    cp_world_size: int = 1,
+    cp_rank: int = 0,
+    g_kv_indptr: torch.Tensor | None = None,
+) -> None:
+    pass""", "4b fake signature"))
+
+# --- [4c] registration: lse is an output buffer, so declare it as mutated ---
+edits.append(("ops", """                op_name="rocm_aiter_mla_decode_fwd",
+                op_func=_rocm_aiter_mla_decode_fwd_impl,
+                mutates_args=["o"],""", """                op_name="rocm_aiter_mla_decode_fwd",
+                op_func=_rocm_aiter_mla_decode_fwd_impl,
+                # KIMI-PATCH-DCP-LSE: "lse" is written in place like "o".
+                mutates_args=["o", "lse"],""", "4c registration"))
+
+# --- [4d] the rocm_aiter_ops.mla_decode_fwd wrapper forwards the new args ---
+edits.append(("ops", """        reduce_partial_map: torch.Tensor | None = None,
+    ):
+        torch.ops.vllm.rocm_aiter_mla_decode_fwd(""", """        reduce_partial_map: torch.Tensor | None = None,
+        # KIMI-PATCH-DCP-LSE
+        lse: torch.Tensor | None = None,
+        cp_world_size: int = 1,
+        cp_rank: int = 0,
+        g_kv_indptr: torch.Tensor | None = None,
+    ):
+        torch.ops.vllm.rocm_aiter_mla_decode_fwd(""", "4d wrapper signature"))
+
+edits.append(("ops", """            reduce_final_map=reduce_final_map,
+            reduce_partial_map=reduce_partial_map,
+        )
+
+    @staticmethod
+    def per_tensor_quant(""", """            reduce_final_map=reduce_final_map,
+            reduce_partial_map=reduce_partial_map,
+            # KIMI-PATCH-DCP-LSE
+            lse=lse,
+            cp_world_size=cp_world_size,
+            cp_rank=cp_rank,
+            g_kv_indptr=g_kv_indptr,
+        )
+
+    @staticmethod
+    def per_tensor_quant(""", "4d wrapper call"))
+
+# --- [4e] gluon has no LSE output and skips persistent metadata -> not DCP-safe ---
+edits.append(("mla", """    @staticmethod
+    def use_gluon_decode(num_heads: int, max_qo_len: int, kv_cache_dtype: str) -> bool:""",
+"""    @staticmethod
+    def _dcp_active() -> bool:
+        # KIMI-PATCH-DCP-LSE: gluon returns (o, None) and, because the builder's
+        # use_persistent_metadata excludes it, also skips the persistent schedule
+        # that every cprr kernel requires. Under DCP force the ASM path. Read the
+        # group directly so the builder and the impl cannot disagree.
+        try:
+            from vllm.distributed.parallel_state import get_dcp_group
+
+            return get_dcp_group().world_size > 1
+        except Exception:
+            return False
+
+    @staticmethod
+    def use_gluon_decode(num_heads: int, max_qo_len: int, kv_cache_dtype: str) -> bool:
+        if AiterMLAHelper._dcp_active():  # KIMI-PATCH-DCP-LSE
+            return False""", "4e gluon decode gate"))
+
+# --- [4f] AiterMLAImpl advertises LSE; the base class derives the rest ---
+# backend.py:940 does need_to_return_lse_for_decode = dcp_world_size > 1 and
+# can_return_lse_for_decode, so this single flag is the whole opt-in.
+edits.append(("mla", """class AiterMLAImpl(MLACommonImpl[AiterMLAMetadata]):""",
+"""class AiterMLAImpl(MLACommonImpl[AiterMLAMetadata]):
+    # KIMI-PATCH-DCP-LSE: backend.py derives need_to_return_lse_for_decode from
+    # this and dcp_world_size > 1, which is what clears cp_utils.py's DCP assert.
+    can_return_lse_for_decode: bool = True
+""", "4f can_return_lse flag"))
+
+# --- [4g] effective head count under the DCP query all-gather ---
+edits.append(("mla", """        mla_padded_q = AiterMLAHelper.get_mla_padded_q(self.num_heads, q)
+        mla_num_heads = AiterMLAHelper.get_actual_mla_num_heads(self.num_heads)""",
+"""        # KIMI-PATCH-DCP-LSE: mla_attention.py all-gathers the query along the
+        # head dim under DCP, so this rank sees num_heads*dcp_world_size heads
+        # (12*8=96 at TP8) while self.num_heads is still the local 12. Padding
+        # against 12 would take the <16 branch and tile 96 heads back down to
+        # 16, silently dropping 5/6 of them.
+        _eff_num_heads = self.num_heads * self.dcp_world_size
+        mla_padded_q = AiterMLAHelper.get_mla_padded_q(_eff_num_heads, q)
+        mla_num_heads = AiterMLAHelper.get_actual_mla_num_heads(_eff_num_heads)""",
+"4g effective head count"))
+
+# --- [4h] allocate the LSE, pass the CP args, return (o, lse) ---
+edits.append(("mla", """        rocm_aiter_ops.mla_decode_fwd(
+            mla_padded_q,
+            kv_buffer,
+            o,
+            self.scale,
+            decode.qo_indptr,
+            decode.max_qo_len,
+            decode.paged_kv_indptr,
+            decode.paged_kv_indices,
+            decode.paged_kv_last_page_len,
+            **mla_kwargs,
+        )
+
+        return AiterMLAHelper.get_mla_unpadded_o(self.num_heads, o), None""",
+"""        # KIMI-PATCH-DCP-LSE: every cprr row in aiter's mla_asm.csv is ps=1 and
+        # bf16/bf16, and a table miss is AITER_CHECK(false) -> SIGABRT rather than
+        # an exception. Fail loudly here instead of core-dumping in warmup.
+        lse = None
+        if self.need_to_return_lse_for_decode:
+            if not decode.has_persistent_metadata:
+                raise RuntimeError(
+                    "DCP on ROCM_AITER_MLA requires the persistent ASM decode "
+                    "schedule (aiter serves CP round-robin only from ps=1 "
+                    "kernels), but has_persistent_metadata is False."
+                )
+            if is_quantized_kv_cache(self._kv_cache_dtype_str):
+                raise RuntimeError(
+                    "DCP on ROCM_AITER_MLA requires a bf16 KV cache; aiter ships "
+                    f"no CP kernel for kv_cache_dtype={self._kv_cache_dtype_str}."
+                )
+            if decode.max_qo_len != 1:
+                raise RuntimeError(
+                    "DCP on ROCM_AITER_MLA requires qlen==1 (aiter has no "
+                    f"gqa=64 CP kernel past qseqlen 1), got {decode.max_qo_len}. "
+                    "Keep DISABLE_SPEC=1 on the DCP path."
+                )
+            lse = torch.empty(
+                (o.shape[0], mla_num_heads), dtype=torch.float32, device=o.device
+            )
+            # aiter wants a cumulative GLOBAL kv indptr; dcp_tot_seq_lens holds
+            # per-request global lengths (flashattn takes those directly as
+            # cp_tot_seqused_k, so this conversion is aiter-specific).
+            tot = decode.dcp_tot_seq_lens
+            assert tot is not None, "DCP decode without dcp_tot_seq_lens"
+            g_kv_indptr = torch.zeros(
+                tot.numel() + 1, dtype=torch.int32, device=tot.device
+            )
+            torch.cumsum(tot, 0, out=g_kv_indptr[1:])
+            mla_kwargs.update(
+                lse=lse,
+                cp_world_size=self.dcp_world_size,
+                cp_rank=self.dcp_rank,
+                g_kv_indptr=g_kv_indptr,
+            )
+
+        rocm_aiter_ops.mla_decode_fwd(
+            mla_padded_q,
+            kv_buffer,
+            o,
+            self.scale,
+            decode.qo_indptr,
+            decode.max_qo_len,
+            decode.paged_kv_indptr,
+            decode.paged_kv_indices,
+            decode.paged_kv_last_page_len,
+            **mla_kwargs,
+        )
+
+        if lse is None:
+            return AiterMLAHelper.get_mla_unpadded_o(_eff_num_heads, o), None
+        # dcp_manager.combine wants [B, H] matching the all-gathered head count.
+        return (
+            AiterMLAHelper.get_mla_unpadded_o(_eff_num_heads, o),
+            AiterMLAHelper.get_mla_unpadded_o(_eff_num_heads, lse.unsqueeze(-1)).squeeze(-1),
+        )""", "4h lse alloc + cp args + return"))
+
+# Verify every anchor is present exactly once BEFORE touching either file.
+srcs = {"ops": src_ops, "mla": src_mla}
+for which, old, _new, tag in edits:
+    n = srcs[which].count(old)
+    if n != 1:
+        sys.stderr.write(f"[dcp-lse] anchor '{tag}' found {n} times (want 1); aborting.\n")
+        sys.exit(1)
+
+for which, old, new, _tag in edits:
+    srcs[which] = srcs[which].replace(old, new, 1)
+
+# is_quantized_kv_cache is referenced by the guard; it is already imported in
+# rocm_aiter_mla.py (used by use_persistent_metadata), but verify rather than assume.
+if "is_quantized_kv_cache" not in srcs["mla"].split("class AiterMLAHelper")[0]:
+    sys.stderr.write("[dcp-lse] is_quantized_kv_cache not imported; aborting.\n")
+    sys.exit(1)
+
+io.open(p_ops, "w", encoding="utf-8").write(srcs["ops"])
+io.open(p_mla, "w", encoding="utf-8").write(srcs["mla"])
+print("[dcp-lse] patched", p_ops)
+print("[dcp-lse] patched", p_mla)
+EOF
+}
+
 # Per-patch switches, so a single patch can be isolated without disabling the
 # others. Note patch [1] is load-bearing: without it ROCM_AITER_FA prefill dies
 # at warmup with the fmha_fwd_bf16_opus TypeError, so skipping it does not give
@@ -245,6 +558,7 @@ EOF
 #   SKIP_PATCH_AITER=1      skip [1] aiter pybind11
 #   SKIP_PATCH_CUDAGRAPH=1  skip [2] TritonMLA UNIFORM_BATCH   <- the HIP-999 suspect
 #   SKIP_PATCH_BLOCKPOOL=1  skip [3] KV block-pool clamp
+#   SKIP_PATCH_DCPLSE=1     skip [4] DCP/LSE plumbing for ROCM_AITER_MLA
 echo "[kimi-patches] applying in-container patches..."
 if [ "${SKIP_PATCH_AITER:-0}" = "1" ]; then
     echo "[aiter-pybind11] SKIPPED via SKIP_PATCH_AITER=1"
@@ -260,5 +574,10 @@ if [ "${SKIP_PATCH_BLOCKPOOL:-0}" = "1" ]; then
     echo "[kv-blockpool] SKIPPED via SKIP_PATCH_BLOCKPOOL=1"
 else
     patch_kv_blockpool || true
+fi
+if [ "${SKIP_PATCH_DCPLSE:-0}" = "1" ]; then
+    echo "[dcp-lse] SKIPPED via SKIP_PATCH_DCPLSE=1"
+else
+    patch_dcp_lse || true
 fi
 echo "[kimi-patches] done."
