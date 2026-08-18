@@ -1891,7 +1891,17 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # image post-dating it. That is why this recipe drives the ASM cprr path rather
   # than Gluon. Whether 311b3513 ships a newer aiter is exactly what this run
   # answers; the ASM path does not depend on it either way.
-  image: vllm/vllm-openai-rocm:nightly-311b3513af33bc29b4acb2fde2e9313e5e9966a0
+  # T14: colleague image, which ships PR #51705 pre-applied AND -- per their
+  # note -- a DSpark draft verify under DCP that works on BOTH the ASM and Gluon
+  # backends. That implies an aiter newer than v0.1.19, the version pinned by
+  # both nightlies, whose mla_gluon asserts "nhead <= 16 or nhead in (64,128)"
+  # and therefore has no kernel for the 96 heads a TP8/DCP8 gather produces.
+  # This is the only way to test MTP under DCP: the ASM path has no gqa=64
+  # kernel past qseqlen 1, so qlen>1 verify has been unreachable on our images.
+  # Their caveats: ASM must slice 96->12 then pad to 16 and cannot multi-token
+  # verify (token-by-token at qlen=1 only); Gluon does qh96 natively but must
+  # flatten instead of using native 4-D MTP.
+  image: yukiozzz/vllm-openai-rocm:kimi-k3-pr51705
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
@@ -1922,7 +1932,9 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # served), so it is the arm most likely to actually return a number.
       # c72 -- the closer comparison to B300's c70 + DCP=8 -- and the c40
       # non-DCP control are follow-up runs, not this one.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [32], spec-decoding: mtp }
+      # c64 crosses DCP_AUTO_CONC_THRESHOLD, turning DCP on -- required, since
+      # testing MTP-under-DCP is the whole point of this image.
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [64], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

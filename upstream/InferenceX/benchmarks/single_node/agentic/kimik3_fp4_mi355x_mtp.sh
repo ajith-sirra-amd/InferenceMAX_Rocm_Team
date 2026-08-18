@@ -286,7 +286,17 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # narrowing that forced DCP=4. If 0x1016 returns at 1048576/8 = 131072 the
     # PR's cp_exempt_groups did not cover our (spec-off) group set.
     DCP_SIZE="${DCP_SIZE:-8}"
-    DISABLE_SPEC="${DISABLE_SPEC:-1}"
+    # T14: spec decoding ON under DCP. This only became possible with the
+    # colleague image: DSpark draft verify under DCP now supports both ASM and
+    # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
+    # asserts "nhead <= 16 or nhead in (64,128)" -- no kernel for the 96 heads a
+    # TP8/DCP8 gather produces -- and the ASM path has no gqa=64 kernel past
+    # qseqlen 1, so qlen>1 verify was unreachable. Per the colleague: ASM must
+    # slice 96->12 then pad to 16 and cannot multi-token verify (token-by-token
+    # at qlen=1 only); Gluon supports qh96 natively but must flatten rather than
+    # use native 4-D MTP. Either way MTP under DCP is finally testable.
+    # Set DISABLE_SPEC=1 to get the previous spec-off behaviour back.
+    DISABLE_SPEC="${DISABLE_SPEC:-0}"
     # NOTE: run 32005332130 died with
     #   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...
     #   Reason: ['required dependencies not available']

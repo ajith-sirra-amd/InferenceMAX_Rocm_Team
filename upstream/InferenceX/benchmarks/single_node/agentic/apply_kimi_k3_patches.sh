@@ -743,7 +743,7 @@ fi
 # an RCCL collective timeout with spec decoding active.
 # To go back to the DCP arm: SKIP_PATCH_PR51705=0 (or SKIP_PATCH_DCPLSE=0 for
 # our own patch) plus SKIP_PATCH_BLOCKTABLE=0, and raise conc to >= 64.
-SKIP_PATCH_PR51705="${SKIP_PATCH_PR51705:-1}"
+SKIP_PATCH_PR51705="${SKIP_PATCH_PR51705:-0}"
 SKIP_PATCH_DCPLSE="${SKIP_PATCH_DCPLSE:-1}"
 if [ "${SKIP_PATCH_DCPLSE:-0}" = "1" ]; then
     echo "[dcp-lse] SKIPPED via SKIP_PATCH_DCPLSE=1"
@@ -756,7 +756,7 @@ else
     patch_pr51705 || true
 fi
 # [6] applies on top of [5] (or on stock) and is the actual 0x1016 fix.
-if [ "${SKIP_PATCH_BLOCKTABLE:-1}" = "1" ]; then
+if [ "${SKIP_PATCH_BLOCKTABLE:-0}" = "1" ]; then
     echo "[dcp-blocktable] SKIPPED via SKIP_PATCH_BLOCKTABLE=1"
 else
     patch_dcp_blocktable || true
