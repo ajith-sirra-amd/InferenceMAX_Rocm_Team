@@ -1951,7 +1951,13 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # and gets TTFT 12.2 s / 1,440 requests. Our trials all ran
       # kv-offloading: none and got TTFT 396 s / 226 requests with KV 82.9% full.
       # conc 20 matches the reference exactly so DCP is the only variable.
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }
+      # T19: scale concurrency. T18 (DCP=8 + dram, conc 20) hit 1,990.8
+      # tok/s/GPU with TTFT 4.6 s -- better first-token latency than the 5,388
+      # reference's 12.2 s -- while using a fraction of DCP's 31.22x KV. TTFT
+      # that low means we are nowhere near saturated, and this is the regime the
+      # reference physically cannot enter: it is capped at 2.52x KV and was
+      # already 82.9% full at conc 32 in our own T12.
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [64], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
