@@ -323,7 +323,17 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # backend, which we are no longer using for decode.
     # Worth ~2.5x on TPOT (DSpark acceptance ~2.51), the single biggest remaining
     # lever. Set DISABLE_SPEC=1 to revert.
-    DISABLE_SPEC="${DISABLE_SPEC:-0}"
+    # T21: spec OFF again. T20 (TRITON_MLA + MTP) degraded steadily --
+    #   08:08 profiling: kv_usage 81.2% cache 5.6% tput_in_srv 5,062/s
+    #   23:10 profiling: kv_usage 81.5% cache 3.7% tput_in_srv 2,897/s
+    # vs T18's kv_usage ~15%, cache 87%, tput_in_srv ~17,000/s. Enabling spec
+    # loads the DSpark drafter as a second model with its own KV, which ate the
+    # headroom that made T18 work; the prefix cache then collapsed and we went
+    # back to recomputing ~100k-token prefills. itl p50 183-193 ms was also no
+    # better than T18's 174 ms, so MTP bought nothing even before the KV cost.
+    # Conclusion: MTP is off the table under DCP for capacity reasons, not just
+    # kernel ones.
+    DISABLE_SPEC="${DISABLE_SPEC:-1}"
     # NOTE: run 32005332130 died with
     #   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...
     #   Reason: ['required dependencies not available']
