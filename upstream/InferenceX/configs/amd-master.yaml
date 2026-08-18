@@ -1957,7 +1957,12 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # that low means we are nowhere near saturated, and this is the regime the
       # reference physically cannot enter: it is capped at 2.52x KV and was
       # already 82.9% full at conc 32 in our own T12.
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [64], spec-decoding: mtp }
+      # Back to c20. T19 at c64 was much WORSE than T18 at c20:
+      #   1,041 vs 1,990 tok/s/GPU | TPOT 0.683 vs 0.174 | TTFT 501 vs 4.6 s
+      #   119 invalid vs 38 | prefix cache hit collapsed 87% -> 14.9%
+      # More concurrency blows out the cache working set (kv_usage was only 28%,
+      # so it is reuse we run out of, not space). c20 is the operating point.
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
