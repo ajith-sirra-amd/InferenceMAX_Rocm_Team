@@ -55,7 +55,11 @@ wait_for_amd_gpu_clean
 # Env-overridable so the accuracy arm can be selected per-run (EVAL_ONLY=true)
 # without editing this file -- the DCP/LSE work needs to flip between the
 # throughput and correctness arms repeatedly.
-EVAL_ONLY="${EVAL_ONLY:-false}"
+# T23: CORRECTNESS GATE on the best DCP config (T18). Never passed on the DCP
+# path -- T6 timed out because decode ran at 3.5-6.8 tok/s with no KV offload.
+# With offload T18 decodes ~4x faster, so 1319 GSM8K questions should now fit.
+# Baseline to match: 0.9651. Flip to false to return to the throughput arm.
+EVAL_ONLY="${EVAL_ONLY:-true}"
 export EVAL_FRAMEWORK="lm-eval"
 
 # Fast iteration mode. benchmark_lib.sh's run_agentic_replay honours
@@ -400,7 +404,10 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     echo "DCP: kv-cache-dtype=$KV_CACHE_DTYPE (fp8 has no CP kernel in aiter)"
     CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
              --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}"
-             --attention-backend "${DCP_ATTN_BACKEND:-TRITON_MLA}")
+             # Back to ROCM_AITER_MLA: T21 showed TRITON_MLA is within noise
+             # (1,948 vs 1,990 tok/s/GPU, TPOT 0.186 vs 0.174), so gate the
+             # configuration that actually produced the best DCP number.
+             --attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
     # Env from vllm-project/vllm#52248's tested DCP config. The four
     # VLLM_USE_DIRECT_DCP_* / VLLM_DCP_Q_REPLICATE disables turn off the
     # symmetric-memory direct DCP paths; that is very likely why upstream could
