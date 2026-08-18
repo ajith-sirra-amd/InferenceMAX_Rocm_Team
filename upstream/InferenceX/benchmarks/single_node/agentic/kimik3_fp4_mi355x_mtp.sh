@@ -261,7 +261,10 @@ fi
 # out at 24), so every current run is bit-for-bit unaffected. The B300 script
 # gates the same way -- it disables spec decode above conc 16, which is how c70
 # ended up with NUM_SPEC_TOKENS=0.
-DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-64}"
+# T17: threshold 64 -> 20 so DCP engages at the reference concurrency. The
+# 5,388 tok/s/GPU reference ran conc 20 with kv-offloading dram; matching it
+# makes DCP the only variable in the comparison.
+DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-20}"
 if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # DCP=4, not 8. Run 32025696861 died with HSA_STATUS_ERROR_EXCEPTION 0x1016
     # on all 8 queues, and the crash dump pins it exactly:
