@@ -404,7 +404,15 @@ fi
 # specifically to remove a per-chunk KDA prefill stall, so more chunks may cut
 # against that gain -- this run measures which effect dominates.
 # B300 does not set this flag at all, so we are moving off their config here.
-MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
+# T13: 8192 -> 32768. This workload is ~99% prefill by token count (T12: input
+# 7,944 tok/s vs output 50), so total throughput IS prefill throughput. At 8192
+# a ~137k-token prompt is ~17 separate chunks, and on this nightly every one of
+# those GEMMs logs "not found tuned config ... using default config" because the
+# image ships no merged_bf16_tuned_gemm.csv. Untuned GEMMs are most penalised at
+# small M, so fewer/larger chunks should recover some of that.
+# Concurrency is NOT the lever here: T12's TTFT was 396 s, i.e. already deeply
+# queued, so raising conc adds latency without adding prefill rate.
+MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-32768}"
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS")
 
 # ---- Async scheduling / KV block-pool stability ------------------------------
