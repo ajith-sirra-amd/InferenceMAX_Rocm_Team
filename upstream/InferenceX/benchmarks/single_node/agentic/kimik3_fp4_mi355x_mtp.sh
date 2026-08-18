@@ -59,7 +59,7 @@ wait_for_amd_gpu_clean
 # path -- T6 timed out because decode ran at 3.5-6.8 tok/s with no KV offload.
 # With offload T18 decodes ~4x faster, so 1319 GSM8K questions should now fit.
 # Baseline to match: 0.9651. Flip to false to return to the throughput arm.
-EVAL_ONLY="${EVAL_ONLY:-true}"
+EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
 
 # Fast iteration mode. benchmark_lib.sh's run_agentic_replay honours
@@ -297,7 +297,16 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # Back to 8 under PR #51705, which is supposed to fix the block-table
     # narrowing that forced DCP=4. If 0x1016 returns at 1048576/8 = 131072 the
     # PR's cp_exempt_groups did not cover our (spec-off) group set.
-    DCP_SIZE="${DCP_SIZE:-8}"
+    # T24: DCP=2, not 8. The decode penalty is per-layer collectives across the
+    # DCP group (T21 proved it is not the kernel: swapping ROCM_AITER_MLA ->
+    # TRITON_MLA moved nothing). Collective traffic scales with world size, and
+    # we do not need the capacity: kv_usage peaked at 15% of DCP=8's 31.22x.
+    # With spec OFF there is no replicated draft group, so capacity is simply
+    # W x M/b -- DCP=2 still gives ~7.8M tokens (~7.5x model-len), far above the
+    # ~4.9M we actually touch, while cutting collective traffic ~4x.
+    # (This is the inverse of the DCP=2 idea I floated for MTP, which was wrong:
+    # with a draft group present, capacity saturates at M/d and lower DCP loses.)
+    DCP_SIZE="${DCP_SIZE:-2}"
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
