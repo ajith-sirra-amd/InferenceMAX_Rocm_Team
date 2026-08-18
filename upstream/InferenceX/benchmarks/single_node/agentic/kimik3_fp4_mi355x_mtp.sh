@@ -422,7 +422,16 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     KV_CACHE_DTYPE="${DCP_KV_CACHE_DTYPE:-fp8}"
     echo "DCP: kv-cache-dtype=$KV_CACHE_DTYPE (fp8 has no CP kernel in aiter)"
     CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
-             --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}"
+             # T28: a2a -> ag_rs. These are the only two DCPCommBackend values
+             # (config/parallel.py:40) and they are genuinely different
+             # algorithms for the decode combine: a2a does an all-to-all LSE
+             # reduce, ag_rs does all-gather(LSE) + reduce-scatter(out)
+             # (dcp_utils.py:_init_combine -> cp_lse_ag_out_rs). ag_rs is the
+             # UPSTREAM DEFAULT; we forced a2a only because a colleague's usage
+             # note said to. Both are pure RCCL -- neither needs the CUDA-only
+             # kernels that killed T27 -- so this is the one remaining way to
+             # change the collective itself on ROCm.
+             --dcp-comm-backend "${DCP_COMM_BACKEND:-ag_rs}"
              # Back to ROCM_AITER_MLA: T21 showed TRITON_MLA is within noise
              # (1,948 vs 1,990 tok/s/GPU, TPOT 0.186 vs 0.174), so gate the
              # configuration that actually produced the best DCP number.
@@ -449,7 +458,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
     export VLLM_DCP_Q_REPLICATE=0
     CP_ARGS+=(--cp-kv-cache-interleave-size 1)
-    echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a} kv=$KV_CACHE_DTYPE"
+    echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-ag_rs} kv=$KV_CACHE_DTYPE"
     echo "DCP: expect a PIECEWISE downgrade warning from platforms/rocm.py -- that is the known ROCm gate."
 fi
 
