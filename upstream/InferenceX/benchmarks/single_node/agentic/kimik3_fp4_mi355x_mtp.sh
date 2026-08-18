@@ -437,19 +437,16 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
     export AITER_BF16_FP8_MOE_BOUND=0
     export AITER_DISABLE_FMHA_OPUS=1
-    # T27: flip the three direct-path flags 0 -> 1. T25 (world size 8->4: TPOT
-    # -4%) and T26 (batch 20->8: TPOT -2%) together prove the decode cost is a
-    # fixed per-step gather/merge that scales with neither ranks nor batch. These
-    # flags select the symmetric-memory *implementation* of precisely that
-    # collective, so they are the only untested lever that touches the actual
-    # bottleneck. They were set to 0 only to copy #52248's config -- never tested.
-    # Upstream needed them off to capture cudagraphs; we run cudagraphs NONE
-    # under DCP, so that constraint does not bind here.
-    export VLLM_USE_DIRECT_DCP_A2A="${VLLM_USE_DIRECT_DCP_A2A:-1}"
-    export VLLM_USE_DIRECT_DCP_Q_GATHER="${VLLM_USE_DIRECT_DCP_Q_GATHER:-1}"
-    export VLLM_USE_DIRECT_DCP_KV_GATHER="${VLLM_USE_DIRECT_DCP_KV_GATHER:-1}"
-    # Q_REPLICATE stays 0 -- it replicates rather than gathers Q, a different
-    # tradeoff, and changing it too would confound the attribution (T20 lesson).
+    # These MUST stay 0 on ROCm. T27 flipped them to 1 and the engine died at
+    # startup: torch.ops._C has no attribute 'direct_dcp_a2a_lse_reduce'. The
+    # Python call site ships in vllm/v1/attention/ops/dcp_utils.py:262, but the
+    # kernel is not compiled into the ROCm build -- torch.ops._C exposes zero
+    # dcp/direct ops (verified in-image, torch 2.12.0 hip 7.2.53211). The
+    # symmetric-memory fast path for the DCP gather/merge is CUDA-only.
+    # This is not a tunable: it needs an AMD kernel, not a config change.
+    export VLLM_USE_DIRECT_DCP_A2A=0
+    export VLLM_USE_DIRECT_DCP_Q_GATHER=0
+    export VLLM_USE_DIRECT_DCP_KV_GATHER=0
     export VLLM_DCP_Q_REPLICATE=0
     CP_ARGS+=(--cp-kv-cache-interleave-size 1)
     echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a} kv=$KV_CACHE_DTYPE"
