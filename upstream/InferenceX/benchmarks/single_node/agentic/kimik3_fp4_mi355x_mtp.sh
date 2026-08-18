@@ -422,16 +422,10 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     KV_CACHE_DTYPE="${DCP_KV_CACHE_DTYPE:-fp8}"
     echo "DCP: kv-cache-dtype=$KV_CACHE_DTYPE (fp8 has no CP kernel in aiter)"
     CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
-             # T28: a2a -> ag_rs. These are the only two DCPCommBackend values
-             # (config/parallel.py:40) and they are genuinely different
-             # algorithms for the decode combine: a2a does an all-to-all LSE
-             # reduce, ag_rs does all-gather(LSE) + reduce-scatter(out)
-             # (dcp_utils.py:_init_combine -> cp_lse_ag_out_rs). ag_rs is the
-             # UPSTREAM DEFAULT; we forced a2a only because a colleague's usage
-             # note said to. Both are pure RCCL -- neither needs the CUDA-only
-             # kernels that killed T27 -- so this is the one remaining way to
-             # change the collective itself on ROCm.
-             --dcp-comm-backend "${DCP_COMM_BACKEND:-ag_rs}"
+             # T28 measured both DCPCommBackend values on ROCm and a2a won on
+             # every metric (2,034 vs 1,978 tok/s/GPU, TPOT 0.167 vs 0.184), so
+             # the upstream default ag_rs is the worse choice here. Back to a2a.
+             --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}"
              # Back to ROCM_AITER_MLA: T21 showed TRITON_MLA is within noise
              # (1,948 vs 1,990 tok/s/GPU, TPOT 0.186 vs 0.174), so gate the
              # configuration that actually produced the best DCP number.
@@ -457,8 +451,20 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
     export VLLM_DCP_Q_REPLICATE=0
-    CP_ARGS+=(--cp-kv-cache-interleave-size 1)
-    echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-ag_rs} kv=$KV_CACHE_DTYPE"
+    # T29: KV shard granularity 1 -> 16. This is the last live, untested DCP
+    # knob on our code path (mla_attention.py:2099 dcp_local_block_size).
+    #   interleave=1  : token-level round-robin -- every rank's shard is strided
+    #                   across the whole sequence, worst locality for the decode
+    #                   read that feeds the combine.
+    #   interleave=16 : 16-token contiguous runs per rank.
+    # Constraint (config/parallel.py:371-372): interleave <= block_size and
+    # block_size % interleave == 0. block_size is the platform default here, so
+    # 16 is valid for any block_size in {16,32,64,128}; an invalid value is
+    # rejected at startup, which is a cheap failure.
+    # This does not change the collective's volume -- T27/T28 showed that is
+    # fixed -- it changes how efficiently each rank reads its own shard.
+    CP_ARGS+=(--cp-kv-cache-interleave-size "${CP_INTERLEAVE:-16}")
+    echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a} interleave=${CP_INTERLEAVE:-16} kv=$KV_CACHE_DTYPE"
     echo "DCP: expect a PIECEWISE downgrade warning from platforms/rocm.py -- that is the known ROCm gate."
 fi
 
