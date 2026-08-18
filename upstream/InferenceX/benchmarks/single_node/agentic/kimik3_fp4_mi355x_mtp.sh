@@ -296,7 +296,14 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # at qlen=1 only); Gluon supports qh96 natively but must flatten rather than
     # use native 4-D MTP. Either way MTP under DCP is finally testable.
     # Set DISABLE_SPEC=1 to get the previous spec-off behaviour back.
-    DISABLE_SPEC="${DISABLE_SPEC:-0}"
+    # T15: spec OFF again. T14 proved MTP-under-DCP is reachable on the
+    # colleague image -- it routed to Gluon without complaining about nhead, so
+    # that image does carry a post-aiter#4412 build -- but it died with
+    #   mla_gluon[bh16bn128] requires batch_size=1, got 64
+    # i.e. the flattened MTP verify path the colleague described is single-batch
+    # only, so it cannot serve a concurrent benchmark. Set DISABLE_SPEC=0 to
+    # reproduce that, ideally at conc 1.
+    DISABLE_SPEC="${DISABLE_SPEC:-1}"
     # NOTE: run 32005332130 died with
     #   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...
     #   Reason: ['required dependencies not available']
