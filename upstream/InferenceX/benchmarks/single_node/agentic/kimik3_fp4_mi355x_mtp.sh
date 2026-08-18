@@ -306,7 +306,15 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # ~4.9M we actually touch, while cutting collective traffic ~4x.
     # (This is the inverse of the DCP=2 idea I floated for MTP, which was wrong:
     # with a draft group present, capacity saturates at M/d and lower DCP loses.)
-    DCP_SIZE="${DCP_SIZE:-2}"
+    # T25: DCP=4. T24 tried 2 and died at init on
+    #   assert AiterMLAHelper.is_valid_num_heads(num_heads)
+    # which requires num_heads < 16 OR num_heads % 16 == 0. DCP gathers
+    # 12 heads/rank x W, so W=2 gives 24 -- neither. Valid sizes for this model
+    # are 1, 4, 8 (12, 48, 96 heads). PR #51705 applies that check to the
+    # GATHERED count, which is what fires.
+    # 4 still halves collective traffic vs 8 and leaves ~16.4M KV tokens against
+    # the ~4.9M we touch.
+    DCP_SIZE="${DCP_SIZE:-4}"
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
