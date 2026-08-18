@@ -266,7 +266,12 @@ fi
 # makes DCP the only variable in the comparison.
 DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-20}"
 if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
-    # DCP=4, not 8. Run 32025696861 died with HSA_STATUS_ERROR_EXCEPTION 0x1016
+    # HISTORY, not current config: DCP is 8 (see DCP_SIZE below). This block
+    # once forced DCP=4 as a workaround; patch [6] fixed the underlying bug and
+    # T18/T19 both ran DCP=8 cleanly (confirmed decode_context_parallel_size=8
+    # in their server logs). Kept because the diagnosis is worth preserving.
+    #
+    # Run 32025696861 died with HSA_STATUS_ERROR_EXCEPTION 0x1016
     # on all 8 queues, and the crash dump pins it exactly:
     #   num_computed_tokens=126720, num_scheduled_tokens=7680, num_output_tokens=0
     # i.e. a chunked-PREFILL continuation, no decode in flight. vLLM narrows every
