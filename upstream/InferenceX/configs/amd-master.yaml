@@ -1901,7 +1901,15 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # Their caveats: ASM must slice 96->12 then pad to 16 and cannot multi-token
   # verify (token-by-token at qlen=1 only); Gluon does qh96 natively but must
   # flatten instead of using native 4-D MTP.
-  image: yukiozzz/vllm-openai-rocm:kimi-k3-pr51705
+  # T16: back to the nightly. The colleague image is a dead end for a CONCURRENT
+  # benchmark: its newer aiter (post-#4412) makes DCP decode route to Gluon, and
+  # the mla_gluon[bh16bn128] regime requires batch_size=1 --
+  #   T14 spec ON : "requires batch_size=1, got 64"
+  #   T15 spec OFF: "requires batch_size=1, got 3"
+  # so it fails at any concurrency > 1, which is why PR #52248 benchmarked at
+  # --max-num-seqs 8. Our nightly pins aiter v0.1.19, which has NO Gluon qh96,
+  # so DCP falls back to the ASM path -- and that path does work at concurrency.
+  image: vllm/vllm-openai-rocm:nightly-311b3513af33bc29b4acb2fde2e9313e5e9966a0
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
