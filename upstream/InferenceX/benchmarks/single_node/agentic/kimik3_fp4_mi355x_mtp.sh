@@ -306,7 +306,19 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # i.e. the flattened MTP verify path the colleague described is single-batch
     # only, so it cannot serve a concurrent benchmark. Set DISABLE_SPEC=0 to
     # reproduce that, ideally at conc 1.
-    DISABLE_SPEC="${DISABLE_SPEC:-1}"
+    # T20: MTP ON under DCP. Re-reading the code, my earlier claim that MTP is
+    # impossible under DCP was WRONG for TRITON_MLA. The gate
+    #   triton_mla.py:61  supports_draft_decode_metadata_update = dcp_world_size == 1
+    # only disables FUSED multi-step draft decode; speculator.py:112 falls back to
+    # "rebuilding attention metadata between draft steps" -- slower, not disabled.
+    # The hard blocker was config/speculative.py's ValueError ("MLA DSpark does
+    # not currently support decode context parallelism"), and PR #51705 (patch
+    # [5]) deletes it. The two REAL kernel gaps -- ASM has no gqa=64 kernel past
+    # qseqlen 1, Gluon's bh16bn128 needs batch_size=1 -- are both in the AITER
+    # backend, which we are no longer using for decode.
+    # Worth ~2.5x on TPOT (DSpark acceptance ~2.51), the single biggest remaining
+    # lever. Set DISABLE_SPEC=1 to revert.
+    DISABLE_SPEC="${DISABLE_SPEC:-0}"
     # NOTE: run 32005332130 died with
     #   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...
     #   Reason: ['required dependencies not available']
@@ -373,7 +385,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     echo "DCP: kv-cache-dtype=$KV_CACHE_DTYPE (fp8 has no CP kernel in aiter)"
     CP_ARGS=(--decode-context-parallel-size "$DCP_SIZE"
              --dcp-comm-backend "${DCP_COMM_BACKEND:-a2a}"
-             --attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
+             --attention-backend "${DCP_ATTN_BACKEND:-TRITON_MLA}")
     # Env from vllm-project/vllm#52248's tested DCP config. The four
     # VLLM_USE_DIRECT_DCP_* / VLLM_DCP_Q_REPLICATE disables turn off the
     # symmetric-memory direct DCP paths; that is very likely why upstream could
