@@ -1887,7 +1887,15 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
     - dram-utilization: 0.50
       search-space:
       # - { tp: 8, kv-offloading: none, conc-list: [1, 4, 8] , spec-decoding: mtp}
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1, 8, 16, 20, 24], spec-decoding: mtp }
+      # Two datapoints requested at this exact code point (scripts, patches and
+      # image all as of 3fa1b88a):
+      #   c1  WITHOUT kv offload  -- single-stream floor, no offload machinery
+      #   c20 WITH    kv offload  -- the config that fixed thrashing for us
+      #                              (TTFT 396 s -> 4.6 s on the nightly)
+      # Reference for c20 without offload at this same point is run 31994675654:
+      #   1,433.8 tok/s/GPU, TPOT 0.0694 s, TTFT 94.9 s, 408/629 requests.
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
