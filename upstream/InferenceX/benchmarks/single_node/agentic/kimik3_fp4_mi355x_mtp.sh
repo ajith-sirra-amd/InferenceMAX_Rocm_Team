@@ -432,7 +432,12 @@ fi
 # small M, so fewer/larger chunks should recover some of that.
 # Concurrency is NOT the lever here: T12's TTFT was 396 s, i.e. already deeply
 # queued, so raising conc adds latency without adding prefill rate.
-MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-32768}"
+# T18: back to 8192. The 32768 experiment (T13/T16) was never completed, and
+# leaving it set broke T17: DCP's 31x KV pool at gpu-memory-utilization 0.9 plus
+# 32k-token activation tensors (aiter logged M:32755, N:8448, K:7168) left only
+# 2408 MB free and the run died with HSA_STATUS_ERROR_OUT_OF_RESOURCES. 8192 is
+# also what the 5,388 reference uses, so this keeps DCP the only variable.
+MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS")
 
 # ---- Async scheduling / KV block-pool stability ------------------------------
