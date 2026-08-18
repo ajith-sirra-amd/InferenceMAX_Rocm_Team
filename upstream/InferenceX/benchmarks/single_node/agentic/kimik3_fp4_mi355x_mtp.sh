@@ -268,7 +268,11 @@ fi
 # T17: threshold 64 -> 20 so DCP engages at the reference concurrency. The
 # 5,388 tok/s/GPU reference ran conc 20 with kv-offloading dram; matching it
 # makes DCP the only variable in the comparison.
-DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-20}"
+# T26: threshold 20 -> 8 so DCP engages at c8. We have only sampled the DCP
+# concurrency curve at c20 (2,034 best) and c64 (1,041, cache thrash). Below c20
+# is unmeasured, and T22's c1 showed interactivity improves sharply as
+# concurrency drops.
+DCP_AUTO_CONC_THRESHOLD="${DCP_AUTO_CONC_THRESHOLD:-8}"
 if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # HISTORY, not current config: DCP is 8 (see DCP_SIZE below). This block
     # once forced DCP=4 as a workaround; patch [6] fixed the underlying bug and
