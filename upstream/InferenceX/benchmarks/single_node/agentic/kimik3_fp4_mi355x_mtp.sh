@@ -327,30 +327,30 @@ if [ -f "$UNIFIED_GEMM_CSV" ]; then
     # and leave the draft non-causal. Search the real cache instead.
     python3 - <<'PYFORCE'
 import glob, json, os, shutil
-roots = [os.environ.get("HF_HUB_CACHE",""), os.environ.get("HF_HOME",""),
-         "/mnt/hf_hub_cache", "/home/models", "/dev/shm/hf-cache", "/root/.cache/huggingface/hub"]
-pats = []
-for r in roots:
-    if r:
-        pats += [f"{r}/models--Inferact--Kimi-K3-DSpark/snapshots/*/config.json",
-                 f"{r}/**/models--Inferact--Kimi-K3-DSpark/snapshots/*/config.json"]
-hits = []
-for p in pats:
-    hits += glob.glob(p, recursive=True)
-if not hits:
-    print("  !! DSpark draft config NOT found -- draft stays non-causal; "
-          "ROCM_AITER_MLA will be rejected for the draft")
-for f in sorted(set(hits)):
-    c = json.load(open(f))
-    d = c.setdefault("dflash_config", {})
-    if d.get("causal") is True:
-        print("  draft already causal:", f)
-    else:
-        if not os.path.exists(f + ".orig.bak"):
-            shutil.copy2(f, f + ".orig.bak")
-        d["causal"] = True
-        json.dump(c, open(f, "w"), indent=2)
-        print("  forced causal:", f)
+# roots = [os.environ.get("HF_HUB_CACHE",""), os.environ.get("HF_HOME",""),
+#          "/mnt/hf_hub_cache", "/home/models", "/dev/shm/hf-cache", "/root/.cache/huggingface/hub"]
+# pats = []
+# for r in roots:
+#     if r:
+#         pats += [f"{r}/models--Inferact--Kimi-K3-DSpark/snapshots/*/config.json",
+#                  f"{r}/**/models--Inferact--Kimi-K3-DSpark/snapshots/*/config.json"]
+# hits = []
+# for p in pats:
+#     hits += glob.glob(p, recursive=True)
+# if not hits:
+#     print("  !! DSpark draft config NOT found -- draft stays non-causal; "
+#           "ROCM_AITER_MLA will be rejected for the draft")
+# for f in sorted(set(hits)):
+#     c = json.load(open(f))
+#     d = c.setdefault("dflash_config", {})
+#     if d.get("causal") is True:
+#         print("  draft already causal:", f)
+#     else:
+#         if not os.path.exists(f + ".orig.bak"):
+#             shutil.copy2(f, f + ".orig.bak")
+#         d["causal"] = True
+#         json.dump(c, open(f, "w"), indent=2)
+#         print("  forced causal:", f)
 PYFORCE
 
     # Their serve flags. ROCM_AITER_MLA everywhere; no separate prefill pin.
