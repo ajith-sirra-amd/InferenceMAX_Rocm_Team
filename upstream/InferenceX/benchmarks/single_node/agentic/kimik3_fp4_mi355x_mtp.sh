@@ -412,18 +412,20 @@ echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-run_benchmark_serving \
-    --model "$MODEL" \
-    --port "$PORT" \
-    --backend vllm \
-    --input-len 1024 \
-    --output-len 100 \
-    --random-range-ratio 1.0 \
-    --num-prompts "$((CONC * 10))" \
-    --max-concurrency "$CONC" \
-    --result-filename "${RESULT_DIR}/RESULT.txt" \
-    --result-dir "$RESULT_DIR" \
-    --trust-remote-code
+run_eval --port "$PORT"
+
+# run_benchmark_serving \
+#     --model "$MODEL" \
+#     --port "$PORT" \
+#     --backend vllm \
+#     --input-len 1024 \
+#     --output-len 100 \
+#     --random-range-ratio 1.0 \
+#     --num-prompts "$((CONC * 10))" \
+#     --max-concurrency "$CONC" \
+#     --result-filename "${RESULT_DIR}/RESULT.txt" \
+#     --result-dir "$RESULT_DIR" \
+#     --trust-remote-code
 
 # if [ "${EVAL_ONLY}" = "true" ]; then
 #     run_eval --port "$PORT"
