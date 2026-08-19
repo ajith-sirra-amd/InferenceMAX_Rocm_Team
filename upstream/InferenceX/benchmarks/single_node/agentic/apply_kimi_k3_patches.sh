@@ -761,4 +761,77 @@ if [ "${SKIP_PATCH_BLOCKTABLE:-0}" = "1" ]; then
 else
     patch_dcp_blocktable || true
 fi
+# -----------------------------------------------------------------------------
+# [7] direct DCP a2a combine -- load the out-of-tree ROCm kernel (T31)
+#
+# vLLM ships the Python call site at vllm/v1/attention/ops/dcp_utils.py:262 but
+# compiles csrc/libtorch_stable/attention/dcp_utils/*.cu ONLY inside
+# if(VLLM_GPU_LANG STREQUAL "CUDA"), so on ROCm torch.ops._C has no
+# direct_dcp_* ops at all. That is exactly what killed T27:
+#   AttributeError: '_OpNamespace' '_C' object has no attribute
+#                   'direct_dcp_a2a_lse_reduce'
+#
+# Only the a2a combine was portable. The q_gather/kv_gather kernels use
+# multimem.st.* PTX under #if __CUDA_ARCH__ >= 900 -- NVIDIA NVLink hardware
+# multicast, with no AMD equivalent -- and are deliberately NOT loaded; their
+# env stays 0 and they keep using the existing RCCL fallbacks. The a2a kernel
+# contains zero multimem; its only PTX is st.global.release.sys.u32 /
+# ld.global.acquire.sys.u32, which map exactly onto __hip_atomic_store /
+# __hip_atomic_load at __ATOMIC_RELEASE/ACQUIRE + __HIP_MEMORY_SCOPE_SYSTEM,
+# preserving the epoch-handshake ordering and scope.
+#
+# The .so is prebuilt on the host (it needs hipcc and ~1 min) and reaches the
+# container through the harness's existing -v /data/hf_hub_cache:/mnt/hf_hub_cache
+# mount. Build recipe and the full transform list live beside it in
+# port_to_hip.py. Built against torch 2.12.0+git6bbd260 / ROCm 7.2.53211.
+#
+# It is dlopen'd rather than imported: there is no PyInit_, registration happens
+# via STABLE_TORCH_LIBRARY_FRAGMENT(_C, ...) static initialisers. It must load
+# AFTER torch (it links libtorch_cpu.so), so the loader is appended to
+# dcp_utils.py, which imports torch at its top and is the sole consumer.
+patch_dcp_direct_a2a() {
+    local so="${DCP_DIRECT_SO:-/mnt/hf_hub_cache/dcp/vllm_dcp_direct_rocm.so}"
+    local f
+    # vLLM logs INFO banners to stdout on import, so _modfile's output can be
+    # multi-line; the path is always the last line.
+    f=$(_modfile vllm.v1.attention.ops.dcp_utils | tail -1) || true
+    if [ -z "$f" ] || [ ! -f "$f" ]; then
+        echo "[dcp-direct] dcp_utils.py not found; skipping"; return 0
+    fi
+    if [ ! -f "$so" ]; then
+        echo "[dcp-direct] $so not present; skipping (DCP falls back to RCCL a2a)"
+        return 0
+    fi
+    if grep -q "DCP-ROCM-DIRECT-A2A" "$f"; then
+        echo "[dcp-direct] already applied"
+    else
+        [ -f "$f.orig" ] || cp "$f" "$f.orig"
+        cat >> "$f" <<PYEOF
+
+# DCP-ROCM-DIRECT-A2A (applied by apply_kimi_k3_patches.sh)
+import ctypes as _dcp_ctypes, os as _dcp_os, sys as _dcp_sys
+_dcp_so = _dcp_os.environ.get(
+    "DCP_DIRECT_SO", "/mnt/hf_hub_cache/dcp/vllm_dcp_direct_rocm.so")
+if _dcp_os.path.exists(_dcp_so):
+    try:
+        _dcp_ctypes.CDLL(_dcp_so, mode=_dcp_ctypes.RTLD_GLOBAL)
+        print("[dcp-direct] loaded " + _dcp_so, file=_dcp_sys.stderr)
+    except OSError as _dcp_err:
+        print("[dcp-direct] load failed: %s" % _dcp_err, file=_dcp_sys.stderr)
+PYEOF
+        echo "[dcp-direct] appended loader to $f"
+    fi
+    # Prove the op actually resolves; a silent miss would look like a perf null.
+    "$PY" - <<'PYEOF' || echo "[dcp-direct] WARNING: op did NOT resolve"
+import torch, vllm.v1.attention.ops.dcp_utils  # noqa: F401
+print("[dcp-direct] op resolves:", torch.ops._C.direct_dcp_a2a_lse_reduce)
+PYEOF
+}
+
+if [ "${SKIP_PATCH_DCP_DIRECT:-0}" = "1" ]; then
+    echo "[dcp-direct] SKIPPED via SKIP_PATCH_DCP_DIRECT=1"
+else
+    patch_dcp_direct_a2a || true
+fi
+
 echo "[kimi-patches] done."
