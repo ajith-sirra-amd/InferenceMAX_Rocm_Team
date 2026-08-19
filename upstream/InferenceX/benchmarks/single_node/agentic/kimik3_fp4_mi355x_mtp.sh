@@ -406,7 +406,7 @@ printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
-# wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 run_benchmark_serving \
     --model "$MODEL" \
