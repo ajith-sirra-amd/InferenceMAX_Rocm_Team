@@ -463,7 +463,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # RCCL; a direct peer-to-peer combine is the only untried mechanism.
     #
     # Q_GATHER/KV_GATHER stay 0 -- their kernels are absent and would trap.
-    export VLLM_USE_DIRECT_DCP_A2A="${VLLM_USE_DIRECT_DCP_A2A:-1}"
+    export VLLM_USE_DIRECT_DCP_A2A="${VLLM_USE_DIRECT_DCP_A2A:-0}"  # T31b: measured -0.9% tput / +2.4% TPOT vs RCCL a2a. Kernel works; it just does not help. Set 1 to re-enable.
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
     export VLLM_DCP_Q_REPLICATE=0
