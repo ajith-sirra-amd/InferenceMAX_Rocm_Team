@@ -368,7 +368,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-1}"
+DCP_SIZE="${DCP_SIZE:-4}"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
 # non-DCP arms must stay bit-for-bit unchanged.
@@ -440,14 +440,30 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
     export AITER_BF16_FP8_MOE_BOUND=0
     export AITER_DISABLE_FMHA_OPUS=1
-    # These MUST stay 0 on ROCm. T27 flipped them to 1 and the engine died at
-    # startup: torch.ops._C has no attribute 'direct_dcp_a2a_lse_reduce'. The
-    # Python call site ships in vllm/v1/attention/ops/dcp_utils.py:262, but the
-    # kernel is not compiled into the ROCm build -- torch.ops._C exposes zero
-    # dcp/direct ops (verified in-image, torch 2.12.0 hip 7.2.53211). The
-    # symmetric-memory fast path for the DCP gather/merge is CUDA-only.
-    # This is not a tunable: it needs an AMD kernel, not a config change.
-    export VLLM_USE_DIRECT_DCP_A2A=0
+    # T27 flipped all three to 1 and the engine died at startup:
+    # torch.ops._C has no attribute 'direct_dcp_a2a_lse_reduce'. The Python call
+    # site ships in vllm/v1/attention/ops/dcp_utils.py:262 but upstream compiles
+    # csrc/libtorch_stable/attention/dcp_utils/*.cu ONLY inside
+    # if(VLLM_GPU_LANG STREQUAL "CUDA"), so the ROCm build has no direct_dcp ops.
+    #
+    # T31: that is now fixed for the a2a combine ONLY. Reading the sources shows
+    # the three kernels are not equally portable:
+    #   q_gather / kv_gather -> multimem.st.* PTX under #if __CUDA_ARCH__ >= 900,
+    #     i.e. NVIDIA NVLink hardware multicast. No AMD equivalent. NOT ported.
+    #   a2a_lse_reduce       -> zero multimem; only st.global.release.sys.u32 and
+    #     ld.global.acquire.sys.u32, which map exactly onto __hip_atomic_store /
+    #     __hip_atomic_load at __ATOMIC_RELEASE/ACQUIRE + __HIP_MEMORY_SCOPE_SYSTEM.
+    # The ported kernel is built into the image as
+    # /opt/dcp/vllm_dcp_direct_rocm.so and verified to resolve:
+    #   torch.ops._C.direct_dcp_a2a_lse_reduce -> _C.direct_dcp_a2a_lse_reduce
+    #
+    # Why the combine is the right target: T25 (world size 8->4, -4%), T26
+    # (batch 20->8, -2%) and T28 (a2a vs ag_rs, within 10%) all showed the
+    # combine is a FIXED per-decode-step cost. Both ROCm combine paths go via
+    # RCCL; a direct peer-to-peer combine is the only untried mechanism.
+    #
+    # Q_GATHER/KV_GATHER stay 0 -- their kernels are absent and would trap.
+    export VLLM_USE_DIRECT_DCP_A2A="${VLLM_USE_DIRECT_DCP_A2A:-1}"
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
     export VLLM_DCP_Q_REPLICATE=0
@@ -463,7 +479,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # rejected at startup, which is a cheap failure.
     # This does not change the collective's volume -- T27/T28 showed that is
     # fixed -- it changes how efficiently each rank reads its own shard.
-    CP_ARGS+=(--cp-kv-cache-interleave-size "${CP_INTERLEAVE:-16}")
+    CP_ARGS+=(--cp-kv-cache-interleave-size "${CP_INTERLEAVE:-1}")
     echo "DCP: decode-context-parallel-size=$DCP_SIZE comm-backend=${DCP_COMM_BACKEND:-a2a} interleave=${CP_INTERLEAVE:-16} kv=$KV_CACHE_DTYPE"
     echo "DCP: expect a PIECEWISE downgrade warning from platforms/rocm.py -- that is the known ROCm gate."
 fi
