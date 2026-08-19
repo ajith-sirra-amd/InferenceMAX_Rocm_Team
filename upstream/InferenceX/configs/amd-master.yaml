@@ -1894,7 +1894,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       #                              (TTFT 396 s -> 4.6 s on the nightly)
       # Reference for c20 without offload at this same point is run 31994675654:
       #   1,433.8 tok/s/GPU, TPOT 0.0694 s, TTFT 94.9 s, 408/629 requests.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
+      # - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
       - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
