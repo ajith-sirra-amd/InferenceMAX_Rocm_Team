@@ -783,13 +783,18 @@ VLLM_CMD=(
     "${COMPILATION_CONFIG_ARGS[@]}"
     "${SPEC_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
+    "${PROFILER_ARGS[@]}"
 )
-# vLLM only registers /start_profile and /stop_profile when this is set at boot,
-# so it must be exported before the server launches, not after.
+# /start_profile and /stop_profile are mounted only when profiler_config.profiler
+# is set (entrypoints/serve/profile/api_router.py:attach_router). VLLM_TORCH_PROFILER_DIR
+# is gone from envs.py in this vLLM -- T35c set it and both endpoints 404'd.
+# It is a CLI arg now: --profiler-config {profiler, torch_profiler_dir, ...}.
+PROFILER_ARGS=()
 if [ "${PROFILE_DECODE:-0}" = "1" ]; then
-    export VLLM_TORCH_PROFILER_DIR="${VLLM_TORCH_PROFILER_DIR:-$RESULT_DIR/torch_profile}"
-    mkdir -p "$VLLM_TORCH_PROFILER_DIR"
-    echo "[profile-decode] VLLM_TORCH_PROFILER_DIR=$VLLM_TORCH_PROFILER_DIR"
+    PROF_DIR_ABS="${PROF_DIR_ABS:-$RESULT_DIR/torch_profile}"
+    mkdir -p "$PROF_DIR_ABS"
+    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\"}")
+    echo "[profile-decode] profiler_config torch -> $PROF_DIR_ABS"
 fi
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
@@ -812,7 +817,7 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 # a few long-output requests to reach steady-state decode, then
 # /start_profile .. /stop_profile around it. Minutes of GPU, not an hour.
 if [ "${PROFILE_DECODE:-0}" = "1" ]; then
-    PROF_DIR="${VLLM_TORCH_PROFILER_DIR:-$RESULT_DIR/torch_profile}"
+    PROF_DIR="${PROF_DIR_ABS:-$RESULT_DIR/torch_profile}"
     mkdir -p "$PROF_DIR"
     echo "[profile-decode] dir=$PROF_DIR"
 
