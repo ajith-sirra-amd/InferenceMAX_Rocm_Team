@@ -47,8 +47,37 @@ not a kernel-speed gap, not reachable from configuration.
 **Best achievable on this stack: [T58](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32414712217) -- 2,685.0 tok/s/GPU,
 TPOT 0.1161** (non-DCP, spec off, real tokens).
 
-What would change the answer is a ROCm MLA backend that declares one of those flags
-and implements the varlen DCP decode path -- upstream/AITER work, not configuration.
+### I reopened this and it holds -- with stronger evidence
+
+A missing *declaration* would be a weak reason to stop, since custom patches are
+authorised. And the flag looked patchable: its only effect is one branch
+(`if DCP>1 and not supports_dcp_with_varlen: reorder_batch_threshold = 1`), and two
+backends declare it **conditionally on KV interleave size == 1** -- a data-layout
+precondition our DCP runs already satisfy (T25 uses interleave 1).
+
+But `triton_mla.py` disables its draft-decode path under DCP **in code, with the
+reason stated**:
+
+```python
+# DCP local sequence lengths are not advanced between draft steps.
+self.supports_draft_decode_metadata_update = self.dcp_world_size == 1
+
+def update_draft_decode_metadata(self, _metadata) -> None:
+    pass                                     # no-op
+```
+
+`speculator.py:112` consumes that flag to decide whether multi-step drafting is
+legal. Flipping `supports_dcp_with_varlen` would therefore not enable anything --
+it would let drafting run while each draft step reads **stale per-rank sequence
+lengths**, i.e. wrong KV ranges: **wrong output, no crash**. The gate that would
+catch it (GSM8K) needs ~15 h on this stack, so an un-gated run would produce a
+throughput number that looks like progress and isn't.
+
+**The upstream ask, precisely:** implement `update_draft_decode_metadata` for
+TritonMLA (or an AITER MLA backend) so DCP local sequence lengths advance between
+draft steps, then set `supports_draft_decode_metadata_update` and
+`supports_dcp_with_varlen` / `supports_non_causal_multi_token_dcp` accordingly.
+Exact file, function, and reason -- a filable vLLM/AITER issue.
 
 ### Two of my own conclusions this overturned
 1. **"MTP under DCP is blocked by `mla_gluon[bh16bn128] requires batch_size=1`"**
