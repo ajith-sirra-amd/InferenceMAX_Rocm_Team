@@ -59,6 +59,8 @@ wait_for_amd_gpu_clean
 # path -- T6 timed out because decode ran at 3.5-6.8 tok/s with no KV offload.
 # With offload T18 decodes ~4x faster, so 1319 GSM8K questions should now fit.
 # Baseline to match: 0.9651. Flip to false to return to the throughput arm.
+PROFILE_DECODE="${PROFILE_DECODE:-1}"   # T35: decode-only torch trace to localise the 122 ms
+export PROFILE_DECODE
 EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
 
@@ -782,6 +784,13 @@ VLLM_CMD=(
     "${SPEC_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
 )
+# vLLM only registers /start_profile and /stop_profile when this is set at boot,
+# so it must be exported before the server launches, not after.
+if [ "${PROFILE_DECODE:-0}" = "1" ]; then
+    export VLLM_TORCH_PROFILER_DIR="${VLLM_TORCH_PROFILER_DIR:-$RESULT_DIR/torch_profile}"
+    mkdir -p "$VLLM_TORCH_PROFILER_DIR"
+    echo "[profile-decode] VLLM_TORCH_PROFILER_DIR=$VLLM_TORCH_PROFILER_DIR"
+fi
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
@@ -790,7 +799,46 @@ echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-if [ "${EVAL_ONLY}" = "true" ]; then
+# ---- PROFILE_DECODE: capture a DECODE-ONLY torch trace -----------------------
+# Why this exists. The DCP decode penalty is 124 ms/step (167 vs 43 non-DCP), but
+# the communication it performs is ~73 MB/step across 24 MLA layers -- about
+# 1.5 ms at 50 GB/s, or 1.4 ms if you cost it as 48 latency-bound collectives.
+# So ~122 ms is unaccounted for, and eleven black-box config sweeps (world size,
+# batch, algorithm, mechanism, granularity, backend, cudagraphs...) all moved it
+# <=4%. A sweep cannot localise this; a trace can.
+#
+# The agentic replay path has no profiling hook and an hour-long trace would be
+# dominated by prefill anyway, so this drives a small decode-only window:
+# a few long-output requests to reach steady-state decode, then
+# /start_profile .. /stop_profile around it. Minutes of GPU, not an hour.
+if [ "${PROFILE_DECODE:-0}" = "1" ]; then
+    PROF_DIR="${VLLM_TORCH_PROFILER_DIR:-$RESULT_DIR/torch_profile}"
+    mkdir -p "$PROF_DIR"
+    echo "[profile-decode] dir=$PROF_DIR"
+
+    # Load generator: long outputs, short prompts -> almost pure decode.
+    PROF_CONC="${PROFILE_DECODE_CONC:-$CONC}"
+    for i in $(seq 1 "$PROF_CONC"); do
+        curl -s -m 600 "http://0.0.0.0:$PORT/v1/completions" \
+            -H 'Content-Type: application/json' \
+            -d "{\"model\":\"$MODEL\",\"prompt\":\"Count upward from $i, one number per line.\",\"max_tokens\":4096,\"temperature\":0,\"stream\":false}" \
+            > /dev/null 2>&1 &
+    done
+    PROF_LOAD_PIDS=$(jobs -p | tr '\n' ' ')
+
+    # Let the batch settle into decode before the trace opens.
+    sleep "${PROFILE_DECODE_WARM_S:-25}"
+    echo "[profile-decode] starting trace"
+    curl -s -m 60 -X POST "http://0.0.0.0:$PORT/start_profile" || true
+    sleep "${PROFILE_DECODE_WINDOW_S:-15}"
+    curl -s -m 300 -X POST "http://0.0.0.0:$PORT/stop_profile" || true
+    echo "[profile-decode] trace stopped; waiting for writer flush"
+    sleep "${PROFILE_DECODE_FLUSH_S:-60}"
+
+    for p in $PROF_LOAD_PIDS; do kill "$p" 2>/dev/null || true; done
+    ls -la "$PROF_DIR" || true
+    echo "[profile-decode] done; skipping the benchmark arm"
+elif [ "${EVAL_ONLY}" = "true" ]; then
     run_eval --port "$PORT"
 else
     build_replay_cmd "$RESULT_DIR"
