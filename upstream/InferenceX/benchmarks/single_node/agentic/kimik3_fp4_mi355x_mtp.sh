@@ -775,7 +775,7 @@ PROFILER_ARGS=()
 if [ "${PROFILE_DECODE:-0}" = "1" ]; then
     PROF_DIR_ABS="${PROF_DIR_ABS:-$RESULT_DIR/torch_profile}"
     mkdir -p "$PROF_DIR_ABS"
-    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\"}")
+    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\",\"torch_profiler_record_shapes\":true,\"torch_profiler_dump_cuda_time_total\":true}")
     echo "[profile-decode] profiler_config torch -> $PROF_DIR_ABS"
 fi
 
