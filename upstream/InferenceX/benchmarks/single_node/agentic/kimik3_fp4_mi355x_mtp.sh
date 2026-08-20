@@ -825,17 +825,59 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 # Fixes the ~62 us launch gaps (T40: ~124k of them, one rank idle 66-89%).
 # PIN_RANKS=0 to disable.
 if [ "${PIN_RANKS:-1}" = "1" ]; then
-    for _p in $(pgrep -f "VLLM::Worker_TP" 2>/dev/null); do
-        _tp=$(ps -p "$_p" -o args= 2>/dev/null | sed -n 's/.*Worker_TP\([0-9]\+\).*/\1/p')
-        [ -n "$_tp" ] || continue
-        _node=$(rocm-smi --showtoponuma 2>/dev/null | grep "GPU\[$_tp\]" | grep -i "Numa Node" | head -1 | awk '{print $NF}')
-        [ -n "$_node" ] || continue
-        _cpus=$(cat /sys/devices/system/node/node$_node/cpulist 2>/dev/null)
-        [ -n "$_cpus" ] || continue
-        if taskset -pc "$_cpus" "$_p" >/dev/null 2>&1; then
-            echo "[pin-ranks] TP$_tp pid=$_p -> numa node$_node cpus=$_cpus"
-        fi
-    done
+    # Give each rank a DEDICATED core slice inside its GPU's NUMA node. Binding
+    # only to the node (128 CPUs shared by 4 ranks) still lets the four ranks
+    # migrate and contend against each other, which is the launch-latency jitter
+    # we are trying to remove. Slice = node cpulist split evenly by the number of
+    # GPUs on that node, keeping SMT siblings together.
+    python3 - <<'PINPY' > /tmp/pinmap.txt 2>/dev/null || true
+import subprocess, re, os
+def cpulist(n):
+    return open(f"/sys/devices/system/node/node{n}/cpulist").read().strip()
+def expand(s):
+    out=[]
+    for part in s.split(","):
+        if "-" in part:
+            a,b=part.split("-"); out += list(range(int(a),int(b)+1))
+        else: out.append(int(part))
+    return out
+def compress(v):
+    v=sorted(v); runs=[]; a=b=v[0]
+    for x in v[1:]:
+        if x==b+1: b=x
+        else: runs.append((a,b)); a=b=x
+    runs.append((a,b))
+    return ",".join(f"{x}-{y}" if x!=y else str(x) for x,y in runs)
+try:
+    topo = subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
+except Exception:
+    topo = ""
+gpu_node={}
+for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)", topo):
+    gpu_node[int(m.group(1))]=int(m.group(2))
+if not gpu_node: raise SystemExit
+bynode={}
+for g,n in sorted(gpu_node.items()): bynode.setdefault(n,[]).append(g)
+for n,gpus in bynode.items():
+    cpus=expand(cpulist(n)); k=len(gpus)
+    half=len(cpus)//2
+    lo,hi=cpus[:half],cpus[half:]          # physical cores and SMT siblings
+    per_lo,per_hi=len(lo)//k,len(hi)//k
+    for i,g in enumerate(gpus):
+        sl = lo[i*per_lo:(i+1)*per_lo] + hi[i*per_hi:(i+1)*per_hi]
+        print(f"{g} {compress(sl)}")
+PINPY
+    if [ -s /tmp/pinmap.txt ]; then
+        while read -r _g _cpus; do
+            for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null); do
+                if taskset -pc "$_cpus" "$_p" >/dev/null 2>&1; then
+                    echo "[pin-ranks] TP$_g pid=$_p -> cpus=$_cpus"
+                fi
+            done
+        done < /tmp/pinmap.txt
+    else
+        echo "[pin-ranks] could not build map; leaving ranks unpinned" >&2
+    fi
     echo "[pin-ranks] done"
 fi
 
