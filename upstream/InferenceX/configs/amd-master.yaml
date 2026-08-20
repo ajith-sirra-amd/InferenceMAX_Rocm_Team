@@ -1964,7 +1964,14 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # so it is reuse we run out of, not space). c20 is the operating point.
       # T27: back to c20 (T26 settled c8 at 969 tok/s/GPU, -52%). Sole variable
       # is VLLM_USE_DIRECT_DCP_{A2A,Q_GATHER,KV_GATHER} 0 -> 1 in the .sh.
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }   # T42: deployed config + async scheduling ON
+      # T54: MTP at conc 8. T51 (32392005995) showed MTP + non-DCP is KV-STARVED
+      # at conc 20: the drafter's weights and its own KV cut the pool from
+      # 4,376,929 tokens (4.17x) to 1,385,293 (1.32x), and 20 concurrent requests
+      # do not fit -- 16 queued behind 6 running, prefix hit collapsing 28.5% ->
+      # 19.0%, tput_in_srv falling 9,538 -> 3,833/s monotonically. Cancelled.
+      # The pool shrank ~3.2x, so the equivalent operating point is ~c6-8.
+      # c8 also has a spec-off comparator on record (T26, DCP=4).
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [8], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
