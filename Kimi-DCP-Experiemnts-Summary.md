@@ -80,6 +80,18 @@ drafts regardless of target logits, inflating the token count. Our completed run
 **The comparison has never been like-for-like, and the asymmetry favours the
 reference.** To be quantified by T50, not asserted.
 
+### Upstream levers checked and rejected (no GPU time spent)
+
+| Lever | Verdict | Why |
+|---|---|---|
+| `VLLM_USE_V2_MODEL_RUNNER=1` | **no-op** | Auto-enables for default-V2 architectures; T47 and T48 both log `Using V2 Model Runner`. |
+| `VLLM_DCP_Q_REPLICATE=1` (vLLM #45964) | **no-op for Kimi-K3** | Needs `DCPGroupColumnParallelLinear`; Kimi-K3 builds plain `ColumnParallelLinear` (`models/kimi_k3/amd/linear.py:376,384`). Env is read only by `deepseek_v2.py` + an NV-only model. |
+
+Q-replication would also be **low value even if patched in**: it removes the query
+all-gather, but the DCP-specific collectives are only ~14% of kernel time
+(`ncclDevKernel` 8.22% + `msccl` 6.06%). `cross_device_reduce_2stage` — the **TP**
+all-reduce, untouched by Q-replication — is **78.37%**. T48 attacks that one.
+
 ### Knob transfer
 
 | B300 knob | our stack | usable |
