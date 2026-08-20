@@ -318,7 +318,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # GATHERED count, which is what fires.
     # 4 still halves collective traffic vs 8 and leaves ~16.4M KV tokens against
     # the ~4.9M we touch.
-    DCP_SIZE="${DCP_SIZE:-8}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
+    DCP_SIZE="${DCP_SIZE:-1}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
@@ -370,7 +370,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-8}"
+DCP_SIZE="${DCP_SIZE:-1}"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
 # non-DCP arms must stay bit-for-bit unchanged.
@@ -380,7 +380,7 @@ CP_ARGS=()
 # differs only in DCP. Without this the DCP block is the only place that
 # passes --attention-backend and the non-DCP arm would auto-select.
 if [ "$DCP_SIZE" -le 1 ]; then
-    CP_ARGS=(--attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
+    CP_ARGS=(--attention-backend "${NONDCP_ATTN_BACKEND:-TRITON_MLA}")   # reference SA decoded on TRITON_MLA
     # T8 died with DCP off because these two live inside the DCP block and
     # neither protection applied. Export them here so both arms match.
     export VLLM_ROCM_USE_AITER_MLA=1
@@ -879,7 +879,7 @@ if [ "${PROFILE_DECODE:-0}" = "1" ]; then
     ls -la "$PROF_DIR" || true
     # The harness wipes the workspace between jobs, so traces vanish within
     # minutes. Copy to the hf-cache mount, which persists on the host.
-    PROF_KEEP="/mnt/hf_hub_cache/dcp/traces/$(date -u +%Y%m%d-%H%M%S)"
+    PROF_KEEP="/mnt/hf_hub_cache/dcp/traces/$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}_$([ "${KV_OFFLOADING}" = "dram" ] && echo offload || echo nooffload)"
     mkdir -p "$PROF_KEEP" && cp -a "$PROF_DIR"/. "$PROF_KEEP"/ 2>/dev/null \
         && echo "[profile-decode] traces kept at $PROF_KEEP" || true
     echo "[profile-decode] done; skipping the benchmark arm"

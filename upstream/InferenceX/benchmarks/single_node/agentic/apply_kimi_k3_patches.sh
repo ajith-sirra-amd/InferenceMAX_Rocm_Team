@@ -738,7 +738,7 @@ if [ "${SKIP_PATCH_AITER:-0}" = "1" ]; then
 else
     patch_aiter_pybind11 || true
 fi
-if [ "${SKIP_PATCH_CUDAGRAPH:-1}" = "1" ]; then
+if [ "${SKIP_PATCH_CUDAGRAPH:-0}" = "1" ]; then
     echo "[triton-mla-cudagraph] SKIPPED via SKIP_PATCH_CUDAGRAPH=1"
 else
     patch_triton_mla_cudagraph || true
