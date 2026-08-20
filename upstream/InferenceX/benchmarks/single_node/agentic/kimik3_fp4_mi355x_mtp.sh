@@ -666,8 +666,10 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # The dense list also exists to guarantee every 3*C is an exact captured
     # size for the DSpark drafter -- irrelevant here, since DCP forces PIECEWISE
     # and DISABLE_SPEC removes the drafter entirely.
-    CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,48,64,96,128,160,192,256,320,384,512"
-    MAX_CUDAGRAPH_CAPTURE_SIZE=512
+    # NOTE: a sparse-ladder-to-512 assignment used to live here and was DEAD --
+    # the capture<=64 block further down is in the same `if`, with no branch
+    # boundary between them, so it silently overwrote this one. Removed rather
+    # than left to mislead: what actually ships is the bounded ladder below.
     # Run 32005837765: PIECEWISE capture DEADLOCKED at graph 3/17 for 30 min, then
     #   query = self.group.all_gather(query, dim=...)
     #   DistBackendError: NCCL error ... unhandled cuda error, NCCL version 2.27.7
