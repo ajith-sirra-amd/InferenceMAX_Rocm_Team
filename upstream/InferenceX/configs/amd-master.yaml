@@ -1979,7 +1979,12 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # --enable-expert-parallel shards experts WITHOUT replicating attention, so
       # it stays at the TP8 footprint (195 GB/GPU) rather than DP attention's
       # impossible 295.2 GB. Never passed in 54 trials -- every row set ep: 1.
-      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: none }
+      # NOTE: spec-decoding also selects the SCRIPT FILENAME -- 'mtp' resolves to
+      # kimik3_fp4_mi355x_mtp.sh (the one we maintain); 'none' resolves to
+      # kimik3_fp4_mi355x.sh, which does not exist. T55 (32404418920) died on
+      # exactly that. Keep it 'mtp' as the selector; actual speculation is gated
+      # inside the script by DISABLE_SPEC, which is how T47/T48 ran spec-off.
+      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

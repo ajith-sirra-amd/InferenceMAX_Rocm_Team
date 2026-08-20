@@ -385,11 +385,12 @@ DCP_SIZE="${DCP_SIZE:-1}"
 # 5,388 tok/s/GPU reference runs MTP, at a measured acceptance length of 2.706.
 # So: default spec OFF when DCP is on, ON when it is not. Override either way
 # with DISABLE_SPEC.
-if [ "$DCP_SIZE" -gt 1 ]; then
-    DISABLE_SPEC="${DISABLE_SPEC:-1}"
-else
-    DISABLE_SPEC="${DISABLE_SPEC:-0}"
-fi
+# T54 (32396466979) closed the MTP question: with the drafter on, non-DCP gives
+# 541 tok/s/GPU and TTFT 77.8 s against T47's 2,656 and 4.43 s without it. The
+# drafter cuts the KV pool 4.17x -> 1.31x and this workload averages 137k input
+# tokens per request, so it starves at c20 (T51, cancelled) and at c8 (T54).
+# Default is therefore spec OFF on BOTH arms now. Set DISABLE_SPEC=0 to re-enable.
+DISABLE_SPEC="${DISABLE_SPEC:-1}"
 echo "spec gate: DCP_SIZE=$DCP_SIZE -> DISABLE_SPEC=$DISABLE_SPEC"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
