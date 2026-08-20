@@ -25,6 +25,7 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 | 14 | MTP under DCP | [T20](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32110276088) | ❌ killed | Draft KV is replicated → costs W× per rank. |
 | 15 | Profiling DCP vs non-DCP | [T35e](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32333672290) / [T37](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) | 🔍 **bottleneck located** | 92.65% collectives vs 56%. DCP shards no work; the TP all-reduce inflates 8.8×. |
 | 16 | Non-DCP best config to completion | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | 📊 **2,656 / TPOT 0.118** | Non-DCP beats DCP by 30.6% tput and 30% TPOT on an identical stack — completed-run comparison. **Ran with MTP OFF** (label said on). Also: 96.7% theoretical cache hit vs ~30% achieved. |
+| 21 | **DP attention** | — | ❌ **infeasible on 8 GPUs** | Non-expert weights are 114.4 GB and DP replicates them per rank → 295.2 GB/GPU vs a 288 GB card. Needs 16 GPUs (204.8 GB). Verified from checkpoint headers; not dispatched. |
 | 20 | **Complete patch [2]** (`query_len_support = UNIFORM`) | **T52** | **queued** | Self-consistent completion; recovers FULL cudagraphs under MTP. **Gated on GSM8K first** — if the Triton decode kernel can't take `query_len > 1` this fails *silently wrong*, not loudly. |
 | 19 | **Bisect the 2.7× decode regression** | **T49** | **queued** | T22 0.043 → T47 0.1176 TPOT with speculation off on BOTH sides. Re-run T47's config on `ac7509e2b`. Largest unexplained result in the investigation, and not DCP's. |
 | 18 | **MTP actually on, non-DCP** | [T50](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32390477829) → [T51](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32392005995) | ⚠️ **T50 failed at init; T51 running** | MTP genuinely active (`method='dspark'`), but full cudagraph capture asserted. **Exposed that patch [2] is incomplete**: it raises `_cudagraph_support` to `UNIFORM_BATCH` without raising `query_len_support` to match, so the reorder threshold stays 1 and `max_query_len = 1+num_spec_tokens` trips `mla_attention.py:2288`. Hidden until now because every patch-[2] trial ran spec **off** — one bug concealed the other. T51 uses PIECEWISE to sidestep it. |
@@ -81,6 +82,39 @@ drafts regardless of target logits, inflating the token count. Our completed run
 (T22 3,341 · T47 2,656 · T25 2,034) ran spec fully **off** — 100% real tokens.
 **The comparison has never been like-for-like, and the asymmetry favours the
 reference.** To be quantified by T50, not asserted.
+
+### DP attention: NOT RUNNABLE on 8 GPUs (measured from the checkpoint)
+
+Read the actual safetensors headers of the cached checkpoint and split every
+tensor by expert vs non-expert:
+
+```
+expert       1,446.46 GB   (92.67%)
+non-expert     114.40 GB   ( 7.33%)
+total        1,560.86 GB
+```
+
+Per-GPU weight footprint on 8 × 288 GB (budget 259 GB at util 0.9):
+
+| Layout | per-GPU | fits |
+|---|---:|---|
+| **TP8 pure** (all sharded 8×) | **195.1 GB** | ✅ |
+| DP8 / TP1 / EP8 (experts/8, **attention replicated**) | **295.2 GB** | ❌ over by 36 GB |
+| TP4 | 390.2 GB | ❌ |
+
+DP attention replicates the **114.4 GB** of non-expert weights on every rank:
+114.40 + 1446.46/8 = 295.2 GB, which exceeds the 288 GB card **even at
+utilisation 1.0** — no tuning rescues it, and headroom for KV is −36 GB. It
+would OOM during weight load.
+
+This reproduces upstream's `strategy_min_gpus` threshold exactly: at DP16,
+114.40 + 1446.46/16 = **204.8 GB**, which fits. Hence "DEP 16+".
+
+**Not dispatched** — it would have burned 8-GPU time to produce an OOM.
+
+**EP=8 survives and is still untested**: `--enable-expert-parallel` shards experts
+without replicating attention, staying at the 195 GB TP8 footprint. Every kimi
+matrix row sets `ep: 1`, so the flag has never been passed in 54 trials.
 
 ### Upstream levers checked and rejected (no GPU time spent)
 
