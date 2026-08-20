@@ -52,7 +52,22 @@ wait_for_amd_gpu_clean
 # below), i.e. draft tokens are actually verified against the target, so this
 # is the only arm whose generated text is valid. It therefore doubles as the
 # correctness check for the triton_mla cudagraph patch.
-EVAL_ONLY="false"
+# T32 (2026-08-20): the ONLY causal-patch gate run so far, 32260873280, scored
+# gsm8k strict 0.6467 / flexible 0.7180 against a 0.9651 baseline. That number
+# is NOT interpretable, because two things were changed together:
+#   (a) dflash_config.causal forced true on DSpark, which is a mask-token
+#       PARALLEL drafter (mask_token_id 163824) and bidirectional by design; and
+#   (b) rejection_sample_method "synthetic", which does not verify at all --
+#       at synthetic_acceptance_length 2.51 with 2 spec tokens the unconditional
+#       rates are [1.0, 0.51], so draft token 0 is accepted with probability 1.0
+#       and the target never gets to reject it.
+# Under "standard" rejection (a) alone is harmless: a degraded draft costs
+# acceptance rate, not accuracy, because the target verifies. "synthetic"
+# removes that guarantee, so together they corrupt output.
+# This run isolates it: EVAL_ONLY=true now also reaches the unified-image block,
+# selecting TRITON_MLA + "standard" and skipping the causal rewrite entirely.
+EVAL_ONLY="${EVAL_ONLY:-true}"
+export EVAL_ONLY
 export EVAL_FRAMEWORK="lm-eval"
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
@@ -327,6 +342,14 @@ if [ -f "$UNIFIED_GEMM_CSV" ]; then
     # and leave the draft non-causal. Search the real cache instead.
     python3 - <<'PYFORCE'
 import glob, json, os, shutil
+# T32: skip the causal rewrite on accuracy runs. Its ONLY purpose is to make
+# ROCM_AITER_MLA a legal draft backend; under EVAL_ONLY the draft runs on
+# TRITON_MLA, which declares supports_non_causal_multi_token_decode=True (see
+# apply_kimi_k3_patches.sh patch [2]), so nothing needs rewriting -- and DSpark
+# keeps the bidirectional attention its mask-token design expects.
+if os.environ.get("EVAL_ONLY", "false") == "true":
+    print("  EVAL_ONLY=true -> leaving DSpark draft NON-causal (TRITON_MLA draft backend)")
+    raise SystemExit(0)
 roots = [os.environ.get("HF_HUB_CACHE",""), os.environ.get("HF_HOME",""),
          "/mnt/hf_hub_cache", "/home/models", "/dev/shm/hf-cache", "/root/.cache/huggingface/hub"]
 pats = []
@@ -366,10 +389,21 @@ PYFORCE
     )
     UNIFIED_MOE_BACKEND=aiter
     UNIFIED_LOAD_FORMAT=auto
-    SPEC_ARGS=(
-        --speculative-config
-        "{\"method\":\"dspark\",\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":2,\"attention_backend\":\"ROCM_AITER_MLA\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"synthetic\",\"synthetic_acceptance_length\":2.51}"
-    )
+    # T32: the unified block used to override SPEC_ARGS unconditionally, so
+    # EVAL_ONLY could never select a verifying config -- which is why the only
+    # gate we have (32260873280) measured causal-forcing AND synthetic together.
+    # Accuracy arm must actually verify; throughput arm keeps the perf model.
+    if [ "${EVAL_ONLY:-false}" = "true" ]; then
+        SPEC_ARGS=(
+            --speculative-config
+            "{\"method\":\"dspark\",\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":2,\"attention_backend\":\"TRITON_MLA\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"standard\"}"
+        )
+    else
+        SPEC_ARGS=(
+            --speculative-config
+            "{\"method\":\"dspark\",\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":2,\"attention_backend\":\"ROCM_AITER_MLA\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"synthetic\",\"synthetic_acceptance_length\":2.51}"
+        )
+    fi
     # Their capture ladder (sparse, to 384) rather than our dense 1..N.
     CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,12,16,24,32,36,40,48,56,64,72,80,88,96,104,112,120,128,136,144,152,160,168,176,184,192,200,208,216,224,232,240,248,256,272,288,304,320,336,352,368,384"
     COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
