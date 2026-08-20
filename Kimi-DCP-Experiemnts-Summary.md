@@ -5,6 +5,63 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 
 ---
 
+## 0. THE ANSWER -- DCP + MTP is structurally unreachable on ROCm
+
+The reference reaches 5,388 tok/s/GPU by running **DCP=8 and MTP together**. We can
+run each alone but never both, and the reason is not tuning:
+
+* **MTP alone starves** -- the drafter cuts the KV pool 4.17x -> 1.31x;
+  [T51](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32392005995) collapsed, [T54](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32396466979) completed at 541 tok/s/GPU.
+* **DCP alone caps** at 2,034 ([T25](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143877066)); twelve levers, all negative.
+* **DCP + MTP fixes both** -- [T60](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32425822552) reached **18.43x KV with
+  speculation on** (19,326,694 tokens vs 1,385,293 without DCP), confirming DCP pays
+  for the drafter's memory -- and then the engine **refused to start**.
+
+```
+TritonMLAMetadataBuilder does not support causal multi-token MLA attention for
+DSpark with decode context parallelism. Select a backend with explicit DSpark DCP
+support or set decode_context_parallel_size=1.
+```
+
+`mla_attention.py::_validate_dspark_dcp_support` requires one of two capability
+flags. Every declaration of either, across the entire image:
+
+```
+supports_non_causal_multi_token_dcp = True
+    tokenspeed_mla.py                                  <- the ONLY one
+
+supports_dcp_with_varlen = True
+    flashinfer_mla · flashattn_mla
+    flashinfer_mla_sparse · flashmla_sparse            <- all NVIDIA
+```
+
+**Neither `triton_mla.py` nor `rocm_aiter_mla.py` declares either flag.** And
+`TOKENSPEED_MLA` -- the backend the B300 reference uses -- is **not in
+`vllm/platforms/rocm.py`'s backend list** and **not installed**
+(`import tokenspeed` -> `ModuleNotFoundError`).
+
+**So the reference's configuration is unavailable on this hardware because the only
+backends implementing the required capability are NVIDIA-only.** Not a tuning gap,
+not a kernel-speed gap, not reachable from configuration.
+
+**Best achievable on this stack: [T58](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32414712217) -- 2,685.0 tok/s/GPU,
+TPOT 0.1161** (non-DCP, spec off, real tokens).
+
+What would change the answer is a ROCm MLA backend that declares one of those flags
+and implements the varlen DCP decode path -- upstream/AITER work, not configuration.
+
+### Two of my own conclusions this overturned
+1. **"MTP under DCP is blocked by `mla_gluon[bh16bn128] requires batch_size=1`"**
+   (T14/T15). I repeated this for many trials as the structural reason. It was
+   carried across image changes without rechecking; the real blocker is the backend
+   capability flag, and the mla_gluon path was never the binding one.
+2. **The config-level ban is version-dependent.** `config/speculative.py`'s
+   "MLA DSpark does not currently support decode context parallelism" is **present**
+   on ac7509e2b ([T59](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32424123796) died on it) and **removed** on 5a4c8d99.
+   Upstream lifted the config ban; the backend requirement is what actually binds.
+
+---
+
 ## 0. WARNING -- Correction: the "2.7x decode regression" does not exist
 
 I reported a 2.7x decode regression (T22 TPOT 0.043 -> T47 0.118, "the largest
