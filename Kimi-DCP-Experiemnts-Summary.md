@@ -5,23 +5,55 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 
 ---
 
-## Headline
+## 1. Summary — what was tried, and what it showed
 
-| Config | tok/s/GPU | TPOT | Trial |
-|---|---:|---:|---|
-| SA reference | 5,388 | 0.038 | — |
-| non-DCP + DRAM offload (older image) | **3,341** | 0.043 | T22 |
-| non-DCP, current stack | ~2,800 | — | T47 |
-| **best DCP** | **2,034** | 0.167 | T25 |
-| DCP before DRAM offload | 781 | 0.687 | T7 |
+| # | Tried | Trial | Result | Finding |
+|---|---|---|---|---|
+| 1 | DCP at all (block-table fix) | T4 | ✅ **0x1016 fixed** | Tables were sized `max_model_len/dcp` but indexed with the undivided length. Boundary tracked the ratio exactly. Made DCP usable. |
+| 2 | DRAM KV offload | T18 | ✅ **781 → 1,991** (2.55×) | Largest single DCP win. But no effect on the decode straggler. |
+| 3 | GSM8K correctness gate | T23 | ✅ **0.9659 / 0.9644** vs 0.9651 | DCP is numerically correct. The case against it is performance only. |
+| 4 | World size 8 → 4 | T24/T25 | ❌ +2.2% | **Decisive.** Halving collective traffic moved TPOT 4% → cost is *not* world-size-scaled. Rules out every scaling fix. DCP=2 is illegal (24 heads). |
+| 5 | Concurrency sweep | T19/T26 | ❌ optimum c20 | c8 969 · c20 2,034 · c64 1,041. Axis closed. |
+| 6 | Combine algo a2a vs ag_rs | T28 | ❌ 2,034 vs 1,978 | Both ROCm options within 3%. |
+| 7 | Shard granularity 1 → 16 | T29 | ❌ 1,977 | Locality before the combine wasn't the cost. |
+| 8 | Attention backend | T21/T45 | ❌ within noise | Not backend-bound. |
+| 9 | CUDA graphs | T7/T45 | ❌ no TPOT effect | Not launch-count-bound at the graph level. |
+| 10 | Async scheduling on/off | T41/T42 | ❌ no effect | 0 `ref_cnt` asserts at c20; the workaround was unnecessary. |
+| 11 | NUMA pinning, node-level | T45 | ❌ no effect | — |
+| 12 | NUMA pinning, per-rank slices | T46 | ❌ **worse** | 188→218 ms rising vs unpinned converging to 208. Not an OS-scheduling problem. |
+| 13 | Ported direct P2P collective to ROCm | T31b | ⚠️ works, **−0.9%** | Hand-ported the a2a combine HIP kernel. Functional, not faster. |
+| 14 | MTP under DCP | T20 | ❌ killed | Draft KV is replicated → costs W× per rank. |
+| 15 | Profiling DCP vs non-DCP | T35e/T37 | 🔍 **bottleneck located** | 92.65% collectives vs 56%. DCP shards no work; the TP all-reduce inflates 8.8×. |
+| 16 | Non-DCP best config to completion | T47 | 📊 **~2,800 sustained** | Also revealed 94.1% theoretical prefix hit vs 30.3% achieved — quantifies what KV capacity is worth. |
+| 17 | **All-reduce implementation** | **T48** | **staged** | The one lever identified and never dispatched. |
 
-**DCP's ceiling is ~2,000 tok/s/GPU — 39% below best non-DCP.** DCP is numerically
-correct (T23: GSM8K 0.9659/0.9644 vs 0.9651 baseline). The case against it is
-performance, not correctness.
+### Performance, all measured runs
+
+| Config | tok/s/GPU | TPOT | TTFT | Trial |
+|---|---:|---:|---:|---|
+| SA reference | **5,388** | 0.038 | — | — |
+| non-DCP + DRAM offload (older image) | **3,341** | 0.043 | — | T22 |
+| non-DCP, current stack, sustained | ~2,800 | — | — | T47 |
+| **best DCP** — DCP=4, c20, DRAM | **2,034** | **0.167** | 3.80 s | **T25** |
+| DCP=8 + ported direct a2a | 2,015 | 0.172 | 4.69 s | T31b |
+| DCP=8, c20, DRAM | 1,991 | 0.174 | 4.64 s | T18 |
+| DCP=4, ag_rs combine | 1,978 | 0.184 | — | T28 |
+| DCP=4, interleave 16 | 1,977 | 0.177 | 4.81 s | T29 |
+| DCP=8 + TRITON_MLA, spec off | 1,948 | 0.186 | 5.4 s | T21 |
+| non-DCP, c1 (latency point) | 1,225 | **0.0042** | — | T22 |
+| DCP=8, c64 | 1,041 | 0.683 | 501 s | T19 |
+| non-DCP c32, no cudagraph patch | 1,015 | 0.170 | — | T11 |
+| DCP=4, c8 | 969 | 0.164 | — | T26 |
+| DCP=8 + PIECEWISE cudagraph | 781 | 0.687 | — | T7 |
+| DCP=8, no offload | 742 | 0.663 | — | T5 |
+| DCP=8 + pinning | — | 0.218 | — | T46 |
+| DCP + everything | — | 0.242 | — | T45 |
+
+**DCP's ceiling is ~2,000 tok/s/GPU — 39% below best non-DCP.**
 
 ---
 
-## The bottleneck
+## 2. The bottleneck
 
 Trace, rank 0, 15 s decode window ([T35e DCP=8](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32333672290) vs [T37 non-DCP](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740)):
 
@@ -55,7 +87,7 @@ is attributed, not by itself the root cause.*
 
 ---
 
-## Patches
+## 3. Patches
 
 | # | Name | What it fixes |
 |---|---|---|
@@ -99,7 +131,7 @@ T17–T31b `ac7509e2b` · T22 unified `3fa1b88a` · T35e→ `nightly-5a4c8d99`.
 
 ---
 
-## Key trials
+## 4. Key trials
 
 ### T48 — `--disable-custom-all-reduce` (staged)
 DCP=8 · conc 20 · DRAM offload · fp8 KV · spec MTP · pinning.
@@ -187,7 +219,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 ---
 
-## Full ledger
+## 5. Full ledger
 
 | # | run | config | result |
 |---|---|---|---|
@@ -230,7 +262,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 ---
 
-## Levers vs the DCP decode penalty
+## 6. Levers vs the DCP decode penalty
 
 | Lever | Trial | Result |
 |---|---|---|
@@ -250,7 +282,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 ---
 
-## Wrong turns (kept)
+## 7. Wrong turns (kept)
 
 - **"The DCP decode cost is irreducible"** — wrong in an interesting way. The cost is real
   but mostly **not DCP's**; it's the TP all-reduce any TP=8 decode pays, which DCP worsens
@@ -275,7 +307,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 ---
 
-## Conclusion
+## 8. Conclusion
 
 **DCP works, is correct, and is structurally unprofitable on this workload.**
 
