@@ -342,14 +342,11 @@ if [ -f "$UNIFIED_GEMM_CSV" ]; then
     # and leave the draft non-causal. Search the real cache instead.
     python3 - <<'PYFORCE'
 import glob, json, os, shutil
-# T32: skip the causal rewrite on accuracy runs. Its ONLY purpose is to make
-# ROCM_AITER_MLA a legal draft backend; under EVAL_ONLY the draft runs on
-# TRITON_MLA, which declares supports_non_causal_multi_token_decode=True (see
-# apply_kimi_k3_patches.sh patch [2]), so nothing needs rewriting -- and DSpark
-# keeps the bidirectional attention its mask-token design expects.
-if os.environ.get("EVAL_ONLY", "false") == "true":
-    print("  EVAL_ONLY=true -> leaving DSpark draft NON-causal (TRITON_MLA draft backend)")
-    raise SystemExit(0)
+# T33: the causal rewrite STAYS on the accuracy arm. T32 showed TRITON_MLA
+# cannot be used with fp8 KV on this model, so ROCM_AITER_MLA is the only legal
+# draft backend and it requires a causal draft. Holding causal forcing constant
+# and flipping only synthetic -> standard isolates the acceptance method, which
+# is the variable most likely responsible for gsm8k 0.6467 vs 0.9651.
 roots = [os.environ.get("HF_HUB_CACHE",""), os.environ.get("HF_HOME",""),
          "/mnt/hf_hub_cache", "/home/models", "/dev/shm/hf-cache", "/root/.cache/huggingface/hub"]
 pats = []
@@ -394,9 +391,21 @@ PYFORCE
     # gate we have (32260873280) measured causal-forcing AND synthetic together.
     # Accuracy arm must actually verify; throughput arm keeps the perf model.
     if [ "${EVAL_ONLY:-false}" = "true" ]; then
+        # T33: T32 tried TRITON_MLA here and died at init with
+        #   "Kimi-K3 fp8 KV cache decode requires a backend that accepts an
+        #    fp8 (quantized) query input."
+        # TRITON_MLA does not take fp8 queries, and KV is fp8, so the two are
+        # mutually exclusive on this model. That is WHY the recipe pins
+        # ROCM_AITER_MLA and then has to force the draft causal -- the causal
+        # hack is a consequence of the fp8 KV choice, not an independent one.
+        #
+        # So isolate the other variable instead: keep ROCM_AITER_MLA and keep
+        # the causal forcing, and change ONLY synthetic -> standard. This asks
+        # the single question that matters: was the 0.6467 caused by
+        # non-verifying acceptance rather than by the causal rewrite?
         SPEC_ARGS=(
             --speculative-config
-            "{\"method\":\"dspark\",\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":2,\"attention_backend\":\"TRITON_MLA\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"standard\"}"
+            "{\"method\":\"dspark\",\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":2,\"attention_backend\":\"ROCM_AITER_MLA\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"standard\"}"
         )
     else
         SPEC_ARGS=(
