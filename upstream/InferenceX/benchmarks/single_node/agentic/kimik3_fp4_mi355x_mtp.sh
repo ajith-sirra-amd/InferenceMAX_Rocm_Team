@@ -46,27 +46,12 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 
 wait_for_amd_gpu_clean
 
-# ACCURACY RUN. Set to "false" to go back to the throughput/agentic-replay arm.
-# Note EVAL_ONLY=true also flips the speculative config from
-# rejection_sample_method "synthetic" to "block" (see the SPEC_ARGS branch
-# below), i.e. draft tokens are actually verified against the target, so this
-# is the only arm whose generated text is valid. It therefore doubles as the
-# correctness check for the triton_mla cudagraph patch.
-# T32 (2026-08-20): the ONLY causal-patch gate run so far, 32260873280, scored
-# gsm8k strict 0.6467 / flexible 0.7180 against a 0.9651 baseline. That number
-# is NOT interpretable, because two things were changed together:
-#   (a) dflash_config.causal forced true on DSpark, which is a mask-token
-#       PARALLEL drafter (mask_token_id 163824) and bidirectional by design; and
-#   (b) rejection_sample_method "synthetic", which does not verify at all --
-#       at synthetic_acceptance_length 2.51 with 2 spec tokens the unconditional
-#       rates are [1.0, 0.51], so draft token 0 is accepted with probability 1.0
-#       and the target never gets to reject it.
-# Under "standard" rejection (a) alone is harmless: a degraded draft costs
-# acceptance rate, not accuracy, because the target verifies. "synthetic"
-# removes that guarantee, so together they corrupt output.
-# This run isolates it: EVAL_ONLY=true now also reaches the unified-image block,
-# selecting TRITON_MLA + "standard" and skipping the causal rewrite entirely.
-EVAL_ONLY="${EVAL_ONLY:-true}"
+# true = gsm8k accuracy arm (uses "standard" rejection, the only verifying mode).
+# false = throughput/agentic-replay arm.
+# Causal gate settled 2026-08-20 (run 32327393537): causal forcing + draft len 2
+# under "standard" scored 0.9659 strict / 0.9651 flexible vs 0.9651 baseline.
+# The earlier 0.6467 was "synthetic" acceptance, which never verifies.
+EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_ONLY
 export EVAL_FRAMEWORK="lm-eval"
 
@@ -114,18 +99,7 @@ install_agentic_deps
 # Set SKIP_KIMI_PATCHES=1 to run stock.
 # bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
 
-# ---- Reference env block ----------------------------------------------------
-# Keep ALL of these. Commenting them out does not avoid the AITER FMHA crash:
-# that crash is gated on VLLM_ROCM_USE_AITER alone (AiterFlashAttnPrefillBackend
-# .is_available() consults only rocm_aiter_ops.is_enabled()), so disabling the
-# others just loses the MoE kernels while keeping the failure.
-# export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
-# export VLLM_ROCM_USE_AITER=1
-# export SAFETENSORS_FAST_GPU=1
-# export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
-# export AITER_BF16_FP8_MOE_BOUND=0
-# # REQUIRED on ROCm per the upstream recipe: the build auto-enables this to 1.
-# export VLLM_USE_BREAKABLE_CUDAGRAPH=0
+# The unified image exports its own AITER env; nothing needed here.
 
 # Workaround for MEC FW <177 RCCL memory reclaim issue (shared with the other
 # gfx950 recipes in this tree).
@@ -202,10 +176,6 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
         "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"standard\"}"
     )
 else
-    # SPEC_ARGS=(
-    #     --speculative-config
-    #     "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
-    # )
     SPEC_ARGS=(
         --speculative-config
         "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"standard\"}"
@@ -378,7 +348,8 @@ PYFORCE
     ASYNC_SCHED_ARGS=(--async-scheduling)
     CHUNKED_PREFILL_ARGS=()
     UNIFIED_ARGS=(
-        --attention-backend ROCM_AITER_MLA
+        # T36: overridable. Draft backend in SPEC_ARGS is untouched.
+        --attention-backend "${DECODE_BACKEND:-TRITON_MLA}"
         --distributed-executor-backend mp
         --enable-prompt-tokens-details
         --no-disable-hybrid-kv-cache-manager
@@ -470,10 +441,4 @@ run_eval --port "$PORT"
 #     --result-dir "$RESULT_DIR" \
 #     --trust-remote-code
 
-# if [ "${EVAL_ONLY}" = "true" ]; then
-#     run_eval --port "$PORT"
-# else
-#     build_replay_cmd "$RESULT_DIR"
-#     run_agentic_replay_and_write_outputs "$RESULT_DIR"
-# fi
 
