@@ -26,8 +26,8 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 | 15 | Profiling DCP vs non-DCP | [T35e](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32333672290) / [T37](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) | 🔍 **bottleneck located** | 92.65% collectives vs 56%. DCP shards no work; the TP all-reduce inflates 8.8×. |
 | 16 | Non-DCP best config to completion | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | 📊 **2,656 / TPOT 0.118** | Non-DCP beats DCP by 30.6% tput and 30% TPOT on an identical stack — completed-run comparison. **Ran with MTP OFF** (label said on). Also: 96.7% theoretical cache hit vs ~30% achieved. |
 | 19 | **Bisect the 2.7× decode regression** | **T49** | **queued** | T22 0.043 → T47 0.1176 TPOT with speculation off on BOTH sides. Re-run T47's config on `ac7509e2b`. Largest unexplained result in the investigation, and not DCP's. |
-| 18 | **MTP actually on, non-DCP** | **T50** | **queued** | T47 re-run with `DISABLE_SPEC=0` — the reference's configuration. Worth ~2.5× on output at the measured acceptance length of 2.706. |
-| 17 | **All-reduce implementation** | **[T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949)** | **running** | The one lever identified and never dispatched. |
+| 18 | **MTP actually on, non-DCP** | **[T50](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32390477829)** | **running** | T47 re-run with `DISABLE_SPEC=0` — the reference's configuration. Worth ~2.5× on output at the measured acceptance length of 2.706. |
+| 17 | **All-reduce implementation** (PYNCCL vs AITER_CUSTOM) | [T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) | ❌ **−23% tput, +31% TPOT** | Hypothesis was well-founded — 78.37% of kernel time is in `cross_device_reduce_2stage`, and NVIDIA also swaps their all-reduce. Answer: **AITER's implementation was already the better one.** The 78% attribution stands; it just isn't addressable by substitution. Also measured DCP's capacity win: prefix hit **70.6%** vs T47's ~30%, `ext_cache_hit` 0%. | The one lever identified and never dispatched. |
 
 *T41, T42 and T45 predate run-URL capture in the ledger; all others link to their GH run.*
 
@@ -39,6 +39,7 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 | non-DCP + DRAM offload (older image) | **3,341** | 0.043 | — | [T22](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32123047671) |
 | non-DCP, current stack, **completed** | **2,656** | **0.118** | 4.43 s | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) |
 | **best DCP** — DCP=4, c20, DRAM | **2,034** | **0.167** | 3.80 s | **[T25](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143877066)** |
+| DCP=8, PYNCCL all-reduce | 1,532 | 0.227 | 11.31 s | [T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) |
 | DCP=8 + ported direct a2a | 2,015 | 0.172 | 4.69 s | [T31b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) |
 | DCP=8, c20, DRAM | 1,991 | 0.174 | 4.64 s | [T18](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32096487055) |
 | DCP=4, ag_rs combine | 1,978 | 0.184 | — | [T28](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32163743641) |
@@ -345,6 +346,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 | 37 | [32340149740](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) | non-DCP profiling | 56.05% collectives |
 | 45 | — | DCP + everything | TPOT 0.242 |
 | 46 | [32368684074](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32368684074) | DCP=8 + pinning | 0.218 rising — no help |
+| 48 | [32381243949](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) | DCP=8 + **PYNCCL all-reduce** | **1,531.6**, TPOT 0.2271 — worse than AITER_CUSTOM |
 | 47 | [32372517517](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | non-DCP, full 3600 s | **2,655.7**, TPOT 0.1176 — completed |
 
 ---
@@ -365,7 +367,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 | NUMA pinning (per-rank) | T46 | ❌ **worse** |
 | Ported direct P2P collective | T31b | ⚠️ works, −0.9% |
 | MTP under DCP | T20 | ❌ draft KV replicated, W× per rank |
-| **All-reduce implementation** | **T48** | **the one untested lever** |
+| **All-reduce implementation** | [T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) | ❌ **−23% / +31% TPOT** — AITER_CUSTOM already better |
 
 ---
 
