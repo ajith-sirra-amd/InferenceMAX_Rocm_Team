@@ -418,7 +418,17 @@ DCP_SIZE="${DCP_SIZE:-1}"
 # refused at init on every ROCm MLA backend (see T60). Set DISABLE_SPEC=0 to
 # re-enable if a backend ever declares supports_non_causal_multi_token_dcp or
 # supports_dcp_with_varlen on ROCm.
-DISABLE_SPEC="${DISABLE_SPEC:-1}"
+#
+# T61 SUPERSEDES THE ABOVE. The 5,388 MI355X reference (run 31993981851) is
+# non-DCP + MTP -- NOT DCP + MTP as I had recorded. Its command carries no
+# --decode-context-parallel-size at all; I had inferred DCP=8 from the *B300*
+# script, which is a different platform and a different file, and never read the
+# MI355X reference's own command until now. So non-DCP + MTP is the configuration
+# that reaches 5,388, and our attempts at it (T51 1.32x KV, T54 541 tok/s/GPU) ran
+# at the SAME --max-num-seqs 40 the reference uses. The remaining deltas were the
+# forced --max-num-batched-tokens 8192, which sizes the MLA chunked-prefill
+# workspace, and our PIECEWISE cudagraph fallback. Both are aligned above.
+DISABLE_SPEC="${DISABLE_SPEC:-0}"
 echo "spec gate: DCP_SIZE=$DCP_SIZE -> DISABLE_SPEC=$DISABLE_SPEC"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
@@ -589,8 +599,22 @@ fi
 # 32k-token activation tensors (aiter logged M:32755, N:8448, K:7168) left only
 # 2408 MB free and the run died with HSA_STATUS_ERROR_OUT_OF_RESOURCES. 8192 is
 # also what the 5,388 reference uses, so this keeps DCP the only variable.
-MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS")
+# T61: the 5,388 MI355X reference (run 31993981851) passes NO --max-num-batched-tokens
+# at all. We have always forced 8192. That matters beyond scheduling: MLA sizes its
+# chunked-prefill workspace from this value
+# (mla_attention.py::determine_chunked_prefill_workspace_size), so pinning it
+# reserves memory the KV pool then cannot have. Reference KV with MTP is
+# 2,646,059 tokens (2.52x); ours with MTP was 1,385,293 (1.32x) at the same
+# --max-num-seqs 40. Set MAX_NUM_BATCHED_TOKENS=0 to omit the flag and take vLLM's
+# own sizing, as the reference does.
+MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-0}"
+if [ "$MAX_NUM_BATCHED_TOKENS" -gt 0 ]; then
+    CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS")
+    echo "chunked prefill: --max-num-batched-tokens $MAX_NUM_BATCHED_TOKENS"
+else
+    CHUNKED_PREFILL_ARGS=()
+    echo "chunked prefill: flag omitted (reference behaviour -- vLLM sizes it)"
+fi
 
 # ---- Async scheduling / KV block-pool stability ------------------------------
 # DSpark is the ONLY spec method exempted from vLLM's async-scheduling disable
@@ -748,9 +772,22 @@ fi
 #
 # PIECEWISE avoids full capture entirely (attention runs outside the graph, so
 # build_for_cudagraph_capture is never called) and carries no correctness risk.
-if [ "${DISABLE_SPEC:-0}" != "1" ] && [ -z "${CUDAGRAPH_MODE_OVERRIDE:-}" ]; then
+# T61 UPDATE: the assert above was observed on 5a4c8d99. The 5,388 MI355X
+# reference (run 31993981851) runs spec-decode WITH FULL_AND_PIECEWISE on
+# ac7509e2b -- dense capture sizes 1..120, max_cudagraph_capture_size 120 -- so
+# the assert is version-specific, not inherent to spec + full capture. Keep the
+# PIECEWISE fallback only for 5a4c8d99; on the reference image match the
+# reference. Set SPEC_CUDAGRAPH_PIECEWISE=1 to force the fallback back on.
+if [ "${DISABLE_SPEC:-0}" != "1" ] && [ -z "${CUDAGRAPH_MODE_OVERRIDE:-}" ] \
+   && [ "${SPEC_CUDAGRAPH_PIECEWISE:-0}" = "1" ]; then
     CUDAGRAPH_MODE_OVERRIDE=PIECEWISE
     echo "cudagraph: spec-decode active -> PIECEWISE (avoids the MLA full-capture assert)"
+fi
+# Reference capture ladder: dense 1..120 with max_cudagraph_capture_size 120.
+if [ "${DISABLE_SPEC:-0}" != "1" ] && [ "${DCP_SIZE:-1}" -le 1 ]; then
+    MAX_CUDAGRAPH_CAPTURE_SIZE="${MAX_CUDAGRAPH_CAPTURE_SIZE_OVERRIDE:-120}"
+    CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"
+    echo "cudagraph: reference ladder -> dense 1..$MAX_CUDAGRAPH_CAPTURE_SIZE"
 fi
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE_OVERRIDE:-FULL_AND_PIECEWISE}"
 if [ "$CUDAGRAPH_MODE" = "NONE" ]; then
