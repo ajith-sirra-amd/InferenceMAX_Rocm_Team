@@ -134,6 +134,25 @@ install_agentic_deps
 if [ "${DCP_SIZE:-1}" -le 1 ]; then
     export SKIP_PATCH_PR51705=1 SKIP_PATCH_BLOCKTABLE=1 SKIP_PATCH_GATHERED_HEADS=1
     echo "patches: non-DCP arm -> skipping DCP-only patches [5] [6] [8]"
+    # T62: also skip patch [2] when speculation is on. Patch [2] raises
+    # TritonMLA's _cudagraph_support to UNIFORM_BATCH, which PERMITS full
+    # cudagraph capture; capture then builds metadata with
+    # max_query_len = 1 + num_speculative_tokens and trips
+    #   mla_attention.py:2185 assert m.max_query_len <= reorder_batch_threshold
+    # (T50 on 5a4c8d99, T61 on ac7509e2b -- so it is not version-specific, as I
+    # had assumed). Without patch [2] the builder reports
+    # UNIFORM_SINGLE_TOKEN_DECODE and vLLM downgrades the drafter to PIECEWISE by
+    # itself, which is exactly what the 5,388 reference does: it passes
+    # FULL_AND_PIECEWISE in --compilation-config and carries no patch [2].
+    # NOTE: like the DCP_SIZE read above, this runs BEFORE DISABLE_SPEC is
+    # resolved (line ~445), so it must use the SAME default that resolution uses
+    # on this arm -- which is 0 (spec ON) for non-DCP. Using :-1 here would
+    # silently disagree with the later default: the fourth time this session that
+    # a value looked decided at one site and was actually decided at another.
+    if [ "${DISABLE_SPEC:-0}" != "1" ]; then
+        export SKIP_PATCH_CUDAGRAPH=1
+        echo "patches: spec-decode on -> skipping patch [2] (reference has no patch [2])"
+    fi
 fi
 if [ ! -f /opt/aiter-local/aiter/configs/merged_bf16_tuned_gemm.csv ]; then
     bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
