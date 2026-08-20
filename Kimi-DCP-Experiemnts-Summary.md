@@ -24,8 +24,8 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 | 13 | Ported direct P2P collective to ROCm | [T31b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) | ⚠️ works, **−0.9%** | Hand-ported the a2a combine HIP kernel. Functional, not faster. |
 | 14 | MTP under DCP | [T20](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32110276088) | ❌ killed | Draft KV is replicated → costs W× per rank. |
 | 15 | Profiling DCP vs non-DCP | [T35e](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32333672290) / [T37](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) | 🔍 **bottleneck located** | 92.65% collectives vs 56%. DCP shards no work; the TP all-reduce inflates 8.8×. |
-| 16 | Non-DCP best config to completion | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | 📊 **~2,800 sustained** | Also revealed 94.1% theoretical prefix hit vs 30.3% achieved — quantifies what KV capacity is worth. |
-| 17 | **All-reduce implementation** | **T48** | **staged** | The one lever identified and never dispatched. |
+| 16 | Non-DCP best config to completion | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | 📊 **2,656 / TPOT 0.118** | Non-DCP beats DCP by 30.6% tput and 30% TPOT on an identical stack — now a completed-run comparison, not an extrapolation. Also: 96.7% theoretical cache hit vs ~30% achieved. |
+| 17 | **All-reduce implementation** | **[T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949)** | **running** | The one lever identified and never dispatched. |
 
 *T41, T42 and T45 predate run-URL capture in the ledger; all others link to their GH run.*
 
@@ -35,7 +35,7 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 |---|---:|---:|---:|---|
 | SA reference | **5,388** | 0.038 | — | — |
 | non-DCP + DRAM offload (older image) | **3,341** | 0.043 | — | [T22](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32123047671) |
-| non-DCP, current stack, sustained | ~2,800 | — | — | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) |
+| non-DCP, current stack, **completed** | **2,656** | **0.118** | 4.43 s | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) |
 | **best DCP** — DCP=4, c20, DRAM | **2,034** | **0.167** | 3.80 s | **[T25](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143877066)** |
 | DCP=8 + ported direct a2a | 2,015 | 0.172 | 4.69 s | [T31b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) |
 | DCP=8, c20, DRAM | 1,991 | 0.174 | 4.64 s | [T18](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32096487055) |
@@ -135,7 +135,8 @@ T17–T31b `ac7509e2b` · T22 unified `3fa1b88a` · T35e→ `nightly-5a4c8d99`.
 
 ## 4. Key trials
 
-### T48 — `--disable-custom-all-reduce` (staged)
+### T48 — `--disable-custom-all-reduce` (RUNNING)
+[Run 32381243949](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) · dispatched 2026-08-20 14:45 UTC
 DCP=8 · conc 20 · DRAM offload · fp8 KV · spec MTP · pinning.
 
 `cross_device_reduce_2stage` **is** the AITER custom all-reduce — 78% of DCP kernel time.
@@ -147,7 +148,7 @@ which is what the identified mechanism is made of.
 *Flagged in the log as "worth one run" three times and never dispatched. A real gap,
 caught by review rather than by me.*
 
-### T47 — best config, run to completion
+### T47 — best config, run to completion ✅ COMPLETED
 [Run 32372517517](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) ·
 DCP **off** · TRITON_MLA · pinning · DRAM offload · fp8 KV · conc 20 · spec MTP
 
@@ -156,13 +157,26 @@ lowest ITL ever measured (32 ms cold / 130 ms steady) but was cancelled, so ever
 downstream was extrapolation from a cancelled run.
 
 ```
-tput_in_srv 20,994–22,669/s  ->  2,624–2,834 tok/s/GPU
-0 preemptions · 0 errors · full 20/20 concurrency
+2,655.7 tok/s/GPU   (input 2,640.9 · output 14.8)
+TOTAL 21,245.9 tok/s · TPOT/ITL mean 0.1176 p50 0.11835 p90 0.14884
+TTFT mean 4.427 p50 1.735 · e2e mean 78.05 p50 33.91
+558/600 successful · 38 InvalidInferenceResultError · 3,629.6 s window
 ```
+
+**Best steady-state TPOT measured at c20 on any config here** — 0.118 vs T25's
+0.167 and T45/T46's 0.242/0.218. **Non-DCP beats DCP by 30.6% throughput and 30%
+TPOT on an identical stack.**
+
+*Correction: while it ran I quoted "~2,800 sustained" from `tput_in_srv`. That was
+the **input** rate / 8. The official total per-GPU aggregate is 2,655.7.*
+
+**Still 20.5% below T22** (2,656 vs 3,341) — the newer nightly plus full patch
+stack has not recovered the older unified image's number. That gap is its own open
+question, and it is not DCP's fault.
 
 **Finding — what the KV capacity is worth:**
 ```
-theoretical_prefix_cache_hit  94.1%   <- unbounded cache
+theoretical_cache_hit_rate    96.7%   <- unbounded cache (final aggregate)
 prefix_cache_hit              30.3%   <- actual, 4.4M-token pool
 ext_cache_hit                 90.8%   <- DRAM catching the misses
 unique_in_srv                 36.2M tokens
@@ -260,7 +274,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 | 37 | [32340149740](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) | non-DCP profiling | 56.05% collectives |
 | 45 | — | DCP + everything | TPOT 0.242 |
 | 46 | [32368684074](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32368684074) | DCP=8 + pinning | 0.218 rising — no help |
-| 47 | [32372517517](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | non-DCP, full 3600 s | ~2,800 sustained |
+| 47 | [32372517517](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | non-DCP, full 3600 s | **2,655.7**, TPOT 0.1176 — completed |
 
 ---
 
