@@ -5,7 +5,39 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 
 ---
 
-## 1. Summary — what was tried, and what it showed
+## 0. WARNING -- Correction: the "2.7x decode regression" does not exist
+
+I reported a 2.7x decode regression (T22 TPOT 0.043 -> T47 0.118, "the largest
+unexplained result in this investigation") and queued a GPU bisect against it.
+**It was a measurement artefact.**
+
+[T22's server log](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32123047671) shows `speculative_config=SpeculativeConfig`,
+364 SpecDecoding samples, acceptance mean **2.509** -- T22 ran **with speculation**.
+Its 0.0429 is per *accepted* token. T47/T57/T58 all ran spec **off**. Normalising:
+
+```
+0.1161 / 2.509 = 0.0463   vs   T22's 0.0429
+```
+
+**How it happened:** `agg_bmk.json`'s `spec_decoding` field read `'none'` for T22.
+That is the same field I flagged as unreliable after T54 -- and I never went back
+to re-audit the conclusions already built on it. Discovering a measurement is
+untrustworthy obliges re-checking past conclusions, not just future ones.
+
+The bisect ([T58](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32414712217)) was still worth running: it cleared the image
+conclusively (1.3 percent TPOT difference), and that negative result is what
+forced me to find the real explanation.
+
+**Consequence:** the reference's 5,388 / 0.038 is spec-ON with *synthetic*
+acceptance; our 2,685 / 0.1161 is spec-OFF with real tokens. **These were never
+comparable.** Normalised TPOT is 0.046 vs 0.038. The naive throughput scaling
+(2,685 x 2.51) is *not* valid either -- [T54](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32396466979) measured what
+actually happens when speculation is enabled here: 541 tok/s/GPU, because the
+drafter cuts the KV pool 4.17x -> 1.31x.
+
+---
+
+## 1. Summary -- what was tried, and what it showed
 
 | # | Tried | Trial | Result | Finding |
 |---|---|---|---|---|
@@ -39,7 +71,9 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 |---|---:|---:|---:|---|
 | SA reference | **5,388** | 0.038 | — | — |
 | non-DCP + DRAM offload (older image) | **3,341** | 0.043 | — | [T22](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32123047671) |
-| non-DCP, current stack, **completed** | **2,656** | **0.118** | 4.43 s | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) |
+| **non-DCP, best completed** | **2,685** | **0.116** | 3.45 s | **[T58](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32414712217)** |
+| non-DCP, 5a4c8d99 | 2,656 | 0.118 | 4.43 s | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) |
+| non-DCP + EP=8 | 2,619 | 0.118 | 5.09 s | [T57](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32406159156) |
 | non-DCP + **MTP**, c8 | 541 | 0.292 | 77.8 s | [T54](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32396466979) |
 | **best DCP** — DCP=4, c20, DRAM | **2,034** | **0.167** | 3.80 s | **[T25](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143877066)** |
 | DCP=8, PYNCCL all-reduce | 1,532 | 0.227 | 11.31 s | [T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) |
@@ -386,7 +420,9 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 | 50 | [32390477829](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32390477829) | non-DCP + MTP, FULL cudagraphs | **FAIL @init** — MLA full-capture assert; exposed patch [2] incomplete |
 | 51 | [32392005995](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32392005995) | non-DCP + MTP, c20 | **cancelled** — KV-starved, 9,538→3,833/s, 16 queued |
 | 54 | [32396466979](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32396466979) | non-DCP + MTP, **c8** | **541.0**, TPOT 0.2921, TTFT 77.8 s — MTP closed |
-| 55 | [32404418920](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32404418920) | **EP=8**, spec off, c20 | running |
+| 55 | [32404418920](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32404418920) | EP=8 attempt | **FAIL** -- spec-decoding also selects the script filename |
+| 57 | [32406159156](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32406159156) | **EP=8** (flag verified) | **2,619.2**, TPOT 0.1177 -- neutral |
+| 58 | [32414712217](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32414712217) | **image bisect** on ac7509e2b | **2,685.0**, TPOT 0.1161 -- image is NOT the cause |
 | 47 | [32372517517](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | non-DCP, full 3600 s | **2,655.7**, TPOT 0.1176 — completed |
 
 ---
