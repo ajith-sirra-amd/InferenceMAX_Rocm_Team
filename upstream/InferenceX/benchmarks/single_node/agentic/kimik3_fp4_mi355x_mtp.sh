@@ -815,6 +815,30 @@ echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
+# ---- Pin each rank to its GPU's NUMA node ------------------------------------
+# Host profiling during T42 found all 8 workers with affinity 0-255 on a 2-socket
+# EPYC 9575F: node0 = CPUs 0-63,128-191 drives GPUs 0-3; node1 = 64-127,192-255
+# drives GPUs 4-7. Nothing binds a rank to its GPU's socket, so a rank can run
+# cross-socket and every kernel launch pays interconnect latency. Linux migrates
+# unpinned processes freely, which is why the straggler moved rank7 -> rank0 ->
+# rank1 -> rank5 across T38-T41 and why no vLLM-level knob touched it.
+# Fixes the ~62 us launch gaps (T40: ~124k of them, one rank idle 66-89%).
+# PIN_RANKS=0 to disable.
+if [ "${PIN_RANKS:-1}" = "1" ]; then
+    for _p in $(pgrep -f "VLLM::Worker_TP" 2>/dev/null); do
+        _tp=$(ps -p "$_p" -o args= 2>/dev/null | sed -n 's/.*Worker_TP\([0-9]\+\).*/\1/p')
+        [ -n "$_tp" ] || continue
+        _node=$(rocm-smi --showtoponuma 2>/dev/null | grep "GPU\[$_tp\]" | grep -i "Numa Node" | head -1 | awk '{print $NF}')
+        [ -n "$_node" ] || continue
+        _cpus=$(cat /sys/devices/system/node/node$_node/cpulist 2>/dev/null)
+        [ -n "$_cpus" ] || continue
+        if taskset -pc "$_cpus" "$_p" >/dev/null 2>&1; then
+            echo "[pin-ranks] TP$_tp pid=$_p -> numa node$_node cpus=$_cpus"
+        fi
+    done
+    echo "[pin-ranks] done"
+fi
+
 # ---- PROFILE_DECODE: capture a DECODE-ONLY torch trace -----------------------
 # Why this exists. The DCP decode penalty is 124 ms/step (167 vs 43 non-DCP), but
 # the communication it performs is ~73 MB/step across 24 MLA layers -- about
