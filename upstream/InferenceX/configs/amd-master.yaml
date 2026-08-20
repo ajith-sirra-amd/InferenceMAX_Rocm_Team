@@ -1912,7 +1912,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # Matched to the reference run's image so DCP is the only variable. The 5,388
   # reference was measured on THIS nightly -- not the unified image, which kills
   # the "unified has tuned GEMMs" theory I had been carrying.
-  image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
+  image: vllm/vllm-openai-rocm:nightly-5a4c8d99242e9e069b604d0e9b969e77f7dd501d
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds

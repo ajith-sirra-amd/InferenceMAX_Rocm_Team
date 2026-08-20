@@ -624,17 +624,32 @@ patch_pr51705() {
         echo "[$label]   got      $got" >&2
         rm -f "$d"; return 0
     fi
-    # Verify every hunk before touching anything: a half-applied 11-file patch
-    # is worse than an unpatched tree.
-    if ! patch -p1 -d "$root" --dry-run --forward < "$d" >/dev/null 2>&1; then
-        echo "[$label] dry-run failed; leaving vllm unpatched." >&2
-        patch -p1 -d "$root" --dry-run --forward < "$d" 2>&1 | grep -iE "fail|hunk" | head -10 >&2
-        rm -f "$d"; return 0
+    # The PR also touches tests/, which do not exist under site-packages, so an
+    # unfiltered apply always fails. Keep only vllm/ files.
+    local dv; dv=$(mktemp)
+    "$PY" - "$d" "$dv" <<'PYEOF'
+import re, sys
+src = open(sys.argv[1]).read()
+blocks = re.split(r"(?m)^(?=diff --git )", src)
+keep = [b for b in blocks
+        if b.startswith("diff --git") and re.search(r"^\+\+\+ b/vllm/", b, re.M)]
+open(sys.argv[2], "w").write("".join(keep))
+print(f"[pr51705] filtered to {len(keep)} vllm/ files")
+PYEOF
+    # Hunk 7 of rocm_aiter_mla.py (the DCP gathered-head sizing) does not apply to
+    # nightlies that refactored the line into AiterMLAHelper.get_actual_mla_num_heads.
+    # Let the other 23 land and fix that one in patch [8] below.
+    if ! patch -p1 -d "$root" --dry-run --forward < "$dv" >/dev/null 2>&1; then
+        echo "[$label] dry-run has rejects; applying what fits" >&2
+        patch -p1 -d "$root" --dry-run --forward < "$dv" 2>&1 | grep -iE "fail" | head -5 >&2
     fi
-    patch -p1 -d "$root" --forward --backup --suffix=.pr51705.orig < "$d" >/dev/null 2>&1 \
-        && echo "[$label] applied PR #51705 (sha ${PR51705_SHA:0:16})" \
-        || echo "[$label] apply failed after a clean dry-run" >&2
-    rm -f "$d"
+    patch -p1 -d "$root" --forward --backup --suffix=.pr51705.orig < "$dv" >/dev/null 2>&1
+    if grep -q "cp_exempt_groups" "$root/vllm/v1/worker/gpu/block_table.py" 2>/dev/null; then
+        echo "[$label] applied PR #51705 (sha ${PR51705_SHA:0:16})"
+    else
+        echo "[$label] apply did not take" >&2
+    fi
+    rm -f "$d" "$dv"
 }
 
 # -----------------------------------------------------------------------------
@@ -832,6 +847,47 @@ if [ "${SKIP_PATCH_DCP_DIRECT:-0}" = "1" ]; then
     echo "[dcp-direct] SKIPPED via SKIP_PATCH_DCP_DIRECT=1"
 else
     patch_dcp_direct_a2a || true
+fi
+
+# [8] DCP gathered-head sizing for AITER MLA decode.
+# PR #51705 hunk 7 wants max(16, num_heads * dcp_world_size); newer nightlies
+# refactored that line to AiterMLAHelper.get_actual_mla_num_heads(self.num_heads),
+# which rounds up to a multiple of 16 but never multiplies by dcp_world_size.
+# DCP gathers every rank's shard before decode (Kimi-K3 TP8/DCP8: 12 -> 96), so
+# the metadata must be sized for the gathered count. No-op when DCP is off.
+patch_dcp_gathered_heads() {
+    local label="dcp-gathered-heads"
+    local f; f=$(_modfile vllm.v1.attention.backends.mla.rocm_aiter_mla | tail -1)
+    [ -n "$f" ] && [ -f "$f" ] || { echo "[$label] target not found; skipping"; return 0; }
+    # Guard on the ASSIGNMENT, not the bare name: PR #51705's other hunks add 14
+    # uses of self._decode_num_heads while hunk 7 -- the one that assigns it --
+    # is exactly the hunk that fails. Matching the name skips this patch and
+    # leaves 14 uses of an attribute that is never set.
+    if grep -qE "self\._decode_num_heads *=" "$f"; then echo "[$label] already patched"; return 0; fi
+    cp -n "$f" "$f.orig" 2>/dev/null || true
+    "$PY" - "$f" <<'PYEOF' || echo "[dcp-gathered-heads] patch failed; unchanged" >&2
+import io, sys
+p = sys.argv[1]
+s = io.open(p, encoding="utf-8").read()
+old = ("        self._num_attention_heads = AiterMLAHelper.get_actual_mla_num_heads(\n"
+       "            self.num_heads\n"
+       "        )\n")
+new = ("        self._decode_num_heads = self.num_heads * self.dcp_world_size\n"
+       "        self._num_attention_heads = AiterMLAHelper.get_actual_mla_num_heads(\n"
+       "            self._decode_num_heads\n"
+       "        )\n")
+if s.count(old) != 1:
+    sys.stderr.write("[dcp-gathered-heads] anchor missing or not unique; aborting\n")
+    sys.exit(1)
+io.open(p, "w", encoding="utf-8").write(s.replace(old, new))
+print("[dcp-gathered-heads] patched", p)
+PYEOF
+}
+
+if [ "${SKIP_PATCH_GATHERED_HEADS:-0}" = "1" ]; then
+    echo "[dcp-gathered-heads] SKIPPED via SKIP_PATCH_GATHERED_HEADS=1"
+else
+    patch_dcp_gathered_heads || true
 fi
 
 echo "[kimi-patches] done."
