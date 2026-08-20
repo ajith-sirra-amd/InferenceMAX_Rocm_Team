@@ -124,6 +124,17 @@ install_agentic_deps
 # Set SKIP_KIMI_PATCHES=1 to run stock.
 # Only meaningful on the stock ROCm nightly. The unified image already carries
 # the PR2585 bundle and a different vLLM, so the anchors would not match there.
+# Patches [5] PR#51705, [6] DCP block-table and [8] DCP gathered-head sizing are
+# DCP-ONLY: they exist to make decode-context-parallel work and touch code paths
+# a dcp_size=1 run never enters. Skipping them on the non-DCP arm keeps that arm
+# on stock vLLM decode, which matters for the T58 image bisect -- otherwise the
+# image and the patch stack move together and neither can be attributed.
+# NOTE: this runs BEFORE DCP_SIZE is resolved at line ~383, so it reads the same
+# ${DCP_SIZE:-1} default the resolution below uses. Keep the two defaults equal.
+if [ "${DCP_SIZE:-1}" -le 1 ]; then
+    export SKIP_PATCH_PR51705=1 SKIP_PATCH_BLOCKTABLE=1 SKIP_PATCH_GATHERED_HEADS=1
+    echo "patches: non-DCP arm -> skipping DCP-only patches [5] [6] [8]"
+fi
 if [ ! -f /opt/aiter-local/aiter/configs/merged_bf16_tuned_gemm.csv ]; then
     bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
 fi

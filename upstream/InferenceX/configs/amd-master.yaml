@@ -1912,7 +1912,10 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # Matched to the reference run's image so DCP is the only variable. The 5,388
   # reference was measured on THIS nightly -- not the unified image, which kills
   # the "unified has tuned GEMMs" theory I had been carrying.
-  image: vllm/vllm-openai-rocm:nightly-5a4c8d99242e9e069b604d0e9b969e77f7dd501d
+  # T58 bisect: the reference's image. T22 got TPOT 0.043 on code point 3fa1b88a
+  # and the SA reference 0.038 on ac7509e2b, while T47/T57 get 0.118 on 5a4c8d99
+  # -- a 2.7x decode regression with spec OFF and DCP OFF on every arm.
+  image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
@@ -1984,7 +1987,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # kimik3_fp4_mi355x.sh, which does not exist. T55 (32404418920) died on
       # exactly that. Keep it 'mtp' as the selector; actual speculation is gated
       # inside the script by DISABLE_SPEC, which is how T47/T48 ran spec-off.
-      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }   # T58: ep back to 1 (T57 showed EP neutral); image is the variable
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
