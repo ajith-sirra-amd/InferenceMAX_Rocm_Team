@@ -318,7 +318,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # GATHERED count, which is what fires.
     # 4 still halves collective traffic vs 8 and leaves ~16.4M KV tokens against
     # the ~4.9M we touch.
-    DCP_SIZE="${DCP_SIZE:-1}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
+    DCP_SIZE="${DCP_SIZE:-8}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
@@ -370,7 +370,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-1}"
+DCP_SIZE="${DCP_SIZE:-8}"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
 # non-DCP arms must stay bit-for-bit unchanged.
@@ -441,7 +441,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
              # Back to ROCM_AITER_MLA: T21 showed TRITON_MLA is within noise
              # (1,948 vs 1,990 tok/s/GPU, TPOT 0.186 vs 0.174), so gate the
              # configuration that actually produced the best DCP number.
-             --attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
+             --attention-backend "${DCP_ATTN_BACKEND:-TRITON_MLA}")
     # Env from vllm-project/vllm#52248's tested DCP config. The four
     # VLLM_USE_DIRECT_DCP_* / VLLM_DCP_Q_REPLICATE disables turn off the
     # symmetric-memory direct DCP paths; that is very likely why upstream could
