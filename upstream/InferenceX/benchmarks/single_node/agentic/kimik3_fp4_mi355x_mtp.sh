@@ -563,7 +563,7 @@ CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS")
 # Cost: async scheduling exists to fill GPU-utilisation gaps, so expect to give
 # some throughput back. Set ASYNC_SCHEDULING=1 to restore the default.
 ASYNC_SCHED_ARGS=()
-if [ "${ASYNC_SCHEDULING:-0}" != "1" ]; then
+if [ "${ASYNC_SCHEDULING:-1}" != "1" ]; then
     ASYNC_SCHED_ARGS=(--no-async-scheduling)
 fi
 
