@@ -1971,7 +1971,15 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # 19.0%, tput_in_srv falling 9,538 -> 3,833/s monotonically. Cancelled.
       # The pool shrank ~3.2x, so the equivalent operating point is ~c6-8.
       # c8 also has a spec-off comparator on record (T26, DCP=4).
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [8], spec-decoding: mtp }
+      # T55: EP=8, spec OFF, back to c20. MTP is closed (T51 collapsed at c20,
+      # T54 completed at c8 with 541 tok/s/GPU vs T47's 2,656 -- the drafter cuts
+      # the KV pool 4.17x -> 1.31x and this workload averages 137k input tokens
+      # per request, so lowering concurrency does not help).
+      # EP is the last untested parallelism axis that fits in 8 GPUs:
+      # --enable-expert-parallel shards experts WITHOUT replicating attention, so
+      # it stays at the TP8 footprint (195 GB/GPU) rather than DP attention's
+      # impossible 295.2 GB. Never passed in 54 trials -- every row set ep: 1.
+      - { tp: 8, ep: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: none }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
