@@ -24,7 +24,9 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 | 13 | Ported direct P2P collective to ROCm | [T31b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) | ⚠️ works, **−0.9%** | Hand-ported the a2a combine HIP kernel. Functional, not faster. |
 | 14 | MTP under DCP | [T20](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32110276088) | ❌ killed | Draft KV is replicated → costs W× per rank. |
 | 15 | Profiling DCP vs non-DCP | [T35e](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32333672290) / [T37](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) | 🔍 **bottleneck located** | 92.65% collectives vs 56%. DCP shards no work; the TP all-reduce inflates 8.8×. |
-| 16 | Non-DCP best config to completion | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | 📊 **2,656 / TPOT 0.118** | Non-DCP beats DCP by 30.6% tput and 30% TPOT on an identical stack — now a completed-run comparison, not an extrapolation. Also: 96.7% theoretical cache hit vs ~30% achieved. |
+| 16 | Non-DCP best config to completion | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | 📊 **2,656 / TPOT 0.118** | Non-DCP beats DCP by 30.6% tput and 30% TPOT on an identical stack — completed-run comparison. **Ran with MTP OFF** (label said on). Also: 96.7% theoretical cache hit vs ~30% achieved. |
+| 19 | **Bisect the 2.7× decode regression** | **T49** | **queued** | T22 0.043 → T47 0.1176 TPOT with speculation off on BOTH sides. Re-run T47's config on `ac7509e2b`. Largest unexplained result in the investigation, and not DCP's. |
+| 18 | **MTP actually on, non-DCP** | **T50** | **queued** | T47 re-run with `DISABLE_SPEC=0` — the reference's configuration. Worth ~2.5× on output at the measured acceptance length of 2.706. |
 | 17 | **All-reduce implementation** | **[T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949)** | **running** | The one lever identified and never dispatched. |
 
 *T41, T42 and T45 predate run-URL capture in the ledger; all others link to their GH run.*
@@ -150,7 +152,7 @@ caught by review rather than by me.*
 
 ### T47 — best config, run to completion ✅ COMPLETED
 [Run 32372517517](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) ·
-DCP **off** · TRITON_MLA · pinning · DRAM offload · fp8 KV · conc 20 · spec MTP
+DCP **off** · TRITON_MLA · pinning · DRAM offload · fp8 KV · conc 20 · **spec OFF** (see correction)
 
 The investigation had no completed aggregate for its own best config — T44 showed the
 lowest ITL ever measured (32 ms cold / 130 ms steady) but was cancelled, so everything
@@ -173,6 +175,19 @@ the **input** rate / 8. The official total per-GPU aggregate is 2,655.7.*
 **Still 20.5% below T22** (2,656 vs 3,341) — the newer nightly plus full patch
 stack has not recovered the older unified image's number. That gap is its own open
 question, and it is not DCP's fault.
+
+> **⚠️ CORRECTION — T47 ran with MTP OFF.** `speculative_config=None`. I reported it
+> as "spec MTP" from the matrix label instead of the engine's own output. Cause:
+> `DISABLE_SPEC="${DISABLE_SPEC:-1}"` lives inside a block gated on **concurrency**
+> (`CONC >= DCP_AUTO_CONC_THRESHOLD`) but commented and echoed as the *DCP* config
+> block. At c20 it fires whether DCP is on or off, so setting `DCP_SIZE=1` left
+> speculation silently disabled. **T44 is affected the same way.**
+>
+> I then briefly concluded the T22→T47 regression was "largely MTP" and withdrew the
+> bisect. Checking T22's aggregate showed `spec: 'none'` there too — **both arms are
+> non-speculative, so MTP explains none of that gap.** The regression stands and the
+> bisect is back on. All "DCP ceiling" numbers in this document should be read as
+> **non-speculative** throughout.
 
 **Finding — what the KV capacity is worth:**
 ```
