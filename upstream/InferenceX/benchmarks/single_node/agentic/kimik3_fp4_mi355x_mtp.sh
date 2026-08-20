@@ -232,9 +232,13 @@ fi
 
 
 # ---- Parallelism ------------------------------------------------------------
+# NOTE: this array was computed here and NEVER referenced in VLLM_CMD, so
+# --enable-expert-parallel could not be passed at any ep value -- EP was silently
+# unreachable for all 55 trials. Wired into VLLM_CMD below as of T57.
 EP_ARGS=()
 if [ "$EP_SIZE" -gt 1 ]; then
     EP_ARGS=(--enable-expert-parallel)
+    echo "EP: expert parallelism ON (EP_SIZE=$EP_SIZE)"
 fi
 
 # ---- Decode context parallel (DCP) ------------------------------------------
@@ -859,6 +863,7 @@ VLLM_CMD=(
     --enable-prompt-tokens-details
     --kv-cache-dtype "$KV_CACHE_DTYPE"
     "${CHUNKED_PREFILL_ARGS[@]}"
+    "${EP_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${UNIFIED_ARGS[@]}"
     "${ASYNC_SCHED_ARGS[@]}"
