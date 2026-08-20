@@ -368,7 +368,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-4}"
+DCP_SIZE="${DCP_SIZE:-8}"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
 # non-DCP arms must stay bit-for-bit unchanged.
