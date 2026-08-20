@@ -441,7 +441,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
              # Back to ROCM_AITER_MLA: T21 showed TRITON_MLA is within noise
              # (1,948 vs 1,990 tok/s/GPU, TPOT 0.186 vs 0.174), so gate the
              # configuration that actually produced the best DCP number.
-             --attention-backend "${DCP_ATTN_BACKEND:-TRITON_MLA}")
+             --attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
     # Env from vllm-project/vllm#52248's tested DCP config. The four
     # VLLM_USE_DIRECT_DCP_* / VLLM_DCP_Q_REPLICATE disables turn off the
     # symmetric-memory direct DCP paths; that is very likely why upstream could
