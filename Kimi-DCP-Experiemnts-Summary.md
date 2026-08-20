@@ -57,7 +57,51 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 
 ---
 
-## 2. The bottleneck
+## 2. Reference-design findings (B300 script, read-only)
+
+Read `SemiAnalysisAI/InferenceX` `kimik3_fp4_b300_vllm_mtp.sh`. Three results.
+
+**a) The reference uses NO DP attention and NO expert parallelism.** Pure
+TP8 + DCP=8 + MTP (`grep -c "enable-expert-parallel|data-parallel"` = 0). On
+NVIDIA, **DCP is the intended path and it performs.** Our DCP decode penalty is a
+ROCm collective problem, not a flaw in the DCP approach.
+
+**b) NVIDIA also refuses the default all-reduce** — `VLLM_ALLREDUCE_USE_FLASHINFER=1`
+substitutes a different implementation. FlashInfer is NV-only, but T48's
+`--disable-custom-all-reduce` is the same move. Independent corroboration that the
+all-reduce implementation is a real lever: reached from our profile, confirmed by
+the reference.
+
+**c) The 5,388 reference number is measured with SYNTHETIC acceptance.** B300 uses
+`rejection_sample_method: "synthetic"` with `synthetic_acceptance_length` on the
+*benchmark* path, and `"block"` only under `EVAL_ONLY`. Synthetic acceptance commits
+drafts regardless of target logits, inflating the token count. Our completed runs
+(T22 3,341 · T47 2,656 · T25 2,034) ran spec fully **off** — 100% real tokens.
+**The comparison has never been like-for-like, and the asymmetry favours the
+reference.** To be quantified by T50, not asserted.
+
+### Knob transfer
+
+| B300 knob | our stack | usable |
+|---|---|---|
+| `VLLM_USE_V2_MODEL_RUNNER=1` | **already active** (auto-on for Kimi-K3) | no-op |
+| `VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION=1` | absent from ROCm build | NV-only |
+| `VLLM_ALLREDUCE_USE_FLASHINFER=1` | FlashInfer is NV-only | not usable |
+| `VLLM_USE_DIRECT_DCP_A2A=1` | ported (T31b) | −0.9% |
+| `VLLM_USE_DIRECT_DCP_{Q,KV}_GATHER=1` | `multimem.st.*` PTX | no AMD equivalent |
+| `--max-num-batched-tokens 16384` | we run 8192 | ✅ **untested** |
+| `VLLM_PREFIX_CACHE_RETENTION_INTERVAL=0` | present, unset | ✅ **untested** |
+| `PYTHONHASHSEED=42` | unset | ✅ **untested** |
+
+> **Wrong turn caught before spending GPU time.** `VLLM_USE_V2_MODEL_RUNNER` reads as
+> unset and `cp_utils.py:50` gates a DCP path on it. I called it the most significant
+> find of the session. It is a **no-op** — `config/vllm.py::use_v2_model_runner`
+> auto-enables for default-V2 architectures, and both T47 and T48 log
+> `gpu_worker.py:396 Using V2 Model Runner`.
+
+---
+
+## 3. The bottleneck
 
 Trace, rank 0, 15 s decode window ([T35e DCP=8](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32333672290) vs [T37 non-DCP](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740)):
 
@@ -91,7 +135,7 @@ is attributed, not by itself the root cause.*
 
 ---
 
-## 3. Patches
+## 4. Patches
 
 | # | Name | What it fixes |
 |---|---|---|
@@ -135,7 +179,7 @@ T17–T31b `ac7509e2b` · T22 unified `3fa1b88a` · T35e→ `nightly-5a4c8d99`.
 
 ---
 
-## 4. Key trials
+## 5. Key trials
 
 ### T48 — `--disable-custom-all-reduce` (RUNNING)
 [Run 32381243949](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) · dispatched 2026-08-20 14:45 UTC
@@ -250,7 +294,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 ---
 
-## 5. Full ledger
+## 6. Full ledger
 
 | # | run | config | result |
 |---|---|---|---|
@@ -293,7 +337,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 ---
 
-## 6. Levers vs the DCP decode penalty
+## 7. Levers vs the DCP decode penalty
 
 | Lever | Trial | Result |
 |---|---|---|
@@ -313,7 +357,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 ---
 
-## 7. Wrong turns (kept)
+## 8. Wrong turns (kept)
 
 - **"The DCP decode cost is irreducible"** — wrong in an interesting way. The cost is real
   but mostly **not DCP's**; it's the TP all-reduce any TP=8 decode pays, which DCP worsens
@@ -338,7 +382,7 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 ---
 
-## 8. Conclusion
+## 9. Conclusion
 
 **DCP works, is correct, and is structurally unprofitable on this workload.**
 

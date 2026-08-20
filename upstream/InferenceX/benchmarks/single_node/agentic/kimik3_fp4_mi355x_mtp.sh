@@ -358,7 +358,13 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # better than T18's 174 ms, so MTP bought nothing even before the KV cost.
     # Conclusion: MTP is off the table under DCP for capacity reasons, not just
     # kernel ones.
-    DISABLE_SPEC="${DISABLE_SPEC:-1}"
+    # NOTE: this used to set DISABLE_SPEC unconditionally, and this whole block
+    # is gated on CONCURRENCY (CONC >= DCP_AUTO_CONC_THRESHOLD) despite being
+    # commented and echoed as the DCP block. At c20 it therefore fired with DCP
+    # OFF too, so the non-DCP arm silently ran spec-decode disabled while the
+    # matrix label still said spec-mtp. T44 and T47 were both affected: both
+    # reported as "spec MTP", both actually speculative_config=None.
+    # The decision now lives after DCP_SIZE is finally resolved, below.
     # NOTE: run 32005332130 died with
     #   ValueError: Selected MLA prefill backend ROCM_AITER_FA is not valid ...
     #   Reason: ['required dependencies not available']
@@ -371,6 +377,20 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
 DCP_SIZE="${DCP_SIZE:-8}"
+
+# ---- Speculative decoding gate (depends on the FINAL DCP_SIZE) --------------
+# MTP is off the table *under DCP*: T14/T15 showed mla_gluon[bh16bn128] is
+# single-batch, and T20 degraded steadily on capacity grounds (draft KV is
+# replicated per rank, costing W x). With DCP OFF none of that applies -- and the
+# 5,388 tok/s/GPU reference runs MTP, at a measured acceptance length of 2.706.
+# So: default spec OFF when DCP is on, ON when it is not. Override either way
+# with DISABLE_SPEC.
+if [ "$DCP_SIZE" -gt 1 ]; then
+    DISABLE_SPEC="${DISABLE_SPEC:-1}"
+else
+    DISABLE_SPEC="${DISABLE_SPEC:-0}"
+fi
+echo "spec gate: DCP_SIZE=$DCP_SIZE -> DISABLE_SPEC=$DISABLE_SPEC"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
 # non-DCP arms must stay bit-for-bit unchanged.
