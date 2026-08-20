@@ -59,7 +59,7 @@ wait_for_amd_gpu_clean
 # path -- T6 timed out because decode ran at 3.5-6.8 tok/s with no KV offload.
 # With offload T18 decodes ~4x faster, so 1319 GSM8K questions should now fit.
 # Baseline to match: 0.9651. Flip to false to return to the throughput arm.
-PROFILE_DECODE="${PROFILE_DECODE:-0}"   # T35: decode-only torch trace to localise the 122 ms
+PROFILE_DECODE="${PROFILE_DECODE:-1}"   # T35: decode-only torch trace to localise the 122 ms
 export PROFILE_DECODE
 EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
@@ -318,7 +318,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # GATHERED count, which is what fires.
     # 4 still halves collective traffic vs 8 and leaves ~16.4M KV tokens against
     # the ~4.9M we touch.
-    DCP_SIZE="${DCP_SIZE:-8}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
+    DCP_SIZE="${DCP_SIZE:-1}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
@@ -370,7 +370,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-8}"
+DCP_SIZE="${DCP_SIZE:-1}"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
 # non-DCP arms must stay bit-for-bit unchanged.
