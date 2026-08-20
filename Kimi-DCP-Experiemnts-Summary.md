@@ -28,7 +28,7 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 | 21 | **DP attention** | — | ❌ **infeasible on 8 GPUs** | Non-expert weights are 114.4 GB and DP replicates them per rank → 295.2 GB/GPU vs a 288 GB card. Needs 16 GPUs (204.8 GB). Verified from checkpoint headers; not dispatched. |
 | 20 | **Complete patch [2]** (`query_len_support = UNIFORM`) | **T52** | **queued** | Self-consistent completion; recovers FULL cudagraphs under MTP. **Gated on GSM8K first** — if the Triton decode kernel can't take `query_len > 1` this fails *silently wrong*, not loudly. |
 | 19 | **Bisect the 2.7× decode regression** | **T49** | **queued** | T22 0.043 → T47 0.1176 TPOT with speculation off on BOTH sides. Re-run T47's config on `ac7509e2b`. Largest unexplained result in the investigation, and not DCP's. |
-| 18 | **MTP actually on, non-DCP** | [T50](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32390477829) → [T51](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32392005995) | ⚠️ **T50 failed at init; T51 running** | MTP genuinely active (`method='dspark'`), but full cudagraph capture asserted. **Exposed that patch [2] is incomplete**: it raises `_cudagraph_support` to `UNIFORM_BATCH` without raising `query_len_support` to match, so the reorder threshold stays 1 and `max_query_len = 1+num_spec_tokens` trips `mla_attention.py:2288`. Hidden until now because every patch-[2] trial ran spec **off** — one bug concealed the other. T51 uses PIECEWISE to sidestep it. |
+| 18 | **MTP actually on, non-DCP** | [T50](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32390477829) → [T51](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32392005995) | ❌ **MTP closed: 541 tok/s/GPU, 4.9× worse than no-MTP** | MTP genuinely active (`method='dspark'`), but full cudagraph capture asserted. **Exposed that patch [2] is incomplete**: it raises `_cudagraph_support` to `UNIFORM_BATCH` without raising `query_len_support` to match, so the reorder threshold stays 1 and `max_query_len = 1+num_spec_tokens` trips `mla_attention.py:2288`. Hidden until now because every patch-[2] trial ran spec **off** — one bug concealed the other. T51 uses PIECEWISE to sidestep it. |
 | 17 | **All-reduce implementation** (PYNCCL vs AITER_CUSTOM) | [T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) | ❌ **−23% tput, +31% TPOT** | Hypothesis was well-founded — 78.37% of kernel time is in `cross_device_reduce_2stage`, and NVIDIA also swaps their all-reduce. Answer: **AITER's implementation was already the better one.** The 78% attribution stands; it just isn't addressable by substitution. Also measured DCP's capacity win: prefix hit **70.6%** vs T47's ~30%, `ext_cache_hit` 0%. | The one lever identified and never dispatched. |
 
 *T41, T42 and T45 predate run-URL capture in the ledger; all others link to their GH run.*
@@ -40,6 +40,7 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 | SA reference | **5,388** | 0.038 | — | — |
 | non-DCP + DRAM offload (older image) | **3,341** | 0.043 | — | [T22](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32123047671) |
 | non-DCP, current stack, **completed** | **2,656** | **0.118** | 4.43 s | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) |
+| non-DCP + **MTP**, c8 | 541 | 0.292 | 77.8 s | [T54](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32396466979) |
 | **best DCP** — DCP=4, c20, DRAM | **2,034** | **0.167** | 3.80 s | **[T25](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143877066)** |
 | DCP=8, PYNCCL all-reduce | 1,532 | 0.227 | 11.31 s | [T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) |
 | DCP=8 + ported direct a2a | 2,015 | 0.172 | 4.69 s | [T31b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) |
@@ -382,6 +383,10 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 | 45 | — | DCP + everything | TPOT 0.242 |
 | 46 | [32368684074](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32368684074) | DCP=8 + pinning | 0.218 rising — no help |
 | 48 | [32381243949](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) | DCP=8 + **PYNCCL all-reduce** | **1,531.6**, TPOT 0.2271 — worse than AITER_CUSTOM |
+| 50 | [32390477829](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32390477829) | non-DCP + MTP, FULL cudagraphs | **FAIL @init** — MLA full-capture assert; exposed patch [2] incomplete |
+| 51 | [32392005995](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32392005995) | non-DCP + MTP, c20 | **cancelled** — KV-starved, 9,538→3,833/s, 16 queued |
+| 54 | [32396466979](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32396466979) | non-DCP + MTP, **c8** | **541.0**, TPOT 0.2921, TTFT 77.8 s — MTP closed |
+| 55 | [32404418920](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32404418920) | **EP=8**, spec off, c20 | running |
 | 47 | [32372517517](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | non-DCP, full 3600 s | **2,655.7**, TPOT 0.1176 — completed |
 
 ---
