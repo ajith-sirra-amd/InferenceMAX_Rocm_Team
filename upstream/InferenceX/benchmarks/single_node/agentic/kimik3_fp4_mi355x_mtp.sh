@@ -702,6 +702,27 @@ else
     CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"
     echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS capture<=$MAX_CUDAGRAPH_CAPTURE_SIZE (3x max_num_seqs)"
 fi
+# T50 (run 32390477829) died in cudagraph capture with
+#   mla_attention.py:2288  assert m.max_query_len <= self.reorder_batch_threshold
+# on the non-DCP + spec-decode arm. Cause: the builder computes
+#   supports_spec_decode = query_len_support != QueryLenSupport.SINGLE_ONLY
+# and TritonMLA does not declare query_len_support, so it inherits SINGLE_ONLY
+# and _init_reorder_batch_threshold leaves the threshold at 1. Full capture then
+# builds metadata with max_query_len = 1 + num_speculative_tokens and asserts.
+#
+# Patch [2] is INCOMPLETE on this nightly: it raises _cudagraph_support to
+# UNIFORM_BATCH (permitting FULL capture) without raising query_len_support to
+# match. The self-consistent pair is UNIFORM_BATCH + QueryLenSupport.UNIFORM,
+# but if the Triton decode kernel cannot really take query_len > 1 that fails
+# SILENTLY WRONG rather than loudly, so it needs a GSM8K gate before it is used
+# for a throughput number -- not a speculative edit here.
+#
+# PIECEWISE avoids full capture entirely (attention runs outside the graph, so
+# build_for_cudagraph_capture is never called) and carries no correctness risk.
+if [ "${DISABLE_SPEC:-0}" != "1" ] && [ -z "${CUDAGRAPH_MODE_OVERRIDE:-}" ]; then
+    CUDAGRAPH_MODE_OVERRIDE=PIECEWISE
+    echo "cudagraph: spec-decode active -> PIECEWISE (avoids the MLA full-capture assert)"
+fi
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE_OVERRIDE:-FULL_AND_PIECEWISE}"
 if [ "$CUDAGRAPH_MODE" = "NONE" ]; then
     # No capture, so the size list is meaningless -- omit it rather than ship a
