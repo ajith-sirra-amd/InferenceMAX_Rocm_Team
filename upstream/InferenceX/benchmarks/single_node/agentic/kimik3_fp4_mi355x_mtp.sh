@@ -376,6 +376,16 @@ DCP_SIZE="${DCP_SIZE:-8}"
 # non-DCP arms must stay bit-for-bit unchanged.
 KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
 CP_ARGS=()
+# Non-DCP arm pins the same decode backend so a DCP-vs-nonDCP profile A/B
+# differs only in DCP. Without this the DCP block is the only place that
+# passes --attention-backend and the non-DCP arm would auto-select.
+if [ "$DCP_SIZE" -le 1 ]; then
+    CP_ARGS=(--attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
+    # T8 died with DCP off because these two live inside the DCP block and
+    # neither protection applied. Export them here so both arms match.
+    export VLLM_ROCM_USE_AITER_MLA=1
+    export AITER_DISABLE_FMHA_OPUS=1
+fi
 if [ "$DCP_SIZE" -gt 1 ]; then
     # Decode MUST be TRITON_MLA under DCP. Run 32011858320 died at init with
     #   RuntimeError: Decode Context Parallelism (DCP) requires attention
