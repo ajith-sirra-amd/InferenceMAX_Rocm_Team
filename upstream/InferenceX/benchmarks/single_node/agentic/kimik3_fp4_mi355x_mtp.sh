@@ -757,6 +757,18 @@ else
     UNIFIED_LOAD_FORMAT=fastsafetensors
 fi
 
+# /start_profile and /stop_profile are mounted only when profiler_config.profiler
+# is set (entrypoints/serve/profile/api_router.py:attach_router). VLLM_TORCH_PROFILER_DIR
+# is gone from envs.py in this vLLM -- T35c set it and both endpoints 404'd.
+# It is a CLI arg now: --profiler-config {profiler, torch_profiler_dir, ...}.
+PROFILER_ARGS=()
+if [ "${PROFILE_DECODE:-0}" = "1" ]; then
+    PROF_DIR_ABS="${PROF_DIR_ABS:-$RESULT_DIR/torch_profile}"
+    mkdir -p "$PROF_DIR_ABS"
+    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\"}")
+    echo "[profile-decode] profiler_config torch -> $PROF_DIR_ABS"
+fi
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
@@ -785,17 +797,6 @@ VLLM_CMD=(
     "${OFFLOAD_ARGS[@]}"
     "${PROFILER_ARGS[@]}"
 )
-# /start_profile and /stop_profile are mounted only when profiler_config.profiler
-# is set (entrypoints/serve/profile/api_router.py:attach_router). VLLM_TORCH_PROFILER_DIR
-# is gone from envs.py in this vLLM -- T35c set it and both endpoints 404'd.
-# It is a CLI arg now: --profiler-config {profiler, torch_profiler_dir, ...}.
-PROFILER_ARGS=()
-if [ "${PROFILE_DECODE:-0}" = "1" ]; then
-    PROF_DIR_ABS="${PROF_DIR_ABS:-$RESULT_DIR/torch_profile}"
-    mkdir -p "$PROF_DIR_ABS"
-    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\"}")
-    echo "[profile-decode] profiler_config torch -> $PROF_DIR_ABS"
-fi
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
