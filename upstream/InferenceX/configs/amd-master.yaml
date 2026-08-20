@@ -1964,7 +1964,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # so it is reuse we run out of, not space). c20 is the operating point.
       # T27: back to c20 (T26 settled c8 at 969 tok/s/GPU, -52%). Sole variable
       # is VLLM_USE_DIRECT_DCP_{A2A,Q_GATHER,KV_GATHER} 0 -> 1 in the .sh.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [20], spec-decoding: mtp }   # T41: async ON, no KV connector so defer_block_free cannot fire
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [20], spec-decoding: mtp }   # T42: deployed config + async scheduling ON
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

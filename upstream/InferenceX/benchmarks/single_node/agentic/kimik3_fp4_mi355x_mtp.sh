@@ -59,7 +59,7 @@ wait_for_amd_gpu_clean
 # path -- T6 timed out because decode ran at 3.5-6.8 tok/s with no KV offload.
 # With offload T18 decodes ~4x faster, so 1319 GSM8K questions should now fit.
 # Baseline to match: 0.9651. Flip to false to return to the throughput arm.
-PROFILE_DECODE="${PROFILE_DECODE:-1}"   # T35: decode-only torch trace to localise the 122 ms
+PROFILE_DECODE="${PROFILE_DECODE:-0}"   # T35: decode-only torch trace to localise the 122 ms
 export PROFILE_DECODE
 EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
