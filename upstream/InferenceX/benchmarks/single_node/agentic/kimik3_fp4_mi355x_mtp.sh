@@ -318,7 +318,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # GATHERED count, which is what fires.
     # 4 still halves collective traffic vs 8 and leaves ~16.4M KV tokens against
     # the ~4.9M we touch.
-    DCP_SIZE="${DCP_SIZE:-8}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
+    DCP_SIZE="${DCP_SIZE:-1}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
@@ -376,7 +376,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-8}"
+DCP_SIZE="${DCP_SIZE:-1}"
 
 # ---- Speculative decoding gate (depends on the FINAL DCP_SIZE) --------------
 # MTP is off the table *under DCP*: T14/T15 showed mla_gluon[bh16bn128] is
@@ -600,7 +600,7 @@ fi
 # with different host-side launch and sync behaviour. This is the one lever the
 # investigation identified and never dispatched.
 ALLREDUCE_ARGS=()
-if [ "${DISABLE_CUSTOM_AR:-1}" = "1" ]; then
+if [ "${DISABLE_CUSTOM_AR:-0}" = "1" ]; then
     ALLREDUCE_ARGS=(--disable-custom-all-reduce)
 fi
 
