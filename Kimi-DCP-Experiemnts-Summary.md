@@ -9,44 +9,46 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 
 | # | Tried | Trial | Result | Finding |
 |---|---|---|---|---|
-| 1 | DCP at all (block-table fix) | T4 | ✅ **0x1016 fixed** | Tables were sized `max_model_len/dcp` but indexed with the undivided length. Boundary tracked the ratio exactly. Made DCP usable. |
-| 2 | DRAM KV offload | T18 | ✅ **781 → 1,991** (2.55×) | Largest single DCP win. But no effect on the decode straggler. |
-| 3 | GSM8K correctness gate | T23 | ✅ **0.9659 / 0.9644** vs 0.9651 | DCP is numerically correct. The case against it is performance only. |
-| 4 | World size 8 → 4 | T24/T25 | ❌ +2.2% | **Decisive.** Halving collective traffic moved TPOT 4% → cost is *not* world-size-scaled. Rules out every scaling fix. DCP=2 is illegal (24 heads). |
-| 5 | Concurrency sweep | T19/T26 | ❌ optimum c20 | c8 969 · c20 2,034 · c64 1,041. Axis closed. |
-| 6 | Combine algo a2a vs ag_rs | T28 | ❌ 2,034 vs 1,978 | Both ROCm options within 3%. |
-| 7 | Shard granularity 1 → 16 | T29 | ❌ 1,977 | Locality before the combine wasn't the cost. |
-| 8 | Attention backend | T21/T45 | ❌ within noise | Not backend-bound. |
-| 9 | CUDA graphs | T7/T45 | ❌ no TPOT effect | Not launch-count-bound at the graph level. |
-| 10 | Async scheduling on/off | T41/T42 | ❌ no effect | 0 `ref_cnt` asserts at c20; the workaround was unnecessary. |
+| 1 | DCP at all (block-table fix) | [T4](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32043813560) | ✅ **0x1016 fixed** | Tables were sized `max_model_len/dcp` but indexed with the undivided length. Boundary tracked the ratio exactly. Made DCP usable. |
+| 2 | DRAM KV offload | [T18](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32096487055) | ✅ **781 → 1,991** (2.55×) | Largest single DCP win. But no effect on the decode straggler. |
+| 3 | GSM8K correctness gate | [T23](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32138970163) | ✅ **0.9659 / 0.9644** vs 0.9651 | DCP is numerically correct. The case against it is performance only. |
+| 4 | World size 8 → 4 | [T24](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143146154) / [T25](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143877066) | ❌ +2.2% | **Decisive.** Halving collective traffic moved TPOT 4% → cost is *not* world-size-scaled. Rules out every scaling fix. DCP=2 is illegal (24 heads). |
+| 5 | Concurrency sweep | [T19](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32101946357) / [T26](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32154159649) | ❌ optimum c20 | c8 969 · c20 2,034 · c64 1,041. Axis closed. |
+| 6 | Combine algo a2a vs ag_rs | [T28](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32163743641) | ❌ 2,034 vs 1,978 | Both ROCm options within 3%. |
+| 7 | Shard granularity 1 → 16 | [T29](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32172937044) | ❌ 1,977 | Locality before the combine wasn't the cost. |
+| 8 | Attention backend | [T21](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32114847961) / T45 | ❌ within noise | Not backend-bound. |
+| 9 | CUDA graphs | [T7](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32060082326) / T45 | ❌ no TPOT effect | Not launch-count-bound at the graph level. |
+| 10 | Async scheduling on/off | T41 / T42 | ❌ no effect | 0 `ref_cnt` asserts at c20; the workaround was unnecessary. |
 | 11 | NUMA pinning, node-level | T45 | ❌ no effect | — |
-| 12 | NUMA pinning, per-rank slices | T46 | ❌ **worse** | 188→218 ms rising vs unpinned converging to 208. Not an OS-scheduling problem. |
-| 13 | Ported direct P2P collective to ROCm | T31b | ⚠️ works, **−0.9%** | Hand-ported the a2a combine HIP kernel. Functional, not faster. |
-| 14 | MTP under DCP | T20 | ❌ killed | Draft KV is replicated → costs W× per rank. |
-| 15 | Profiling DCP vs non-DCP | T35e/T37 | 🔍 **bottleneck located** | 92.65% collectives vs 56%. DCP shards no work; the TP all-reduce inflates 8.8×. |
-| 16 | Non-DCP best config to completion | T47 | 📊 **~2,800 sustained** | Also revealed 94.1% theoretical prefix hit vs 30.3% achieved — quantifies what KV capacity is worth. |
+| 12 | NUMA pinning, per-rank slices | [T46](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32368684074) | ❌ **worse** | 188→218 ms rising vs unpinned converging to 208. Not an OS-scheduling problem. |
+| 13 | Ported direct P2P collective to ROCm | [T31b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) | ⚠️ works, **−0.9%** | Hand-ported the a2a combine HIP kernel. Functional, not faster. |
+| 14 | MTP under DCP | [T20](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32110276088) | ❌ killed | Draft KV is replicated → costs W× per rank. |
+| 15 | Profiling DCP vs non-DCP | [T35e](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32333672290) / [T37](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) | 🔍 **bottleneck located** | 92.65% collectives vs 56%. DCP shards no work; the TP all-reduce inflates 8.8×. |
+| 16 | Non-DCP best config to completion | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | 📊 **~2,800 sustained** | Also revealed 94.1% theoretical prefix hit vs 30.3% achieved — quantifies what KV capacity is worth. |
 | 17 | **All-reduce implementation** | **T48** | **staged** | The one lever identified and never dispatched. |
+
+*T41, T42 and T45 predate run-URL capture in the ledger; all others link to their GH run.*
 
 ### Performance, all measured runs
 
 | Config | tok/s/GPU | TPOT | TTFT | Trial |
 |---|---:|---:|---:|---|
 | SA reference | **5,388** | 0.038 | — | — |
-| non-DCP + DRAM offload (older image) | **3,341** | 0.043 | — | T22 |
-| non-DCP, current stack, sustained | ~2,800 | — | — | T47 |
-| **best DCP** — DCP=4, c20, DRAM | **2,034** | **0.167** | 3.80 s | **T25** |
-| DCP=8 + ported direct a2a | 2,015 | 0.172 | 4.69 s | T31b |
-| DCP=8, c20, DRAM | 1,991 | 0.174 | 4.64 s | T18 |
-| DCP=4, ag_rs combine | 1,978 | 0.184 | — | T28 |
-| DCP=4, interleave 16 | 1,977 | 0.177 | 4.81 s | T29 |
-| DCP=8 + TRITON_MLA, spec off | 1,948 | 0.186 | 5.4 s | T21 |
-| non-DCP, c1 (latency point) | 1,225 | **0.0042** | — | T22 |
-| DCP=8, c64 | 1,041 | 0.683 | 501 s | T19 |
-| non-DCP c32, no cudagraph patch | 1,015 | 0.170 | — | T11 |
-| DCP=4, c8 | 969 | 0.164 | — | T26 |
-| DCP=8 + PIECEWISE cudagraph | 781 | 0.687 | — | T7 |
-| DCP=8, no offload | 742 | 0.663 | — | T5 |
-| DCP=8 + pinning | — | 0.218 | — | T46 |
+| non-DCP + DRAM offload (older image) | **3,341** | 0.043 | — | [T22](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32123047671) |
+| non-DCP, current stack, sustained | ~2,800 | — | — | [T47](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) |
+| **best DCP** — DCP=4, c20, DRAM | **2,034** | **0.167** | 3.80 s | **[T25](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143877066)** |
+| DCP=8 + ported direct a2a | 2,015 | 0.172 | 4.69 s | [T31b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) |
+| DCP=8, c20, DRAM | 1,991 | 0.174 | 4.64 s | [T18](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32096487055) |
+| DCP=4, ag_rs combine | 1,978 | 0.184 | — | [T28](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32163743641) |
+| DCP=4, interleave 16 | 1,977 | 0.177 | 4.81 s | [T29](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32172937044) |
+| DCP=8 + TRITON_MLA, spec off | 1,948 | 0.186 | 5.4 s | [T21](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32114847961) |
+| non-DCP, c1 (latency point) | 1,225 | **0.0042** | — | [T22](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32123047671) |
+| DCP=8, c64 | 1,041 | 0.683 | 501 s | [T19](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32101946357) |
+| non-DCP c32, no cudagraph patch | 1,015 | 0.170 | — | [T11](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32073039787) |
+| DCP=4, c8 | 969 | 0.164 | — | [T26](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32154159649) |
+| DCP=8 + PIECEWISE cudagraph | 781 | 0.687 | — | [T7](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32060082326) |
+| DCP=8, no offload | 742 | 0.663 | — | [T5](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32049134216) |
+| DCP=8 + pinning | — | 0.218 | — | [T46](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32368684074) |
 | DCP + everything | — | 0.242 | — | T45 |
 
 **DCP's ceiling is ~2,000 tok/s/GPU — 39% below best non-DCP.**
@@ -223,42 +225,42 @@ PR #51705 + patch [6] → errors=0, no fault. The run that made DCP usable at al
 
 | # | run | config | result |
 |---|---|---|---|
-| 1 | 32025696861 | [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
-| 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
-| 3 | 32042030173 | #51705 only, DCP8 | FAIL 0x1016 @135,168 |
-| 4 | 32043813560 | #51705 + **[6]** | **0x1016 FIXED**, errors=0 |
-| 5 | 32049134216 | + `AIPERF_FAST=1` | 742.4, TPOT 663 ms; 113/183 dropped, validity suspect |
-| 6 | 32055440757 | GSM8K gate | timeout not fault — 3.5–6.8 tok/s, ≈15 h needed |
-| 7 | 32060082326 | + PIECEWISE cudagraph | 780.6, TPOT 0.687 |
-| 8 | 32066978737 | DCP off, [1]–[3] off | FAIL @15 min — **my error**, `AITER_DISABLE_FMHA_OPUS` only set in the DCP branch |
-| 9 | 32068474469 | DCP off, [1]–[3] on | FAIL @25 min — RCCL watchdog |
-| 10 | 32070778181 | DCP off, [1][2][3] | FAIL @21 min — same signature, so [5] wasn't the cause |
-| 11 | 32073039787 | DCP off, [2] off | 1,014.9, TPOT 0.170 |
-| 12 | 32077536567 | + full profile | 999.4, TPOT 0.1698 |
-| 13 | 32084553677 | chunk 8192→32768 | LOST — cancelled by workflow concurrency rule |
-| 14 | 32089974051 | yukiozzz, c64, MTP | FAIL — `mla_gluon requires batch_size=1, got 64` |
-| 15 | 32090860356 | yukiozzz, c64 | FAIL — same, got 3 |
-| 16 | 32093774227 | c64, chunk 32768 | cancelled @20 min |
-| 17 | 32094907936 | DCP8 c20 DRAM | FAIL — **my error**, leftover `MAX_NUM_BATCHED_TOKENS=32768` |
-| 18 | 32096487055 | DCP8 c20 **DRAM** | **1,990.8**, TPOT 0.1742 |
-| 19 | 32101946357 | conc 64 | 1,041.1, TTFT 501 s — worse |
-| 20 | 32110276088 | TRITON_MLA + MTP | cancelled @55 min, degrading |
-| 21 | 32114847961 | TRITON_MLA, spec off | 1,948.4 — noise vs T18 |
-| 22 | 32123047671 | DCP off, c1+c20 | **3,340.5 — BEST OVERALL** |
-| 23 | 32138970163 | GSM8K gate | **PASSED 0.9659/0.9644** |
-| 24 | 32143146154 | DCP=2 | FAIL @init — `is_valid_num_heads(24)` illegal at TP8 |
-| 25 | 32143877066 | DCP=4 c20 | **2,033.7 — BEST DCP** |
-| 26 | 32154159649 | DCP=4 **c8** | 969.4 — concurrency axis closed |
-| 27 | 32162233477 | direct symm-mem | FAIL @9 min — op absent, CUDA-only |
-| 28 | 32163743641 | **ag_rs** | 1,978.4 — a2a wins |
-| 29 | 32172937044 | interleave 1→16 | 1,977.2 — worse |
-| 31a | 32269094879 | local image tag | FAIL @6 min, no GPU — harness `--pull always` can't resolve a local tag |
-| 31b | 32270805303 | **ported direct a2a** | 2,014.7 — works, **−0.9%** |
+| 1 | [32025696861](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32025696861) | [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
+| 2 | [32039650984](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32039650984) | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
+| 3 | [32042030173](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32042030173) | #51705 only, DCP8 | FAIL 0x1016 @135,168 |
+| 4 | [32043813560](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32043813560) | #51705 + **[6]** | **0x1016 FIXED**, errors=0 |
+| 5 | [32049134216](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32049134216) | + `AIPERF_FAST=1` | 742.4, TPOT 663 ms; 113/183 dropped, validity suspect |
+| 6 | [32055440757](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32055440757) | GSM8K gate | timeout not fault — 3.5–6.8 tok/s, ≈15 h needed |
+| 7 | [32060082326](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32060082326) | + PIECEWISE cudagraph | 780.6, TPOT 0.687 |
+| 8 | [32066978737](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32066978737) | DCP off, [1]–[3] off | FAIL @15 min — **my error**, `AITER_DISABLE_FMHA_OPUS` only set in the DCP branch |
+| 9 | [32068474469](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32068474469) | DCP off, [1]–[3] on | FAIL @25 min — RCCL watchdog |
+| 10 | [32070778181](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32070778181) | DCP off, [1][2][3] | FAIL @21 min — same signature, so [5] wasn't the cause |
+| 11 | [32073039787](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32073039787) | DCP off, [2] off | 1,014.9, TPOT 0.170 |
+| 12 | [32077536567](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32077536567) | + full profile | 999.4, TPOT 0.1698 |
+| 13 | [32084553677](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32084553677) | chunk 8192→32768 | LOST — cancelled by workflow concurrency rule |
+| 14 | [32089974051](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32089974051) | yukiozzz, c64, MTP | FAIL — `mla_gluon requires batch_size=1, got 64` |
+| 15 | [32090860356](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32090860356) | yukiozzz, c64 | FAIL — same, got 3 |
+| 16 | [32093774227](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32093774227) | c64, chunk 32768 | cancelled @20 min |
+| 17 | [32094907936](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32094907936) | DCP8 c20 DRAM | FAIL — **my error**, leftover `MAX_NUM_BATCHED_TOKENS=32768` |
+| 18 | [32096487055](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32096487055) | DCP8 c20 **DRAM** | **1,990.8**, TPOT 0.1742 |
+| 19 | [32101946357](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32101946357) | conc 64 | 1,041.1, TTFT 501 s — worse |
+| 20 | [32110276088](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32110276088) | TRITON_MLA + MTP | cancelled @55 min, degrading |
+| 21 | [32114847961](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32114847961) | TRITON_MLA, spec off | 1,948.4 — noise vs T18 |
+| 22 | [32123047671](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32123047671) | DCP off, c1+c20 | **3,340.5 — BEST OVERALL** |
+| 23 | [32138970163](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32138970163) | GSM8K gate | **PASSED 0.9659/0.9644** |
+| 24 | [32143146154](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143146154) | DCP=2 | FAIL @init — `is_valid_num_heads(24)` illegal at TP8 |
+| 25 | [32143877066](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32143877066) | DCP=4 c20 | **2,033.7 — BEST DCP** |
+| 26 | [32154159649](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32154159649) | DCP=4 **c8** | 969.4 — concurrency axis closed |
+| 27 | [32162233477](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32162233477) | direct symm-mem | FAIL @9 min — op absent, CUDA-only |
+| 28 | [32163743641](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32163743641) | **ag_rs** | 1,978.4 — a2a wins |
+| 29 | [32172937044](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32172937044) | interleave 1→16 | 1,977.2 — worse |
+| 31a | [32269094879](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32269094879) | local image tag | FAIL @6 min, no GPU — harness `--pull always` can't resolve a local tag |
+| 31b | [32270805303](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) | **ported direct a2a** | 2,014.7 — works, **−0.9%** |
 | 35e | 32333672290 | DCP=8 profiling | 92.65% collectives |
-| 37 | 32340149740 | non-DCP profiling | 56.05% collectives |
+| 37 | [32340149740](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) | non-DCP profiling | 56.05% collectives |
 | 45 | — | DCP + everything | TPOT 0.242 |
-| 46 | 32368684074 | DCP=8 + pinning | 0.218 rising — no help |
-| 47 | 32372517517 | non-DCP, full 3600 s | ~2,800 sustained |
+| 46 | [32368684074](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32368684074) | DCP=8 + pinning | 0.218 rising — no help |
+| 47 | [32372517517](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32372517517) | non-DCP, full 3600 s | ~2,800 sustained |
 
 ---
 
