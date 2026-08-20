@@ -333,7 +333,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # GATHERED count, which is what fires.
     # 4 still halves collective traffic vs 8 and leaves ~16.4M KV tokens against
     # the ~4.9M we touch.
-    DCP_SIZE="${DCP_SIZE:-8}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
+    DCP_SIZE="${DCP_SIZE:-1}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
@@ -391,7 +391,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-8}"
+DCP_SIZE="${DCP_SIZE:-1}"
 
 # ---- Speculative decoding gate (depends on the FINAL DCP_SIZE) --------------
 # MTP is off the table *under DCP*: T14/T15 showed mla_gluon[bh16bn128] is
@@ -412,7 +412,13 @@ DCP_SIZE="${DCP_SIZE:-8}"
 # exhibiting the reference's own normal regime. It has never been completed.
 # MTP under DCP is reachable on TRITON_MLA -- the mla_gluon batch_size=1 blocker
 # from T14/T15 is on the Gluon path, which TRITON_MLA does not take.
-DISABLE_SPEC="${DISABLE_SPEC:-0}"
+# Default: spec OFF. MTP starves this workload without DCP (T51 collapsed at c20,
+# T54 completed at 541 tok/s/GPU vs T58's 2,685) because the drafter cuts the KV
+# pool 4.17x -> 1.31x, and DCP+MTP -- which would pay for that memory -- is
+# refused at init on every ROCm MLA backend (see T60). Set DISABLE_SPEC=0 to
+# re-enable if a backend ever declares supports_non_causal_multi_token_dcp or
+# supports_dcp_with_varlen on ROCm.
+DISABLE_SPEC="${DISABLE_SPEC:-1}"
 echo "spec gate: DCP_SIZE=$DCP_SIZE -> DISABLE_SPEC=$DISABLE_SPEC"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the

@@ -1915,14 +1915,16 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # T58 bisect: the reference's image. T22 got TPOT 0.043 on code point 3fa1b88a
   # and the SA reference 0.038 on ac7509e2b, while T47/T57 get 0.118 on 5a4c8d99
   # -- a 2.7x decode regression with spec OFF and DCP OFF on every arm.
-  # T60: back to 5a4c8d99, which is the ONLY image where DCP + MTP is reachable.
-  # T59 (32424123796) died on ac7509e2b at config validation:
-  #   ValueError: MLA DSpark does not currently support decode context
-  #               parallelism; set decode_context_parallel_size=1
-  # config/speculative.py gates on method==dspark AND K3DSparkModel AND
-  # decode_context_parallel_size>1. That gate is PRESENT on ac7509e2b and
-  # REMOVED on 5a4c8d99 -- verified by grepping both images.
-  image: vllm/vllm-openai-rocm:nightly-5a4c8d99242e9e069b604d0e9b969e77f7dd501d
+  # BEST MEASURED CONFIG: T58 (32414712217) -- 2,685.0 tok/s/GPU, TPOT 0.1161,
+  # TTFT 3.450 s, non-DCP, spec off, real tokens, patches [1][2][3] only.
+  # Slightly ahead of the same config on 5a4c8d99 (T47: 2,655.7 / 0.1176).
+  #
+  # DCP+MTP -- the reference's recipe, and the only untried combination that could
+  # have closed the gap -- is refused at init on every ROCm MLA backend: T60 showed
+  # _validate_dspark_dcp_support requires supports_non_causal_multi_token_dcp
+  # (declared only by tokenspeed_mla, absent from ROCm) or supports_dcp_with_varlen
+  # (declared only by flashinfer/flashattn/flashmla, all NVIDIA).
+  image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
