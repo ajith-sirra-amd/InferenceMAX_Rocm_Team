@@ -458,7 +458,23 @@ CP_ARGS=()
 # differs only in DCP. Without this the DCP block is the only place that
 # passes --attention-backend and the non-DCP arm would auto-select.
 if [ "$DCP_SIZE" -le 1 ]; then
-    CP_ARGS=(--attention-backend "${NONDCP_ATTN_BACKEND:-TRITON_MLA}")   # reference SA decoded on TRITON_MLA
+    # T63: do NOT force the main model's decode backend. The comment that used to
+    # sit here -- "reference SA decoded on TRITON_MLA" -- was WRONG. The 5,388
+    # reference command (run 31993981851) carries no --attention-backend at all;
+    # it sets only --attention-config {"mla_prefill_backend":"ROCM_AITER_FA"} and
+    # puts TRITON_MLA inside --speculative-config, i.e. for the DRAFT. I mistook
+    # the draft's backend for the target's and then forced TRITON_MLA on the main
+    # model for every non-DCP trial, including T58 (2,685, our best).
+    # Left unset, ROCm selects ROCM_AITER_MLA, which AMD documents as 1.2-1.6x
+    # faster TPOT than TRITON_MLA on MI300X/MI325X/MI355X. Set
+    # NONDCP_ATTN_BACKEND=TRITON_MLA to restore the old forced behaviour.
+    if [ -n "${NONDCP_ATTN_BACKEND:-}" ]; then
+        CP_ARGS=(--attention-backend "$NONDCP_ATTN_BACKEND")
+        echo "non-DCP decode backend: forced to $NONDCP_ATTN_BACKEND"
+    else
+        CP_ARGS=()
+        echo "non-DCP decode backend: unset (reference behaviour -- ROCm picks ROCM_AITER_MLA)"
+    fi
     # T8 died with DCP off because these two live inside the DCP block and
     # neither protection applied. Export them here so both arms match.
     export VLLM_ROCM_USE_AITER_MLA=1
