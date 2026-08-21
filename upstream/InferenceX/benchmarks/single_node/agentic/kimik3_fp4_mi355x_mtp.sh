@@ -129,9 +129,20 @@ install_agentic_deps
 # a dcp_size=1 run never enters. Skipping them on the non-DCP arm keeps that arm
 # on stock vLLM decode, which matters for the T58 image bisect -- otherwise the
 # image and the patch stack move together and neither can be attributed.
-# NOTE: this runs BEFORE DCP_SIZE is resolved at line ~383, so it reads the same
-# ${DCP_SIZE:-1} default the resolution below uses. Keep the two defaults equal.
-if [ "${DCP_SIZE:-1}" -le 1 ]; then
+# DCP_SIZE IS RESOLVED HERE, ONCE, because this patch gate needs it and it used to
+# be decided ~270 lines below. T66 (32449866187) died on exactly that split: the
+# gate read ${DCP_SIZE:-1} = 1 and skipped the DCP-only patches, while the later
+# resolution set DCP_SIZE=8 and enabled DCP -- so DCP ran without the patches that
+# make it work, and the engine refused with
+#   "DCP requires attention implementations to return the softmax LSE during
+#    decode, but AiterMLAImpl does not."
+# The old comment here said "keep the two defaults equal", which is exactly the
+# kind of instruction-to-a-future-reader that fails. Resolving once removes the
+# possibility instead of documenting it. The sites below now consume this value.
+DCP_SIZE="${DCP_SIZE:-8}"   # T66: DCP re-baseline. 1 = non-DCP (T64).
+export DCP_SIZE
+echo "DCP_SIZE resolved to $DCP_SIZE (single source of truth)"
+if [ "$DCP_SIZE" -le 1 ]; then
     export SKIP_PATCH_PR51705=1 SKIP_PATCH_BLOCKTABLE=1 SKIP_PATCH_GATHERED_HEADS=1
     echo "patches: non-DCP arm -> skipping DCP-only patches [5] [6] [8]"
     # T62: also skip patch [2] when speculation is on. Patch [2] raises
@@ -352,7 +363,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # GATHERED count, which is what fires.
     # 4 still halves collective traffic vs 8 and leaves ~16.4M KV tokens against
     # the ~4.9M we touch.
-    DCP_SIZE="${DCP_SIZE:-8}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
+    : # DCP_SIZE already resolved at the top (single source of truth); do not re-default.
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
@@ -410,7 +421,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-8}"
+# DCP_SIZE already resolved at the top (single source of truth); do not re-default.
 
 # ---- Speculative decoding gate (depends on the FINAL DCP_SIZE) --------------
 # MTP is off the table *under DCP*: T14/T15 showed mla_gluon[bh16bn128] is
