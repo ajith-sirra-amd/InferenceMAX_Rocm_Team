@@ -352,7 +352,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # GATHERED count, which is what fires.
     # 4 still halves collective traffic vs 8 and leaves ~16.4M KV tokens against
     # the ~4.9M we touch.
-    DCP_SIZE="${DCP_SIZE:-1}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
+    DCP_SIZE="${DCP_SIZE:-8}"   # 8 = 31.22x KV (32.7M tok); 4 = 16.25x
     # T14: spec decoding ON under DCP. This only became possible with the
     # colleague image: DSpark draft verify under DCP now supports both ASM and
     # Gluon there. On our nightlies aiter is pinned to v0.1.19, whose mla_gluon
@@ -410,7 +410,7 @@ if [ "$CONC" -ge "$DCP_AUTO_CONC_THRESHOLD" ]; then
     # block restored, ROCM_AITER_FA is available again, so keep the pin.
     echo "DCP: CONC=$CONC >= $DCP_AUTO_CONC_THRESHOLD -> B300-style config (DCP=8, spec decode off)"
 fi
-DCP_SIZE="${DCP_SIZE:-1}"
+DCP_SIZE="${DCP_SIZE:-8}"
 
 # ---- Speculative decoding gate (depends on the FINAL DCP_SIZE) --------------
 # MTP is off the table *under DCP*: T14/T15 showed mla_gluon[bh16bn128] is
@@ -447,7 +447,7 @@ DCP_SIZE="${DCP_SIZE:-1}"
 # at the SAME --max-num-seqs 40 the reference uses. The remaining deltas were the
 # forced --max-num-batched-tokens 8192, which sizes the MLA chunked-prefill
 # workspace, and our PIECEWISE cudagraph fallback. Both are aligned above.
-DISABLE_SPEC="${DISABLE_SPEC:-0}"
+DISABLE_SPEC="${DISABLE_SPEC:-1}"
 echo "spec gate: DCP_SIZE=$DCP_SIZE -> DISABLE_SPEC=$DISABLE_SPEC"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
@@ -535,7 +535,15 @@ if [ "$DCP_SIZE" -gt 1 ]; then
              # Back to ROCM_AITER_MLA: T21 showed TRITON_MLA is within noise
              # (1,948 vs 1,990 tok/s/GPU, TPOT 0.186 vs 0.174), so gate the
              # configuration that actually produced the best DCP number.
-             --attention-backend "${DCP_ATTN_BACKEND:-TRITON_MLA}")   # T59: reference decodes on TRITON_MLA, and MTP requires it
+             # T66: back to ROCM_AITER_MLA. The TRITON_MLA default here came from
+             # T59, which needed it for MTP-under-DCP -- a combination since shown
+             # to be refused at init on every ROCm MLA backend (T60), so that
+             # reason is dead. Meanwhile T64 proved AITER MLA is worth 2.4x over
+             # TRITON_MLA on the non-DCP arm. Leaving TRITON_MLA here would make
+             # T66 a backend comparison wearing a DCP label -- exactly the
+             # confound that invalidated every earlier DCP number. DCP must run
+             # the same backend as its control.
+             --attention-backend "${DCP_ATTN_BACKEND:-ROCM_AITER_MLA}")
     # Env from vllm-project/vllm#52248's tested DCP config. The four
     # VLLM_USE_DIRECT_DCP_* / VLLM_DCP_Q_REPLICATE disables turn off the
     # symmetric-memory direct DCP paths; that is very likely why upstream could
