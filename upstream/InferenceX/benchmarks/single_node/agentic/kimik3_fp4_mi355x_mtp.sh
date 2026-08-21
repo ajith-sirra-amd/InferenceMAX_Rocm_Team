@@ -447,7 +447,7 @@ DCP_SIZE="${DCP_SIZE:-1}"
 # at the SAME --max-num-seqs 40 the reference uses. The remaining deltas were the
 # forced --max-num-batched-tokens 8192, which sizes the MLA chunked-prefill
 # workspace, and our PIECEWISE cudagraph fallback. Both are aligned above.
-DISABLE_SPEC="${DISABLE_SPEC:-0}"
+DISABLE_SPEC="${DISABLE_SPEC:-1}"
 echo "spec gate: DCP_SIZE=$DCP_SIZE -> DISABLE_SPEC=$DISABLE_SPEC"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
@@ -642,7 +642,13 @@ fi
 # 2,646,059 tokens (2.52x); ours with MTP was 1,385,293 (1.32x) at the same
 # --max-num-seqs 40. Set MAX_NUM_BATCHED_TOKENS=0 to omit the flag and take vLLM's
 # own sizing, as the reference does.
-MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-0}"
+# T64: back to a bounded cap. T63 omitted it (reference behaviour) and died with
+# HSA_STATUS_ERROR_OUT_OF_RESOURCES at runtime once the target moved to
+# ROCM_AITER_MLA -- the only delta from T62, which survived on TRITON_MLA with the
+# same omission. AITER MLA needs more workspace, so unbounded chunking does not
+# fit alongside it here. 8192 is T58's value, which makes T64 exactly T58 with the
+# decode backend as the single variable.
+MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-8192}"
 if [ "$MAX_NUM_BATCHED_TOKENS" -gt 0 ]; then
     CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS")
     echo "chunked prefill: --max-num-batched-tokens $MAX_NUM_BATCHED_TOKENS"
