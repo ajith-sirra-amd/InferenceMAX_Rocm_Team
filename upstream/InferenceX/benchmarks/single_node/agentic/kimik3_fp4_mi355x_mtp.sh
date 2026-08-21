@@ -86,11 +86,54 @@ if [[ -n "${SLURM_JOB_ID:-}" ]]; then
     echo "JOB $SLURM_JOB_ID running on ${SLURMD_NODENAME:-unknown}"
 fi
 
-if [ "$TP" -ne 8 ]; then
-    echo "Error: Kimi-K3 MXFP4 is a 1.56 TB checkpoint and only fits at TP=8 on" >&2
-    echo "       288 GB gfx950 parts (~195 GB/GPU). Got TP=$TP." >&2
+# ---- Parallel layout guard --------------------------------------------------
+# DP_SIZE defaults to 1 (pure TP8, every trial to date). TOTAL_RANKS = TP * DP
+# must be 8, the GPU count.
+#
+# The guard used to be a flat "TP must be 8", justified by "TP=4 would need
+# ~390 GB/GPU". That figure is 1,560.86 GB / 4 -- correct for PURE TP4 with no
+# expert parallelism, and NOT applicable once EP shards the experts. Measured
+# from the checkpoint's safetensors headers: experts 1,446.46 GB (92.67%),
+# non-expert 114.40 GB (7.33%). With EP over all 8 ranks, non-expert weights
+# shard within the TP group and replicate only across DP:
+#     DP1/TP8  114.40/8 + 1446.46/8 = 195.1 GB   <- today
+#     DP2/TP4  114.40/4 + 1446.46/8 = 209.4 GB   <- fits, ~50 GB spare
+#     DP4/TP2  114.40/2 + 1446.46/8 = 238.0 GB   <- fits, ~21 GB spare
+#     DP8/TP1  114.40/1 + 1446.46/8 = 295.2 GB   <- does NOT fit (288 GB card)
+# So the guard must reject pure TP<8 (which really cannot load) while allowing
+# DP*TP=8 with EP -- not reject both. I previously took the old comment at face
+# value and wrongly concluded DP attention was infeasible on 8 GPUs.
+DP_SIZE="${DP_SIZE:-2}"   # T67: DP2/TP4/EP8. Set 1 for pure TP8 (T64).
+export DP_SIZE
+TOTAL_RANKS=$(( TP * DP_SIZE ))
+if [ "$TOTAL_RANKS" -ne 8 ]; then
+    echo "Error: TP * DP must equal 8 (the GPU count). Got TP=$TP DP=$DP_SIZE -> $TOTAL_RANKS." >&2
     exit 1
 fi
+if [ "$DP_SIZE" -eq 1 ] && [ "$TP" -ne 8 ]; then
+    echo "Error: without data parallelism this checkpoint only fits at TP=8." >&2
+    echo "       Kimi-K3 MXFP4 is 1.56 TB; TP=$TP would need ~$(( 1561 / TP )) GB/GPU." >&2
+    exit 1
+fi
+if [ "$DP_SIZE" -gt 1 ] && [ "$EP_SIZE" -le 1 ]; then
+    echo "Error: DP=$DP_SIZE requires expert parallelism (ep>1) or the experts do" >&2
+    echo "       not shard and the layout will not fit. Set ep: 8 in the matrix." >&2
+    exit 1
+fi
+# Reject layouts that cannot hold the weights, by arithmetic rather than by a
+# remembered rule. Measured from the checkpoint: experts 1446 GB, non-expert
+# 114 GB. Non-expert shards within the TP group; experts shard across all ranks
+# when EP is on (and across the TP group only when it is not).
+_EXPERT_GB=1446; _NONEXPERT_GB=114; _CARD_GB=288
+if [ "$EP_SIZE" -gt 1 ]; then _E_DIV=$TOTAL_RANKS; else _E_DIV=$TP; fi
+_PER_GPU_GB=$(( _NONEXPERT_GB / TP + _EXPERT_GB / _E_DIV ))
+if [ "$_PER_GPU_GB" -ge "$_CARD_GB" ]; then
+    echo "Error: layout TP=$TP DP=$DP_SIZE EP=$EP_SIZE needs ~${_PER_GPU_GB} GB/GPU," >&2
+    echo "       which exceeds the ${_CARD_GB} GB card before any KV cache." >&2
+    echo "       (non-expert ${_NONEXPERT_GB}/TP + experts ${_EXPERT_GB}/${_E_DIV})" >&2
+    exit 1
+fi
+echo "parallel layout: TP=$TP DP=$DP_SIZE EP=$EP_SIZE -> $TOTAL_RANKS ranks, ~${_PER_GPU_GB} GB/GPU weights"
 
 # ROCR/HIP visibility for vLLM 0.14+
 if [ -n "${ROCR_VISIBLE_DEVICES:-}" ]; then
@@ -256,7 +299,7 @@ if agentic_kv_offload_enabled; then
 case "${KV_OFFLOAD_BACKEND:-}" in
   vllm-simple)
     require_agentic_kv_offload_backend "$KV_OFFLOAD_BACKEND"
-    CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TP ))
+    CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))   # T67: TOTAL_RANKS = TP*DP; using TP alone over-allocates host DRAM by DP x
     # Identical prefixes must hash to identical block keys across ranks.
     export PYTHONHASHSEED=42
     SIMPLE_LAZY_OFFLOAD="${SIMPLE_LAZY_OFFLOAD:-false}"
@@ -280,6 +323,18 @@ EP_ARGS=()
 if [ "$EP_SIZE" -gt 1 ]; then
     EP_ARGS=(--enable-expert-parallel)
     echo "EP: expert parallelism ON (EP_SIZE=$EP_SIZE)"
+fi
+
+# ---- Data parallelism (DP attention) ----------------------------------------
+# Each DP rank owns its own requests end to end, so the per-layer attention
+# all-reduce disappears -- the collective T35e profiled at 92.65% of DCP decode
+# kernel time and that T48 proved cannot be fixed by substituting the
+# implementation. DP_ARGS MUST be consumed by VLLM_CMD; EP_ARGS sat
+# defined-but-unused for 55 trials, so the orphan check is run after this.
+DP_ARGS=()
+if [ "$DP_SIZE" -gt 1 ]; then
+    DP_ARGS=(--data-parallel-size "$DP_SIZE")
+    echo "DP: data-parallel attention ON (DP_SIZE=$DP_SIZE, TP=$TP per group)"
 fi
 
 # ---- Decode context parallel (DCP) ------------------------------------------
@@ -985,6 +1040,7 @@ VLLM_CMD=(
     --kv-cache-dtype "$KV_CACHE_DTYPE"
     "${CHUNKED_PREFILL_ARGS[@]}"
     "${EP_ARGS[@]}"
+    "${DP_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${UNIFIED_ARGS[@]}"
     "${ASYNC_SCHED_ARGS[@]}"
