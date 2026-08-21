@@ -5,6 +5,69 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 
 ---
 
+## 0. RESULTS — final standings (all 8 GPUs, real tokens unless noted)
+
+| Config | tok/s/GPU | TPOT | TTFT | Trial |
+|---|---:|---:|---:|---|
+| SA reference — TP8 + MTP, **synthetic** acceptance | 5,388 | 0.0382 | 12.2 s | — |
+| **TP8, AITER MLA, spec off — BEST** | **4,622.8** | **0.0461** | **2.14 s** | [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) |
+| DP2/TP4/EP8 attention | 2,998.6 | 0.1140 (p50 **0.0652**) | 8.57 s | [T67b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32458502570) |
+| TP8 + MTP | 2,045.4 | 0.1003 | 67.7 s | [T65](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32444354043) |
+| TP8 + DCP=8 | 1,574.5 | 0.2174 | 12.4 s | [T66c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32451498395) |
+| DP2/TP4 + MTP | cancelled by user | | | T68 |
+
+**86% of the reference's throughput while running no speculation and real tokens**,
+where the reference uses MTP with synthetic acceptance (drafts committed
+regardless of target logits). 37% of the 12,500 target, from 21% at the session's
+start.
+
+### The single biggest lever was a flag I had added
+
++72% came from **deleting `--attention-backend TRITON_MLA`**, justified by a
+comment I wrote — *"reference SA decoded on TRITON_MLA"* — which was false. That
+string appears in the reference's `--speculative-config`, configuring the
+**draft**; the reference sets no target backend and lets ROCm pick
+ROCM_AITER_MLA. The error was in **every non-DCP trial**, worth **2.4x** on the
+decode path the whole investigation was trying to speed up.
+
+### All three "structural" features lose on this workload
+
+| Feature | vs TP8 | Why |
+|---|---|---|
+| **DCP=8** | **−66%** | Delivered its capacity promise in full — 31.26× KV, 70.1% prefix hit, ≤14% used — and still lost 3×. **Capacity was never the constraint.** Collective-bound (T35e: 92.65% of decode kernel time in collectives). |
+| **MTP** | **−56%** | Accelerates decode = **0.6% of scored tokens**, while costing 36% of the KV pool serving the other 99.4%. TTFT 2.14 s → 67.7 s. |
+| **DP attention** | **−35%** | Best of the three. **TPOT p50 0.0652 vs mean 0.1140** — a spread no other config shows, consistent with removing the per-layer all-reduce (fast median) while the two DP groups imbalance (heavy tail). |
+
+### Two harness fields produced false conclusions
+
+1. **`spec_decoding`** read `'none'` while MTP was running (364 SpecDecoding
+   samples in the engine log). It caused me to report T47 as "spec MTP" and to
+   invent a "2.7× decode regression" that was really spec-on vs spec-off.
+2. **`per_gpu.total_tput_tps`** divides TOTAL by `tp`, not the GPU count. At
+   DP2/TP4 it reported **5,997.2** — a new record beating the reference — when
+   the true figure is **2,998.6** (÷8). Caught before publishing.
+
+**Reconcile every aggregate against the engine log. Both traps were caught that
+way, and both would otherwise have become headline claims.**
+
+### Five instances of one script bug class
+
+A value that looks decided at one site is actually decided at another: shadowed
+`DCP_SIZE`; `DISABLE_SPEC` in a concurrency-gated block labelled DCP; dead
+`CUDAGRAPH_CAPTURE_SIZES`; **`EP_ARGS` computed but never consumed — expert
+parallelism was unreachable for 55 trials**; and a split `DCP_SIZE` default whose
+warning comment I had written myself. Fixed structurally: `DCP_SIZE` resolves
+once, guards compute from measured weights, and an orphan check runs before
+every dispatch.
+
+### Corrected: DP attention was never infeasible
+
+I ruled it out from the DP8/TP1 extreme (295.2 GB > 288 GB card) and generalised.
+With EP sharding experts, only the non-expert 114.4 GB replicates across DP:
+DP2/TP4 = **209.4 GB**, comfortably inside budget. It ran fine.
+
+---
+
 ## 0. RESULT -- 4,622.8 tok/s/GPU, +72% from deleting one flag I had added
 
 [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) -- full 3,612 s window, completed:
