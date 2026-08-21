@@ -1924,7 +1924,15 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # _validate_dspark_dcp_support requires supports_non_causal_multi_token_dcp
   # (declared only by tokenspeed_mla, absent from ROCm) or supports_dcp_with_varlen
   # (declared only by flashinfer/flashattn/flashmla, all NVIDIA).
-  image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
+  # T66c: DCP must run on 5a4c8d99. The DCP patch stack ([5] PR#51705, [6], [8])
+  # was developed against it; on ac7509e2b the builder predates PR #51705's
+  # plumbing and T66b died with
+  #   'AiterMLAMetadataBuilder' object has no attribute 'dcp_world_size'
+  # Image caveat, stated rather than hidden: on the NON-DCP arm these two images
+  # differ by 1.1% (T47 2,655.7 on 5a4c8d99 vs T58 2,685.0 on ac7509e2b, both
+  # forced TRITON_MLA), so comparing DCP-on-5a4c8d99 against T64-on-ac7509e2b
+  # carries ~1% image uncertainty -- an order of magnitude below the effect.
+  image: vllm/vllm-openai-rocm:nightly-5a4c8d99242e9e069b604d0e9b969e77f7dd501d
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
