@@ -447,7 +447,7 @@ DCP_SIZE="${DCP_SIZE:-1}"
 # at the SAME --max-num-seqs 40 the reference uses. The remaining deltas were the
 # forced --max-num-batched-tokens 8192, which sizes the MLA chunked-prefill
 # workspace, and our PIECEWISE cudagraph fallback. Both are aligned above.
-DISABLE_SPEC="${DISABLE_SPEC:-1}"
+DISABLE_SPEC="${DISABLE_SPEC:-0}"
 echo "spec gate: DCP_SIZE=$DCP_SIZE -> DISABLE_SPEC=$DISABLE_SPEC"
 # fp8 KV everywhere except the DCP path, which overrides this to bf16 below --
 # every measured number to date (c12=4431 ... c20=5022) is on fp8, so the
