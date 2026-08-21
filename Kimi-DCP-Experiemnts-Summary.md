@@ -5,7 +5,69 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 
 ---
 
-## 0. RETRACTED -- I had never read the reference's actual command
+## 0. RESULT -- 4,622.8 tok/s/GPU, +72% from deleting one flag I had added
+
+[T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) -- full 3,612 s window, completed:
+
+```
+4,622.8 tok/s/GPU   TOTAL 36,982.5   (in 36,697.7 / out 284.8)
+TPOT mean 0.0461  p50 0.0423  p90 0.0551
+TTFT mean 2.143 s  p50 0.997 s
+1,046 / 1,090 successful
+Using ROCM_AITER_MLA backend · 0 --attention-backend flags in the command
+```
+
+**Single variable.** Same image, same patches, spec off on both, KV pool
+byte-identical (4,376,929 tokens):
+
+| | [T58](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32414712217) forced TRITON_MLA | **[T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) AITER MLA** | change |
+|---|---:|---:|---|
+| tok/s/GPU | 2,685.0 | **4,622.8** | **+72.2%** |
+| TPOT mean | 0.1161 | **0.0461** | **-60.3%** |
+| TTFT mean | 3.450 s | **2.143 s** | -37.9% |
+| requests OK | 569/611 | **1,046/1,090** | +84% |
+
+**Versus the reference, while handicapped:**
+
+| | tok/s/GPU | TPOT | speculation |
+|---|---:|---:|---|
+| SA reference | 5,388 | 0.0382 | **MTP on, synthetic acceptance** |
+| **T64** | **4,622.8** | **0.0461** | **OFF, real tokens** |
+
+86% of the reference's throughput and within 21% on TPOT **without the feature it
+uses to get there**. Against the 12,500 target: 37%, up from 21%.
+
+### What actually happened
+
+The gain came entirely from deleting `--attention-backend TRITON_MLA` -- a line
+**I added**, justified by a comment **I wrote**: *"reference SA decoded on
+TRITON_MLA"*. That was false. TRITON_MLA appears in the reference's
+`--speculative-config`, configuring the **draft**; the reference sets no target
+backend and lets ROCm pick ROCM_AITER_MLA. Measured here that is worth **2.4x**.
+
+The error was in **every non-DCP trial of the whole investigation**. Twelve DCP
+levers, a hand-ported HIP a2a kernel, per-rank NUMA pinning and an all-reduce
+substitution were spent optimising *around a handicap I introduced*. The
+measurements were sound; the baseline was not. **Reading the reference's 15-line
+`vllm_command.txt` would have caught it on day one** -- I inferred its config from
+the B300 script instead and never verified until hour ~10.
+
+### Earlier conclusions that this changes
+* **"DCP's ceiling is ~2,000 tok/s/GPU"** -- true as measured, but every DCP arm
+  also carried the forced backend. **DCP has never been evaluated against a
+  correct baseline**; its real standing is unknown.
+* **"MTP starves"** -- retracted at T61 (our chunk cap, not MTP).
+* **"DCP+MTP unreachable on ROCm"** -- still a true fact about the backends, but
+  no longer the explanation for the gap.
+
+### Next
+1. **T64 + MTP** -- the reference's remaining edge is speculation, and T64's KV is
+   healthy (usage fell to 40-57%), so the drafter now has room earlier attempts lacked.
+2. **Re-baseline DCP against T64.**
+
+---
+
+## 0b. (Superseded) I had never read the reference's actual command
 
 Everything below headed "THE ANSWER" was built on an inference, not a reading. I
 took the MI355X reference's configuration from the **B300 script** -- a different
