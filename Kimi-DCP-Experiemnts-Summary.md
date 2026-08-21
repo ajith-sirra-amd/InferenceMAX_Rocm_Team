@@ -46,6 +46,11 @@ decode path the whole investigation was trying to speed up.
 2. **`per_gpu.total_tput_tps`** divides TOTAL by `tp`, not the GPU count. At
    DP2/TP4 it reported **5,997.2** — a new record beating the reference — when
    the true figure is **2,998.6** (÷8). Caught before publishing.
+   **Confirmed from the job log itself**, which prints `Throughput per GPU: 5997`
+   while the same run logs `world_size=8`, `rank=0..7`, `local_rank=0..7` and
+   `EngineCore_DP0/DP1`. Correct for every TP-only trial (tp == GPUs); wrong by
+   `8/tp` for any DP layout. **Any DP result published from this harness is
+   overstated 2× unless the divisor is fixed.**
 
 **Reconcile every aggregate against the engine log. Both traps were caught that
 way, and both would otherwise have become headline claims.**
