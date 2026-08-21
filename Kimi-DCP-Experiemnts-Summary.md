@@ -5,7 +5,47 @@ MXFP4) on 8× MI355X, TP8, agentic replay. **Target: 12,500 tok/s/GPU.**
 
 ---
 
-## 0. THE ANSWER -- DCP + MTP is structurally unreachable on ROCm
+## 0. RETRACTED -- I had never read the reference's actual command
+
+Everything below headed "THE ANSWER" was built on an inference, not a reading. I
+took the MI355X reference's configuration from the **B300 script** -- a different
+platform, a different file -- and only read the reference's own
+`vllm_command.txt` (run 31993981851) late in the session. It says:
+
+```
+--tensor-parallel-size 8 --max-num-seqs 40 --gpu-memory-utilization 0.9
+--kv-cache-dtype fp8 --no-async-scheduling --enable-prefix-caching
+--attention-config {"mla_prefill_backend":"ROCM_AITER_FA"}
+--compilation-config {FULL_AND_PIECEWISE, max_capture 120, sizes [1..120]}
+--speculative-config {dspark, TRITON_MLA, synthetic, accept 2.51}
+NO --decode-context-parallel-size   NO --max-num-batched-tokens   NO --attention-backend
+```
+
+**Three of my own errors, all load-bearing:**
+
+| # | I claimed | Actually |
+|---|---|---|
+| 1 | The reference runs **DCP=8 + MTP** together | It runs **no DCP**. Non-DCP + MTP. T60's "DCP+MTP is refused on ROCm" is still true, but it is **not** what separates us from the reference. |
+| 2 | **MTP starves** this workload (T51 cancelled, T54 = 541) | **We starved it.** Our forced `--max-num-batched-tokens 8192` sizes the MLA chunked-prefill workspace. Omitting it ([T61](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32428889181)) reproduced the reference's KV pool **byte for byte**: 2,646,059 tokens (2.52x) vs our 1,385,293 (1.32x). |
+| 3 | The reference **decodes on TRITON_MLA** | It sets **no** target backend. TRITON_MLA appears only inside `--speculative-config`, i.e. for the **draft**. I mistook the draft's backend for the target's and forced the slower one on the main model in every non-DCP trial -- **including [T58](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32414712217), our best result**. |
+
+### Trials from the correction
+
+| # | Change | Outcome |
+|---|---|---|
+| [T61](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32428889181) | omit `--max-num-batched-tokens` | **KV fixed exactly**; then hit the T50 cudagraph assert -- so that assert is *not* version-specific, as I'd assumed |
+| [T62](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32430343818) | + drop patch [2] | **assert cleared**, MTP live, KV 2.52x -- but tput decayed 9,713 -> 4,353/s, 17 queued. KV was not the whole story. |
+| [T63](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32434647582) | + release the forced backend | `ROCM_AITER_MLA` selected (verified), reference backend split reproduced -- then `HSA_STATUS_ERROR_OUT_OF_RESOURCES`. Only delta vs T62 was the backend, so **AITER MLA needs more workspace**. |
+| [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) | **T58 + AITER MLA only** | running -- clean test of the 1.2-1.6x backend claim against our best result |
+
+**Patch [2] causes the assert.** It raises TritonMLA's `_cudagraph_support` to
+`UNIFORM_BATCH`, permitting full capture, which then builds metadata with
+`max_query_len = 1 + num_speculative_tokens`. The reference carries **no patch [2]**
+and lets vLLM downgrade the drafter to PIECEWISE by itself.
+
+---
+
+## 0b. (Superseded) DCP + MTP is unreachable on ROCm
 
 The reference reaches 5,388 tok/s/GPU by running **DCP=8 and MTP together**. We can
 run each alone but never both, and the reason is not tuning:
