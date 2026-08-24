@@ -55,6 +55,102 @@ decode path the whole investigation was trying to speed up.
 **Reconcile every aggregate against the engine log. Both traps were caught that
 way, and both would otherwise have become headline claims.**
 
+### Profiling — what it found, and what it does not establish
+
+Torch profiler, decode-only windows, 8 ranks captured per run. Post-processed
+summaries kept in `dcp-profiling-results/`; raw traces retained from T44 onward.
+
+**⚠️ READ THIS FIRST.** Every profiling run below used the **forced TRITON_MLA
+backend** — the handicap later shown to cost **2.4×** (T64). The traces describe
+that stack accurately, but the profiled system was running at ~40% of its
+achievable speed. **The mechanism was never re-profiled on the corrected stack.**
+
+#### Whole-trace kernel breakdown (rank 0, 15 s decode window)
+
+| | [T35e](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32333672290) DCP=8 | [T37](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32340149740) non-DCP |
+|---|---:|---:|
+| Total GPU kernel time | 14.801 s | 5.033 s |
+| Kernels launched | 121,030 | 235,224 |
+| `cross_device_reduce_2stage` (TP all-reduce) | **78.37%** / 10,602 calls | 55.48% / 22,599 |
+| `ncclDevKernel_Generic_1` | 8.22% | — |
+| `mscclKernel_Sum` | 6.06% | — |
+| MoE GEMM (`mfma_moe1`+`moe2`) | 1.91% | 13.33% |
+| **collectives / compute** | **92.65% / ~7%** | 56.05% / ~44% |
+
+Per decode step (~118 all-reduces/step in **both** arms):
+
+| | all-reduce | compute | steps/15 s | TPOT |
+|---|---:|---:|---:|---:|
+| non-DCP | 14.6 ms | 11.5 ms | ~191 | 43 ms |
+| DCP=8 | **129 ms** | 11.6 ms | ~90 | 167 ms |
+
+#### Per-rank analysis — the straggler
+
+An all-reduce returns when the **last** rank arrives, so the rank spending the
+*least* time inside it is the one arriving late.
+
+`T38` DCP=8, offload dram — all-reduce time per rank:
+```
+rank    0      1      2      3      4      5      6      7
+sec  11.72  11.71  10.13   9.32  10.59  11.69   8.47   2.07  <- STRAGGLER
+p50 ~1000 us on 7 of 8 ranks -> waiting on EVERY call, not a tail
+```
+Non-DCP for contrast: **p50 8–9 µs on every rank** — the reduce itself costs
+~8 µs (287 KB payload). Everything above that is one rank late and seven idling.
+
+`T40` host timeline, straggler vs normal over the same 15.20 s:
+```
+rank1 STRAGGLER  gpu_busy  5.15 s  idle 10.05 s (66%)  123,900 launch gaps
+                 gap p50 62 us  p90 190 us  max 1.2 ms
+rank2 NORMAL     gpu_busy 14.86 s  idle  0.35 s ( 2%)  116,678 gaps
+                 gap p50  0 us  p90   0 us
+host op totals IDENTICAL: 96,452 ms vs 97,114 ms
+```
+
+**Root cause (on the handicapped stack): host-launch-bound starvation.** The
+straggler's GPU waits ~62 µs after each kernel for the host to launch the next,
+~124k times ≈ 10 s idle. Host *work* is identical between ranks, so it is launch
+**delay**, not extra work. The other seven then block inside the all-reduce,
+which is why the cost is *attributed* to collective time.
+
+#### Non-findings — hypotheses the profiling killed
+
+| Hypothesis | Evidence against |
+|---|---|
+| KV offload causes it | `T39` removed offload entirely; straggler persisted |
+| A specific bad GPU/link | Straggler **moves**: rank 7 → 0 → 1 → 5 across T38/T39/T40/T41 |
+| GPU load imbalance | Compute per rank 1.05–1.11 s, **≤5% spread**, in every arm |
+| DCP shards decode work | 11.5 ms/step non-DCP vs **11.6** ms/step DCP — no reduction |
+| Async scheduling | `T41` enabled it; straggler persisted (rank 5, 89% idle) |
+| The collective implementation | `T48` PYNCCL instead of AITER custom: **−23%**, worse |
+| NUMA placement | `T45` node-level, `T46` per-rank slices — no effect / worse |
+| Combine algorithm, shard granularity | `a2a` vs `ag_rs` within 3%; interleave 1→16 no help |
+
+Also ruled out by construction: the straggler is not a clean 1-vs-7 split — `T40`
+shows intermediate ranks (265/272 µs), i.e. a **gradient**, whichever rank loses
+the CPU race.
+
+#### What the profiling does NOT establish
+
+1. **It does not explain the corrected stack.** All traces predate the AITER MLA
+   fix. DCP was *re-measured* at [T66c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32451498395) (−66%) but **never
+   re-profiled**. Whether host-launch starvation is still the mechanism, or
+   whether AITER MLA changes the launch pattern entirely, is **unknown**.
+2. **It never identified a fix.** The mechanism was characterised precisely and
+   twelve levers derived from it all failed. Diagnosis ≠ actionability.
+3. **`--no-async-scheduling` was implicated but not exonerating.** T40 reasoned
+   that `max_concurrent_batches=1` removes the overlap that would absorb launch
+   latency — but T41 turned async scheduling *on* and the straggler remained.
+   The reasoning was plausible and the prediction wrong.
+4. **No profiling exists for DP attention.** [T67b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32458502570)'s TPOT
+   spread (p50 0.0652 vs mean 0.1140) is *consistent with* removing the
+   per-layer all-reduce and DP-group imbalance, but that is inference from
+   latency percentiles, **not** a measured trace.
+5. **The 78.37% attribution is a time-attribution, not a cost.** Kernel duration
+   includes time blocked waiting on peers. The collective is where the time is
+   *charged*, not necessarily where it is *spent* — stated as a caveat when first
+   recorded, and it is why "optimise the collective" kept failing.
+
 ### Five instances of one script bug class
 
 A value that looks decided at one site is actually decided at another: shadowed
