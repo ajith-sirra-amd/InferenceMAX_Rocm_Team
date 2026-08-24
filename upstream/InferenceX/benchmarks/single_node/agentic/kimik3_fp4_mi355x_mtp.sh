@@ -182,7 +182,7 @@ install_agentic_deps
 # The old comment here said "keep the two defaults equal", which is exactly the
 # kind of instruction-to-a-future-reader that fails. Resolving once removes the
 # possibility instead of documenting it. The sites below now consume this value.
-DCP_SIZE="${DCP_SIZE:-1}"   # 1 = non-DCP. DCP and DP attention are alternatives.
+DCP_SIZE="${DCP_SIZE:-8}"   # 1 = non-DCP. DCP and DP attention are alternatives.
 # vLLM requires tp_size % dcp_size == 0. T67 tripped this deep inside pydantic
 # ("tp_size=4 must be divisible by dcp_size=8") because DCP_SIZE=8 was left over
 # from T66c while TP moved to 4. Fail here instead, with the reason.

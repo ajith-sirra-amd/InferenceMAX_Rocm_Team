@@ -1932,7 +1932,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # differ by 1.1% (T47 2,655.7 on 5a4c8d99 vs T58 2,685.0 on ac7509e2b, both
   # forced TRITON_MLA), so comparing DCP-on-5a4c8d99 against T64-on-ac7509e2b
   # carries ~1% image uncertainty -- an order of magnitude below the effect.
-  image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
+  image: vllm/vllm-openai-rocm:nightly-5a4c8d99242e9e069b604d0e9b969e77f7dd501d
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
