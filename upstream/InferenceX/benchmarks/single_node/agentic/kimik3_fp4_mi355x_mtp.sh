@@ -93,9 +93,9 @@ CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-MAX_NUM_SEQS=$(( CONC * 2 ))
-CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,40,48,64,80"
-MAX_CUDAGRAPH_CAPTURE_SIZE=80
+MAX_NUM_SEQS=40
+CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,40"
+MAX_CUDAGRAPH_CAPTURE_SIZE=40
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
