@@ -18,6 +18,7 @@ context, MXFP4) · vLLM ROCm · agentic-replay workload · concurrency 20.
 | DP2/TP4/EP8 attention | 2,998.6 | 0.1140 (p50 0.0652) | 8.57 s | none | yes |
 | TP8 + MTP | 2,045.4 | 0.1003 | 67.7 s | MTP, synthetic | yes |
 | TP8 + MTP + **full graphs** | 982.4 | 0.1659 | 212.7 s | MTP, synthetic | yes, 3,605 s |
+| TP8 + MTP + full graphs + async sched | 724.2 | 0.1374 | 374.8 s | MTP, synthetic | yes, 3,629 s |
 | TP8 + DCP=8, piecewise graphs | 1,574.5 | 0.2174 | 12.4 s | none | yes, 3,628 s |
 
 The best complete run reaches **86% of the reference's throughput without
@@ -47,18 +48,22 @@ Two things to keep in view when reading the numbers above:
   result. The suggestive part: server-side input rate reached **63,185/s against
   ~37,000/s at concurrency 20** (~1.7×), so the pool does look convertible into
   throughput — unproven until a run survives the window.
-- **MTP on full graphs has now been measured, and it is worse, not better.**
-  T88: **982.4 tok/s/GPU**, TPOT 0.1659, over a clean full 3,604.5 s window with
-  speculation confirmed engaged at 64–68% acceptance. That is ~5× below
-  no-speculation and half the piecewise MTP best. Full graphs do not rescue MTP
-  on their own. The signature is thrashing rather than compute: **TTFT 212.69 s**
-  (vs 2.14 s), **prefix hit 8.4%** (vs 53.4%), `unique_in_srv` 27.9M, KV pool
-  down to 2,817,325 tokens with a draft model resident. Cause is very likely
-  pool starvation via 2.7 — that run left `--max-num-batched-tokens 8192` pinned,
-  which is the configuration 2.7 explicitly warns against under MTP. Retest with
-  it omitted is in flight. Note the reference reaches 5,388 with MTP on a
-  *smaller* pool (2,646,059), so speculation is demonstrably capable here and
-  982.4 reflects our configuration, not a limit of MTP.
+- **MTP is not the lever, and the reason is structural.** Two clean full-window
+  runs: T88 **982.4** tok/s/GPU and T90 (async scheduling) **724.2**, against
+  4,622.8 without speculation. Enabling MTP collapses prefix caching:
+
+  | | prefix hit | TTFT | tok/s/GPU |
+  |---|---:|---:|---:|
+  | T64 no MTP | **53.4%** | 2.14 s | **4,622.8** |
+  | T88 MTP | 8.4% | 212.7 s | 982.4 |
+  | T90 MTP + async sched | 10.7% | 374.8 s | 724.2 |
+
+  A 53% → ~10% hit-rate collapse with `unique_in_srv` at 20–28M means the cache
+  thrashes and requests queue. Neither pool sizing nor scheduling touches it;
+  both were tried and falsified. **Pool sizing is retired as a cause** — the
+  reference reaches 5,388 on a *smaller* pool (2,646,059) than T88's 2,817,325.
+  The open question is why speculation destroys prefix reuse here, not which
+  knob to turn next.
 
 **Best-known configuration**
 ```
