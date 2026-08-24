@@ -342,11 +342,40 @@ if [ "${SKIP_PATCH_BLOCKPOOL:-0}" = "1" ]; then
 else
     patch_kv_blockpool || true
 fi
+AITER4915_SHA="pr4915"
+patch_aiter_opus_rows() {
+    local label="aiter-opus-rows"
+    local cfg; cfg=$($PY -c "import aiter,os;print(os.path.dirname(aiter.__file__))" 2>/dev/null)/configs
+    [ -d "$cfg" ] || { echo "[$label] aiter configs not found; skipping"; return 0; }
+    local gfx; gfx=$(rocm-smi --showproductname 2>/dev/null | grep -oiE "gfx9[0-9]+" | head -1)
+    gfx="${gfx:-gfx950}"
+    case "$gfx" in
+        gfx942|gfx950) ;;
+        *) echo "[$label] arch $gfx unaffected; skipping"; return 0 ;;
+    esac
+    local n=0
+    while IFS= read -r f; do
+        if grep -qE "^$gfx,.*,opus," "$f" 2>/dev/null; then
+            cp -n "$f" "$f.orig" 2>/dev/null || true
+            local c; c=$(grep -cE "^$gfx,.*,opus," "$f")
+            grep -vE "^$gfx,.*,opus," "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            n=$(( n + c ))
+        fi
+    done < <(find "$cfg" -name "*_tuned_gemm.csv" 2>/dev/null)
+    echo "[$label] removed $n $gfx opus rows (ROCm/aiter#4915)"
+}
+
 SKIP_PATCH_PR51705="${SKIP_PATCH_PR51705:-0}"
 if [ "$SKIP_PATCH_PR51705" = "1" ]; then
     echo "[pr51705] SKIPPED via SKIP_PATCH_PR51705=1"
 else
     patch_pr51705 || true
+fi
+
+if [ "${SKIP_PATCH_OPUS_ROWS:-0}" = "1" ]; then
+    echo "[aiter-opus-rows] SKIPPED via SKIP_PATCH_OPUS_ROWS=1"
+else
+    patch_aiter_opus_rows || true
 fi
 
 echo "[kimi-patches] done."

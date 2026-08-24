@@ -69,13 +69,7 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-require_agentic_kv_offload_backend "$KV_OFFLOAD_BACKEND"
-CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
 export PYTHONHASHSEED=42
-OFFLOAD_ARGS=(
-    --kv-transfer-config
-    "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":false}}"
-)
 
 KV_CACHE_DTYPE=fp8
 CP_ARGS=(
@@ -127,7 +121,6 @@ VLLM_CMD=(
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
-    "${OFFLOAD_ARGS[@]}"
 )
 
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
