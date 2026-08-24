@@ -31,7 +31,7 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-DCP_SIZE=8
+DCP_SIZE=1
 export DCP_SIZE
 
 export SKIP_PATCH_OPUS_ROWS=1
@@ -73,27 +73,24 @@ trap 'exit 143' TERM
 export PYTHONHASHSEED=42
 
 KV_CACHE_DTYPE=fp8
-CP_ARGS=(
-    --decode-context-parallel-size "$DCP_SIZE"
-    --dcp-comm-backend a2a
-    --attention-backend ROCM_AITER_MLA
-    --cp-kv-cache-interleave-size 1
-)
+CP_ARGS=()
 export VLLM_ROCM_USE_AITER_MLA=1
 export AITER_DISABLE_FMHA_OPUS=1
-export VLLM_USE_DIRECT_DCP_A2A=0
-export VLLM_USE_DIRECT_DCP_Q_GATHER=0
-export VLLM_USE_DIRECT_DCP_KV_GATHER=0
-export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
-export VLLM_DCP_Q_REPLICATE=1
+
+SPEC_NUM_TOKENS=2
+SYNTHETIC_ACCEPT_LEN=2.51
+SPEC_ARGS=(
+    --speculative-config
+    "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
+)
 
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
 MAX_NUM_SEQS=$(( CONC * 2 ))
-CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,40,48,64"
-MAX_CUDAGRAPH_CAPTURE_SIZE=64
+CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,48,64,80,96,112,120,128"
+MAX_CUDAGRAPH_CAPTURE_SIZE=128
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
@@ -119,6 +116,7 @@ VLLM_CMD=(
     --kv-cache-dtype "$KV_CACHE_DTYPE"
     "${CHUNKED_PREFILL_ARGS[@]}"
     "${CP_ARGS[@]}"
+    "${SPEC_ARGS[@]}"
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
