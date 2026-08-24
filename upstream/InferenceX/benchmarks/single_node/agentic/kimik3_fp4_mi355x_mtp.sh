@@ -59,7 +59,7 @@ wait_for_amd_gpu_clean
 # path -- T6 timed out because decode ran at 3.5-6.8 tok/s with no KV offload.
 # With offload T18 decodes ~4x faster, so 1319 GSM8K questions should now fit.
 # Baseline to match: 0.9651. Flip to false to return to the throughput arm.
-PROFILE_DECODE="${PROFILE_DECODE:-1}"   # T35: decode-only torch trace to localise the 122 ms
+PROFILE_DECODE="${PROFILE_DECODE:-0}"   # T35: decode-only torch trace to localise the 122 ms
 export PROFILE_DECODE
 EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
@@ -654,7 +654,11 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_USE_DIRECT_DCP_A2A="${VLLM_USE_DIRECT_DCP_A2A:-0}"  # T31b: measured -0.9% tput / +2.4% TPOT vs RCCL a2a. Kernel works; it just does not help. Set 1 to re-enable.
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
-    export VLLM_DCP_Q_REPLICATE=0
+    export VLLM_ALLOW_DCP_FULL_CUDAGRAPH="${VLLM_ALLOW_DCP_FULL_CUDAGRAPH:-1}"
+    # Q replication removes the decode query all-gather entirely
+    # (mla_attention.py skips dcp_manager.query_gather when qrep_decode), which
+    # is what makes the DCP decode path free of RCCL and therefore capturable.
+    export VLLM_DCP_Q_REPLICATE="${VLLM_DCP_Q_REPLICATE:-1}"
     # T29: KV shard granularity 1 -> 16. This is the last live, untested DCP
     # knob on our code path (mla_attention.py:2099 dcp_local_block_size).
     #   interleave=1  : token-level round-robin -- every rank's shard is strided
@@ -870,9 +874,16 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # DCP8 to completion, as did the colleague recipe. Small capture ladder to
     # keep capture time bounded and to stay near their cap of 16.
     # Set DCP_CUDAGRAPH_MODE=NONE to revert if capture hangs again.
-    CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,48,64"
-    MAX_CUDAGRAPH_CAPTURE_SIZE=64
-    CUDAGRAPH_MODE_OVERRIDE="${DCP_CUDAGRAPH_MODE:-PIECEWISE}"
+    # T71: DCP now keeps FULL cudagraphs. platforms/rocm.py used to force
+    # PIECEWISE whenever decode_context_parallel_size > 1 -- a ROCm-only gate,
+    # absent from cuda.py -- which removed the one mitigation for the
+    # host-launch starvation the profiling identified (straggler idle 66%,
+    # ~124k gaps at 62 us, amplified by ~279 all-reduces per step). The
+    # refreshed PR #51705 adds VLLM_ALLOW_DCP_FULL_CUDAGRAPH to bypass it.
+    # Same dense ladder as the non-DCP arm so the two are comparable.
+    CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 120)"
+    MAX_CUDAGRAPH_CAPTURE_SIZE=120
+    CUDAGRAPH_MODE_OVERRIDE="${DCP_CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
     echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS DCP mode -> cudagraph_mode=$CUDAGRAPH_MODE_OVERRIDE capture<=64"
 else
     CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")"

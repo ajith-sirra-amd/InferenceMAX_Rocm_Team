@@ -603,7 +603,7 @@ EOF
 # is unchanged for every group we actually have. Expect the same fault at
 # max_model_len/dcp = 1048576/8 = 131072.
 PR51705_URL="https://patch-diff.githubusercontent.com/raw/vllm-project/vllm/pull/51705.diff"
-PR51705_SHA="78baf20117a2fdc128d1dea1d3b532e148317f448ed238683305aae91aff5126"  # re-pinned 2026-08-20: PR updated upstream; adds causal verify window, non_causal_multi_token_decode, fp8 decode routing, MTP split
+PR51705_SHA="3674054faeb3de87c741f741367973c2c16f6d199a79455e30ba3ed335424b0f"  # re-pinned 2026-08-24: PR now adds VLLM_ALLOW_DCP_FULL_CUDAGRAPH, VLLM_DCP_Q_REPLICATE, triton_mla supports_non_causal_multi_token_dcp=True and rocm_aiter_mla supports_dcp_with_varlen -- i.e. every DCP blocker we had patched around
 patch_pr51705() {
     local label="pr51705"
     local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
