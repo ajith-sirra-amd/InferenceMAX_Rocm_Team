@@ -177,6 +177,38 @@ serialization, component bisects) cheap.
 unique tokens clean, well past the ~6.3M trigger, so it was not merely too slow
 to get there.
 
+**Conclusion: this is an upstream bug, not a misconfiguration.** The fault is
+invariant to everything available to us:
+
+| Dimension varied | Result |
+|---|---|
+| KV offload on/off | faults |
+| aiter opus rows present/removed | faults |
+| capture ladder 64 / 40 / 80 | faults |
+| comm backend `a2a` / `ag_rs` | faults |
+| `VLLM_DCP_Q_REPLICATE` 1 / 0 | faults |
+| decode backend AITER / TRITON | inconclusive (T82/T84) |
+| concurrency 20 / 40 | faults, 7× sooner at 40 |
+| `max_num_seqs` 40 / 80 | faults, **no effect on timing** |
+| image `d626108b` / `f94666b6` | faults identically |
+| `AMD_SERIALIZE_KERNEL=3` | faults, no attribution |
+
+**It scales with in-flight decode batch size, not with buffer sizing.** T87 held
+`max_num_seqs=40` while running concurrency 40 and faulted at 420.6 s — the same
+as `max_num_seqs=80`. That eliminates the buffer-sizing hypotheses outright,
+since `paged_kv_indices` (`max_num_seqs × max_model_len`) and the aiter MLA
+metadata workspace (`max_num_reqs = max_num_seqs`) are both sized by the
+quantity held constant.
+
+Corroborating: `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` defaults to **`False`** upstream —
+the PR author opted not to enable this combination by default.
+
+**Reproduction for an upstream report:** concurrency 40, DCP=8,
+`FULL_AND_PIECEWISE`, `VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1` → GPU page fault on all
+8 ranks in **~420 s**, 10 of 10 runs. All ranks fault at one shared low offset
+over unrelated bases. No kernel attribution available: `Reason: Unknown`, and
+the GPU coredump handler fails with `execvp` ENOENT.
+
 **The image is the one variable never changed.** Every run T64–T83 used
 `nightly-d626108b` (2026-08-20). Checked against the newest nightly
 `f94666b6` (2026-08-24, 139 commits later): PR #51705 is **still not merged**
@@ -184,7 +216,10 @@ upstream and the ROCm DCP→PIECEWISE gate is **still present**, so a newer imag
 does not fix this by itself. It is a better base for one concrete reason —
 the vendored diff applies with **0 failed hunks** there versus **4** on
 `d626108b`, which removes the silent `enable_dcp_q_replicate` reject that killed
-T78. Not yet run end-to-end.
+T78. **Now confirmed end-to-end (T86): the newer image faults identically**
+(419.9 s), and it genuinely ran the new build (`dev1133+gf94666b60` vs
+`dev994+gd626108b1`), so this is not a cache artifact. We stay on it for the
+cleaner patch application, not for any fix.
 
 **The aiter opus-rows patch is exonerated**, on both fault and performance:
 
