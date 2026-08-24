@@ -39,7 +39,13 @@ Two things to keep in view when reading the numbers above:
 - **DCP + full graphs does not currently beat non-DCP** at concurrency 20
   (4,298–4,551 vs 4,622.8). DCP's entire value is the 31× KV pool, which only
   pays at higher concurrency — KV usage has been just 10–12% with zero
-  preemptions in every DCP run. Concurrency 40 is under test.
+  preemptions in every DCP run.
+- **Concurrency 40 is not yet a usable number.** T83 reports 4,457.1 tok/s/GPU,
+  but it faulted at 424 s while still ramping (TTFT 5.16 s), so the aggregate is
+  dominated by ramp-up rather than steady state and is **not** recorded as a
+  result. The suggestive part: server-side input rate reached **63,185/s against
+  ~37,000/s at concurrency 20** (~1.7×), so the pool does look convertible into
+  throughput — unproven until a run survives the window.
 - **MTP has never been measured on full graphs.** Every MTP number here (best
   2,045.4) ran on piecewise. Since the reference's whole advantage is
   speculation (2.6), this is the largest untested lever. It is now unblocked:
@@ -141,10 +147,31 @@ Two corrections to earlier reasoning on this page, both mine:
   and T80 ran `ag_rs` while still pinning it on. `ag_rs` was tested in an
   off-design pairing and is not cleanly refuted (it was also ~3% slower).
 
-**The trigger is cumulative workload, not elapsed time.** T82 ran **3,607.6 s**
-clean — longer than every faulting run — while reaching only 4.12M unique
-tokens. A run can therefore look clean purely by not doing enough work, which is
-the trap T82 fell into (see below).
+**The trigger scales with concurrency, not with elapsed time or accumulated
+work.** Two results pin this down, and the second corrects the first:
+
+- T82 ran **3,607.6 s** clean — longer than every faulting run — while reaching
+  only 4.12M unique tokens. So it is not elapsed time, and a run can look clean
+  purely by not doing enough work.
+- T83 raised concurrency 20 → 40 and faulted at **424.5 s** with only
+  **1,629,728** unique tokens. So it is not accumulated work either.
+
+| | concurrency 20 (6 runs) | concurrency 40 (T83) |
+|---|---|---|
+| fault at | ~2,900 s | **424.5 s** |
+| unique tokens | ~6.3M | **1.63M** |
+| kv_usage | ~11% | 25.9% |
+| requests completed | ~924–958 | 243 |
+
+Concurrency brings the fault **7× sooner** while the request rate rose only
+~1.8×. The tight ~6.3M clustering across the six earlier runs was an artifact of
+holding concurrency fixed at 20, **not** a property of the bug — anything built
+on that correlation should be discarded. The evidence now points at something
+scaling with the number of *concurrent* sequences.
+
+Practical consequence: the fault reproduces in **~7 minutes** at concurrency 40
+instead of ~50, which makes previously unaffordable diagnostics (kernel
+serialization, component bisects) cheap.
 
 **Piecewise safety is real, not an artifact.** T66c reached **14,317,525**
 unique tokens clean, well past the ~6.3M trigger, so it was not merely too slow
