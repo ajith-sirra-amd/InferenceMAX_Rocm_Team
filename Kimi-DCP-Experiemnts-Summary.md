@@ -8,18 +8,26 @@ context, MXFP4) · vLLM ROCm · agentic-replay workload · concurrency 20.
 
 # 1. Current state
 
-| Configuration | tok/s/GPU | TPOT | TTFT | Speculation |
-|---|---:|---:|---:|---|
-| SA reference (MI355X) | 5,388 | 0.0382 | 12.2 s | MTP, **synthetic** acceptance |
-| **Best measured — TP8, AITER MLA** | **4,622.8** | **0.0461** | **2.14 s** | none, real tokens |
-| DP2/TP4/EP8 attention | 2,998.6 | 0.1140 (p50 0.0652) | 8.57 s | none |
-| TP8 + MTP | 2,045.4 | 0.1003 | 67.7 s | MTP, synthetic |
-| TP8 + DCP=8 | 1,574.5 | 0.2174 | 12.4 s | none |
+| Configuration | tok/s/GPU | TPOT | TTFT | Speculation | Complete |
+|---|---:|---:|---:|---|---|
+| SA reference (MI355X) | 5,388 | 0.0382 | 12.2 s | MTP, **synthetic** acceptance | yes |
+| **Best complete — TP8, AITER MLA** | **4,622.8** | **0.0461** | **2.14 s** | none, real tokens | yes, 3,612 s |
+| DCP=8 + full graphs, no offload | 4,551.0 | 0.0499 | — | none | **no — GPU fault @ 2,771 s** |
+| DCP=8 + full graphs + offload | 4,421.2 | 0.0497 | — | none | **no — GPU fault @ 3,033 s** |
+| DP2/TP4/EP8 attention | 2,998.6 | 0.1140 (p50 0.0652) | 8.57 s | none | yes |
+| TP8 + MTP | 2,045.4 | 0.1003 | 67.7 s | MTP, synthetic | yes |
+| TP8 + DCP=8, piecewise graphs | 1,574.5 | 0.2174 | 12.4 s | none | yes, 3,628 s |
 
-The best configuration reaches **86% of the reference's throughput without
+The best complete run reaches **86% of the reference's throughput without
 speculation**, where the reference runs MTP with synthetic acceptance (drafts
 committed regardless of target logits, which inflates its token count).
 Against the 12,500 target: **37%**.
+
+**DCP is no longer the loser it appears to be further down this page.** Enabling
+full CUDA graphs moved DCP from 1,574.5 to 4,551.0 tok/s/GPU (+189%) and TPOT
+from 0.2174 to 0.0499 — see 2.0. Those runs are listed as incomplete because
+they die on a GPU page fault before the benchmark window closes, so they are
+**not** claimable results yet. Closing that fault is the current blocker.
 
 **Best-known configuration**
 ```
@@ -36,6 +44,86 @@ GPU KV cache 4,376,929 tokens (4.17×)
 ---
 
 # 2. Findings, in priority order
+
+### 2.0 DCP's penalty was a ROCm-only cudagraph downgrade, not DCP itself
+
+For most of this investigation DCP looked structurally slow — roughly a third of
+plain TP8. It was not. `vllm/platforms/rocm.py` silently downgrades the
+cudagraph mode whenever DCP is on:
+
+```python
+if compilation_config.cudagraph_mode.has_full_cudagraphs():
+    # decode context parallel does not support full cudagraphs
+    if parallel_config.decode_context_parallel_size > 1:
+        compilation_config.cudagraph_mode = CUDAGraphMode.PIECEWISE
+```
+
+This gate exists **only on the ROCm path** — `cuda.py` has zero occurrences, so
+NVIDIA DCP keeps full graphs. Piecewise splits the graph at every attention op
+and hands each decode step back to the host to relaunch. Host-launch latency was
+already the profiled bottleneck (3.4), so this downgrade lands directly on the
+limiter, and every DCP number recorded before this point was measuring the
+downgrade rather than DCP.
+
+Lifting it (vLLM PR #51705, which gates the same code on
+`VLLM_ALLOW_DCP_FULL_CUDAGRAPH`):
+
+| | piecewise | full graphs | |
+|---|---:|---:|---|
+| tok/s/GPU | 1,574.5 | 4,551.0 | +189% |
+| TPOT | 0.2174 | 0.0499 | −77% |
+| prefix cache hit | 71.0% | 94.3% | |
+
+DCP now sits within 2% of the best non-DCP run while carrying **31× the KV
+capacity** (32.8M vs 4.4M tokens). That combination — reference-class TPOT at
+32× cache — is the only configuration on this page with a credible path past the
+reference, because it is the only one where concurrency can rise without
+evicting. KV usage at concurrency 20 was 10.5% with zero preemptions.
+
+**Blocker.** Both full-graph runs die on a GPU page fault before the window
+closes (2,771 s and 3,033 s). Until that closes these are not results. See 2.0b.
+
+### 2.0b The full-graph page fault — evidence and open question
+
+All eight ranks fault simultaneously with `VM_L2_PROTECTION_FAULT_STATUS`,
+`PERMISSION_FAULTS: 0x3`, IH client `0x1b (UTCL2)`, TCP client — a
+vector-memory out-of-bounds **read**.
+
+What the addresses say: the eight faulting addresses share the same low offset
+(six at `...ce000`, two at `...cc000`) across completely unrelated bases. That is
+one logical per-rank buffer overrun by a *fixed* amount on every rank. A KV or
+block-table walk running off the end would scatter across ranks instead.
+
+Two candidate causes, currently confounded — the last clean run had **neither**
+full graphs **nor** the aiter opus-rows patch, while both faulting runs had
+**both**:
+
+| Run | opus rows removed | full graphs | outcome |
+|---|---|---|---|
+| T66c | no | no | clean, 3,628 s |
+| T73 | yes | yes | fault @ 3,033 s |
+| T74 | yes | yes | fault @ 2,771 s |
+
+The opus patch is not a small change. Untuned-GEMM fallbacks per run went from
+**88** (T66c) to **42,320** (T74) — ~480×. Stripping opus rows from the tuned
+GEMM CSVs does not merely drop a few bad configs; it pushes thousands of shapes
+onto a fallback dispatch path, which is a credible source of a mis-sized
+workspace. Note also that this row-removal is a blunter instrument than what
+ROCm/aiter#4915 does upstream, so any fault here may belong to the local
+approximation rather than the PR.
+
+Explicitly **not** evidence: untuned-GEMM log lines appearing just above the
+fault. They run 42,320 deep from line 202 onward, so anything that faults will
+have them adjacent.
+
+A secondary hypothesis — `min_kv_seq_len` frozen into the captured graph at
+`rocm_aiter_mla.py:1268`, since Gluon derives `NUM_KV_SPLITS` from it as launch
+geometry — reads the wrong way round on inspection: a stale split count is
+hazardous when replay sequences are *shorter* than capture, whereas these faults
+arrive only after ~46 min of context *growth*. Not eliminated, but demoted.
+
+Open: T77 re-runs the faulting configuration with the opus patch disabled and
+full graphs kept, moving exactly one variable.
 
 ### 2.1 The decode attention backend is worth 2.4×
 Forcing `--attention-backend TRITON_MLA` on the target model costs **72% of
@@ -252,6 +340,18 @@ Two reported fields produce incorrect conclusions if taken at face value.
 **Any DP or DP+EP result published from this harness is overstated 2× unless the
 divisor is corrected.** Aggregates should be reconciled against the engine log.
 
+A third hazard is reproducibility rather than measurement. vLLM PR #51705 was
+fetched at runtime and pinned by sha256; the PR was then force-pushed **twice in
+one day**, and each time the pin correctly refused to apply — which silently
+removed the DCP patches and killed the run at engine init with `Decode Context
+Parallelism (DCP) requires attention implementations to return the softmax LSE
+during decode`. The pin behaved exactly as designed, but a hard pin against an
+actively developed PR guarantees repeated breakage. The diff is now **vendored
+in-repo** (`pr51705_vllm.diff`, `vllm/`-only), so the exact bytes that produced a
+result sit next to the script that applies them, with no network fetch. Any
+comparison spanning that change must confirm which revision was actually in the
+image.
+
 ---
 
 # 6. Configuration reference
@@ -264,7 +364,7 @@ divisor is corrected.** Aggregates should be reconciled against the engine log.
 | [2] | TritonMLA cudagraph | Raises `_cudagraph_support` to `UNIFORM_BATCH` so the DSpark drafter keeps FULL cudagraphs. Measured 14.05 → 77.65 tok/s single-stream (5.52×). **Incompatible with speculation on current nightlies** — it permits full capture, which then trips `assert m.max_query_len <= reorder_batch_threshold`. Skipped when spec is on. |
 | [3] | KV block-pool clamp | `allocate_external_computed_blocks()` can pass a negative count to `get_new_blocks`, which is silently destructive (`num_free_blocks -= n` increases it; `range(n)` iterates zero times). A later pop walks past the tail. Load-dependent: c10 died at 3612 s, c12 at 487 s, c16 at 354 s. Requires `--kv-transfer-config`. |
 | [4] | DCP-LSE plumbing | Plumbs softmax LSE + round-robin CP through AITER MLA decode. aiter's LSE is natural-log with sm_scale folded, `[B,H]` fp32. Superseded by [5]. |
-| [5] | vLLM PR #51705 | Upstream DCP for Kimi-K3 DSpark. Fetched at runtime, pinned by sha256, diff filtered to `vllm/`. Does **not** fix the 0x1016 fault. |
+| [5] | vLLM PR #51705 | Upstream DCP for Kimi-K3 DSpark, **and** the `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` gate that unlocks 2.0. Now **vendored** in-repo as `pr51705_vllm.diff` and applied from disk. Does **not** fix the 0x1016 fault. |
 | [6] | DCP block-table sizing | **The 0x1016 fix.** Tables sized `cdiv(max_model_len, block_size × dcp_size)` but indexed with the undivided `max_model_len`. Boundary tracks the ratio exactly: DCP8/bf16 faulted at 134,400; DCP4/bf16 at 262,656; DCP8/fp8 at 135,168 — block **count**, not bytes. |
 | [7] | direct DCP a2a (ROCm port) | vLLM compiles the kernel only under `VLLM_GPU_LANG == CUDA`. The a2a combine ported to HIP (`st/ld.global.{release,acquire}.sys.u32` → `__hip_atomic_*` at SYSTEM scope). Gather kernels use `multimem.st.*`, not ported. **−0.9%.** |
 | [8] | DCP gathered-head sizing | Supplies PR #51705's failing hunk (`_decode_num_heads = num_heads × dcp_world_size`). Requires image `5a4c8d99`; on `ac7509e2b` the builder predates the plumbing and lacks `dcp_world_size`. |
