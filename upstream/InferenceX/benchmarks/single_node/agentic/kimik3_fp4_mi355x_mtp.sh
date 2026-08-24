@@ -80,10 +80,6 @@ CP_ARGS=(
     --cp-kv-cache-interleave-size 1
 )
 export VLLM_ROCM_USE_AITER_MLA=1
-# T85 diagnostic: synchronous kernel launches so a fault aborts AT the offending
-# kernel instead of asynchronously. May not penetrate captured-graph replay.
-export AMD_SERIALIZE_KERNEL=3
-export TORCH_SHOW_CPP_STACKTRACES=1
 export AITER_DISABLE_FMHA_OPUS=1
 export VLLM_USE_DIRECT_DCP_A2A=0
 export VLLM_USE_DIRECT_DCP_Q_GATHER=0
