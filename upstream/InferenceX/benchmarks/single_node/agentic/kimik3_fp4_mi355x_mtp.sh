@@ -75,7 +75,7 @@ export PYTHONHASHSEED=42
 KV_CACHE_DTYPE=fp8
 CP_ARGS=(
     --decode-context-parallel-size "$DCP_SIZE"
-    --dcp-comm-backend ag_rs
+    --dcp-comm-backend a2a
     --attention-backend ROCM_AITER_MLA
     --cp-kv-cache-interleave-size 1
 )
@@ -85,7 +85,7 @@ export VLLM_USE_DIRECT_DCP_A2A=0
 export VLLM_USE_DIRECT_DCP_Q_GATHER=0
 export VLLM_USE_DIRECT_DCP_KV_GATHER=0
 export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
-export VLLM_DCP_Q_REPLICATE=1
+export VLLM_DCP_Q_REPLICATE=0
 
 SPEC_ARGS=()
 
