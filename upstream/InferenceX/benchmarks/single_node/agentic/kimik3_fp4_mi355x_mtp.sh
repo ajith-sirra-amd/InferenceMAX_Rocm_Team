@@ -75,7 +75,7 @@ export PYTHONHASHSEED=42
 KV_CACHE_DTYPE=fp8
 CP_ARGS=(
     --decode-context-parallel-size "$DCP_SIZE"
-    --dcp-comm-backend a2a
+    --dcp-comm-backend ag_rs
     --attention-backend ROCM_AITER_MLA
     --cp-kv-cache-interleave-size 1
 )
