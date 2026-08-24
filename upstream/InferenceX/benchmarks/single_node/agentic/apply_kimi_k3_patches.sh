@@ -644,8 +644,23 @@ PYEOF
         patch -p1 -d "$root" --dry-run --forward < "$dv" 2>&1 | grep -iE "fail" | head -5 >&2
     fi
     patch -p1 -d "$root" --forward --backup --suffix=.pr51705.orig < "$dv" >/dev/null 2>&1
-    if grep -q "cp_exempt_groups" "$root/vllm/v1/worker/gpu/block_table.py" 2>/dev/null; then
+    # Verify against something the CURRENT revision actually adds. The old marker
+    # was cp_exempt_groups in worker/gpu/block_table.py; the refreshed PR does not
+    # touch that file at all (0 occurrences), so the check reported "apply did not
+    # take" on a patch that had in fact applied. Use the DCP full-cudagraph hatch
+    # in platforms/rocm.py, which is the capability we are applying the PR for.
+    if grep -q "VLLM_ALLOW_DCP_FULL_CUDAGRAPH" "$root/vllm/platforms/rocm.py" 2>/dev/null; then
         echo "[$label] applied PR #51705 (sha ${PR51705_SHA:0:16})"
+        # The refreshed PR supersedes patches [6] and [8]:
+        #  [6] block-table sizing -> replaced by per-spec
+        #      spec.max_num_blocks_per_req(vllm_config, block_table_max_model_len),
+        #      which is strictly better: it distinguishes DCP-sharded attention KV
+        #      from Mamba/GDN recurrent state that is replicated across DCP ranks.
+        #      Our blanket row-count patch did not, and its anchor is now gone
+        #      ("no unique anchor found").
+        #  [8] gathered-head sizing -> the PR carries _decode_num_heads itself.
+        export SKIP_PATCH_BLOCKTABLE=1 SKIP_PATCH_GATHERED_HEADS=1
+        echo "[$label] superseding patches [6] and [8] (PR carries both)"
     else
         echo "[$label] apply did not take" >&2
     fi
