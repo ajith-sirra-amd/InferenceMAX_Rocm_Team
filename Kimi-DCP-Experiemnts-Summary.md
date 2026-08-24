@@ -19,6 +19,7 @@ context, MXFP4) · vLLM ROCm · agentic-replay workload · concurrency 20.
 | TP8 + MTP | 2,045.4 | 0.1003 | 67.7 s | MTP, synthetic | yes |
 | TP8 + MTP + **full graphs** | 982.4 | 0.1659 | 212.7 s | MTP, synthetic | yes, 3,605 s |
 | TP8 + MTP + full graphs + async sched | 724.2 | 0.1374 | 374.8 s | MTP, synthetic | yes, 3,629 s |
+| TP8, no spec, **`--async-scheduling`** | 963.5 | 0.2498 | 137.5 s | none | yes, 3,467 s |
 | TP8 + DCP=8, piecewise graphs | 1,574.5 | 0.2174 | 12.4 s | none | yes, 3,628 s |
 
 The best complete run reaches **86% of the reference's throughput without
@@ -64,6 +65,23 @@ Two things to keep in view when reading the numbers above:
   reference reaches 5,388 on a *smaller* pool (2,646,059) than T88's 2,817,325.
   The open question is why speculation destroys prefix reuse here, not which
   knob to turn next.
+
+### Do not enable `--async-scheduling`
+
+It costs **4.8×** on this workload. Same KV pool as T64 (4,376,929 tokens,
+identical), no speculation, clean window:
+
+| | prefix hit | kv_usage | TTFT | TPOT | tok/s/GPU |
+|---|---:|---:|---:|---:|---:|
+| T64 `--no-async-scheduling` | 53.4% | 41.1% | 2.14 s | 0.0461 | **4,622.8** |
+| T91 `--async-scheduling` | 17.4% | **96.2%** | 137.5 s | 0.2498 | **963.5** |
+
+Mechanism: async scheduling defers block frees (`defer_block_free` with
+`max_concurrent_batches > 1`), the pool saturates at 96%, prefix blocks are
+evicted, hit rate collapses and the workload thrashes. This is **not**
+DCP-specific — it is about block lifetime under concurrent batches and applies
+on every path. The same thrash mechanism explains the MTP collapse, which is why
+neither pool sizing nor scheduling moved it.
 
 **Best-known configuration**
 ```
