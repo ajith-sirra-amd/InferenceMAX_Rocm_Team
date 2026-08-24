@@ -77,20 +77,15 @@ CP_ARGS=()
 export VLLM_ROCM_USE_AITER_MLA=1
 export AITER_DISABLE_FMHA_OPUS=1
 
-SPEC_NUM_TOKENS=2
-SYNTHETIC_ACCEPT_LEN=2.51
-SPEC_ARGS=(
-    --speculative-config
-    "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
-)
+SPEC_ARGS=()
 
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
 MAX_NUM_SEQS=40
-CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,48,64,80,96,112,120,128"
-MAX_CUDAGRAPH_CAPTURE_SIZE=128
+CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,40"
+MAX_CUDAGRAPH_CAPTURE_SIZE=40
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
