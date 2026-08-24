@@ -17,6 +17,7 @@ context, MXFP4) · vLLM ROCm · agentic-replay workload · concurrency 20.
 | DCP=8 + full graphs, TRITON MLA | 2,210.0 | 0.1508 | — | none | yes, 3,608 s |
 | DP2/TP4/EP8 attention | 2,998.6 | 0.1140 (p50 0.0652) | 8.57 s | none | yes |
 | TP8 + MTP | 2,045.4 | 0.1003 | 67.7 s | MTP, synthetic | yes |
+| TP8 + MTP + **full graphs** | 982.4 | 0.1659 | 212.7 s | MTP, synthetic | yes, 3,605 s |
 | TP8 + DCP=8, piecewise graphs | 1,574.5 | 0.2174 | 12.4 s | none | yes, 3,628 s |
 
 The best complete run reaches **86% of the reference's throughput without
@@ -46,10 +47,18 @@ Two things to keep in view when reading the numbers above:
   result. The suggestive part: server-side input rate reached **63,185/s against
   ~37,000/s at concurrency 20** (~1.7×), so the pool does look convertible into
   throughput — unproven until a run survives the window.
-- **MTP has never been measured on full graphs.** Every MTP number here (best
-  2,045.4) ran on piecewise. Since the reference's whole advantage is
-  speculation (2.6), this is the largest untested lever. It is now unblocked:
-  #52188 is in the image and the `enable_dcp_q_replicate` reject is fixed.
+- **MTP on full graphs has now been measured, and it is worse, not better.**
+  T88: **982.4 tok/s/GPU**, TPOT 0.1659, over a clean full 3,604.5 s window with
+  speculation confirmed engaged at 64–68% acceptance. That is ~5× below
+  no-speculation and half the piecewise MTP best. Full graphs do not rescue MTP
+  on their own. The signature is thrashing rather than compute: **TTFT 212.69 s**
+  (vs 2.14 s), **prefix hit 8.4%** (vs 53.4%), `unique_in_srv` 27.9M, KV pool
+  down to 2,817,325 tokens with a draft model resident. Cause is very likely
+  pool starvation via 2.7 — that run left `--max-num-batched-tokens 8192` pinned,
+  which is the configuration 2.7 explicitly warns against under MTP. Retest with
+  it omitted is in flight. Note the reference reaches 5,388 with MTP on a
+  *smaller* pool (2,646,059), so speculation is demonstrably capable here and
+  982.4 reflects our configuration, not a limit of MTP.
 
 **Best-known configuration**
 ```
