@@ -84,8 +84,8 @@ SPEC_ARGS=(
     "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
 )
 
-CHUNKED_PREFILL_ARGS=()
-ASYNC_SCHED_ARGS=(--no-async-scheduling)
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
+ASYNC_SCHED_ARGS=(--async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
 MAX_NUM_SEQS=40
