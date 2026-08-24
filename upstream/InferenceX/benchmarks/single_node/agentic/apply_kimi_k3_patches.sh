@@ -279,51 +279,26 @@ EOF
 # have speculative_config=None, so cp_exempt_groups is empty and the narrowing
 # is unchanged for every group we actually have. Expect the same fault at
 # max_model_len/dcp = 1048576/8 = 131072.
-PR51705_URL="https://patch-diff.githubusercontent.com/raw/vllm-project/vllm/pull/51705.diff"
-PR51705_SHA="3674054faeb3de87c741f741367973c2c16f6d199a79455e30ba3ed335424b0f"  # re-pinned 2026-08-24: PR now adds VLLM_ALLOW_DCP_FULL_CUDAGRAPH, VLLM_DCP_Q_REPLICATE, triton_mla supports_non_causal_multi_token_dcp=True and rocm_aiter_mla supports_dcp_with_varlen -- i.e. every DCP blocker we had patched around
 patch_pr51705() {
     local label="pr51705"
     local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
     if [ -z "$root" ] || [ ! -d "$root/vllm" ]; then
         echo "[$label] vllm root not found; skipping."; return 0
     fi
-    if grep -q "cp_exempt_groups" "$root/vllm/v1/worker/gpu/block_table.py" 2>/dev/null; then
+    if grep -q "VLLM_ALLOW_DCP_FULL_CUDAGRAPH" "$root/vllm/platforms/rocm.py" 2>/dev/null; then
         echo "[$label] already patched."; return 0
     fi
-    local d; d=$(mktemp)
-    if ! curl -fsSL "$PR51705_URL" -o "$d"; then
-        echo "[$label] download failed; leaving vllm unpatched." >&2; rm -f "$d"; return 0
+    local dv="$(dirname "$0")/pr51705_vllm.diff"
+    if [ ! -f "$dv" ]; then
+        echo "[$label] vendored diff not found at $dv; skipping." >&2; return 0
     fi
-    local got; got=$(sha256sum "$d" | cut -d" " -f1)
-    if [ "$got" != "$PR51705_SHA" ]; then
-        echo "[$label] sha256 mismatch -- PR updated since review; refusing to apply." >&2
-        echo "[$label]   expected $PR51705_SHA" >&2
-        echo "[$label]   got      $got" >&2
-        rm -f "$d"; return 0
-    fi
-    # The PR also touches tests/, which do not exist under site-packages, so an
-    # unfiltered apply always fails. Keep only vllm/ files.
-    local dv; dv=$(mktemp)
-    "$PY" - "$d" "$dv" <<'PYEOF'
-import re, sys
-src = open(sys.argv[1]).read()
-blocks = re.split(r"(?m)^(?=diff --git )", src)
-keep = [b for b in blocks
-        if b.startswith("diff --git") and re.search(r"^\+\+\+ b/vllm/", b, re.M)]
-open(sys.argv[2], "w").write("".join(keep))
-print(f"[pr51705] filtered to {len(keep)} vllm/ files")
-PYEOF
-    if ! patch -p1 -d "$root" --dry-run --forward < "$dv" >/dev/null 2>&1; then
-        echo "[$label] dry-run has rejects; applying what fits" >&2
-        patch -p1 -d "$root" --dry-run --forward < "$dv" 2>&1 | grep -iE "fail" | head -5 >&2
-    fi
-    patch -p1 -d "$root" --forward --backup --suffix=.pr51705.orig < "$dv" >/dev/null 2>&1
+    echo "[$label] applying vendored diff ($(sha256sum "$dv" | cut -c1-16), $(wc -l < "$dv") lines)"
+    patch -p1 -d "$root" --forward --batch < "$dv" >/dev/null 2>&1
     if grep -q "VLLM_ALLOW_DCP_FULL_CUDAGRAPH" "$root/vllm/platforms/rocm.py" 2>/dev/null; then
-        echo "[$label] applied PR #51705 (sha ${PR51705_SHA:0:16})"
+        echo "[$label] applied"
     else
         echo "[$label] apply did not take" >&2
     fi
-    rm -f "$d" "$dv"
 }
 
 echo "[kimi-patches] applying in-container patches..."

@@ -93,7 +93,7 @@ MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"
 MAX_NUM_SEQS=$(( CONC * 2 ))
 CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,40,48,64"
 MAX_CUDAGRAPH_CAPTURE_SIZE=64
-CUDAGRAPH_MODE=PIECEWISE
+CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 GPU_MEM_UTIL=0.9
