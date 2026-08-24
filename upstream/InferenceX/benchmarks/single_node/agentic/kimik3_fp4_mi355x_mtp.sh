@@ -59,7 +59,7 @@ wait_for_amd_gpu_clean
 # path -- T6 timed out because decode ran at 3.5-6.8 tok/s with no KV offload.
 # With offload T18 decodes ~4x faster, so 1319 GSM8K questions should now fit.
 # Baseline to match: 0.9651. Flip to false to return to the throughput arm.
-PROFILE_DECODE="${PROFILE_DECODE:-0}"   # T35: decode-only torch trace to localise the 122 ms
+PROFILE_DECODE="${PROFILE_DECODE:-1}"   # T35: decode-only torch trace to localise the 122 ms
 export PROFILE_DECODE
 EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_FRAMEWORK="lm-eval"
@@ -103,7 +103,7 @@ fi
 # So the guard must reject pure TP<8 (which really cannot load) while allowing
 # DP*TP=8 with EP -- not reject both. I previously took the old comment at face
 # value and wrongly concluded DP attention was infeasible on 8 GPUs.
-DP_SIZE="${DP_SIZE:-2}"   # T67: DP2/TP4/EP8. Set 1 for pure TP8 (T64).
+DP_SIZE="${DP_SIZE:-1}"
 export DP_SIZE
 TOTAL_RANKS=$(( TP * DP_SIZE ))
 if [ "$TOTAL_RANKS" -ne 8 ]; then
