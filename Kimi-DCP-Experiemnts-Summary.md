@@ -94,36 +94,58 @@ What the addresses say: the eight faulting addresses share the same low offset
 one logical per-rank buffer overrun by a *fixed* amount on every rank. A KV or
 block-table walk running off the end would scatter across ranks instead.
 
-Two candidate causes, currently confounded — the last clean run had **neither**
-full graphs **nor** the aiter opus-rows patch, while both faulting runs had
-**both**:
+**The trigger is DCP, not full graphs.** T64 ran non-DCP with the *same*
+`FULL_AND_PIECEWISE` mode and completed 3,612 s cleanly. So full graphs alone
+are safe; DCP + full graphs is the failing combination.
 
-| Run | opus rows removed | full graphs | outcome |
-|---|---|---|---|
-| T66c | no | no | clean, 3,628 s |
-| T73 | yes | yes | fault @ 3,033 s |
-| T74 | yes | yes | fault @ 2,771 s |
+**The aiter opus-rows patch is exonerated**, on both fault and performance:
 
-The opus patch is not a small change. Untuned-GEMM fallbacks per run went from
-**88** (T66c) to **42,320** (T74) — ~480×. Stripping opus rows from the tuned
-GEMM CSVs does not merely drop a few bad configs; it pushes thousands of shapes
-onto a fallback dispatch path, which is a credible source of a mis-sized
-workspace. Note also that this row-removal is a blunter instrument than what
-ROCm/aiter#4915 does upstream, so any fault here may belong to the local
-approximation rather than the PR.
+| Run | opus rows | offload | duration | tok/s/GPU | outcome |
+|---|---|---|---:|---:|---|
+| T73 | removed | yes | 3,033 s | 4,421.2 | fault |
+| T74 | removed | no | 2,771 s | 4,551.0 | fault |
+| T77 | **present** | no | 3,013 s | 4,451.9 | fault |
 
-Explicitly **not** evidence: untuned-GEMM log lines appearing just above the
-fault. They run 42,320 deep from line 202 onward, so anything that faults will
-have them adjacent.
+With opus rows left fully intact the run still faults, at the same point, with
+the same throughput. An earlier reading here — that untuned-GEMM fallbacks rose
+~480× (88 → 42,320) because of the opus patch — was **wrong**. T77 logged
+**46,056** of those messages *with* opus rows present. That gap was piecewise vs
+full graphs changing batch shapes, not opus. Adjacency of untuned-GEMM lines to
+the fault was never evidence either: they run 42,320 deep from line 202 onward.
 
-A secondary hypothesis — `min_kv_seq_len` frozen into the captured graph at
-`rocm_aiter_mla.py:1268`, since Gluon derives `NUM_KV_SPLITS` from it as launch
-geometry — reads the wrong way round on inspection: a stale split count is
-hazardous when replay sequences are *shorter* than capture, whereas these faults
-arrive only after ~46 min of context *growth*. Not eliminated, but demoted.
+What the fault correlates with:
 
-Open: T77 re-runs the faulting configuration with the opus patch disabled and
-full graphs kept, moving exactly one variable.
+| Run | unique tokens at fault | kv_usage | prefix hit |
+|---|---:|---:|---:|
+| T74 | 6,063,765 | 11.8% | 94.2% |
+| T77 | 6,508,095 | 11.8% | 94.1% |
+| T73 | 6,359,477 | 10.5% | 94.3% |
+| **T64 (non-DCP, clean)** | **62,697,249** | 41.1% | 53.4% |
+
+T64 ran ten times past the DCP fault point without incident, so the unique-token
+count is not itself the trigger. Note that at fault time the DCP runs have
+**never evicted anything** — 94% prefix hit against a 31× pool, so sequences
+grow monotonically. That fits a per-request length limit frozen into a captured
+graph, which only DCP's pool is large enough to let sequences reach.
+
+Ruled out by inspection: `paged_kv_indices`, the persistent page-index buffer,
+is sized `max_num_seqs × max_model_len` (167 MB) against at most ~8.4M entries
+in use.
+
+Demoted: `min_kv_seq_len` frozen into the captured graph at
+`rocm_aiter_mla.py:1268`, where Gluon derives `NUM_KV_SPLITS` from it as launch
+geometry. A stale split count is hazardous when replay sequences are *shorter*
+than capture, but these faults arrive only after context *growth*.
+
+Closest upstream analogue: vLLM **#50791**, which sizes the FlashInfer sparse
+MLA workspace for DCP. Not applicable to us (B200/FlashInfer), but it documents
+this exact bug class — DCP forces LSE during decode, the LSE slab is carved from
+a DCP-unaware workspace, and every DCP worker dies at once. The ROCm-side
+equivalent is the place to look next.
+
+**DCP is parked meanwhile.** At concurrency 20 it does not win anyway
+(4,451–4,551 vs non-DCP 4,622.8); its value is capacity headroom for higher
+concurrency, which is worth nothing until a run survives the window.
 
 ### 2.1 The decode attention backend is worth 2.4×
 Forcing `--attention-backend TRITON_MLA` on the target model costs **72% of
@@ -163,7 +185,24 @@ Any optimisation targeting decode addresses 0.6% of the scored tokens. This
 single fact explains why MTP loses, why DCP's decode-side capacity is worthless
 here, and why TTFT regressions matter more than TPOT regressions.
 
-### 2.5 DCP + MTP is unavailable on ROCm
+### 2.5 DCP + MTP — no longer blocked upstream (finding below is superseded)
+
+**Superseded as of the current image.** vLLM **#52188 "[Spec decode] Support
+Kimi-K3 DCP with DSpark"** merged 2026-08-17 and is present in
+`nightly-d626108b`. It landed `prepare_dcp_local_seq_lens` and `cp_local_slot`
+in `cp_utils.py` — including at `spec_decode/dflash/cudagraph.py:45`, which is
+precisely the "local sequence lengths are not advanced between draft steps"
+gap described below. Together with vendored PR #51705, which supplies
+`supports_non_causal_multi_token_dcp` on Triton MLA and `supports_dcp_with_varlen`
+on AITER MLA, both capability flags the validator looks for are now satisfied.
+
+Related, still open upstream: **#52269** (Kimi-K3 DSpark under DCP, draft — not
+worth vendoring yet) and **#48392** (dense GQA/MHA drafts; Kimi-K3 is MLA, so
+#52188 already covers it).
+
+Untested here so far, because DCP + full graphs still faults (2.0b). The
+original analysis is kept below for the record:
+
 `mla_attention.py::_validate_dspark_dcp_support` requires one of two capability
 flags. Across the entire image:
 ```
