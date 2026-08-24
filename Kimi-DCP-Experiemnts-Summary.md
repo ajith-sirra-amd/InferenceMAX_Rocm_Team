@@ -130,6 +130,59 @@ Also ruled out by construction: the straggler is not a clean 1-vs-7 split — `T
 shows intermediate ranks (265/272 µs), i.e. a **gradient**, whichever rank loses
 the CPU race.
 
+#### Performance-limiting factors under DCP
+
+The single most useful number in the whole profile:
+
+```
+aiter::cross_device_reduce_2stage<bf16,8,false>   -- SAME kernel, SAME 287 KB payload
+  non-DCP :     8 us per call (p50, every rank)
+  DCP=8   : 1,094 us per call (11.599 s / 10,602 calls)
+  ratio   : 137x
+```
+
+**The kernel did not get slower. It got made to wait.** Per-step kernel density
+is essentially unchanged (DCP 1,345 vs non-DCP 1,232 kernels/step) and compute
+per step is identical (11.6 vs 11.5 ms). Nothing about the *work* changed.
+
+Ranked limiters, by evidence:
+
+| # | Limiter | Evidence |
+|---|---|---|
+| 1 | **~118 global barriers per decode step** | Same count in both arms. Each all-reduce is a hard sync across 8 ranks, so any per-rank jitter is amplified 118× per step. This is the amplifier that turns 62 µs of host delay into 129 ms/step. |
+| 2 | **Host launch latency on the critical path** | Straggler idle 66% of the window, ~124k gaps, gap p50 62 µs, identical host *work*. `max_concurrent_batches=1` leaves nothing to overlap it with. |
+| 3 | **DCP adds sync points while sharding no work** | compute/step 11.5 → 11.6 ms. The gather/merge is pure added synchronisation on this model — only 24 of 93 layers are full-attn MLA, so there is little to shard. |
+| 4 | **Workload shape** | 99.4% of scored tokens are prefill. DCP buys decode-side KV capacity, which [T66c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32451498395) proved was never the constraint (31.26× KV, 70.1% prefix hit, ≤14% used — still −66%). |
+
+#### Which kernels would need work — and the honest answer
+
+**No kernel needs to be made faster.** The dominant 78.37% is *blocking time*
+charged to a kernel that already completes in 8 µs when it is not waiting.
+[T48](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32381243949) tested this directly by substituting the implementation
+(PYNCCL instead of AITER custom): **−23% throughput, +31% TPOT.** Replacing the
+kernel makes it worse, because the kernel was never the problem.
+
+If DCP is to be made viable on ROCm, the addressable items are — in order of
+measured share and tractability:
+
+| Target | Share / status | Notes |
+|---|---|---|
+| **Reduce sync points per step** (kernel/layer fusion) | attacks limiter #1 | NVIDIA ships `VLLM_ENABLE_K3_LATENT_MOE_TAIL_FUSION`; **absent from the ROCm build**. Fusion cuts launch count *and* barrier count — the only lever that hits both limiters at once. |
+| **DCP's own collectives** | `ncclDevKernel_Generic_1` 8.22% + `mscclKernel_Sum` 6.06% ≈ **14.3%** | These are genuinely DCP's (gather + LSE merge). Real work, but a minority — perfect execution caps the win at ~14%. |
+| `cp_lse_ag_out_rs` direct path | ported, **−0.9%** | [T31b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32270805303) hand-ported `direct_dcp_a2a_lse_reduce` to HIP. Works; does not help. |
+| `q_gather` / `kv_gather` direct path | **not portable** | Use `multimem.st.*` PTX (NVLink hardware multicast, `__CUDA_ARCH__ >= 900`). No AMD equivalent. |
+| Eliminate the query all-gather | `VLLM_DCP_Q_REPLICATE` | Needs `DCPGroupColumnParallelLinear`; Kimi-K3 builds plain `ColumnParallelLinear` (`models/kimi_k3/amd/linear.py:376,384`). Would attack part of the 14.3%, not the 78%. |
+| Hide launch latency | **tried, failed** | Async scheduling on ([T41](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32349492001)) left the straggler intact. A deeper fix would be full-step graph capture so the host is out of the per-kernel path entirely — untested. |
+
+**The blunt version:** the profile says DCP's cost is *serialisation*, not
+arithmetic. Kernel-level optimisation can address at most the ~14% that DCP's own
+collectives occupy. The other 78% is seven GPUs idling in a barrier waiting for
+one host thread, and it is only fixable by removing barriers or removing the host
+from the launch path — not by making any kernel faster.
+
+⚠️ All of the above derives from traces taken on the **forced-TRITON_MLA** stack.
+See the limits below.
+
 #### What the profiling does NOT establish
 
 1. **It does not explain the corrected stack.** All traces predate the AITER MLA
