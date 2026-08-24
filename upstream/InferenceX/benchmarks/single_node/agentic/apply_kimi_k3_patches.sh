@@ -318,6 +318,54 @@ else
     patch_kv_blockpool || true
 fi
 AITER4915_SHA="pr4915"
+patch_pr51705_rejects() {
+    local label="pr51705-rejects"
+    local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
+    [ -n "$root" ] && [ -d "$root/vllm" ] || { echo "[$label] vllm root not found; skipping."; return 0; }
+
+    # PR #51705 hunk 4 of models/kimi_k3/nvidia/mla.py is rejected against this
+    # image: the PR's context line is "run_gemm_rs_ar", the image has
+    # "run_gemm_rs" (renamed upstream). The hunk that USES
+    # enable_dcp_q_replicate applies, so MultiHeadLatentAttention ends up
+    # referencing a parameter its signature never gained. Harmless with spec
+    # off -- nothing instantiates it -- but dspark_mla.py passes the kwarg, so
+    # DCP + MTP dies at init with:
+    #   TypeError: MultiHeadLatentAttention.__init__() got an unexpected
+    #   keyword argument 'enable_dcp_q_replicate'
+    local f="$root/vllm/models/kimi_k3/nvidia/mla.py"
+    if [ -f "$f" ] && grep -q "enable_dcp_q_replicate" "$f" 2>/dev/null; then
+        if ! grep -qE "^\s*enable_dcp_q_replicate: bool" "$f"; then
+            cp -n "$f" "$f.prerej" 2>/dev/null || true
+            $PY - "$f" <<'PYEOF'
+import re, sys
+f = sys.argv[1]
+s = open(f).read()
+# Insert the parameter ahead of the renamed trailing arg, matching the PR's
+# placement after non_causal_multi_token_decode.
+pat = re.compile(r"(non_causal_multi_token_decode: bool = False,\n)(\s*)(run_gemm_rs(_ar)?: bool = False,)")
+s2, n = pat.subn(r"\1\2enable_dcp_q_replicate: bool = True,\n\2\3", s, count=1)
+if n:
+    open(f, "w").write(s2)
+print(f"  inserted={n}")
+PYEOF
+        fi
+    fi
+    if grep -qE "^\s*enable_dcp_q_replicate: bool" "$f" 2>/dev/null; then
+        rm -f "$f.rej"
+        echo "[$label] MultiHeadLatentAttention.__init__ accepts enable_dcp_q_replicate"
+    else
+        echo "[$label] WARNING: enable_dcp_q_replicate still missing -- DCP+MTP will fail at init" >&2
+    fi
+
+    # Any surviving .rej under a Kimi path is a silent correctness hole.
+    local r; r=$(find "$root/vllm/models/kimi_k3" "$root/vllm/v1/attention/backends/mla" \
+                     -name "*.rej" 2>/dev/null | head -5)
+    if [ -n "$r" ]; then
+        echo "[$label] WARNING: unresolved rejects on Kimi/MLA paths:" >&2
+        echo "$r" | sed "s/^/  /" >&2
+    fi
+}
+
 patch_aiter_opus_rows() {
     local label="aiter-opus-rows"
     local cfg; cfg=$($PY -c "import aiter,os;print(os.path.dirname(aiter.__file__))" 2>/dev/null)/configs
@@ -346,6 +394,8 @@ if [ "$SKIP_PATCH_PR51705" = "1" ]; then
 else
     patch_pr51705 || true
 fi
+
+patch_pr51705_rejects || true
 
 if [ "${SKIP_PATCH_OPUS_ROWS:-0}" = "1" ]; then
     echo "[aiter-opus-rows] SKIPPED via SKIP_PATCH_OPUS_ROWS=1"
