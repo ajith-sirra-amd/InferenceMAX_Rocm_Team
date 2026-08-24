@@ -881,8 +881,15 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # ~124k gaps at 62 us, amplified by ~279 all-reduces per step). The
     # refreshed PR #51705 adds VLLM_ALLOW_DCP_FULL_CUDAGRAPH to bypass it.
     # Same dense ladder as the non-DCP arm so the two are comparable.
-    CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 120)"
-    MAX_CUDAGRAPH_CAPTURE_SIZE=120
+    # T73: sparse ladder. T72 kept FULL graphs under DCP (the hatch works) but
+    # segfaulted at capture 84/120 inside an aiter GEMM at M:36 -- the
+    # "[aiter] shape is M:36, N:6288, K:7168" lines are aiter's JIT/tuning path
+    # running DURING capture, which is a capture violation. A dense 1..120 ladder
+    # forces 120 distinct shapes through it. max_num_seqs is 40, so sizes above
+    # that are never used in decode anyway; batches land on the next captured
+    # size with padding, which is standard vLLM behaviour.
+    CUDAGRAPH_CAPTURE_SIZES="${DCP_CAPTURE_SIZES:-1,2,4,8,16,24,32,40,48,64}"
+    MAX_CUDAGRAPH_CAPTURE_SIZE=64
     CUDAGRAPH_MODE_OVERRIDE="${DCP_CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
     echo "cudagraph sizing: CONC=$CONC max_num_seqs=$MAX_NUM_SEQS DCP mode -> cudagraph_mode=$CUDAGRAPH_MODE_OVERRIDE capture<=64"
 else
