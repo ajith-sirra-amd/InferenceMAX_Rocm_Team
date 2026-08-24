@@ -14,6 +14,7 @@ context, MXFP4) · vLLM ROCm · agentic-replay workload · concurrency 20.
 | **Best complete — TP8, AITER MLA** | **4,622.8** | **0.0461** | **2.14 s** | none, real tokens | yes, 3,612 s |
 | DCP=8 + full graphs, no offload | 4,551.0 | 0.0499 | — | none | **no — GPU fault @ 2,771 s** |
 | DCP=8 + full graphs + offload | 4,421.2 | 0.0497 | — | none | **no — GPU fault @ 3,033 s** |
+| DCP=8 + full graphs, TRITON MLA | 2,210.0 | 0.1508 | — | none | yes, 3,608 s |
 | DP2/TP4/EP8 attention | 2,998.6 | 0.1140 (p50 0.0652) | 8.57 s | none | yes |
 | TP8 + MTP | 2,045.4 | 0.1003 | 67.7 s | MTP, synthetic | yes |
 | TP8 + DCP=8, piecewise graphs | 1,574.5 | 0.2174 | 12.4 s | none | yes, 3,628 s |
@@ -23,11 +24,26 @@ speculation**, where the reference runs MTP with synthetic acceptance (drafts
 committed regardless of target logits, which inflates its token count).
 Against the 12,500 target: **37%**.
 
+**No throughput improvement has been achieved yet.** The best usable number is
+still T64's **4,622.8 tok/s/GPU** — 86% of the reference, **37% of the 12,500
+target** — unchanged.
+
 **DCP is no longer the loser it appears to be further down this page.** Enabling
 full CUDA graphs moved DCP from 1,574.5 to 4,551.0 tok/s/GPU (+189%) and TPOT
 from 0.2174 to 0.0499 — see 2.0. Those runs are listed as incomplete because
 they die on a GPU page fault before the benchmark window closes, so they are
 **not** claimable results yet. Closing that fault is the current blocker.
+
+Two things to keep in view when reading the numbers above:
+
+- **DCP + full graphs does not currently beat non-DCP** at concurrency 20
+  (4,298–4,551 vs 4,622.8). DCP's entire value is the 31× KV pool, which only
+  pays at higher concurrency — KV usage has been just 10–12% with zero
+  preemptions in every DCP run. Concurrency 40 is under test.
+- **MTP has never been measured on full graphs.** Every MTP number here (best
+  2,045.4) ran on piecewise. Since the reference's whole advantage is
+  speculation (2.6), this is the largest untested lever. It is now unblocked:
+  #52188 is in the image and the `enable_dcp_q_replicate` reject is fixed.
 
 **Best-known configuration**
 ```
@@ -97,6 +113,51 @@ block-table walk running off the end would scatter across ranks instead.
 **The trigger is DCP, not full graphs.** T64 ran non-DCP with the *same*
 `FULL_AND_PIECEWISE` mode and completed 3,612 s cleanly. So full graphs alone
 are safe; DCP + full graphs is the failing combination.
+
+**Every DCP configuration knob has now been falsified.** Six runs, one variable
+each, all landing in the same band:
+
+| Run | variable moved | duration | unique tokens | tok/s/GPU |
+|---|---|---:|---:|---:|
+| T73 | KV offload on | 3,033 s | 6.36M | 4,421.2 |
+| T74 | offload off | 2,771 s | 6.06M | 4,551.0 |
+| T77 | opus rows present | 3,013 s | 6.51M | 4,451.9 |
+| T79 | capture ladder 40 | 2,992 s | 6.34M | 4,421.6 |
+| T80 | `ag_rs` comm backend | 2,987 s | 6.42M | 4,298.4 |
+| T81 | `VLLM_DCP_Q_REPLICATE=0` | 2,997 s | 6.35M | 4,489.3 |
+
+Falsified: opus rows, KV offload, capture ladder, comm backend, query
+replication. The fault is invariant to configuration, so it lives in the DCP +
+full-graph decode path itself, not in how we drive it.
+
+Two corrections to earlier reasoning on this page, both mine:
+
+- The capture-ladder theory was wrong *on its own terms*. `FULL_AND_PIECEWISE`
+  already routes mixed prefill+decode batches to piecewise and reserves full
+  graphs for uniform decode batches, so the 48/64 slots were never the
+  mixed-batch path claimed.
+- T80 was not the clean single-variable test it was described as. PR #51705
+  redefines `VLLM_DCP_Q_REPLICATE` as *auto — on when `dcp_comm_backend=="a2a"`*,
+  and T80 ran `ag_rs` while still pinning it on. `ag_rs` was tested in an
+  off-design pairing and is not cleanly refuted (it was also ~3% slower).
+
+**The trigger is cumulative workload, not elapsed time.** T82 ran **3,607.6 s**
+clean — longer than every faulting run — while reaching only 4.12M unique
+tokens. A run can therefore look clean purely by not doing enough work, which is
+the trap T82 fell into (see below).
+
+**Piecewise safety is real, not an artifact.** T66c reached **14,317,525**
+unique tokens clean, well past the ~6.3M trigger, so it was not merely too slow
+to get there.
+
+**The image is the one variable never changed.** Every run T64–T83 used
+`nightly-d626108b` (2026-08-20). Checked against the newest nightly
+`f94666b6` (2026-08-24, 139 commits later): PR #51705 is **still not merged**
+upstream and the ROCm DCP→PIECEWISE gate is **still present**, so a newer image
+does not fix this by itself. It is a better base for one concrete reason —
+the vendored diff applies with **0 failed hunks** there versus **4** on
+`d626108b`, which removes the silent `enable_dcp_q_replicate` reject that killed
+T78. Not yet run end-to-end.
 
 **The aiter opus-rows patch is exonerated**, on both fault and performance:
 
