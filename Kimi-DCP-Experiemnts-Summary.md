@@ -20,6 +20,7 @@ context, MXFP4) · vLLM ROCm · agentic-replay workload · concurrency 20.
 | TP8 + MTP + **full graphs** | 982.4 | 0.1659 | 212.7 s | MTP, synthetic | yes, 3,605 s |
 | TP8 + MTP + full graphs + async sched | 724.2 | 0.1374 | 374.8 s | MTP, synthetic | yes, 3,629 s |
 | TP8, no spec, **`--async-scheduling`** | 963.5 | 0.2498 | 137.5 s | none | yes, 3,467 s |
+| TP8, no spec, **no KV offload** | 1,397.0 | 0.2332 | 35.0 s | none | yes, 3,629 s |
 | TP8 + DCP=8, piecewise graphs | 1,574.5 | 0.2174 | 12.4 s | none | yes, 3,628 s |
 
 The best complete run reaches **86% of the reference's throughput without
@@ -65,6 +66,29 @@ Two things to keep in view when reading the numbers above:
   reference reaches 5,388 on a *smaller* pool (2,646,059) than T88's 2,817,325.
   The open question is why speculation destroys prefix reuse here, not which
   knob to turn next.
+
+### DRAM KV offload is worth 3.3× on the non-DCP path — do not drop it
+
+| | offload | prefix hit | TTFT | tok/s/GPU |
+|---|---|---:|---:|---:|
+| T64 | **dram** | 53.4% | 2.14 s | **4,622.8** |
+| T92 | none | 24.0% | 35.0 s | **1,397.0** |
+
+Identical otherwise: same 4,376,929-token pool, no speculation, no async
+scheduling, full graphs, AITER MLA, non-DCP, clean 3,628.8 s window,
+`SimpleCPUOffloadConnector` confirmed absent from T92 and `unique_in_srv`
+reaching 32.5M. Without the DRAM extension the GPU pool cannot hold the working
+set and the prefix cache halves.
+
+The Kimi matrix row carried `kv-offloading: none` from T74 onward, so **every
+non-DCP baseline quoted in that period was handicapped**.
+
+**This invalidates a comparison made repeatedly on this page.** The claim "DCP +
+full graphs does not beat non-DCP at concurrency 20" set DCP's 4,421–4,551
+against 4,622.8 — but the DCP runs carry a 31× GPU-resident pool while the
+non-DCP runs they were measured against had their cache extension removed. The
+only valid non-DCP-with-offload number is T64's, taken on a different image.
+Treat the DCP-vs-non-DCP verdict as **open** until a like-for-like pair exists.
 
 ### Do not enable `--async-scheduling`
 
