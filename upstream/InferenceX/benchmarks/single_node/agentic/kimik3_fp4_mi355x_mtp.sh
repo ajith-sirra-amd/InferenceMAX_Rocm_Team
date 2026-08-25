@@ -31,7 +31,7 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-DCP_SIZE=1
+DCP_SIZE=8
 export DCP_SIZE
 
 export SKIP_PATCH_OPUS_ROWS=1
@@ -99,7 +99,17 @@ if agentic_kv_offload_enabled; then
 fi
 
 KV_CACHE_DTYPE=fp8
-CP_ARGS=()
+CP_ARGS=(
+    --decode-context-parallel-size "$DCP_SIZE"
+    --dcp-comm-backend a2a
+    --attention-backend ROCM_AITER_MLA
+    --cp-kv-cache-interleave-size 1
+)
+export VLLM_USE_DIRECT_DCP_A2A=0
+export VLLM_USE_DIRECT_DCP_Q_GATHER=0
+export VLLM_USE_DIRECT_DCP_KV_GATHER=0
+export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
+export VLLM_DCP_Q_REPLICATE=1
 export VLLM_ROCM_USE_AITER_MLA=1
 export AITER_DISABLE_FMHA_OPUS=1
 
@@ -110,7 +120,7 @@ ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
 MAX_NUM_SEQS=40
-CUDAGRAPH_CAPTURE_SIZES="1,2,4,8,16,24,32,40"
+CUDAGRAPH_CAPTURE_SIZES="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40"
 MAX_CUDAGRAPH_CAPTURE_SIZE=40
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
