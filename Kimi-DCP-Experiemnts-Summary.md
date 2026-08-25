@@ -36,16 +36,19 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 **Images** (`vllm/vllm-openai-rocm:nightly-<sha>`)
 
-| Tag | Date | Used by | Note |
+| Tag | Date | Used by | PR #51705 |
 |---|---|---|---|
-| `ac7509e2` | 08-13 | T64 | Image of the current best result |
-| `5a4c8d99` | 08-19 | T66c | |
-| `d626108b` | 08-20 | T73–T85 | Vendored PR #51705 applies with **4 failed hunks** |
-| `f94666b6` | 08-24 | T86–T94 | Current. Same fault. PR #51705 still unmerged, ROCm DCP→piecewise gate still present. Kept because the vendored diff applies with **0 failed hunks** |
+| `ac7509e2` | 08-13 | T64 | — |
+| `5a4c8d99` | 08-19 | T66c | — |
+| `d626108b` | 08-20 | T73–T85 | 4 failed hunks |
+| `f94666b6` | 08-24 | T86–T94 | 0 failed hunks |
 
-Image is **not** the cause of the DCP crash — T86 reproduced it on `f94666b6`
-(`dev1133`) exactly as T85 did on `d626108b` (`dev994`). T65 and T67b images
-were not verified from logs.
+- `ac7509e2` is where our best result was measured — three images back.
+- `f94666b6` is current. Still no PR #51705 upstream, gate still present.
+  Kept only because our patch applies cleanly on it.
+- Image is **not** the cause of the DCP crash: T86 reproduced it on
+  `f94666b6` exactly as T85 did on `d626108b`.
+- T65 and T67b images were not verified from logs.
 
 ---
 
