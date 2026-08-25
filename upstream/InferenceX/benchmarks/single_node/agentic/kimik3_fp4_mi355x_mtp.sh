@@ -5,6 +5,9 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 export EVAL_FRAMEWORK="lm-eval"
+EVAL_ONLY="${EVAL_ONLY:-true}"
+EVAL_LIMIT="${EVAL_LIMIT:-200}"
+export EVAL_ONLY EVAL_LIMIT
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
@@ -213,5 +216,13 @@ if [ -s /tmp/pinmap.txt ]; then
     done < /tmp/pinmap.txt
 fi
 
-build_replay_cmd "$RESULT_DIR"
-run_agentic_replay_and_write_outputs "$RESULT_DIR"
+# EVAL_ONLY=true runs the GSM8K accuracy gate instead of the throughput replay.
+# EVAL_LIMIT bounds the sample count; unset/full runs the whole dataset (the
+# earlier attempt timed out needing ~15 h at 780 tok/s -- see ledger row 6).
+if [ "${EVAL_ONLY:-false}" = "true" ]; then
+    echo "[eval] GSM8K accuracy gate, EVAL_LIMIT=${EVAL_LIMIT:-full}"
+    run_eval --port "$PORT"
+else
+    build_replay_cmd "$RESULT_DIR"
+    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+fi
