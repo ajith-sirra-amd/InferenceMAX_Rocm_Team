@@ -35,6 +35,8 @@ KV capacity — so the lever is `max_num_seqs`, not more offered load.
 |---|---|---|---|---|---|---:|---:|---:|---|---|
 | SA reference | No | Yes | Yes | — | 20 | 5,388 | 0.0382 | 12.2 s | OK | [SA](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31993981851/job/95282381888) |
 | **T103 best** | **8** | No | **Yes** | Full | **52** | **7,950.6** | 0.0913 | 4.76 s | **OK 3,628 s** | [T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638) |
+| T105 | **8** | No | **Yes** | Full | 56 | 7,844.0 | 0.1041 | 7.03 s | OK 3,630 s | [T105](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32876995670) |
+| T104 | **8** | No | **Yes** | Full | 64 | 7,650.7 | 0.1264 | 8.99 s | OK 3,627 s | [T104](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32866152287) |
 | T96 | **8** | No | **Yes** | Full | **40** | **7,206.4** | 0.0722 | 3.73 s | **OK 3,627 s** | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
 | T102 | **8** | **Yes** | **Yes** | Full | 40 | 1,075.4 | 0.1900 | 262.6 s | OK 3,612 s | [T102](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32846271434) |
 | T98 | **8** | No | **Yes** | Full | **72** | 2,039.9 | 0.1542 | 20.22 s | **Aborted 1,210 s** | [T98](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32821348618) |
@@ -186,6 +188,24 @@ dataset.
 
 Reminder: the capture ladder must be dense and must track `max_num_seqs`
 exactly. Sparse ladders caused the crash.
+
+**Throughput peaks at concurrency 52 — it does not keep climbing.**
+
+| conc | n | tok/s/GPU | TPOT | TTFT | prefix hit |
+|---:|---:|---:|---:|---:|---:|
+| 40 | 43 | 7,206.4 | 0.0722 | 3.73 s | 93.7% |
+| **52** | 54 | **7,950.6** | 0.0913 | 4.76 s | 93.7% |
+| 56 | 66 | 7,844.0 | 0.1041 | 7.03 s | 92.7% |
+| 64 | 80 | 7,650.7 | 0.1264 | 8.99 s | 90.0% |
+
+Flat-topped between 52 and 56 (1.3% apart), then falls. Cause is prefix-hit
+erosion (93.7% → 90.0%) as concurrent contexts multiply, plus TPOT rising faster
+than resident count.
+
+**The model below is superseded and kept only for its TPOT/TTFT fits.** Its
+throughput term `T(n)=16,823·n/(n+48)` is monotonic and predicted conc 64 would
+beat 52 by ~20%; it fell 3.8% instead. The earlier "~10,000–10,500 ceiling"
+followed from that form and is **wrong** — measured peak is ~7,950.
 
 **Scaling model** (fitted on T95 n=18, T96 n=36, T98 n=91; `n` = resident requests)
 
