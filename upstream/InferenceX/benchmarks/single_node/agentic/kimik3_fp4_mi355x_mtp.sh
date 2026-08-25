@@ -72,6 +72,32 @@ trap 'exit 143' TERM
 
 export PYTHONHASHSEED=42
 
+# KV offload. TOTAL_CPU_DRAM_GB is the aggregate host-DRAM budget the matrix
+# generator derives from dram-utilization and the runner's available CPU DRAM;
+# per the agentic README it must be consumed as given, never replaced with a
+# model-specific constant. Worth 3.3x on the non-DCP path (T92 vs T64), so the
+# absence of this block is not a neutral simplification.
+OFFLOAD_ARGS=()
+if agentic_kv_offload_enabled; then
+    case "${KV_OFFLOAD_BACKEND:-}" in
+      vllm-simple)
+        require_agentic_kv_offload_backend "$KV_OFFLOAD_BACKEND"
+        CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
+        # Identical prefixes must hash to identical block keys across ranks.
+        export PYTHONHASHSEED=42
+        SIMPLE_LAZY_OFFLOAD="${SIMPLE_LAZY_OFFLOAD:-false}"
+        OFFLOAD_ARGS=(
+            --kv-transfer-config
+            "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":$SIMPLE_LAZY_OFFLOAD}}"
+        )
+        echo "SimpleCPUOffloadConnector: ${CPU_BYTES_PER_RANK} B/rank x ${TOTAL_RANKS} ranks, lazy_offload=$SIMPLE_LAZY_OFFLOAD"
+        ;;
+      *)
+        echo "KV offload requested (KV_OFFLOADING=$KV_OFFLOADING) but backend '${KV_OFFLOAD_BACKEND:-unset}' is not handled here" >&2
+        ;;
+    esac
+fi
+
 KV_CACHE_DTYPE=fp8
 CP_ARGS=()
 export VLLM_ROCM_USE_AITER_MLA=1
@@ -110,12 +136,17 @@ VLLM_CMD=(
     --enable-prompt-tokens-details
     --kv-cache-dtype "$KV_CACHE_DTYPE"
     "${CHUNKED_PREFILL_ARGS[@]}"
+    "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${SPEC_ARGS[@]}"
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
+
+for _a in CP_ARGS SPEC_ARGS CHUNKED_PREFILL_ARGS ASYNC_SCHED_ARGS MLA_PREFILL_ARGS OFFLOAD_ARGS COMPILATION_CONFIG_ARGS; do
+    grep -q "\${$_a\[@\]}" "$0" || echo "[orphan-check] WARNING: $_a is built but never passed to VLLM_CMD" >&2
+done
 
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
