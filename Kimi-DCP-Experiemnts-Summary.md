@@ -9,30 +9,43 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 **Best usable: 4,622.8 tok/s/GPU** — 86% of the SA reference, **37% of target**.
 
-| Config | DCP | MTP | Offload | Graphs | Conc | tok/s/GPU | TPOT | TTFT | Status | Run | SHA |
-|---|---|---|---|---|---|---:|---:|---:|---|---|---|
-| SA reference | no | yes | — | — | 20 | 5,388 | 0.0382 | 12.2 s | ok | — | — |
-| **T64 best** | no | no | **yes** | full | 20 | **4,622.8** | 0.0461 | 2.14 s | **ok 3,612 s** | [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) | `9d8250de` |
-| T86 | **8** | no | no | full | 40 | 4,621.5 | 0.0736 | 4.42 s | fault 420 s | [T86](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32754837021) | `4542d1ed` |
-| T87 | **8** | no | no | full | 40 | 4,611.6 | 0.0734 | 5.75 s | fault 421 s | [T87](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32758545737) | `52c4c8cd` |
-| T74 | **8** | no | no | full | 20 | 4,551.0 | 0.0499 | — | fault 2,771 s | [T74](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32699967765) | `34daf833` |
-| T81 | **8** | no | no | full | 20 | 4,489.3 | 0.0501 | 2.18 s | fault 2,997 s | [T81](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32729114956) | `572f770d` |
-| T83 | **8** | no | no | full | 40 | 4,457.1 | 0.0672 | 5.16 s | fault 425 s | [T83](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32745214998) | `5db73a60` |
-| T77 | **8** | no | no | full | 20 | 4,451.9 | 0.0503 | — | fault 3,013 s | [T77](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32708108429) | `c525c3ee` |
-| T79 | **8** | no | no | full | 20 | 4,421.6 | 0.0488 | 2.25 s | fault 2,992 s | [T79](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32716127572) | `ed927789` |
-| T73 | **8** | no | **yes** | full | 20 | 4,421.2 | 0.0497 | — | fault 3,033 s | [T73](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32694320223) | `45582e2e` |
-| T80 | **8** | no | no | full | 20 | 4,298.4 | 0.0444 | — | fault 2,987 s | [T80](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32722526689) | `30c4608a` |
-| T67b DP2/TP4 | no | no | yes | full | 20 | 2,998.6 | 0.1140 | 8.57 s | ok | [T67b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32458502570) | `001ca8d9` |
-| T82 TRITON MLA | **8** | no | no | full | 20 | 2,210.0 | 0.1508 | — | ok 3,608 s | [T82](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32736571541) | `c0d4e0fc` |
-| T65 | no | **yes** | yes | piecewise | 20 | 2,045.4 | 0.1003 | 67.7 s | ok | [T65](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32444354043) | `1800ee4d` |
-| T66c | **8** | no | **yes** | **piecewise** | 20 | 1,574.5 | 0.2174 | 12.4 s | **ok 3,628 s** | [T66c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32451498395) | `59ba24bc` |
-| T92 | no | no | **no** | full | 20 | 1,397.0 | 0.2332 | 35.0 s | ok 3,629 s | [T92](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32789572478) | `220a28f8` |
-| T93c | no | no | no* | full | 20 | 1,343.0 | 0.2292 | 40.3 s | ok 3,613 s | [T93c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32795749613) | `ffa2bb7c` |
-| T88 | no | **yes** | no | full | 20 | 982.4 | 0.1659 | 212.7 s | ok 3,605 s | [T88](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32763413965) | `bfa32e4b` |
-| T91 async sched | no | no | no | full | 20 | 963.5 | 0.2498 | 137.5 s | ok 3,467 s | [T91](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32782978418) | `5354eaf6` |
-| T90 | no | **yes** | no | full | 20 | 724.2 | 0.1374 | 374.8 s | ok 3,629 s | [T90](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32774606161) | `9179c04d` |
+| Config | DCP | MTP | Offload | Graphs | Conc | tok/s/GPU | TPOT | TTFT | Status | Image | Run | SHA |
+|---|---|---|---|---|---|---:|---:|---:|---|---|---|---|
+| SA reference | no | yes | — | — | 20 | 5,388 | 0.0382 | 12.2 s | ok | — | — | — |
+| **T64 best** | no | no | **yes** | full | 20 | **4,622.8** | 0.0461 | 2.14 s | **ok 3,612 s** | `ac7509e2` | [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) | `9d8250de` |
+| T86 | **8** | no | no | full | 40 | 4,621.5 | 0.0736 | 4.42 s | fault 420 s | `f94666b6` | [T86](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32754837021) | `4542d1ed` |
+| T87 | **8** | no | no | full | 40 | 4,611.6 | 0.0734 | 5.75 s | fault 421 s | `f94666b6` | [T87](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32758545737) | `52c4c8cd` |
+| T74 | **8** | no | no | full | 20 | 4,551.0 | 0.0499 | — | fault 2,771 s | `d626108b` | [T74](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32699967765) | `34daf833` |
+| T81 | **8** | no | no | full | 20 | 4,489.3 | 0.0501 | 2.18 s | fault 2,997 s | `d626108b` | [T81](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32729114956) | `572f770d` |
+| T83 | **8** | no | no | full | 40 | 4,457.1 | 0.0672 | 5.16 s | fault 425 s | `d626108b` | [T83](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32745214998) | `5db73a60` |
+| T77 | **8** | no | no | full | 20 | 4,451.9 | 0.0503 | — | fault 3,013 s | `d626108b` | [T77](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32708108429) | `c525c3ee` |
+| T79 | **8** | no | no | full | 20 | 4,421.6 | 0.0488 | 2.25 s | fault 2,992 s | `d626108b` | [T79](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32716127572) | `ed927789` |
+| T73 | **8** | no | **yes** | full | 20 | 4,421.2 | 0.0497 | — | fault 3,033 s | `d626108b` | [T73](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32694320223) | `45582e2e` |
+| T80 | **8** | no | no | full | 20 | 4,298.4 | 0.0444 | — | fault 2,987 s | `d626108b` | [T80](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32722526689) | `30c4608a` |
+| T67b DP2/TP4 | no | no | yes | full | 20 | 2,998.6 | 0.1140 | 8.57 s | ok | — | [T67b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32458502570) | `001ca8d9` |
+| T82 TRITON MLA | **8** | no | no | full | 20 | 2,210.0 | 0.1508 | — | ok 3,608 s | `d626108b` | [T82](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32736571541) | `c0d4e0fc` |
+| T65 | no | **yes** | yes | piecewise | 20 | 2,045.4 | 0.1003 | 67.7 s | ok | — | [T65](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32444354043) | `1800ee4d` |
+| T66c | **8** | no | **yes** | **piecewise** | 20 | 1,574.5 | 0.2174 | 12.4 s | **ok 3,628 s** | `5a4c8d99` | [T66c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32451498395) | `59ba24bc` |
+| T92 | no | no | **no** | full | 20 | 1,397.0 | 0.2332 | 35.0 s | ok 3,629 s | `f94666b6` | [T92](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32789572478) | `220a28f8` |
+| T93c | no | no | no* | full | 20 | 1,343.0 | 0.2292 | 40.3 s | ok 3,613 s | `f94666b6` | [T93c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32795749613) | `ffa2bb7c` |
+| T88 | no | **yes** | no | full | 20 | 982.4 | 0.1659 | 212.7 s | ok 3,605 s | `f94666b6` | [T88](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32763413965) | `bfa32e4b` |
+| T91 async sched | no | no | no | full | 20 | 963.5 | 0.2498 | 137.5 s | ok 3,467 s | `f94666b6` | [T91](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32782978418) | `5354eaf6` |
+| T90 | no | **yes** | no | full | 20 | 724.2 | 0.1374 | 374.8 s | ok 3,629 s | `f94666b6` | [T90](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32774606161) | `9179c04d` |
 
 \* T93c asked for offload; the script silently ignored it. See below.
+
+**Images** (`vllm/vllm-openai-rocm:nightly-<sha>`)
+
+| Tag | Date | Used by | Note |
+|---|---|---|---|
+| `ac7509e2` | 08-13 | T64 | image of the current best result |
+| `5a4c8d99` | 08-19 | T66c | |
+| `d626108b` | 08-20 | T73–T85 | vendored PR #51705 applies with **4 failed hunks** |
+| `f94666b6` | 08-24 | T86–T94 | current. Same fault. PR #51705 still unmerged, ROCm DCP→piecewise gate still present. Kept because the vendored diff applies with **0 failed hunks** |
+
+Image is **not** the cause of the DCP crash — T86 reproduced it on `f94666b6`
+(`dev1133`) exactly as T85 did on `d626108b` (`dev994`). T65 and T67b images
+were not verified from logs.
 
 ---
 
