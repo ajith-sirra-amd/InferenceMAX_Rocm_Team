@@ -307,6 +307,15 @@ if [ "${SKIP_PATCH_AITER:-0}" = "1" ]; then
 else
     patch_aiter_pybind11 || true
 fi
+# [2] is superseded by pr51705, which carries its own Triton MLA cudagraph
+# support AND supports_non_causal_multi_token_dcp. Applying [2] first mutates
+# triton_mla.py so 51705's hunks on that file REJECT, silently dropping the
+# capability flag -- which makes DCP+MTP die at init with "does not support
+# non-causal draft MLA attention" (T99).
+if [ "${SKIP_PATCH_PR51705:-0}" != "1" ]; then
+    SKIP_PATCH_CUDAGRAPH=1
+    echo "[triton-mla-cudagraph] auto-skipped: superseded by pr51705"
+fi
 if [ "${SKIP_PATCH_CUDAGRAPH:-0}" = "1" ]; then
     echo "[triton-mla-cudagraph] SKIPPED via SKIP_PATCH_CUDAGRAPH=1"
 else
@@ -361,7 +370,8 @@ PYEOF
     local r; r=$(find "$root/vllm/models/kimi_k3" "$root/vllm/v1/attention/backends/mla" \
                      -name "*.rej" 2>/dev/null | head -5)
     if [ -n "$r" ]; then
-        echo "[$label] WARNING: unresolved rejects on Kimi/MLA paths:" >&2
+        echo "[$label] ERROR: unresolved rejects on Kimi/MLA paths -- capability" >&2
+        echo "[$label]   flags may be missing; DCP+MTP will fail at init:" >&2
         echo "$r" | sed "s/^/  /" >&2
     fi
 }
