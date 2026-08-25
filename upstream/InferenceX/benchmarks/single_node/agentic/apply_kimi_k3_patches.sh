@@ -366,6 +366,25 @@ PYEOF
     fi
 }
 
+patch_pr51171() {
+    local label="pr51171"
+    local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
+    [ -n "$root" ] && [ -d "$root/vllm" ] || { echo "[$label] vllm root not found; skipping."; return 0; }
+    if grep -q "kv_cache_size_tokens" "$root/vllm/v1/worker/gpu_worker.py" 2>/dev/null; then
+        echo "[$label] already patched."; return 0
+    fi
+    local dv="$(dirname "$0")/pr51171_vllm.diff"
+    [ -f "$dv" ] || { echo "[$label] vendored diff not found; skipping." >&2; return 0; }
+    # Conflicts with pr51705 (both rewrite rocm_aiter_mla.py / triton_mla.py).
+    # 51705 is only needed for DCP; this is the non-DCP spec-decode path.
+    local fails; fails=$(patch -p1 -d "$root" --forward --batch < "$dv" 2>&1 | grep -c FAILED)
+    if grep -q "kv_cache_size_tokens" "$root/vllm/v1/worker/gpu_worker.py" 2>/dev/null; then
+        echo "[$label] applied (failed hunks: $fails)"
+    else
+        echo "[$label] apply did not take (failed hunks: $fails)" >&2
+    fi
+}
+
 patch_aiter_opus_rows() {
     local label="aiter-opus-rows"
     local cfg; cfg=$($PY -c "import aiter,os;print(os.path.dirname(aiter.__file__))" 2>/dev/null)/configs
@@ -396,6 +415,13 @@ else
 fi
 
 patch_pr51705_rejects || true
+
+SKIP_PATCH_PR51171="${SKIP_PATCH_PR51171:-1}"
+if [ "$SKIP_PATCH_PR51171" = "1" ]; then
+    echo "[pr51171] SKIPPED via SKIP_PATCH_PR51171=1"
+else
+    patch_pr51171 || true
+fi
 
 if [ "${SKIP_PATCH_OPUS_ROWS:-0}" = "1" ]; then
     echo "[aiter-opus-rows] SKIPPED via SKIP_PATCH_OPUS_ROWS=1"

@@ -1,0 +1,267 @@
+diff --git a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+index 51f487947a2b..a057c7cfa321 100644
+--- a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
++++ b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+@@ -681,7 +681,6 @@ def _build_decode(
+             block_table_tensor,
+             block_table_tensor.stride(0),
+             paged_kv_indptr,
+-            seq_lens_for_kernel,
+             KERNEL_BLOCK_SIZE=self.kernel_block_size,
+             BLOCK_SIZE=1024,
+         )
+@@ -786,6 +785,20 @@ def _build_decode(
+             )
+             has_persistent_metadata = True
+ 
++        # Small-head multi-token verify uses mla_gluon's 4-D MTP entry over the
++        # ordinary per-request paged-KV view, so there is no expanded per-token
++        # buffer to build here. mla_gluon still wants a lower bound on the KV
++        # length it is asked to split; on the verify path that bound is over
++        # requests, not over expanded rows. The .item() below runs in the
++        # builder, outside the captured region, so it does not abort HIP graph
++        # capture the way the per-layer syncs in forward_mqa did.
++        min_kv_seq_len = 1
++        if AiterMLAHelper.use_gluon_verify(
++            self.num_heads, int(max_qo_len), self._kv_cache_dtype_str
++        ):
++            per_req_len = paged_kv_indptr[1:] - paged_kv_indptr[:-1]
++            min_kv_seq_len = int(per_req_len.min().item())
++
+         attn_metadata = AiterMLADecodeMetadata(
+             block_table=block_table_tensor,
+             seq_lens=seq_lens_for_kernel,
+@@ -795,6 +808,7 @@ def _build_decode(
+             qo_indptr=qo_indptr,
+             dcp_tot_seq_lens=dcp_tot_seq_lens_device,
+             max_qo_len=max_qo_len,
++            min_kv_seq_len=min_kv_seq_len,
+             use_gluon_decode=use_gluon_decode,
+             attn_out_dtype=self.decode_attn_out_dtype,
+             has_persistent_metadata=has_persistent_metadata,
+@@ -836,7 +850,6 @@ def _expand_page_indices_kernel(
+     block_table,
+     block_table_stride,
+     cu_num_tokens,
+-    seq_lens,
+     KERNEL_BLOCK_SIZE: tl.constexpr,
+     BLOCK_SIZE: tl.constexpr,
+ ):
+@@ -856,7 +869,7 @@ def _expand_page_indices_kernel(
+     req_idx = tl.program_id(0)
+     row_ptr = block_table + req_idx * block_table_stride
+     start_idx = tl.load(cu_num_tokens + req_idx)
+-    num_tokens = tl.load(seq_lens + req_idx)
++    num_tokens = tl.load(cu_num_tokens + req_idx + 1) - start_idx
+ 
+     offset = tl.arange(0, BLOCK_SIZE)
+     for i in tl.range(0, num_tokens, BLOCK_SIZE):
+@@ -977,11 +990,12 @@ def use_gluon_decode(num_heads: int, max_qo_len: int, kv_cache_dtype: str) -> bo
+ 
+     @staticmethod
+     def use_gluon_verify(num_heads: int, max_qo_len: int, kv_cache_dtype: str) -> bool:
+-        """Whether a small-head multi-token verify is flattened onto Gluon.
++        """Whether a small-head multi-token verify uses native Gluon MTP.
+ 
+-        bf16 has no gqa<16, qseqlen>1 asm kernel, so the verify is flattened
+-        into per-token Gluon decodes. fp8 has one via the q-row fold and must
+-        not come here: the flatten hands Gluon the batch size its fp8 regime
++        bf16 has no gqa<16, qseqlen>1 asm kernel, so verify goes through
++        ``mla_gluon``'s 4-D MTP entry (``q`` shaped ``[batch, qlen, nhead, dim]``)
++        with ``use_2d_view=True``. fp8 has one via the q-row fold and must not
++        come here: the MTP path hands Gluon the batch size its fp8 regime
+         asserts against. A predicate rather than inline in forward_mqa so the
+         builder sees the same answer the impl acts on.
+         """
+@@ -1270,19 +1284,17 @@ def forward_mqa(
+             return o, None
+ 
+         # 12-head (<16) multi-token verify (DSpark): the asm path has no
+-        # gqa<16, qseqlen>1 kernel. Flatten each verify token to its own
+-        # qseqlen=1 gluon decode, mirroring the TRITON_MLA / sparse-backend
+-        # flatten but on the fast gluon kernel. The block is causal -- the
+-        # target is checking draft tokens, so position t must not see t+1 --
+-        # and attention rows are independent, so giving row t the KV range
+-        # [0, context + t] is exactly causal multi-token attention.
++        # gqa<16, qseqlen>1 kernel, so the block goes to the gluon kernel's 4-D
++        # MTP entry, which serves a whole (1 + num_spec) block in one launch.
++        # The block is causal -- the target is checking draft tokens, so
++        # position t must not see t+1 -- and the kernel bounds each query
++        # position's scores itself.
+         # Arch, mode and dtype gating all live in use_gluon_verify, so that the
+         # builder -- which has to know whether the asm decode will run -- sees
+         # the same answer as this branch.
+         if AiterMLAHelper.use_gluon_verify(
+             self.num_heads, int(decode.max_qo_len), self.kv_cache_dtype
+         ):
+-            qlen = int(decode.max_qo_len)
+             if type(q) is tuple:
+                 q_nope, q_pe = q
+             else:
+@@ -1298,56 +1310,39 @@ def forward_mqa(
+                 device=q_nope.device,
+             )
+             kv_buffer = kv_c_and_k_pe_cache.reshape(-1, kv_c_and_k_pe_cache.shape[-1])
+-            # Expand per-request paged-KV to per-verify-token. Row r*qlen+t is
+-            # request r's verify token t, and seq_lens counts the tokens
+-            # scheduled in this step, so a request's KV range already spans its
+-            # whole verify block and context_r = seq_len_r - qlen. Token t may
+-            # attend to [0, context_r + t], i.e. seq_len_r - (qlen - 1) + t
+-            # entries. paged_kv_indices lists a request's pages in ascending
+-            # position order, so each row's causal window is a prefix of that
+-            # request's slice and only the row length changes. Rows clamp to
+-            # zero for cudagraph padding requests, whose seq_len is 0. Fully
+-            # vectorized (no host loop).
+-            old_indptr = decode.paged_kv_indptr
+-            per_req_len = old_indptr[1:] - old_indptr[:-1]
+-            dev = q_nope.device
+-            row_req = torch.arange(per_req_len.shape[0], device=dev).repeat_interleave(
+-                qlen
++            assert attn_metadata.causal, (
++                "AITER MLA small-head verify MTP is causal-only"
+             )
+-            row_len = (
+-                (
+-                    per_req_len.unsqueeze(1)
+-                    - (qlen - 1)
+-                    + torch.arange(qlen, device=dev, dtype=per_req_len.dtype)
++            # Hand mla_gluon its 4-D MTP entry instead of an expanded
++            # per-verify-token paged-KV view. The flat query layout is already
++            # row-major (r * qlen + t), so unflatten is a free view. mla_gluon
++            # applies the per-position causal bound
++            # score_end = min(split_kv_end, seq_len - qlen + q_pos + 1)
++            # in-kernel, and seq_lens already spans the verify block, so that
++            # bound is context_r + q_pos + 1 -- the same window the expanded
++            # view supplied by truncating each row's page list.
++            qlen = int(decode.max_qo_len)
++            num_reqs = B // qlen
++            if num_reqs * qlen != B:
++                raise ValueError(
++                    f"verify block {B} rows is not a multiple of qlen {qlen}"
+                 )
+-                .clamp_(min=0)
+-                .flatten()
+-            )
+-            new_indptr = torch.cat([old_indptr.new_zeros(1), row_len.cumsum(0)]).to(
+-                torch.int32
+-            )
+-            total = int(new_indptr[-1].item())
+-            within = torch.arange(total, device=dev, dtype=torch.int64) - new_indptr[
+-                :-1
+-            ].to(torch.int64).repeat_interleave(row_len)
+-            src = (
+-                old_indptr[row_req].to(torch.int64).repeat_interleave(row_len) + within
+-            )
+-            new_indices = decode.paged_kv_indices[src]
++            assert decode.paged_kv_indptr is not None
++            assert decode.paged_kv_indices is not None
+             mla_gluon = _get_mla_gluon()
+             mla_gluon(
+-                q_nope=q_nope,
+-                q_pe=q_pe,
++                q_nope=q_nope.unflatten(0, (num_reqs, qlen)),
++                q_pe=q_pe.unflatten(0, (num_reqs, qlen)),
+                 kv_c=kv_buffer,
+-                o=o,
+-                page_table=new_indices,
+-                seq_info=new_indptr,
++                o=o.unflatten(0, (num_reqs, qlen)),
++                page_table=decode.paged_kv_indices,
++                seq_info=decode.paged_kv_indptr,
+                 sm_scale=self.scale,
+                 k_pe=None,
+                 kv_pe_offset=self.kv_lora_rank,
+                 use_2d_view=False,
+                 kv_scale=1.0,
+-                min_kv_seq_len=int(row_len.min()),
++                min_kv_seq_len=decode.min_kv_seq_len,
+             )
+             return o, None
+ 
+diff --git a/vllm/v1/attention/backends/mla/triton_mla.py b/vllm/v1/attention/backends/mla/triton_mla.py
+index 6275778902f8..f28d8c78b63f 100644
+--- a/vllm/v1/attention/backends/mla/triton_mla.py
++++ b/vllm/v1/attention/backends/mla/triton_mla.py
+@@ -6,6 +6,7 @@
+ import torch
+ 
+ import vllm.envs as envs
++from vllm.config import VllmConfig
+ from vllm.config.cache import CacheDType
+ from vllm.logger import init_logger
+ from vllm.model_executor.layers.attention.mla_attention import (
+@@ -25,6 +26,7 @@
+     MultipleOf,
+ )
+ from vllm.v1.attention.ops.triton_decode_attention import decode_attention_fwd
++from vllm.v1.kv_cache_interface import KVCacheSpec
+ from vllm.v1.worker.workspace import (
+     current_workspace_manager,
+     is_workspace_manager_initialized,
+@@ -55,6 +57,34 @@ class TritonMLAMetadataBuilder(MLACommonMetadataBuilder[MLACommonMetadata]):
+     # forward_mqa, so no intra-block causal masking is required.
+     supports_non_causal_multi_token_decode: ClassVar[bool] = True
+ 
++    @classmethod
++    def get_cudagraph_support(
++        cls,
++        vllm_config: VllmConfig,
++        kv_cache_spec: KVCacheSpec,
++    ) -> AttentionCGSupport:
++        """Report UNIFORM_BATCH where a non-causal multi-token block is served.
++
++        ``_cudagraph_support`` is a class constant, so serving the DSpark
++        draft's (1 + num_spec) block through the decode path reports
++        UNIFORM_SINGLE_TOKEN_DECODE and, because the engine takes the minimum
++        over all attention groups, downgrades the *whole* engine off full
++        cudagraphs. ``forward_mqa`` flattens that block with
++        ``repeat_interleave`` on a Python int and performs no device->host
++        sync, so it does satisfy the UNIFORM_BATCH contract.
++
++        ``non_causal_multi_token_decode`` is a KV-cache-group property, not a
++        per-layer one: ``MLAAttentionSpec.merge`` ORs it over every layer in
++        the group, so a group holding both a draft and its target reports it
++        for both. That is the same predicate ``__init__`` below already uses to
++        raise ``reorder_batch_threshold``, so the two stay consistent, but it
++        does mean this lifts a causal target sharing the draft's KV cache group
++        as well.
++        """
++        if getattr(kv_cache_spec, "non_causal_multi_token_decode", False):
++            return AttentionCGSupport.UNIFORM_BATCH
++        return cls._cudagraph_support
++
+     def __init__(self, kv_cache_spec, layer_names, vllm_config, device):
+         super().__init__(kv_cache_spec, layer_names, vllm_config, device)
+         # DCP local sequence lengths are not advanced between draft steps.
+diff --git a/vllm/v1/worker/gpu_worker.py b/vllm/v1/worker/gpu_worker.py
+index 05c03af75eac..7eb33cb2989c 100644
+--- a/vllm/v1/worker/gpu_worker.py
++++ b/vllm/v1/worker/gpu_worker.py
+@@ -69,6 +69,7 @@
+ from vllm.utils.mem_utils import MemorySnapshot, format_gib, memory_profiling
+ from vllm.utils.torch_utils import set_random_seed, set_torch_threads_for_runtime
+ from vllm.v1.attention.backends.utils import record_kv_cache_layout
++from vllm.v1.core.kv_cache_utils import get_kv_cache_capacity
+ from vllm.v1.core.sched.output import GrammarOutput, SchedulerOutput
+ from vllm.v1.kv_cache_interface import KVCacheConfig, KVCacheSpec
+ from vllm.v1.outputs import (
+@@ -674,6 +675,19 @@ def initialize_from_config(self, kv_cache_config: KVCacheConfig) -> None:
+         # Update local config with adjusted num blocks after profiling,
+         # so that it's available to the warmup stage.
+         self.cache_config.num_gpu_blocks = kv_cache_config.num_blocks
++        # num_gpu_blocks * block_size is not the pool's token capacity when a
++        # request occupies more than one KV cache group, which is why
++        # kv_cache_size_tokens exists. It is only ever filled in by the engine
++        # core and the front end, so the worker's copy stays None and anything
++        # sizing a buffer off the KV pool during warmup -- the AITER MLA verify
++        # view, for one -- silently falls back to a far looser bound. Fill it in
++        # here too; get_kv_cache_capacity is documented to give the same answer
++        # for the worker's config as for the scheduler's.
++        if kv_cache_config.kv_cache_groups:
++            (
++                self.cache_config.kv_cache_size_tokens,
++                self.cache_config.kv_cache_max_concurrency,
++            ) = get_kv_cache_capacity(self.vllm_config, kv_cache_config)
+ 
+         # Adopt the engine core's layout; workers spawned after resolution
+         # (e.g. elastic EP scale-up) only see it through the config.
