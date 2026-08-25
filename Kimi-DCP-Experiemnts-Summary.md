@@ -10,6 +10,8 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 **Best: 7,206.4 tok/s/GPU — DCP=8 + full graphs at concurrency 40 (T96).**
 **134% of the SA reference (5,388)** · **58% of the 12,500 target**.
 Clean full window, 0 faults, 0 aborts.
+**Accuracy verified: GSM8K 98.5%** on the identical config
+([T97](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32819265466)).
 
 **The DCP crash is fixed.** Cause was our **sparse capture ladder**: decode
 batches were padded up to the next captured size, and the padded rows read out
@@ -115,6 +117,17 @@ was never diffed against ours.
   `f94666b6` exactly as T85 did on `d626108b`.
 - T65 and T67b images were not verified from logs.
 
+**Accuracy**
+
+| Check | Config | Result |
+|---|---|---|
+| GSM8K 5-shot | T96 config (DCP=8, full graphs, AITER MLA, dense ladder 80, offload) | **98.5%** exact_match ±0.0086 |
+
+Flexible-extract and strict-match agree exactly, so the score is not an
+extraction artifact. Run: [T97](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32819265466), `EVAL_LIMIT=200`.
+Set `EVAL_ONLY=true` in the `.sh` to re-run it; `EVAL_LIMIT=full` for the whole
+dataset.
+
 **Patches** (applied inside the container by `apply_kimi_k3_patches.sh`)
 
 | Patch | What it does | Runs |
@@ -141,9 +154,11 @@ was never diffed against ours.
 
 # What to do next
 
-1. **GSM8K accuracy gate** (running). The bug we fixed was an out-of-bounds
-   *read*; a read can return garbage instead of crashing. T96's throughput is
-   not claimable until outputs are verified correct.
+1. ~~GSM8K accuracy gate~~ — **done, passed.** 98.5% exact_match (±0.0086),
+   5-shot, flexible-extract and strict-match identical, run on the exact T96
+   config (DCP=8, dense ladder 80, AITER MLA, offload). This mattered because
+   the bug the dense ladder fixed was an out-of-bounds *read*, which can return
+   garbage instead of crashing. It does not. T96's 7,206.4 is real.
 2. **Push concurrency further** — 60, then 80. KV usage is still 11.3% at
    conc 40 with zero preemptions, so ~8× of the pool is unused.
 3. **Re-test MTP on top of this**, with #51171 for full graphs. The reference
