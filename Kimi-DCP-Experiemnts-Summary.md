@@ -177,8 +177,30 @@ dataset.
    (32.8M → 14.2M), prefix hit falls 93.7% → 28.6%, workload thrashes. DCP's
    advantage *is* KV capacity; speculation spends it.
 
+4. **Concurrency 1 and 4 — interactivity runs.** Different axis from everything
+   above: these measure **TPOT/TTFT, not throughput**, and will look poor on
+   tok/s/GPU by design (~340 and ~1,300 predicted). Expect TPOT ~19–24 ms.
+   This is where DCP should look best — one request's KV is sharded over all 8
+   GPUs, so attention is 8-way parallel at 1/8 the KV read per rank.
+
 Reminder: the capture ladder must be dense and must track `max_num_seqs`
 exactly. Sparse ladders caused the crash.
+
+**Scaling model** (fitted on T95 n=18, T96 n=36, T98 n=91; `n` = resident requests)
+
+```
+TPOT(n) = 0.01745 + 0.001503*n     s     (n=36 predicted 0.0716 vs 0.0722 measured)
+TTFT(n) = -7.06   + 0.300*n        s
+T(n)    = 16,823 * n/(n + 48)      tok/s/GPU
+```
+
+- Best realistic landing **~10,000–10,500 tok/s/GPU** at conc ~64–80 — 80–84% of target.
+- **Latency binds first, not cache.** Throughput asymptote is 16,823, above
+  target, but 12,500 needs n≈145 → TTFT ~36 s. T98 aborted at 20.2 s.
+- **KV offload adds capacity DCP cannot use**: 11.3% pool usage at conc 40 and
+  `ext_cache_hit` 0.0–0.6%. It was worth 3.3× for *non-DCP* only.
+- Passing 12,500 needs the **0.0015 s/request decode slope** cut — a faster MLA
+  decode kernel or shorter effective context. Not more concurrency, not more cache.
 
 # Known traps
 
