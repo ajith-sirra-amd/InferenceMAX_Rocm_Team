@@ -103,19 +103,12 @@ aborts on failed-request threshold.
 | DCP, piecewise | OK — T66c ran to 14.3M tokens |
 | **DCP + full graphs** | **Crash, 10 of 10 runs** |
 
-**Timing scales with concurrency — nothing else**
-
-| Conc | `max_num_seqs` | Crash at |
-|---|---|---|
-| 20 | 40 | ~2,900 s |
-| 40 | 80 | ~420 s |
-| 40 | **40** | **421 s** |
-
-- Concurrency 40 crashes **7x sooner** while request rate rises only ~1.8x.
-- `max_num_seqs` makes no difference — so it is **not** a buffer sized by it.
-  That rules out `paged_kv_indices` and the aiter MLA metadata workspace.
-- Not elapsed time: T82 ran 3,608 s clean.
-- Not accumulated tokens: crash came at 6.3M tokens at conc 20, 1.6M at conc 40.
+- **Timing scales with concurrency only.** Conc 20 crashes at ~2,900 s, conc 40
+  at ~420 s — 7x sooner, while request rate rises only ~1.8x. `max_num_seqs`
+  makes no difference (40 and 80 both crash at ~421 s), so it is not a buffer
+  sized by it — that rules out `paged_kv_indices` and the aiter MLA metadata
+  workspace. Not elapsed time either (T82 ran 3,608 s clean), and not
+  accumulated tokens (6.3M at conc 20 vs 1.6M at conc 40).
 
 **Fault signature**
 
