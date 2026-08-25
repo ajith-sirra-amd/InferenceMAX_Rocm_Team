@@ -2007,7 +2007,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # T67: DP2/TP4/EP8 -- data-parallel attention. tp: 4 with DP_SIZE=2 in the
       # .sh gives 8 ranks; ep: 8 is REQUIRED or the experts do not shard and the
       # layout will not fit (the guard enforces this). ~209 GB/GPU of weights.
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [40], spec-decoding: mtp }
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [52], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
