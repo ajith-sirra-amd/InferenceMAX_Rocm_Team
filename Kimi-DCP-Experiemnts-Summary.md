@@ -35,6 +35,7 @@ KV capacity — so the lever is `max_num_seqs`, not more offered load.
 |---|---|---|---|---|---|---:|---:|---:|---|---|
 | SA reference | No | Yes | Yes | — | 20 | 5,388 | 0.0382 | 12.2 s | OK | [SA](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31993981851/job/95282381888) |
 | **T96 best** | **8** | No | **Yes** | Full | **40** | **7,206.4** | 0.0722 | 3.73 s | **OK 3,627 s** | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
+| T102 | **8** | **Yes** | **Yes** | Full | 40 | 1,075.4 | 0.1900 | 262.6 s | OK 3,612 s | [T102](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32846271434) |
 | T98 | **8** | No | **Yes** | Full | **72** | 2,039.9 | 0.1542 | 20.22 s | **Aborted 1,210 s** | [T98](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32821348618) |
 | T95 | **8** | No | **Yes** | Full | 20 | **4,585.3** | **0.0445** | **2.24 s** | **OK 3,630 s** | [T95](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32806967290) |
 | T94 non-DCP | No | No | **Yes** | Full | 20 | 4,537.0 | 0.0454 | 2.82 s | OK 3,627 s | [T94](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32801140212) |
@@ -170,8 +171,11 @@ dataset.
 2. **Decouple `max_num_seqs` from concurrency.** Conc 72 with `max_num_seqs`
    144 aborted (T98); the in-flight decode batch, not the pool, is the limit.
    Retry high concurrency with `max_num_seqs` held near 80.
-3. **Re-test MTP on top of this**, with #51171 for full graphs. The reference
-   gets its 5,388 with speculation; we are at 7,206 without it.
+3. ~~Re-test MTP~~ — **done, MTP is closed.** T102 ran DCP+MTP cleanly and lost
+   ~85%: 1,075.4 vs 7,206.4. Dense ladder, clean draft, DCP working — no
+   confounds left. Cause is memory: draft + graphs halve the KV pool
+   (32.8M → 14.2M), prefix hit falls 93.7% → 28.6%, workload thrashes. DCP's
+   advantage *is* KV capacity; speculation spends it.
 
 Reminder: the capture ladder must be dense and must track `max_num_seqs`
 exactly. Sparse ladders caused the crash.
