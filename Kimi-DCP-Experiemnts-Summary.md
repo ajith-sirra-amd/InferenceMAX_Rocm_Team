@@ -7,18 +7,26 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 # Where we are
 
-**Best: 4,585.3 tok/s/GPU — DCP=8 + full graphs, clean full window (T95).**
-85% of the SA reference, **37% of target**.
+**Best: 7,206.4 tok/s/GPU — DCP=8 + full graphs at concurrency 40 (T96).**
+**134% of the SA reference (5,388)** · **58% of the 12,500 target**.
+Clean full window, 0 faults, 0 aborts.
 
 **The DCP crash is fixed.** Cause was our **sparse capture ladder**: decode
 batches were padded up to the next captured size, and the padded rows read out
 of bounds. A dense ladder (every size 1…40, as the SA reference uses) runs
-clean. DCP now beats non-DCP *and* keeps 31× the KV pool at 94.5% prefix hit.
+clean. DCP now beats non-DCP *and* keeps 31× the KV pool at ~94% prefix hit.
+
+**Concurrency is where DCP pays.** Doubling to 40 gave **+57%** (4,585 → 7,206)
+while KV usage stayed at **11.3%** and prefix hit held at 93.7%. Non-DCP cannot
+follow — it is already at 54.3% hit on a 4.4M pool with a 243 GB/rank DRAM
+crutch. There is still ~8× of pool unused, so concurrency 60–80 is the next
+step.
 
 | Config | DCP | MTP | Offload | Graphs | Conc | Tok/s/GPU | TPOT | TTFT | Status | Run |
 |---|---|---|---|---|---|---:|---:|---:|---|---|
 | SA reference | No | Yes | Yes | — | 20 | 5,388 | 0.0382 | 12.2 s | OK | [SA](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31993981851/job/95282381888) |
-| **T95 best** | **8** | No | **Yes** | Full | 20 | **4,585.3** | **0.0445** | **2.24 s** | **OK 3,630 s** | [T95](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32806967290) |
+| **T96 best** | **8** | No | **Yes** | Full | **40** | **7,206.4** | 0.0722 | 3.73 s | **OK 3,627 s** | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
+| T95 | **8** | No | **Yes** | Full | 20 | **4,585.3** | **0.0445** | **2.24 s** | **OK 3,630 s** | [T95](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32806967290) |
 | T94 non-DCP | No | No | **Yes** | Full | 20 | 4,537.0 | 0.0454 | 2.82 s | OK 3,627 s | [T94](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32801140212) |
 | T64 | No | No | **Yes** | Full | 20 | **4,622.8** | 0.0461 | 2.14 s | **OK 3,612 s** | [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) |
 | T86 | **8** | No | No | Full | 40 | 4,621.5 | 0.0736 | 4.42 s | Fault 420 s | [T86](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32754837021) |
@@ -133,15 +141,16 @@ was never diffed against ours.
 
 # What to do next
 
-1. **Finish the DCP crash bisect** — TRITON MLA at conc 40 (~25 min). Splits it
-   into aiter kernel vs vLLM DCP code. Aiter side we can patch ourselves.
-2. **If it is vLLM code — report upstream.** Repro is solid: conc 40, DCP=8,
-   full graphs, dies in ~7 min, every time.
-3. **Re-baseline non-DCP with offload actually on** (T94, running).
+1. **GSM8K accuracy gate** (running). The bug we fixed was an out-of-bounds
+   *read*; a read can return garbage instead of crashing. T96's throughput is
+   not claimable until outputs are verified correct.
+2. **Push concurrency further** — 60, then 80. KV usage is still 11.3% at
+   conc 40 with zero preemptions, so ~8× of the pool is unused.
+3. **Re-test MTP on top of this**, with #51171 for full graphs. The reference
+   gets its 5,388 with speculation; we are at 7,206 without it.
 
-Piecewise is not a fallback: 1,574.5, roughly 3x too slow.
-
----
+Reminder: the capture ladder must be dense and must track `max_num_seqs`
+exactly. Sparse ladders caused the crash.
 
 # Known traps
 
