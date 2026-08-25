@@ -21,13 +21,21 @@ clean. DCP now beats non-DCP *and* keeps 31× the KV pool at ~94% prefix hit.
 **Concurrency is where DCP pays.** Doubling to 40 gave **+57%** (4,585 → 7,206)
 while KV usage stayed at **11.3%** and prefix hit held at 93.7%. Non-DCP cannot
 follow — it is already at 54.3% hit on a 4.4M pool with a 243 GB/rank DRAM
-crutch. There is still ~8× of pool unused, so concurrency 60–80 is the next
-step.
+crutch. **But concurrency 72 is past the knee.** T98 aborted at 1,210 s — 29/287
+requests failed on timeout, TTFT 20.22 s. Not a capacity problem: **zero
+preemptions, KV plateaued at 57.7%**. The cause is our `max_num_seqs = CONC × 2`
+convention, which let **91 sequences decode concurrently**. Each step then
+attends over ~5× the KV, decode eats the step budget, prefill starves (input
+58,000 → 32,000/s), and latency blows out.
+
+**Conc 40 is the sweet spot so far.** The ceiling is decode time per step, not
+KV capacity — so the lever is `max_num_seqs`, not more offered load.
 
 | Config | DCP | MTP | Offload | Graphs | Conc | Tok/s/GPU | TPOT | TTFT | Status | Run |
 |---|---|---|---|---|---|---:|---:|---:|---|---|
 | SA reference | No | Yes | Yes | — | 20 | 5,388 | 0.0382 | 12.2 s | OK | [SA](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31993981851/job/95282381888) |
 | **T96 best** | **8** | No | **Yes** | Full | **40** | **7,206.4** | 0.0722 | 3.73 s | **OK 3,627 s** | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
+| T98 | **8** | No | **Yes** | Full | **72** | 2,039.9 | 0.1542 | 20.22 s | **Aborted 1,210 s** | [T98](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32821348618) |
 | T95 | **8** | No | **Yes** | Full | 20 | **4,585.3** | **0.0445** | **2.24 s** | **OK 3,630 s** | [T95](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32806967290) |
 | T94 non-DCP | No | No | **Yes** | Full | 20 | 4,537.0 | 0.0454 | 2.82 s | OK 3,627 s | [T94](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32801140212) |
 | T64 | No | No | **Yes** | Full | 20 | **4,622.8** | 0.0461 | 2.14 s | **OK 3,612 s** | [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) |
@@ -159,8 +167,9 @@ dataset.
    config (DCP=8, dense ladder 80, AITER MLA, offload). This mattered because
    the bug the dense ladder fixed was an out-of-bounds *read*, which can return
    garbage instead of crashing. It does not. T96's 7,206.4 is real.
-2. **Push concurrency further** — 60, then 80. KV usage is still 11.3% at
-   conc 40 with zero preemptions, so ~8× of the pool is unused.
+2. **Decouple `max_num_seqs` from concurrency.** Conc 72 with `max_num_seqs`
+   144 aborted (T98); the in-flight decode batch, not the pool, is the limit.
+   Retry high concurrency with `max_num_seqs` held near 80.
 3. **Re-test MTP on top of this**, with #51171 for full graphs. The reference
    gets its 5,388 with speculation; we are at 7,206 without it.
 
