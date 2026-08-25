@@ -90,6 +90,68 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 ---
 
+# The DCP + full graphs crash
+
+**What happens:** GPU page fault on all 8 ranks at once. Server dies, benchmark
+aborts on failed-request threshold.
+
+**Only this pair triggers it**
+
+| Config | Result |
+|---|---|
+| Full graphs, no DCP | OK — T64 ran to 62.7M tokens |
+| DCP, piecewise | OK — T66c ran to 14.3M tokens |
+| **DCP + full graphs** | **Crash, 10 of 10 runs** |
+
+**Timing scales with concurrency — nothing else**
+
+| Conc | `max_num_seqs` | Crash at |
+|---|---|---|
+| 20 | 40 | ~2,900 s |
+| 40 | 80 | ~420 s |
+| 40 | **40** | **421 s** |
+
+- Concurrency 40 crashes **7x sooner** while request rate rises only ~1.8x.
+- `max_num_seqs` makes no difference — so it is **not** a buffer sized by it.
+  That rules out `paged_kv_indices` and the aiter MLA metadata workspace.
+- Not elapsed time: T82 ran 3,608 s clean.
+- Not accumulated tokens: crash came at 6.3M tokens at conc 20, 1.6M at conc 40.
+
+**Fault signature**
+
+- `VM_L2_PROTECTION_FAULT_STATUS`, `PERMISSION_FAULTS: 0x3`, IH client
+  `0x1b (UTCL2)`, TCP client → vector-memory **out-of-bounds read**.
+- All 8 ranks fault at the **same low offset** over unrelated base addresses —
+  one per-rank buffer overrun by a fixed amount. A page-table walk running off
+  the end would scatter instead.
+
+**Already ruled out** (one variable each, all still crash)
+
+KV offload · aiter opus rows · capture ladder size · comm backend `a2a`/`ag_rs` ·
+`VLLM_DCP_Q_REPLICATE` on/off · `max_num_seqs` · two different images.
+
+**Why we cannot name the kernel yet**
+
+- Log says only `Reason: Unknown`; the GPU coredump handler fails with
+  `execvp` ENOENT.
+- `AMD_SERIALIZE_KERNEL=3` does not help — it serialises individual dispatches,
+  but the crash is inside a **captured graph replay** where kernels launch as a
+  unit. Throughput fell only 13%, confirming it never took effect.
+- The aiter-vs-vLLM bisect is unfinished: T82 never reached the trigger, T84
+  hung for an unrelated reason.
+
+**Evidence it is upstream, not our config**
+
+- `vllm/platforms/rocm.py` force-downgrades to piecewise whenever DCP > 1.
+  `cuda.py` has no such gate — NVIDIA DCP keeps full graphs.
+- PR #51705 adds `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` to lift it, and ships it
+  **default-off**.
+
+**Reproduction** — conc 40, DCP=8, `FULL_AND_PIECEWISE`,
+`VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1` → all 8 ranks fault in ~420 s, every time.
+
+---
+
 # What to do next
 
 1. **Finish the DCP crash bisect** — TRITON MLA at conc 40 (~25 min). Splits it
