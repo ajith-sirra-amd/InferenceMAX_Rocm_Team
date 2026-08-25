@@ -189,6 +189,26 @@ dataset.
 Reminder: the capture ladder must be dense and must track `max_num_seqs`
 exactly. Sparse ladders caused the crash.
 
+**Concurrency sweep — complete.** Throughput peaks at 52; latency is best at 4.
+
+| conc | n | Tok/s/GPU | TPOT | TTFT p50 | Prefix hit | Run |
+|---:|---:|---:|---:|---:|---:|---|
+| 1 | 4 | 940.0 | **0.0224** | 0.96 s | 95.5% | [T106](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32887252465) |
+| **4** | 6 | 1,525.1 | 0.0256 | **0.87 s** | — | [T107](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32895236167) |
+| 40 | 43 | 7,206.4 | 0.0722 | — | 93.7% | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
+| **52** | 54 | **7,950.6** | 0.0913 | — | 93.7% | [T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638) |
+| 56 | 66 | 7,844.0 | 0.1041 | — | 92.7% | [T105](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32876995670) |
+| 64 | 80 | 7,650.7 | 0.1264 | — | 90.0% | [T104](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32866152287) |
+
+- **Best throughput: 7,950.6 tok/s/GPU @ conc 52** — 148% of the SA reference,
+  64% of target, GSM8K 98.5%.
+- **Best interactivity: conc 4** — TPOT 25.6 ms, TTFT p50 0.87 s. Beats conc 1 on
+  TTFT *and* throughput; conc 1's `max_num_seqs 4` was too tight and queued the
+  replay's branched sub-requests.
+- `max_num_seqs` needs **branching headroom** (~1.25× conc). Too tight raises
+  TTFT (T106); too loose lets residents run away and abort (T98, `mns` 144 → 91
+  residents → TTFT 20.2 s).
+
 **Throughput peaks at concurrency 52 — it does not keep climbing.**
 
 | conc | n | tok/s/GPU | TPOT | TTFT | prefix hit |
