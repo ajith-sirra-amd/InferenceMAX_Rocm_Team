@@ -34,44 +34,6 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 \* T93c asked for offload; the script silently ignored it. See below.
 
-**Images** (`vllm/vllm-openai-rocm:nightly-<sha>`)
-
-| Tag | Date | Used by | PR #51705 |
-|---|---|---|---|
-| `ac7509e2` | 08-13 | T64 | — |
-| `5a4c8d99` | 08-19 | T66c | — |
-| `d626108b` | 08-20 | T73–T85 | 4 failed hunks |
-| `f94666b6` | 08-24 | T86–T94 | 0 failed hunks |
-
-- `ac7509e2` is where our best result was measured — three images back.
-- `f94666b6` is current. Still no PR #51705 upstream, gate still present.
-  Kept only because our patch applies cleanly on it.
-- Image is **not** the cause of the DCP crash: T86 reproduced it on
-  `f94666b6` exactly as T85 did on `d626108b`.
-- T65 and T67b images were not verified from logs.
-
-**Patches** (applied inside the container by `apply_kimi_k3_patches.sh`)
-
-| Patch | What it does | Runs |
-|---|---|---|
-| `aiter-pybind11` | Fixes an aiter/pybind11 signature mismatch | All |
-| `triton-mla-cudagraph` | Lets Triton MLA run under CUDA graphs | All |
-| `kv-blockpool` | Clamps a negative block count | All |
-| `pr51705` | vLLM PR — DCP support **and** the full-graph hatch | T76 onward |
-| `pr51705-rejects` | Re-applies the hunk that PR misses on our image | T79 onward |
-| `aiter-opus-rows` | Drops opus GEMM rows (ROCm/aiter#4915) | T74–T76 only |
-
-- `pr51705` is **vendored in-repo** since T76. Before that it was fetched live
-  and pinned by SHA — the PR was force-pushed twice in one day and killed two
-  runs, hence the vendoring.
-- `pr51705-rejects` fixes `enable_dcp_q_replicate` missing from
-  `MultiHeadLatentAttention.__init__`. Silent with speculation off; kills every
-  rank at init with MTP on. Needed on `d626108b`, not on `f94666b6`.
-- `aiter-opus-rows` is **off since T77** — it changed neither the crash nor
-  throughput.
-- Dropped as no-ops: `dcp-lse`, `dcp-blocktable`, `dcp-direct-a2a`,
-  `dcp-gathered-heads` — all superseded by `pr51705`.
-
 ---
 
 # The five things that matter
@@ -142,6 +104,46 @@ KV offload · aiter opus rows · capture ladder size · comm backend `a2a`/`ag_r
 
 **Reproduction** — conc 40, DCP=8, `FULL_AND_PIECEWISE`,
 `VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1` → all 8 ranks fault in ~420 s, every time.
+
+---
+
+**Images** (`vllm/vllm-openai-rocm:nightly-<sha>`)
+
+| Tag | Date | Used by | PR #51705 |
+|---|---|---|---|
+| `ac7509e2` | 08-13 | T64 | — |
+| `5a4c8d99` | 08-19 | T66c | — |
+| `d626108b` | 08-20 | T73–T85 | 4 failed hunks |
+| `f94666b6` | 08-24 | T86–T94 | 0 failed hunks |
+
+- `ac7509e2` is where our best result was measured — three images back.
+- `f94666b6` is current. Still no PR #51705 upstream, gate still present.
+  Kept only because our patch applies cleanly on it.
+- Image is **not** the cause of the DCP crash: T86 reproduced it on
+  `f94666b6` exactly as T85 did on `d626108b`.
+- T65 and T67b images were not verified from logs.
+
+**Patches** (applied inside the container by `apply_kimi_k3_patches.sh`)
+
+| Patch | What it does | Runs |
+|---|---|---|
+| `aiter-pybind11` | Fixes an aiter/pybind11 signature mismatch | All |
+| `triton-mla-cudagraph` | Lets Triton MLA run under CUDA graphs | All |
+| `kv-blockpool` | Clamps a negative block count | All |
+| `pr51705` | vLLM PR — DCP support **and** the full-graph hatch | T76 onward |
+| `pr51705-rejects` | Re-applies the hunk that PR misses on our image | T79 onward |
+| `aiter-opus-rows` | Drops opus GEMM rows (ROCm/aiter#4915) | T74–T76 only |
+
+- `pr51705` is **vendored in-repo** since T76. Before that it was fetched live
+  and pinned by SHA — the PR was force-pushed twice in one day and killed two
+  runs, hence the vendoring.
+- `pr51705-rejects` fixes `enable_dcp_q_replicate` missing from
+  `MultiHeadLatentAttention.__init__`. Silent with speculation off; kills every
+  rank at init with MTP on. Needed on `d626108b`, not on `f94666b6`.
+- `aiter-opus-rows` is **off since T77** — it changed neither the crash nor
+  throughput.
+- Dropped as no-ops: `dcp-lse`, `dcp-blocktable`, `dcp-direct-a2a`,
+  `dcp-gathered-heads` — all superseded by `pr51705`.
 
 ---
 
