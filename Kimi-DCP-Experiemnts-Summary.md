@@ -50,6 +50,28 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
   `f94666b6` exactly as T85 did on `d626108b`.
 - T65 and T67b images were not verified from logs.
 
+**Patches** (applied inside the container by `apply_kimi_k3_patches.sh`)
+
+| Patch | What it does | Runs |
+|---|---|---|
+| `aiter-pybind11` | Fixes an aiter/pybind11 signature mismatch | All |
+| `triton-mla-cudagraph` | Lets Triton MLA run under CUDA graphs | All |
+| `kv-blockpool` | Clamps a negative block count | All |
+| `pr51705` | vLLM PR — DCP support **and** the full-graph hatch | T76 onward |
+| `pr51705-rejects` | Re-applies the hunk that PR misses on our image | T79 onward |
+| `aiter-opus-rows` | Drops opus GEMM rows (ROCm/aiter#4915) | T74–T76 only |
+
+- `pr51705` is **vendored in-repo** since T76. Before that it was fetched live
+  and pinned by SHA — the PR was force-pushed twice in one day and killed two
+  runs, hence the vendoring.
+- `pr51705-rejects` fixes `enable_dcp_q_replicate` missing from
+  `MultiHeadLatentAttention.__init__`. Silent with speculation off; kills every
+  rank at init with MTP on. Needed on `d626108b`, not on `f94666b6`.
+- `aiter-opus-rows` is **off since T77** — it changed neither the crash nor
+  throughput.
+- Dropped as no-ops: `dcp-lse`, `dcp-blocktable`, `dcp-direct-a2a`,
+  `dcp-gathered-heads` — all superseded by `pr51705`.
+
 ---
 
 # The five things that matter
@@ -159,7 +181,7 @@ each, all landing in the same band:
 
 | Run | variable moved | duration | unique tokens | tok/s/GPU |
 |---|---|---:|---:|---:|
-| T73 | KV offload on | 3,033 s | 6.36M | 4,421.2 |
+| T73 | KV offload on (no opus patch) | 3,033 s | 6.36M | 4,421.2 |
 | T74 | offload off | 2,771 s | 6.06M | 4,551.0 |
 | T77 | opus rows present | 3,013 s | 6.51M | 4,451.9 |
 | T79 | capture ladder 40 | 2,992 s | 6.34M | 4,421.6 |
@@ -259,7 +281,7 @@ cleaner patch application, not for any fix.
 
 | Run | opus rows | offload | duration | tok/s/GPU | outcome |
 |---|---|---|---:|---:|---|
-| T73 | removed | yes | 3,033 s | 4,421.2 | fault |
+| T73 | present | yes | 3,033 s | 4,421.2 | fault |
 | T74 | removed | no | 2,771 s | 4,551.0 | fault |
 | T77 | **present** | no | 3,013 s | 4,451.9 | fault |
 
