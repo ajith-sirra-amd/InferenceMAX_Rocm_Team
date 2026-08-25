@@ -7,12 +7,20 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 # Where we are
 
-**Best usable: 4,622.8 tok/s/GPU** — 86% of the SA reference, **37% of target**.
+**Best: 4,585.3 tok/s/GPU — DCP=8 + full graphs, clean full window (T95).**
+85% of the SA reference, **37% of target**.
+
+**The DCP crash is fixed.** Cause was our **sparse capture ladder**: decode
+batches were padded up to the next captured size, and the padded rows read out
+of bounds. A dense ladder (every size 1…40, as the SA reference uses) runs
+clean. DCP now beats non-DCP *and* keeps 31× the KV pool at 94.5% prefix hit.
 
 | Config | DCP | MTP | Offload | Graphs | Conc | Tok/s/GPU | TPOT | TTFT | Status | Run |
 |---|---|---|---|---|---|---:|---:|---:|---|---|
 | SA reference | No | Yes | Yes | — | 20 | 5,388 | 0.0382 | 12.2 s | OK | [SA](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31993981851/job/95282381888) |
-| **T64 best** | No | No | **Yes** | Full | 20 | **4,622.8** | 0.0461 | 2.14 s | **OK 3,612 s** | [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) |
+| **T95 best** | **8** | No | **Yes** | Full | 20 | **4,585.3** | **0.0445** | **2.24 s** | **OK 3,630 s** | [T95](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32806967290) |
+| T94 non-DCP | No | No | **Yes** | Full | 20 | 4,537.0 | 0.0454 | 2.82 s | OK 3,627 s | [T94](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32801140212) |
+| T64 | No | No | **Yes** | Full | 20 | **4,622.8** | 0.0461 | 2.14 s | **OK 3,612 s** | [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) |
 | T86 | **8** | No | No | Full | 40 | 4,621.5 | 0.0736 | 4.42 s | Fault 420 s | [T86](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32754837021) |
 | T87 | **8** | No | No | Full | 40 | 4,611.6 | 0.0734 | 5.75 s | Fault 421 s | [T87](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32758545737) |
 | T74 | **8** | No | No | Full | 20 | 4,551.0 | 0.0499 | — | Fault 2,771 s | [T74](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32699967765) |
@@ -52,58 +60,34 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 ---
 
-# The DCP + full graphs crash
+# The DCP + full graphs crash — SOLVED
 
-**What happens:** GPU page fault on all 8 ranks at once. Server dies, benchmark
-aborts on failed-request threshold.
+**Cause:** our capture ladder was sparse (`1,2,4,8,16,24,32,40`). Every decode
+batch was padded up to the next captured size, and the padded rows read out of
+bounds under DCP. Fix: capture **every** size, `1…max_num_seqs`.
 
-**Only this pair triggers it**
+- Crashed 10 of 10 runs with the sparse ladder. Clean on the first dense-ladder
+  run (T95, 3,630 s, 7.35M unique tokens — past every previous crash point).
+- Only DCP + full graphs was affected. Full graphs alone (T64) and DCP with
+  piecewise (T66c) were always fine.
+- Timing scaled with concurrency, not time or tokens: conc 20 crashed ~2,900 s,
+  conc 40 ~420 s. More concurrency means more distinct batch sizes, so more
+  padding events. `max_num_seqs` made no difference (40 and 80 both ~421 s).
+- Signature fit padding: all 8 ranks faulted at the **same low offset** over
+  unrelated bases — one buffer overrun by a fixed amount on every rank.
 
-| Config | Result |
-|---|---|
-| Full graphs, no DCP | OK — T64 ran to 62.7M tokens |
-| DCP, piecewise | OK — T66c ran to 14.3M tokens |
-| **DCP + full graphs** | **Crash, 10 of 10 runs** |
+**What confirmed it:** a SemiAnalysis run
+([32746060058](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/32746060058))
+ran DCP8 + full graphs for 2 hours with **zero faults** using a dense ladder
+(every integer 2…60). That run used TRITON_MLA, which first suggested the
+backend was the difference — the ladder turned out to be the real variable, and
+AITER MLA works fine with a dense ladder while being ~2× faster
+(4,585.3 vs ~2,210–2,476).
 
-- **Timing scales with concurrency only.** Conc 20 crashes at ~2,900 s, conc 40
-  at ~420 s — 7x sooner, while request rate rises only ~1.8x. `max_num_seqs`
-  makes no difference (40 and 80 both crash at ~421 s), so it is not a buffer
-  sized by it — that rules out `paged_kv_indices` and the aiter MLA metadata
-  workspace. Not elapsed time either (T82 ran 3,608 s clean), and not
-  accumulated tokens (6.3M at conc 20 vs 1.6M at conc 40).
-
-**Fault signature**
-
-- `VM_L2_PROTECTION_FAULT_STATUS`, `PERMISSION_FAULTS: 0x3`, IH client
-  `0x1b (UTCL2)`, TCP client → vector-memory **out-of-bounds read**.
-- All 8 ranks fault at the **same low offset** over unrelated base addresses —
-  one per-rank buffer overrun by a fixed amount. A page-table walk running off
-  the end would scatter instead.
-
-**Already ruled out** (one variable each, all still crash)
-
-KV offload · aiter opus rows · capture ladder size · comm backend `a2a`/`ag_rs` ·
-`VLLM_DCP_Q_REPLICATE` on/off · `max_num_seqs` · two different images.
-
-**Why we cannot name the kernel yet**
-
-- Log says only `Reason: Unknown`; the GPU coredump handler fails with
-  `execvp` ENOENT.
-- `AMD_SERIALIZE_KERNEL=3` does not help — it serialises individual dispatches,
-  but the crash is inside a **captured graph replay** where kernels launch as a
-  unit. Throughput fell only 13%, confirming it never took effect.
-- The aiter-vs-vLLM bisect is unfinished: T82 never reached the trigger, T84
-  hung for an unrelated reason.
-
-**Evidence it is upstream, not our config**
-
-- `vllm/platforms/rocm.py` force-downgrades to piecewise whenever DCP > 1.
-  `cuda.py` has no such gate — NVIDIA DCP keeps full graphs.
-- PR #51705 adds `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` to lift it, and ships it
-  **default-off**.
-
-**Reproduction** — conc 40, DCP=8, `FULL_AND_PIECEWISE`,
-`VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1` → all 8 ranks fault in ~420 s, every time.
+**Cost of finding it:** six runs were spent varying DCP knobs — offload, opus
+rows, comm backend, query replication, `max_num_seqs`, images — while the ladder
+sat unexamined. The SA reference script was available throughout and its ladder
+was never diffed against ours.
 
 ---
 
@@ -163,6 +147,7 @@ Piecewise is not a fallback: 1,574.5, roughly 3x too slow.
 
 | Trap | Cost |
 |---|---|
+| **Sparse capture ladder under DCP** | **GPU page fault** — use every size 1…N |
 | `--async-scheduling` on | 4.8x |
 | KV offload block missing from the `.sh` | 3.3x |
 | Capture ladder below `max_num_seqs x (1+spec)` | Decode silently drops to piecewise |
