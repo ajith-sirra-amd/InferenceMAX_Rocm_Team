@@ -1,127 +1,89 @@
-# Kimi-K3 on 8× MI355X — Performance Investigation
+# Kimi-K3 on 8x MI355X — Performance
 
-Kimi-K3 (2.8T MoE, 93 layers of which 24 are full-attention MLA, 96 heads, 1M
-context, MXFP4) · vLLM ROCm · agentic-replay workload · concurrency 20.
+Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 **Target: 12,500 tok/s/GPU.**
 
 ---
 
-# 1. Current state
+# Where we are
 
-| Configuration | tok/s/GPU | TPOT | TTFT | Speculation | Complete |
-|---|---:|---:|---:|---|---|
-| SA reference (MI355X) | 5,388 | 0.0382 | 12.2 s | MTP, **synthetic** acceptance | yes |
-| **Best complete — TP8, AITER MLA** | **4,622.8** | **0.0461** | **2.14 s** | none, real tokens | yes, 3,612 s |
-| DCP=8 + full graphs, no offload | 4,551.0 | 0.0499 | — | none | **no — GPU fault @ 2,771 s** |
-| DCP=8 + full graphs + offload | 4,421.2 | 0.0497 | — | none | **no — GPU fault @ 3,033 s** |
-| DCP=8 + full graphs, TRITON MLA | 2,210.0 | 0.1508 | — | none | yes, 3,608 s |
-| DP2/TP4/EP8 attention | 2,998.6 | 0.1140 (p50 0.0652) | 8.57 s | none | yes |
-| TP8 + MTP | 2,045.4 | 0.1003 | 67.7 s | MTP, synthetic | yes |
-| TP8 + MTP + **full graphs** | 982.4 | 0.1659 | 212.7 s | MTP, synthetic | yes, 3,605 s |
-| TP8 + MTP + full graphs + async sched | 724.2 | 0.1374 | 374.8 s | MTP, synthetic | yes, 3,629 s |
-| TP8, no spec, **`--async-scheduling`** | 963.5 | 0.2498 | 137.5 s | none | yes, 3,467 s |
-| TP8, no spec, **no KV offload** | 1,397.0 | 0.2332 | 35.0 s | none | yes, 3,629 s |
-| TP8 + DCP=8, piecewise graphs | 1,574.5 | 0.2174 | 12.4 s | none | yes, 3,628 s |
+**Best usable: 4,622.8 tok/s/GPU** — 86% of the SA reference, **37% of target**.
 
-The best complete run reaches **86% of the reference's throughput without
-speculation**, where the reference runs MTP with synthetic acceptance (drafts
-committed regardless of target logits, which inflates its token count).
-Against the 12,500 target: **37%**.
+| Config | DCP | MTP | Offload | Graphs | Conc | tok/s/GPU | TPOT | TTFT | Status | Run | SHA |
+|---|---|---|---|---|---|---:|---:|---:|---|---|---|
+| SA reference | no | yes | — | — | 20 | 5,388 | 0.0382 | 12.2 s | ok | — | — |
+| **T64 best** | no | no | **yes** | full | 20 | **4,622.8** | 0.0461 | 2.14 s | **ok 3,612 s** | [T64](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32436403856) | `9d8250de` |
+| T86 | **8** | no | no | full | 40 | 4,621.5 | 0.0736 | 4.42 s | fault 420 s | [T86](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32754837021) | `4542d1ed` |
+| T87 | **8** | no | no | full | 40 | 4,611.6 | 0.0734 | 5.75 s | fault 421 s | [T87](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32758545737) | `52c4c8cd` |
+| T74 | **8** | no | no | full | 20 | 4,551.0 | 0.0499 | — | fault 2,771 s | [T74](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32699967765) | `34daf833` |
+| T81 | **8** | no | no | full | 20 | 4,489.3 | 0.0501 | 2.18 s | fault 2,997 s | [T81](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32729114956) | `572f770d` |
+| T83 | **8** | no | no | full | 40 | 4,457.1 | 0.0672 | 5.16 s | fault 425 s | [T83](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32745214998) | `5db73a60` |
+| T77 | **8** | no | no | full | 20 | 4,451.9 | 0.0503 | — | fault 3,013 s | [T77](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32708108429) | `c525c3ee` |
+| T79 | **8** | no | no | full | 20 | 4,421.6 | 0.0488 | 2.25 s | fault 2,992 s | [T79](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32716127572) | `ed927789` |
+| T73 | **8** | no | **yes** | full | 20 | 4,421.2 | 0.0497 | — | fault 3,033 s | [T73](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32694320223) | `45582e2e` |
+| T80 | **8** | no | no | full | 20 | 4,298.4 | 0.0444 | — | fault 2,987 s | [T80](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32722526689) | `30c4608a` |
+| T67b DP2/TP4 | no | no | yes | full | 20 | 2,998.6 | 0.1140 | 8.57 s | ok | [T67b](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32458502570) | `001ca8d9` |
+| T82 TRITON MLA | **8** | no | no | full | 20 | 2,210.0 | 0.1508 | — | ok 3,608 s | [T82](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32736571541) | `c0d4e0fc` |
+| T65 | no | **yes** | yes | piecewise | 20 | 2,045.4 | 0.1003 | 67.7 s | ok | [T65](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32444354043) | `1800ee4d` |
+| T66c | **8** | no | **yes** | **piecewise** | 20 | 1,574.5 | 0.2174 | 12.4 s | **ok 3,628 s** | [T66c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32451498395) | `59ba24bc` |
+| T92 | no | no | **no** | full | 20 | 1,397.0 | 0.2332 | 35.0 s | ok 3,629 s | [T92](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32789572478) | `220a28f8` |
+| T93c | no | no | no* | full | 20 | 1,343.0 | 0.2292 | 40.3 s | ok 3,613 s | [T93c](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32795749613) | `ffa2bb7c` |
+| T88 | no | **yes** | no | full | 20 | 982.4 | 0.1659 | 212.7 s | ok 3,605 s | [T88](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32763413965) | `bfa32e4b` |
+| T91 async sched | no | no | no | full | 20 | 963.5 | 0.2498 | 137.5 s | ok 3,467 s | [T91](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32782978418) | `5354eaf6` |
+| T90 | no | **yes** | no | full | 20 | 724.2 | 0.1374 | 374.8 s | ok 3,629 s | [T90](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32774606161) | `9179c04d` |
 
-**No throughput improvement has been achieved yet.** The best usable number is
-still T64's **4,622.8 tok/s/GPU** — 86% of the reference, **37% of the 12,500
-target** — unchanged.
-
-**DCP is no longer the loser it appears to be further down this page.** Enabling
-full CUDA graphs moved DCP from 1,574.5 to 4,551.0 tok/s/GPU (+189%) and TPOT
-from 0.2174 to 0.0499 — see 2.0. Those runs are listed as incomplete because
-they die on a GPU page fault before the benchmark window closes, so they are
-**not** claimable results yet. Closing that fault is the current blocker.
-
-Two things to keep in view when reading the numbers above:
-
-- **DCP + full graphs does not currently beat non-DCP** at concurrency 20
-  (4,298–4,551 vs 4,622.8). DCP's entire value is the 31× KV pool, which only
-  pays at higher concurrency — KV usage has been just 10–12% with zero
-  preemptions in every DCP run.
-- **Concurrency 40 is not yet a usable number.** T83 reports 4,457.1 tok/s/GPU,
-  but it faulted at 424 s while still ramping (TTFT 5.16 s), so the aggregate is
-  dominated by ramp-up rather than steady state and is **not** recorded as a
-  result. The suggestive part: server-side input rate reached **63,185/s against
-  ~37,000/s at concurrency 20** (~1.7×), so the pool does look convertible into
-  throughput — unproven until a run survives the window.
-- **MTP is not the lever, and the reason is structural.** Two clean full-window
-  runs: T88 **982.4** tok/s/GPU and T90 (async scheduling) **724.2**, against
-  4,622.8 without speculation. Enabling MTP collapses prefix caching:
-
-  | | prefix hit | TTFT | tok/s/GPU |
-  |---|---:|---:|---:|
-  | T64 no MTP | **53.4%** | 2.14 s | **4,622.8** |
-  | T88 MTP | 8.4% | 212.7 s | 982.4 |
-  | T90 MTP + async sched | 10.7% | 374.8 s | 724.2 |
-
-  A 53% → ~10% hit-rate collapse with `unique_in_srv` at 20–28M means the cache
-  thrashes and requests queue. Neither pool sizing nor scheduling touches it;
-  both were tried and falsified. **Pool sizing is retired as a cause** — the
-  reference reaches 5,388 on a *smaller* pool (2,646,059) than T88's 2,817,325.
-  The open question is why speculation destroys prefix reuse here, not which
-  knob to turn next.
-
-### DRAM KV offload is worth 3.3× on the non-DCP path — do not drop it
-
-| | offload | prefix hit | TTFT | tok/s/GPU |
-|---|---|---:|---:|---:|
-| T64 | **dram** | 53.4% | 2.14 s | **4,622.8** |
-| T92 | none | 24.0% | 35.0 s | **1,397.0** |
-
-Identical otherwise: same 4,376,929-token pool, no speculation, no async
-scheduling, full graphs, AITER MLA, non-DCP, clean 3,628.8 s window,
-`SimpleCPUOffloadConnector` confirmed absent from T92 and `unique_in_srv`
-reaching 32.5M. Without the DRAM extension the GPU pool cannot hold the working
-set and the prefix cache halves.
-
-The Kimi matrix row carried `kv-offloading: none` from T74 onward, so **every
-non-DCP baseline quoted in that period was handicapped**.
-
-**This invalidates a comparison made repeatedly on this page.** The claim "DCP +
-full graphs does not beat non-DCP at concurrency 20" set DCP's 4,421–4,551
-against 4,622.8 — but the DCP runs carry a 31× GPU-resident pool while the
-non-DCP runs they were measured against had their cache extension removed. The
-only valid non-DCP-with-offload number is T64's, taken on a different image.
-Treat the DCP-vs-non-DCP verdict as **open** until a like-for-like pair exists.
-
-### Do not enable `--async-scheduling`
-
-It costs **4.8×** on this workload. Same KV pool as T64 (4,376,929 tokens,
-identical), no speculation, clean window:
-
-| | prefix hit | kv_usage | TTFT | TPOT | tok/s/GPU |
-|---|---:|---:|---:|---:|---:|
-| T64 `--no-async-scheduling` | 53.4% | 41.1% | 2.14 s | 0.0461 | **4,622.8** |
-| T91 `--async-scheduling` | 17.4% | **96.2%** | 137.5 s | 0.2498 | **963.5** |
-
-Mechanism: async scheduling defers block frees (`defer_block_free` with
-`max_concurrent_batches > 1`), the pool saturates at 96%, prefix blocks are
-evicted, hit rate collapses and the workload thrashes. This is **not**
-DCP-specific — it is about block lifetime under concurrent batches and applies
-on every path. The same thrash mechanism explains the MTP collapse, which is why
-neither pool sizing nor scheduling moved it.
-
-**Best-known configuration**
-```
-TP8 · no DCP · no DP · no speculation
-attention: target backend UNSET  -> ROCm selects ROCM_AITER_MLA
-           prefill ROCM_AITER_FA via --attention-config
---max-num-batched-tokens 8192 · --kv-cache-dtype fp8 · --max-num-seqs 40
---gpu-memory-utilization 0.9 · DRAM KV offload (SimpleCPUOffloadConnector)
-image: vllm/vllm-openai-rocm:nightly-ac7509e2b1db40fec2f03dde1ed4e9dfdc2338c9
-patches: [1] aiter pybind11 · [2] TritonMLA cudagraph · [3] KV block-pool clamp
-GPU KV cache 4,376,929 tokens (4.17×)
-```
+\* T93c asked for offload; the script silently ignored it. See below.
 
 ---
 
-# 2. Findings, in priority order
+# The five things that matter
+
+- **DCP + full graphs crashes.** GPU page fault, 10 runs out of 10. Nothing
+  else does. Full graphs alone are fine (T64). DCP alone is fine (T66c).
+- **That crash is where the headroom is.** DCP holds 32.8M KV tokens vs 4.4M,
+  used only 10%, 94% cache hit. T64 is 14x oversubscribed at 53% hit and needs
+  a 243 GB/rank DRAM crutch. Only DCP can take more concurrency.
+- **MTP loses 5x.** Cache hit falls 53% -> 10%. Not fixable by pool size or
+  scheduling; both tried.
+- **`--async-scheduling` loses 4.8x.** It defers block frees, pool fills to
+  96%, cache evicts. The reference uses it — do not copy that flag.
+- **KV offload is worth 3.3x** on non-DCP. It was silently missing from T74
+  onward, so DCP-vs-non-DCP is **not yet a fair comparison**.
+
+---
+
+# What to do next
+
+1. **Finish the DCP crash bisect** — TRITON MLA at conc 40 (~25 min). Splits it
+   into aiter kernel vs vLLM DCP code. Aiter side we can patch ourselves.
+2. **If it is vLLM code — report upstream.** Repro is solid: conc 40, DCP=8,
+   full graphs, dies in ~7 min, every time.
+3. **Re-baseline non-DCP with offload actually on** (T94, running).
+
+Piecewise is not a fallback: 1,574.5, roughly 3x too slow.
+
+---
+
+# Known traps
+
+| Trap | Cost |
+|---|---|
+| `--async-scheduling` on | 4.8x |
+| KV offload block missing from the .sh | 3.3x |
+| Capture ladder below `max_num_seqs x (1+spec)` | decode silently drops to piecewise |
+| `spec-decoding` matrix field | also picks the script filename |
+| `per_gpu.total_tput_tps` | divides by `tp`, not GPU count — 2x wrong on DP |
+| `agg_bmk.json` `spec_decoding` | reports the matrix label, not engine state |
+| Workflow "completed success" | says nothing about whether the benchmark aborted |
+
+---
+
+# Appendix — detail, evidence and history
+
+Everything below is the working record: mechanisms, profiling, falsified
+hypotheses, corrections and the full trial ledger.
+
+## 2. Findings, in priority order
 
 ### 2.0 DCP's penalty was a ROCm-only cudagraph downgrade, not DCP itself
 
@@ -430,7 +392,7 @@ shard.
 
 ---
 
-# 3. Limiting kernels and where the time goes
+## 3. Limiting kernels and where the time goes
 
 Torch profiler, decode-only windows, 8 ranks. **Caveat: all existing traces were
 captured with the forced TRITON_MLA backend** — the 2.4× handicap. Traces of the
@@ -529,7 +491,7 @@ removing barriers or removing the host from the launch path.
 
 ---
 
-# 4. Recommended direction
+## 4. Recommended direction
 
 1. **Keep the target attention backend unset.** Largest single effect measured.
 2. **Do not enable DCP or MTP** on this workload at c20 with this request mix.
@@ -546,7 +508,7 @@ removing barriers or removing the host from the launch path.
 
 ---
 
-# 5. Measurement hazards in this harness
+## 5. Measurement hazards in this harness
 
 Two reported fields produce incorrect conclusions if taken at face value.
 
@@ -572,7 +534,7 @@ image.
 
 ---
 
-# 6. Configuration reference
+## 6. Configuration reference
 
 ### 6.1 In-container patches
 
@@ -601,7 +563,7 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 
 ---
 
-# 7. Trial ledger
+## 7. Trial ledger
 
 | # | Run | Configuration | Result |
 |---|---|---|---|
@@ -658,7 +620,7 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 
 ---
 
-# 8. Investigation history
+## 8. Investigation history
 
 ### 8.1 Levers tested against the DCP decode penalty — all negative
 
