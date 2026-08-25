@@ -7,8 +7,8 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 # Where we are
 
-**Best: 7,206.4 tok/s/GPU — DCP=8 + full graphs at concurrency 40 (T96).**
-**134% of the SA reference (5,388)** · **58% of the 12,500 target**.
+**Best: 7,950.6 tok/s/GPU — DCP=8 + full graphs at concurrency 52 (T103).**
+**148% of the SA reference (5,388)** · **64% of the 12,500 target**.
 Clean full window, 0 faults, 0 aborts.
 **Accuracy verified: GSM8K 98.5%** on the identical config
 ([T97](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32819265466)).
@@ -34,7 +34,8 @@ KV capacity — so the lever is `max_num_seqs`, not more offered load.
 | Config | DCP | MTP | Offload | Graphs | Conc | Tok/s/GPU | TPOT | TTFT | Status | Run |
 |---|---|---|---|---|---|---:|---:|---:|---|---|
 | SA reference | No | Yes | Yes | — | 20 | 5,388 | 0.0382 | 12.2 s | OK | [SA](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31993981851/job/95282381888) |
-| **T96 best** | **8** | No | **Yes** | Full | **40** | **7,206.4** | 0.0722 | 3.73 s | **OK 3,627 s** | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
+| **T103 best** | **8** | No | **Yes** | Full | **52** | **7,950.6** | 0.0913 | 4.76 s | **OK 3,628 s** | [T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638) |
+| T96 | **8** | No | **Yes** | Full | **40** | **7,206.4** | 0.0722 | 3.73 s | **OK 3,627 s** | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
 | T102 | **8** | **Yes** | **Yes** | Full | 40 | 1,075.4 | 0.1900 | 262.6 s | OK 3,612 s | [T102](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32846271434) |
 | T98 | **8** | No | **Yes** | Full | **72** | 2,039.9 | 0.1542 | 20.22 s | **Aborted 1,210 s** | [T98](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32821348618) |
 | T95 | **8** | No | **Yes** | Full | 20 | **4,585.3** | **0.0445** | **2.24 s** | **OK 3,630 s** | [T95](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32806967290) |
