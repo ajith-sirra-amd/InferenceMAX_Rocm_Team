@@ -5,8 +5,6 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 export EVAL_FRAMEWORK="lm-eval"
-SKIP_KIMI_PATCHES="${SKIP_KIMI_PATCHES:-1}"
-export SKIP_KIMI_PATCHES
 EVAL_ONLY="${EVAL_ONLY:-false}"
 EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export EVAL_ONLY EVAL_LIMIT
@@ -40,30 +38,11 @@ DCP_SIZE=8
 export DCP_SIZE
 
 export SKIP_PATCH_OPUS_ROWS=1
-# SKIP_KIMI_PATCHES=1 for images with the patches already baked in
-# (kimi-k3-vllm:latest). Skipping is asserted, not assumed: if the image turns
-# out not to carry them, fail here rather than 20 minutes later at engine init
-# with "DCP requires attention implementations to return the softmax LSE".
-if [ "${SKIP_KIMI_PATCHES:-0}" = "1" ]; then
-    echo "[kimi-patches] SKIPPED -- verifying the image really has them"
-    python3 - <<'VERIFY'
-import os, sys, vllm
-r = os.path.dirname(os.path.dirname(vllm.__file__))
-checks = {
-    "VLLM_ALLOW_DCP_FULL_CUDAGRAPH": f"{r}/vllm/platforms/rocm.py",
-    "supports_non_causal_multi_token_dcp": f"{r}/vllm/v1/attention/backends/mla/triton_mla.py",
-    "enable_dcp_q_replicate": f"{r}/vllm/models/kimi_k3/nvidia/mla.py",
-}
-missing = [k for k, f in checks.items() if k not in open(f).read()]
-if not os.path.exists(f"{r}/vllm/v1/attention/ops/rocm_aiter_mla_reduce.py"):
-    missing.append("rocm_aiter_mla_reduce.py")
-if missing:
-    sys.exit("[kimi-patches] FATAL: image is missing " + ", ".join(missing))
-print("[kimi-patches] verified: DCP hatch, non-causal DCP, q-replicate, LSE reduce")
-VERIFY
-else
-    bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
-fi
+# Patches are pre-applied in kimi-k3-vllm:latest (kv-blockpool, pr51705
+# e72380a5, pr51705-rejects), so the in-container patch step is not run.
+# Re-enable the line below when running against a stock upstream image.
+# bash "$(dirname "$0")/apply_kimi_k3_patches.sh" || true
+
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
