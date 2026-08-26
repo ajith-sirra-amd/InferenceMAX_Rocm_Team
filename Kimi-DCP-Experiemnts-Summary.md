@@ -145,37 +145,24 @@ extraction artifact. Run: [T97](https://github.com/ajith-sirra-amd/InferenceMAX_
 Set `EVAL_ONLY=true` in the `.sh` to re-run it; `EVAL_LIMIT=full` for the whole
 dataset.
 
-**Upstream PRs — status on our stack**
+**Applied upstream PRs**
 
-| PR | What it does | Status here |
-|---|---|---|
-| [#51705](https://github.com/vllm-project/vllm/pull/51705) | DCP for Kimi-K3 DSpark; `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` hatch; softmax-LSE for AITER MLA decode | **Vendored, essential.** Still unmerged upstream. Without it DCP dies at init: *"requires attention implementations to return the softmax LSE during decode"* |
-| [#52188](https://github.com/vllm-project/vllm/pull/52188) | Kimi-K3 DCP with DSpark (`prepare_dcp_local_seq_lens`, `cp_local_slot`) | **Merged, already in image.** Supersedes finding 2.5 |
-| [#51040](https://github.com/vllm-project/vllm/pull/51040) | FP8 ASM MLA prefill for non-divisor head counts (pads 12 → 16) | **Vendored but INERT for K3.** Patches `forward_mha`, which K3 never calls — it prefills via `_forward_prefill_fused`. Applied cleanly (0 failed hunks) and does nothing |
-| [#51171](https://github.com/vllm-project/vllm/pull/51171) | FULL cudagraphs for AITER MLA spec decode | **Archived — unusable.** Conflicts with #51705 (5 of 8 hunks reject on `rocm_aiter_mla.py`), and its `triton_mla.py` hunk uses the same `non_causal_multi_token_decode` predicate, so it would not have fixed the DSpark DCP gate either |
-| [#50619](https://github.com/vllm-project/vllm/pull/50619) | Kimi-K3 DSpark decode defects (draft downgrades target's cudagraphs) | Not applied. Overlaps #51171 on the same defect |
-| [#50791](https://github.com/vllm-project/vllm/pull/50791) | Size FlashInfer sparse MLA workspace for DCP | Not applicable — B200/FlashInfer. Cited only as the bug class during the crash hunt |
-| [#50883](https://github.com/vllm-project/vllm/pull/50883) | Scale `UniformTypeKVCacheSpecs` groups by DCP | Not applied. Would matter for hybrid + DCP + offload |
-| [#52269](https://github.com/vllm-project/vllm/pull/52269) | Kimi-K3 DSpark under DCP | Draft — not vendored |
-| [#48392](https://github.com/vllm-project/vllm/pull/48392) | DFlash/DSpark drafts under DCP (dense GQA/MHA) | Not applicable — K3 is MLA, #52188 covers it |
-| [#51203](https://github.com/vllm-project/vllm/pull/51203) | Keep FP8 query allocation stable across CUDA graph replay | Not applicable — MiniMax-M3 specific. Matched our crash *shape* but not our model |
+| PR | What it gives us |
+|---|---|
+| [#51705](https://github.com/vllm-project/vllm/pull/51705) | DCP for Kimi-K3; `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` hatch; softmax-LSE for AITER MLA decode. **Vendored** as `pr51705_vllm.diff` — still unmerged upstream, and DCP cannot run without it |
+| [#52188](https://github.com/vllm-project/vllm/pull/52188) | Kimi-K3 DCP with DSpark (`prepare_dcp_local_seq_lens`, `cp_local_slot`). **Merged upstream, already in the image** — nothing to apply |
 
-Also relevant, ROCm-side: [ROCm/aiter#4915](https://github.com/ROCm/aiter/pull/4915)
-(opus GEMM rows) — tried and **exonerated**, see archive notes.
+Everything else considered (#51040, #51171, #50619, #50791, #50883, #52269,
+#48392, #51203, ROCm/aiter#4915) was either inert, conflicting or inapplicable —
+see `archive/README-patches.md`.
 
-**Patches** (applied inside the container by `apply_kimi_k3_patches.sh`)
+**Applied patches** (`apply_kimi_k3_patches.sh`, 3 of them)
 
-| Patch | What it does | Runs |
-|---|---|---|
-| `aiter-pybind11` | Fixes an aiter/pybind11 signature mismatch | All |
-| `triton-mla-cudagraph` | Lets Triton MLA run under CUDA graphs | All |
-| `kv-blockpool` | Clamps a negative block count | All |
-| `pr51705` | vLLM PR — DCP support **and** the full-graph hatch | T76 onward |
-| `pr51705-rejects` | Re-applies the hunk that PR misses on our image | T79 onward |
-| `pr51040` | FP8 ASM MLA prefill, 12→16 head pad | T110 onward — **inert for K3** |
-| ~~`aiter-opus-rows`~~ | Dropped opus GEMM rows | T74–T76 only — **archived** |
-| ~~`aiter-pybind11`~~ | pybind11 guard | **archived** — no-op on this image |
-| ~~`triton-mla-cudagraph`~~ | Triton MLA cudagraphs | **archived** — superseded by #51705 |
+| Patch | What it does |
+|---|---|
+| `pr51705` | Vendored vLLM PR — DCP support and the full-graph hatch |
+| `pr51705-rejects` | Adds `enable_dcp_q_replicate` to `MultiHeadLatentAttention.__init__`; the PR's own hunk rejects on this image |
+| `kv-blockpool` | Clamps a negative block count |
 
 - `pr51705` is **vendored in-repo** since T76. Before that it was fetched live
   and pinned by SHA — the PR was force-pushed twice in one day and killed two
@@ -183,10 +170,10 @@ Also relevant, ROCm-side: [ROCm/aiter#4915](https://github.com/ROCm/aiter/pull/4
 - `pr51705-rejects` fixes `enable_dcp_q_replicate` missing from
   `MultiHeadLatentAttention.__init__`. Silent with speculation off; kills every
   rank at init with MTP on. Needed on `d626108b`, not on `f94666b6`.
-- `aiter-opus-rows` is **off since T77** — it changed neither the crash nor
-  throughput.
-- Dropped as no-ops: `dcp-lse`, `dcp-blocktable`, `dcp-direct-a2a`,
-  `dcp-gathered-heads` — all superseded by `pr51705`.
+- All three are **pre-applied** in `aigmkt/kimi-k3-vllm:latest`, so the runtime
+  patch step is commented out in the launcher.
+- Archived patches and the reasoning for each removal:
+  `archive/README-patches.md`.
 
 ---
 
