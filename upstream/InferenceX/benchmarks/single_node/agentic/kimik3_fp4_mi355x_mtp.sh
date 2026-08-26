@@ -142,6 +142,14 @@ MAX_CUDAGRAPH_CAPTURE_SIZE=80
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
+PROFILE="${PROFILE:-1}"
+PROFILER_ARGS=()
+if [ "$PROFILE" = "1" ]; then
+    PROF_DIR_ABS="$RESULT_DIR/torch_profile"; mkdir -p "$PROF_DIR_ABS"
+    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\",\"torch_profiler_record_shapes\":true}")
+    echo "[profile] torch profiler -> $PROF_DIR_ABS"
+fi
+
 GPU_MEM_UTIL=0.9
 
 VLLM_CMD=(
@@ -170,6 +178,7 @@ VLLM_CMD=(
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
+    "${PROFILER_ARGS[@]}"
 )
 
 for _a in CP_ARGS SPEC_ARGS CHUNKED_PREFILL_ARGS ASYNC_SCHED_ARGS MLA_PREFILL_ARGS OFFLOAD_ARGS COMPILATION_CONFIG_ARGS; do
@@ -234,7 +243,46 @@ fi
 # EVAL_ONLY=true runs the GSM8K accuracy gate instead of the throughput replay.
 # EVAL_LIMIT bounds the sample count; unset/full runs the whole dataset (the
 # earlier attempt timed out needing ~15 h at 780 tok/s -- see ledger row 6).
-if [ "${EVAL_ONLY:-false}" = "true" ]; then
+if [ "$PROFILE" = "1" ]; then
+    PROF_DIR="$PROF_DIR_ABS"
+    # Profile the REAL workload shape, not decode-only: the agentic replay is
+    # prefill-dominated (~65k input tok/s vs ~250 output), so a decode-only
+    # trace would profile 3.6% of the time. Drive long prompts + short outputs
+    # so prefill and decode are both represented in proportion.
+    for i in $(seq 1 "${PROFILE_CONC:-16}"); do
+        ( python3 - "$PORT" "$MODEL" "$i" <<'GENPY'
+import sys, json, urllib.request, random
+port, model, seed = sys.argv[1], sys.argv[2], int(sys.argv[3])
+random.seed(seed)
+words = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta"]
+for _ in range(40):
+    prompt = " ".join(random.choice(words) for _ in range(6000))   # long prefill
+    body = json.dumps({"model": model, "prompt": prompt,
+                       "max_tokens": 64, "temperature": 0.0}).encode()
+    try:
+        urllib.request.urlopen(urllib.request.Request(
+            f"http://0.0.0.0:{port}/v1/completions", body,
+            {"Content-Type": "application/json"}), timeout=600).read()
+    except Exception:
+        pass
+GENPY
+        ) > /dev/null 2>&1 &
+    done
+    PROF_PIDS=$(jobs -p | tr '\n' ' ')
+    sleep "${PROFILE_WARM_S:-90}"
+    echo "[profile] starting trace"
+    curl -s -m 60 -X POST "http://0.0.0.0:$PORT/start_profile" || true
+    sleep "${PROFILE_WINDOW_S:-20}"
+    curl -s -m 600 -X POST "http://0.0.0.0:$PORT/stop_profile" || true
+    echo "[profile] stopped; flushing"
+    sleep "${PROFILE_FLUSH_S:-120}"
+    for q in $PROF_PIDS; do kill "$q" 2>/dev/null || true; done
+    PROF_KEEP="/mnt/hf_hub_cache/kimi-profiles/$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
+    mkdir -p "$PROF_KEEP" && cp -a "$PROF_DIR"/. "$PROF_KEEP"/ 2>/dev/null \
+        && echo "[profile] kept at $PROF_KEEP" || true
+    ls -la "$PROF_DIR" || true
+    echo "[profile] done; skipping benchmark arm"
+elif [ "${EVAL_ONLY:-false}" = "true" ]; then
     echo "[eval] GSM8K accuracy gate, EVAL_LIMIT=${EVAL_LIMIT:-full}"
     run_eval --port "$PORT"
 else
