@@ -160,6 +160,16 @@ fi
 
 GPU_MEM_UTIL=0.9
 
+# fastsafetensors stages a whole shard batch in device memory before scattering:
+# 96 shards / 12 batches = 8 shards x ~15.7 GB = ~117 GiB on top of the weights
+# already resident. T109 survives that by a hair (weights alone are 192.56 GiB of
+# the 268 GiB card, leaving ~75 GiB), but T117 and T118 both died at shard 11/12
+# with ~270 MB free -- and T118 proved it is not the MoE kernel, since it OOM'd
+# identically after the backend was moved back to AITER_MXFP4_BF16. 'auto' stages
+# through host memory instead, trading startup time for load-time headroom. It
+# does not affect steady-state throughput, so T103 stays comparable.
+LOAD_FORMAT="${LOAD_FORMAT:-auto}"
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
@@ -167,7 +177,7 @@ VLLM_CMD=(
     --trust-remote-code
     --moe-backend auto
     --tensor-parallel-size "$TP"
-    --load-format fastsafetensors
+    --load-format "$LOAD_FORMAT"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
