@@ -245,53 +245,30 @@ fi
 # earlier attempt timed out needing ~15 h at 780 tok/s -- see ledger row 6).
 if [ "$PROFILE" = "1" ]; then
     PROF_DIR="$PROF_DIR_ABS"
-    # Profile the REAL workload shape, not decode-only: the agentic replay is
-    # prefill-dominated (~65k input tok/s vs ~250 output), so a decode-only
-    # trace would profile 3.6% of the time. Drive long prompts + short outputs
-    # so prefill and decode are both represented in proportion.
-    for i in $(seq 1 "${PROFILE_CONC:-16}"); do
-        ( python3 - "$PORT" "$MODEL" "$i" <<'GENPY'
-import sys, json, urllib.request, random
-port, model, seed = sys.argv[1], sys.argv[2], int(sys.argv[3])
-random.seed(seed)
-words = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta"]
-for _ in range(40):
-    prompt = " ".join(random.choice(words) for _ in range(6000))   # long prefill
-    body = json.dumps({"model": model, "prompt": prompt,
-                       "max_tokens": 64, "temperature": 0.0}).encode()
-    try:
-        urllib.request.urlopen(urllib.request.Request(
-            f"http://0.0.0.0:{port}/v1/completions", body,
-            {"Content-Type": "application/json"}), timeout=600).read()
-    except Exception:
-        pass
-GENPY
-        ) > /dev/null 2>&1 &
-    done
-    PROF_PIDS=$(jobs -p | tr '\n' ' ')
-    sleep "${PROFILE_WARM_S:-90}"
-    echo "[profile] starting trace"
-    curl -s -m 60 -X POST "http://0.0.0.0:$PORT/start_profile" || true
-    sleep "${PROFILE_WINDOW_S:-5}"
-    curl -s -m 900 -X POST "http://0.0.0.0:$PORT/stop_profile" || true
-    echo "[profile] stopped; waiting for all ranks to serialise"
-    # 8 worker traces + 1 async_llm. Worker traces are large and are written
-    # after stop_profile returns, so poll rather than guessing a flush time --
-    # the previous attempt copied after 120 s and captured only async_llm.
-    for _w in $(seq 1 120); do
-        _n=$(ls "$PROF_DIR"/*.pt.trace.json* 2>/dev/null | wc -l)
-        _sz=$(du -sk "$PROF_DIR" 2>/dev/null | cut -f1)
-        [ "$_w" = 1 ] || [ $(( _w % 12 )) = 0 ] && echo "[profile]   files=$_n dir=${_sz}KB"
-        [ "$_n" -ge 9 ] && sleep 45 && break
-        sleep 10
-    done
-    echo "[profile] final: $(ls "$PROF_DIR"/*.pt.trace.json* 2>/dev/null | wc -l) trace files"
-    for q in $PROF_PIDS; do kill "$q" 2>/dev/null || true; done
-    PROF_KEEP="/mnt/hf_hub_cache/kimi-profiles/$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
-    mkdir -p "$PROF_KEEP" && cp -a "$PROF_DIR"/. "$PROF_KEEP"/ 2>/dev/null \
-        && echo "[profile] kept at $PROF_KEEP" || true
-    ls -la "$PROF_DIR" || true
-    echo "[profile] done; skipping benchmark arm"
+    # Ride along with the real agentic replay rather than a hand-rolled load
+    # generator. T113 hand-rolled one (16 shells x 6000-token prompts fired at
+    # server-ready) and hung a worker in shm_broadcast before the trace opened.
+    # The replay is the load path every successful run uses; profile that.
+    (
+        sleep "${PROFILE_WARM_S:-420}"
+        echo "[profile] starting trace"
+        curl -s -m 60 -X POST "http://0.0.0.0:$PORT/start_profile" || true
+        sleep "${PROFILE_WINDOW_S:-5}"
+        curl -s -m 900 -X POST "http://0.0.0.0:$PORT/stop_profile" || true
+        echo "[profile] stopped; waiting for all ranks to serialise"
+        for _w in $(seq 1 120); do
+            _n=$(ls "$PROF_DIR"/*.pt.trace.json* 2>/dev/null | wc -l)
+            [ $(( _w % 6 )) = 1 ] && echo "[profile]   files=$_n dir=$(du -sk "$PROF_DIR" 2>/dev/null|cut -f1)KB"
+            [ "$_n" -ge 9 ] && sleep 45 && break
+            sleep 10
+        done
+        echo "[profile] final: $(ls "$PROF_DIR"/*.pt.trace.json* 2>/dev/null | wc -l) trace files"
+        PROF_KEEP="/mnt/hf_hub_cache/kimi-profiles/$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
+        mkdir -p "$PROF_KEEP" && cp -a "$PROF_DIR"/. "$PROF_KEEP"/ 2>/dev/null \
+            && echo "[profile] kept at $PROF_KEEP" || true
+    ) &
+    build_replay_cmd "$RESULT_DIR"
+    run_agentic_replay_and_write_outputs "$RESULT_DIR"
 elif [ "${EVAL_ONLY:-false}" = "true" ]; then
     echo "[eval] GSM8K accuracy gate, EVAL_LIMIT=${EVAL_LIMIT:-full}"
     run_eval --port "$PORT"
