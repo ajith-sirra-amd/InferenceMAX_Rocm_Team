@@ -7,10 +7,48 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 # Where we are
 
-> **Where the time goes:** see
-> [Kimi-K3-Where-The-Time-Goes.md](Kimi-K3-Where-The-Time-Goes.md) — ~94% is
-> BF16 dense GEMMs, attention is 5.6%, MoE is already a8w4. That document also
-> closes the fp8-prefill line with measurements.
+> **Where the time goes — now MEASURED,** by rocprofv3 on
+> [T116](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32964875218)
+> (2.3 GB trace, 6.36M dispatches). See
+> [Kimi-K3-Where-The-Time-Goes.md](Kimi-K3-Where-The-Time-Goes.md).
+> **The GPU is idle 44.1% of the serving window.** Of the 55.9% it is busy:
+> collectives **34.3%**, MLA attention **21.8%**, dense BF16 GEMM **15.3%**,
+> MoE (already FP8×MXFP4) 12.5%, KDA 5.2%.
+> This retires two earlier claims from this document: attention is **21.8%, not
+> 5.6%**, and dense BF16 GEMM is **15.3%, not 94%**.
+> **Biggest lever is the idle, then collectives — not any GEMM.**
+
+## FP8 attention weights: tested and rejected (T117–T119)
+
+`amd/Kimi-K3-Quark-MXFP4-AttnFP8` converts exactly the 15.3% dense-BF16 block
+(`q/k/v/o_proj`, MLA `q_a/q_b/kv_a/kv_b`) to F8_E4M3, keeping routed experts
+MXFP4. Two real blockers were found and **both fixed**:
+
+1. **Load OOM at shard 11/12, 272 MB free.** Not size — it needs 188.2 GB/GPU
+   against moonshotai's 195.1. Cause: `fastsafetensors` stages a whole shard
+   batch on device (8 × ~15.7 GB ≈ 117 GiB). Fix: `LOAD_FORMAT=auto`.
+2. **Wrong MoE kernel.** AMD's config declares MXFP4 *activations*, so
+   `OCP_MX_Scheme` resolved to `w_mxfp4_a_mxfp4` → `AITER_MXFP4_MXFP4`
+   ("W4A4: CK kernel"), not the `AITER_MXFP4_BF16` + situv2 a8w4 path every
+   working run uses. Fix: `global_quant_config.input_tensors = null` in the
+   downloaded checkpoint (weights bit-identical; MXFP4 activation quant is
+   `is_dynamic`, so nothing stored is invalidated; `*self_attn*` keeps its own
+   fp8 spec so FP8 attention survives).
+
+**It still loses, on memory:**
+
+| | moonshotai | AttnFP8 |
+|---|---:|---:|
+| Model loading took | 192.56 GiB | **240.75 GiB** |
+| Available KV cache | 54.41 GiB | **9.38 GiB** |
+| GPU KV cache | ~32.7M tok | **5,391,048 tok** |
+| Prefix cache hit | 93.8% | **0.0%** |
+
+**+48 GiB/GPU more resident while 7 GB/GPU smaller on disk** — unexplained, and
+*not* MoE tile padding (K3's AITER A16W4 SiTU kernel takes native intermediate
+size). At conc 52: `Running: 1 reqs, Waiting: 18`. Cancelled rather than measure
+KV starvation. **Verdict: trading a 93.8% prefix cache for a block worth +3–5%
+is a bad trade.** Parked until the +48 GiB is explained.
 
 **Best: 7,950.6 tok/s/GPU — DCP=8 + full graphs at concurrency 52 (T103).**
 **148% of the SA reference (5,388)** · **64% of the 12,500 target**.
