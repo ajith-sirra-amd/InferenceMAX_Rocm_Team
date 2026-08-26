@@ -37,7 +37,6 @@ install_agentic_deps
 DCP_SIZE=8
 export DCP_SIZE
 
-export SKIP_PATCH_OPUS_ROWS=1
 # Patches are pre-applied in kimi-k3-vllm:latest (kv-blockpool, pr51705
 # e72380a5, pr51705-rejects), so the in-container patch step is not run.
 # Re-enable the line below when running against a stock upstream image.
