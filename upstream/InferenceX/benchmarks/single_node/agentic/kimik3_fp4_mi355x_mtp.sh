@@ -136,18 +136,23 @@ CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-MAX_NUM_SEQS=16
-CUDAGRAPH_CAPTURE_SIZES="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
-MAX_CUDAGRAPH_CAPTURE_SIZE=16
+MAX_NUM_SEQS=80
+CUDAGRAPH_CAPTURE_SIZES="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80"
+MAX_CUDAGRAPH_CAPTURE_SIZE=80
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-PROFILE="${PROFILE:-1}"
-PROFILER_ARGS=()
-if [ "$PROFILE" = "1" ]; then
-    PROF_DIR_ABS="$RESULT_DIR/torch_profile"; mkdir -p "$PROF_DIR_ABS"
-    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\",\"torch_profiler_record_shapes\":false}")
-    echo "[profile] torch profiler -> $PROF_DIR_ABS"
+# ROCPROF=1 wraps the server in rocprofv3 kernel tracing. This replaces the
+# torch profiler, which added a per-step annotate_profile hook and hung a worker
+# in shm_broadcast at both concurrency 52 (T114) and 8 (T115). rocprofv3 traces
+# at the HIP layer and never touches vLLM's step loop.
+ROCPROF="${ROCPROF:-1}"
+ROCPROF_PREFIX=()
+if [ "$ROCPROF" = "1" ]; then
+    RP_DIR="/mnt/hf_hub_cache/kimi-profiles/rocprof_$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
+    mkdir -p "$RP_DIR"
+    ROCPROF_PREFIX=(rocprofv3 --kernel-trace --stats -f csv -d "$RP_DIR" -o k --)
+    echo "[rocprof] tracing -> $RP_DIR"
 fi
 
 GPU_MEM_UTIL=0.9
@@ -178,7 +183,6 @@ VLLM_CMD=(
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
-    "${PROFILER_ARGS[@]}"
 )
 
 for _a in CP_ARGS SPEC_ARGS CHUNKED_PREFILL_ARGS ASYNC_SCHED_ARGS MLA_PREFILL_ARGS OFFLOAD_ARGS COMPILATION_CONFIG_ARGS; do
@@ -188,7 +192,7 @@ done
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 
-"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+"${ROCPROF_PREFIX[@]}" "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
@@ -243,33 +247,7 @@ fi
 # EVAL_ONLY=true runs the GSM8K accuracy gate instead of the throughput replay.
 # EVAL_LIMIT bounds the sample count; unset/full runs the whole dataset (the
 # earlier attempt timed out needing ~15 h at 780 tok/s -- see ledger row 6).
-if [ "$PROFILE" = "1" ]; then
-    PROF_DIR="$PROF_DIR_ABS"
-    # Ride along with the real agentic replay rather than a hand-rolled load
-    # generator. T113 hand-rolled one (16 shells x 6000-token prompts fired at
-    # server-ready) and hung a worker in shm_broadcast before the trace opened.
-    # The replay is the load path every successful run uses; profile that.
-    (
-        sleep "${PROFILE_WARM_S:-300}"
-        echo "[profile] starting trace"
-        curl -s -m 60 -X POST "http://0.0.0.0:$PORT/start_profile" || true
-        sleep "${PROFILE_WINDOW_S:-5}"
-        curl -s -m 900 -X POST "http://0.0.0.0:$PORT/stop_profile" || true
-        echo "[profile] stopped; waiting for all ranks to serialise"
-        for _w in $(seq 1 120); do
-            _n=$(ls "$PROF_DIR"/*.pt.trace.json* 2>/dev/null | wc -l)
-            [ $(( _w % 6 )) = 1 ] && echo "[profile]   files=$_n dir=$(du -sk "$PROF_DIR" 2>/dev/null|cut -f1)KB"
-            [ "$_n" -ge 9 ] && sleep 45 && break
-            sleep 10
-        done
-        echo "[profile] final: $(ls "$PROF_DIR"/*.pt.trace.json* 2>/dev/null | wc -l) trace files"
-        PROF_KEEP="/mnt/hf_hub_cache/kimi-profiles/$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
-        mkdir -p "$PROF_KEEP" && cp -a "$PROF_DIR"/. "$PROF_KEEP"/ 2>/dev/null \
-            && echo "[profile] kept at $PROF_KEEP" || true
-    ) &
-    build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
-elif [ "${EVAL_ONLY:-false}" = "true" ]; then
+if [ "${EVAL_ONLY:-false}" = "true" ]; then
     echo "[eval] GSM8K accuracy gate, EVAL_LIMIT=${EVAL_LIMIT:-full}"
     run_eval --port "$PORT"
 else
