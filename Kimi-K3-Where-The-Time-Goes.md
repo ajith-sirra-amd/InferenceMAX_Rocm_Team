@@ -21,23 +21,61 @@ provisional until a real profiler run exists.
 
 ### Per-token MACs (whole model, from safetensors shapes)
 
-| Component | MACs/token | Share of GEMM |
-|---|---:|---:|
-| MoE experts (93L, top-16 + 2 shared) | 55.29 G | **57.1%** |
-| KDA projections (69L) | 30.61 G | **31.6%** |
-| MLA projections (24L) | 5.57 G | 5.8% |
-| latent + gate (93L) | 5.38 G | 5.6% |
-| **Total** | **96.85 G** | |
+| Component | Weights | Compute | MACs/token | Share of GEMM |
+|---|---|---|---:|---:|
+| MoE experts (93L, top-16 + 2 shared) | **MXFP4** | **a8w4** | 55.29 G | **57.1%** |
+| KDA projections (69L) | BF16 | **BF16** | 30.61 G | **31.6%** |
+| MLA projections (24L) | BF16 | **BF16** | 5.57 G | 5.8% |
+| latent + gate (93L) | BF16 | **BF16** | 5.38 G | 5.6% |
+| **Total** | | | **96.85 G** | |
+
+Only the experts are quantised. Everything else is BF16 **in the checkpoint** —
+not a config choice, and unaffected by `--kv-cache-dtype fp8`, which governs KV
+storage only.
+
+**Why KDA is the largest BF16 term:** MLA uses low-rank compression (q → 1536,
+kv → 576 latent), while KDA uses four *full-rank* `[12288 × 7168]` projections
+(12288 = 96 heads × 128) plus `o_proj`. So a KDA layer is **1.9×** an MLA layer,
+and there are **2.9×** as many → **5.5×** the total.
 
 ### Converted to time (per token, per GPU, TP8)
 
-| Component | ns/token | Share |
+| Component | Precision | ns/token | Share |
+|---|---|---:|---:|
+| **TP collectives** (theory) | BF16 payload | 11,666 | **49.1%** |
+| Dense GEMM (KDA + MLA + latent) | **BF16** | 8,311 | 35.0% |
+| MoE GEMM | **a8w4** | 2,765 | 11.6% |
+| MLA attention (measured) | **BF16** | 858 | 3.6% |
+| KDA state update (upper bound) | BF16 | 177 | 0.7% |
+
+MoE carries **57% of the MACs but only 11.6% of the time** — a8w4 runs ~4×
+BF16's FLOP rate. Conversely the BF16 dense paths hold ~43% of MACs and ~35% of
+time. That ratio is the whole argument for quantising dense weights.
+
+### If dense BF16 became FP8, what would it buy?
+
+Upper bound, using the theory table: dense BF16 is **35.0%** of device time. FP8
+runs ~2× BF16 on this hardware, so halving it gives:
+
+| | Share | Best case |
 |---|---:|---:|
-| **TP collectives** (theory) | 11,666 | **49.1%** |
-| Dense GEMM, BF16 | 8,311 | 35.0% |
-| MoE GEMM, a8w4 | 2,765 | 11.6% |
-| MLA attention (measured) | 858 | 3.6% |
-| KDA state update (upper bound) | 177 | 0.7% |
+| Dense BF16 → FP8 | 35.0% → 17.5% | **~1.21× overall** |
+| Same, if collectives are overstated and dense is really ~60% | 60% → 30% | ~1.43× |
+
+So **~1.2×, maybe ~1.4× if the collectives estimate is too pessimistic** — real,
+but short of the 1.57× needed for 12,500 on its own. And that is a ceiling: it
+assumes perfect 2× on every dense GEMM with no quantise/dequantise overhead.
+
+Caveats that matter before anyone starts:
+
+- **It changes numerics.** Dense layers are BF16 in the checkpoint because
+  that is where accuracy is most sensitive. Needs GSM8K (98.5% today) to validate.
+- **It is a checkpoint/quantisation change**, not a flag.
+- **The 35% is unverified** — the budget it comes from overpredicts throughput
+  by 5.2×. If collectives dominate as the theory suggests, dense quantisation
+  buys proportionally less.
+- **KDA is where it would pay**, not "dense" generically — 30.61 G of the
+  41.56 G dense MACs. Quantising only MLA would be near-pointless.
 
 ### This model does not reconcile with reality
 
