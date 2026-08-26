@@ -123,7 +123,7 @@ export AITER_DISABLE_FMHA_OPUS=1
 
 SPEC_ARGS=()
 
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 16384)
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
