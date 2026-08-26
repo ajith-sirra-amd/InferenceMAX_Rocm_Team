@@ -50,6 +50,46 @@ size). At conc 52: `Running: 1 reqs, Waiting: 18`. Cancelled rather than measure
 KV starvation. **Verdict: trading a 93.8% prefix cache for a block worth +3–5%
 is a bad trade.** Parked until the +48 GiB is explained.
 
+## Interactivity: TPOT 22.43 → 10.30 ms at concurrency 1 (2.18×)
+
+Goal was 3×. We got **2.18×**, and the shortfall is structural, not a missing knob.
+
+| Metric | T106 base | T121 DCP off + no offload | **T122 + MTP** | SA c1 |
+|---|---:|---:|---:|---:|
+| **TPOT mean** | 0.02243 | 0.02165 | **0.01030** | 0.02156 |
+| TPOT p90 | 0.02851 | 0.02732 | **0.01357** | 0.02666 |
+| **Interactivity** tok/s/user | 44.58 | 46.20 | **97.08** | 46.37 |
+| **tok/s/GPU** | 940.0 | 973.3 | **1,210.4** | 980.6 |
+| e2e mean | 19.32 s | 18.56 s | **16.48 s** | 18.45 s |
+| TTFT mean | 1.429 | 1.367 | **1.964** | 1.241 |
+| TTFT p95 | 5.043 | 4.821 | **6.277** | 3.394 |
+
+**Decomposition — this is the useful part:**
+
+- **DCP off + offload off = −3.5% only** (22.43 → 21.65 ms). It closed the gap to
+  SA c1 exactly (973.3 vs 980.6), so the ~4% deficit *was* the DRAM offload. But
+  it proves TPOT at conc 1 is **barrier-latency-bound**: ~118 global 8-rank syncs
+  per decode step, which no config change removes.
+- **MTP = the whole 2.18×** (21.65 → 10.30 ms). It doesn't make a step cheaper —
+  it amortises the step over ~2.5 accepted tokens.
+
+**Measured acceptance was real, not assumed:** mean acceptance length **2.48–2.55**,
+draft acceptance rate **77%**, which validates the 2.51 synthetic constant.
+
+**Why 2.18× and not 2.54×:** MTP costs draft forward passes plus verification, and
+its weights and draft KV shrank the pool 4.57M → 2.94M tokens, dropping prefix hit
+94.7% → 89.5%.
+
+**The cost, not hidden: TTFT got worse** — mean +37%, p95 +24%. The draft model runs
+on prefill steps too and at conc 1 there is nothing to hide it behind. MTP is a
+TPOT-for-TTFT trade, not a free win.
+
+**To go further:** `num_speculative_tokens` 2→3 is cheap to try but acceptance decays
+with depth. The real ceiling is the ~118 barriers/step — the remaining 10.3 ms lives
+there, which is the collectives problem (34.3% of GPU busy), not a knob.
+Raising `synthetic_acceptance_length` would hit 3× on paper, but measured acceptance
+is 2.48–2.55 and inflating it would be manufacturing the number.
+
 ## SA is ahead of us by ~4–5%, and the cause is the DRAM KV offload
 
 SA run [32968517728](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/32968517728)
@@ -295,7 +335,9 @@ exactly. Sparse ladders caused the crash.
 
 | conc | n | Tok/s/GPU | TPOT | TTFT p50 | Prefix hit | Run |
 |---:|---:|---:|---:|---:|---:|---|
-| 1 | 4 | 940.0 | **0.0224** | 0.96 s | 95.5% | [T106](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32887252465) |
+| **1 + MTP** | 8 | **1,210.4** | **0.0103** | 1.09 s | 89.5% | [T122](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32992548212) |
+| 1 (DCP off, no offload) | 8 | 973.3 | 0.0217 | 0.93 s | 94.7% | [T121](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32986150759) |
+| 1 | 4 | 940.0 | 0.0224 | 0.96 s | 95.5% | [T106](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32887252465) |
 | **4** | 6 | 1,525.1 | 0.0256 | **0.87 s** | — | [T107](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32895236167) |
 | 40 | 43 | 7,206.4 | 0.0722 | — | 93.7% | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
 | **52** | 54 | **7,950.6** | 0.0913 | — | 93.7% | [T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638) |
