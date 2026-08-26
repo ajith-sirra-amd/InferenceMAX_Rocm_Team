@@ -8,40 +8,64 @@ Measured on 8× MI355X, DCP=8, concurrency 52, from run
 
 ---
 
-## Headline
+## Headline — and a correction
 
-**~94% of time is BF16 dense GEMMs. Attention is 5.6%. MoE is already quantised
-and cheap.**
+An earlier version of this document claimed **"~94% of time is BF16 dense
+GEMMs."** That was derived by subtraction (attention measured at 5.6%, therefore
+"everything else is GEMM") and it is **wrong**. It ignored the 69 KDA layers and
+TP collectives entirely.
 
-| Component | Share of time | Precision | State |
-|---|---:|---|---|
-| **Dense GEMMs** | **~94%** | BF16 | hipBLASLt, ~50% of peak |
-| MLA attention | 5.6% | BF16 | fp8 unavailable on ROCm |
-| MoE experts | small | a8w4 | already quantised |
+A first-principles budget built from the actual checkpoint shapes gives a very
+different split — and then fails its own sanity check, so treat both as
+provisional until a real profiler run exists.
 
----
+### Per-token MACs (whole model, from safetensors shapes)
 
-## The paradox: 7.3% of weights, 94% of time
+| Component | MACs/token | Share of GEMM |
+|---|---:|---:|
+| MoE experts (93L, top-16 + 2 shared) | 55.29 G | **57.1%** |
+| KDA projections (69L) | 30.61 G | **31.6%** |
+| MLA projections (24L) | 5.57 G | 5.8% |
+| latent + gate (93L) | 5.38 G | 5.6% |
+| **Total** | **96.85 G** | |
 
-| | Params | Share | Active per token |
-|---|---:|---:|---:|
-| Experts | 2,595 B | 92.67% | ~23–46 B (top-k of **896**) |
-| **Dense** | **205 B** | **7.33%** | **205 B — all of it** |
+### Converted to time (per token, per GPU, TP8)
 
-Two effects compound:
+| Component | ns/token | Share |
+|---|---:|---:|
+| **TP collectives** (theory) | 11,666 | **49.1%** |
+| Dense GEMM, BF16 | 8,311 | 35.0% |
+| MoE GEMM, a8w4 | 2,765 | 11.6% |
+| MLA attention (measured) | 858 | 3.6% |
+| KDA state update (upper bound) | 177 | 0.7% |
 
-1. **Sparsity.** Every token traverses every dense layer; it touches only a
-   handful of 896 experts. Dense does **4–9× the FLOPs** of the active experts.
-2. **Precision.** Dense is BF16; MoE is a8w4, ~4× faster per FLOP. That
-   multiplies the gap again.
+### This model does not reconcile with reality
 
-Predicted dense time share: **94.7% (top_k=16) … 97.3% (top_k=8)**.
-Measured: **~94%**. Model and measurement agree.
+It implies **42.1 k tok/s/GPU**; we measure **~8.1 k**. A **5.2× gap**.
 
-**Parameter count tracks memory, not compute.** MoE made parameters cheap — so
-effectively the *unquantised* 7.3% now owns the runtime.
+So something large is unaccounted for. Candidates, in rough order of suspicion:
 
----
+1. **Host-side per-request cost** — separately measured at ~1.5 ms/request,
+   ~82% of TPOT at n=54. The budget above models only device work.
+2. **Collectives estimate is crude** — assumes ~400 GB/s effective and perfect
+   ring all-reduce. Real latency at these small message sizes (7168×2 B) is
+   likely far worse, which would *increase* their share.
+3. **In-situ GEMM efficiency below microbenchmark** — the 1250 TFLOP/s figure
+   comes from isolated back-to-back calls, not interleaved with everything else.
+
+**What survives from all this:**
+
+- Attention is small — measured 5.6% empirically, 3.6% by theory. Both agree it
+  is not the target. **fp8 attention remains not worth it.**
+- **KDA projections are 31.6% of GEMM MACs and were entirely missing from the
+  earlier analysis.** 69 of 93 layers; ignoring them was the main error.
+- MoE dominates raw MACs (57.1%) but is a8w4, so its *time* share is ~12%.
+- Dense BF16 GEMM is significant (~35%) but nowhere near the claimed 94%.
+- **Collectives may be the largest single device-side term** and have never been
+  measured here.
+
+**A real profiler run is required** before optimising further. Everything in
+this section is arithmetic on shapes, not observation.
 
 ## GEMM profile
 
@@ -112,17 +136,32 @@ never calls.
 
 ## What could still close the gap to 12,500 (1.57× needed)
 
-| Lever | Attacks | Est. | Risk |
+**Ranking deferred until a real profile exists.** The theoretical budget and the
+earlier subtraction-based one disagree sharply, and the budget misses reality by
+5.2×, so any ranking now would be guesswork dressed as analysis.
+
+Candidates, with what we actually know about each:
+
+| Lever | Attacks | Evidence | Status |
 |---|---|---|---|
-| **Tune aiter GEMM kernels** for the 8 shapes | 94% | 50% → 80% of peak ≈ **1.5×** | None — same precision |
-| **Quantise dense weights to fp8** | 94% | up to ~2× on that slice | Changes numerics; needs GSM8K |
-| Reduce host per-request cost (1.5 ms/req) | 82% of TPOT | raises the concurrency peak | Upstream vLLM work |
-| fp8 attention | 5.6% | ~2.8% | Needs a new ROCm prefill backend |
+| **Real profiler run** | everything | — | **Do this first** |
+| Host per-request cost | ~82% of TPOT | measured: 1.5 ms/request | Strong, upstream vLLM work |
+| TP collectives | maybe ~49% device time | theory only, never measured | Unknown — profile it |
+| Tune aiter GEMM kernels | ~35% (dense) | measured ~50% of BF16 peak | Zero numerics risk |
+| Quantise dense weights to fp8 | ~35% (dense) | up to ~2× on that slice | Changes numerics; needs GSM8K |
+| fp8 attention | 3.6–5.6% | measured both ways | **Closed — not worth it** |
 
 Everything reachable by configuration is already measured and closed:
 concurrency peaks at 52, chunk 16384 costs 2.5%, async scheduling costs 9.2%,
 MTP costs 85%, extra cache tiers do nothing (`ext_cache_hit` ≈ 0, pool 23.5%
 used).
+
+### What the profile run needs to capture
+
+- Per-kernel device time (torch profiler or rocprof), not sampled throughput
+- **Collective time separately** — the largest unknown
+- KDA vs MLA layer split — 69 vs 24 layers, KDA never measured
+- Host gaps, to confirm or refute the 1.5 ms/request term on the timeline
 
 ---
 
