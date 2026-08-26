@@ -1940,6 +1940,27 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # experts / dense MLP move BF16 -> MXFP4 as a bonus. kv_cache_quant_config is
   # empty, so the KV cache is untouched and the DCP + AITER-MLA path is unaffected.
   # 1.370 TiB vs 1.5 TB, so it also frees a little KV headroom.
+  #
+  # T117 OOM'd at shard 11/12 with 272 MB free, and the cause was NOT size:
+  # per-GPU weights are 188.2 GB here vs 195.1 GB for moonshotai. AMD's config
+  # declares MoE *activations* as fp4/group32/e8m0, so OCP_MX_Scheme resolved to
+  # w_mxfp4_a_mxfp4 and vLLM selected AITER_MXFP4_MXFP4 -- annotated upstream as
+  # "W4A4: CK kernel", a different kernel family from the AITER_MXFP4_BF16 +
+  # VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1 path every working run has used. That
+  # path wanted ~115 GB/GPU of extra transient memory during load.
+  #
+  # Fix, applied to the downloaded checkpoint (NOT to this repo), with the
+  # original kept alongside as config.json.amd-orig:
+  #     quantization_config.global_quant_config.input_tensors = null
+  # from_quant_dtype(None, "mxfp4") -> w_mxfp4 -> AITER_MXFP4_BF16, i.e. exactly
+  # T103's MoE kernels. Legitimate rather than a hack: MXFP4 activation quant is
+  # is_dynamic=true, computed at runtime, so nothing stored in the weights is
+  # invalidated -- the MXFP4 weights are bit-identical. layer_quant_config
+  # "*self_attn*" carries its own fp8_e4m3 input_tensors, so FP8 attention (the
+  # entire point of the run) is untouched. Activations end up higher precision
+  # than AMD validated, so GSM8K should be >= their reported 96.36%.
+  # Side benefit: MoE kernels now match T103 exactly, making this a true
+  # single-variable test of BF16 -> FP8 attention weights.
   # Revert to moonshotai/Kimi-K3 to reproduce T103 (7,950.6 tok/s/GPU).
   model: amd/Kimi-K3-Quark-MXFP4-AttnFP8
   model-prefix: kimik3
