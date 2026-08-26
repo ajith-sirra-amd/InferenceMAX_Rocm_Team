@@ -146,7 +146,7 @@ PROFILE="${PROFILE:-1}"
 PROFILER_ARGS=()
 if [ "$PROFILE" = "1" ]; then
     PROF_DIR_ABS="$RESULT_DIR/torch_profile"; mkdir -p "$PROF_DIR_ABS"
-    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\",\"torch_profiler_record_shapes\":true}")
+    PROFILER_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROF_DIR_ABS\",\"torch_profiler_record_shapes\":false}")
     echo "[profile] torch profiler -> $PROF_DIR_ABS"
 fi
 
@@ -272,10 +272,20 @@ GENPY
     sleep "${PROFILE_WARM_S:-90}"
     echo "[profile] starting trace"
     curl -s -m 60 -X POST "http://0.0.0.0:$PORT/start_profile" || true
-    sleep "${PROFILE_WINDOW_S:-20}"
-    curl -s -m 600 -X POST "http://0.0.0.0:$PORT/stop_profile" || true
-    echo "[profile] stopped; flushing"
-    sleep "${PROFILE_FLUSH_S:-120}"
+    sleep "${PROFILE_WINDOW_S:-5}"
+    curl -s -m 900 -X POST "http://0.0.0.0:$PORT/stop_profile" || true
+    echo "[profile] stopped; waiting for all ranks to serialise"
+    # 8 worker traces + 1 async_llm. Worker traces are large and are written
+    # after stop_profile returns, so poll rather than guessing a flush time --
+    # the previous attempt copied after 120 s and captured only async_llm.
+    for _w in $(seq 1 120); do
+        _n=$(ls "$PROF_DIR"/*.pt.trace.json* 2>/dev/null | wc -l)
+        _sz=$(du -sk "$PROF_DIR" 2>/dev/null | cut -f1)
+        [ "$_w" = 1 ] || [ $(( _w % 12 )) = 0 ] && echo "[profile]   files=$_n dir=${_sz}KB"
+        [ "$_n" -ge 9 ] && sleep 45 && break
+        sleep 10
+    done
+    echo "[profile] final: $(ls "$PROF_DIR"/*.pt.trace.json* 2>/dev/null | wc -l) trace files"
     for q in $PROF_PIDS; do kill "$q" 2>/dev/null || true; done
     PROF_KEEP="/mnt/hf_hub_cache/kimi-profiles/$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
     mkdir -p "$PROF_KEEP" && cp -a "$PROF_DIR"/. "$PROF_KEEP"/ 2>/dev/null \
