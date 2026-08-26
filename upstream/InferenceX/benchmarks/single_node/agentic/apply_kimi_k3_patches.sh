@@ -175,6 +175,24 @@ patch_pr51705() {
     fi
 }
 
+patch_pr51040() {
+    local label="pr51040"
+    local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
+    [ -n "$root" ] && [ -d "$root/vllm" ] || { echo "[$label] vllm root not found; skipping."; return 0; }
+    local f="$root/vllm/v1/attention/backends/mla/rocm_aiter_mla.py"
+    if grep -q "0 < self.num_heads < 16" "$f" 2>/dev/null; then
+        echo "[$label] already patched."; return 0
+    fi
+    local dv="$(dirname "$0")/pr51040_vllm.diff"
+    [ -f "$dv" ] || { echo "[$label] vendored diff not found; skipping." >&2; return 0; }
+    local fails; fails=$(patch -p1 -d "$root" --forward --batch < "$dv" 2>&1 | grep -c FAILED)
+    if grep -q "0 < self.num_heads < 16" "$f" 2>/dev/null; then
+        echo "[$label] applied -- FP8 MLA prefill now covers 12 heads/rank (failed hunks: $fails)"
+    else
+        echo "[$label] apply did not take (failed hunks: $fails)" >&2
+    fi
+}
+
 patch_pr51705_rejects() {
     local label="pr51705-rejects"
     local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
@@ -238,5 +256,7 @@ else
 fi
 
 patch_pr51705_rejects || true
+
+patch_pr51040 || true
 
 echo "[kimi-patches] done."
