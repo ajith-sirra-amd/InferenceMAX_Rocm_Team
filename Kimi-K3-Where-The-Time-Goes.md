@@ -105,23 +105,33 @@ So something large is unaccounted for. Candidates, in rough order of suspicion:
 **A real profiler run is required** before optimising further. Everything in
 this section is arithmetic on shapes, not observation.
 
-## GEMM profile
+## BF16 dense GEMM profile
 
-Shapes and frequencies taken from the real run; timings measured at M=7729
-(observed prefill chunk).
+**Scope, which matters:** every row here is **BF16 → BF16**. All 111,064 logged
+dispatches in the run are `dtype='torch.bfloat16' otype='torch.bfloat16'` —
+there is no dtype variation between rows. **MoE GEMMs do not appear at all**
+(0 matches): they run the Situv2 / a8w4 path, which does not emit these
+messages. So the shares below are shares *of BF16 dense GEMM time*, **not of
+total time**.
 
-| N | K | Dispatches | ms | TFLOP/s | Share |
-|---:|---:|---:|---:|---:|---:|
-| 6288 | 7168 | 14,456 | 0.577 | 1208 | **33.0%** |
-| 8448 | 7168 | 8,800 | 0.675 | 1387 | **23.5%** |
-| 3584 | 7168 | 14,456 | 0.330 | 1202 | **18.9%** |
-| 7168 | 4224 | 8,800 | 0.374 | 1250 | 13.1% |
-| 7168 | 1536 | 8,800 | 0.151 | 1127 | 5.3% |
-| 7168 | 768 | 8,800 | 0.093 | 912 | 3.3% |
-| 2304 | 1536 | 8,800 | 0.063 | 871 | 2.2% |
-| 1536 | 128 | 14,456 | 0.014 | 222 | 0.8% |
+Shapes and frequencies from the real run; timings measured at M=7729 (observed
+prefill chunk). Shapes are post-TP8 sharding.
+
+| N | K | Precision | Dispatches | ms | TFLOP/s | Share of BF16 GEMM | Likely source |
+|---:|---:|---|---:|---:|---:|---:|---|
+| 6288 | 7168 | BF16 | 14,456 | 0.577 | 1208 | **33.0%** | KDA (fused q/k/v/g) |
+| 8448 | 7168 | BF16 | 8,800 | 0.675 | 1387 | **23.5%** | unmapped |
+| 3584 | 7168 | BF16 | 14,456 | 0.330 | 1202 | **18.9%** | `routed_expert_down_proj` |
+| 7168 | 4224 | BF16 | 8,800 | 0.374 | 1250 | 13.1% | dense MLP (33792/8) |
+| 7168 | 1536 | BF16 | 8,800 | 0.151 | 1127 | 5.3% | `o_proj` (12288/8) |
+| 7168 | 768 | BF16 | 8,800 | 0.093 | 912 | 3.3% | unmapped |
+| 2304 | 1536 | BF16 | 8,800 | 0.063 | 871 | 2.2% | MLA `q_b_proj` (18432/8) |
+| 1536 | 128 | BF16 | 14,456 | 0.014 | 222 | 0.8% | KDA `f_b_proj` (12288/8) |
 
 **~1200–1400 TFLOP/s against ~2600 BF16 peak — about 50%.**
+
+Source mappings are inferred from checkpoint shapes divided by TP=8; two are
+unresolved and marked as such rather than guessed.
 
 ### The "not found tuned config" messages are not a slow path
 
