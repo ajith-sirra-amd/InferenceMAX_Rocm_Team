@@ -105,6 +105,15 @@ if agentic_kv_offload_enabled; then
 fi
 
 KV_CACHE_DTYPE=fp8
+# Expert parallelism. EP_SIZE is validated at the top of this script; without
+# this block it was validated and then ignored, so `ep: 8` in the matrix did
+# nothing. That is how EP stayed silently unreachable for 55 trials before T57.
+EP_ARGS=()
+if [ "${EP_SIZE:-1}" -gt 1 ]; then
+    EP_ARGS=(--enable-expert-parallel)
+    echo "EP: expert parallelism ON (EP_SIZE=$EP_SIZE)"
+fi
+
 CP_ARGS=(
     --decode-context-parallel-size "$DCP_SIZE"
     --dcp-comm-backend a2a
@@ -156,6 +165,7 @@ VLLM_CMD=(
     "${CHUNKED_PREFILL_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
+    "${EP_ARGS[@]}"
     "${SPEC_ARGS[@]}"
     "${ASYNC_SCHED_ARGS[@]}"
     "${MLA_PREFILL_ARGS[@]}"

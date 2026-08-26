@@ -7,6 +7,11 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 # Where we are
 
+> **Where the time goes:** see
+> [Kimi-K3-Where-The-Time-Goes.md](Kimi-K3-Where-The-Time-Goes.md) — ~94% is
+> BF16 dense GEMMs, attention is 5.6%, MoE is already a8w4. That document also
+> closes the fp8-prefill line with measurements.
+
 **Best: 7,950.6 tok/s/GPU — DCP=8 + full graphs at concurrency 52 (T103).**
 **148% of the SA reference (5,388)** · **64% of the 12,500 target**.
 Clean full window, 0 faults, 0 aborts.

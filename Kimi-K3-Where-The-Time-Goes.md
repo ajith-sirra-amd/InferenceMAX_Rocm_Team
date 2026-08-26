@@ -1,5 +1,7 @@
 # Kimi-K3 — where the time actually goes
 
+Companion to [Kimi-DCP-Experiemnts-Summary.md](Kimi-DCP-Experiemnts-Summary.md).
+
 Measured on 8× MI355X, DCP=8, concurrency 52, from run
 [T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638)
 (7,950.6 tok/s/GPU) plus kernel microbenchmarks on the same host.
