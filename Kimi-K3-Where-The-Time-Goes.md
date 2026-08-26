@@ -8,7 +8,87 @@ Measured on 8× MI355X, DCP=8, concurrency 52, from run
 
 ---
 
-## Headline — and a correction
+## MEASURED — rocprofv3, T116
+
+Everything below this section is superseded by real data. Source:
+[T116](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32964875218),
+`rocprofv3 --kernel-trace --stats`, 2.3 GB trace, **6,356,992 kernel dispatches**
+on one GPU (Agent 2), DCP=8, conc 52, dense ladder 1…80.
+
+Method, so the numbers can be checked: 31 dispatches with negative or >1 s
+durations were discarded (rocprof mis-times the spin-wait custom all-reduce; its
+`k_kernel_stats.csv` is unusable — one row reports 2⁶⁴ ns and a bogus
+`Percentage=100.00`, which is why these figures come from the raw trace).
+Busy time is the **union of merged intervals**, not a naive sum. 32 dead periods
+longer than 2 s (largest **207 s**, benchmark phase boundaries) are excluded to
+give a serving window of 1467 s.
+
+### The headline is idle, not any kernel
+
+| | |
+|---|---:|
+| Serving window | 1467.1 s |
+| GPU busy (union) | 820.5 s |
+| **Occupancy** | **55.9%** |
+| **Idle** | **44.1%** |
+
+Sum-of-kernels (820.5 s) ≈ union-busy, so there is **essentially no kernel
+overlap** — it is one serialized stream. The idle is **diffuse, not one stall**:
+2.7M separate gaps — 0.2–1 ms 10.1%, 1–10 ms 8.1%, >10 ms 18.1%, 50–200 µs 5.8%.
+Tracing overhead cannot explain it (3.5k dispatches/s × ~1–2 µs ≈ 0.5% of wall).
+
+**No kernel optimisation can address more than 55.9% of the clock.**
+
+### Where the 55.9% goes
+
+| Group | % busy | % wall | Precision |
+|---|---:|---:|---|
+| **Collectives** | **34.31** | 19.19 | BF16 payload (nccl 732k calls @336 µs, `cross_device_reduce`, msccl) |
+| **MLA attention** | **21.79** | 12.19 | BF16 QK/PV, FP32 softmax (`fmha_fwd_hd192_hd128_bf16`, 65k @ **2.65 ms**) |
+| **Dense GEMM** | **15.26** | 8.53 | BF16→BF16 14.22, BF16→FP32 1.03 (hipBLASLt `Cijk_*`) |
+| MoE GEMM | 12.49 | 6.99 | **act FP8 × wt MXFP4** 9.88, BF16 reduce 1.69, FP32 topk 0.68 |
+| KDA linear attn | 5.16 | 2.88 | BF16 io, FP32 accum (Triton) |
+| Attn residual | 3.82 | 2.14 | BF16 io (`_attn_res_kernel`) |
+| Elementwise / copy | 3.70 | 2.07 | incl. 0.84 `copyBuffer` = DRAM KV offload |
+| KV cache | 2.42 | 1.35 | **FP8 KV → BF16** dequant |
+| Quant / norm | 0.88 | 0.49 | BF16 → FP8/FP4 group-32 |
+
+### Reading BF16 correctly
+
+~74% of GPU time *touches* BF16, but only **15.26%** is a BF16 **weight matrix in
+a linear layer** — the only thing a checkpoint's weight precision can change. The
+rest is BF16 being **shipped over the network** (34.31%), **fed through attention
+softmax** (21.79%), or **added/normalised elementwise** (17.67%).
+
+| Role of the BF16 | % busy | Fix | Weight quant helps? |
+|---|---:|---|:--:|
+| Network payload | 34.31 | FP8 all-reduce | ✗ |
+| Attention math | 21.79 | an FP8 FMHA kernel | ✗ |
+| Linear-layer weights | **15.26** | **weight quantization** | **✓** |
+| State / elementwise | 17.67 | nothing — memory-bound | ✗ |
+| Already FP8×MXFP4 | 10.05 | already done | n/a |
+| FP32 (topk/sort) | 0.75 | negligible | ✗ |
+
+### Three earlier claims this retires
+
+1. **"Attention is 5.6%"** — it is **21.79%**. The MAC model treated attention as
+   compute-bound; it is memory/softmax-bound.
+2. **"~94% dense BF16 GEMMs"** — **15.26%**.
+3. **"Dense→FP8 buys ~1.2×"** — halving 15.26% of a 55.9%-busy GPU saves ~4.3% of
+   wall, so **+3–5%**, not +20%. Confirmed by T117–T119 (see summary): the AMD
+   AttnFP8 checkpoint converts exactly this block.
+
+### What to attack, in order
+
+1. **44.1% idle** — host-bound. Largest single lever, bigger than all kernels.
+2. **34.31% collectives** — TP=8 all-reduce + DCP=8 all-to-all, ~270 nccl calls
+   per forward pass. FP8 payload would be the direct attack.
+3. **21.79% MLA attention** — needs an FP8 FMHA kernel; KV cache is *already* FP8
+   but `fmha_fwd_..._bf16` dequantises to BF16 for the math.
+
+---
+
+## Superseded — the first-principles budget (kept for history)
 
 An earlier version of this document claimed **"~94% of time is BF16 dense
 GEMMs."** That was derived by subtraction (attention measured at 5.6%, therefore
@@ -16,8 +96,9 @@ GEMMs."** That was derived by subtraction (attention measured at 5.6%, therefore
 TP collectives entirely.
 
 A first-principles budget built from the actual checkpoint shapes gives a very
-different split — and then fails its own sanity check, so treat both as
-provisional until a real profiler run exists.
+different split — and then fails its own sanity check. The measured section above
+now settles it: the budget's 49.1% collectives / 35.0% dense split was directionally
+right on collectives and **2.3× too high on dense**.
 
 ### Per-token MACs (whole model, from safetensors shapes)
 

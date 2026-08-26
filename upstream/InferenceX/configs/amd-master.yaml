@@ -1961,8 +1961,26 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # than AMD validated, so GSM8K should be >= their reported 96.36%.
   # Side benefit: MoE kernels now match T103 exactly, making this a true
   # single-variable test of BF16 -> FP8 attention weights.
-  # Revert to moonshotai/Kimi-K3 to reproduce T103 (7,950.6 tok/s/GPU).
-  model: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+  #
+  # T119 VERDICT: AttnFP8 is a NET LOSS in this stack, and not for a reason the
+  # checkpoint can be blamed for. With LOAD_FORMAT=auto it loads and serves
+  # correctly on AITER_MXFP4_BF16, but:
+  #     Model loading took        240.75 GiB   (moonshotai: 192.56 GiB)
+  #     Available KV cache memory   9.38 GiB   (moonshotai:  54.41 GiB)
+  #     GPU KV cache            5,391,048 tok  (moonshotai: ~32.7M tok)
+  # It occupies +48 GiB/GPU MORE than moonshotai despite being 7 GB/GPU SMALLER
+  # on disk (188.2 vs 195.1 GB/GPU) -- something upcasts or duplicates at load,
+  # and it is not MoE tile padding (the ROCm branch of
+  # mxfp4_round_up_hidden_size_and_intermediate_size explicitly notes K3's AITER
+  # A16W4 SiTU kernel takes K3's native intermediate size).
+  # The 6x smaller KV cache collapsed the run: "Running: 1 reqs, Waiting: 18",
+  # prefix cache hit 0.0% against T103's 93.8%. Cancelled rather than spend GPU
+  # hours measuring KV starvation.
+  # Cost/benefit is decisive: T116's profile puts the entire BF16 dense-GEMM
+  # block this checkpoint converts at 15.26% of GPU busy, worth +3-5% of wall,
+  # against losing a 93.8% prefix cache hit rate. Not worth pursuing until the
+  # +48 GiB is understood.
+  model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
   precision: fp4
