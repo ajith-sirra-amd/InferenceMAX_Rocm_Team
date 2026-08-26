@@ -1933,7 +1933,15 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # forced TRITON_MLA), so comparing DCP-on-5a4c8d99 against T64-on-ac7509e2b
   # carries ~1% image uncertainty -- an order of magnitude below the effect.
   image: aigmkt/kimi-k3-vllm:latest
-  model: moonshotai/Kimi-K3
+  # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
+  # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
+  # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
+  # scales instead of BF16. Routed experts stay MXFP4 (U8 + e8m0), and shared
+  # experts / dense MLP move BF16 -> MXFP4 as a bonus. kv_cache_quant_config is
+  # empty, so the KV cache is untouched and the DCP + AITER-MLA path is unaffected.
+  # 1.370 TiB vs 1.5 TB, so it also frees a little KV headroom.
+  # Revert to moonshotai/Kimi-K3 to reproduce T103 (7,950.6 tok/s/GPU).
+  model: amd/Kimi-K3-Quark-MXFP4-AttnFP8
   model-prefix: kimik3
   runner: cluster:mi355x-amds
   precision: fp4

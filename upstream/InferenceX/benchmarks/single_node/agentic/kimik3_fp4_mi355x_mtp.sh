@@ -146,7 +146,10 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # torch profiler, which added a per-step annotate_profile hook and hung a worker
 # in shm_broadcast at both concurrency 52 (T114) and 8 (T115). rocprofv3 traces
 # at the HIP layer and never touches vLLM's step loop.
-ROCPROF="${ROCPROF:-1}"
+# Default OFF: T116 collected the trace we needed (2.3 GB, 6.36M dispatches) and
+# tracing costs ~17% input throughput, so any run whose *number* we intend to
+# quote must have this off. Set ROCPROF=1 explicitly to profile again.
+ROCPROF="${ROCPROF:-0}"
 ROCPROF_PREFIX=()
 if [ "$ROCPROF" = "1" ]; then
     RP_DIR="/mnt/hf_hub_cache/kimi-profiles/rocprof_$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
