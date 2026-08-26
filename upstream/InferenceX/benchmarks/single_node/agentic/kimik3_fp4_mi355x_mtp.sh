@@ -34,7 +34,22 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-DCP_SIZE=8
+# DCP_SIZE is concurrency-dependent. DCP exists to enlarge the KV pool, which is
+# what buys throughput at CONC 40-64; at CONC 1-4 the pool is irrelevant (T106
+# ran at 95.5% prefix hit on a fraction of it) and DCP is pure added latency --
+# an a2a plus a KV gather and a merge on every one of the 24 MLA layers, on top
+# of the ~118 global barriers a decode step already issues. At batch 1 there is
+# no work in flight to hide any of it, so TPOT is barrier-latency-bound.
+# LOW_CONC_INTERACTIVE lets the matrix drive this without a second script.
+LOW_CONC_INTERACTIVE="${LOW_CONC_INTERACTIVE:-auto}"
+if [ "$LOW_CONC_INTERACTIVE" = "auto" ]; then
+    if [ "${CONC:-52}" -le 4 ]; then LOW_CONC_INTERACTIVE=1; else LOW_CONC_INTERACTIVE=0; fi
+fi
+if [ "$LOW_CONC_INTERACTIVE" = "1" ]; then
+    DCP_SIZE="${DCP_SIZE_OVERRIDE:-1}"
+else
+    DCP_SIZE="${DCP_SIZE_OVERRIDE:-8}"
+fi
 export DCP_SIZE
 
 # Patches are pre-applied in kimi-k3-vllm:latest (kv-blockpool, pr51705
@@ -130,15 +145,45 @@ export AITER_DISABLE_FMHA_OPUS=1
 export VLLM_ROCM_USE_AITER_MLA=1
 export AITER_DISABLE_FMHA_OPUS=1
 
+# Speculative decoding (MTP), wired from the matrix's spec-decoding field.
+# SPEC_ARGS was previously built empty and unconditionally, so `spec-decoding:
+# mtp` in the matrix was validated and then ignored -- the same orphan class as
+# EP_ARGS (55 trials) and the KV-offload block (cost 3.3x). The orphan-check at
+# the bottom catches unused arrays, not arrays that are used but always empty.
+SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-2}"
+SYNTHETIC_ACCEPT_LEN="${SYNTHETIC_ACCEPT_LEN:-2.51}"
 SPEC_ARGS=()
+if [ "${SPEC_DECODING:-}" = "mtp" ]; then
+    SPEC_ARGS=(
+        --speculative-config
+        "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
+    )
+    echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN)"
+fi
 
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-MAX_NUM_SEQS=80
-CUDAGRAPH_CAPTURE_SIZES="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80"
-MAX_CUDAGRAPH_CAPTURE_SIZE=80
+# max_num_seqs needs branching headroom (~1.25x CONC): too tight queues the
+# replay's branched sub-requests and raises TTFT (T106 at mns 4), too loose lets
+# residents run away and abort (T98, mns 144 -> 91 residents -> TTFT 20.2 s).
+if [ "$LOW_CONC_INTERACTIVE" = "1" ]; then
+    MAX_NUM_SEQS="${MAX_NUM_SEQS_OVERRIDE:-8}"
+else
+    MAX_NUM_SEQS="${MAX_NUM_SEQS_OVERRIDE:-80}"
+fi
+
+# The capture ladder must be DENSE and must reach the largest batch the model
+# can actually see. A sparse ladder pads decode batches up to the next captured
+# size and the padded rows read out of bounds -- that was the DCP GPU page fault
+# that cost ~20 trials. With MTP every scheduled sequence expands to (k+1) rows,
+# so the ceiling is MAX_NUM_SEQS*(k+1); T99 used 240 for mns 80 at k=2.
+SPEC_ROWS=1
+if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 )); fi
+MAX_CUDAGRAPH_CAPTURE_SIZE=$(( MAX_NUM_SEQS * SPEC_ROWS ))
+CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")
+echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $SPEC_ROWS rows), DCP=$DCP_SIZE"
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 

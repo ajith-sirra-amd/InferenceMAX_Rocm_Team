@@ -2054,7 +2054,33 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # T67: DP2/TP4/EP8 -- data-parallel attention. tp: 4 with DP_SIZE=2 in the
       # .sh gives 8 ranks; ep: 8 is REQUIRED or the experts do not shard and the
       # layout will not fit (the guard enforces this). ~209 GB/GPU of weights.
-      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [52], spec-decoding: mtp }
+      # NOTE: spec-decoding was removed from the conc-52 line. It used to read
+      # `spec-decoding: mtp`, which was inert because SPEC_ARGS was built empty
+      # and the field was never consulted. Now that MTP is actually wired, that
+      # stale field would have silently turned MTP on at conc 52, where it is
+      # worth -85% (T102: 1,075.4 vs 7,206.4 at conc 40; prefix cache collapses
+      # 53% -> 10% because the drafter's weights and KV shrink the pool).
+      #
+      # T121 -- minimum-TPOT interactivity point. Target is 3x below T106's
+      # 22.4 ms. At CONC 1 nothing is compute-bound: a decode step issues ~118
+      # global barriers and at batch 1 there is no work in flight to hide them,
+      # so TPOT is barrier-latency-bound. Three changes, all pushing the same
+      # direction:
+      #   DCP 8 -> 1  : DCP buys KV pool, which is irrelevant at conc 1 (T106
+      #                 held 95.5% prefix hit). It costs an a2a + KV gather +
+      #                 merge on each of the 24 MLA layers, every step.
+      #   MTP on      : amortises the whole step over ~2.51 accepted tokens.
+      #                 This is the only lever large enough to reach 3x; DCP-off
+      #                 alone cannot, because the 93 layers' 2 all-reduce each
+      #                 remain. Harmless at conc 1 -- the KV-pool shrink that
+      #                 killed MTP at conc 40 does not bind when one request runs.
+      #   offload off : SA's c1 (kvnone) beat our T106 (dram) by 4.1% throughput
+      #                 and 15.2% TTFT, and T116 shows copyBuffer firing 697,367
+      #                 times with idle gaps bracketed by it. At conc 1 the KV
+      #                 working set is tiny, so DRAM offload is pure stall risk.
+      # mns 8 with a dense 1..24 ladder (8 x (k+1)); T106's mns 4 was too tight
+      # and queued the replay's branched sub-requests, costing TTFT.
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

@@ -69,6 +69,41 @@ softmax** (21.79%), or **added/normalised elementwise** (17.67%).
 | Already FP8×MXFP4 | 10.05 | already done | n/a |
 | FP32 (topk/sort) | 0.75 | negligible | ✗ |
 
+### Pure GEMM only — BF16 vs FP8, time share vs compute share
+
+Restricting to **GEMM kernels alone** (hipBLASLt `Cijk_*` + AITER `mfma_moe1/2`),
+which are **24.68% of GPU busy** — 202.5 s of 820.5 s. Compute is MACs/token from
+the checkpoint shapes; time is measured.
+
+| | **Time share** | **Compute share** | sec | G MACs/token |
+|---|---:|---:|---:|---:|
+| **BF16 GEMM** (KDA proj + MLA proj + latent/gate) | **60.3%** | **42.9%** | 122.1 | 41.56 |
+| **FP8 × MXFP4 GEMM** (MoE experts) | **39.7%** | **57.1%** | 80.4 | 55.29 |
+
+**The shares are inverted.** BF16 does **43% of the math but consumes 60% of the
+time**; FP8×MXFP4 does **57% of the math in 40% of the time**.
+
+**Efficiency — G MACs per 1% of GPU-busy time:**
+
+| | |
+|---|---:|
+| BF16 | 2.79 |
+| FP8 × MXFP4 | **5.64** |
+| **Ratio** | **2.02×** |
+
+That 2.02× is essentially the hardware's BF16→FP8 ratio, which means **neither
+path is underperforming**: the AITER `afp8_wfp4` kernels and the hipBLASLt BF16
+kernels are both running about as well as the silicon allows. The difference is
+precision, not a tuning defect.
+
+**Ceiling if BF16 GEMM ran at the FP8 path's efficiency:**
+14.88% → 7.37% of busy, saving 61.6 s = **4.20% of the 1467 s wall ≈ +4.4%
+throughput.** Derived independently of the earlier estimate and agreeing with it.
+
+**As a share of total GPU busy:** BF16 GEMM **14.88%**, FP8 GEMM **9.80%**,
+non-GEMM **75.32%**. With 44.1% idle on top, GEMM precision is a ~4% lever on a
+problem that needs 1.57×. This closes the GEMM line of inquiry.
+
 ### Three earlier claims this retires
 
 1. **"Attention is 5.6%"** — it is **21.79%**. The MAC model treated attention as
