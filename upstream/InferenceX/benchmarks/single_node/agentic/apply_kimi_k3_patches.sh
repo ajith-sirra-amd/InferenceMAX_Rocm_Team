@@ -312,9 +312,17 @@ fi
 # triton_mla.py so 51705's hunks on that file REJECT, silently dropping the
 # capability flag -- which makes DCP+MTP die at init with "does not support
 # non-causal draft MLA attention" (T99).
-if [ "${SKIP_PATCH_PR51705:-0}" != "1" ]; then
+# Gate on whether pr51705 CAN actually apply, not on whether we intend it to.
+# Keying this on SKIP_PATCH_PR51705 alone meant that if the vendored diff was
+# missing, 51705 skipped silently AND took this patch down with it, leaving the
+# tree worse off than with neither. That is exactly what happened on a fork that
+# had this script but not pr51705_vllm.diff: DCP then died at init with
+# "requires attention implementations to return the softmax LSE during decode".
+if [ "${SKIP_PATCH_PR51705:-0}" != "1" ] && [ -f "$(dirname "$0")/pr51705_vllm.diff" ]; then
     SKIP_PATCH_CUDAGRAPH=1
     echo "[triton-mla-cudagraph] auto-skipped: superseded by pr51705"
+elif [ "${SKIP_PATCH_PR51705:-0}" != "1" ]; then
+    echo "[triton-mla-cudagraph] pr51705 diff missing -- keeping this patch as fallback" >&2
 fi
 if [ "${SKIP_PATCH_CUDAGRAPH:-0}" = "1" ]; then
     echo "[triton-mla-cudagraph] SKIPPED via SKIP_PATCH_CUDAGRAPH=1"
@@ -376,46 +384,7 @@ PYEOF
     fi
 }
 
-patch_pr51171() {
-    local label="pr51171"
-    local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
-    [ -n "$root" ] && [ -d "$root/vllm" ] || { echo "[$label] vllm root not found; skipping."; return 0; }
-    if grep -q "kv_cache_size_tokens" "$root/vllm/v1/worker/gpu_worker.py" 2>/dev/null; then
-        echo "[$label] already patched."; return 0
-    fi
-    local dv="$(dirname "$0")/pr51171_vllm.diff"
-    [ -f "$dv" ] || { echo "[$label] vendored diff not found; skipping." >&2; return 0; }
-    # Conflicts with pr51705 (both rewrite rocm_aiter_mla.py / triton_mla.py).
-    # 51705 is only needed for DCP; this is the non-DCP spec-decode path.
-    local fails; fails=$(patch -p1 -d "$root" --forward --batch < "$dv" 2>&1 | grep -c FAILED)
-    if grep -q "kv_cache_size_tokens" "$root/vllm/v1/worker/gpu_worker.py" 2>/dev/null; then
-        echo "[$label] applied (failed hunks: $fails)"
-    else
-        echo "[$label] apply did not take (failed hunks: $fails)" >&2
-    fi
-}
 
-patch_aiter_opus_rows() {
-    local label="aiter-opus-rows"
-    local cfg; cfg=$($PY -c "import aiter,os;print(os.path.dirname(aiter.__file__))" 2>/dev/null)/configs
-    [ -d "$cfg" ] || { echo "[$label] aiter configs not found; skipping"; return 0; }
-    local gfx; gfx=$(rocm-smi --showproductname 2>/dev/null | grep -oiE "gfx9[0-9]+" | head -1)
-    gfx="${gfx:-gfx950}"
-    case "$gfx" in
-        gfx942|gfx950) ;;
-        *) echo "[$label] arch $gfx unaffected; skipping"; return 0 ;;
-    esac
-    local n=0
-    while IFS= read -r f; do
-        if grep -qE "^$gfx,.*,opus," "$f" 2>/dev/null; then
-            cp -n "$f" "$f.orig" 2>/dev/null || true
-            local c; c=$(grep -cE "^$gfx,.*,opus," "$f")
-            grep -vE "^$gfx,.*,opus," "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-            n=$(( n + c ))
-        fi
-    done < <(find "$cfg" -name "*_tuned_gemm.csv" 2>/dev/null)
-    echo "[$label] removed $n $gfx opus rows (ROCm/aiter#4915)"
-}
 
 SKIP_PATCH_PR51705="${SKIP_PATCH_PR51705:-0}"
 if [ "$SKIP_PATCH_PR51705" = "1" ]; then
@@ -426,17 +395,6 @@ fi
 
 patch_pr51705_rejects || true
 
-SKIP_PATCH_PR51171="${SKIP_PATCH_PR51171:-1}"
-if [ "$SKIP_PATCH_PR51171" = "1" ]; then
-    echo "[pr51171] SKIPPED via SKIP_PATCH_PR51171=1"
-else
-    patch_pr51171 || true
-fi
 
-if [ "${SKIP_PATCH_OPUS_ROWS:-0}" = "1" ]; then
-    echo "[aiter-opus-rows] SKIPPED via SKIP_PATCH_OPUS_ROWS=1"
-else
-    patch_aiter_opus_rows || true
-fi
 
 echo "[kimi-patches] done."
