@@ -136,9 +136,9 @@ CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-MAX_NUM_SEQS=80
-CUDAGRAPH_CAPTURE_SIZES="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80"
-MAX_CUDAGRAPH_CAPTURE_SIZE=80
+MAX_NUM_SEQS=16
+CUDAGRAPH_CAPTURE_SIZES="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"
+MAX_CUDAGRAPH_CAPTURE_SIZE=16
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
@@ -250,7 +250,7 @@ if [ "$PROFILE" = "1" ]; then
     # server-ready) and hung a worker in shm_broadcast before the trace opened.
     # The replay is the load path every successful run uses; profile that.
     (
-        sleep "${PROFILE_WARM_S:-420}"
+        sleep "${PROFILE_WARM_S:-300}"
         echo "[profile] starting trace"
         curl -s -m 60 -X POST "http://0.0.0.0:$PORT/start_profile" || true
         sleep "${PROFILE_WINDOW_S:-5}"
