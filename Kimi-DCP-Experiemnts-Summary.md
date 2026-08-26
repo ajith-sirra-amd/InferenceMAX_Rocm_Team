@@ -50,6 +50,55 @@ size). At conc 52: `Running: 1 reqs, Waiting: 18`. Cancelled rather than measure
 KV starvation. **Verdict: trading a 93.8% prefix cache for a block worth +3–5%
 is a bad trade.** Parked until the +48 GiB is explained.
 
+## SA is ahead of us by ~4–5%, and the cause is the DRAM KV offload
+
+SA run [32968517728](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/32968517728)
+uses **our own image** (`aigmkt/kimi-k3-vllm:latest`) and beats us at both ends:
+
+| | SA | ours | Δ |
+|---|---:|---:|---:|
+| **c52** tok/s/GPU | **8,295.9** | 7,914.8 (T120) | **−4.8%** |
+| c52 TPOT | 0.0828 | 0.0892 | +7.7% worse |
+| **c1** tok/s/GPU | **980.6** | 940.0 (T106) | **−4.1%** |
+| c1 TPOT | 0.02156 | 0.02243 | +4.0% worse |
+| c1 TTFT p95 | 3.394 s | 5.043 s | **+48.6% worse** |
+
+Their server log confirms **DCP is on** (`decode_context_parallel_size=8`) — the
+`dcp1` in their artifact names is just the matrix label, exactly as our own
+artifacts say `ep1` while the script hardcodes DCP=8. Diffing the two logs, every
+material setting matches: dcp_comm_backend a2a, ROCM_AITER_MLA, max_num_seqs 80,
+max_num_batched_tokens 8192, FULL_AND_PIECEWISE, speculative_config None,
+`Model loading took 192.56 GiB`, GPU KV 32,756,602 tokens.
+
+**One difference remains: `kv-offloading` — they run `none`, we run `dram`.**
+
+T116's idle attribution independently points at the same thing. `copyBuffer`
+(the DRAM offload's host↔device transfer) is the **single largest idle cause**:
+**114.2 s of idle immediately before it (17.6% of all idle) and 67.3 s after**,
+while contributing only 0.84% of actual GPU work across 697,367 calls.
+
+The offload earned its place when the GPU pool was small (T92 vs T94, non-DCP,
+3.3×). DCP now gives us 32.7M tokens on-device, so it has become pure host
+traffic. **Next run: conc 52 with `kv-offloading: none`.**
+
+## GPU idle is 44.3% — and it is mostly one thing
+
+From T116 (1467 s serving window, 649.5 s idle across 2,724,405 gaps):
+
+| kernel **after** the gap | idle_s | % serving | % of idle |
+|---|---:|---:|---:|
+| **`copyBuffer`** (DRAM KV offload) | **114.2** | **7.78%** | **17.6%** |
+| `Cijk_` (dense GEMM) | 69.6 | 4.75% | 10.7% |
+| `elementwise_manual_unroll` | 52.7 | 3.59% | 8.1% |
+| `ncclDevKernel` | 43.5 | 2.97% | 6.7% |
+| `merge_attn_states` (DCP partial-attn merge) | 41.9 | 2.86% | 6.5% |
+| `fillBufferAligned` | 35.2 | 2.40% | 5.4% |
+
+`fillBufferAligned` is only 6,069 gaps but averages **5.7 ms** each — an
+allocator/memset path worth investigating separately.
+
+---
+
 **Best: 7,950.6 tok/s/GPU — DCP=8 + full graphs at concurrency 52 (T103).**
 **148% of the SA reference (5,388)** · **64% of the 12,500 target**.
 Clean full window, 0 faults, 0 aborts.
@@ -76,8 +125,10 @@ KV capacity — so the lever is `max_num_seqs`, not more offered load.
 
 | Config | DCP | MTP | Offload | Graphs | Conc | Tok/s/GPU | TPOT | TTFT | Status | Run |
 |---|---|---|---|---|---|---:|---:|---:|---|---|
+| **SA c52 — ahead of us** | **8** | No | **No** | Full | **52** | **8,295.9** | **0.0828** | **4.37 s** | OK 3,629 s | [SA](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/32968517728) |
 | SA reference | No | Yes | Yes | — | 20 | 5,388 | 0.0382 | 12.2 s | OK | [SA](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31993981851/job/95282381888) |
 | **T103 best** | **8** | No | **Yes** | Full | **52** | **7,950.6** | 0.0913 | 4.76 s | **OK 3,628 s** | [T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638) |
+| T120 parity, new image | **8** | No | **Yes** | Full | 52 | 7,914.8 | 0.0892 | 4.85 s | OK 3,629 s | [T120](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32976534358) |
 | T105 | **8** | No | **Yes** | Full | 56 | 7,844.0 | 0.1041 | 7.03 s | OK 3,630 s | [T105](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32876995670) |
 | T104 | **8** | No | **Yes** | Full | 64 | 7,650.7 | 0.1264 | 8.99 s | OK 3,627 s | [T104](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32866152287) |
 | T96 | **8** | No | **Yes** | Full | **40** | **7,206.4** | 0.0722 | 3.73 s | **OK 3,627 s** | [T96](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32812667740) |
