@@ -152,8 +152,16 @@ export AITER_DISABLE_FMHA_OPUS=1
 # the bottom catches unused arrays, not arrays that are used but always empty.
 SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-2}"
 SYNTHETIC_ACCEPT_LEN="${SYNTHETIC_ACCEPT_LEN:-2.51}"
+# The harness does NOT export SPEC_DECODING -- T121 proved it: the container had
+# CONC, TP, EP_SIZE, KV_OFFLOADING and no SPEC_* at all, so gating on
+# $SPEC_DECODING left speculative_config=None while `spec-decoding: mtp` sat in
+# the matrix. The field does reach us, but only inside RESULT_FILENAME
+# (kimik3_tp8_conc1_kvnone_spec-mtp_...), which is what we key off here. Keep the
+# SPEC_DECODING check too, in case a future harness starts exporting it.
+SPEC_ENABLE="${SPEC_DECODING:-}"
+case "${RESULT_FILENAME:-}" in *spec-mtp*) SPEC_ENABLE=mtp;; esac
 SPEC_ARGS=()
-if [ "${SPEC_DECODING:-}" = "mtp" ]; then
+if [ "$SPEC_ENABLE" = "mtp" ]; then
     SPEC_ARGS=(
         --speculative-config
         "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
