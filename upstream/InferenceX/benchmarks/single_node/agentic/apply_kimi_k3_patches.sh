@@ -17,27 +17,6 @@ except Exception:
 EOF
 }
 
-# _patch <file> <already-patched-marker> <<'PYEOF' ... old/new python ... PYEOF
-# The heredoc body must define OLD and NEW strings.
-_patch() {
-    local target="$1" marker="$2" label="$3"
-    if [ -z "$target" ] || [ ! -f "$target" ]; then
-        echo "[$label] target not found; skipping."
-        return 0
-    fi
-    if grep -q "$marker" "$target"; then
-        echo "[$label] already patched."
-        return 0
-    fi
-    cp -n "$target" "$target.orig" 2>/dev/null || true
-    if $PY - "$target" "$label"; then
-        return 0
-    else
-        echo "[$label] patch failed; left unchanged." >&2
-        return 0
-    fi
-}
-
 # -----------------------------------------------------------------------------
 # [3] vLLM: clamp the negative block count that corrupts the KV free list
 # -----------------------------------------------------------------------------
@@ -59,7 +38,14 @@ _patch() {
 # --no-async-scheduling was tested and does NOT help (c12 died at 490 s).
 patch_kv_blockpool() {
     local label="kv-blockpool"
-    local target; target=$(_modfile vllm.v1.core.single_type_kv_cache_manager)
+    # Resolve by path, not by import: importing vllm.v1.core pulls in GPU deps,
+    # so _modfile returns empty on a host with no visible device and the patch
+    # silently no-ops.
+    local target
+    target=$($PY -c "import vllm, os; print(os.path.join(os.path.dirname(vllm.__file__), 'v1', 'core', 'single_type_kv_cache_manager.py'))" 2>/dev/null)
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+        target=$(ls /usr/local/lib/python3*/dist-packages/vllm/v1/core/single_type_kv_cache_manager.py 2>/dev/null | head -1)
+    fi
     if [ -z "$target" ] || [ ! -f "$target" ]; then
         echo "[$label] target not found; skipping."; return 0
     fi
@@ -175,24 +161,6 @@ patch_pr51705() {
     fi
 }
 
-patch_pr51040() {
-    local label="pr51040"
-    local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
-    [ -n "$root" ] && [ -d "$root/vllm" ] || { echo "[$label] vllm root not found; skipping."; return 0; }
-    local f="$root/vllm/v1/attention/backends/mla/rocm_aiter_mla.py"
-    if grep -q "0 < self.num_heads < 16" "$f" 2>/dev/null; then
-        echo "[$label] already patched."; return 0
-    fi
-    local dv="$(dirname "$0")/pr51040_vllm.diff"
-    [ -f "$dv" ] || { echo "[$label] vendored diff not found; skipping." >&2; return 0; }
-    local fails; fails=$(patch -p1 -d "$root" --forward --batch < "$dv" 2>&1 | grep -c FAILED)
-    if grep -q "0 < self.num_heads < 16" "$f" 2>/dev/null; then
-        echo "[$label] applied -- FP8 MLA prefill now covers 12 heads/rank (failed hunks: $fails)"
-    else
-        echo "[$label] apply did not take (failed hunks: $fails)" >&2
-    fi
-}
-
 patch_pr51705_rejects() {
     local label="pr51705-rejects"
     local root; root=$($PY -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null)
@@ -295,8 +263,6 @@ else
 fi
 
 patch_pr51705_rejects || true
-
-patch_pr51040 || true
 
 echo "[kimi-patches] done."
 
