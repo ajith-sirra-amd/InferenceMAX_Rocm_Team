@@ -201,6 +201,52 @@ efficiency. All MoE runs `afp8_wfp4`; the `a16wfp4` BF16-activation variant is
 observed 2.04× saves ~6.1% of wall ≈ **+6.5% throughput** — up from +4.4% when
 idle was 44%, because there is less idle to dilute it.
 
+### FP16 is not a faster GEMM path — measured
+
+Prompted by QuickReduce's note that "bfloat16 kernels are slower than fp16" on
+ROCm. That comment is about QuickReduce's **codec** (bit-level pack/unpack for
+INT4/INT8 quantization), not MFMA. Benchmarked directly on the real TP8-sharded
+shapes, one MI355X, hipBLASLt via torch:
+
+| shape | M | N | K | BF16 TFLOP/s | FP16 TFLOP/s | FP16/BF16 |
+|---|---:|---:|---:|---:|---:|---:|
+| KDA q/k/v decode | 64 | 1536 | 7168 | 86.5 | 87.7 | 1.014× |
+| **KDA q/k/v prefill** | 8192 | 1536 | 7168 | **1212.5** | 1095.0 | **0.903×** |
+| KDA o_proj decode | 64 | 7168 | 1536 | 112.4 | 111.2 | 0.990× |
+| KDA o_proj prefill | 8192 | 7168 | 1536 | 1020.9 | 1023.4 | 1.003× |
+| MLA q_b decode | 64 | 2304 | 1536 | 36.9 | 36.4 | 0.989× |
+| MLA q_b prefill | 8192 | 2304 | 1536 | 891.4 | 854.6 | 0.959× |
+| MLA kv_b prefill | 8192 | 3072 | 512 | 753.0 | 707.2 | 0.939× |
+| **shared_expert prefill** | 8192 | 768 | 7168 | **1023.4** | 906.8 | **0.886×** |
+
+**FP16 loses on 6 of 8 shapes, by up to 11.4%.** There is no hidden hipBLASLt
+tuning advantage. Casting GEMM to FP16 would cost throughput *and* add FP16's
+range risk (max 65,504 vs BF16's ~3.4e38, which is why BF16 exists). Closed.
+
+This also corroborates the profile from a second direction: BF16 GEMM measured
+2.50 G MACs per 1% of busy against FP8×MXFP4's 5.12, a 2.04× ratio that matches
+the hardware's BF16→FP8 ratio exactly. BF16 is already running at full
+matrix-core rate.
+
+### Decode GEMMs run at 7% of prefill efficiency
+
+The more important result from the same benchmark:
+
+| | BF16 TFLOP/s |
+|---|---:|
+| prefill, M=8192 | **1,212** |
+| decode, M=64 | **86.5** |
+
+**14× worse, purely because M=64.** At that shape the matrix cores idle waiting
+on memory — it is not a precision problem. Decode cannot be fixed by making the
+math cheaper, because the math is not the cost. That agrees with the profile
+reaching the same conclusion from the other side (decode is collective- and
+launch-bound).
+
+It also sizes the BF16→FP8 lever honestly: FP8 gives ~2× on **prefill** GEMMs,
+which already run at 1,212 TFLOP/s. On decode GEMMs at 86.5 TFLOP/s it will buy
+far less, because those are latency-bound rather than compute-bound.
+
 ### Collectives: the DCP group never gets the fast all-reduce
 
     group 'tp:0'  -> ['AITER_CUSTOM', 'PYNCCL']
