@@ -237,7 +237,9 @@ for n in sorted(by):
         if i < len(by[n]): print(f"{g} {by[n][i]}")
 CCDPY
 
+PIN_CCD="${PIN_CCD:-0}"
 pin_workers_to_ccd() {
+    [ "$PIN_CCD" = "1" ] || return 0
     [ -s /tmp/ccdmap.txt ] || return 0
     local pinned=0
     while read -r _g _cpus; do
@@ -266,7 +268,7 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 wait "$PIN_BG" 2>/dev/null || true
 pin_workers_to_ccd
-if [ -s /tmp/ccdmap.txt ]; then
+if [ "$PIN_CCD" = "1" ] && [ -s /tmp/ccdmap.txt ]; then
     while read -r _g _cpus; do
         for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null | head -1); do
             _stray=$(for _t in /proc/$_p/task/*; do taskset -pc "${_t##*/}" 2>/dev/null | sed 's/.*list: //'; done | sort -u | grep -vFx "$_cpus" | wc -l)
