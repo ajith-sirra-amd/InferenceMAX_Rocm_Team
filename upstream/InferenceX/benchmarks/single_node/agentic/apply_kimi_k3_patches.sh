@@ -249,6 +249,45 @@ else
     patch_kv_blockpool || true
 fi
 
+patch_dcp_aiter_allreduce() {
+    local label="dcp-aiter-allreduce"
+    # Resolve by path, not by import: cuda_communicator pulls in GPU deps, so
+    # _modfile returns empty on a host with no visible device and the patch
+    # silently no-ops. Importing vllm at all is unnecessary to edit a file.
+    local target
+    target=$($PY -c "import vllm, os; print(os.path.join(os.path.dirname(vllm.__file__), 'distributed', 'device_communicators', 'cuda_communicator.py'))" 2>/dev/null)
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+        target=$(ls /usr/local/lib/python3*/dist-packages/vllm/distributed/device_communicators/cuda_communicator.py 2>/dev/null | head -1)
+    fi
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+        echo "[$label] cuda_communicator.py not found -- skipping" >&2
+        return 1
+    fi
+    if grep -q 'AGENTX_DCP_FAST_AR' "$target"; then
+        echo "[$label] already applied"
+        return 0
+    fi
+    if ! grep -q 'if "tp" not in unique_name:' "$target"; then
+        echo "[$label] gate text not found (upstream changed?) -- skipping" >&2
+        return 1
+    fi
+    python3 - "$target" <<'PYEOF'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = '        if "tp" not in unique_name:\n'
+new = ('        # AGENTX_DCP_FAST_AR: upstream gates every fast all-reduce backend on the\n'
+       '        # literal substring "tp" in the group name, so dcp:0 falls through to\n'
+       '        # PYNCCL before any hardware capability is checked. On Kimi-K3 with DCP=8\n'
+       '        # that group carries most of the collective time. Allow dcp as well.\n'
+       '        if "tp" not in unique_name and "dcp" not in unique_name:\n')
+assert s.count(old) == 1, f"expected exactly 1 gate, found {s.count(old)}"
+open(p, "w").write(s.replace(old, new))
+print("  patched gate")
+PYEOF
+    echo "[$label] applied to $target"
+}
+
 if [ "${SKIP_PATCH_PR51705:-0}" = "1" ]; then
     echo "[pr51705] SKIPPED via SKIP_PATCH_PR51705=1"
 else
@@ -260,3 +299,5 @@ patch_pr51705_rejects || true
 patch_pr51040 || true
 
 echo "[kimi-patches] done."
+
+patch_dcp_aiter_allreduce || true
