@@ -152,7 +152,7 @@ CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-MAX_NUM_SEQS=$(( CONC * 2 ))
+MAX_NUM_SEQS=$(( (CONC * 5 + 3) / 4 ))
 if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
 if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
 MAX_NUM_SEQS="${MAX_NUM_SEQS_OVERRIDE:-$MAX_NUM_SEQS}"
