@@ -144,7 +144,7 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-ROCPROF="${ROCPROF:-1}"
+ROCPROF="${ROCPROF:-0}"
 ROCPROF_PREFIX=()
 if [ "$ROCPROF" = "1" ]; then
     RP_DIR="/mnt/hf_hub_cache/kimi-profiles/rocprof_$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}_kv${KV_OFFLOADING}"

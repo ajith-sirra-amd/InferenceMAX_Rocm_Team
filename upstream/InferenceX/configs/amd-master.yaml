@@ -2087,7 +2087,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # kimik3_fp4_mi355x.sh, which is not in the tree, and the row fails before
       # the server starts. Whether MTP actually runs is decided in the script by
       # CONC (<=4 only), not by this field.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [52], spec-decoding: mtp }
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [96], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
