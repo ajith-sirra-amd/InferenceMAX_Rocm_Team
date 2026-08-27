@@ -112,7 +112,7 @@ export VLLM_ROCM_USE_AITER_MLA=1
 export AITER_DISABLE_FMHA_OPUS=1
 
 SPEC_ENABLE="${SPEC_DECODING:-}"
-case "${RESULT_FILENAME:-}" in *spec-mtp*) SPEC_ENABLE=mtp;; esac
+case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
 if [ "$LOW_CONC_INTERACTIVE" != "1" ]; then SPEC_ENABLE=""; fi
 SPEC_ARGS=()
 if [ "$SPEC_ENABLE" = "mtp" ]; then
