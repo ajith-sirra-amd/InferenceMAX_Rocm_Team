@@ -105,6 +105,70 @@ Two distinct causes:
   each**. That is the DCP partial-attention path waiting on a cross-rank sync —
   structural to DCP, not host overhead.
 
+### What the CPU is actually doing
+
+Naming the kernel the GPU was **waiting to start** identifies which host stage
+stalled. From T124's 403.9 s of intra-serving idle:
+
+| idle | % idle | n | avg gap | waiting to start | host work |
+|---:|---:|---:|---:|---|---|
+| **71.9 s** | **17.8%** | 512,608 | 140 µs | `__amd_rocclr_copyBuffer` | **H2D upload of batch metadata** — `input_ids`, `positions`, `slot_mapping`, `block_tables`, `seq_lens`, `query_start_loc`. **~127 copies per step** |
+| 28.3 s | 7.0% | **6,050** | **4,683 µs** | `__amd_rocclr_fillBufferAligned` | `hipMemset` — allocator zeroing |
+| 28.0 s | 6.9% | 22,651 | **1,237 µs** | `merge_attn_states_kernel` | **not CPU** — DCP cross-rank sync |
+| 26.2 s | 6.5% | 569,384 | 46 µs | `ncclDevKernel_Generic_1` | **not CPU** — collective rank skew |
+| **25.2 s** | **6.2%** | **79** | **319,062 µs** | `arange_cuda` | 79 events at 319 ms each — **unexplained** |
+| 22.1 s | 5.5% | 164,868 | 134 µs | `elementwise_manual_unroll` | sampling / penalties / metadata math |
+| 15.6 s | 3.9% | 91,331 | 171 µs | `elementwise_manual_unroll` | as above |
+| 12.0 s | 3.0% | 101,467 | 118 µs | `CatArrayBatchedCopy` | `torch.cat` in attention-metadata assembly |
+
+**Rough attribution of the 403.9 s:**
+
+| | | |
+|---|---:|---|
+| host / Python | **~150 s (37%)** | batch-tensor build + upload (84 s), sampling/elementwise (38 s), allocator memsets (28 s) |
+| **not** Python | ~54 s (13%) | DCP merge sync (28 s), collective rank skew (26 s) |
+| unexplained | ~25 s (6%) | `arange_cuda`, 79 events |
+| remainder | | per-dispatch overhead, partly rocprof's own |
+
+The per-step host sequence is: scheduler decisions (which requests run, KV block
+alloc/free, prefix-cache block hashing) → `_prepare_inputs()` building ~127 CPU
+tensors and uploading them → attention-metadata construction (DCP adds per-rank
+`seq_lens`/`cu_seqlens` work) → sampling → incremental detokenization and IPC to
+the API server. **The ~127 `copyBuffer`/step is the fingerprint of that second
+stage**, and it is the single largest host item.
+
+### The tokenizer is slow — but it is not this
+
+Kimi-K3 ships **no `tokenizer.json`**, so there is no HF Rust
+`PreTrainedTokenizerFast` path:
+
+    tokenizer_class : TikTokenTokenizer   (auto_map -> tokenization_kimi.py)
+    tokenizer.json  : ABSENT
+    vLLM log        : "slow tokenizer" x10,  tokenizer_mode=kimi
+
+**This does not explain the measured idle.** The stalls above are tensor uploads
+in EngineCore; tokenization is once per *request* and detokenization is
+`IncrementalDetokenizer` inside `OutputProcessor` — both live in the **API server
+process**, not the GPU step loop. Accelerating the tokenizer would not move the
+`copyBuffer` gaps.
+
+Where it *could* matter is TTFT: at ~66,000 input tok/s every prompt is tokenized
+in full, **including the ~94% that hit the prefix cache and are never computed**.
+So tokenizer cost scales with raw input, not with the 6% actually prefilled.
+
+Levers, if that is ever shown to bind:
+
+- **`--api-server-count N`** — scales the front-end processes doing
+  tokenize/detokenize/HTTP. The natural fix, since the work is there and not in
+  EngineCore.
+- `--skip-tokenizer-init` — only if the client sends token IDs; our replay sends
+  text, so not applicable without changing the harness.
+- A real `tokenizer.json` for Kimi-K3 would unlock the Rust fast path, but that is
+  a checkpoint asset we do not control.
+
+**Untested.** No measurement yet shows tokenization binding — it is a hypothesis
+about TTFT, not a finding, and it is listed here so it is not mistaken for one.
+
 ### BF16 vs FP8, weighted into end-to-end wall
 
 GEMM only — **27.41% of GPU busy (312.1 s)**:
