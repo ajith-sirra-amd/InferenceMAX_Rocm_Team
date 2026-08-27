@@ -28,7 +28,9 @@ Then commit the container. The script is marker-guarded and idempotent — safe 
 re-run. Expected output:
 
 ```
-[kv-blockpool] applied to .../single_type_kv_cache_manager.py
+[kimi-patches] applying in-container patches...
+[kv-blockpool] patched .../v1/core/single_type_kv_cache_manager.py
+[pr51705] applying vendored diff (c326df26b4eb4caa, 3830 lines)
 [pr51705] applied
 [pr51705-rejects] MultiHeadLatentAttention.__init__ accepts enable_dcp_q_replicate
 [kimi-patches] done.
@@ -56,10 +58,12 @@ Inside the patch script:
 | `patch_kv_blockpool` | [L39](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L39) | [L217](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L217) |
 | `patch_pr51705` | [L142](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L142) | [L262](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L262) |
 | **`patch_pr51705_rejects`** | [**L164**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L164) | [**L265**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L265) |
-| `patch_dcp_aiter_allreduce` \* | [L220](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L220) | [L269](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L269) |
 
-\* not part of the image — untested local patch that lets the `dcp:0` process
-group use the fast all-reduce backends instead of falling back to PYNCCL.
+The script also carries `patch_dcp_aiter_allreduce`, which lets the `dcp:0`
+process group use the fast all-reduce backends instead of falling back to PYNCCL.
+It is **experimental, never measured, and not in the reference image** — gated
+behind `APPLY_DCP_FAST_AR=1` and off by default. Enabling it produces an image
+that does not match `aigmkt/kimi-k3-vllm:latest`.
 
 ## Why `pr51705-rejects` is required
 

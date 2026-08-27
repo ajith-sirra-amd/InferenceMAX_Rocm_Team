@@ -264,6 +264,10 @@ fi
 
 patch_pr51705_rejects || true
 
-echo "[kimi-patches] done."
+# EXPERIMENTAL, off by default. Not in aigmkt/kimi-k3-vllm:latest -- enabling it
+# produces an image that does NOT match the reference. Never measured.
+if [ "${APPLY_DCP_FAST_AR:-0}" = "1" ]; then
+    patch_dcp_aiter_allreduce || true
+fi
 
-patch_dcp_aiter_allreduce || true
+echo "[kimi-patches] done."
