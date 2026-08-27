@@ -59,11 +59,8 @@ Inside the patch script:
 | `patch_pr51705` | [L142](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L142) | [L262](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L262) |
 | **`patch_pr51705_rejects`** | [**L164**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L164) | [**L265**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L265) |
 
-The script also carries `patch_dcp_aiter_allreduce`, which lets the `dcp:0`
-process group use the fast all-reduce backends instead of falling back to PYNCCL.
-It is **experimental, never measured, and not in the reference image** — gated
-behind `APPLY_DCP_FAST_AR=1` and off by default. Enabling it produces an image
-that does not match `aigmkt/kimi-k3-vllm:latest`.
+Those three are the whole script — running it reproduces the reference image
+exactly.
 
 ## Why `pr51705-rejects` is required
 

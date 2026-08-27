@@ -1,0 +1,75 @@
+REMOVED FROM apply_kimi_k3_patches.sh -- reference only, never measured.
+
+WHAT IT DOES
+vllm/distributed/device_communicators/cuda_communicator.py gates every fast
+all-reduce backend on a literal substring test:
+
+    if "tp" not in unique_name:
+        use_custom_allreduce = False
+        use_torch_symm_mem = False
+        use_flashinfer_allreduce = False
+        use_aiter_allreduce = False
+
+Groups are named tp:0, dcp:0, ep:0, so dcp:0 fails the test and every fast
+backend is switched off before any hardware capability is checked. It falls
+through to PYNCCL:
+
+    tp:0  -> ['AITER_CUSTOM', 'PYNCCL']
+    dcp:0 -> ['PYNCCL']
+    ep:0  -> ['PYNCCL']
+
+This patch widens the gate to allow dcp.
+
+WHY IT MIGHT MATTER
+Generic ncclDevKernel is 22.55% of GPU busy against 3.63% for
+cross_device_reduce_2stage, the tuned AITER path TP gets. On a DCP=8 model the
+excluded group carries most of the collective time. VLLM_ROCM_QUICK_REDUCE_*
+cannot reach dcp:0 either, since qr_comm sits behind the same gate -- so this is
+not reachable by configuration at all.
+
+WHY IT IS NOT IN THE IMAGE
+Never run. Upstream restricts this to TP deliberately -- the comment says so --
+and does not state the reason. Custom all-reduce registers IPC buffers per group;
+whether a second registration over the same 8 ranks is safe, wasteful, or
+incorrect is unknown. Validated only to the extent that it applies cleanly, is
+idempotent, and leaves the file importable.
+
+TO USE: paste the function back into apply_kimi_k3_patches.sh and invoke it.
+patch_dcp_aiter_allreduce() {
+    local label="dcp-aiter-allreduce"
+    # Resolve by path, not by import: cuda_communicator pulls in GPU deps, so
+    # _modfile returns empty on a host with no visible device and the patch
+    # silently no-ops. Importing vllm at all is unnecessary to edit a file.
+    local target
+    target=$($PY -c "import vllm, os; print(os.path.join(os.path.dirname(vllm.__file__), 'distributed', 'device_communicators', 'cuda_communicator.py'))" 2>/dev/null)
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+        target=$(ls /usr/local/lib/python3*/dist-packages/vllm/distributed/device_communicators/cuda_communicator.py 2>/dev/null | head -1)
+    fi
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+        echo "[$label] cuda_communicator.py not found -- skipping" >&2
+        return 1
+    fi
+    if grep -q 'AGENTX_DCP_FAST_AR' "$target"; then
+        echo "[$label] already applied"
+        return 0
+    fi
+    if ! grep -q 'if "tp" not in unique_name:' "$target"; then
+        echo "[$label] gate text not found (upstream changed?) -- skipping" >&2
+        return 1
+    fi
+    python3 - "$target" <<'PYEOF'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = '        if "tp" not in unique_name:\n'
+new = ('        # AGENTX_DCP_FAST_AR: upstream gates every fast all-reduce backend on the\n'
+       '        # literal substring "tp" in the group name, so dcp:0 falls through to\n'
+       '        # PYNCCL before any hardware capability is checked. On Kimi-K3 with DCP=8\n'
+       '        # that group carries most of the collective time. Allow dcp as well.\n'
+       '        if "tp" not in unique_name and "dcp" not in unique_name:\n')
+assert s.count(old) == 1, f"expected exactly 1 gate, found {s.count(old)}"
+open(p, "w").write(s.replace(old, new))
+print("  patched gate")
+PYEOF
+    echo "[$label] applied to $target"
+}
