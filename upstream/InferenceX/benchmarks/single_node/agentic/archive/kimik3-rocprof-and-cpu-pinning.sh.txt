@@ -1,67 +1,117 @@
-REMOVED FROM kimik3_fp4_mi355x_mtp.sh -- kept for reference, not sourced.
+REMOVED FROM kimik3_fp4_mi355x_mtp.sh -- reference only, not sourced.
 
-=== rocprofv3 kernel tracing wrapper ===
-Was applied as: "${ROCPROF_PREFIX[@]}" "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
-Produced T116's trace (2.3 GB, 6,356,992 dispatches). Raw output committed under
-kimi-k3-profiles/. Costs ~17% input throughput, so any run quoting a number must
-not use it.
+=== 1. rocprofv3 kernel tracing wrapper ===
+Applied as: "${ROCPROF_PREFIX[@]}" "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+Produced T116 (offload ON) and T124 (offload OFF). Raw stats CSVs are committed
+under kimi-k3-profiles/. Costs ~17-18% input throughput because rocprofv3
+intercepts every dispatch, so any run quoting a number must not use it -- and
+the idle percentages it reports are inflated by that same interception.
 
 ROCPROF="${ROCPROF:-0}"
 ROCPROF_PREFIX=()
 if [ "$ROCPROF" = "1" ]; then
-    RP_DIR="/mnt/hf_hub_cache/kimi-profiles/rocprof_$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
+    RP_DIR="/mnt/hf_hub_cache/kimi-profiles/rocprof_$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}_kv${KV_OFFLOADING}"
     mkdir -p "$RP_DIR"
     ROCPROF_PREFIX=(rocprofv3 --kernel-trace --stats -f csv -d "$RP_DIR" -o k --)
     echo "[rocprof] tracing -> $RP_DIR"
 fi
 
-=== NUMA-aware CPU pinning of TP workers ===
-Read rocm-smi --showtoponuma, split each NUMA node's cpulist across the GPUs on
-that node (low and high halves, to spread SMT siblings), then taskset each
-VLLM::Worker_TP<n>_ process onto its slice.
+=== 2. Cache-aware CCD pinning (one L3 domain per GPU, every thread) ===
+Topology on this host: 2x EPYC 9575F, 64 cores/socket, SMT2, 256 logical CPUs.
+L3 is 512 MiB over 16 instances = 32 MiB per CCD; each CCD is 8 physical cores
+plus their 8 SMT siblings = 16 logical CPUs. GPUs 0-3 are on NUMA node 0 and
+4-7 on node 1, giving 8 CCDs per node against 4 GPUs -- one whole CCD per GPU
+with 4 spare per node for EngineCore, the API server and the OS.
+    GPU0 0-7,128-135    GPU4 64-71,192-199
+    GPU1 8-15,136-143   GPU5 72-79,200-207
+    GPU2 16-23,144-151  GPU6 80-87,208-215
+    GPU3 24-31,152-159  GPU7 88-95,216-223
+Measured motivation: workers run unpinned (affinity 0-255) and threads of the
+GPU0-3 workers were observed executing on node1 cores, i.e. cross-socket for
+every host-side operation. Each worker draws 283% CPU across ~197 threads, so
+pinning to a single core would serialise ~3 cores of work -- one CCD is the
+right granularity.
+Note the bug this version fixes: the earlier implementation called
+    taskset -pc "$_cpus" "$_p"
+which sets affinity for ONE TID, not a process. With ~197 threads per worker it
+pinned the main thread and left ~196 free to roam, which is why pinning never
+showed a measurable win. This version walks /proc/<pid>/task/* and pins every
+thread, applies early and repeatedly so threads spawned during model init are
+caught, and logs stray_affinities so a partial pin is visible.
+NEVER MEASURED for performance -- gated behind PIN_CCD and removed before an
+A/B was run.
 
-python3 - <<'PINPY' > /tmp/pinmap.txt 2>/dev/null || true
-import subprocess, re
-def cpulist(n):
-    return open(f"/sys/devices/system/node/node{n}/cpulist").read().strip()
+python3 - <<'CCDPY' > /tmp/ccdmap.txt 2>/dev/null || true
+import subprocess, re, os, glob
 def expand(s):
-    out=[]
-    for part in s.split(","):
-        if "-" in part:
-            a,b=part.split("-"); out += list(range(int(a),int(b)+1))
-        else: out.append(int(part))
+    v=[]
+    for part in s.split(','):
+        if '-' in part:
+            a,b=part.split('-'); v+=list(range(int(a),int(b)+1))
+        else: v.append(int(part))
+    return v
+def l3_domains():
+    seen,out=set(),[]
+    for c in sorted(int(re.search(r'cpu(\d+)$',x).group(1)) for x in glob.glob('/sys/devices/system/cpu/cpu[0-9]*')):
+        f=f'/sys/devices/system/cpu/{"cpu"}{c}/cache/index3/shared_cpu_list'
+        if not os.path.exists(f): continue
+        d=open(f).read().strip()
+        if d not in seen: seen.add(d); out.append(d)
     return out
-def compress(v):
-    v=sorted(v); runs=[]; a=b=v[0]
-    for x in v[1:]:
-        if x==b+1: b=x
-        else: runs.append((a,b)); a=b=x
-    runs.append((a,b))
-    return ",".join(f"{x}-{y}" if x!=y else str(x) for x,y in runs)
-try:
-    topo = subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
-except Exception:
-    topo = ""
-gpu_node={}
-for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)", topo):
-    gpu_node[int(m.group(1))]=int(m.group(2))
+def node_of(cpus):
+    for n in glob.glob('/sys/devices/system/node/node[0-9]*'):
+        nid=int(re.search(r'node(\d+)$',n).group(1))
+        if cpus[0] in expand(open(f'{n}/cpulist').read().strip()): return nid
+    return -1
+topo=""
+try: topo=subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
+except Exception: pass
+gpu_node={int(m.group(1)):int(m.group(2)) for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)",topo)}
 if not gpu_node: raise SystemExit
-bynode={}
-for g,n in sorted(gpu_node.items()): bynode.setdefault(n,[]).append(g)
-for n,gpus in bynode.items():
-    cpus=expand(cpulist(n)); k=len(gpus)
-    half=len(cpus)//2
-    lo,hi=cpus[:half],cpus[half:]
-    per_lo,per_hi=len(lo)//k,len(hi)//k
-    for i,g in enumerate(gpus):
-        sl = lo[i*per_lo:(i+1)*per_lo] + hi[i*per_hi:(i+1)*per_hi]
-        print(f"{g} {compress(sl)}")
-PINPY
+by={}
+for d in l3_domains(): by.setdefault(node_of(expand(d)),[]).append(d)
+for n in by: by[n].sort(key=lambda d: expand(d)[0])
+for n in sorted(by):
+    for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
+        if i < len(by[n]): print(f"{g} {by[n][i]}")
+CCDPY
 
-if [ -s /tmp/pinmap.txt ]; then
+PIN_CCD="${PIN_CCD:-0}"
+pin_workers_to_ccd() {
+    [ "$PIN_CCD" = "1" ] || return 0
+    [ -s /tmp/ccdmap.txt ] || return 0
+    local pinned=0
     while read -r _g _cpus; do
         for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null); do
-            taskset -pc "$_cpus" "$_p" >/dev/null 2>&1 && echo "[pin-ranks] TP$_g pid=$_p -> cpus=$_cpus"
+            for _t in /proc/$_p/task/*; do
+                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1))
+            done
         done
-    done < /tmp/pinmap.txt
+    done < /tmp/ccdmap.txt
+    echo "[pin-ccd] pinned $pinned threads"
+}
+
+(
+    for _i in $(seq 1 60); do
+        pgrep -f "VLLM::Worker_TP0_" >/dev/null 2>&1 && break
+        sleep 5
+    done
+    for _i in 1 2 3 4 5 6; do
+        pin_workers_to_ccd
+        sleep 20
+    done
+) &
+PIN_BG=$!
+
+wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+
+wait "$PIN_BG" 2>/dev/null || true
+pin_workers_to_ccd
+if [ "$PIN_CCD" = "1" ] && [ -s /tmp/ccdmap.txt ]; then
+    while read -r _g _cpus; do
+        for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null | head -1); do
+            _stray=$(for _t in /proc/$_p/task/*; do taskset -pc "${_t##*/}" 2>/dev/null | sed 's/.*list: //'; done | sort -u | grep -vFx "$_cpus" | wc -l)
+            echo "[pin-ccd] GPU$_g pid=$_p cpus=$_cpus stray_affinities=$_stray"
+        done
+    done < /tmp/ccdmap.txt
 fi

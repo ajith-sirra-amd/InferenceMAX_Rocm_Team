@@ -167,17 +167,7 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-ROCPROF="${ROCPROF:-0}"
-ROCPROF_PREFIX=()
-if [ "$ROCPROF" = "1" ]; then
-    RP_DIR="/mnt/hf_hub_cache/kimi-profiles/rocprof_$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}_kv${KV_OFFLOADING}"
-    mkdir -p "$RP_DIR"
-    ROCPROF_PREFIX=(rocprofv3 --kernel-trace --stats -f csv -d "$RP_DIR" -o k --)
-    echo "[rocprof] tracing -> $RP_DIR"
-fi
-
 GPU_MEM_UTIL=0.9
-
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
@@ -214,86 +204,11 @@ done
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 
-"${ROCPROF_PREFIX[@]}" "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
-
-python3 - <<'CCDPY' > /tmp/ccdmap.txt 2>/dev/null || true
-import subprocess, re, os, glob
-def expand(s):
-    v=[]
-    for part in s.split(','):
-        if '-' in part:
-            a,b=part.split('-'); v+=list(range(int(a),int(b)+1))
-        else: v.append(int(part))
-    return v
-def l3_domains():
-    seen,out=set(),[]
-    for c in sorted(int(re.search(r'cpu(\d+)$',x).group(1)) for x in glob.glob('/sys/devices/system/cpu/cpu[0-9]*')):
-        f=f'/sys/devices/system/cpu/{"cpu"}{c}/cache/index3/shared_cpu_list'
-        if not os.path.exists(f): continue
-        d=open(f).read().strip()
-        if d not in seen: seen.add(d); out.append(d)
-    return out
-def node_of(cpus):
-    for n in glob.glob('/sys/devices/system/node/node[0-9]*'):
-        nid=int(re.search(r'node(\d+)$',n).group(1))
-        if cpus[0] in expand(open(f'{n}/cpulist').read().strip()): return nid
-    return -1
-topo=""
-try: topo=subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
-except Exception: pass
-gpu_node={int(m.group(1)):int(m.group(2)) for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)",topo)}
-if not gpu_node: raise SystemExit
-by={}
-for d in l3_domains(): by.setdefault(node_of(expand(d)),[]).append(d)
-for n in by: by[n].sort(key=lambda d: expand(d)[0])
-for n in sorted(by):
-    for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
-        if i < len(by[n]): print(f"{g} {by[n][i]}")
-CCDPY
-
-PIN_CCD="${PIN_CCD:-0}"
-pin_workers_to_ccd() {
-    [ "$PIN_CCD" = "1" ] || return 0
-    [ -s /tmp/ccdmap.txt ] || return 0
-    local pinned=0
-    while read -r _g _cpus; do
-        for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null); do
-            for _t in /proc/$_p/task/*; do
-                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1))
-            done
-        done
-    done < /tmp/ccdmap.txt
-    echo "[pin-ccd] pinned $pinned threads"
-}
-
-(
-    for _i in $(seq 1 60); do
-        pgrep -f "VLLM::Worker_TP0_" >/dev/null 2>&1 && break
-        sleep 5
-    done
-    for _i in 1 2 3 4 5 6; do
-        pin_workers_to_ccd
-        sleep 20
-    done
-) &
-PIN_BG=$!
-
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
-wait "$PIN_BG" 2>/dev/null || true
-pin_workers_to_ccd
-if [ "$PIN_CCD" = "1" ] && [ -s /tmp/ccdmap.txt ]; then
-    while read -r _g _cpus; do
-        for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null | head -1); do
-            _stray=$(for _t in /proc/$_p/task/*; do taskset -pc "${_t##*/}" 2>/dev/null | sed 's/.*list: //'; done | sort -u | grep -vFx "$_cpus" | wc -l)
-            echo "[pin-ccd] GPU$_g pid=$_p cpus=$_cpus stray_affinities=$_stray"
-        done
-    done < /tmp/ccdmap.txt
-fi
-
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
