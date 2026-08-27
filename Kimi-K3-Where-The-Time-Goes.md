@@ -2,13 +2,163 @@
 
 Companion to [Kimi-DCP-Experiemnts-Summary.md](Kimi-DCP-Experiemnts-Summary.md).
 
-Measured on 8× MI355X, DCP=8, concurrency 52, from run
-[T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638)
-(7,950.6 tok/s/GPU) plus kernel microbenchmarks on the same host.
+Measured on 8× MI355X, DCP=8, concurrency 52. Current data is
+[T124](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33033974874)
+(rocprofv3, **no KV offload**); [T116](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32964875218)
+(offload ON) is kept below for the before/after. Raw profiler output is committed
+verbatim under [kimi-k3-profiles/](kimi-k3-profiles/).
 
 ---
 
-## MEASURED — rocprofv3, T116
+## MEASURED — rocprofv3, T124 (current, offload OFF)
+
+Source:
+[T124](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33033974874),
+`rocprofv3 --kernel-trace --stats`, 3.1 GB trace, **8,474,873 dispatches**,
+DCP=8, conc 52, `max_num_seqs` 65, **no KV offload**, no MTP.
+Same method as T116 below: negative/>1 s durations discarded, busy is the
+**union of merged intervals**, dead periods >2 s excluded. Serving window 1430.7 s.
+
+**T124 supersedes T116.** T116 profiled the same point *with* the DRAM offload,
+which we have since removed on its own evidence.
+
+### Removing the KV offload cut idle by 16 points
+
+| | T116 offload ON | **T124 offload OFF** |
+|---|---:|---:|
+| GPU busy | 55.7% | **71.8%** |
+| **Idle** | **44.3%** | **28.2%** |
+| collectives (% busy) | 34.31% | 29.68% |
+| dispatches | 6.36M | 8.47M |
+| tok/s/GPU *(traced both sides, not quotable)* | 3,146.0 | **6,821.5** |
+| requests | 375/524 | **1123/1232** |
+
+| gap size | T116 | T124 | change |
+|---|---:|---:|---|
+| 10–200 µs | 115.2 s (7.9%) | 124.0 s (8.7%) | unchanged — pure launch overhead |
+| 0.2–1 ms | 147.5 s (10.1%) | 104.8 s (7.3%) | −29% |
+| 1–10 ms | 118.7 s (8.1%) | 57.6 s (4.0%) | −51% |
+| **>10 ms** | **265.7 s, n=4,104** | **114.6 s, n=877** | **−57%, 4.7× fewer** |
+
+The multi-millisecond stalls were the offload's host↔device traffic. The
+sub-200 µs launch gaps did not move — the signature of dispatch overhead rather
+than memory traffic. Predicted before the run; it held.
+
+### Prefill vs decode — two different problems
+
+Method caveat first: chunked prefill **interleaves both in one forward pass**, so
+this classifies 1 ms windows by whether prefill attention (`fmha`) was running.
+A mixed pass runs `fmha` in some milliseconds and its MoE/GEMM/collectives in
+others, so prefill's non-attention work lands in the decode bucket. The tell is
+MoE showing 0.1% in prefill windows. **Prefill's true share is higher than 33%
+and decode's collective share is inflated.** Treat the split as indicative.
+
+| category | prefill-active | | decode-only | |
+|---|---:|---:|---:|---:|
+| **collectives** | 34.0 s | 9.0% | **304.0 s** | **39.9%** |
+| **MLA attn (fmha)** | **268.7 s** | **71.3%** | 0 | — |
+| dense GEMM | 30.6 s | 8.1% | 158.3 s | 20.8% |
+| MoE | 0.3 s | 0.1% | 154.8 s | 20.3% |
+| KDA | 0 | — | 62.1 s | 8.2% |
+| attn residual | 3.1 s | 0.8% | 39.7 s | 5.2% |
+| MLA attn (decode/DCP) | 22.6 s | 6.0% | 6.4 s | 0.8% |
+| **total** | **377.1 s** | **33.1%** | **761.7 s** | **66.9%** |
+
+**Prefill is attention-bound (71%); decode is collective-bound (40%).**
+
+What survives the caveat cleanly: `fmha` = **268.7 s = 23.6% of all busy,
+exclusively prefill**; `gather`+`merge` = **29.1 s = 2.6%, exclusively decode**.
+Everything else is genuinely shared and cannot be split by kernel name.
+
+Workload context: **152–175 input tokens per output token**, but prefix cache hit
+is ~94%, so only ~6% of input tokens are actually computed. That is how a 175:1
+token ratio reconciles with prefill being only ~1/3 of GPU time.
+
+### The idle is almost entirely in decode
+
+| | idle | share |
+|---|---:|---:|
+| prefill-active windows | 29.8 s | **7.4%** |
+| **decode-only windows** | **374.1 s** | **92.6%** |
+
+Prefill keeps the GPU nearly saturated — it submits 8192-token chunks that occupy
+it for tens of ms. Decode submits ~52-row batches across 93 layers where every
+kernel is short and the host cannot stay ahead.
+
+**What the GPU is waiting for, in decode:**
+
+| idle | share | n | avg gap | next kernel |
+|---:|---:|---:|---:|---|
+| 121.2 s | 32.4% | 592,738 | 205 µs | elementwise/other |
+| **102.8 s** | **27.5%** | 537,111 | 191 µs | **copy/fill** |
+| 34.8 s | 9.3% | 325,151 | 107 µs | KDA |
+| **29.0 s** | **7.8%** | 20,717 | **1,400 µs** | **MLA attn decode (DCP)** |
+| 26.3 s | 7.0% | 294,448 | 89 µs | MoE |
+| 24.0 s | 6.4% | 228,603 | 105 µs | dense GEMM |
+
+Two distinct causes:
+
+- **~60% of decode idle is 100–200 µs gaps before small ops** across ~1.75M
+  events. The host is not issuing fast enough — a **launch-rate** problem, not a
+  memory one.
+- **`MLA attn decode (DCP)` is the outlier**: only 20,717 gaps but **1,400 µs
+  each**. That is the DCP partial-attention path waiting on a cross-rank sync —
+  structural to DCP, not host overhead.
+
+### BF16 vs FP8, weighted into end-to-end wall
+
+GEMM only — **27.41% of GPU busy (312.1 s)**:
+
+| | time share | compute share | sec |
+|---|---:|---:|---:|
+| **BF16 GEMM** | **60.5%** | 42.9% | 189.0 |
+| **FP8 × MXFP4** | **39.4%** | 57.1% | 123.1 |
+
+Efficiency **2.50 vs 5.12** G MACs per 1% of busy = **2.04×**, essentially
+unchanged from T116's 2.02×. Removing the offload changed the idle, not kernel
+efficiency. All MoE runs `afp8_wfp4`; the `a16wfp4` BF16-activation variant is
+0.01%, i.e. absent.
+
+**Weighted into overall e2e wall** (1431 s serving, 71.8% busy):
+
+| category | % busy | **% e2e wall** |
+|---|---:|---:|
+| **IDLE** | — | **28.23%** |
+| collectives (BF16 payload) | 29.68% | **21.30%** |
+| MLA attn prefill (BF16 QK/PV) | 23.60% | **16.94%** |
+| **BF16 dense GEMM** | 16.59% | **11.91%** |
+| FP8 × MXFP4 MoE GEMM | 10.81% | 7.76% |
+| elementwise/copy/other | 7.55% | 5.42% |
+| KDA (BF16 io) | 5.46% | 3.92% |
+| attn residual (BF16) | 3.76% | 2.70% |
+| MLA attn decode (FP8 KV→BF16) | 2.55% | 1.83% |
+
+**BF16 dense GEMM is 11.91% of wall.** Converting all of it to FP8 at the
+observed 2.04× saves ~6.1% of wall ≈ **+6.5% throughput** — up from +4.4% when
+idle was 44%, because there is less idle to dilute it.
+
+### Collectives: the DCP group never gets the fast all-reduce
+
+    group 'tp:0'  -> ['AITER_CUSTOM', 'PYNCCL']
+    group 'dcp:0' -> ['PYNCCL']
+    group 'ep:0'  -> ['PYNCCL']
+
+Generic `ncclDevKernel_Generic_1` is **22.55%** of GPU busy against **3.63%** for
+`cross_device_reduce_2stage`, the tuned AITER path TP uses. The cost sits in the
+group that did not get the fast backend — a concrete target, not just a fact.
+
+### Priority order, by e2e wall
+
+| target | % e2e wall | handle |
+|---|---:|---|
+| **Idle (92.6% of it in decode)** | **28.2%** | host launch rate in decode |
+| **Collectives** | **21.3%** | `dcp:0` on generic PYNCCL |
+| MLA attn prefill | 16.9% | needs an FP8 FMHA kernel |
+| BF16 dense GEMM | 11.9% | weight quantization, ~+6.5% |
+
+---
+
+## Superseded — rocprofv3, T116 (offload ON)
 
 Everything below this section is superseded by real data. Source:
 [T116](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32964875218),

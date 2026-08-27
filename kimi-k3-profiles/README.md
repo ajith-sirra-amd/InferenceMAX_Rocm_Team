@@ -4,7 +4,26 @@ Unprocessed profiler output, committed verbatim. Nothing here has been filtered,
 recomputed, or reformatted. For the analysis derived from it see
 [../Kimi-K3-Where-The-Time-Goes.md](../Kimi-K3-Where-The-Time-Goes.md).
 
-## `T116_rocprofv3_k_kernel_stats.csv`
+## `T124_rocprofv3_k_kernel_stats_no-offload.csv` — current
+
+| | |
+|---|---|
+| Run | [T124](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33033974874) |
+| Date | 2026-08-27 |
+| Config | DCP=8, conc 52, `max_num_seqs` 65, dense ladder 1…65, TP=8, EP=1, **no KV offload**, no MTP, gmu 0.9 |
+| Trace | 3.1 GB, **8,474,873 dispatches**, serving window 1430.7 s |
+| Result | GPU busy **71.8%**, idle **28.2%** |
+| MD5 | `9c779a75b49fbd33c198690355649210` |
+
+This is the current profile. It supersedes T116 below, which was taken with the
+DRAM KV offload enabled — the offload has since been removed, and removing it is
+what took idle from 44.3% to 28.2%.
+
+Same two caveats apply as for T116: the `Percentage` column is unusable because
+of the wrapped `cross_device_reduce_2stage` row, and the stats aggregate all
+8 GPUs.
+
+## `T116_rocprofv3_k_kernel_stats.csv` — superseded (offload ON)
 
 | | |
 |---|---|
@@ -42,14 +61,15 @@ other row is driven to ~1e-6. **Treat `Percentage` as unusable.**
 1,191,325 calls here versus 732,464 on Agent 2 alone. Divide by device, or use
 the trace, if you want per-GPU figures.
 
-## The full kernel trace is not in git
+## The full kernel traces are not in git
 
 `k_kernel_trace.csv` is **2.3 GB / 6,356,992 rows** — one row per dispatch, with
 `Agent_Id`, `Stream_Id`, `Start_Timestamp`, `End_Timestamp`, grid/workgroup
 dimensions. Too large to commit. It is on the benchmark host at:
 
 ```
-/data/hf_hub_cache/kimi-profiles/rocprof_20260826-114528_dcp8_conc52/k_kernel_trace.csv
+T116 (offload ON) : /data/hf_hub_cache/kimi-profiles/rocprof_20260826-114528_dcp8_conc52/k_kernel_trace.csv
+T124 (offload OFF): /data/hf_hub_cache/kimi-profiles/rocprof_20260827-024048_dcp8_conc52_kvnone/k_kernel_trace.csv
 ```
 
 The occupancy and idle-gap numbers in the analysis doc come from this file, not
