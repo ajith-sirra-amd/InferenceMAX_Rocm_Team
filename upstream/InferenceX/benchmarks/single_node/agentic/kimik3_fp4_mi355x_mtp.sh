@@ -119,28 +119,16 @@ export AITER_DISABLE_FMHA_OPUS=1
 export VLLM_ROCM_USE_AITER_MLA=1
 export AITER_DISABLE_FMHA_OPUS=1
 
-if [ "$LOW_CONC_INTERACTIVE" = "1" ]; then
-    SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
-else
-    SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-2}"
-fi
-case "$SPEC_NUM_TOKENS" in
-    1) GOLDEN_AL=1.85 ;;
-    2) GOLDEN_AL=2.51 ;;
-    3) GOLDEN_AL=3.00 ;;
-    4) GOLDEN_AL=3.36 ;;
-    5) GOLDEN_AL=3.62 ;;
-    6) GOLDEN_AL=3.75 ;;
-    7) GOLDEN_AL=3.84 ;;
-    8) GOLDEN_AL=4.00 ;;
-    *) echo "[spec] no golden AL for num_speculative_tokens=$SPEC_NUM_TOKENS (curve covers 1-8); refusing to invent one" >&2; exit 1 ;;
-esac
-SYNTHETIC_ACCEPT_LEN="$GOLDEN_AL"
 SPEC_ENABLE="${SPEC_DECODING:-}"
 case "${RESULT_FILENAME:-}" in *spec-mtp*) SPEC_ENABLE=mtp;; esac
 if [ "$LOW_CONC_INTERACTIVE" != "1" ]; then SPEC_ENABLE=""; fi
 SPEC_ARGS=()
 if [ "$SPEC_ENABLE" = "mtp" ]; then
+    SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
+    case "$SPEC_NUM_TOKENS" in
+        8) SYNTHETIC_ACCEPT_LEN=4.00 ;;
+        *) echo "[spec] no golden AL wired for num_speculative_tokens=$SPEC_NUM_TOKENS; take it from golden_al_distribution/kimik3_dspark_probabilistic_sample_method_block_rejection_sample_method.yaml and add the case" >&2; exit 1 ;;
+    esac
     SPEC_ARGS=(
         --speculative-config
         "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
