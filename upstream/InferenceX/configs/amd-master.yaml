@@ -2081,7 +2081,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # mns 8 with a dense 1..24 ladder (8 x (k+1)); T106's mns 4 was too tight
       # and queued the replay's branched sub-requests, costing TTFT.
       - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1, 4], spec-decoding: mtp }
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [52] }
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [8, 16, 32, 40, 52, 56, 58] }
       - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72] }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
