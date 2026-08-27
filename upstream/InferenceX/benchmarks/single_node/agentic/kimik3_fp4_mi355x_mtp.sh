@@ -41,6 +41,7 @@ export AITER_BF16_FP8_MOE_BOUND=0
 export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export GPU_ARCHS=gfx950
 export VLLM_ROCM_USE_AITER_MOE=1
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-FP}"
 export AITER_SITUV2_A8W4=1
 export HSA_NO_SCRATCH_RECLAIM=1
 export VLLM_K3_KDA_SAFE_STAGES=1
@@ -129,7 +130,7 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
 fi
 
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
-if [ "${ASYNC_SCHED:-1}" = "1" ]; then
+if [ "${ASYNC_SCHED:-0}" = "1" ]; then
     ASYNC_SCHED_ARGS=(--async-scheduling)
 else
     ASYNC_SCHED_ARGS=(--no-async-scheduling)
