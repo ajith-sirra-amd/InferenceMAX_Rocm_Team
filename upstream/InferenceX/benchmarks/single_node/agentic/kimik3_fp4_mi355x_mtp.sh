@@ -30,15 +30,7 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-LOW_CONC_INTERACTIVE="${LOW_CONC_INTERACTIVE:-auto}"
-if [ "$LOW_CONC_INTERACTIVE" = "auto" ]; then
-    if [ "${CONC:-52}" -le 4 ]; then LOW_CONC_INTERACTIVE=1; else LOW_CONC_INTERACTIVE=0; fi
-fi
-if [ "$LOW_CONC_INTERACTIVE" = "1" ]; then
-    DCP_SIZE="${DCP_SIZE_OVERRIDE:-1}"
-else
-    DCP_SIZE="${DCP_SIZE_OVERRIDE:-8}"
-fi
+if [ "$CONC" -le 4 ]; then LOW_CONC_INTERACTIVE=1; DCP_SIZE=1; else LOW_CONC_INTERACTIVE=0; DCP_SIZE=8; fi
 export DCP_SIZE
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
@@ -140,10 +132,9 @@ CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
 ASYNC_SCHED_ARGS=(--no-async-scheduling)
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-MAX_NUM_SEQS=$(( (CONC * 5 + 3) / 4 ))
+MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
 if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
 if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
-MAX_NUM_SEQS="${MAX_NUM_SEQS_OVERRIDE:-$MAX_NUM_SEQS}"
 
 SPEC_ROWS=1
 if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 )); fi
