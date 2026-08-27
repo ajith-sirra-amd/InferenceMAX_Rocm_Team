@@ -2080,7 +2080,9 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       #                 working set is tiny, so DRAM offload is pure stall risk.
       # mns 8 with a dense 1..24 ladder (8 x (k+1)); T106's mns 4 was too tight
       # and queued the replay's branched sub-requests, costing TTFT.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1, 4], spec-decoding: mtp }
+      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [52] }
+      - { tp: 8, ep: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72] }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
