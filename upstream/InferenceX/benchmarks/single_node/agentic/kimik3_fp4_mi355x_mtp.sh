@@ -129,7 +129,11 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
 fi
 
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
-ASYNC_SCHED_ARGS=(--no-async-scheduling)
+if [ "${ASYNC_SCHED:-0}" = "1" ]; then
+    ASYNC_SCHED_ARGS=(--async-scheduling)
+else
+    ASYNC_SCHED_ARGS=(--no-async-scheduling)
+fi
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
 MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
