@@ -18,19 +18,23 @@ Base + #51705 + #52707 alone is **not** enough. See below.
 
 ## Where things are
 
-| file | path |
+Both under `upstream/InferenceX/benchmarks/single_node/agentic/`:
+
+| file | |
 |---|---|
-| patch script | `upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh` |
-| vendored #51705 diff (170 KB) | `upstream/InferenceX/benchmarks/single_node/agentic/pr51705_vllm.diff` |
+| patch script | [`apply_kimi_k3_patches.sh`](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh) |
+| vendored #51705 diff (170 KB) | [`pr51705_vllm.diff`](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/pr51705_vllm.diff) |
 
-Inside `apply_kimi_k3_patches.sh`:
+Inside the patch script:
 
-| function | line | invoked |
+| function | defined | invoked |
 |---|---:|---:|
-| `patch_kv_blockpool` | 60 | 246 |
-| `patch_pr51705` | 156 | 291 |
-| **`patch_pr51705_rejects`** | **196** | **297** |
-| `patch_dcp_aiter_allreduce` | 252 | 303 |
+| `patch_kv_blockpool` | [L60](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L60) | [L246](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L246) |
+| `patch_pr51705` | [L156](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L156) | [L291](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L291) |
+| **`patch_pr51705_rejects`** | [**L196**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L196) | [**L297**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L297) |
+| `patch_dcp_aiter_allreduce` * | [L252](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L252) | [L303](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L303) |
+
+\* not part of the image — untested local patch for the `dcp:0` -> PYNCCL gate.
 
 ## Why `-rejects` is required
 
