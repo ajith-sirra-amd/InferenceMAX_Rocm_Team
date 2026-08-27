@@ -2,7 +2,7 @@
 
 ```
 kimi.base    : nightly-f94666b6
-kimi.patches : kv-blockpool, pr51705(e72380a5), pr51705-rejects, pr51040
+kimi.patches : kv-blockpool, pr51705(e72380a5), pr51705-rejects
 ```
 
 ## Recipe
@@ -13,7 +13,6 @@ kimi.patches : kv-blockpool, pr51705(e72380a5), pr51705-rejects, pr51040
 | 2 | `kv-blockpool` | [#52707](https://github.com/vllm-project/vllm/pull/52707) | yes |
 | 3 | `pr51705` | [#51705](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` | yes |
 | 4 | **`pr51705-rejects`** | none — fixes #51705's rejected hunk | **yes** |
-| 5 | `pr51040` | [#51040](https://github.com/vllm-project/vllm/pull/51040) | no — inert for K3 |
 
 Base + #51705 + #52707 alone is **not** enough. See below.
 
@@ -31,7 +30,6 @@ Inside `apply_kimi_k3_patches.sh`:
 | `patch_kv_blockpool` | 60 | 246 |
 | `patch_pr51705` | 156 | 291 |
 | **`patch_pr51705_rejects`** | **196** | **297** |
-| `patch_pr51040` | 178 | 299 |
 | `patch_dcp_aiter_allreduce` | 252 | 303 |
 
 ## Why `-rejects` is required
@@ -75,8 +73,6 @@ Marker-guarded and idempotent — safe to re-run. Not called from
   Today's PR head is not the same as this image.
 - **`-rejects` is base-specific.** It exists only because #51705 is unmerged and
   its diff is stale against this nightly. Once #51705 merges, it is unnecessary.
-- **`pr51040` can be dropped** — FP8 MLA prefill never activates for K3
-  (`forward_mha` is not called), and it is invoked with `|| true`.
 - **Once #51705 and #52707 both merge**, a stock nightly containing them is
   equivalent and this image can be retired. Budget one validation run at C52:
   a later nightly is hundreds of unrelated commits ahead, and DCP is the path
