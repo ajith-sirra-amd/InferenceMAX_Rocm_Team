@@ -1,0 +1,67 @@
+REMOVED FROM kimik3_fp4_mi355x_mtp.sh -- kept for reference, not sourced.
+
+=== rocprofv3 kernel tracing wrapper ===
+Was applied as: "${ROCPROF_PREFIX[@]}" "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+Produced T116's trace (2.3 GB, 6,356,992 dispatches). Raw output committed under
+kimi-k3-profiles/. Costs ~17% input throughput, so any run quoting a number must
+not use it.
+
+ROCPROF="${ROCPROF:-0}"
+ROCPROF_PREFIX=()
+if [ "$ROCPROF" = "1" ]; then
+    RP_DIR="/mnt/hf_hub_cache/kimi-profiles/rocprof_$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
+    mkdir -p "$RP_DIR"
+    ROCPROF_PREFIX=(rocprofv3 --kernel-trace --stats -f csv -d "$RP_DIR" -o k --)
+    echo "[rocprof] tracing -> $RP_DIR"
+fi
+
+=== NUMA-aware CPU pinning of TP workers ===
+Read rocm-smi --showtoponuma, split each NUMA node's cpulist across the GPUs on
+that node (low and high halves, to spread SMT siblings), then taskset each
+VLLM::Worker_TP<n>_ process onto its slice.
+
+python3 - <<'PINPY' > /tmp/pinmap.txt 2>/dev/null || true
+import subprocess, re
+def cpulist(n):
+    return open(f"/sys/devices/system/node/node{n}/cpulist").read().strip()
+def expand(s):
+    out=[]
+    for part in s.split(","):
+        if "-" in part:
+            a,b=part.split("-"); out += list(range(int(a),int(b)+1))
+        else: out.append(int(part))
+    return out
+def compress(v):
+    v=sorted(v); runs=[]; a=b=v[0]
+    for x in v[1:]:
+        if x==b+1: b=x
+        else: runs.append((a,b)); a=b=x
+    runs.append((a,b))
+    return ",".join(f"{x}-{y}" if x!=y else str(x) for x,y in runs)
+try:
+    topo = subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
+except Exception:
+    topo = ""
+gpu_node={}
+for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)", topo):
+    gpu_node[int(m.group(1))]=int(m.group(2))
+if not gpu_node: raise SystemExit
+bynode={}
+for g,n in sorted(gpu_node.items()): bynode.setdefault(n,[]).append(g)
+for n,gpus in bynode.items():
+    cpus=expand(cpulist(n)); k=len(gpus)
+    half=len(cpus)//2
+    lo,hi=cpus[:half],cpus[half:]
+    per_lo,per_hi=len(lo)//k,len(hi)//k
+    for i,g in enumerate(gpus):
+        sl = lo[i*per_lo:(i+1)*per_lo] + hi[i*per_hi:(i+1)*per_hi]
+        print(f"{g} {compress(sl)}")
+PINPY
+
+if [ -s /tmp/pinmap.txt ]; then
+    while read -r _g _cpus; do
+        for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null); do
+            taskset -pc "$_cpus" "$_p" >/dev/null 2>&1 && echo "[pin-ranks] TP$_g pid=$_p -> cpus=$_cpus"
+        done
+    done < /tmp/pinmap.txt
+fi

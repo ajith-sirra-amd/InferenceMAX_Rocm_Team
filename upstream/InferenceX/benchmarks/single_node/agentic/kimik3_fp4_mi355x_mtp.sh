@@ -153,15 +153,6 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-ROCPROF="${ROCPROF:-0}"
-ROCPROF_PREFIX=()
-if [ "$ROCPROF" = "1" ]; then
-    RP_DIR="/mnt/hf_hub_cache/kimi-profiles/rocprof_$(date -u +%Y%m%d-%H%M%S)_dcp${DCP_SIZE}_conc${CONC}"
-    mkdir -p "$RP_DIR"
-    ROCPROF_PREFIX=(rocprofv3 --kernel-trace --stats -f csv -d "$RP_DIR" -o k --)
-    echo "[rocprof] tracing -> $RP_DIR"
-fi
-
 GPU_MEM_UTIL=0.9
 
 LOAD_FORMAT="${LOAD_FORMAT:-auto}"
@@ -201,57 +192,11 @@ done
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 
-"${ROCPROF_PREFIX[@]}" "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
-python3 - <<'PINPY' > /tmp/pinmap.txt 2>/dev/null || true
-import subprocess, re
-def cpulist(n):
-    return open(f"/sys/devices/system/node/node{n}/cpulist").read().strip()
-def expand(s):
-    out=[]
-    for part in s.split(","):
-        if "-" in part:
-            a,b=part.split("-"); out += list(range(int(a),int(b)+1))
-        else: out.append(int(part))
-    return out
-def compress(v):
-    v=sorted(v); runs=[]; a=b=v[0]
-    for x in v[1:]:
-        if x==b+1: b=x
-        else: runs.append((a,b)); a=b=x
-    runs.append((a,b))
-    return ",".join(f"{x}-{y}" if x!=y else str(x) for x,y in runs)
-try:
-    topo = subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
-except Exception:
-    topo = ""
-gpu_node={}
-for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)", topo):
-    gpu_node[int(m.group(1))]=int(m.group(2))
-if not gpu_node: raise SystemExit
-bynode={}
-for g,n in sorted(gpu_node.items()): bynode.setdefault(n,[]).append(g)
-for n,gpus in bynode.items():
-    cpus=expand(cpulist(n)); k=len(gpus)
-    half=len(cpus)//2
-    lo,hi=cpus[:half],cpus[half:]
-    per_lo,per_hi=len(lo)//k,len(hi)//k
-    for i,g in enumerate(gpus):
-        sl = lo[i*per_lo:(i+1)*per_lo] + hi[i*per_hi:(i+1)*per_hi]
-        print(f"{g} {compress(sl)}")
-PINPY
-
-if [ -s /tmp/pinmap.txt ]; then
-    while read -r _g _cpus; do
-        for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null); do
-            taskset -pc "$_cpus" "$_p" >/dev/null 2>&1 && echo "[pin-ranks] TP$_g pid=$_p -> cpus=$_cpus"
-        done
-    done < /tmp/pinmap.txt
-fi
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
