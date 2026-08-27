@@ -129,7 +129,7 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
 fi
 
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
-if [ "${ASYNC_SCHED:-0}" = "1" ]; then
+if [ "${ASYNC_SCHED:-1}" = "1" ]; then
     ASYNC_SCHED_ARGS=(--async-scheduling)
 else
     ASYNC_SCHED_ARGS=(--no-async-scheduling)
