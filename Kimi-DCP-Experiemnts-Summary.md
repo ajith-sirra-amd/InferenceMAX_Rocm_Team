@@ -121,7 +121,62 @@ The offload earned its place when the GPU pool was small (T92 vs T94, non-DCP,
 3.3×). DCP now gives us 32.7M tokens on-device, so it has become pure host
 traffic. **Next run: conc 52 with `kv-offloading: none`.**
 
-## GPU idle is 44.3% — and it is mostly one thing
+## SOLVED: GPU idle 44.3% -> 28.2% by removing the DRAM KV offload
+
+T116 profiled C52 **with** the offload; T124 re-profiled the same point **without**
+it. Both traced identically, so rocprof's overhead cancels.
+
+| | T116 offload ON | **T124 offload OFF** |
+|---|---:|---:|
+| GPU busy | 55.7% | **71.8%** |
+| **Idle** | **44.3%** | **28.2%** |
+| Collectives (% busy) | 34.31% | **29.44%** |
+| dispatches | 6.36M | 8.47M |
+| tok/s/GPU *(traced, not quotable)* | 3,146.0 | **6,821.5** |
+| requests | 375/524 | **1123/1232** |
+
+**Idle fell 16.1 points, and precisely the predicted stalls vanished:**
+
+| gap size | T116 | T124 | change |
+|---|---:|---:|---|
+| 10-200 us | 115.2 s (7.9%) | 124.0 s (8.7%) | unchanged - pure launch overhead |
+| 0.2-1 ms | 147.5 s (10.1%) | 104.8 s (7.3%) | -29% |
+| 1-10 ms | 118.7 s (8.1%) | 57.6 s (4.0%) | -51% |
+| **>10 ms** | **265.7 s (18.1%), n=4,104** | **114.6 s (8.0%), n=877** | **-57%, 4.7x fewer** |
+
+The multi-millisecond stalls were the offload's host<->device traffic. The
+sub-200 us launch gaps did not move at all, which is the expected signature:
+those are dispatch overhead, not memory traffic.
+
+**What remains, in order:** 10-200 us launch gaps 8.7% of serving (2.06M events,
+a host-bound floor); >10 ms stalls 8.0% (877 events at ~130 ms each); 0.2-1 ms
+per-step scheduler work 7.3%; 1-10 ms 4.0%. `copyBuffer` is still the top
+idle-follower at 71.9 s (down from 114.2 s) since it is a generic HIP copy used
+beyond the offload. `merge_attn_states` at 28.0 s is DCP's partial-attention
+merge and is intrinsic to DCP.
+
+## Collectives: the DCP group never gets the fast all-reduce
+
+From the server log:
+
+    group 'tp:0'  -> ['AITER_CUSTOM', 'PYNCCL']
+    group 'dcp:0' -> ['PYNCCL']
+    group 'ep:0'  -> ['PYNCCL']
+
+Generic `ncclDevKernel_Generic_1` is **22.55%** of GPU busy against **3.63%** for
+`cross_device_reduce_2stage`, the tuned AITER path TP uses. The cost is
+concentrated in the group that did not get the fast backend. T116 detail, per
+decode step (~290 collective launches per step on one GPU):
+
+| %busy | calls | us/call | per step | grid | family |
+|---:|---:|---:|---:|---:|---|
+| 16.93 | 415,346 | 334.5 | 152.3 | 28672 | nccl |
+| 3.63 | 80,682 | 369.0 | 29.6 | 40960 | cross_device_reduce (AITER custom) |
+| 3.43 | 247,288 | 113.8 | 90.7 | 1792 | nccl |
+| 2.19 | 47,312 | 379.0 | 17.4 | 28416 | nccl |
+| ~5.9 | few | 5-9 ms | <1 | 4096-16384 | nccl (prefill) |
+
+## Superseded: GPU idle is 44.3% (measured with the offload ON)
 
 From T116 (1467 s serving window, 649.5 s idle across 2,724,405 gaps):
 
