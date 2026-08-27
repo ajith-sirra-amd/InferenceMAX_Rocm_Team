@@ -120,11 +120,6 @@ if [ "$DCP_SIZE" -gt 1 ]; then
 else
     echo "[dcp] DISABLED -- no DCP args, no DCP env"
 fi
-export VLLM_USE_DIRECT_DCP_A2A=0
-export VLLM_USE_DIRECT_DCP_Q_GATHER=0
-export VLLM_USE_DIRECT_DCP_KV_GATHER=0
-export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
-export VLLM_DCP_Q_REPLICATE=1
 export VLLM_ROCM_USE_AITER_MLA=1
 export AITER_DISABLE_FMHA_OPUS=1
 export VLLM_ROCM_USE_AITER_MLA=1
@@ -147,7 +142,7 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
     echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN)"
 fi
 
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens 8192)
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-2048}")
 if [ "${ASYNC_SCHED:-0}" = "1" ]; then
     ASYNC_SCHED_ARGS=(--async-scheduling)
 else
