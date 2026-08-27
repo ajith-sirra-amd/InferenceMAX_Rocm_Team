@@ -146,7 +146,6 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 
 GPU_MEM_UTIL=0.9
 
-LOAD_FORMAT="${LOAD_FORMAT:-auto}"
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
@@ -155,7 +154,7 @@ VLLM_CMD=(
     --trust-remote-code
     --moe-backend auto
     --tensor-parallel-size "$TP"
-    --load-format "$LOAD_FORMAT"
+    --load-format fastsafetensors
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
