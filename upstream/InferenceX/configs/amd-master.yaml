@@ -2087,10 +2087,14 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # kimik3_fp4_mi355x.sh, which is not in the tree, and the row fails before
       # the server starts. Whether MTP actually runs is decided in the script by
       # CONC (<=4 only), not by this field.
-      # dcp-size drives DCP in the script: >1 adds the DCP args and env, 1 adds
-      # neither. C1/C4 are interactivity points where DCP is pure added latency
-      # (T121: DCP off is +3.5% TPOT), so they run dcp-size 1.
+      # C1 -- best interactivity. DCP off (pure added latency at batch 1), MTP on
+      # at k=8 with golden AL 4.00, mns 8 via the floor, no offload.
       - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
+      # C52 -- best throughput. DCP=8 for the 32.7M-token KV pool, mns 80, MTP off
+      # (it is -85% at this concurrency). DRAM offload kept: mns 80 without it has
+      # died with HSA_STATUS_ERROR_OUT_OF_RESOURCES three times (T129 and both SA
+      # C16/C52), while every completed run at mns 80 had the offload behind it.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [52], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

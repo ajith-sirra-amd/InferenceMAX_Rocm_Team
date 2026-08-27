@@ -142,7 +142,7 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
     echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN)"
 fi
 
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-2048}")
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
 if [ "${ASYNC_SCHED:-0}" = "1" ]; then
     ASYNC_SCHED_ARGS=(--async-scheduling)
 else
