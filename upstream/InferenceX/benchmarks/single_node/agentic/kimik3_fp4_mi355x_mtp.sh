@@ -150,8 +150,43 @@ export AITER_DISABLE_FMHA_OPUS=1
 # mtp` in the matrix was validated and then ignored -- the same orphan class as
 # EP_ARGS (55 trials) and the KV-offload block (cost 3.3x). The orphan-check at
 # the bottom catches unused arrays, not arrays that are used but always empty.
-SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-2}"
-SYNTHETIC_ACCEPT_LEN="${SYNTHETIC_ACCEPT_LEN:-2.51}"
+#
+# Acceptance length is NOT a free parameter. Under the AgentX fairness rules
+# (golden_al_distribution/README.md) a submission "may choose any supported draft
+# length, but it may not substitute a different acceptance target". So the AL is
+# looked up from the committed golden curve rather than typed in, which makes a
+# mismatched (k, AL) pair impossible to express:
+#   golden_al_distribution/kimik3_dspark_probabilistic_sample_method_block_rejection_sample_method.yaml
+#   kimi-k3 / thinking_on, measured on SPEED-Bench coding with draft
+#   Inferact/Kimi-K3-DSpark, draft_sample_method=probabilistic,
+#   rejection_sample_method=block.
+# Note this is SYNTHETIC acceptance: vLLM injects the AL, so the "Mean acceptance
+# length" the server logs is the realized value of what we injected, not an
+# independent measurement of draft quality.
+# Draft length. The interactivity profile takes the longest supported draft (k=8,
+# AL 4.00 vs k=2's 2.51 -- 59% more accepted tokens per step) because minimum TPOT
+# is the whole point there. Whether that actually wins depends on how the draft
+# overhead splits: T122 at k=2 cost 4.51 ms on top of T121's 21.65 ms base, and if
+# most of that is fixed (verification/sampling) k=8 lands near 7.3 ms, while if it
+# scales per draft forward pass k=8 lands near 9.9 ms and k=4-5 is the optimum.
+# k=8 is both the highest-upside choice and the measurement that separates the two.
+if [ "$LOW_CONC_INTERACTIVE" = "1" ]; then
+    SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
+else
+    SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-2}"
+fi
+case "$SPEC_NUM_TOKENS" in
+    1) GOLDEN_AL=1.85 ;;
+    2) GOLDEN_AL=2.51 ;;
+    3) GOLDEN_AL=3.00 ;;
+    4) GOLDEN_AL=3.36 ;;
+    5) GOLDEN_AL=3.62 ;;
+    6) GOLDEN_AL=3.75 ;;
+    7) GOLDEN_AL=3.84 ;;
+    8) GOLDEN_AL=4.00 ;;
+    *) echo "[spec] no golden AL for num_speculative_tokens=$SPEC_NUM_TOKENS (curve covers 1-8); refusing to invent one" >&2; exit 1 ;;
+esac
+SYNTHETIC_ACCEPT_LEN="$GOLDEN_AL"
 # The harness does NOT export SPEC_DECODING -- T121 proved it: the container had
 # CONC, TP, EP_SIZE, KV_OFFLOADING and no SPEC_* at all, so gating on
 # $SPEC_DECODING left speculative_config=None while `spec-decoding: mtp` sat in
