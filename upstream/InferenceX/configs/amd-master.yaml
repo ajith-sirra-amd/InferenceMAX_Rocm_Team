@@ -2087,7 +2087,10 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # kimik3_fp4_mi355x.sh, which is not in the tree, and the row fails before
       # the server starts. Whether MTP actually runs is decided in the script by
       # CONC (<=4 only), not by this field.
-      - { tp: 8, ep: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
+      # dcp-size drives DCP in the script: >1 adds the DCP args and env, 1 adds
+      # neither. C1/C4 are interactivity points where DCP is pure added latency
+      # (T121: DCP off is +3.5% TPOT), so they run dcp-size 1.
+      - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

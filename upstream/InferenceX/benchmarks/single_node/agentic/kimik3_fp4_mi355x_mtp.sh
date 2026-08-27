@@ -31,8 +31,15 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-if [ "$CONC" -le 4 ]; then LOW_CONC_INTERACTIVE=1; DCP_SIZE=1; else LOW_CONC_INTERACTIVE=0; DCP_SIZE=8; fi
+if [ "$CONC" -le 4 ]; then LOW_CONC_INTERACTIVE=1; else LOW_CONC_INTERACTIVE=0; fi
+if [ -n "${DCP_SIZE:-}" ]; then
+    DCP_SOURCE=matrix
+else
+    if [ "$CONC" -le 4 ]; then DCP_SIZE=1; else DCP_SIZE=8; fi
+    DCP_SOURCE=conc-fallback
+fi
 export DCP_SIZE
+echo "[dcp] size=$DCP_SIZE source=$DCP_SOURCE conc=$CONC"
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
@@ -97,12 +104,22 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then
     echo "EP: expert parallelism ON (EP_SIZE=$EP_SIZE)"
 fi
 
-CP_ARGS=(
-    --decode-context-parallel-size "$DCP_SIZE"
-    --dcp-comm-backend a2a
-    --attention-backend ROCM_AITER_MLA
-    --cp-kv-cache-interleave-size 1
-)
+CP_ARGS=(--attention-backend ROCM_AITER_MLA)
+if [ "$DCP_SIZE" -gt 1 ]; then
+    CP_ARGS+=(
+        --decode-context-parallel-size "$DCP_SIZE"
+        --dcp-comm-backend a2a
+        --cp-kv-cache-interleave-size 1
+    )
+    export VLLM_USE_DIRECT_DCP_A2A=0
+    export VLLM_USE_DIRECT_DCP_Q_GATHER=0
+    export VLLM_USE_DIRECT_DCP_KV_GATHER=0
+    export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
+    export VLLM_DCP_Q_REPLICATE=1
+    echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"
+else
+    echo "[dcp] DISABLED -- no DCP args, no DCP env"
+fi
 export VLLM_USE_DIRECT_DCP_A2A=0
 export VLLM_USE_DIRECT_DCP_Q_GATHER=0
 export VLLM_USE_DIRECT_DCP_KV_GATHER=0
