@@ -168,7 +168,17 @@ MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"
 
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
-    if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
+    # The floor of 8 exists for the concurrent arms, where mns must leave room
+    # above CONC for requests in flight. At CONC <= 4 it does the opposite: at
+    # CONC 1 / k 8 the decode batch is exactly 9 rows, yet the floor captures
+    # 8 x 9 = 72 -- 63 graphs that can never be selected. T140 drops the floor
+    # here to measure what that costs. Ladder stays DENSE, only shorter, so the
+    # out-of-bounds padding fault from the sparse-ladder trials cannot recur.
+    if [ "$CONC" -le 4 ]; then
+        if [ "$MAX_NUM_SEQS" -lt "$CONC" ]; then MAX_NUM_SEQS="$CONC"; fi
+    else
+        if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
+    fi
     if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
 fi
 
