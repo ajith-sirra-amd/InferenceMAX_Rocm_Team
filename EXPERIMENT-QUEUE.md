@@ -41,28 +41,34 @@ rather than a flattering one.
   46.2 s/shard vs the usual ~1.6, so ~74 min instead of ~2.5.** Cause found, see
   below — not a fault, it will finish.
 
-### OPERATIONAL: the DRAM offload poisons the NEXT run's model load
+### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 
-The C52 arm allocates `SimpleCPUOffloadConnector: 243,625,000,000 B/rank` × 8 =
-**1.949 TB** of host DRAM (`TOTAL_CPU_DRAM_GB: 1949`). That evicts the page
-cache holding the 192.63 GiB of weights, so the following job re-reads every
-shard from disk:
+**Correction.** I previously wrote that the DRAM offload poisons the *next*
+run's model load by ~30x (46.2 s/shard). That conclusion was built on a
+`Loading safetensors checkpoint shards` line that is from an **SA run, not
+ours**. I misattributed it. The 46.2 / 51.6 s/shard figures and the "~30x,
+~70 min of idle on the next run" claim are **withdrawn** — I have no shard-rate
+data for our own runs, because the log blob for T154 C1 has never flushed.
 
-| | s/shard | 96 shards |
-|---|--:|--:|
-| page cache warm | ~1.6 | ~2.5 min |
-| after a dram-offload run | **46.2** | **~74 min** |
+**What IS measured on our runner:**
 
-**~30x, ~70 min of GPU idle per affected run.** Measured startup, serve -> ready:
-C52 with offload 19.4 min; C1 warm 6.5-7.9 min.
+| | |
+|---|---|
+| C52 offload allocation | `SimpleCPUOffloadConnector: 243,625,000,000 B/rank` x 8 = **1.949 TB** host DRAM (`TOTAL_CPU_DRAM_GB: 1949`) |
+| C52 weight load (that same job) | **576.66 s** |
+| C1 weight load (T145/T147/T151) | **149-155 s** |
+| serve -> ready | C52 **19.4 min**; C1 **6.5-7.9 min** |
 
-**Queue rule from this:** screen C52 with `kv-offloading: none` + `mns 65`
-(T133 = 7,725.96) and only switch to `dram` + `mns 80` (T103 = 7,950.6) for a
-final confirmation run. The offload is worth ~2.9% to us, but paying ~70 min on
-every subsequent run makes it the wrong choice while iterating. Put any
-offload run LAST in a batch.
-- **Next after it passes:** queue item **B1** (`FORCE_EVAL=0`, agentic, C1+C52)
-  for the perf baseline on this stack.
+So our C52 arm loads ~3.8x slower than our C1 arms. That is the job that
+*allocates* the offload, not one following it, so its own offload does not
+explain it. Cache state, the larger `mns 80 / ladder 1..80` capture, and DCP
+init are all unseparated here. **Untested hypothesis, do not act on it as fact.**
+
+**Queue rule, kept but on weaker grounds:** screen C52 with
+`kv-offloading: none` + `mns 65` (T133 = 7,725.96) and use `dram` + `mns 80`
+(T103 = 7,950.6) only for a final confirmation. Justification is now simply that
+the offload is worth ~2.9% and adds ~12 min of startup per run, not the
+retracted next-run penalty.
 
 ## Queue — run in order, one variable per run
 
