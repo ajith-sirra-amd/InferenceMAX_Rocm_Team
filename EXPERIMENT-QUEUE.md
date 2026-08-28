@@ -30,10 +30,16 @@ rather than a flattering one.
 
 ## Current state
 
-- **In flight:** T154 — GSM8K, C1 + C52, `EVAL_LIMIT=200`, nightly + rebased #51705.
-- **Blocked on:** T154 result. If GSM8K regresses vs 96.82/96.89 (full-set
-  baseline; 200-slice so compare loosely, flag anything below ~94%), the #51705
-  rebase is wrong — revert to `aigmkt/kimi-k3-vllm:latest` and re-plan.
+- **T154 C52 GSM8K: 99.0% — PASSED.** Nightly + rebased #51705, DCP=8, 200
+  problems, strict and flexible both 0.99 ±0.0071. The rebase is numerically
+  sound on the DCP path. Gates confirmed: `[pr51705] applied`,
+  `[dcp] ENABLED size=8`, `graphs: dense ladder 1..80`, `[load] auto`.
+  The job shows red only on `Benchmark result ... not found` — expected, since
+  eval-only writes no benchmark JSON and the runner cannot skip that check for
+  an agentic scenario. Not a failure.
+- **In flight:** T154 C1 GSM8K — the DSpark draft + MTP path.
+- **Next after it passes:** queue item **B1** (`FORCE_EVAL=0`, agentic, C1+C52)
+  for the perf baseline on this stack.
 
 ## Queue — run in order, one variable per run
 

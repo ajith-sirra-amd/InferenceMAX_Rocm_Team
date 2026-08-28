@@ -1065,7 +1065,8 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 151 | 33187965065 | aigmkt, mns 8, ladder 1..16 | 7.93 / 8.20 — this is `sa.sh`'s C1 config |
 | 152 | 33190157834 | nightly + #51705 (bad rebase) | FAIL — `MultiHeadLatentAttention.__init__() got an unexpected keyword argument 'enable_dcp_q_replicate'`; I wrongly discarded `kimi_k3/nvidia/mla.py` as "NVIDIA-only" |
 | 153 | 33191059734 | nightly + #51705 (fixed rebase) | cancelled for the accuracy gate |
-| 154 | 33191753746 | **GSM8K** C1 + C52, limit 200, nightly + #51705 | in flight |
+| 154a | 33191753746 | **GSM8K C52**, limit 200, nightly + rebased #51705, DCP=8 | **99.0%** strict + flexible (±0.71). Gate PASSES — rebase sound on the DCP path. Job red only on the expected "Benchmark result not found" (eval-only makes no benchmark JSON; the runner cannot skip that check for agentic scenarios) |
+| 154b | 33191753746 | **GSM8K C1**, limit 200, DCP off, MTP k=8 | in flight |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |
