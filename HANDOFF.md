@@ -9,7 +9,7 @@ Last updated 2026-08-28. Target **12,500 tok/s/GPU**.
 | **C52 throughput** | **7,950.6 tok/s/GPU** | [T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638) — DCP=8, mns 80, DRAM offload, full graphs, no MTP |
 | **C1 interactivity** | **8.37 ms TPOT · 33.46 ms ITL · 119.5 tok/s/user** | [T140](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33160495127) — fixed-length 8000/2000, DCP off, k=8 @ AL 4.00, ladder 1…9 |
 | C1, agentic harness | 6.70 ms TPOT · 149.31 tok/s/user | [T123](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33029724147) — **different harness, not comparable to T140** |
-| reference | 8,296.0 tok/s/GPU | SA C52, no offload — **fastest on record, but that config crashes on our runner** |
+| reference | 8,296.0 tok/s/GPU | [SA C52](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/32968517728) — DCP=8, mns 80, **DRAM offload**, `fastsafetensors`, KV 32,756,602 tokens |
 
 Accuracy gate: **GSM8K 96.82% / 96.89%** over the full 1,319 problems.
 
@@ -100,7 +100,8 @@ Two client-harness facts worth carrying:
 
 | thing | result |
 |---|---|
-| DRAM KV offload | Removing it cut idle **44.3% → 28.2%**. But `mns` 80 **without** it died 3/3 (`HSA_STATUS_ERROR_OUT_OF_RESOURCES`) — T129 + both SA C16/C52. Every completed `mns` 80 run had the offload. |
+| DRAM KV offload | Removing it cut idle **44.3% → 28.2%**. But `mns` 80 **without** it died with `HSA_STATUS_ERROR_OUT_OF_RESOURCES` — **on our runner**. Every completed `mns` 80 run had the offload. **Correction:** I previously wrote "3/3 — T129 + both SA C16/C52". The SA half is wrong: SA's C52 reference runs `KV_OFFLOADING: dram`, so they never ran `mns` 80 without it. Pair `mns` 80 with the offload. |
+| **SA's 8,296 is our own recipe** | SA C52 = DCP=8, mns 80, **DRAM offload**, `fastsafetensors` — the same shape as our T103 (7,950.6). We are **4.3% behind on an identical config**, not behind on a config we cannot run. Earlier notes calling it "no offload" were wrong. |
 | `mns` 65 + no offload at C52 | **Answered: no.** [T133](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33130489071) = **7,725.96 tok/s/GPU**, 1817/1926 requests, TTFT p95 18.8 s. Survives the crash but lands **below** T103's 7,950.6, so it is not the route to 8,296. |
 | **async scheduling** | **T108: 7,222.3 vs 7,950.6 = −9.2%.** Already tested on the **no-offload** path (`kv=none`, mns 80). Not stale. |
 | QuickReduce FP | **−8.39%**. Accuracy fine. It *preempts* `AITER_CUSTOM` in dispatch order rather than supplementing it. |
