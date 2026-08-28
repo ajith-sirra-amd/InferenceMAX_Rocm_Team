@@ -60,6 +60,16 @@ exactly.
 - **Pin `e72380a5`.** #51705 is open and changing — a reviewer asked to retire
   `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` and the author agreed. Today's PR head will not
   reproduce this image.
+- **Check `triton_mla.py` after any rebase.** The vendored diff raises
+  `TritonMLAMetadataBuilder._cudagraph_support` from
+  `UNIFORM_SINGLE_TOKEN_DECODE` to `UNIFORM_BATCH`. The DSpark draft can only
+  run on TRITON_MLA — it is the sole ROCm MLA backend declaring
+  `supports_non_causal_multi_token_decode` — and cudagraph capability is the
+  **minimum across attention groups**, so without this line the draft demotes
+  the whole engine `FULL_AND_PIECEWISE` → `PIECEWISE` and the drafter runs
+  eager. Measured cost of losing it: **14.05 → 77.65 tok/s, ITL 71.16 → 12.88
+  ms (5.52×)**. Confirm `Capturing model for DSpark speculator...` appears in
+  the server log; if it is missing, this hunk did not land.
 - **Once #51705 and #52707 both merge**, a stock nightly containing them is
   equivalent and this image can be retired. Budget one validation run at
   concurrency 52 first: a later nightly carries hundreds of unrelated commits,
