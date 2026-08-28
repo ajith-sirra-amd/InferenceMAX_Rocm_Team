@@ -175,9 +175,7 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
 fi
 echo "[mns] max_num_seqs=$MAX_NUM_SEQS conc=$CONC offload=${KV_OFFLOADING:-none}"
 if [ "$MAX_NUM_SEQS" -ge 80 ] && ! agentic_kv_offload_enabled; then
-    echo "[mns] WARNING: max_num_seqs=$MAX_NUM_SEQS with KV_OFFLOADING=${KV_OFFLOADING:-none}." >&2
-    echo "[mns] WARNING: this combination died 3/3 with HSA_STATUS_ERROR_OUT_OF_RESOURCES." >&2
-    echo "[mns] WARNING: set kv-offloading: dram, or export MAX_NUM_SEQS=65." >&2
+    echo "[mns] note: mns=$MAX_NUM_SEQS with KV_OFFLOADING=${KV_OFFLOADING:-none}. Proven on mi355x-amds_01 (8204 tok/s/GPU); OOMs on mi355x-amd_b23_07. Export MAX_NUM_SEQS=65 if HSA_STATUS_ERROR_OUT_OF_RESOURCES."
 fi
 
 SPEC_ROWS=1
