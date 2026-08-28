@@ -107,6 +107,8 @@ Two client-harness facts worth carrying:
 | FP16 GEMM | Loses on **6 of 8** real shapes, up to −11.4%. BF16 already runs at full matrix-core rate (2.04× vs FP8 = the hardware ratio). |
 | AMD `Kimi-K3-Quark-MXFP4-AttnFP8` | Loads and serves, but needs **240.75 GiB vs 192.63** → KV 9.38 GiB vs 59.81. Dropped. |
 | MTP at high concurrency | −85% at C40. **Only** enable at CONC ≤ 4. |
+| draft KV dtype `auto` → `fp8` | **TPOT no-op, KV win.** T143 11.93 vs T144 11.97 ms (122k ctx, C1) — identical. But the KV pool grew **15,077,972 → 20,580,438 tokens (+36.5%)** in the same 53.84 GiB: the draft was holding KV at 2 B/element while the target held 1. Keep fp8. Validate draft quality separately — `synthetic` rejection **imposes** AL, so bad drafts still report 4.00. |
+| draft on `ROCM_AITER_MLA` | **Impossible.** `TRITON_MLA` is the only ROCm MLA backend declaring `supports_non_causal_multi_token_decode`, which the DSpark draft requires; the other two (`flashinfer_mla`, `tokenspeed_mla`) are NVIDIA. Flipping the ClassVar True is unsafe — the aiter ASM path has no gqa=64 kernel past qseqlen 1, and synthetic AL would hide wrong drafts. |
 | chunk size | prefill knob; 16384 measured −2.5%. Moves TTFT, not TPOT. |
 | EP=8 | −4.7% |
 | C96 | 4,667.9, TTFT **122 s** (p95 414 s). Past the knee; offload doesn't rescue it. |
@@ -181,7 +183,9 @@ Prefill all-reduces are ~117 MB and always fall back to RCCL.
 - **`pr51705-rejects` was a no-op.** Zero `.rej` files on this base; the parameter lands from the PR itself. Removed and archived. My `run_gemm_rs` rename claim was carried from an older base without rechecking.
 - **The DCP all-reduce PR was wrong.** `get_dcp_group()` only calls `all_gather`, never `all_reduce` — widening an all-reduce backend gate does nothing. Branch deleted before opening. The log showing `dcp:0 -> ['PYNCCL']` tells you which backends are *available*, not which are *used*.
 - **`mns` 65 vs 80.** I replaced the validated `2×CONC` with `1.25×` on a theory; it bound at C52 (T128 hit maxRun=65). Currently back at `1.25×` deliberately, to test the no-offload survivor.
-- **SA vs us at C1**: same k, same AL 4.00, same acceptance 37.5%, same backends, same machines — engine generation rate differs only ~4% (87.7 vs 90.9 tok/s) yet client TPOT differs 1.56×. **Unresolved; likely client-side.** I wrongly guessed k=2, then different machines, then slower step time.
+- **SA vs us at C1 — RESOLVED, and it was a client metrics artifact.** I chased k=2, then different machines, then slower step time. All wrong. Diffing two SA C1 runs of the *same* config ([33062469329](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/33062469329) vs [33083417848](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/33083417848), read-only) shows the only env difference is `RUNNER_NAME: mi355x-amds_02` vs `_04` — and one of them records **`Decode Duration` min = 0.00 ms** and **ITL min = 0.00 ms**. That makes `1/tpot` explode: `intvty` p95 **3,465** and p99 **22,987** tok/s/user (= 0.043 ms/token, not physical), and mean output tok/s/user 1,280.95 with max 65,065. The clean node reports 100.24 / max 207.66. Aggregate throughput is identical across the two (1,236 vs 1,239 tok/s/GPU; decode 74.47 vs 74.57). **Any SA C1 latency percentile above p50 should be treated as suspect unless `Decode Duration` min is non-zero.**
+- **"SA is ahead of us at C1 by 4–5%" is stale.** It compared against T106, before the DRAM offload came out. Like-for-like today (agentic, k=8 @ AL 4.00, DCP off, mns 8): **ours T133 = 1,237.2 tok/s/GPU, TPOT mean 7.18 ms, p50 8.69, p90 11.04** vs SA **1,236 / 1,239 tok/s/GPU, ITL p50 8.64 / 10.21**. We are at parity, marginally ahead.
+- **SA does NOT run DCP at C1.** `Kimi-DCP-Experiemnts-Summary.md` says "SA has DCP on" — that is their **C52** arm. Their C1 runs `decode_context_parallel_size=1`. So DCP-at-C1 is not something SA is doing that we are missing.
 
 ## In flight
 
