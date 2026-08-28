@@ -230,13 +230,27 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 #
 # ISL is deliberately short for the same reason. Assert against max-model-len
 # so a future sweep cannot walk past the 1M ceiling.
-ISL="${ISL:-8000}"
-OSL="${OSL:-2000}"
-RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0}"
+#
+# Do NOT write ${ISL:-8000}. The runner exports ISL, OSL and RANDOM_RANGE_RATIO
+# into the container (see the -e list on its docker run) and, for the agentic
+# scenario, sets them to 0 / 0 / 0.8 because the replay supplies the prompts.
+# They are SET, just to zero, so :- never fires. T137 (33157520672) reached the
+# client with --random-input-len 0 and died in sample_random_requests with
+#   ValueError: low >= high
+# Treat 0 as "not supplied", and override with ITL_ISL / ITL_OSL, which the
+# runner does not touch.
+ISL="${ITL_ISL:-${ISL:-0}}"
+OSL="${ITL_OSL:-${OSL:-0}}"
+[ "$ISL" -gt 0 ] 2>/dev/null || ISL=8000
+[ "$OSL" -gt 0 ] 2>/dev/null || OSL=2000
+# Fixed length: hard 0, not the runner's 0.8 jitter. ITL variance is the metric
+# here, so the prompts must not vary in length.
+RANDOM_RANGE_RATIO=0
 if [ $(( ISL + OSL )) -gt 1048576 ]; then
     echo "Error: ISL+OSL = $(( ISL + OSL )) exceeds max-model-len 1048576." >&2
     exit 1
 fi
+echo "[client] fixed-length: ISL=$ISL OSL=$OSL range-ratio=$RANDOM_RANGE_RATIO conc=$CONC prompts=$(( CONC * 10 ))"
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
