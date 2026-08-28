@@ -7,7 +7,8 @@ Last updated 2026-08-28. Target **12,500 tok/s/GPU**.
 | point | metric | run |
 |---|---|---|
 | **C52 throughput** | **7,950.6 tok/s/GPU** | [T103](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32855763638) — DCP=8, mns 80, DRAM offload, full graphs, no MTP |
-| **C1 interactivity** | **6.70 ms TPOT · 149.31 tok/s/user** | [T123](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33029724147) — DCP off, MTP k=8 @ golden AL 4.00, mns 8 |
+| **C1 interactivity** | **8.37 ms TPOT · 33.46 ms ITL · 119.5 tok/s/user** | [T140](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33160495127) — fixed-length 8000/2000, DCP off, k=8 @ AL 4.00, ladder 1…9 |
+| C1, agentic harness | 6.70 ms TPOT · 149.31 tok/s/user | [T123](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33029724147) — **different harness, not comparable to T140** |
 | reference | 8,296.0 tok/s/GPU | SA C52, no offload — **fastest on record, but that config crashes on our runner** |
 
 Accuracy gate: **GSM8K 96.82% / 96.89%** over the full 1,319 problems.
@@ -43,11 +44,64 @@ GPU busy 71.8%, idle 28.2%. Of **e2e wall**:
 
 **Even eliminating idle entirely gives ~11,050.** Every remaining kernel lever is single-digit percent. 12,500 is not reachable with the levers identified so far — say so rather than implying otherwise.
 
+## C1 ITL sweep (T138/T139/T140)
+
+Fixed-length `run_benchmark_serving`, ISL 8000 / OSL 2000 / range-ratio 0,
+non-agentic, DCP off, 10 prompts + 2 warmups. ~10 min per cell against the
+agentic replay's 1h12m.
+
+| | k=6 · ladder 56 | k=8 · ladder 72 | **k=8 · ladder 9** |
+|---|--:|--:|--:|
+| run | [T138](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33158510878) | [T139](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33159693747) | [**T140**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33160495127) |
+| golden AL | 3.75 | 4.00 | 4.00 |
+| Mean ITL (ms) | 32.70 | 33.63 | **33.46** |
+| Mean TPOT (ms) | 8.70 | 8.42 | **8.37** |
+| P99 TPOT (ms) | 8.83 | 8.47 | **8.43** |
+| tok/s/user | 114.9 | 118.8 | **119.5** |
+| Mean TTFT (ms) | 1055.5 | 1058.8 | 1048.9 |
+| graph capture | 56 s | 65 s | **26 s** |
+| graph memory | 1.21 GiB | 1.46 GiB | **0.83 GiB** |
+
+Measured ITL/TPOT is **3.76** and **3.994** against golden AL 3.75 and 4.00 —
+the synthetic-AL wiring lands to three digits.
+
+**The C1 step is 87.5% fixed overhead.** Two points with only k varying solve
+`step = a + b·(k+1)`: **b = 0.465 ms** per verify row, **a = 29.44 ms** fixed.
+That model predicts both measured points to within 0.02 ms. Extrapolated over
+the golden AL curve, TPOT is *still falling* at k=8 (16.42 / 12.29 / 10.44 /
+9.46 / 8.91 / 8.72 / 8.64 / **8.41** for k=1…8) — **k=8 is the best only
+because the golden AL table ends there**, not because the curve turned. A
+marginal row costs 0.465 ms against a 33.6 ms step, so deeper speculation stays
+profitable as long as AL rises at all. Getting AL past k=8 needs a new entry in
+`golden_al_distribution/`.
+
+**Ladder: C1 and C4 do not need a heavy one.** `mns` floored at 8, so C1
+captured 8×9 = 72 graphs to serve a decode batch that is always exactly 9 rows.
+Dropping the floor for CONC ≤ 4 cut capture 65 s → 26 s and graph memory 1.46 →
+0.83 GiB/GPU. TPOT moved −0.6%, same direction at every percentile but too
+small to quote from one run — call it a tie on latency, a win on cost. The
+ladder stays **dense**, only shorter, so the sparse-ladder padding fault cannot
+recur. C52 unchanged at `mns` 65.
+
+Two client-harness facts worth carrying:
+
+- **The runner exports `ISL=0`, `OSL=0`, `RANDOM_RANGE_RATIO=0.8`** into the
+  container for the agentic scenario. `${ISL:-8000}` never fires — the variable
+  is set, just to zero. T137 died with `ValueError: low >= high`. Use
+  `ITL_ISL` / `ITL_OSL`, which the runner does not touch.
+- **The runner checks `[ -f "$RESULT_FILENAME.json" ]` in the workspace root**,
+  not in `$RESULT_DIR`. Pass `--result-dir /workspace/` as the `fixed_seq_len`
+  scripts do, or the job goes red on a benchmark that actually succeeded (T138).
+- **Effective ISL is 4,320, not 8,000.** The random dataset decodes token IDs to
+  text and re-encodes; Kimi's BPE re-merges and the 10 convergence retries never
+  close. Still one 8192 prefill chunk. Affects TTFT, not a C1 decode step.
+
 ## Settled — do not re-litigate
 
 | thing | result |
 |---|---|
 | DRAM KV offload | Removing it cut idle **44.3% → 28.2%**. But `mns` 80 **without** it died 3/3 (`HSA_STATUS_ERROR_OUT_OF_RESOURCES`) — T129 + both SA C16/C52. Every completed `mns` 80 run had the offload. |
+| `mns` 65 + no offload at C52 | **Answered: no.** [T133](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33130489071) = **7,725.96 tok/s/GPU**, 1817/1926 requests, TTFT p95 18.8 s. Survives the crash but lands **below** T103's 7,950.6, so it is not the route to 8,296. |
 | **async scheduling** | **T108: 7,222.3 vs 7,950.6 = −9.2%.** Already tested on the **no-offload** path (`kv=none`, mns 80). Not stale. |
 | QuickReduce FP | **−8.39%**. Accuracy fine. It *preempts* `AITER_CUSTOM` in dispatch order rather than supplementing it. |
 | FP16 GEMM | Loses on **6 of 8** real shapes, up to −11.4%. BF16 already runs at full matrix-core rate (2.04× vs FP8 = the hardware ratio). |
@@ -131,7 +185,9 @@ Prefill all-reduces are ~117 MB and always fall back to RCCL.
 
 ## In flight
 
-Run [33130489071](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33130489071) — C1 + C52. C52 is **mns 65 / no offload**, the one untested combination that might reach 8,296 without the crash. Matrix currently points at `kimi-k3-vllm:no-rejects` (2-patch image) for C52.
+Nothing. T140 was the last dispatch.
 
 Script gates, all default-off except MTP's k:
-`EVAL_ONLY=0`, `QUICK_REDUCE_QUANTIZATION=NONE`, `ASYNC_SCHED=0`, `MAX_BATCHED_TOKENS=8192`, `SPEC_NUM_TOKENS=8`, `mns = clamp(1.25×CONC, 8, 80)`.
+`EVAL_ONLY=0`, `QUICK_REDUCE_QUANTIZATION=NONE`, `ASYNC_SCHED=0`,
+`MAX_BATCHED_TOKENS=8192`, `SPEC_NUM_TOKENS=8` (CONC ≤ 4) / `0` otherwise,
+`mns = clamp(1.25×CONC, CONC if CONC≤4 else 8, 80)`, `--result-dir /workspace/`.
