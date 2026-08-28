@@ -31,7 +31,6 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-if [ "$CONC" -le 4 ]; then LOW_CONC_INTERACTIVE=1; else LOW_CONC_INTERACTIVE=0; fi
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix
 else
@@ -127,14 +126,20 @@ export AITER_DISABLE_FMHA_OPUS=1
 
 SPEC_ENABLE="${SPEC_DECODING:-}"
 case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
-if [ "$LOW_CONC_INTERACTIVE" != "1" ]; then SPEC_ENABLE=""; fi
+# Speculative depth per concurrency. k=0 disables MTP and is the single gate --
+# it replaces the old CONC<=4 test, which could not express "on, but shallower".
+# Override by exporting SPEC_NUM_TOKENS.
+case "$CONC" in
+    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;
+    8|12|16) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}" ;;
+    *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
+esac
+if [ "$SPEC_NUM_TOKENS" -eq 0 ]; then SPEC_ENABLE=""; fi
 SPEC_ARGS=()
 if [ "$SPEC_ENABLE" = "mtp" ]; then
-    SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
-    # Transcribed from golden_al_distribution/
+    # AL is a function of k alone. Transcribed from golden_al_distribution/
     # kimik3_dspark_probabilistic_sample_method_block_rejection_sample_method.yaml
-    # (kimi-k3 / thinking_on). SA's per-conc table uses the k=3/6/7 rows; the
-    # rest are the same table's remaining entries.
+    # (kimi-k3 / thinking_on). Never set k and AL independently -- they desync.
     case "$SPEC_NUM_TOKENS" in
         1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
         2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
@@ -161,9 +166,11 @@ else
 fi
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
-if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
-if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
+if [ -z "${MAX_NUM_SEQS:-}" ]; then
+    MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
+    if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
+    if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
+fi
 
 SPEC_ROWS=1
 if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 )); fi
@@ -216,9 +223,37 @@ echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
+# ITL sweep: fixed-length serving instead of the agentic replay. The replay
+# costs ~1h12m per cell; this costs ~3 min and measures the same thing, since
+# at CONC 1 the decode step is barrier-bound and ITL does not move with context
+# length. Restore the two commented lines below to go back to agentic.
+#
+# ISL is deliberately short for the same reason. Assert against max-model-len
+# so a future sweep cannot walk past the 1M ceiling.
+ISL="${ISL:-8000}"
+OSL="${OSL:-2000}"
+RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0}"
+if [ $(( ISL + OSL )) -gt 1048576 ]; then
+    echo "Error: ISL+OSL = $(( ISL + OSL )) exceeds max-model-len 1048576." >&2
+    exit 1
+fi
+
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
-    build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    # build_replay_cmd "$RESULT_DIR"
+    # run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    run_benchmark_serving \
+        --model "$MODEL" \
+        --port "$PORT" \
+        --backend vllm \
+        --input-len "$ISL" \
+        --output-len "$OSL" \
+        --random-range-ratio "$RANDOM_RANGE_RATIO" \
+        --num-prompts "$(( CONC * 10 ))" \
+        --max-concurrency "$CONC" \
+        --result-filename "$RESULT_FILENAME" \
+        --result-dir "$RESULT_DIR" \
+        --use-chat-template \
+        --trust-remote-code
 fi
