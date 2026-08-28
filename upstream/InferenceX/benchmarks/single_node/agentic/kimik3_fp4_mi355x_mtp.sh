@@ -4,7 +4,18 @@ set -x
 source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
-export EVAL_ONLY="${EVAL_ONLY:-false}"
+# T154: GSM8K accuracy gate BEFORE any perf number, because the #51705 rebase
+# hand-merged 3 conflicts in kimi_k3/nvidia/mla.py including the MLA forward
+# body, and rejection_sample_method "synthetic" IMPOSES the accept length, so a
+# draft numerics regression cannot show up as a lower AL. Perf runs are blind to
+# it; only accuracy is not.
+# Forced, not defaulted: the runner exports EVAL_ONLY=false, so ${EVAL_ONLY:-...}
+# never fires -- same trap as ISL/OSL. Set FORCE_EVAL=0 to go back to benchmarks.
+if [ "${FORCE_EVAL:-1}" = "1" ]; then EVAL_ONLY=true; else EVAL_ONLY="${EVAL_ONLY:-false}"; fi
+export EVAL_ONLY
+EVAL_LIMIT="${EVAL_LIMIT:-200}"
+export EVAL_LIMIT
+echo "[eval] EVAL_ONLY=$EVAL_ONLY limit=$EVAL_LIMIT (gsm8k via utils/evals/gsm8k.yaml)"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
