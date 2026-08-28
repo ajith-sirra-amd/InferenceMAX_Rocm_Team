@@ -7,6 +7,109 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 # Where we are
 
+## C1 interactivity sweep, 2026-08-28 (T138–T151) — CURRENT
+
+Fixed-length screen: ISL 122k (effective ~63.8k after the BPE round-trip),
+OSL 500, 100 requests, DCP off, k=8 @ AL 4.00, draft KV fp8.
+Chosen to match the agentic replay's 122,657-token mean input, because DCP's
+value is context-length dependent and an 8k screen would mis-rank it.
+
+| run | image | DCP | mns / ladder | TPOT mean | p50 | p90 | ITL |
+|---|---|--:|---|--:|--:|--:|--:|
+| [T147](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33171360827) | **nightly 6f7df92a8e** | 1 | 8 / 1..72 | **7.57** | 7.47 | **7.91** | 29.47 |
+| [T148](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33183801155) | nightly | 1 | 8 / 1..72 | 7.57 | 7.49 | 7.93 | — |
+| [T150](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33185946417) | nightly | 1 | **1 / 1..9** | 7.58 | 7.48 | 7.93 | — |
+| [T151](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33187965065) | aigmkt | 1 | 8 / 1..16 | 7.93 | 7.77 | 8.20 | — |
+| [T145](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33168461313) | aigmkt | 1 | 8 / 1..72 | 8.77 | 8.63 | 9.06 | 34.16 |
+| [T146](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33169840000) | aigmkt | 1 + comm flags | 8 / 1..72 | 8.79 | 8.64 | 9.07 | 34.29 |
+| [T144](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33166811023) | aigmkt | **8** | 8 / 1..72 | 11.97 | 11.91 | 13.71 | 46.72 |
+| [T143](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33165123199) | aigmkt | **8** | 8 / 1..72 (draft bf16) | 11.93 | 11.84 | 13.70 | 46.54 |
+
+**Four results, in order of size.**
+
+1. **DCP=8 costs +36.5% TPOT at C1** (T144 vs T145: 11.97 → 8.77) and widens the
+   tail (13.71 → 9.06 p90). It buys a 6.4× KV pool — 20,580,438 vs 3,218,642
+   tokens — which is the one resource that does not bind with a single resident
+   request. DCP adds a per-layer a2a + KV gather + LSE merge to a step that is
+   already barrier-bound, to parallelise attention work that is negligible at
+   batch 9. **SA reached the same conclusion independently: their C1 runs
+   `decode_context_parallel_size=1`.** The doc's older "SA has DCP on" claim is
+   about their **C52** arm.
+2. **The nightly is worth −13.7%** (T145 → T147, 8.77 → 7.57, sole variable =
+   175 vLLM commits). Most likely #53942 (`eh_proj` low-latency GEMM, explicitly
+   "enabling m=1 and m=2", which is exactly the C1 batch regime, 12.9–25.2%
+   kernel improvement) and #53818 (ROCm graphs were being captured on a stream
+   that never ran warmup).
+3. **Neither ladder size nor scheduler headroom matters at C1** on the nightly:
+   mns 8/ladder 72, mns 8/ladder 16 and mns 1/ladder 9 all land 7.57–7.58 mean,
+   7.91–7.93 p90. But ladder 9 cuts graph capture **44 s → 7 s** and graph
+   memory 1.46 → 0.83 GiB/GPU, and grows the KV pool 2.3%. Free; take it.
+4. **`--dcp-comm-backend a2a` and `--cp-kv-cache-interleave-size 1` are inert at
+   DCP size 1** (T145 vs T146: identical TPOT, byte-identical KV pool
+   3,218,642). They only do work when there is a CP group.
+
+**Unexplained, stated rather than buried:** on the *aigmkt* image, ladder 72 → 16
+plus fastsafetensors → auto gave −9.6% (8.77 → 7.93), yet both deltas measured
+**inert** on the nightly. The image digest was identical across both runs
+(`sha256:7f0dfe6304c9`, build `dev1133+gf94666b60`), so the tag did not move.
+Working hypothesis, not established: #53818 fixes graph capture on a stream that
+never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
+engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
+unexplained — both of its candidate causes are now measured inert.
+
+## Draft model: constraints found while optimising it
+
+- **The DSpark draft cannot leave `TRITON_MLA`.** It is the only ROCm MLA backend
+  declaring `supports_non_causal_multi_token_decode`, which the non-causal draft
+  requires; `flashinfer_mla` and `tokenspeed_mla` also declare it but are NVIDIA.
+  `ROCM_AITER_MLA` inherits the base default `False` and `mla_attention.py`
+  raises `"Non-causal multi-token MLA requires an explicitly supported attention
+  group"`.
+- **Flipping that ClassVar to `True` would be unsafe**, not merely ineffective:
+  the flag is a declaration, not an implementation, the aiter ASM path has no
+  gqa=64 kernel past qseqlen 1, and because `rejection_sample_method` is
+  `synthetic` the accept length is **imposed**, so wrong drafts would still
+  report AL 4.00. That whole class of change is untestable on this harness and
+  needs real rejection sampling + GSM8K.
+- **`TritonMLAMetadataBuilder._cudagraph_support` must stay `UNIFORM_BATCH`.**
+  Cudagraph capability is the **minimum across attention groups**, so with
+  upstream's `UNIFORM_SINGLE_TOKEN_DECODE` the draft demotes the whole engine to
+  PIECEWISE and runs eager: **14.05 → 77.65 tok/s, ITL 71.16 → 12.88 ms**.
+  Acceptance test: the server log must show `Capturing model for DSpark
+  speculator...`.
+- **Draft KV `auto` → `fp8` is TPOT-neutral but grows the KV pool 36.5%**
+  (15,077,972 → 20,580,438 tokens in the same 53.84 GiB). The draft was holding
+  KV at 2 bytes/element while the target held 1. Keep fp8.
+
+## SA comparison, corrected twice
+
+Reading SA's logs directly (read-only) retired two claims in this document.
+
+| SA run | conc | offload | mns | result |
+|---|--:|---|--:|---|
+| [32968517728](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/32968517728) | 52 | **dram** | 80 | **8,296** tok/s/GPU |
+| [33062469329](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/33062469329) j98484457387 | 52 | **none** | 80 | **8,204** tok/s/GPU |
+| 33062469329 j98484457440 | 1 | none | 8 | ITL p50 **8.64** ms |
+| [33083417848](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/33083417848) | 1 | none | 8 | ITL p50 **10.21** ms |
+
+- **"SA C52 runs no offload" was wrong** — the 8,296 reference runs `dram`. Both
+  their C52 configs are the same shape as our T103 (7,950.6), so we are **3–4%
+  behind on an identical recipe**, not blocked on something we cannot run.
+- **"`mns` 80 without the offload died 3/3 including both SA C16/C52" was wrong.**
+  SA ran exactly that and got 8,204 on `mi355x-amds_01`. The OOM
+  (`HSA_STATUS_ERROR_OUT_OF_RESOURCES`) is specific to `mi355x-amd_b23_07`.
+  **It is a node limit, not a config limit.**
+- **The 1.56× "SA is faster at C1" gap is a client metrics artifact.** Their two
+  runs of the *same* config differ only in `RUNNER_NAME`, and one records
+  `Decode Duration` min = **0.00 ms**, which makes `1/tpot` explode: `intvty`
+  p95 3,465 and p99 22,987 tok/s/user (0.043 ms/token — not physical), mean
+  output 1,280.95 tok/s/user with max 65,065, against the clean node's 100.24 /
+  207.66. Aggregate throughput is identical (1,236 vs 1,239). **Treat any SA C1
+  percentile above p50 as suspect unless `Decode Duration` min is non-zero.**
+  Like-for-like we are at parity: ours T133 = 1,237.2 tok/s/GPU, TPOT mean 7.18,
+  p50 8.69, p90 11.04.
+
+
 > **Where the time goes — now MEASURED,** by rocprofv3 on
 > [T116](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32964875218)
 > (2.3 GB trace, 6.36M dispatches). See
@@ -946,6 +1049,23 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 
 | # | Run | Configuration | Result |
 |---|---|---|---|
+| 138 | 33158510878 | fixed-len 8k, C1, k=6, ladder 56 | ITL 32.70, TPOT 8.70 — 10 requests, percentiles unusable |
+| 139 | 33159693747 | k=8, ladder 72 | ITL 33.63, TPOT 8.42 |
+| 140 | 33160495127 | k=8, ladder 9 | TPOT 8.37; capture 65s→26s, 1.46→0.83 GiB |
+| 141 | — | (superseded) | |
+| 142 | 33164549184 | 1000 prompts @ 8k | CANCELLED — wrong ISL for a DCP screen |
+| 143 | 33165123199 | **122k**, 100 req, DCP=8, draft bf16 | TPOT 11.93 / p90 13.70 |
+| 144 | 33166811023 | DCP=8, draft **fp8** | TPOT 11.97 / p90 13.71; KV pool +36.5% |
+| 145 | 33168461313 | **DCP off**, draft fp8 | **TPOT 8.77 / p90 9.06** — DCP costs +36.5% |
+| 146 | 33169840000 | DCP=1 + a2a + interleave | 8.79 / 9.07 — flags **inert** at size 1 |
+| 147 | 33171360827 | **nightly 6f7df92a8e** + 1-line cg patch | **TPOT 7.57 / p90 7.91** — nightly worth −13.7% |
+| 148 | 33183801155 | nightly + load-format auto | 7.57 / 7.93 — load-format **inert** |
+| 149 | 33185690716 | (ladder cap 16) | CANCELLED to run mns=CONC first |
+| 150 | 33185946417 | nightly, **mns=1 ladder 1..9** | 7.58 / 7.93; capture 44s→**7s**, KV +2.3% |
+| 151 | 33187965065 | aigmkt, mns 8, ladder 1..16 | 7.93 / 8.20 — this is `sa.sh`'s C1 config |
+| 152 | 33190157834 | nightly + #51705 (bad rebase) | FAIL — `MultiHeadLatentAttention.__init__() got an unexpected keyword argument 'enable_dcp_q_replicate'`; I wrongly discarded `kimi_k3/nvidia/mla.py` as "NVIDIA-only" |
+| 153 | 33191059734 | nightly + #51705 (fixed rebase) | cancelled for the accuracy gate |
+| 154 | 33191753746 | **GSM8K** C1 + C52, limit 200, nightly + #51705 | in flight |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |
