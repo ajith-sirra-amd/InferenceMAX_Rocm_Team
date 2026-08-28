@@ -37,7 +37,30 @@ rather than a flattering one.
   The job shows red only on `Benchmark result ... not found` — expected, since
   eval-only writes no benchmark JSON and the runner cannot skip that check for
   an agentic scenario. Not a failure.
-- **In flight:** T154 C1 GSM8K — the DSpark draft + MTP path.
+- **In flight:** T154 C1 GSM8K — the DSpark draft + MTP path. **Loading slowly:
+  46.2 s/shard vs the usual ~1.6, so ~74 min instead of ~2.5.** Cause found, see
+  below — not a fault, it will finish.
+
+### OPERATIONAL: the DRAM offload poisons the NEXT run's model load
+
+The C52 arm allocates `SimpleCPUOffloadConnector: 243,625,000,000 B/rank` × 8 =
+**1.949 TB** of host DRAM (`TOTAL_CPU_DRAM_GB: 1949`). That evicts the page
+cache holding the 192.63 GiB of weights, so the following job re-reads every
+shard from disk:
+
+| | s/shard | 96 shards |
+|---|--:|--:|
+| page cache warm | ~1.6 | ~2.5 min |
+| after a dram-offload run | **46.2** | **~74 min** |
+
+**~30x, ~70 min of GPU idle per affected run.** Measured startup, serve -> ready:
+C52 with offload 19.4 min; C1 warm 6.5-7.9 min.
+
+**Queue rule from this:** screen C52 with `kv-offloading: none` + `mns 65`
+(T133 = 7,725.96) and only switch to `dram` + `mns 80` (T103 = 7,950.6) for a
+final confirmation run. The offload is worth ~2.9% to us, but paying ~70 min on
+every subsequent run makes it the wrong choice while iterating. Put any
+offload run LAST in a batch.
 - **Next after it passes:** queue item **B1** (`FORCE_EVAL=0`, agentic, C1+C52)
   for the perf baseline on this stack.
 
