@@ -126,7 +126,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
     export VLLM_DCP_Q_REPLICATE=1
     echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"
-elif [ "${DCP_COMM_ARGS_AT_1:-0}" = "1" ]; then
+elif [ "${DCP_COMM_ARGS_AT_1:-1}" = "1" ]; then
     # T146: DCP=1 but keep the two comm flags. With decode_context_parallel_size
     # 1 there is no CP group for them to act on, so the expectation is that they
     # are inert and T146 reproduces T145 exactly. That is the point -- it is a
