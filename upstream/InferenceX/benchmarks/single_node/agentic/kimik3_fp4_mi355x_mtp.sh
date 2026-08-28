@@ -34,7 +34,14 @@ install_agentic_deps
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix
 else
-    if [ "$CONC" -le 4 ]; then DCP_SIZE=1; else DCP_SIZE=8; fi
+    # T141: DCP=8 at CONC <= 4 too. The old "DCP off below 5" rule was never
+    # earned -- T106 -> T121 flipped DCP off AND the DRAM offload off in one
+    # step, and the summary attributes the whole -3.5% to the offload. The one
+    # DCP-on/offload-off C1 point on record is SA's, at TPOT 0.02156, which is
+    # BETTER than our DCP-off 0.02165. And every C1+MTP run we have (T122,
+    # T123, T138-T140) was DCP off, so DCP=8 + MTP k=8 at CONC 1 has never
+    # been measured here -- while SA runs exactly that.
+    DCP_SIZE=8
     DCP_SOURCE=conc-fallback
 fi
 export DCP_SIZE
@@ -174,11 +181,13 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
     # 8 x 9 = 72 -- 63 graphs that can never be selected. T140 drops the floor
     # here to measure what that costs. Ladder stays DENSE, only shorter, so the
     # out-of-bounds padding fault from the sparse-ladder trials cannot recur.
-    if [ "$CONC" -le 4 ]; then
-        if [ "$MAX_NUM_SEQS" -lt "$CONC" ]; then MAX_NUM_SEQS="$CONC"; fi
-    else
-        if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
-    fi
+    # T141 restores the floor of 8 at CONC <= 4. T140's right-sizing is a real
+    # win on capture cost (65s -> 26s, 1.46 -> 0.83 GiB/GPU) and that stands,
+    # but its -0.6% latency read came from 10 requests on a harness whose
+    # prompt lengths turned out to scatter 1121-7979, so it is not evidence.
+    # T141 is a DCP A/B against T133, and T133 ran mns 8 / ladder 1..72 --
+    # match it exactly so DCP is the ONLY variable.
+    if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
     if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
 fi
 
@@ -233,13 +242,24 @@ echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-# ITL sweep: fixed-length serving instead of the agentic replay. The replay
-# costs ~1h12m per cell; this costs ~3 min and measures the same thing, since
-# at CONC 1 the decode step is barrier-bound and ITL does not move with context
-# length. Restore the two commented lines below to go back to agentic.
+# BACK TO THE AGENTIC REPLAY (T141). The fixed-length harness below is kept,
+# disabled, because it is genuinely useful for a ~10 min turnaround -- but it
+# cannot carry a TPOT claim, for two reasons found in T138-T140:
 #
-# ISL is deliberately short for the same reason. Assert against max-model-len
-# so a future sweep cannot walk past the 1M ceiling.
+#   1. num-prompts is CONC*10, so C1 gets TEN requests. TPOT percentiles are
+#      per-request, so p90 over 10 samples is nearly the maximum. (ITL
+#      percentiles are fine -- those are per-interval, ~10k samples.)
+#   2. It is not actually fixed-length. With --random-range-ratio 0 the ten
+#      prompts still came out 1121-7979 tokens and 277-1828 output tokens: the
+#      random dataset decodes token ids to text and re-encodes, Kimi's BPE
+#      re-merges, and the 10 convergence retries never close.
+#
+# The replay costs ~1h per cell and is DURATION-capped, not prompt-capped --
+# 3600 s yields ~184 requests at C1. Use the workflow's duration-override input
+# to buy more; ~19.3 s/request at C1, so >=1000 requests needs ~19,300 s.
+#
+# To go back to fixed-length: comment the two replay lines and uncomment
+# run_benchmark_serving.
 #
 # Do NOT write ${ISL:-8000}. The runner exports ISL, OSL and RANDOM_RANGE_RATIO
 # into the container (see the -e list on its docker run) and, for the agentic
@@ -265,19 +285,19 @@ echo "[client] fixed-length: ISL=$ISL OSL=$OSL range-ratio=$RANDOM_RANGE_RATIO c
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
-    # build_replay_cmd "$RESULT_DIR"
-    # run_agentic_replay_and_write_outputs "$RESULT_DIR"
-    run_benchmark_serving \
-        --model "$MODEL" \
-        --port "$PORT" \
-        --backend vllm \
-        --input-len "$ISL" \
-        --output-len "$OSL" \
-        --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "$(( CONC * 10 ))" \
-        --max-concurrency "$CONC" \
-        --result-filename "$RESULT_FILENAME" \
-        --result-dir /workspace/ \
-        --use-chat-template \
-        --trust-remote-code
+    build_replay_cmd "$RESULT_DIR"
+    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    # run_benchmark_serving \
+    #     --model "$MODEL" \
+    #     --port "$PORT" \
+    #     --backend vllm \
+    #     --input-len "$ISL" \
+    #     --output-len "$OSL" \
+    #     --random-range-ratio "$RANDOM_RANGE_RATIO" \
+    #     --num-prompts "$(( CONC * 10 ))" \
+    #     --max-concurrency "$CONC" \
+    #     --result-filename "$RESULT_FILENAME" \
+    #     --result-dir /workspace/ \
+    #     --use-chat-template \
+    #     --trust-remote-code
 fi
