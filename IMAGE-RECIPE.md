@@ -1,12 +1,5 @@
 # Reproducing `aigmkt/kimi-k3-vllm:latest`
 
-Image labels, verbatim:
-
-```
-kimi.base    : nightly-f94666b6
-kimi.patches : kv-blockpool, pr51705(e72380a5)
-```
-
 ## Recipe
 
 | # | piece | source |
