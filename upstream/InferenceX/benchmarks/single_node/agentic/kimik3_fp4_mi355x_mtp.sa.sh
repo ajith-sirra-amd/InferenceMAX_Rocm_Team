@@ -31,32 +31,6 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-patch_triton_mla_cudagraph_runtime() {
-    local f
-    f=$(python3 -c "import vllm.v1.attention.backends.mla.triton_mla as m; print(m.__file__)" 2>/dev/null) || {
-        echo "[cg-patch] cannot locate triton_mla.py" >&2; return 1; }
-    if grep -q "AttentionCGSupport.UNIFORM_BATCH" "$f"; then
-        echo "[cg-patch] already UNIFORM_BATCH ($f)"; return 0
-    fi
-    python3 - "$f" <<'PY' || return 1
-import re, sys
-p = sys.argv[1]
-s = open(p).read()
-new, n = re.subn(
-    r"_cudagraph_support:\s*ClassVar\[AttentionCGSupport\]\s*=\s*\(\s*AttentionCGSupport\.UNIFORM_SINGLE_TOKEN_DECODE\s*,?\s*\)",
-    "_cudagraph_support: ClassVar[AttentionCGSupport] = AttentionCGSupport.UNIFORM_BATCH",
-    s, count=1)
-if n != 1:
-    sys.exit("[cg-patch] pattern not found -- refusing to run")
-open(p, "w").write(new)
-print(f"[cg-patch] UNIFORM_SINGLE_TOKEN_DECODE -> UNIFORM_BATCH in {p}")
-PY
-    grep -q "AttentionCGSupport.UNIFORM_BATCH" "$f" || { echo "[cg-patch] verify failed" >&2; return 1; }
-}
-if [ "${RUNTIME_CG_PATCH:-1}" = "1" ]; then
-    patch_triton_mla_cudagraph_runtime || { echo "FATAL: TritonMLA cudagraph patch failed" >&2; exit 1; }
-fi
-
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix
 else
