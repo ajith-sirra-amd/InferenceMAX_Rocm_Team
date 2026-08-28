@@ -69,6 +69,31 @@ print(f"[cg-patch] UNIFORM_SINGLE_TOKEN_DECODE -> UNIFORM_BATCH in {p}")
 PY
     grep -q "AttentionCGSupport.UNIFORM_BATCH" "$f" || { echo "[cg-patch] verify failed" >&2; return 1; }
 }
+# T152: apply #51705 (DCP for Kimi-K3 DSpark) at runtime, rebased onto this
+# nightly. The vendored diff was cut against f94666b60d and does NOT apply to
+# 6f7df92a8e -- 4 files conflict. Rebased with git apply --3way; the three
+# conflicting files we do not use (models/kimi_k3/nvidia/mla.py, which collides
+# with #54015's merged QKV-gate refactor, and both mooncake store files, whose
+# transfer_groups API was refactored upstream) were taken at their NIGHTLY
+# version, so only the ROCm-side DCP changes are carried. speculator.py's one
+# conflict was two different added imports; both are kept and both are used.
+# Result: 23 files, every changed .py parses, patch -p1 applies with 0 rejects.
+# This supersedes the one-line cg patch below -- the diff already carries the
+# TritonMLA UNIFORM_BATCH bump -- but that stays as a guard and no-ops.
+apply_pr51705_nightly() {
+    local d="$(dirname "$0")/pr51705_nightly.diff"
+    local root
+    root=$(python3 -c "import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))" 2>/dev/null) || return 1
+    [ -f "$d" ] || { echo "[pr51705] diff not found at $d" >&2; return 1; }
+    if grep -q "prepare_dcp_local_seq_lens" "$root/vllm/v1/worker/gpu/spec_decode/speculator.py" 2>/dev/null; then
+        echo "[pr51705] already applied"; return 0
+    fi
+    patch -p1 -d "$root" --forward --batch < "$d" || { echo "[pr51705] FAILED" >&2; return 1; }
+    echo "[pr51705] applied (rebased onto 6f7df92a8e)"
+}
+if [ "${RUNTIME_PR51705:-1}" = "1" ]; then
+    apply_pr51705_nightly || { echo "FATAL: pr51705 runtime patch failed" >&2; exit 1; }
+fi
 if [ "${RUNTIME_CG_PATCH:-1}" = "1" ]; then
     patch_triton_mla_cudagraph_runtime || { echo "FATAL: TritonMLA cudagraph patch failed" >&2; exit 1; }
 fi
@@ -274,6 +299,7 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
     # prompt lengths turned out to scatter 1121-7979, so it is not evidence.
     # T141 is a DCP A/B against T133, and T133 ran mns 8 / ladder 1..72 --
     # match it exactly so DCP is the ONLY variable.
+    if [ "$DCP_SIZE" -gt 1 ]; then MAX_NUM_SEQS=80; fi
     if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
     if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
 fi
@@ -406,17 +432,6 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 else
     # build_replay_cmd "$RESULT_DIR"
     # run_agentic_replay_and_write_outputs "$RESULT_DIR"
-    run_benchmark_serving \
-        --model "$MODEL" \
-        --port "$PORT" \
-        --backend vllm \
-        --input-len "$ISL" \
-        --output-len "$OSL" \
-        --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "$NUM_PROMPTS" \
-        --max-concurrency "$CONC" \
-        --result-filename "$RESULT_FILENAME" \
-        --result-dir /workspace/ \
-        --use-chat-template \
-        --trust-remote-code
+    build_replay_cmd "$RESULT_DIR"
+    run_agentic_replay_and_write_outputs "$RESULT_DIR"
 fi
