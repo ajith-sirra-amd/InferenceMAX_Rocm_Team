@@ -30,19 +30,17 @@ rather than a flattering one.
 
 ## Current state
 
-- **T156 C52 = 7,906 tok/s/GPU** — nightly FLAT vs T103's 7,950.6. GSM8K 0.99.
-- **T156 C1 = 1,509 tok/s/GPU, ITL p50 7.89 ms — DIRTY.** 17/148 error-dropped
-  (11.5% vs T123's 1.6%), 131 served in 1985 s vs 190 in 3609 s. The +17%
-  throughput is an artifact of the short window and drops; on ITL p50 the
-  nightly is 7.89 vs T123's 7.71, slightly worse. **Needs a clean re-run.**
-- **AITER tuned GEMM configs (was queue C1) DEFERRED** — not dispatchable
-  through this harness. It needs an offline AITER tuning job to generate
-  `/tmp/aiter_configs/bf16_tuned_gemm.csv` entries, not a benchmark run. Keep it
-  as the highest-value item but it requires a different job type.
-- **In flight: T157** — C52 with `gpu-memory-utilization` 0.90 -> 0.95. One
-  variable, no numerics change, immediately actionable. Weak prior (KV usage is
-  only ~28% at C52) but it is cheap and clears the queue toward #52190.
-- **Next:** #52190 torch.compile (numerics -> GSM8K first), then CCD pinning.
+- **T157 gmu 0.95 = HARD FAIL.** 0/57 requests at C52; KV pool grew +26% then
+  every warmup request hung for 1200 s with zero errors. Not an OOM. **Reverted
+  to 0.9 — settled, do not retry.** C1 arm cancelled since the config is known
+  bad.
+- **T156 C52 = 7,906** (nightly flat vs T103 7,950.6). **T156 C1 = 1,509
+  tok/s/GPU / ITL p50 7.89 ms but DIRTY** (11.5% drops) — still needs a clean
+  re-run.
+- **In flight: T158** — C52 with `NCCL_MIN_NCHANNELS=32`. Collectives are 21.3%
+  of e2e wall and RCCL has never been tuned. No numerics change.
+- **Next:** #52190 torch.compile (numerics -> GSM8K first), then CCD pinning,
+  then a clean C1 re-run.
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 

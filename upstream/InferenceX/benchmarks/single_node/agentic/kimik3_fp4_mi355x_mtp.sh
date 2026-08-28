@@ -138,6 +138,8 @@ export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export GPU_ARCHS=gfx950
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
+export NCCL_MIN_NCHANNELS="${NCCL_MIN_NCHANNELS:-32}"
+echo "[rccl] NCCL_MIN_NCHANNELS=$NCCL_MIN_NCHANNELS"
 export AITER_SITUV2_A8W4=1
 export HSA_NO_SCRATCH_RECLAIM=1
 export VLLM_K3_KDA_SAFE_STAGES=1
@@ -335,7 +337,7 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.95}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.9}"
 echo "[gmu] gpu_memory_utilization=$GPU_MEM_UTIL"
 
 VLLM_CMD=(

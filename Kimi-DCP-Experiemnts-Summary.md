@@ -57,6 +57,28 @@ never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
 engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
 unexplained — both of its candidate causes are now measured inert.
 
+## gmu 0.95 hangs the engine at C52 — do not retry
+
+T157, C52, sole variable `gpu-memory-utilization` 0.90 -> 0.95:
+
+- KV pool grew **31,924,580 -> 40,222,007 tokens (+26%)**, so the setting took.
+- Server reached `Application startup complete`.
+- Then **every one of 55 warmup requests hung**: `returned=0/107, sent=55,
+  in_flight=55, errors=0` for **1200 s**, and the client dropped all 57.
+
+**0 successful requests.** It is not an OOM — there is no `HSA_STATUS_*`, no
+allocation failure, and the engine reported no errors. It accepted work and
+produced nothing, which points at exhausted activation/workspace headroom
+stalling the step rather than a clean allocation failure.
+
+vLLM itself flagged the margin in the same log: *"--gpu-memory-utilization=0.9500
+is equivalent to 0.9349 without CUDA graph memory profiling"*. At mns 80 +
+DCP=8 + the DRAM offload, 0.9349 effective leaves too little.
+
+**Settled: gmu stays 0.9.** The weak prior in the queue was right — KV usage is
+only ~28% at C52, so the pool was never the constraint, and buying more of it
+cost the run entirely.
+
 ## C1 on the nightly: 1,509 tok/s/GPU, but the run is dirty
 
 T156 C1, agentic, nightly + rebased #51705, DCP off, k=8, mns 8, ladder 1..16:
@@ -1160,7 +1182,8 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 155 | 33197400117 | GSM8K C1 k=0 control | CANCELLED — superseded; C52's 0.99 already clears the rebase, and C1 accuracy is not a gate under `synthetic` |
 | 156a | 33197613253 | **C52 PERF, nightly 6f7df92a8e + rebased #51705**, DCP=8, mns 80, dram, load auto | **7,906 tok/s/GPU**, 1879/1989 requests, KV 31,924,580, input 62,665 tok/s, 3629.7 s |
 | 156b | 33197613253 | **C1 PERF**, nightly + rebased #51705, DCP off, k=8, mns 8, ladder 1..16 | **1,509 tok/s/GPU**, ITL p50 **7.89** ms (err-adj 8.07), intvty p50 126. **CAVEAT: 17/148 error-dropped (11.5%) vs T123's 1.6%**, only 131 served in 1984 s vs T123's 190 in 3609 s — not a clean comparison |
-| 157 | pending | C52, `gpu-memory-utilization` 0.90 -> 0.95 | first actionable C52 lever; AITER tuning deferred, see note |
+| 157 | 33209544438 | C52, **gmu 0.95** | **HARD FAIL — 0 successful / 57, all error-dropped.** Server started, KV pool grew 31.9M -> **40.2M tokens (+26%)**, then all 55 warmup requests HUNG: 0 returned, 0 errors, 1200 s. Not an OOM — the engine accepted work and never produced output. Reverted to 0.9 |
+| 158 | pending | C52, **NCCL_MIN_NCHANNELS=32** | collectives are 21.3% of e2e wall and RCCL tuning has never been touched |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |
