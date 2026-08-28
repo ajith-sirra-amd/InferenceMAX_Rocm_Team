@@ -1932,7 +1932,11 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # differ by 1.1% (T47 2,655.7 on 5a4c8d99 vs T58 2,685.0 on ac7509e2b, both
   # forced TRITON_MLA), so comparing DCP-on-5a4c8d99 against T64-on-ac7509e2b
   # carries ~1% image uncertainty -- an order of magnitude below the effect.
-  image: kimi-k3-vllm:no-rejects
+  # aigmkt/ prefix is required: the runner pulls rather than using a local
+  # image, so the bare tag kimi-k3-vllm:no-rejects fails with "pull access
+  # denied" -- it is built on the box and was never pushed. This is also the
+  # image T103 and T133 ran, so the sweep stays comparable to them.
+  image: aigmkt/kimi-k3-vllm:latest
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
