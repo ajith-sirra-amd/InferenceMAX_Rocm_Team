@@ -274,7 +274,10 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
     # prompt lengths turned out to scatter 1121-7979, so it is not evidence.
     # T141 is a DCP A/B against T133, and T133 ran mns 8 / ladder 1..72 --
     # match it exactly so DCP is the ONLY variable.
-    if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
+    if [ "$CONC" -le 4 ]; then
+        MAX_NUM_SEQS="$CONC"
+    fi
+    if [ "$MAX_NUM_SEQS" -lt 1 ]; then MAX_NUM_SEQS=1; fi
     if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
 fi
 
