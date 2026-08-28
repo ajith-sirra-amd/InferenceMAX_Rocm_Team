@@ -223,6 +223,10 @@ else
     patch_pr51705 || true
 fi
 
-patch_pr51705_rejects || true
+if [ "${SKIP_PATCH_REJECTS:-0}" = "1" ]; then
+    echo "[pr51705-rejects] SKIPPED via SKIP_PATCH_REJECTS=1"
+else
+    patch_pr51705_rejects || true
+fi
 
 echo "[kimi-patches] done."

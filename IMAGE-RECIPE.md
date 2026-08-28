@@ -12,9 +12,9 @@ kimi.patches : kv-blockpool, pr51705(e72380a5), pr51705-rejects
 | 1 | base image | `vllm/vllm-openai-rocm:nightly-f94666b60d4c58ec0807d22c837cfae322a1dde9` |
 | 2 | `kv-blockpool` | [#52707](https://github.com/vllm-project/vllm/pull/52707) |
 | 3 | `pr51705` | [#51705](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` |
-| 4 | **`pr51705-rejects`** | no upstream PR — fixes #51705's rejected hunk |
+**Base + #51705 + #52707 is sufficient.**
 
-**Base + #51705 + #52707 is not sufficient. Item 4 is required.**
+`pr51705-rejects` is also in the script but is a **no-op on this base** — see below.
 
 ## Build
 
@@ -62,28 +62,20 @@ Inside the patch script:
 Those three are the whole script — running it reproduces the reference image
 exactly.
 
-## Why `pr51705-rejects` is required
+## `pr51705-rejects` is a no-op on this base
 
-#51705's diff does not apply cleanly to `f94666b6`. Hunk 4 of
-`vllm/models/kimi_k3/nvidia/mla.py` rejects — the PR's context line is
-`run_gemm_rs_ar`, this nightly has `run_gemm_rs`.
+It exists for a case that does not occur here. Applying the vendored `e72380a5`
+diff to `f94666b6` produces **zero `.rej` files**; every hunk applies, and
+`MultiHeadLatentAttention.__init__` gains `enable_dcp_q_replicate: bool = True`
+directly from the PR. `dspark_mla.py` passes `enable_dcp_q_replicate=False`, and
+the class accepts it.
 
-The failure is asymmetric:
+The patch is guarded so it correctly does nothing, and can be skipped entirely
+with `SKIP_PATCH_REJECTS=1`.
 
-- the hunk that **uses** `enable_dcp_q_replicate` applies
-- the hunk that **adds it to the signature** rejects
-
-`MultiHeadLatentAttention` then references a parameter its `__init__` never
-gained. Invisible with spec decoding off — nothing instantiates it — but
-`dspark_mla.py` passes the kwarg, so **DCP + MTP fails at init**:
-
-```
-TypeError: MultiHeadLatentAttention.__init__() got an unexpected
-           keyword argument 'enable_dcp_q_replicate'
-```
-
-`patch_pr51705_rejects` inserts `enable_dcp_q_replicate: bool = True` into the
-signature.
+Keep it only if building against a base where the reject does occur -- it was
+written for one whose `mla.py` context line read `run_gemm_rs` rather than
+`run_gemm_rs_ar`.
 
 ## Caveats
 
