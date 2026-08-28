@@ -57,6 +57,37 @@ never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
 engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
 unexplained — both of its candidate causes are now measured inert.
 
+## The nightly does NOT help C52 throughput
+
+T156, agentic, nightly `6f7df92a8e` + rebased #51705, DCP=8, mns 80, DRAM
+offload, load-format auto — the same recipe as T103 and SA:
+
+| | tok/s/GPU | image |
+|---|--:|---|
+| SA C52 | **8,296** | aigmkt |
+| T103 | **7,950.6** | aigmkt |
+| **T156** | **7,906** | **nightly + #51705** |
+
+**−0.6% against T103 — flat, arguably a hair worse.** So the **−13.7% TPOT the
+nightly bought at C1 does not transfer to C52 throughput.**
+
+That is consistent with the mechanism rather than a surprise: the headline
+candidate, **#53942, is explicitly an "enabling m=1 and m=2 for low latency
+gemm" change**. m=1/m=2 is the C1 batch regime. At C52 the decode batch is 52
+and the GEMMs are already large enough that the low-latency dispatch does not
+apply. #53818 (graphs captured on a stream that never ran warmup) likewise
+matters most where per-step launch overhead dominates, which is C1.
+
+**Consequence for the plan:** the nightly is a C1 lever, not a C52 lever. C52
+throughput still sits at ~7,900–7,950 and the remaining gap to SA's 8,296 is
+~4.9%, unexplained by anything in the engine version. The C52 levers worth
+spending GPU time on are the ones that attack idle and dense GEMM directly —
+AITER tuned configs (45,250 misses), #52190 torch.compile (currently zero
+post-grad fusion), CCD pinning — not newer vLLM.
+
+Run detail: 1879/1989 requests (93 error-dropped), KV pool 31,924,580 tokens,
+input 62,665 tok/s, 3629.7 s window, GSM8K 0.99 on this exact config.
+
 ## GSM8K with MTP on scores 0.14 — and no baseline ever covered this
 
 T154, nightly + rebased #51705, GSM8K limit 200:
@@ -1100,7 +1131,9 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 153 | 33191059734 | nightly + #51705 (fixed rebase) | cancelled for the accuracy gate |
 | 154a | 33191753746 | **GSM8K C52**, limit 200, nightly + rebased #51705, DCP=8 | **99.0%** strict + flexible (±0.71). Gate PASSES — rebase sound on the DCP path. Job red only on the expected "Benchmark result not found" (eval-only makes no benchmark JSON; the runner cannot skip that check for agentic scenarios) |
 | 154b | 33191753746 | **GSM8K C1**, limit 200, DCP off, **MTP k=8**, synthetic AL 4.00 | **0.14 / 0.13** — vs **0.99** on C52 (k=0) on the identical stack |
-| 155 | pending | **GSM8K C1, k=0 control** — same stack, MTP OFF | separates "synthetic corrupts output" from "the rebase broke the draft path" |
+| 155 | 33197400117 | GSM8K C1 k=0 control | CANCELLED — superseded; C52's 0.99 already clears the rebase, and C1 accuracy is not a gate under `synthetic` |
+| 156a | 33197613253 | **C52 PERF, nightly 6f7df92a8e + rebased #51705**, DCP=8, mns 80, dram, load auto | **7,906 tok/s/GPU**, 1879/1989 requests, KV 31,924,580, input 62,665 tok/s, 3629.7 s |
+| 156b | 33197613253 | C1 PERF, same stack, DCP off, k=8 | in flight |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |

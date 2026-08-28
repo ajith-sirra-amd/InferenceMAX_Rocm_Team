@@ -30,23 +30,17 @@ rather than a flattering one.
 
 ## Current state
 
-- **T154 C52 GSM8K 0.99 — PASSED.** Validates the rebased #51705 on the DCP=8
-  path, which is the path it changes. That is the accuracy evidence we need.
-- **T154 C1 GSM8K 0.14 — recorded, not a gate.** `synthetic` rejection imposes
-  the accept length instead of verifying drafts, so degraded text is expected.
-- **T155 (C1 k=0 control) CANCELLED** — superseded. C52's 0.99 already clears
-  the rebase; the control was not worth ~90 min of GPU time.
-- **In flight: T156 = queue item B1** — perf baseline on nightly + rebased
-  #51705, agentic, C1 + C52. `FORCE_EVAL=0`, `k=8` at C1, C52 row re-enabled.
-  Compare C52 vs T103 **7,950.6** and SA **8,296**; C1 vs T123 **6.70** agentic.
-
-### Deferred: a real C1 accuracy test uses `block`, not `synthetic`
-
-The golden-AL file is `kimik3_dspark_probabilistic_sample_method_**block**_rejection_sample_method.yaml`.
-So `rejection_sample_method: "block"` is the real-verification path and is what
-a genuine C1 accuracy gate would use — `synthetic` cannot produce one by
-construction. Deferred, not dropped: it changes the accept length and therefore
-TPOT, so it is an accuracy experiment, not a perf one.
+- **T156 C52 = 7,906 tok/s/GPU** (nightly + rebased #51705, DCP=8, mns 80, dram,
+  auto). vs T103 **7,950.6** and SA **8,296**. **−0.6% — the nightly is FLAT at
+  C52.** Its −13.7% C1 win does not transfer, consistent with #53942 being an
+  explicit m=1/m=2 low-latency-GEMM change that cannot apply at batch 52.
+  GSM8K on this exact config: 0.99.
+- **In flight:** T156 C1 (same stack, DCP off, k=8). Expect ~6.70–7.6 ms TPOT.
+- **Direction change from this result:** stop looking to newer vLLM for C52.
+  Go to the levers that attack idle and dense GEMM directly — queue C1 (AITER
+  tuned configs, 45,250 misses), C2 (#52190 torch.compile, zero post-grad
+  fusion today), C3 (CCD pinning).
+- **Next dispatch after T156 C1:** queue item **C1 — AITER tuned GEMM configs.**
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 
