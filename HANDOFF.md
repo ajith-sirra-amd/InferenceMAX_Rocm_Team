@@ -64,6 +64,55 @@ GPU busy 71.8%, idle 28.2%. Of **e2e wall**:
 3. **CCD pinning** — written, never measured, archived. Workers run **unpinned** (affinity `0-255`) with GPU0-3 threads observed on node1 cores. One L3 domain (32 MiB) per GPU. See `archive/kimik3-rocprof-and-cpu-pinning.sh.txt`.
 4. **The 8 MiB custom-AR ceiling** — prefill all-reduces are ~117 MB so they *always* fall back to RCCL. That's where 16.93% of GPU busy lives.
 
+## Next steps, ranked
+
+Ordered by expected value. Items 1–5 are untested and each has direct evidence behind it.
+
+**1. AITER / hipBLASLt tuned GEMM configs.** A single C52 run logs **45,250**
+`[aiter] not found tuned config in /tmp/aiter_config` messages — every dense GEMM
+falls back to hipBLASLt heuristic selection. Dense GEMM is **11.9% of e2e wall**.
+Top missing shapes (M varies with batch, N/K fixed):
+`M:935 N:6288 K:7168`, `M:935 N:3584 K:7168`, `M:7928 N:3072 K:512`, `M:640 N:6288 K:7168`.
+Run offline tuning for these and ship the config with the image. No code risk, no
+numerics change. *I dismissed this early on as "not a slow path" without testing it.*
+
+**2. #52190 — torch.compile is disabled.** Log: `torch.compile is turned on, but
+the model does not support it`. We run with **zero post-grad fusion**, including
+`aiter::allreduce_fusion_kernel_1stage` and `fused_qk_rmsnorm`. Fewer kernels
+attacks the launch-bound idle; the fused all-reduce attacks collectives. 2/3 hunks
+apply, failing one is a single line in `compilation.py`.
+
+**3. CCD pinning.** Written, archived, **never measured**. Workers run unpinned
+(`0-255`) with GPU0-3 threads observed on node1 cores — cross-socket for every
+host-side op. Plausibly upstream of the 71.9 s idle before `copyBuffer` and the
+26.2 s of collective rank skew. One 32 MiB L3 domain per GPU.
+
+**4. `CUDAGRAPH_MODE=FULL`** instead of `FULL_AND_PIECEWISE`. Untested. With
+chunked prefill most steps are mixed and take the piecewise path; forcing FULL
+would show whether graph coverage is the launch-rate problem. Risk: batches
+outside the ladder fall back.
+
+**5. `--api-server-count N`.** Kimi-K3 has **no `tokenizer.json`** — vLLM logs
+"slow tokenizer" ×10 and uses `tokenizer_mode=kimi`. At ~66k input tok/s *every*
+prompt is tokenized in full, including the ~94% that hit the prefix cache and are
+never computed. Frontend work scales with raw input, not with what is computed.
+
+**6. #51437** — overlaps the shared all-reduce with the routed up-projection.
+Works at any message size, so unlike QuickReduce it reaches decode collectives
+(304 s vs prefill's 34 s). 5/6 hunks apply.
+
+**7. RCCL env tuning** — `NCCL_ALGO`, `NCCL_MIN_NCHANNELS`, `NCCL_PROTO`. Never
+touched. ~90% of collective volume is on RCCL.
+
+**8. `gpu-memory-utilization 0.95`** — more KV headroom. Weak prior: KV usage is
+only ~28% at C52, so the pool is not binding.
+
+**9. Concurrency fill-in at 44/48/50.** We have 40 and 52 and nothing between,
+and the peak sits somewhere in that gap.
+
+**10. Raise the custom all-reduce `max_size`** (currently `8192*1024` = 8 MiB).
+Prefill all-reduces are ~117 MB and always fall back to RCCL.
+
 ## Traps — I hit each of these
 
 - **Orphaned variables.** `EP_ARGS` ignored for 55 trials; the KV-offload block deleted in a cleanup (cost 3.3×); MTP wired but never fired. The orphan-check catches *unused* arrays, not arrays that are used but always empty.
