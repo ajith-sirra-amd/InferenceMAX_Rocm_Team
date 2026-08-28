@@ -130,7 +130,7 @@ case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
 # it replaces the old CONC<=4 test, which could not express "on, but shallower".
 # Override by exporting SPEC_NUM_TOKENS.
 case "$CONC" in
-    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-6}" ;;   # T136: 8 -> 6, AL 4.00 -> 3.75
+    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;   # T139: 6 -> 8, AL 3.75 -> 4.00
     8|12|16) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}" ;;
     *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
 esac
@@ -267,7 +267,7 @@ else
         --num-prompts "$(( CONC * 10 ))" \
         --max-concurrency "$CONC" \
         --result-filename "$RESULT_FILENAME" \
-        --result-dir "$RESULT_DIR" \
+        --result-dir /workspace/ \
         --use-chat-template \
         --trust-remote-code
 fi
