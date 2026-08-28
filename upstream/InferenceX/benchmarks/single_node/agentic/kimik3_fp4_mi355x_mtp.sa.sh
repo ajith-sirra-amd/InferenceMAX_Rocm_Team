@@ -129,7 +129,6 @@ SPEC_ENABLE="${SPEC_DECODING:-}"
 case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
 case "$CONC" in
     1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;
-    8|12|16) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}" ;;
     *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
 esac
 if [ "$SPEC_NUM_TOKENS" -eq 0 ]; then SPEC_ENABLE=""; fi
