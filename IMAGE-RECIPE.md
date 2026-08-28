@@ -9,13 +9,13 @@ kimi.patches : kv-blockpool, pr51705(e72380a5)
 
 ## Recipe
 
-| # | piece | upstream PR | what it does |
-|---|---|---|---|
-| 1 | base image | — | `vllm/vllm-openai-rocm:nightly-f94666b60d4c58ec0807d22c837cfae322a1dde9` |
-| 2 | `kv-blockpool` | [**#52707**](https://github.com/vllm-project/vllm/pull/52707) — *[Bugfix][KV Cache] Prevent negative external block allocation* | Clamps external computed-block allocation at zero. Without it, `ceil(total_computed_tokens / block_size) - len(request_blocks)` can go negative when speculative allocation is rejected; `get_new_blocks()` then corrupts the free-block counter and a later pop walks past the linked-list tail. Load-dependent mid-run death. Only reachable on the external block path, i.e. with `--kv-transfer-config`. |
-| 3 | `pr51705` | [**#51705**](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` — *[ROCm][DSpark][DCP] Support decode context parallelism for Kimi-K3 DSpark* | The DCP implementation itself: `--decode-context-parallel-size`, the a2a comm backend, softmax-LSE return for AITER MLA decode, and the `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` hatch that lifts the ROCm gate forcing PIECEWISE graphs when DCP is on. **DCP cannot run without this.** |
+| # | piece | source |
+|---|---|---|
+| 1 | base image | `vllm/vllm-openai-rocm:nightly-f94666b60d4c58ec0807d22c837cfae322a1dde9` |
+| 2 | `kv-blockpool` | [#52707](https://github.com/vllm-project/vllm/pull/52707) — prevents negative external block allocation |
+| 3 | `pr51705` | [#51705](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` — DCP support for Kimi-K3 DSpark |
 
-**Base + #52707 + #51705 is sufficient.**
+**Base + #52707 + #51705 is sufficient.** DCP cannot run without #51705.
 
 ## Build
 
