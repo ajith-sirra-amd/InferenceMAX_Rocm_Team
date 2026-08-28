@@ -270,7 +270,13 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 # runner does not touch.
 ISL="${ITL_ISL:-${ISL:-0}}"
 OSL="${ITL_OSL:-${OSL:-0}}"
-[ "$ISL" -gt 0 ] 2>/dev/null || ISL=8000
+# 122k, matching the agentic replay's 122,657-token mean input (T133 C1), not
+# 8k. Context length is the one thing that decides whether DCP is worth its
+# per-layer a2a + KV gather + LSE merge: at 8k the KV read is ~20 us against a
+# ~29 ms step, so DCP is pure overhead and the screen would say "DCP loses"
+# regardless of what it does on the real workload. At 122k the attention work
+# DCP parallelises is 28x larger. Screen at the length you intend to serve.
+[ "$ISL" -gt 0 ] 2>/dev/null || ISL=122000
 # OSL 500 for the C1 screening sweep, not 2000. At 1000 requests OSL 2000 costs
 # ~2.7 h per trial, which is too slow to rank configs; OSL 500 costs ~55 min and
 # still averages TPOT over ~125 decode steps per request at AL 4.00. All arms in
@@ -280,11 +286,16 @@ OSL="${ITL_OSL:-${OSL:-0}}"
 # Fixed length: hard 0, not the runner's 0.8 jitter. ITL variance is the metric
 # here, so the prompts must not vary in length.
 RANDOM_RANGE_RATIO=0
-# Floor of 1000 so TPOT percentiles have a real sample count; above CONC 100
-# keep the old 10-per-slot rule so the concurrent arms scale.
+# Screening budget: ~15 min of benchmark, not a fixed 1000. At ISL 122k a C1
+# request costs roughly 6-7 s (long prefill + ~250 decode tokens), so 100
+# requests lands near the budget. 100 per-request TPOT samples is enough to
+# RANK configs; it is not enough to publish one, so the winner gets a long run
+# before any headline number is quoted.
+# The old CONC*10 rule gave TEN requests at C1, which is what made T138-T140's
+# TPOT percentiles unusable -- those percentiles are per-request.
 NUM_PROMPTS="${NUM_PROMPTS:-0}"
 [ "$NUM_PROMPTS" -gt 0 ] 2>/dev/null || NUM_PROMPTS=$(( CONC * 10 ))
-if [ "$NUM_PROMPTS" -lt 1000 ]; then NUM_PROMPTS=1000; fi
+if [ "$NUM_PROMPTS" -lt 100 ]; then NUM_PROMPTS=100; fi
 if [ $(( ISL + OSL )) -gt 1048576 ]; then
     echo "Error: ISL+OSL = $(( ISL + OSL )) exceeds max-model-len 1048576." >&2
     exit 1
