@@ -2090,7 +2090,17 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # C52 -- no offload at mns 65. The only untested combination: mns 65 with no
       # offload completed in T124 and T128, while mns 80 with no offload has died
       # 3/3 with OUT_OF_RESOURCES. Targets SA's 8,296.0 without the crash.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [52], spec-decoding: mtp }
+      # T135 -- C1 ITL baseline on the fixed-length harness. The script now calls
+      # run_benchmark_serving (ISL 8000 / OSL 2000) instead of the agentic replay,
+      # so a cell is ~10 min rather than 1h12m. This row establishes the
+      # same-harness baseline at k=8; the agentic 6.70 ms record was measured on
+      # a different harness and is not comparable to it.
+      # dcp-size 1: DCP buys KV pool, which is irrelevant at conc 1, and it costs
+      # an a2a + KV gather + merge on each of the 24 MLA layers every step.
+      # spec-decoding: mtp must stay -- the runner uses it to pick the _mtp script
+      # filename. Whether MTP runs is decided in the script by CONC.
+      - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [52], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
