@@ -131,7 +131,18 @@ if [ "$LOW_CONC_INTERACTIVE" != "1" ]; then SPEC_ENABLE=""; fi
 SPEC_ARGS=()
 if [ "$SPEC_ENABLE" = "mtp" ]; then
     SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
+    # Transcribed from golden_al_distribution/
+    # kimik3_dspark_probabilistic_sample_method_block_rejection_sample_method.yaml
+    # (kimi-k3 / thinking_on). SA's per-conc table uses the k=3/6/7 rows; the
+    # rest are the same table's remaining entries.
     case "$SPEC_NUM_TOKENS" in
+        1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
+        2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
+        3) SYNTHETIC_ACCEPT_LEN=3.00 ;;
+        4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
+        5) SYNTHETIC_ACCEPT_LEN=3.62 ;;
+        6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
+        7) SYNTHETIC_ACCEPT_LEN=3.84 ;;
         8) SYNTHETIC_ACCEPT_LEN=4.00 ;;
         *) echo "[spec] no golden AL wired for num_speculative_tokens=$SPEC_NUM_TOKENS; take it from golden_al_distribution/kimik3_dspark_probabilistic_sample_method_block_rejection_sample_method.yaml and add the case" >&2; exit 1 ;;
     esac
