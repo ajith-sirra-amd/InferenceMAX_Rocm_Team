@@ -30,22 +30,23 @@ rather than a flattering one.
 
 ## Current state
 
-- **T154 C52 GSM8K 0.99 — PASSED** (DCP=8, k=0, nightly + rebased #51705).
-- **T154 C1 GSM8K 0.14 / 0.13 — FAILED** (DCP off, k=8, synthetic AL 4.00).
-  No prior baseline ever ran MTP on, so this is a first measurement, not a
-  regression. Leading cause: `synthetic` rejection imposes acceptance without
-  verifying drafts, so output is corrupt by construction.
-- **In flight: T155** — C1, **k=0**, same stack, GSM8K limit 200. Kept because
-  it validates the REBASE on the DCP-off path, which is independent of the
-  synthetic question. ~0.99 clears it.
-- **C1 accuracy is NOT a gate.** `synthetic` rejection is the sanctioned perf
-  methodology (that is what `golden_al_distribution/` exists for) — it imposes
-  the accept length, so corrupt text is expected and is not a defect. Do not
-  block on it, do not re-run it, do not spend GPU time chasing it. Record C1
-  accuracy once for the record and move on.
-- **Accuracy gating stays for C52** (k=0), where output is real: 0.99 passed.
-- **After T155:** restore `SPEC_NUM_TOKENS=8` at CONC<=4, set `FORCE_EVAL=0`,
-  re-enable the C52 matrix row, and run queue item **B1** — the perf baseline.
+- **T154 C52 GSM8K 0.99 — PASSED.** Validates the rebased #51705 on the DCP=8
+  path, which is the path it changes. That is the accuracy evidence we need.
+- **T154 C1 GSM8K 0.14 — recorded, not a gate.** `synthetic` rejection imposes
+  the accept length instead of verifying drafts, so degraded text is expected.
+- **T155 (C1 k=0 control) CANCELLED** — superseded. C52's 0.99 already clears
+  the rebase; the control was not worth ~90 min of GPU time.
+- **In flight: T156 = queue item B1** — perf baseline on nightly + rebased
+  #51705, agentic, C1 + C52. `FORCE_EVAL=0`, `k=8` at C1, C52 row re-enabled.
+  Compare C52 vs T103 **7,950.6** and SA **8,296**; C1 vs T123 **6.70** agentic.
+
+### Deferred: a real C1 accuracy test uses `block`, not `synthetic`
+
+The golden-AL file is `kimik3_dspark_probabilistic_sample_method_**block**_rejection_sample_method.yaml`.
+So `rejection_sample_method: "block"` is the real-verification path and is what
+a genuine C1 accuracy gate would use — `synthetic` cannot produce one by
+construction. Deferred, not dropped: it changes the accept length and therefore
+TPOT, so it is an accuracy experiment, not a perf one.
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 
