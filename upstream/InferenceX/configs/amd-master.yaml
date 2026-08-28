@@ -1936,7 +1936,29 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # image, so the bare tag kimi-k3-vllm:no-rejects fails with "pull access
   # denied" -- it is built on the box and was never pushed. This is also the
   # image T103 and T133 ran, so the sweep stays comparable to them.
-  image: aigmkt/kimi-k3-vllm:latest
+  # T147: STOCK nightly, 175 commits ahead of the f94666b60d our image is built
+  # on. Not a rebuild -- the launcher applies the one line this needs at runtime
+  # (patch_triton_mla_cudagraph_runtime), so no image build and no registry push.
+  #
+  # That one line is all a C1 run needs out of the vendored #51705 diff: the rest
+  # is DCP, and T144 vs T145 measured DCP=8 at C1 as +36.5% TPOT. #52707 merged
+  # upstream 2026-08-28 and IS in this nightly; #51705 is still open, and C1 does
+  # not want it.
+  #
+  # What this is testing, in expected order of effect at C1:
+  #   #53942 eh_proj low-latency GEMM -- "enabling m=1 and m=2", exactly the C1
+  #          batch regime, 12.9-25.2% kernel improvement. eh_proj is the MTP
+  #          projection and sat on nn.Linear, so the low-latency dispatch never
+  #          applied to it.
+  #   #53818 ROCm: capture CUDA graphs on the current stream -- graphs were being
+  #          recorded on a stream that never ran warmup.
+  #   #53641 gpu_sync_allowed on the ROCm AITER FA backend (our MLA prefill).
+  #   #53955 / #53682 release cudagraph profiling memory before KV allocation.
+  #   #51040 ROCm K3 FP8 asm MLA prefill (merged; previously archived here).
+  #
+  # Revert to aigmkt/kimi-k3-vllm:latest if this regresses. That image remains
+  # the reference for C52, which still needs #51705 for DCP.
+  image: vllm/vllm-openai-rocm:nightly-6f7df92a8e6cdc74a725b8f10b4d0b48ba2b37ef
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel

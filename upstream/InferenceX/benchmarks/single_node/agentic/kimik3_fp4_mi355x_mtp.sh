@@ -31,6 +31,49 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
+# ---------------------------------------------------------------------------
+# T147: runtime patch, so we can run a STOCK nightly without building an image.
+#
+# The DSpark draft can only run on TRITON_MLA (it is the only ROCm MLA backend
+# declaring supports_non_causal_multi_token_decode), and cudagraph capability is
+# the MINIMUM across attention groups. Upstream TritonMLAMetadataBuilder is
+# UNIFORM_SINGLE_TOKEN_DECODE -- still is, as of 6f7df92a8e -- which demotes the
+# whole engine FULL_AND_PIECEWISE -> PIECEWISE and leaves the drafter eager.
+# Measured cost of losing it: 14.05 -> 77.65 tok/s, ITL 71.16 -> 12.88 ms.
+#
+# aigmkt/kimi-k3-vllm:latest ships this inside the vendored #51705 diff. A stock
+# nightly does not, so apply it here. It is the ONLY thing a C1 run needs from
+# that 3,830-line diff: the rest of #51705 is DCP, and T144 vs T145 measured
+# DCP=8 at C1 as +36.5% TPOT, so C1 does not want DCP at all.
+#
+# Fails the run rather than serving a silently 5.5x-slower config.
+patch_triton_mla_cudagraph_runtime() {
+    local f
+    f=$(python3 -c "import vllm.v1.attention.backends.mla.triton_mla as m; print(m.__file__)" 2>/dev/null) || {
+        echo "[cg-patch] cannot locate triton_mla.py" >&2; return 1; }
+    if grep -q "AttentionCGSupport.UNIFORM_BATCH" "$f"; then
+        echo "[cg-patch] already UNIFORM_BATCH ($f)"; return 0
+    fi
+    python3 - "$f" <<'PY' || return 1
+import re, sys
+p = sys.argv[1]
+s = open(p).read()
+new, n = re.subn(
+    r"_cudagraph_support:\s*ClassVar\[AttentionCGSupport\]\s*=\s*\(\s*AttentionCGSupport\.UNIFORM_SINGLE_TOKEN_DECODE\s*,?\s*\)",
+    "_cudagraph_support: ClassVar[AttentionCGSupport] = AttentionCGSupport.UNIFORM_BATCH",
+    s, count=1)
+if n != 1:
+    sys.exit("[cg-patch] pattern not found -- refusing to run")
+open(p, "w").write(new)
+print(f"[cg-patch] UNIFORM_SINGLE_TOKEN_DECODE -> UNIFORM_BATCH in {p}")
+PY
+    grep -q "AttentionCGSupport.UNIFORM_BATCH" "$f" || { echo "[cg-patch] verify failed" >&2; return 1; }
+}
+if [ "${RUNTIME_CG_PATCH:-1}" = "1" ]; then
+    patch_triton_mla_cudagraph_runtime || { echo "FATAL: TritonMLA cudagraph patch failed" >&2; exit 1; }
+fi
+# ---------------------------------------------------------------------------
+
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix
 else
@@ -126,7 +169,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
     export VLLM_DCP_Q_REPLICATE=1
     echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"
-elif [ "${DCP_COMM_ARGS_AT_1:-1}" = "1" ]; then
+elif [ "${DCP_COMM_ARGS_AT_1:-0}" = "1" ]; then
     # T146: DCP=1 but keep the two comm flags. With decode_context_parallel_size
     # 1 there is no CP group for them to act on, so the expectation is that they
     # are inert and T146 reproduces T145 exactly. That is the point -- it is a
