@@ -8,7 +8,8 @@
 | 2 | `kv-blockpool` | [#52707](https://github.com/vllm-project/vllm/pull/52707) — prevents negative external block allocation |
 | 3 | `pr51705` | [#51705](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` — DCP support for Kimi-K3 DSpark |
 
-**Base + #52707 + #51705 is sufficient.** DCP cannot run without #51705.
+**Base + #52707 + #51705 is sufficient.** 
+> Note : DCP cannot run without #51705.
 
 ## Build
 
