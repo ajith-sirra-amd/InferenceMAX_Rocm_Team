@@ -242,24 +242,23 @@ echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-# BACK TO THE AGENTIC REPLAY (T141). The fixed-length harness below is kept,
-# disabled, because it is genuinely useful for a ~10 min turnaround -- but it
-# cannot carry a TPOT claim, for two reasons found in T138-T140:
+# Fixed-length serving, not the agentic replay. The agentic path is already
+# well sampled (T133 C1: 184 requests over its DURATION cap); the gap was here.
 #
-#   1. num-prompts is CONC*10, so C1 gets TEN requests. TPOT percentiles are
-#      per-request, so p90 over 10 samples is nearly the maximum. (ITL
-#      percentiles are fine -- those are per-interval, ~10k samples.)
-#   2. It is not actually fixed-length. With --random-range-ratio 0 the ten
-#      prompts still came out 1121-7979 tokens and 277-1828 output tokens: the
-#      random dataset decodes token ids to text and re-encodes, Kimi's BPE
-#      re-merges, and the 10 convergence retries never close.
+# NUM_PROMPTS, not CONC*10. T138-T140 ran CONC*10 = TEN requests at C1, and
+# TPOT percentiles are PER-REQUEST, so p90 over 10 samples is essentially the
+# maximum -- not a number to draw a conclusion from. (ITL percentiles were fine
+# even then: those are per-interval, ~10k samples.) 1000 requests at C1 costs
+# ~2.7 h at the 9.56 s mean e2e latency T140 measured, well inside the job's
+# 500-minute timeout.
 #
-# The replay costs ~1h per cell and is DURATION-capped, not prompt-capped --
-# 3600 s yields ~184 requests at C1. Use the workflow's duration-override input
-# to buy more; ~19.3 s/request at C1, so >=1000 requests needs ~19,300 s.
-#
-# To go back to fixed-length: comment the two replay lines and uncomment
-# run_benchmark_serving.
+# Still to be aware of: this harness is not as fixed-length as its name says.
+# With --random-range-ratio 0 the T140 prompts still came out 1121-7979 input
+# tokens and 277-1828 output tokens, because the random dataset round-trips
+# token ids through decode/encode and Kimi's BPE re-merges faster than the 10
+# convergence retries can correct. More requests fixes the SAMPLING problem,
+# not the length-scatter one -- but with 1000 samples the scatter averages out
+# instead of dominating.
 #
 # Do NOT write ${ISL:-8000}. The runner exports ISL, OSL and RANDOM_RANGE_RATIO
 # into the container (see the -e list on its docker run) and, for the agentic
@@ -276,28 +275,33 @@ OSL="${ITL_OSL:-${OSL:-0}}"
 # Fixed length: hard 0, not the runner's 0.8 jitter. ITL variance is the metric
 # here, so the prompts must not vary in length.
 RANDOM_RANGE_RATIO=0
+# Floor of 1000 so TPOT percentiles have a real sample count; above CONC 100
+# keep the old 10-per-slot rule so the concurrent arms scale.
+NUM_PROMPTS="${NUM_PROMPTS:-0}"
+[ "$NUM_PROMPTS" -gt 0 ] 2>/dev/null || NUM_PROMPTS=$(( CONC * 10 ))
+if [ "$NUM_PROMPTS" -lt 1000 ]; then NUM_PROMPTS=1000; fi
 if [ $(( ISL + OSL )) -gt 1048576 ]; then
     echo "Error: ISL+OSL = $(( ISL + OSL )) exceeds max-model-len 1048576." >&2
     exit 1
 fi
-echo "[client] fixed-length: ISL=$ISL OSL=$OSL range-ratio=$RANDOM_RANGE_RATIO conc=$CONC prompts=$(( CONC * 10 ))"
+echo "[client] fixed-length: ISL=$ISL OSL=$OSL range-ratio=$RANDOM_RANGE_RATIO conc=$CONC prompts=$NUM_PROMPTS"
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
-    build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
-    # run_benchmark_serving \
-    #     --model "$MODEL" \
-    #     --port "$PORT" \
-    #     --backend vllm \
-    #     --input-len "$ISL" \
-    #     --output-len "$OSL" \
-    #     --random-range-ratio "$RANDOM_RANGE_RATIO" \
-    #     --num-prompts "$(( CONC * 10 ))" \
-    #     --max-concurrency "$CONC" \
-    #     --result-filename "$RESULT_FILENAME" \
-    #     --result-dir /workspace/ \
-    #     --use-chat-template \
-    #     --trust-remote-code
+    # build_replay_cmd "$RESULT_DIR"
+    # run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    run_benchmark_serving \
+        --model "$MODEL" \
+        --port "$PORT" \
+        --backend vllm \
+        --input-len "$ISL" \
+        --output-len "$OSL" \
+        --random-range-ratio "$RANDOM_RANGE_RATIO" \
+        --num-prompts "$NUM_PROMPTS" \
+        --max-concurrency "$CONC" \
+        --result-filename "$RESULT_FILENAME" \
+        --result-dir /workspace/ \
+        --use-chat-template \
+        --trust-remote-code
 fi
