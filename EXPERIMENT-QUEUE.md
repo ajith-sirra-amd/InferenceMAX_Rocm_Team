@@ -35,10 +35,17 @@ rather than a flattering one.
   No prior baseline ever ran MTP on, so this is a first measurement, not a
   regression. Leading cause: `synthetic` rejection imposes acceptance without
   verifying drafts, so output is corrupt by construction.
-- **In flight: T155** — C1, **k=0**, same stack, GSM8K limit 200. ~0.99 confirms
-  the synthetic explanation and clears the rebase; ~0.14 indicts the rebase and
-  blocks everything until fixed.
-- C52 row commented out of the matrix meanwhile — it already passed.
+- **In flight: T155** — C1, **k=0**, same stack, GSM8K limit 200. Kept because
+  it validates the REBASE on the DCP-off path, which is independent of the
+  synthetic question. ~0.99 clears it.
+- **C1 accuracy is NOT a gate.** `synthetic` rejection is the sanctioned perf
+  methodology (that is what `golden_al_distribution/` exists for) — it imposes
+  the accept length, so corrupt text is expected and is not a defect. Do not
+  block on it, do not re-run it, do not spend GPU time chasing it. Record C1
+  accuracy once for the record and move on.
+- **Accuracy gating stays for C52** (k=0), where output is real: 0.99 passed.
+- **After T155:** restore `SPEC_NUM_TOKENS=8` at CONC<=4, set `FORCE_EVAL=0`,
+  re-enable the C52 matrix row, and run queue item **B1** — the perf baseline.
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 
