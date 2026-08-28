@@ -30,17 +30,19 @@ rather than a flattering one.
 
 ## Current state
 
-- **T156 C52 = 7,906 tok/s/GPU** (nightly + rebased #51705, DCP=8, mns 80, dram,
-  auto). vs T103 **7,950.6** and SA **8,296**. **−0.6% — the nightly is FLAT at
-  C52.** Its −13.7% C1 win does not transfer, consistent with #53942 being an
-  explicit m=1/m=2 low-latency-GEMM change that cannot apply at batch 52.
-  GSM8K on this exact config: 0.99.
-- **In flight:** T156 C1 (same stack, DCP off, k=8). Expect ~6.70–7.6 ms TPOT.
-- **Direction change from this result:** stop looking to newer vLLM for C52.
-  Go to the levers that attack idle and dense GEMM directly — queue C1 (AITER
-  tuned configs, 45,250 misses), C2 (#52190 torch.compile, zero post-grad
-  fusion today), C3 (CCD pinning).
-- **Next dispatch after T156 C1:** queue item **C1 — AITER tuned GEMM configs.**
+- **T156 C52 = 7,906 tok/s/GPU** — nightly FLAT vs T103's 7,950.6. GSM8K 0.99.
+- **T156 C1 = 1,509 tok/s/GPU, ITL p50 7.89 ms — DIRTY.** 17/148 error-dropped
+  (11.5% vs T123's 1.6%), 131 served in 1985 s vs 190 in 3609 s. The +17%
+  throughput is an artifact of the short window and drops; on ITL p50 the
+  nightly is 7.89 vs T123's 7.71, slightly worse. **Needs a clean re-run.**
+- **AITER tuned GEMM configs (was queue C1) DEFERRED** — not dispatchable
+  through this harness. It needs an offline AITER tuning job to generate
+  `/tmp/aiter_configs/bf16_tuned_gemm.csv` entries, not a benchmark run. Keep it
+  as the highest-value item but it requires a different job type.
+- **In flight: T157** — C52 with `gpu-memory-utilization` 0.90 -> 0.95. One
+  variable, no numerics change, immediately actionable. Weak prior (KV usage is
+  only ~28% at C52) but it is cheap and clears the queue toward #52190.
+- **Next:** #52190 torch.compile (numerics -> GSM8K first), then CCD pinning.
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 

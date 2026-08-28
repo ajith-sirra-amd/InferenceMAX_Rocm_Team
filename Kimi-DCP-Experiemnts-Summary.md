@@ -57,6 +57,32 @@ never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
 engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
 unexplained — both of its candidate causes are now measured inert.
 
+## C1 on the nightly: 1,509 tok/s/GPU, but the run is dirty
+
+T156 C1, agentic, nightly + rebased #51705, DCP off, k=8, mns 8, ladder 1..16:
+
+| | T123 (aigmkt) | T133 (aigmkt) | **T156 (nightly)** |
+|---|--:|--:|--:|
+| tok/s/GPU | 1,288.2 | 1,237.2 | **1,509** |
+| TPOT/ITL p50 (ms) | **7.71** | 8.69 | 7.89 |
+| requests | 190/193 | 184/187 | **131/148** |
+| error-dropped | 1.6% | 1.6% | **11.5%** |
+| duration (s) | 3609 | 3556 | **1985** |
+
+**Do not quote the +17% throughput.** The run served 131 requests in 1985 s
+against T123's 190 in 3609 s, and dropped 11.5% of requests versus 1.6%. A
+higher error rate inflates tok/s/GPU because dropped requests cost time but are
+excluded from the numerator's accounting, and the shorter window means a
+different slice of the replay. On the metric that is robust to this — **ITL
+p50 — the nightly is 7.89 vs T123's 7.71, i.e. slightly WORSE**, not better.
+
+Also note `Inter Token Latency` min = **0.00 ms** again, the same degenerate
+-request artifact found in SA's logs, so p95 (2,701 tok/s/user) and p99 (13,009)
+are junk. p50 only.
+
+**Needs a clean re-run before it goes in any summary.** The 11.5% error rate is
+itself the finding worth chasing.
+
 ## The nightly does NOT help C52 throughput
 
 T156, agentic, nightly `6f7df92a8e` + rebased #51705, DCP=8, mns 80, DRAM
@@ -1133,7 +1159,8 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 154b | 33191753746 | **GSM8K C1**, limit 200, DCP off, **MTP k=8**, synthetic AL 4.00 | **0.14 / 0.13** — vs **0.99** on C52 (k=0) on the identical stack |
 | 155 | 33197400117 | GSM8K C1 k=0 control | CANCELLED — superseded; C52's 0.99 already clears the rebase, and C1 accuracy is not a gate under `synthetic` |
 | 156a | 33197613253 | **C52 PERF, nightly 6f7df92a8e + rebased #51705**, DCP=8, mns 80, dram, load auto | **7,906 tok/s/GPU**, 1879/1989 requests, KV 31,924,580, input 62,665 tok/s, 3629.7 s |
-| 156b | 33197613253 | C1 PERF, same stack, DCP off, k=8 | in flight |
+| 156b | 33197613253 | **C1 PERF**, nightly + rebased #51705, DCP off, k=8, mns 8, ladder 1..16 | **1,509 tok/s/GPU**, ITL p50 **7.89** ms (err-adj 8.07), intvty p50 126. **CAVEAT: 17/148 error-dropped (11.5%) vs T123's 1.6%**, only 131 served in 1984 s vs T123's 190 in 3609 s — not a clean comparison |
+| 157 | pending | C52, `gpu-memory-utilization` 0.90 -> 0.95 | first actionable C52 lever; AITER tuning deferred, see note |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |
