@@ -150,7 +150,7 @@ else
 fi
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-MAX_NUM_SEQS=$(( CONC * 2 ))
+MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
 if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
 if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
 

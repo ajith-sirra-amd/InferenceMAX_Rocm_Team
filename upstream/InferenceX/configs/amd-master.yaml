@@ -2090,11 +2090,10 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # C1 -- best interactivity. DCP off (pure added latency at batch 1), MTP on
       # at k=8 with golden AL 4.00, mns 8 via the floor, no offload.
       - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
-      # C52 -- best throughput. DCP=8 for the 32.7M-token KV pool, mns 80, MTP off
-      # (it is -85% at this concurrency). DRAM offload kept: mns 80 without it has
-      # died with HSA_STATUS_ERROR_OUT_OF_RESOURCES three times (T129 and both SA
-      # C16/C52), while every completed run at mns 80 had the offload behind it.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [52], spec-decoding: mtp }
+      # C52 -- no offload at mns 65. The only untested combination: mns 65 with no
+      # offload completed in T124 and T128, while mns 80 with no offload has died
+      # 3/3 with OUT_OF_RESOURCES. Targets SA's 8,296.0 without the crash.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [52], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
