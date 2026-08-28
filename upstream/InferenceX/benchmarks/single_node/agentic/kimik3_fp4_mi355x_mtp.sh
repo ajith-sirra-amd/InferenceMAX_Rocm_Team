@@ -248,6 +248,18 @@ else
 fi
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
+# T148: load-format is a live lever again. It was a UNIFIED_LOAD_FORMAT
+# variable until 3412f0fa ("reduce the launcher to the code that actually
+# runs") collapsed it to a hardcoded fastsafetensors -- the same class of
+# mistake as deleting the KV-offload block as dead code. T123 is the ONLY run
+# on record with auto, and it is our best C1 ever (TPOT 6.70 mean / 7.71 p50,
+# 1,288.20 tok/s/GPU, KV pool 2,826,382 vs T133's 2,687,226 on the same node).
+# Once T146 showed the DCP comm flags inert at size 1, load-format is the only
+# thing left that separated T123 from T133 -- but that is inference from a
+# single pair, not an A/B. This makes it one, against T147 on the same nightly.
+LOAD_FORMAT="${LOAD_FORMAT:-auto}"
+echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
+
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
     # The floor of 8 exists for the concurrent arms, where mns must leave room
@@ -283,7 +295,7 @@ VLLM_CMD=(
     --trust-remote-code
     --moe-backend auto
     --tensor-parallel-size "$TP"
-    --load-format fastsafetensors
+    --load-format "$LOAD_FORMAT"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
