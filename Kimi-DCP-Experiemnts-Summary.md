@@ -57,6 +57,39 @@ never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
 engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
 unexplained — both of its candidate causes are now measured inert.
 
+## GSM8K with MTP on scores 0.14 — and no baseline ever covered this
+
+T154, nightly + rebased #51705, GSM8K limit 200:
+
+| arm | DCP | k | GSM8K |
+|---|--:|--:|--:|
+| C52 | 8 | **0** | **0.99** strict + flexible |
+| C1 | 1 | **8** | **0.14** flexible / **0.13** strict |
+
+**Every accuracy baseline this project has ever recorded was taken with MTP
+OFF** — 98.5% (T97, the T103 config), 0.9659/0.9644 (trial 23), 96.82/96.89.
+There is no prior GSM8K with speculative decoding enabled. So 0.14 is not a
+regression against a known-good number; it is the first measurement of a
+configuration nobody had ever gated.
+
+**Leading explanation:** `rejection_sample_method: "synthetic"` with
+`synthetic_acceptance_length: 4.00` **imposes** the accept length rather than
+verifying draft tokens against the target. If drafts are accepted without real
+verification, the emitted text is corrupt by construction and 0.14 is expected
+behaviour of the measurement methodology, not a defect in the engine or in the
+#51705 rebase. The alternative is that the rebase broke the draft path.
+
+T155 separates them: same stack, C1, **k=0**, everything else identical.
+~0.99 confirms the synthetic explanation; ~0.14 indicts the rebase.
+
+**If the synthetic explanation holds, it has a consequence worth stating
+plainly: every C1 TPOT number in this document — ours and SA's, since SA uses
+the same `synthetic` setting — is measured on a configuration that does not
+produce usable output.** That is fine for ranking engine changes, which is what
+the golden-AL methodology is for, but it means "best TPOT at C1" is not by
+itself a shippable result. A shippable C1 number needs real rejection sampling,
+which would change the accept length and therefore the TPOT.
+
 ## Draft model: constraints found while optimising it
 
 - **The DSpark draft cannot leave `TRITON_MLA`.** It is the only ROCm MLA backend
@@ -1066,7 +1099,8 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 152 | 33190157834 | nightly + #51705 (bad rebase) | FAIL — `MultiHeadLatentAttention.__init__() got an unexpected keyword argument 'enable_dcp_q_replicate'`; I wrongly discarded `kimi_k3/nvidia/mla.py` as "NVIDIA-only" |
 | 153 | 33191059734 | nightly + #51705 (fixed rebase) | cancelled for the accuracy gate |
 | 154a | 33191753746 | **GSM8K C52**, limit 200, nightly + rebased #51705, DCP=8 | **99.0%** strict + flexible (±0.71). Gate PASSES — rebase sound on the DCP path. Job red only on the expected "Benchmark result not found" (eval-only makes no benchmark JSON; the runner cannot skip that check for agentic scenarios) |
-| 154b | 33191753746 | **GSM8K C1**, limit 200, DCP off, MTP k=8 | in flight |
+| 154b | 33191753746 | **GSM8K C1**, limit 200, DCP off, **MTP k=8**, synthetic AL 4.00 | **0.14 / 0.13** — vs **0.99** on C52 (k=0) on the identical stack |
+| 155 | pending | **GSM8K C1, k=0 control** — same stack, MTP OFF | separates "synthetic corrupts output" from "the rebase broke the draft path" |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |

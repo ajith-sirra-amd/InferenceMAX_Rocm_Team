@@ -30,16 +30,15 @@ rather than a flattering one.
 
 ## Current state
 
-- **T154 C52 GSM8K: 99.0% — PASSED.** Nightly + rebased #51705, DCP=8, 200
-  problems, strict and flexible both 0.99 ±0.0071. The rebase is numerically
-  sound on the DCP path. Gates confirmed: `[pr51705] applied`,
-  `[dcp] ENABLED size=8`, `graphs: dense ladder 1..80`, `[load] auto`.
-  The job shows red only on `Benchmark result ... not found` — expected, since
-  eval-only writes no benchmark JSON and the runner cannot skip that check for
-  an agentic scenario. Not a failure.
-- **In flight:** T154 C1 GSM8K — the DSpark draft + MTP path. **Loading slowly:
-  46.2 s/shard vs the usual ~1.6, so ~74 min instead of ~2.5.** Cause found, see
-  below — not a fault, it will finish.
+- **T154 C52 GSM8K 0.99 — PASSED** (DCP=8, k=0, nightly + rebased #51705).
+- **T154 C1 GSM8K 0.14 / 0.13 — FAILED** (DCP off, k=8, synthetic AL 4.00).
+  No prior baseline ever ran MTP on, so this is a first measurement, not a
+  regression. Leading cause: `synthetic` rejection imposes acceptance without
+  verifying drafts, so output is corrupt by construction.
+- **In flight: T155** — C1, **k=0**, same stack, GSM8K limit 200. ~0.99 confirms
+  the synthetic explanation and clears the rebase; ~0.14 indicts the rebase and
+  blocks everything until fixed.
+- C52 row commented out of the matrix meanwhile — it already passed.
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 

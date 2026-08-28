@@ -230,7 +230,14 @@ case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
 # it replaces the old CONC<=4 test, which could not express "on, but shallower".
 # Override by exporting SPEC_NUM_TOKENS.
 case "$CONC" in
-    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;   # T139: 6 -> 8, AL 3.75 -> 4.00
+    # T155: k=0 at C1 TEMPORARILY, to separate two causes of the 0.14 GSM8K.
+    # C52 (k=0, DCP=8) scored 0.99 on this same stack; C1 (k=8, DCP=1) scored
+    # 0.14. The only candidates are (A) rejection_sample_method "synthetic",
+    # which imposes acceptance without real verification and would corrupt
+    # output by construction, or (B) my #51705 rebase breaking the draft path.
+    # k=0 with everything else identical separates them: ~0.99 means A, ~0.14
+    # means B. Restore to 8 once answered.
+    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;   # T139: 6 -> 8, AL 3.75 -> 4.00
     8|12|16) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}" ;;
     *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
 esac
