@@ -161,15 +161,21 @@ else
 fi
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
+if [ "$CONC" -le 4 ]; then
+    LOAD_FORMAT="${LOAD_FORMAT:-auto}"
+else
+    LOAD_FORMAT="${LOAD_FORMAT:-fastsafetensors}"
+fi
+echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
+
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
-    if agentic_kv_offload_enabled; then
-        MAX_NUM_SEQS=$(( CONC * 2 ))
-        if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
+    if [ "$DCP_SIZE" -gt 1 ]; then
+        MAX_NUM_SEQS=80
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
-        if [ "$MAX_NUM_SEQS" -gt 65 ]; then MAX_NUM_SEQS=65; fi
+        if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
+        if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
     fi
-    if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
 fi
 echo "[mns] max_num_seqs=$MAX_NUM_SEQS conc=$CONC offload=${KV_OFFLOADING:-none}"
 
@@ -190,7 +196,7 @@ VLLM_CMD=(
     --trust-remote-code
     --moe-backend auto
     --tensor-parallel-size "$TP"
-    --load-format fastsafetensors
+    --load-format "$LOAD_FORMAT"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
