@@ -41,7 +41,10 @@ else
     # BETTER than our DCP-off 0.02165. And every C1+MTP run we have (T122,
     # T123, T138-T140) was DCP off, so DCP=8 + MTP k=8 at CONC 1 has never
     # been measured here -- while SA runs exactly that.
-    DCP_SIZE=8
+    # T145: back to DCP=1 at CONC <= 4. T143 (DCP=8) measured TPOT 11.93 ms at
+    # the 122k context; T145 is its DCP-off control at the same context, same
+    # draft, same ladder.
+    if [ "$CONC" -le 4 ]; then DCP_SIZE=1; else DCP_SIZE=8; fi
     DCP_SOURCE=conc-fallback
 fi
 export DCP_SIZE
@@ -123,6 +126,17 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
     export VLLM_DCP_Q_REPLICATE=1
     echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"
+elif [ "${DCP_COMM_ARGS_AT_1:-0}" = "1" ]; then
+    # T146: DCP=1 but keep the two comm flags. With decode_context_parallel_size
+    # 1 there is no CP group for them to act on, so the expectation is that they
+    # are inert and T146 reproduces T145 exactly. That is the point -- it is a
+    # cheap check that the DCP effect measured in T143 comes from the CP group
+    # itself and not from a side effect of these flags. Any difference between
+    # T145 and T146 means one of them is doing something undocumented.
+    # Note the engine default is dcp_comm_backend=ag_rs, so a2a IS a change to
+    # the recorded config even at size 1.
+    CP_ARGS+=(--dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
+    echo "[dcp] size=1, comm args RETAINED (a2a, interleave=1), no DCP env"
 else
     echo "[dcp] DISABLED -- no DCP args, no DCP env"
 fi
