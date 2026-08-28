@@ -11,7 +11,7 @@ wait_for_amd_gpu_clean
 # it; only accuracy is not.
 # Forced, not defaulted: the runner exports EVAL_ONLY=false, so ${EVAL_ONLY:-...}
 # never fires -- same trap as ISL/OSL. Set FORCE_EVAL=0 to go back to benchmarks.
-if [ "${FORCE_EVAL:-1}" = "1" ]; then EVAL_ONLY=true; else EVAL_ONLY="${EVAL_ONLY:-false}"; fi
+if [ "${FORCE_EVAL:-0}" = "1" ]; then EVAL_ONLY=true; else EVAL_ONLY="${EVAL_ONLY:-false}"; fi
 export EVAL_ONLY
 EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export EVAL_LIMIT
@@ -230,14 +230,7 @@ case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
 # it replaces the old CONC<=4 test, which could not express "on, but shallower".
 # Override by exporting SPEC_NUM_TOKENS.
 case "$CONC" in
-    # T155: k=0 at C1 TEMPORARILY, to separate two causes of the 0.14 GSM8K.
-    # C52 (k=0, DCP=8) scored 0.99 on this same stack; C1 (k=8, DCP=1) scored
-    # 0.14. The only candidates are (A) rejection_sample_method "synthetic",
-    # which imposes acceptance without real verification and would corrupt
-    # output by construction, or (B) my #51705 rebase breaking the draft path.
-    # k=0 with everything else identical separates them: ~0.99 means A, ~0.14
-    # means B. Restore to 8 once answered.
-    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;   # T139: 6 -> 8, AL 3.75 -> 4.00
+    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;   # T139: 6 -> 8, AL 3.75 -> 4.00
     8|12|16) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}" ;;
     *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
 esac
@@ -448,8 +441,6 @@ echo "[client] fixed-length: ISL=$ISL OSL=$OSL range-ratio=$RANDOM_RANGE_RATIO c
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
-    # build_replay_cmd "$RESULT_DIR"
-    # run_agentic_replay_and_write_outputs "$RESULT_DIR"
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
 fi
