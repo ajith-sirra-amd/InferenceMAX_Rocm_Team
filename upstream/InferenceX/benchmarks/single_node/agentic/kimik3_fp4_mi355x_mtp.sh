@@ -158,11 +158,29 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
         8) SYNTHETIC_ACCEPT_LEN=4.00 ;;
         *) echo "[spec] no golden AL wired for num_speculative_tokens=$SPEC_NUM_TOKENS; take it from golden_al_distribution/kimik3_dspark_probabilistic_sample_method_block_rejection_sample_method.yaml and add the case" >&2; exit 1 ;;
     esac
+    # T144: draft KV fp8, was "auto" (bf16). The target model already runs
+    # --kv-cache-dtype fp8; the draft was left on the default, so every draft
+    # forward re-read its KV at 2 bytes/element while the target read 1. At the
+    # 122k context this screen runs that is the draft's single largest memory
+    # cost, and the draft runs k times per accepted-token group.
+    #
+    # attention_backend stays TRITON_MLA and is NOT a free choice: it is the
+    # only ROCm MLA backend declaring supports_non_causal_multi_token_decode
+    # (flashinfer_mla and tokenspeed_mla are the other two, both NVIDIA), which
+    # DSpark's non-causal draft requires. ROCM_AITER_MLA inherits the base
+    # default False and mla_attention.py raises on it.
+    #
+    # WARNING when reading any result from this arm: rejection_sample_method is
+    # "synthetic", so the accept length is IMPOSED by synthetic_acceptance_length
+    # and is not measured. A numerics regression in the draft therefore cannot
+    # show up as a lower AL. Judge this change on TPOT only, and validate draft
+    # quality separately with real rejection sampling + GSM8K before shipping.
+    DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
     SPEC_ARGS=(
         --speculative-config
-        "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"auto\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
+        "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
     )
-    echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN)"
+    echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN, draft kv=$DRAFT_KV_DTYPE)"
 fi
 
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
