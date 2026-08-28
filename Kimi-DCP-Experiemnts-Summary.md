@@ -57,6 +57,25 @@ never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
 engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
 unexplained — both of its candidate causes are now measured inert.
 
+## RCCL: more channels is worse at C52
+
+T158, sole variable `NCCL_MIN_NCHANNELS=32`:
+
+| | tok/s/GPU |
+|---|--:|
+| T156 (default channels) | **7,906** |
+| T158 (`NCCL_MIN_NCHANNELS=32`) | **7,656** |
+
+**−3.2%.** KV pool identical (31,924,580), requests comparable (1801/1911 vs
+1879/1989), input throughput 60,576 vs 62,665 tok/s. Reverted.
+
+More channels splits each collective across more parallel streams, which helps
+bandwidth-bound transfers but adds per-channel launch and synchronisation
+overhead. At C52 the collectives are already large enough to saturate, so the
+extra channels are pure overhead. **Settled — do not raise the channel count.**
+`NCCL_PROTO` is a different axis and remains untested, but this result lowers
+the prior on RCCL tuning generally.
+
 ## gmu 0.95 hangs the engine at C52 — do not retry
 
 T157, C52, sole variable `gpu-memory-utilization` 0.90 -> 0.95:
@@ -1183,7 +1202,8 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 156a | 33197613253 | **C52 PERF, nightly 6f7df92a8e + rebased #51705**, DCP=8, mns 80, dram, load auto | **7,906 tok/s/GPU**, 1879/1989 requests, KV 31,924,580, input 62,665 tok/s, 3629.7 s |
 | 156b | 33197613253 | **C1 PERF**, nightly + rebased #51705, DCP off, k=8, mns 8, ladder 1..16 | **1,509 tok/s/GPU**, ITL p50 **7.89** ms (err-adj 8.07), intvty p50 126. **CAVEAT: 17/148 error-dropped (11.5%) vs T123's 1.6%**, only 131 served in 1984 s vs T123's 190 in 3609 s — not a clean comparison |
 | 157 | 33209544438 | C52, **gmu 0.95** | **HARD FAIL — 0 successful / 57, all error-dropped.** Server started, KV pool grew 31.9M -> **40.2M tokens (+26%)**, then all 55 warmup requests HUNG: 0 returned, 0 errors, 1200 s. Not an OOM — the engine accepted work and never produced output. Reverted to 0.9 |
-| 158 | pending | C52, **NCCL_MIN_NCHANNELS=32** | collectives are 21.3% of e2e wall and RCCL tuning has never been touched |
+| 158 | 33212429374 | C52, **NCCL_MIN_NCHANNELS=32** | **7,656 tok/s/GPU — a 3.2% LOSS** vs T156's 7,906 on the identical config. 1801/1911 requests, KV 31,924,580 (unchanged), input 60,576 tok/s. Reverted |
+| 159 | pending | C52, **CCD pinning** (`PIN_CCD=1`) | restored from archive; one 32 MiB L3 domain per GPU, every thread |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |

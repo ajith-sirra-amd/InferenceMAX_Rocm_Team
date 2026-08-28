@@ -30,17 +30,24 @@ rather than a flattering one.
 
 ## Current state
 
-- **T157 gmu 0.95 = HARD FAIL.** 0/57 requests at C52; KV pool grew +26% then
-  every warmup request hung for 1200 s with zero errors. Not an OOM. **Reverted
-  to 0.9 — settled, do not retry.** C1 arm cancelled since the config is known
-  bad.
-- **T156 C52 = 7,906** (nightly flat vs T103 7,950.6). **T156 C1 = 1,509
-  tok/s/GPU / ITL p50 7.89 ms but DIRTY** (11.5% drops) — still needs a clean
-  re-run.
-- **In flight: T158** — C52 with `NCCL_MIN_NCHANNELS=32`. Collectives are 21.3%
-  of e2e wall and RCCL has never been tuned. No numerics change.
-- **Next:** #52190 torch.compile (numerics -> GSM8K first), then CCD pinning,
-  then a clean C1 re-run.
+**C52 ledger so far — every lever tried has been flat or negative:**
+
+| run | change | tok/s/GPU |
+|---|---|--:|
+| T103 (aigmkt) | baseline | **7,950.6** |
+| T156 | nightly + #51705 | 7,906 (−0.6%) |
+| T157 | gmu 0.95 | **0 — engine hung** |
+| T158 | NCCL_MIN_NCHANNELS=32 | 7,656 (−3.2%) |
+| SA | reference | 8,296 |
+
+- **In flight: T159** — CCD pinning (`PIN_CCD=1`), restored from the archive.
+  One 32 MiB L3 domain per GPU, pinning **every thread** via `/proc/<pid>/task/*`
+  rather than the main TID (the archived note records that the earlier
+  `taskset -pc <pid>` version pinned 1 of ~197 threads, which is why pinning
+  never showed a win). No numerics change.
+- **Next:** #52190 torch.compile — the only untried lever with a large
+  mechanism behind it (zero post-grad fusion today). Numerics → GSM8K first.
+  Then a clean C1 re-run (T156 C1 had 11.5% drops).
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 
