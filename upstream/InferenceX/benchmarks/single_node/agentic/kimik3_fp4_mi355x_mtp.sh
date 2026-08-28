@@ -271,7 +271,12 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 ISL="${ITL_ISL:-${ISL:-0}}"
 OSL="${ITL_OSL:-${OSL:-0}}"
 [ "$ISL" -gt 0 ] 2>/dev/null || ISL=8000
-[ "$OSL" -gt 0 ] 2>/dev/null || OSL=2000
+# OSL 500 for the C1 screening sweep, not 2000. At 1000 requests OSL 2000 costs
+# ~2.7 h per trial, which is too slow to rank configs; OSL 500 costs ~55 min and
+# still averages TPOT over ~125 decode steps per request at AL 4.00. All arms in
+# the sweep share it, so the ranking is internally consistent. The winner gets
+# re-run at OSL 2000 before any headline number is quoted.
+[ "$OSL" -gt 0 ] 2>/dev/null || OSL=500
 # Fixed length: hard 0, not the runner's 0.8 jitter. ITL variance is the metric
 # here, so the prompts must not vary in length.
 RANDOM_RANGE_RATIO=0
