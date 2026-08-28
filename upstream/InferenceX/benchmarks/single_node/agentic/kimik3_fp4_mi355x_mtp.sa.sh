@@ -161,11 +161,7 @@ else
 fi
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-if [ "$CONC" -le 4 ]; then
-    LOAD_FORMAT="${LOAD_FORMAT:-auto}"
-else
-    LOAD_FORMAT="${LOAD_FORMAT:-fastsafetensors}"
-fi
+LOAD_FORMAT="${LOAD_FORMAT:-auto}"
 echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
