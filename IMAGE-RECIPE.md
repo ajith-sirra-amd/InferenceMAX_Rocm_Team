@@ -2,7 +2,7 @@
 
 ```
 kimi.base    : nightly-f94666b6
-kimi.patches : kv-blockpool, pr51705(e72380a5), pr51705-rejects
+kimi.patches : kv-blockpool, pr51705(e72380a5)
 ```
 
 ## Recipe
@@ -12,9 +12,8 @@ kimi.patches : kv-blockpool, pr51705(e72380a5), pr51705-rejects
 | 1 | base image | `vllm/vllm-openai-rocm:nightly-f94666b60d4c58ec0807d22c837cfae322a1dde9` |
 | 2 | `kv-blockpool` | [#52707](https://github.com/vllm-project/vllm/pull/52707) |
 | 3 | `pr51705` | [#51705](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` |
-**Base + #51705 + #52707 is sufficient.**
 
-`pr51705-rejects` is also in the script but is a **no-op on this base** — see below.
+**Base + #51705 + #52707 is sufficient.**
 
 ## Build
 
@@ -32,7 +31,6 @@ re-run. Expected output:
 [kv-blockpool] patched .../v1/core/single_type_kv_cache_manager.py
 [pr51705] applying vendored diff (c326df26b4eb4caa, 3830 lines)
 [pr51705] applied
-[pr51705-rejects] MultiHeadLatentAttention.__init__ accepts enable_dcp_q_replicate
 [kimi-patches] done.
 ```
 
@@ -57,34 +55,15 @@ Inside the patch script:
 |---|---:|---:|
 | `patch_kv_blockpool` | [L39](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L39) | [L217](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L217) |
 | `patch_pr51705` | [L142](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L142) | [L262](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L262) |
-| **`patch_pr51705_rejects`** | [**L164**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L164) | [**L265**](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh#L265) |
 
 Those three are the whole script — running it reproduces the reference image
 exactly.
-
-## `pr51705-rejects` is a no-op on this base
-
-It exists for a case that does not occur here. Applying the vendored `e72380a5`
-diff to `f94666b6` produces **zero `.rej` files**; every hunk applies, and
-`MultiHeadLatentAttention.__init__` gains `enable_dcp_q_replicate: bool = True`
-directly from the PR. `dspark_mla.py` passes `enable_dcp_q_replicate=False`, and
-the class accepts it.
-
-The patch is guarded so it correctly does nothing, and can be skipped entirely
-with `SKIP_PATCH_REJECTS=1`.
-
-Keep it only if building against a base where the reject does occur -- it was
-written for one whose `mla.py` context line read `run_gemm_rs` rather than
-`run_gemm_rs_ar`.
 
 ## Caveats
 
 - **Pin `e72380a5`.** #51705 is open and changing — a reviewer asked to retire
   `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` and the author agreed. Today's PR head will not
   reproduce this image.
-- **`pr51705-rejects` is base-specific**, needed only because #51705 is unmerged
-  and its diff is stale against this nightly. It becomes unnecessary once #51705
-  merges.
 - **Once #51705 and #52707 both merge**, a stock nightly containing them is
   equivalent and this image can be retired. Budget one validation run at
   concurrency 52 first: a later nightly carries hundreds of unrelated commits,
