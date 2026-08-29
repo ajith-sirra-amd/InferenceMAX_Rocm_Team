@@ -81,6 +81,31 @@ was fixed too.
 
 **CCD pinning remains UNMEASURED.** Do not record T159 as evidence either way.
 
+## First real CCD-pinning measurement: C1 ITL p50 7.89 -> 7.71 ms
+
+T160 C1 is the first run where the pin actually applied -- `[pin-ccd] pinned
+1418 threads` then `1490` -- after fixing all three defects.
+
+All nightly + rebased #51705, C1, DCP off, k=8, mns 8, ladder 1..16:
+
+| run | pinning | ITL p50 (ms) | tok/s/GPU |
+|---|---|--:|--:|
+| T156 | none | 7.89 | 1,509 |
+| T158 | none (+nccl32) | 8.06 | 1,515 |
+| **T160** | **1,490 threads** | **7.71** | **1,521** |
+
+**-2.3% on ITL p50 against T156. Do not over-read it.** T156 and T158 differ by
+2.2% (7.89 -> 8.06) from an RCCL change that is independently known to be
+*negative*, which puts run-to-run spread at C1 in the same 2% band as the effect
+being claimed. One run cannot separate them.
+
+The C52 arm is the better test and is still running: 8 workers of ~190 threads
+each on a 2-socket box where GPU0-3 threads were observed executing on node1
+cores, so the cross-socket traffic pinning removes is far larger there than at
+C1 with a single resident request.
+
+All four nightly C1 runs have now dropped **exactly 17/148**.
+
 ## The pinning diagnostic killed a C52 run -- third bug in the same block
 
 T159 C52 reached `Application startup complete`, logged `[pin-ccd] pinned 1562
@@ -1311,7 +1336,8 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 158b | 33212429374 | C1, NCCL_MIN_NCHANNELS=32 | 1,515 tok/s/GPU, ITL p50 **8.06** ms vs T156's 7.89 — RCCL neutral-to-slightly-worse at C1 too. **17/148 error-dropped again, identical to T156** |
 | 159a | 33222609872 | **CCD pinning C1** | **`[pin-ccd] pinned 0 threads` — the pin did NOT apply.** 1,511 tok/s/GPU, 17/148 dropped (3rd identical) — i.e. just a repeat of T158. Cause found: the pgrep pattern required a trailing underscore |
 | 159b | 33222609872 | CCD pinning C52 | **FAILED — my own bug.** Pin DID apply (1,458 then 1,562 threads) but the script exited immediately after, before the replay. `set -euo pipefail` + a `taskset \| sed` pipeline in my stray-affinities diagnostic. C1 survived only because it pinned 0 threads so that code never ran |
-| 160 | pending | CCD pinning, **pattern fixed** | re-run once the matcher is verified |
+| 160a | 33227244303 | **CCD pinning C1, all 3 bugs fixed** | Pin APPLIED: **1,418 then 1,490 threads**. ITL p50 **7.71** ms, 1,521 tok/s/GPU, 17/148 dropped (4th identical) |
+| 160b | 33227244303 | CCD pinning C52 | in flight |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |
