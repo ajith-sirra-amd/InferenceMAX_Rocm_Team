@@ -75,7 +75,27 @@ sub-200 us launch gaps did not move, which is the expected signature.
 died 3/3 with `HSA_STATUS_ERROR_OUT_OF_RESOURCES` on `mi355x-amd_b23_07`. It is
 **not** a config limit -- SA ran exactly that on `mi355x-amds_01` for 8,204
 tok/s/GPU -- but it is a limit on OUR node. If it OOMs, that is the node, and
-the fallback is `MAX_NUM_SEQS=65` (T133 = 7,725.96).
+the fallback order is below.
+
+**If it OOMs, try gmu BEFORE dropping mns.** The margin is bracketed:
+
+| gmu | mns | offload | outcome |
+|--:|--:|---|---|
+| 0.95 | 80 | dram | engine **hung**, 0/57 (T157) |
+| 0.90 | 80 | none | `HSA_STATUS_ERROR_OUT_OF_RESOURCES` 3/3 (our node) |
+| 0.90 | 80 | dram | 7,950.6 (T103) |
+| 0.90 | 65 | none | 7,725.96 (T133) |
+
+Headroom is already marginal at 0.90 -- 0.95 hung it -- so mns 80 failing is
+plausibly the same resource. Order:
+
+1. **`GPU_MEM_UTIL=0.85`**, mns 80, none. Cheap, no numerics change.
+2. **`HSA_NO_SCRATCH_RECLAIM=0`**. The script sets `1`, keeping scratch
+   allocated rather than returning it. `HSA_STATUS_ERROR_OUT_OF_RESOURCES` is
+   HSA runtime exhaustion -- queues, signals, scratch -- not a plain HBM OOM, so
+   this targets it more directly than gmu.
+3. `MAX_NUM_SEQS=65` (7,725.96) last, since it concedes the mns-80 point SA gets
+   8,204 from -- the limit is our node, not the config.
 - **Then:** root-cause the crash from `results/server.log` (the runner console
   log stops at `Application startup complete`; the engine trace is in that
   artifact).
