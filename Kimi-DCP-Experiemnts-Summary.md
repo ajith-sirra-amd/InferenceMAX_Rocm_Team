@@ -81,6 +81,33 @@ was fixed too.
 
 **CCD pinning remains UNMEASURED.** Do not record T159 as evidence either way.
 
+## CCD pinning slows model load 3.6x -- it is applied DURING the load
+
+Measured from T160 C1 against the unpinned runs:
+
+| run | pinning | weight load | serve -> ready |
+|---|---|--:|--:|
+| **T160 C1** | **pinned** | **2133.9 s (35.6 min)** | **39.3 min** |
+| T158 C1 | none | 600.7 s | 14.0 min |
+| T156 C1 | none | 681.4 s | 15.3 min |
+| T151 C1 | none, aigmkt | 155.2 s | 7.9 min |
+
+The background pre-pin loop fires as soon as the workers appear -- first
+`[pin-ccd] pinned 1418 threads` at 01:48:19, well before loading finishes -- and
+confines each worker's ~190 threads to **one CCD = 8 physical cores**. Weight
+loading is embarrassingly parallel (safetensors decode plus H2D staging), so
+capping it at 8 cores serialises it.
+
+**The pre-pin loop is also unnecessary.** The post-`wait_for_server_ready` call
+walks `/proc/<pid>/task/*` and catches every thread, including any spawned
+during load. If CCD pinning is retried, **delete the background loop and pin
+only after the server is ready** -- otherwise every pinned run pays ~25 extra
+minutes of load and the comparison is confounded by it.
+
+Separately worth noting: the *unpinned* nightly runs load 4x slower than the
+aigmkt run (600-681 s vs 155 s). That is a different effect -- image or storage
+contention -- and is not explained by pinning.
+
 ## RETRACTION: every nightly C1 number came from a run where the ENGINE CRASHED
 
 The aiperf error summary from T160 C1 explains the 17/148 and invalidates the
