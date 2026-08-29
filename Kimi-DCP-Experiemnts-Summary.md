@@ -37,7 +37,10 @@ Every nightly C1 run ends in **one EngineCore 500 crash** → 12 connection-refu
 | T123 (aigmkt) | **7.71 ms**, 1,288.2 | **valid** — 190/193 over 3609 s |
 | T156 / T158 / T160 | 7.89 / 8.06 / 7.71 | **withdrawn — engine crashed** |
 
-The CCD-pinning "−2.3%" is withdrawn with them. **Root-causing the crash is the top priority**; its trace is in `results/server.log`, which the runner console log never captures.
+The CCD-pinning "−2.3%" is withdrawn with them. **Root cause found** (detail below): a
+`sample_tokens` collective RPC exceeds its dequeue timeout and the nightly's new
+fault-tolerance sentinel turns that into a fatal `EngineDeadError`. No worker fault
+precedes it. Prediction: **aigmkt does not crash** — which the sa.sh run tests.
 
 ## Rules learned the hard way
 
@@ -49,6 +52,50 @@ The CCD-pinning "−2.3%" is withdrawn with them. **Root-causing the crash is th
 ---
 
 # Detail — 2026-08-28/29 session
+
+## ROOT CAUSE of the C1 engine crash: an RPC timeout promoted to a fatal error
+
+From `results/server.log` (T160 C1 artifact; the runner console log stops at
+`Application startup complete` and never sees this):
+
+```
+EngineCore.step
+  -> model_executor.sample_tokens
+  -> collective_rpc -> get_response
+  -> mq.dequeue(timeout=dequeue_timeout)
+  -> shm_broadcast.py:797 acquire_read
+  -> RuntimeError("cancelled")
+=> vllm.v1.engine.exceptions.EngineDeadError
+```
+
+**Nothing failed on the worker side.** The last worker line before the crash is
+an ordinary aiter GEMM (`M:2247 N:3072 K:512`, a prefill chunk). No HSA fault,
+no CUDA error, no OOM, no traceback from any rank. A worker simply did not
+answer the shared-memory queue within the dequeue timeout, and the engine
+concluded it was dead.
+
+Note the frame `vllm/v1/fault_tolerance/engine_core_sentinel.py:179
+run_with_fault_tolerance`. That subsystem is **new in the nightly**. Likely
+mechanism:
+
+> a single very long step -- the agentic replay's p95 input is **430,904
+> tokens** -- exceeds the RPC dequeue timeout, and where the older engine simply
+> waited, the sentinel promotes it to a fatal `EngineDeadError`.
+
+That fits every observation: it fires **once**, always at the same point in the
+replay (hence the constant 17/148), it kills the server so the following 12
+requests are connection-refused, and it never appeared on `aigmkt` -- T123
+completed 190/193 over 3609 s on that image.
+
+**Testable prediction:** sa.sh on `aigmkt/kimi-k3-vllm:latest` will *not* abort
+at C1. If it does abort, the cause is the config or the replay rather than the
+engine version, and this explanation is wrong.
+
+If confirmed, the fix is a longer RPC timeout, not a performance change.
+`VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200` is already set by the script, so the
+binding timeout is a *different* one on the `sample_tokens` path and still needs
+locating.
+
 
 
 ## C1 interactivity sweep, 2026-08-28 (T138–T151) — CURRENT
