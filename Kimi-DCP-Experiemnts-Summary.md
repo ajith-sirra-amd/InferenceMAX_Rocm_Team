@@ -7,6 +7,50 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 # Where we are
 
+**Both targets matter equally. Neither is met.**
+
+| | target | best measured | gap |
+|---|---|---|---|
+| **C52 throughput** | 12,500 tok/s/GPU | **7,950.6** (T103) | **−36%** |
+| **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
+| SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
+
+## C52 — every lever tried is flat or negative
+
+| run | change vs T103 | tok/s/GPU |
+|---|---|--:|
+| **T103** | baseline: DCP=8, mns 80, dram, aigmkt | **7,950.6** |
+| T156 | nightly + rebased #51705 | 7,906 (−0.6%) |
+| T158 | `NCCL_MIN_NCHANNELS=32` | 7,656 (−3.2%) |
+| T157 | `gmu 0.95` | **0 — engine hung** |
+| T160 | CCD pinning | in flight |
+
+Settled negatives: QuickReduce FP −8.39% · EP=8 −4.7% · async −9.2% · chunk 16384 −2.5% · FP16 GEMM loses 6/8 shapes.
+**The nightly is a C1 lever, not a C52 one** — #53942 is explicitly an m=1/m=2 change and cannot apply at batch 52.
+
+## C1 — all nightly numbers are RETRACTED
+
+Every nightly C1 run ends in **one EngineCore 500 crash** → 12 connection-refused → aiperf cancels at its 10% threshold. Always 17/148, always ~1980 s of a 3600 s window.
+
+| run | quoted | status |
+|---|--:|---|
+| T123 (aigmkt) | **7.71 ms**, 1,288.2 | **valid** — 190/193 over 3609 s |
+| T156 / T158 / T160 | 7.89 / 8.06 / 7.71 | **withdrawn — engine crashed** |
+
+The CCD-pinning "−2.3%" is withdrawn with them. **Root-causing the crash is the top priority**; its trace is in `results/server.log`, which the runner console log never captures.
+
+## Rules learned the hard way
+
+- **DRAM offload OFF.** Idle 44.3% → 28.2%, >10 ms stalls −57% (T116 vs T124).
+- **DCP OFF at C1** (+36.5% TPOT), **ON at C52**.
+- `mns` 80 + no offload OOMs on **our node only** — SA gets 8,204 with it.
+- Read the aiperf error summary **before** quoting any throughput number.
+
+---
+
+# Detail — 2026-08-28/29 session
+
+
 ## C1 interactivity sweep, 2026-08-28 (T138–T151) — CURRENT
 
 Fixed-length screen: ISL 122k (effective ~63.8k after the BPE round-trip),
@@ -57,6 +101,7 @@ never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
 engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
 unexplained — both of its candidate causes are now measured inert.
 
+
 ## CCD pinning matched zero threads — and why
 
 T159 logged `[pin-ccd] pinned 0 threads`, so the run is not a test of pinning at
@@ -80,6 +125,7 @@ against all three strings. The same stale pattern in the wait-for-worker loop
 was fixed too.
 
 **CCD pinning remains UNMEASURED.** Do not record T159 as evidence either way.
+
 
 ## CCD pinning slows model load 3.6x -- it is applied DURING the load
 
@@ -107,6 +153,7 @@ minutes of load and the comparison is confounded by it.
 Separately worth noting: the *unpinned* nightly runs load 4x slower than the
 aigmkt run (600-681 s vs 155 s). That is a different effect -- image or storage
 contention -- and is not explained by pinning.
+
 
 ## RETRACTION: every nightly C1 number came from a run where the ENGINE CRASHED
 
@@ -149,6 +196,7 @@ and it is present on the nightly + rebased #51705 stack. Whether it also occurs
 on `aigmkt/kimi-k3-vllm:latest` is the immediate question, since T123 on that
 image did not crash.
 
+
 ## First real CCD-pinning measurement: C1 ITL p50 7.89 -> 7.71 ms
 
 T160 C1 is the first run where the pin actually applied -- `[pin-ccd] pinned
@@ -173,6 +221,7 @@ cores, so the cross-socket traffic pinning removes is far larger there than at
 C1 with a single resident request.
 
 All four nightly C1 runs have now dropped **exactly 17/148**.
+
 
 ## The pinning diagnostic killed a C52 run -- third bug in the same block
 
@@ -205,30 +254,6 @@ only exists under DCP, (3) the diagnostic aborted the run under `pipefail`. Each
 one silently produced a plausible-looking log. **CCD pinning is still
 UNMEASURED.**
 
-## CCD pinning matched zero threads -- and why
-
-T159 logged `[pin-ccd] pinned 0 threads`, so the run is not a test of pinning at
-all; 1,511 tok/s/GPU simply reproduces T158's 1,515.
-
-**Cause:** the matcher required a trailing underscore after the rank index. That
-form only exists when DCP is on, where the process title is `Worker_TP0_DCP0`.
-At C1 DCP is off and the title is `Worker_TP0`, with nothing after it, so the
-pattern matched nothing on every one of the 8 ranks.
-
-This is the *second* defect in the same 20 lines. The archived note recorded the
-first: `taskset -pc <pid>` sets affinity for one TID, so with ~197 threads per
-worker it pinned 1 and left ~196 roaming -- which is why pinning "never showed a
-win" historically. Both bugs share a shape: **the code ran, printed a
-plausible-looking line, and silently did nothing.** The explicit
-`pinned 0 threads` counter is the only reason this one was caught rather than
-filed as another null result.
-
-Fixed to a matcher that accepts a non-digit or end-of-string after the rank
-index, so it matches both `Worker_TP0` and `Worker_TP0_DCP0` while still
-excluding `Worker_TP1`. Verified against all three. The same stale pattern in
-the wait-for-worker loop was fixed too.
-
-**CCD pinning remains UNMEASURED.** T159 is not evidence either way.
 
 ## The C1 11.5% drop rate is SYSTEMATIC, not noise
 
@@ -255,6 +280,7 @@ until this is fixed — that metric is per-token and robust to the drops:
 
 Diagnosing the drops is now worth more than the next config knob.
 
+
 ## RCCL: more channels is worse at C52
 
 T158, sole variable `NCCL_MIN_NCHANNELS=32`:
@@ -273,6 +299,7 @@ overhead. At C52 the collectives are already large enough to saturate, so the
 extra channels are pure overhead. **Settled — do not raise the channel count.**
 `NCCL_PROTO` is a different axis and remains untested, but this result lowers
 the prior on RCCL tuning generally.
+
 
 ## gmu 0.95 hangs the engine at C52 — do not retry
 
@@ -295,6 +322,7 @@ DCP=8 + the DRAM offload, 0.9349 effective leaves too little.
 **Settled: gmu stays 0.9.** The weak prior in the queue was right — KV usage is
 only ~28% at C52, so the pool was never the constraint, and buying more of it
 cost the run entirely.
+
 
 ## C1 on the nightly: 1,509 tok/s/GPU, but the run is dirty
 
@@ -321,6 +349,7 @@ are junk. p50 only.
 
 **Needs a clean re-run before it goes in any summary.** The 11.5% error rate is
 itself the finding worth chasing.
+
 
 ## The nightly does NOT help C52 throughput
 
@@ -352,6 +381,7 @@ post-grad fusion), CCD pinning — not newer vLLM.
 
 Run detail: 1879/1989 requests (93 error-dropped), KV pool 31,924,580 tokens,
 input 62,665 tok/s, 3629.7 s window, GSM8K 0.99 on this exact config.
+
 
 ## GSM8K with MTP on scores 0.14 — and no baseline ever covered this
 
@@ -386,6 +416,7 @@ the golden-AL methodology is for, but it means "best TPOT at C1" is not by
 itself a shippable result. A shippable C1 number needs real rejection sampling,
 which would change the accept length and therefore the TPOT.
 
+
 ## Draft model: constraints found while optimising it
 
 - **The DSpark draft cannot leave `TRITON_MLA`.** It is the only ROCm MLA backend
@@ -409,6 +440,7 @@ which would change the accept length and therefore the TPOT.
 - **Draft KV `auto` → `fp8` is TPOT-neutral but grows the KV pool 36.5%**
   (15,077,972 → 20,580,438 tokens in the same 53.84 GiB). The draft was holding
   KV at 2 bytes/element while the target held 1. Keep fp8.
+
 
 ## SA comparison, corrected twice
 
