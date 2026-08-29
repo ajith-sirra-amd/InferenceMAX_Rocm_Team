@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| C52 throughput | **12,500 tok/s/GPU** | **7,968 (T160)** · SA 8,296 | **−36%** |
+| C52 throughput | **12,500 tok/s/GPU** | **8,127 (T163)** · SA 8,296 | **−35%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -100,87 +100,42 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   C1 untouched (DCP=1 branch still yields mns 8, ladder 1..8).
   **If it OOMs:** `GPU_MEM_UTIL=0.85`, then `HSA_NO_SCRATCH_RECLAIM=0`, then
   back to mns 80. Baseline to beat: **8,127**.
-- **NEXT (user-requested): run `sa.sh` at C1 + C52.** Already staged — sa.sh
-  copied over `kimik3_fp4_mi355x_mtp.sh`, image reverted to
-  `aigmkt/kimi-k3-vllm:latest`. **This doubles as the crash A/B**: sa.sh has no
-  runtime patch, no CCD pinning, and runs the aigmkt image on which T123
-  completed 190/193. If C1 still aborts at ~10% the crash is not caused by the
-  nightly or the rebase; if it completes, it is.
-  Config: C1 dcp=1 k=8 mns=8 ladder 1..16; C52 dcp=8 k=0 mns=80 ladder 1..80,
-  **kv-offloading: none**.
 
-### Why C52 runs WITHOUT the DRAM offload
+### Why C52 runs WITH the DRAM offload — CORRECTED
 
-I had staged it with `dram` because sa.sh pairs mns 80 with the offload. That
-ignored the measured reason the offload was dropped (T116 vs T124, same point,
-both traced so rocprof overhead cancels):
+This section previously argued the opposite. It was inferred from GPU idle, not
+from throughput, and three direct A/Bs now say the offload wins:
 
-| | offload ON | offload OFF |
-|---|--:|--:|
-| GPU idle | **44.3%** | **28.2%** |
-| >10 ms stalls | 265.7 s, n=4,104 | 114.6 s, n=877 (**-57%**) |
-| collectives, % busy | 34.31% | 29.44% |
+| | dram | none | delta |
+|---|--:|--:|--:|
+| ours, mns 80, pin after ready | **8,127** (T163) | 7,824 (T161) | **+3.9%** |
+| ours, T103 vs T133 (mns 80 vs 65) | 7,950.6 | 7,725.96 | +2.8% |
+| SA, mns 80 | 8,296 | 8,204 | +1.1% |
 
-The multi-millisecond stalls *were* the offload's host<->device traffic; the
-sub-200 us launch gaps did not move, which is the expected signature.
+The T116/T124 idle finding was real — idle 44.3% → 28.2%, >10 ms stalls −57% —
+but it **never converted into throughput**. Dropping the offload removes the
+host↔device stalls *and* the KV capacity that keeps the batch full; the second
+effect is larger. That is also why N5 (mns 96) is the current lever: capacity is
+the only axis that has moved this number.
 
-**Known risk, stated:** `mns 80` + `kv-offloading: none` is the combination that
-died 3/3 with `HSA_STATUS_ERROR_OUT_OF_RESOURCES` on `mi355x-amd_b23_07`. It is
-**not** a config limit -- SA ran exactly that on `mi355x-amds_01` for 8,204
-tok/s/GPU -- but it is a limit on OUR node. If it OOMs, that is the node, and
-the fallback order is below.
+**Config requirement:** `kv-offloading: dram` needs
+`kv-offload-backend: { name: vllm-simple }` in the same yaml row, or `get-jobs`
+fails pydantic validation before any GPU work starts.
 
-**If it OOMs, try gmu BEFORE dropping mns.** The margin is bracketed:
+**Node history, kept:** `mns 80` + `none` died 3/3 with
+`HSA_STATUS_ERROR_OUT_OF_RESOURCES` on `mi355x-amd_b23_07`, but T161 ran it
+cleanly, so that failure mode is not currently reproducing.
+
+**If a run OOMs, try gmu BEFORE dropping mns.** The margin is bracketed:
 
 | gmu | mns | offload | outcome |
 |--:|--:|---|---|
 | 0.95 | 80 | dram | engine **hung**, 0/57 (T157) |
-| 0.90 | 80 | none | `HSA_STATUS_ERROR_OUT_OF_RESOURCES` 3/3 (our node) |
-| 0.90 | 80 | dram | 7,950.6 (T103) |
+| 0.90 | 80 | none | `HSA_STATUS_ERROR_OUT_OF_RESOURCES` 3/3, then OK in T161 |
+| 0.90 | 80 | dram | **8,127** (T163) |
 | 0.90 | 65 | none | 7,725.96 (T133) |
 
-Headroom is already marginal at 0.90 -- 0.95 hung it -- so mns 80 failing is
-plausibly the same resource. Order:
-
-1. **`GPU_MEM_UTIL=0.85`**, mns 80, none. Cheap, no numerics change.
-2. **`HSA_NO_SCRATCH_RECLAIM=0`**. The script sets `1`, keeping scratch
-   allocated rather than returning it. `HSA_STATUS_ERROR_OUT_OF_RESOURCES` is
-   HSA runtime exhaustion -- queues, signals, scratch -- not a plain HBM OOM, so
-   this targets it more directly than gmu.
-3. `MAX_NUM_SEQS=65` (7,725.96) last, since it concedes the mns-80 point SA gets
-   8,204 from -- the limit is our node, not the config.
-- **Then:** root-cause the crash from `results/server.log` (the runner console
-  log stops at `Application startup complete`; the engine trace is in that
-  artifact).
-
-### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
-
-**Correction.** I previously wrote that the DRAM offload poisons the *next*
-run's model load by ~30x (46.2 s/shard). That conclusion was built on a
-`Loading safetensors checkpoint shards` line that is from an **SA run, not
-ours**. I misattributed it. The 46.2 / 51.6 s/shard figures and the "~30x,
-~70 min of idle on the next run" claim are **withdrawn** — I have no shard-rate
-data for our own runs, because the log blob for T154 C1 has never flushed.
-
-**What IS measured on our runner:**
-
-| | |
-|---|---|
-| C52 offload allocation | `SimpleCPUOffloadConnector: 243,625,000,000 B/rank` x 8 = **1.949 TB** host DRAM (`TOTAL_CPU_DRAM_GB: 1949`) |
-| C52 weight load (that same job) | **576.66 s** |
-| C1 weight load (T145/T147/T151) | **149-155 s** |
-| serve -> ready | C52 **19.4 min**; C1 **6.5-7.9 min** |
-
-So our C52 arm loads ~3.8x slower than our C1 arms. That is the job that
-*allocates* the offload, not one following it, so its own offload does not
-explain it. Cache state, the larger `mns 80 / ladder 1..80` capture, and DCP
-init are all unseparated here. **Untested hypothesis, do not act on it as fact.**
-
-**Queue rule, kept but on weaker grounds:** screen C52 with
-`kv-offloading: none` + `mns 65` (T133 = 7,725.96) and use `dram` + `mns 80`
-(T103 = 7,950.6) only for a final confirmation. Justification is now simply that
-the offload is worth ~2.9% and adds ~12 min of startup per run, not the
-retracted next-run penalty.
+Order: `GPU_MEM_UTIL=0.85` → `HSA_NO_SCRATCH_RECLAIM=0` → `MAX_NUM_SEQS` down.
 
 ## Queue — REPRIORITISED 2026-08-29 against the T124 profile
 
@@ -195,7 +150,7 @@ Ranked by **% of e2e wall the lever can actually touch**
 | 3 | MLA prefill attn | 16.9% | no lever (needs FP8 FMHA) |
 | 4 | BF16 dense GEMM | 11.9% | **N4** tuned configs |
 
-### N1 — CCD pinning, applied AFTER `wait_for_server_ready` *(next script edit)*
+### N1 — CCD pinning after `wait_for_server_ready` — **DONE (T161), kept**
 
 T160 measured **2008.62 s** to load weights (vs 576–681 s unpinned): the pre-pin
 loop confines the ~190 loader threads per worker to one CCD's 8 physical cores
@@ -205,7 +160,7 @@ capture are one-time and must run across all cores. This also makes C3
 measurable for the first time (T160's number is confounded by the load penalty).
 Remove the background pre-pin loop entirely.
 
-### N2 — async scheduling, retested on the nightly *(largest addressable item)*
+### N2 — async scheduling — **DONE (T162): −1.8%, SETTLED NEGATIVE**
 
 The profile attributes **~150 s of 403.9 s idle (37%) to host/Python**: batch
 tensor build + **~127 H2D `copyBuffer` per step** (71.9 s alone), sampling
@@ -224,7 +179,13 @@ Generic `ncclDevKernel_Generic_1` = **22.55% of GPU busy**; the tuned
 that did not get the fast backend. Try `--dcp-comm-backend` alternatives to
 `a2a`; check what the nightly's enum accepts before dispatching.
 
-### N4 — AITER tuned GEMM configs
+### N4 — chunked prefill size — **DONE (T164): 4096 is −7.4%, 8192 is the peak**
+
+### N5 — `max_num_seqs` 80 → 96 — **IN FLIGHT (T165)**
+
+Capacity is the only axis that has moved this number (T163's +3.9%). Push it.
+
+### N6 — AITER tuned GEMM configs
 
 T160 C52 still logs `not found tuned config ... will use default config! using
 torch solution:0` — the miss falls all the way back to **plain torch**, not an
