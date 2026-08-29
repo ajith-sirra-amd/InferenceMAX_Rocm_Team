@@ -30,24 +30,33 @@ rather than a flattering one.
 
 ## Current state
 
-**C52 ledger — every lever tried is flat or negative:**
+**RETRACTED: all nightly C1 throughput/ITL numbers.** T160's aiperf error
+summary shows the 17/148 is **one EngineCore crash** (500) followed by 12
+connection-refused requests, tripping aiperf's 10% failed-request threshold and
+cancelling the run. T156/T158/T160 C1 are truncated runs ending at an engine
+crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
+
+**C52 ledger (unaffected — those runs completed):**
 
 | run | change | tok/s/GPU |
 |---|---|--:|
 | T103 (aigmkt) | baseline | **7,950.6** |
-| T156 | nightly + #51705 | 7,906 (−0.6%) |
-| T157 | gmu 0.95 | **0 — engine hung** |
-| T158 | NCCL_MIN_NCHANNELS=32 | 7,656 (−3.2%) |
+| T156 | nightly + #51705 | 7,906 |
+| T157 | gmu 0.95 | 0 — engine hung |
+| T158 | NCCL_MIN_NCHANNELS=32 | 7,656 |
 | SA | reference | 8,296 |
 
-**C1 — report ITL p50, not tok/s/GPU:** T123 7.71 ms (1.6% drops) · T156 7.89 ·
-T158 8.06. All nightly C1 runs drop **exactly 17/148 = 11.5%**, identical across
-two runs, so it is systematic. tok/s/GPU from those runs is not comparable.
-
-- **In flight: T159** — CCD pinning (`PIN_CCD=1`), every thread via
-  `/proc/<pid>/task/*`. No numerics change.
-- **Next, re-prioritised:** diagnose the C1 17/148 drops — that is now worth
-  more than another config knob. Then #52190 torch.compile (GSM8K first).
+- **In flight:** T160 C52 (CCD pinning, pin applied 1,458/1,562 threads).
+- **NEXT (user-requested): run `sa.sh` at C1 + C52.** Already staged — sa.sh
+  copied over `kimik3_fp4_mi355x_mtp.sh`, image reverted to
+  `aigmkt/kimi-k3-vllm:latest`. **This doubles as the crash A/B**: sa.sh has no
+  runtime patch, no CCD pinning, and runs the aigmkt image on which T123
+  completed 190/193. If C1 still aborts at ~10% the crash is not caused by the
+  nightly or the rebase; if it completes, it is.
+  Config: C1 dcp=1 k=8 mns=8 ladder 1..16; C52 dcp=8 k=0 mns=80 ladder 1..80.
+- **Then:** root-cause the crash from `results/server.log` (the runner console
+  log stops at `Application startup complete`; the engine trace is in that
+  artifact).
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 

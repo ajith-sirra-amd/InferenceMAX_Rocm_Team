@@ -81,6 +81,47 @@ was fixed too.
 
 **CCD pinning remains UNMEASURED.** Do not record T159 as evidence either way.
 
+## RETRACTION: every nightly C1 number came from a run where the ENGINE CRASHED
+
+The aiperf error summary from T160 C1 explains the 17/148 and invalidates the
+numbers built on it:
+
+    N/A  InvalidInferenceResultError   2
+    500  Internal Server Error         1     <- EngineCore encountered an issue
+    N/A  ClientConnectorError         12     <- ConnectionRefused on 127.0.0.1:8888
+
+    Run aborted (failed_request_threshold): 15/146 profiling requests failed
+    (10.3%), exceeding the --failed-request-threshold limit of 10.0%.
+
+**This is ONE engine crash, not 15 request failures.** EngineCore dies, the
+server stops listening, and the following 12 requests get connection-refused.
+aiperf then trips its 10% threshold and **cancels the run**. That is why the
+count is always ~17/148 and the window is always ~1980 s instead of the 3600 s
+DURATION -- it is deterministic because the crash lands at the same point in the
+replay.
+
+**Consequently these numbers are withdrawn as measurements:**
+
+| run | quoted | status |
+|---|--:|---|
+| T156 C1 | 1,509 tok/s/GPU, ITL p50 7.89 | engine crashed mid-run |
+| T158 C1 | 1,515, ITL p50 8.06 | engine crashed mid-run |
+| T160 C1 | 1,521, ITL p50 7.71 | engine crashed mid-run |
+
+They describe a truncated prefix of the replay that ends at an engine crash, and
+they are **not comparable to T123's 1,288.2 / 7.71 ms**, which completed 190/193
+requests over 3609 s. In particular the CCD-pinning "-2.3%" I reported from T160
+rests on a crashed run and should not be treated as evidence.
+
+The engine's own stack trace is written to `results/server.log`, which the
+runner console log does not capture -- the runner log ends at
+`Application startup complete`. Root-causing the crash requires that artifact.
+
+**The crash is now the top priority.** It invalidates C1 measurement entirely,
+and it is present on the nightly + rebased #51705 stack. Whether it also occurs
+on `aigmkt/kimi-k3-vllm:latest` is the immediate question, since T123 on that
+image did not crash.
+
 ## First real CCD-pinning measurement: C1 ITL p50 7.89 -> 7.71 ms
 
 T160 C1 is the first run where the pin actually applied -- `[pin-ccd] pinned
