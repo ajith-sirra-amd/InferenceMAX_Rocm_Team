@@ -53,7 +53,29 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   runtime patch, no CCD pinning, and runs the aigmkt image on which T123
   completed 190/193. If C1 still aborts at ~10% the crash is not caused by the
   nightly or the rebase; if it completes, it is.
-  Config: C1 dcp=1 k=8 mns=8 ladder 1..16; C52 dcp=8 k=0 mns=80 ladder 1..80.
+  Config: C1 dcp=1 k=8 mns=8 ladder 1..16; C52 dcp=8 k=0 mns=80 ladder 1..80,
+  **kv-offloading: none**.
+
+### Why C52 runs WITHOUT the DRAM offload
+
+I had staged it with `dram` because sa.sh pairs mns 80 with the offload. That
+ignored the measured reason the offload was dropped (T116 vs T124, same point,
+both traced so rocprof overhead cancels):
+
+| | offload ON | offload OFF |
+|---|--:|--:|
+| GPU idle | **44.3%** | **28.2%** |
+| >10 ms stalls | 265.7 s, n=4,104 | 114.6 s, n=877 (**-57%**) |
+| collectives, % busy | 34.31% | 29.44% |
+
+The multi-millisecond stalls *were* the offload's host<->device traffic; the
+sub-200 us launch gaps did not move, which is the expected signature.
+
+**Known risk, stated:** `mns 80` + `kv-offloading: none` is the combination that
+died 3/3 with `HSA_STATUS_ERROR_OUT_OF_RESOURCES` on `mi355x-amd_b23_07`. It is
+**not** a config limit -- SA ran exactly that on `mi355x-amds_01` for 8,204
+tok/s/GPU -- but it is a limit on OUR node. If it OOMs, that is the node, and
+the fallback is `MAX_NUM_SEQS=65` (T133 = 7,725.96).
 - **Then:** root-cause the crash from `results/server.log` (the runner console
   log stops at `Application startup complete`; the engine trace is in that
   artifact).
