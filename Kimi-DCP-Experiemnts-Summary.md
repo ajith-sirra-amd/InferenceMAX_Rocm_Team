@@ -57,6 +57,55 @@ never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
 engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
 unexplained — both of its candidate causes are now measured inert.
 
+## CCD pinning matched zero threads — and why
+
+T159 logged `[pin-ccd] pinned 0 threads`, so the run is not a test of pinning at
+all; 1,511 tok/s/GPU simply reproduces T158's 1,515.
+
+**Cause:** the matcher was `pgrep -f "VLLM::Worker_TP${_g}_"` — with a trailing
+underscore. That form only exists when DCP is on, where the process title is
+`Worker_TP0_DCP0`. At C1 DCP is off and the title is `Worker_TP0`, with nothing
+after it, so the pattern matched nothing on every one of the 8 ranks.
+
+This is the *second* defect in the same 20 lines. The archived note already
+recorded the first: `taskset -pc <pid>` sets affinity for one TID, so with ~197
+threads per worker it pinned 1 and left ~196 roaming — which is why pinning
+"never showed a win" historically. Both bugs share a shape: **the code ran, printed
+a plausible-looking line, and silently did nothing.** `pinned 0 threads` is the
+only reason this one was caught rather than logged as another null result.
+
+Fixed to `pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)"`, which matches both
+`Worker_TP0` and `Worker_TP0_DCP0` and does not match `Worker_TP1`. Verified
+against all three strings. The same stale pattern in the wait-for-worker loop
+was fixed too.
+
+**CCD pinning remains UNMEASURED.** Do not record T159 as evidence either way.
+
+## CCD pinning matched zero threads -- and why
+
+T159 logged `[pin-ccd] pinned 0 threads`, so the run is not a test of pinning at
+all; 1,511 tok/s/GPU simply reproduces T158's 1,515.
+
+**Cause:** the matcher required a trailing underscore after the rank index. That
+form only exists when DCP is on, where the process title is `Worker_TP0_DCP0`.
+At C1 DCP is off and the title is `Worker_TP0`, with nothing after it, so the
+pattern matched nothing on every one of the 8 ranks.
+
+This is the *second* defect in the same 20 lines. The archived note recorded the
+first: `taskset -pc <pid>` sets affinity for one TID, so with ~197 threads per
+worker it pinned 1 and left ~196 roaming -- which is why pinning "never showed a
+win" historically. Both bugs share a shape: **the code ran, printed a
+plausible-looking line, and silently did nothing.** The explicit
+`pinned 0 threads` counter is the only reason this one was caught rather than
+filed as another null result.
+
+Fixed to a matcher that accepts a non-digit or end-of-string after the rank
+index, so it matches both `Worker_TP0` and `Worker_TP0_DCP0` while still
+excluding `Worker_TP1`. Verified against all three. The same stale pattern in
+the wait-for-worker loop was fixed too.
+
+**CCD pinning remains UNMEASURED.** T159 is not evidence either way.
+
 ## The C1 11.5% drop rate is SYSTEMATIC, not noise
 
 T156 C1 and T158 C1 both dropped **exactly 17 of 148** requests (11.5%), on
@@ -1229,7 +1278,9 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 157 | 33209544438 | C52, **gmu 0.95** | **HARD FAIL — 0 successful / 57, all error-dropped.** Server started, KV pool grew 31.9M -> **40.2M tokens (+26%)**, then all 55 warmup requests HUNG: 0 returned, 0 errors, 1200 s. Not an OOM — the engine accepted work and never produced output. Reverted to 0.9 |
 | 158 | 33212429374 | C52, **NCCL_MIN_NCHANNELS=32** | **7,656 tok/s/GPU — a 3.2% LOSS** vs T156's 7,906 on the identical config. 1801/1911 requests, KV 31,924,580 (unchanged), input 60,576 tok/s. Reverted |
 | 158b | 33212429374 | C1, NCCL_MIN_NCHANNELS=32 | 1,515 tok/s/GPU, ITL p50 **8.06** ms vs T156's 7.89 — RCCL neutral-to-slightly-worse at C1 too. **17/148 error-dropped again, identical to T156** |
-| 159 | pending | **CCD pinning** (`PIN_CCD=1`) | restored from archive; one 32 MiB L3 domain per GPU, every thread |
+| 159a | 33222609872 | **CCD pinning C1** | **`[pin-ccd] pinned 0 threads` — the pin did NOT apply.** 1,511 tok/s/GPU, 17/148 dropped (3rd identical) — i.e. just a repeat of T158. Cause found: the pgrep pattern required a trailing underscore |
+| 159b | 33222609872 | CCD pinning C52 | in flight |
+| 160 | pending | CCD pinning, **pattern fixed** | re-run once the matcher is verified |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |

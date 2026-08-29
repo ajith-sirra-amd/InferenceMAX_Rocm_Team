@@ -418,7 +418,7 @@ pin_workers_to_ccd() {
     [ -s /tmp/ccdmap.txt ] || return 0
     local pinned=0
     while read -r _g _cpus; do
-        for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null); do
+        for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null); do
             for _t in /proc/$_p/task/*; do
                 taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1))
             done
@@ -429,7 +429,7 @@ pin_workers_to_ccd() {
 
 (
     for _i in $(seq 1 60); do
-        pgrep -f "VLLM::Worker_TP0_" >/dev/null 2>&1 && break
+        pgrep -f "VLLM::Worker_TP0([^0-9]|$)" >/dev/null 2>&1 && break
         sleep 5
     done
     for _i in 1 2 3 4 5 6; do
@@ -445,7 +445,7 @@ wait "$PIN_BG" 2>/dev/null || true
 pin_workers_to_ccd
 if [ "$PIN_CCD" = "1" ] && [ -s /tmp/ccdmap.txt ]; then
     while read -r _g _cpus; do
-        for _p in $(pgrep -f "VLLM::Worker_TP${_g}_" 2>/dev/null | head -1); do
+        for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null | head -1); do
             _stray=$(for _t in /proc/$_p/task/*; do taskset -pc "${_t##*/}" 2>/dev/null | sed 's/.*list: //'; done | sort -u | grep -vFx "$_cpus" | wc -l)
             echo "[pin-ccd] GPU$_g pid=$_p cpus=$_cpus stray_affinities=$_stray"
         done
