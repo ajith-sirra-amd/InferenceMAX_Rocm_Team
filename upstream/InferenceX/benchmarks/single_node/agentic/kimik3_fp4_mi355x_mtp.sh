@@ -110,15 +110,18 @@ if [ "$DCP_SIZE" -gt 1 ]; then
         --dcp-comm-backend a2a
         --cp-kv-cache-interleave-size 1
     )
-    # N9: the script had been force-DISABLING the direct a2a that #51705 added,
-    # overriding its auto-on-with-a2a default. The profile's second-biggest item
-    # is collectives at 21.3% of wall, concentrated in the dcp:0 group, so the
-    # direct path is aimed straight at it. One variable: a2a only; the two
-    # gathers stay off so the change is attributable.
-    export VLLM_USE_DIRECT_DCP_A2A=1
+    # N9 IMPOSSIBLE ON THIS IMAGE -- these three stay 0. T167 flipped a2a to 1
+    # and every worker died during cudagraph capture with
+    #   AttributeError: '_OpNamespace' '_C' object has no attribute
+    #                   'direct_dcp_a2a_lse_reduce'
+    # The direct DCP path needs a compiled C++ op from #51705 that
+    # aigmkt/kimi-k3-vllm does not ship. So these were never "force-disabling a
+    # fast path" -- they disable an op that is absent. Re-enabling requires a
+    # rebuilt image, which is out of bounds here.
+    export VLLM_USE_DIRECT_DCP_A2A=0
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
-    echo "[dcp-direct] a2a=1 q_gather=0 kv_gather=0"
+    echo "[dcp-direct] a2a=0 q_gather=0 kv_gather=0 (op absent in this image)"
     export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
     export VLLM_DCP_Q_REPLICATE=1
     echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"

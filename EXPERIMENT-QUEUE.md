@@ -120,7 +120,25 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
     batch rows kills the engine on an RPC timeout (T165); more KV memory hangs
     it (T166/T157). T163's +3.9% from the offload was capacity that came from
     *host* DRAM, which is the only place more of it can currently come from.
-- **In flight: T167 C52 = N9, `VLLM_USE_DIRECT_DCP_A2A` 0 → 1.** One variable
+- **T167 DONE, FAILED: the direct DCP a2a op does not exist in this image.**
+  Every worker died at cudagraph capture with `AttributeError: '_OpNamespace'
+  '_C' object has no attribute 'direct_dcp_a2a_lse_reduce'`. My framing was
+  wrong — the script's `=0` is not suppressing an unmeasured fast path, it is
+  disabling a **compiled op aigmkt does not ship**. #51705 gives the Python
+  plumbing, not the kernel. Reverted; needs a rebuilt image, out of bounds.
+  Cost: ~50 min of it was runner queue time, ~18 min of GPU.
+- **Config space at C52 is now exhausted.** Every knob reachable from the
+  script has been measured: chunk peaks at 8192, mns is capped by the RPC
+  timeout, gmu is capped by the warmup hang, async is negative, the offload is
+  on, pinning is on, and the direct DCP path needs a kernel we do not have.
+  **Everything still open (N3, N6, N8) needs either vLLM source or an offline
+  tuning job.** Best remains **T163's 8,127**.
+- **In flight: T168 C52 — exact repeat of T163, no variable changed.** This is
+  deliberate: the whole ledger quotes deltas of +0.78%, +2.0%, −1.8% and I have
+  **never measured run-to-run variance**, so I cannot say which of those are
+  real. A second sample of the best config gives the noise floor that every
+  earlier claim depends on. It also keeps the GPUs busy while N8 is blocked.
+- **SUPERSEDED — the original T167 plan:** One variable
   vs T163. The script had been **force-disabling** the direct a2a that #51705
   added, overriding its own auto-on-with-a2a default — so the fast path has
   never actually been measured. Collectives are 21.3% of wall and concentrated

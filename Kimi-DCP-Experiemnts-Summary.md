@@ -29,6 +29,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T164 | **chunk 4096** (offload dram) | 7,528 (−7.4% vs T163) |
 | T165 | **mns 96** | **engine died** — 5,090 partial, aborted |
 | T166 | **gmu 0.92** | **0/103 — hung in warmup** |
+| T167 | **direct DCP a2a** | **workers died at capture — op absent** |
 
 ## T165: the C1 crash is not C1-specific, and my aigmkt prediction was wrong
 
@@ -80,6 +81,20 @@ pre-pin background loop fires during loading and confines ~190 loader threads pe
 worker to one CCD's 8 physical cores. That is wall-clock only — it does not touch the
 serving-window throughput — but it adds ~23 min to every run. Fixed for the next run:
 pinning is now one-shot **after `wait_for_server_ready`**, background loop deleted.
+
+**The direct DCP a2a is not available on this image.** T167 flipped
+`VLLM_USE_DIRECT_DCP_A2A` 0 → 1 and every worker died during cudagraph capture:
+
+```
+AttributeError: '_OpNamespace' '_C' object has no attribute
+                'direct_dcp_a2a_lse_reduce'
+```
+
+I had read the script's `=0` as *force-disabling a fast path we'd never
+measured*. Wrong: it disables a **compiled C++ op that `aigmkt/kimi-k3-vllm`
+does not ship**. #51705 adds the Python plumbing, not the kernel, to this build.
+Re-enabling needs a rebuilt image, which is out of bounds. Reverted to 0 with
+the error recorded next to it.
 
 **gmu > 0.90 is settled: the headroom is not usable.** T166 at 0.92 got 0
 successful out of 103. The server started and KV grew **59.8 → 65.6 GiB
