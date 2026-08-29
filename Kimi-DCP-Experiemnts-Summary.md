@@ -57,6 +57,31 @@ never ran warmup, so a 72-graph ladder had more exposure to that bug on the old
 engine. The same pair also leaves the old T123 (6.70) vs T133 (7.18) gap
 unexplained — both of its candidate causes are now measured inert.
 
+## The C1 11.5% drop rate is SYSTEMATIC, not noise
+
+T156 C1 and T158 C1 both dropped **exactly 17 of 148** requests (11.5%), on
+different engine settings, both finishing at ~1983 s having served 131. T123 on
+the same replay dropped 3/193 (1.6%) over 3609 s.
+
+Identical counts across two independent runs rules out randomness. Something in
+the current C1 configuration fails a fixed subset of the replay. Candidates, in
+order: the 1M `max-model-len` against requests whose context exceeds what the
+DCP-off KV pool (3.3M tokens) can hold; a client timeout on the longest
+trajectories; or a spec-decode path that errors on particular inputs.
+
+**Consequence: no C1 tok/s/GPU from this configuration is comparable to T123's
+1,288.2.** Dropped requests consume time but are excluded from the success
+accounting, and the window is 1983 s against 3609 s. Report ITL p50 for C1
+until this is fixed — that metric is per-token and robust to the drops:
+
+| | ITL p50 (ms) | tok/s/GPU | dropped |
+|---|--:|--:|--:|
+| T123 (aigmkt) | **7.71** | 1,288.2 | 1.6% |
+| T156 (nightly) | 7.89 | 1,509 | 11.5% |
+| T158 (nightly + nccl32) | 8.06 | 1,515 | 11.5% |
+
+Diagnosing the drops is now worth more than the next config knob.
+
 ## RCCL: more channels is worse at C52
 
 T158, sole variable `NCCL_MIN_NCHANNELS=32`:
@@ -1203,7 +1228,8 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 156b | 33197613253 | **C1 PERF**, nightly + rebased #51705, DCP off, k=8, mns 8, ladder 1..16 | **1,509 tok/s/GPU**, ITL p50 **7.89** ms (err-adj 8.07), intvty p50 126. **CAVEAT: 17/148 error-dropped (11.5%) vs T123's 1.6%**, only 131 served in 1984 s vs T123's 190 in 3609 s — not a clean comparison |
 | 157 | 33209544438 | C52, **gmu 0.95** | **HARD FAIL — 0 successful / 57, all error-dropped.** Server started, KV pool grew 31.9M -> **40.2M tokens (+26%)**, then all 55 warmup requests HUNG: 0 returned, 0 errors, 1200 s. Not an OOM — the engine accepted work and never produced output. Reverted to 0.9 |
 | 158 | 33212429374 | C52, **NCCL_MIN_NCHANNELS=32** | **7,656 tok/s/GPU — a 3.2% LOSS** vs T156's 7,906 on the identical config. 1801/1911 requests, KV 31,924,580 (unchanged), input 60,576 tok/s. Reverted |
-| 159 | pending | C52, **CCD pinning** (`PIN_CCD=1`) | restored from archive; one 32 MiB L3 domain per GPU, every thread |
+| 158b | 33212429374 | C1, NCCL_MIN_NCHANNELS=32 | 1,515 tok/s/GPU, ITL p50 **8.06** ms vs T156's 7.89 — RCCL neutral-to-slightly-worse at C1 too. **17/148 error-dropped again, identical to T156** |
+| 159 | pending | **CCD pinning** (`PIN_CCD=1`) | restored from archive; one 32 MiB L3 domain per GPU, every thread |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |
 | 3 | 32042030173 | PR#51705 only, DCP8 | FAIL 0x1016 @135,168 |

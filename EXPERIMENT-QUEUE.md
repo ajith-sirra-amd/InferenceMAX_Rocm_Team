@@ -30,7 +30,7 @@ rather than a flattering one.
 
 ## Current state
 
-**C52 ledger so far — every lever tried has been flat or negative:**
+**C52 ledger — every lever tried is flat or negative:**
 
 | run | change | tok/s/GPU |
 |---|---|--:|
@@ -40,14 +40,14 @@ rather than a flattering one.
 | T158 | NCCL_MIN_NCHANNELS=32 | 7,656 (−3.2%) |
 | SA | reference | 8,296 |
 
-- **In flight: T159** — CCD pinning (`PIN_CCD=1`), restored from the archive.
-  One 32 MiB L3 domain per GPU, pinning **every thread** via `/proc/<pid>/task/*`
-  rather than the main TID (the archived note records that the earlier
-  `taskset -pc <pid>` version pinned 1 of ~197 threads, which is why pinning
-  never showed a win). No numerics change.
-- **Next:** #52190 torch.compile — the only untried lever with a large
-  mechanism behind it (zero post-grad fusion today). Numerics → GSM8K first.
-  Then a clean C1 re-run (T156 C1 had 11.5% drops).
+**C1 — report ITL p50, not tok/s/GPU:** T123 7.71 ms (1.6% drops) · T156 7.89 ·
+T158 8.06. All nightly C1 runs drop **exactly 17/148 = 11.5%**, identical across
+two runs, so it is systematic. tok/s/GPU from those runs is not comparable.
+
+- **In flight: T159** — CCD pinning (`PIN_CCD=1`), every thread via
+  `/proc/<pid>/task/*`. No numerics change.
+- **Next, re-prioritised:** diagnose the C1 17/148 drops — that is now worth
+  more than another config knob. Then #52190 torch.compile (GSM8K first).
 
 ### OPERATIONAL: DRAM offload and slow model loads — PARTLY RETRACTED
 
