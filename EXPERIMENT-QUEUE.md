@@ -74,9 +74,24 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   Fixed: `kv-offload-backend: { name: vllm-simple }` — what T103/T160 ran.
   **Queue rule added: any yaml search-space edit gets a local parse + the
   dram/backend assertion before dispatch.** No GPU time was consumed.
-- **In flight: T163 C52 — restore `kv-offloading: dram`.** One variable vs
-  T161 (async already reverted, so the rest is T161's config). Confirms the
-  +1.8% and re-establishes the best baseline for N3. Expect ~7,950–7,970.
+- **T163 DONE. C52 = 8,127 — NEW BEST.** 1,955 successful, error rate 0.102%.
+  The offload is worth **+3.9%** (vs T161 7,824), bigger than the +1.8% I
+  estimated, and it clears T160's 7,968 by +2.0% with pinning after ready.
+  **SA's 8,296 is now 2.0% away.** Caveat: the connector allocated 226.89 GB/rank
+  here vs 243.6 GB earlier, so offload size is not constant across the ledger.
+  C1 aborted a fourth time at the identical 15/146.
+- **N3 is BLOCKED, not skipped.** The nightly logs only the *potential* AR
+  backend list for `dcp:0` (`NCCL_SYMM_MEM, QUICK_REDUCE, FLASHINFER,
+  AITER_CUSTOM, CUSTOM, SYMM_MEM, PYNCCL`) and never prints which it selected,
+  so I cannot confirm the old "dcp:0 gets PYNCCL only" finding still holds on
+  this build, and I could not find a documented flag to force it. Guessing a
+  `--dcp-comm-backend` enum value risks a hard startup failure. Needs the
+  selected-backend line located in vLLM source first.
+- **In flight: T164 C52 = N4, `max-num-batched-tokens` 8192 → 4096.** One
+  variable vs T163. 16384 was −2.5%, so the gradient points at smaller; 4096 is
+  the untested side. Prefill saturates the GPU while decode starves, so shorter
+  chunks should let decode interleave more often. C52 only; C1 stays 8192.
+  Gate line `[chunk]` added. Baseline to beat: **8,127**.
 - **NEXT (user-requested): run `sa.sh` at C1 + C52.** Already staged — sa.sh
   copied over `kimik3_fp4_mi355x_mtp.sh`, image reverted to
   `aigmkt/kimi-k3-vllm:latest`. **This doubles as the crash A/B**: sa.sh has no

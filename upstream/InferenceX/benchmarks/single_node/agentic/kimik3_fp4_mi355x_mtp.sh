@@ -153,7 +153,16 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
     echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN, draft kv=$DRAFT_KV_DTYPE)"
 fi
 
+# N4: chunked-prefill size at C52. 16384 was -2.5%, so the gradient points the
+# other way; 4096 is the untested side. The profile says prefill saturates the
+# GPU while decode starves, so shorter prefill chunks should let decode
+# interleave more often -- at the cost of more launches per prefilled token.
+# C52 only; C1 keeps 8192 so this is one variable at the point being measured.
+if [ "${CONC:-1}" -ge 16 ] 2>/dev/null; then
+    MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-4096}"
+fi
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
 # 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
 # engine, but still the wrong sign after 175 commits. The host prep the profile

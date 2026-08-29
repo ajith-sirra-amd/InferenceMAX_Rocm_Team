@@ -11,7 +11,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **C52 throughput** | 12,500 tok/s/GPU | **7,968** (T160) | **−36%** |
+| **C52 throughput** | 12,500 tok/s/GPU | **8,127** (T163) | **−35%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
@@ -26,6 +26,15 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | **T160** | nightly + #51705 + **CCD pinning**, offload **dram** | **7,968** — best to date |
 | T161 | pin after ready, offload **none** | 7,824 (−1.8%) |
 | T162 | **async scheduling** (offload none) | 7,686 (−1.8% vs T161) |
+| **T163** | **dram restored** + pin after ready | **8,127 — best to date** |
+
+**T163 is the new best: 8,127 tok/s/GPU**, 1,955 successful, error rate 0.102%.
+The offload is worth **+3.9%** (vs T161's 7,824 on the identical stack) — larger
+than the +1.8% I estimated from T160, and it also clears T160's 7,968 by +2.0%
+with pinning applied after ready rather than during the load. **SA's 8,296 is
+now only 2.0% away.** Note the connector allocated 226.89 GB/rank here, not the
+243.6 GB of earlier runs, so the exact offload size is not held constant across
+the ledger.
 
 **CCD pinning is worth +0.78% at C52** (T160 7,968 vs T156 7,906, same stack, pinning
 the sole variable), and edges past the old aigmkt baseline T103 by +0.2%. Clean run:
