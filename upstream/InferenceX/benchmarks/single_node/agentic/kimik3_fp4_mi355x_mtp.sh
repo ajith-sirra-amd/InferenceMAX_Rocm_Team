@@ -153,14 +153,9 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
     echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN, draft kv=$DRAFT_KV_DTYPE)"
 fi
 
-# N4: chunked-prefill size at C52. 16384 was -2.5%, so the gradient points the
-# other way; 4096 is the untested side. The profile says prefill saturates the
-# GPU while decode starves, so shorter prefill chunks should let decode
-# interleave more often -- at the cost of more launches per prefilled token.
-# C52 only; C1 keeps 8192 so this is one variable at the point being measured.
-if [ "${CONC:-1}" -ge 16 ] 2>/dev/null; then
-    MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-4096}"
-fi
+# N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
+# against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
+# clear peak at 8192 and both sides are downhill.
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
 echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
@@ -177,9 +172,14 @@ MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"
 LOAD_FORMAT="${LOAD_FORMAT:-auto}"
 echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 
+# N5: mns 80 -> 96 at C52. T163 showed the DRAM offload is worth +3.9%, and the
+# mechanism is KV capacity keeping the batch full -- not the stall reduction the
+# idle profile predicted. If capacity is what binds, more resident sequences
+# should buy more. The offload supplies the KV, so this is the natural next step
+# on the one axis that has actually moved the number.
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
-        MAX_NUM_SEQS=80
+        MAX_NUM_SEQS=96
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
@@ -198,7 +198,7 @@ if [ "$CONC" -le 4 ]; then
 elif [ "$CONC" -le 16 ]; then
     LADDER_MAX=32
 else
-    LADDER_MAX=80
+    LADDER_MAX=96
 fi
 MAX_CUDAGRAPH_CAPTURE_SIZE=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 if [ "$MAX_CUDAGRAPH_CAPTURE_SIZE" -gt "$LADDER_MAX" ]; then MAX_CUDAGRAPH_CAPTURE_SIZE=$LADDER_MAX; fi

@@ -87,11 +87,19 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   this build, and I could not find a documented flag to force it. Guessing a
   `--dcp-comm-backend` enum value risks a hard startup failure. Needs the
   selected-backend line located in vLLM source first.
-- **In flight: T164 C52 = N4, `max-num-batched-tokens` 8192 → 4096.** One
-  variable vs T163. 16384 was −2.5%, so the gradient points at smaller; 4096 is
-  the untested side. Prefill saturates the GPU while decode starves, so shorter
-  chunks should let decode interleave more often. C52 only; C1 stays 8192.
-  Gate line `[chunk]` added. Baseline to beat: **8,127**.
+- **T164 DONE. N4 chunk 4096 = 7,528, −7.4% vs T163.** Confirmed live
+  (`[chunk] max_num_batched_tokens=4096 conc=52`; C1 correctly stayed 8192).
+  **My gradient reasoning was wrong** — I extrapolated from 16384's −2.5% that
+  smaller would help, and 4096 is three times worse than 16384. The curve peaks
+  at 8192 and both sides fall away. Reverted and marked settled.
+- **In flight: T165 C52 = N5, `max_num_seqs` 80 → 96** (ladder cap 80 → 96 to
+  match). One variable vs T163. Rationale: T163 showed the offload is worth
+  +3.9% and the mechanism is **KV capacity keeping the batch full**, not the
+  stall reduction the idle profile predicted. Capacity is the one axis that has
+  actually moved the number, so push it. The offload supplies the KV.
+  C1 untouched (DCP=1 branch still yields mns 8, ladder 1..8).
+  **If it OOMs:** `GPU_MEM_UTIL=0.85`, then `HSA_NO_SCRATCH_RECLAIM=0`, then
+  back to mns 80. Baseline to beat: **8,127**.
 - **NEXT (user-requested): run `sa.sh` at C1 + C52.** Already staged — sa.sh
   copied over `kimik3_fp4_mi355x_mtp.sh`, image reverted to
   `aigmkt/kimi-k3-vllm:latest`. **This doubles as the crash A/B**: sa.sh has no

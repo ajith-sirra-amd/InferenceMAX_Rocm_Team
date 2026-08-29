@@ -26,6 +26,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | **T160** | nightly + #51705 + **CCD pinning**, offload **dram** | **7,968** — best to date |
 | T161 | pin after ready, offload **none** | 7,824 (−1.8%) |
 | T162 | **async scheduling** (offload none) | 7,686 (−1.8% vs T161) |
+| T164 | **chunk 4096** (offload dram) | 7,528 (−7.4% vs T163) |
 | **T163** | **dram restored** + pin after ready | **8,127 — best to date** |
 
 **T163 is the new best: 8,127 tok/s/GPU**, 1,955 successful, error rate 0.102%.
@@ -47,7 +48,7 @@ worker to one CCD's 8 physical cores. That is wall-clock only — it does not to
 serving-window throughput — but it adds ~23 min to every run. Fixed for the next run:
 pinning is now one-shot **after `wait_for_server_ready`**, background loop deleted.
 
-Settled negatives: QuickReduce FP −8.39% · EP=8 −4.7% · **async −1.8% on the nightly** (was −9.2% on the old engine; retested T162, still the wrong sign) · chunk 16384 −2.5% · FP16 GEMM loses 6/8 shapes.
+Settled negatives: QuickReduce FP −8.39% · EP=8 −4.7% · **async −1.8% on the nightly** (was −9.2% on the old engine; retested T162, still the wrong sign) · **chunk: 8192 is the peak** — 4096 is −7.4% (T164), 16384 is −2.5% · FP16 GEMM loses 6/8 shapes.
 
 **The async result matters beyond its own sign.** The profile's biggest single
 item — ~150 s of 403.9 s idle attributed to host/Python batch prep — is the
