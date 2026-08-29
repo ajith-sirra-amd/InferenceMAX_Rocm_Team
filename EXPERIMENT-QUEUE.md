@@ -68,6 +68,12 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
     that, and it made throughput worse. Either the attribution is wrong or the
     host work is already off the critical path. N3 is now the leading lever by
     default, not by ranking.
+- **T163 attempt 1 failed in `get-jobs`, my error.** Pydantic:
+  `kv-offload-backend is required when kv-offloading is 'dram'`. I restored
+  `dram` without the backend key that f3afc488 had removed alongside it.
+  Fixed: `kv-offload-backend: { name: vllm-simple }` — what T103/T160 ran.
+  **Queue rule added: any yaml search-space edit gets a local parse + the
+  dram/backend assertion before dispatch.** No GPU time was consumed.
 - **In flight: T163 C52 — restore `kv-offloading: dram`.** One variable vs
   T161 (async already reverted, so the rest is T161's config). Confirms the
   +1.8% and re-establishes the best baseline for N3. Expect ~7,950–7,970.
