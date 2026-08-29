@@ -30,6 +30,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T165 | **mns 96** | **engine died** — 5,090 partial, aborted |
 | T166 | **gmu 0.92** | **0/103 — hung in warmup** |
 | T167 | **direct DCP a2a** | **workers died at capture — op absent** |
+| T168 | **repeat of T163, no change** | in flight — measures run-to-run noise |
 
 ## T165: the C1 crash is not C1-specific, and my aigmkt prediction was wrong
 

@@ -133,6 +133,9 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   on, pinning is on, and the direct DCP path needs a kernel we do not have.
   **Everything still open (N3, N6, N8) needs either vLLM source or an offline
   tuning job.** Best remains **T163's 8,127**.
+- **T167 C1 also aborted, 131/148 — seventh consecutive.** Config verified back
+  at T163 values (dcp-direct 0, mns 80, ladder 80, gmu 0.90, chunk 8192, async
+  off, offload dram+vllm-simple).
 - **In flight: T168 C52 — exact repeat of T163, no variable changed.** This is
   deliberate: the whole ledger quotes deltas of +0.78%, +2.0%, −1.8% and I have
   **never measured run-to-run variance**, so I cannot say which of those are
