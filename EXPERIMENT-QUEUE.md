@@ -47,6 +47,8 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
 | SA | reference | 8,296 |
 
 - **In flight:** T160 C52 (CCD pinning, pin applied 1,458/1,562 threads).
+  **Its number will be confounded** — weight load took **2008.62 s** because the
+  pre-pin loop ran during loading. See N1; pinning moves after server-ready.
 - **NEXT (user-requested): run `sa.sh` at C1 + C52.** Already staged — sa.sh
   copied over `kimik3_fp4_mi355x_mtp.sh`, image reverted to
   `aigmkt/kimi-k3-vllm:latest`. **This doubles as the crash A/B**: sa.sh has no
@@ -129,25 +131,70 @@ init are all unseparated here. **Untested hypothesis, do not act on it as fact.*
 the offload is worth ~2.9% and adds ~12 min of startup per run, not the
 retracted next-run penalty.
 
-## Queue — run in order, one variable per run
+## Queue — REPRIORITISED 2026-08-29 against the T124 profile
 
-### Phase B — establish the both-points baseline on nightly + #51705
-- **B1** `FORCE_EVAL=0`, agentic, C1 + C52. Headline numbers for the new stack.
-  Compare C52 vs T103 7,950.6 / SA 8,296; C1 vs T123 6.70 agentic.
+The old order led with tuned GEMM. That does not match our own measurements.
+Ranked by **% of e2e wall the lever can actually touch**
+([Where-The-Time-Goes](Kimi-K3-Where-The-Time-Goes.md)):
 
-### Phase C — C52 throughput, highest evidence first
-- **C1** *(strongest)* **AITER/hipBLASLt tuned GEMM configs.** One C52 run logs
-  **45,250** `not found tuned config in /tmp/aiter_configs/bf16_tuned_gemm.csv`.
-  Dense GEMM is **11.9% of e2e wall**. Top shapes: `M:935 N:6288 K:7168`,
-  `M:935 N:3584 K:7168`, `M:7928 N:3072 K:512`, `M:640 N:6288 K:7168`, and at
-  C1 `M:7 N:20480 K:7168`, `M:7 N:7168 K:35840`, `M:7 N:2880 K:7168`.
-  No numerics change → no GSM8K needed.
-- **C2** **#52190 — torch.compile is silently disabled.** Log still says
-  `torch.compile is turned on, but the model does not support it`, so we run
-  with **zero post-grad fusion** despite `fuse_allreduce_rms`, `fuse_norm_quant`,
-  `fuse_mla_dual_rms_norm` all configured true. Numerics change → **GSM8K first**.
-- **C3** **CCD / NUMA pinning.** Written, archived, never measured. Workers run
-  unpinned (`0-255`) with GPU0-3 threads seen on node1 cores. One 32 MiB L3 per GPU.
+| rank | target | % e2e wall | queue item |
+|---|---|--:|---|
+| 1 | idle, host launch/prep in decode | **28.2%** (37% of it = host) | **N2** async sched |
+| 2 | collectives, `dcp:0` on generic PYNCCL | **21.3%** | **N3** dcp comm backend |
+| 3 | MLA prefill attn | 16.9% | no lever (needs FP8 FMHA) |
+| 4 | BF16 dense GEMM | 11.9% | **N4** tuned configs |
+
+### N1 — CCD pinning, applied AFTER `wait_for_server_ready` *(next script edit)*
+
+T160 measured **2008.62 s** to load weights (vs 576–681 s unpinned): the pre-pin
+loop confines the ~190 loader threads per worker to one CCD's 8 physical cores
+during weight load and cudagraph capture. Pinning must be **one-shot, after the
+server reports ready** — steady-state locality is the thing we want; load and
+capture are one-time and must run across all cores. This also makes C3
+measurable for the first time (T160's number is confounded by the load penalty).
+Remove the background pre-pin loop entirely.
+
+### N2 — async scheduling, retested on the nightly *(largest addressable item)*
+
+The profile attributes **~150 s of 403.9 s idle (37%) to host/Python**: batch
+tensor build + **~127 H2D `copyBuffer` per step** (71.9 s alone), sampling
+elementwise (38 s), allocator memsets (28 s). Async scheduling is the one lever
+that overlaps that host work with the GPU step. It was **−9.2% on the old
+engine**; the scheduler has moved 175 commits and the profile says this is where
+the time is. Safe at C52 (`k=0`, no spec decode). No numerics change.
+
+### N3 — the `dcp:0` group never gets the fast all-reduce
+
+    group 'tp:0'  -> ['AITER_CUSTOM', 'PYNCCL']
+    group 'dcp:0' -> ['PYNCCL']
+
+Generic `ncclDevKernel_Generic_1` = **22.55% of GPU busy**; the tuned
+`cross_device_reduce_2stage` TP uses = **3.63%**. 21.3% of wall sits in the group
+that did not get the fast backend. Try `--dcp-comm-backend` alternatives to
+`a2a`; check what the nightly's enum accepts before dispatching.
+
+### N4 — AITER tuned GEMM configs
+
+T160 C52 still logs `not found tuned config ... will use default config! using
+torch solution:0` — the miss falls all the way back to **plain torch**, not an
+aiter kernel. Miss shapes confirmed in T160: decode `M:19..80 N:6288 K:7168` and
+`N:3584 K:7168`; prefill `M:8192` × {8448, 7168, 6288, 3584, 2304, 2112, 1536}.
+Needs an **offline tuning job**, not a benchmark dispatch. No numerics change.
+
+### RETIRED — C2 (#52190 torch.compile silently disabled)
+
+**Does not apply on the nightly.** T160 C52 logs
+`Enabled custom fusions: norm_quant, act_quant, allreduce_rms, mla_dual_rms_norm`
+with `mode=VLLM_COMPILE`, populated `splitting_ops`, and **no**
+`does not support it` line. Fusion is already on — and already inside T156's
+7,906 (−0.6%). So post-grad fusion is worth ~nothing here. Closed.
+
+Also confirmed live at C52: `cudagraph_mode=FULL_AND_PIECEWISE`, sizes 1..80,
+`VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1`. Cudagraphs are not the missing piece; the
+residual launch gaps are in *mixed* prefill+decode steps and in host prep, which
+is what N2 targets.
+
+### Remaining, unchanged
 - **C4** `gpu-memory-utilization` 0.90 → 0.95.
 - **C5** RCCL env: `NCCL_PROTO=LL/LL128`, `NCCL_ALGO`, `NCCL_MIN_NCHANNELS`.
 - **C6** Custom all-reduce `max_size` 8 MiB → larger. Prefill AR is ~117 MB and
