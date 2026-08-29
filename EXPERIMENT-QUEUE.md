@@ -92,14 +92,31 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   **My gradient reasoning was wrong** — I extrapolated from 16384's −2.5% that
   smaller would help, and 4096 is three times worse than 16384. The curve peaks
   at 8192 and both sides fall away. Reverted and marked settled.
-- **In flight: T165 C52 = N5, `max_num_seqs` 80 → 96** (ladder cap 80 → 96 to
-  match). One variable vs T163. Rationale: T163 showed the offload is worth
-  +3.9% and the mechanism is **KV capacity keeping the batch full**, not the
-  stall reduction the idle profile predicted. Capacity is the one axis that has
-  actually moved the number, so push it. The offload supplies the KV.
-  C1 untouched (DCP=1 branch still yields mns 8, ladder 1..8).
-  **If it OOMs:** `GPU_MEM_UTIL=0.85`, then `HSA_NO_SCRATCH_RECLAIM=0`, then
-  back to mns 80. Baseline to beat: **8,127**.
+- **T165 DONE, and it FAILED: mns 96 kills the engine.** 256/392, aborted at
+  29/285 = 10.175%. Partial number 5,090, not a measurement.
+  - **Same trace as every C1 abort**: `engine_core_sentinel` → `mq.dequeue`
+    timeout → `EngineDeadError`. So the C1 crash was never C1-specific.
+  - **My "aigmkt won't crash" prediction is WITHDRAWN.** The sentinel is in
+    `v0.26.1rc1.dev1133` too. (I also briefly misread the build string as a
+    version change between T163 and T165 — it is not; T163/T164/T165 are all
+    the same build, so the mns A/B is clean.)
+  - **Not memory:** engine dump at death says `num_running_reqs=45`,
+    `kv_cache_usage=0.28`. No OOM, no HSA fault. The fallback ladder was not
+    needed and was not used.
+  - mns 96 reverted; mns 80 completed twice on this image.
+- **NEW TOP PRIORITY — N8: raise the executor RPC dequeue timeout.** It caps the
+  resident-sequence axis and is the sole cause of six straight C1 aborts.
+  `VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200` is already set and is not the
+  binding one. Needs the `dequeue_timeout` on
+  `multiproc_executor.get_response` located in vLLM source before it can be
+  changed. Doing this would reopen mns AND likely give the first valid C1
+  number in six runs.
+- **In flight: T166 C52 = N7, `gpu-memory-utilization` 0.90 → 0.92.** One
+  variable vs T163. T163 says capacity drives the number; T165 says the
+  batch-rows axis is timeout-capped. gmu buys KV capacity **without** adding
+  batch rows, so it tests the same hypothesis on the axis that did not crash.
+  0.95 hung the engine (T157), so step rather than jump. C52 only; C1 keeps
+  0.90. Gate line `[gmu]` added. Baseline to beat: **8,127**.
 
 ### Why C52 runs WITH the DRAM offload — CORRECTED
 

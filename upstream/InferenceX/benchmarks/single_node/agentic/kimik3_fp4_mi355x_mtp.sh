@@ -172,14 +172,16 @@ MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"
 LOAD_FORMAT="${LOAD_FORMAT:-auto}"
 echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 
-# N5: mns 80 -> 96 at C52. T163 showed the DRAM offload is worth +3.9%, and the
-# mechanism is KV capacity keeping the batch full -- not the stall reduction the
-# idle profile predicted. If capacity is what binds, more resident sequences
-# should buy more. The offload supplies the KV, so this is the natural next step
-# on the one axis that has actually moved the number.
+# N5 SETTLED NEGATIVE: mns 96 KILLS THE ENGINE. T165 C52 died mid-replay with
+# EngineDeadError from engine_core_sentinel -> mq.dequeue timeout, the same
+# trace as the C1 crash. Not memory: the dump shows kv_cache_usage=0.28 and
+# num_running_reqs=45. A 96-row batch simply makes the step longer than the
+# executor's RPC dequeue timeout, and the sentinel promotes that to fatal.
+# mns 80 completed twice on this exact image (T163, T164). Do not raise it
+# again without first raising that timeout.
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
-        MAX_NUM_SEQS=96
+        MAX_NUM_SEQS=80
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
@@ -198,7 +200,7 @@ if [ "$CONC" -le 4 ]; then
 elif [ "$CONC" -le 16 ]; then
     LADDER_MAX=32
 else
-    LADDER_MAX=96
+    LADDER_MAX=80
 fi
 MAX_CUDAGRAPH_CAPTURE_SIZE=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 if [ "$MAX_CUDAGRAPH_CAPTURE_SIZE" -gt "$LADDER_MAX" ]; then MAX_CUDAGRAPH_CAPTURE_SIZE=$LADDER_MAX; fi
@@ -207,7 +209,14 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
+# N7: gmu 0.90 -> 0.92. T163 says capacity drives this number, but T165 shows
+# the resident-sequence axis is capped by the RPC timeout, not by memory. gmu
+# buys KV capacity without adding batch rows, so it tests the same hypothesis
+# on the axis that did not crash. 0.95 hung the engine (T157), so step, do not
+# jump. C52 only; C1 keeps 0.90.
 GPU_MEM_UTIL=0.9
+if [ "${CONC:-1}" -ge 16 ] 2>/dev/null; then GPU_MEM_UTIL=0.92; fi
+echo "[gmu] gpu_memory_utilization=$GPU_MEM_UTIL conc=$CONC"
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"

@@ -27,6 +27,38 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T161 | pin after ready, offload **none** | 7,824 (−1.8%) |
 | T162 | **async scheduling** (offload none) | 7,686 (−1.8% vs T161) |
 | T164 | **chunk 4096** (offload dram) | 7,528 (−7.4% vs T163) |
+| T165 | **mns 96** | **engine died** — 5,090 partial, aborted |
+
+## T165: the C1 crash is not C1-specific, and my aigmkt prediction was wrong
+
+T165 C52 died mid-replay at mns 96 with the **identical** trace to every C1 abort:
+
+```
+engine_core_sentinel.py:179 run_with_fault_tolerance
+  -> mq.dequeue(timeout=dequeue_timeout) -> shm_broadcast acquire_read
+  => vllm.v1.engine.exceptions.EngineDeadError
+```
+
+Two things this settles:
+
+1. **I predicted aigmkt would not have this crash. It does.** The sentinel is in
+   `v0.26.1rc1.dev1133+gf94666b60` too, so "the nightly's new fault-tolerance
+   subsystem" was the wrong framing. The prediction is withdrawn.
+2. **It is not memory.** The engine's own dump at death reads
+   `num_running_reqs=45`, `kv_cache_usage=0.28`. No OOM, no HSA fault. The
+   worker simply did not answer the executor's RPC inside the dequeue timeout.
+
+**mns 96 is a settled negative and reverted.** mns 80 completed twice on this
+exact image (T163 8,127, T164 7,528). The mechanism that fits: a 96-row batch
+makes the step long enough to exceed the timeout, and the sentinel turns a slow
+step into a fatal error. Same mechanism as C1, where k=8 MTP over ~430k-token
+prompts produces the long step.
+
+**Consequence for the target:** the resident-sequence axis is capped by an RPC
+timeout, not by hardware. Raising that timeout is now the highest-value unblock
+— it would reopen mns and very likely fix C1 as well. `VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200`
+is already set and is **not** the binding one; the actual `dequeue_timeout` on
+the `multiproc_executor.get_response` path still needs to be located in source.
 | **T163** | **dram restored** + pin after ready | **8,127 — best to date** |
 
 **T163 is the new best: 8,127 tok/s/GPU**, 1,955 successful, error rate 0.102%.
