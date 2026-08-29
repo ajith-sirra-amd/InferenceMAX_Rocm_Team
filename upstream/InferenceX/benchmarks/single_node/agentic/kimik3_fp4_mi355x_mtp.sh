@@ -235,7 +235,64 @@ printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
+python3 - <<'CCDPY' > /tmp/ccdmap.txt 2>/dev/null || true
+import subprocess, re, os, glob
+def expand(s):
+    v=[]
+    for part in s.split(','):
+        if '-' in part:
+            a,b=part.split('-'); v+=list(range(int(a),int(b)+1))
+        else: v.append(int(part))
+    return v
+def l3_domains():
+    seen,out=set(),[]
+    for c in sorted(int(re.search(r'cpu(\d+)$',x).group(1)) for x in glob.glob('/sys/devices/system/cpu/cpu[0-9]*')):
+        f=f'/sys/devices/system/cpu/cpu{c}/cache/index3/shared_cpu_list'
+        if not os.path.exists(f): continue
+        d=open(f).read().strip()
+        if d not in seen: seen.add(d); out.append(d)
+    return out
+def node_of(cpus):
+    for n in glob.glob('/sys/devices/system/node/node[0-9]*'):
+        nid=int(re.search(r'node(\d+)$',n).group(1))
+        if cpus[0] in expand(open(f'{n}/cpulist').read().strip()): return nid
+    return -1
+topo=""
+try: topo=subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
+except Exception: pass
+gpu_node={int(m.group(1)):int(m.group(2)) for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)",topo)}
+if not gpu_node: raise SystemExit
+by={}
+for d in l3_domains(): by.setdefault(node_of(expand(d)),[]).append(d)
+for n in by: by[n].sort(key=lambda d: expand(d)[0])
+for n in sorted(by):
+    for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
+        if i < len(by[n]): print(f"{g} {by[n][i]}")
+CCDPY
+
+PIN_CCD="${PIN_CCD:-1}"
+pin_workers_to_ccd() {
+    [ "$PIN_CCD" = "1" ] || return 0
+    [ -s /tmp/ccdmap.txt ] || return 0
+    local pinned=0
+    while read -r _g _cpus; do
+        for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null); do
+            for _t in /proc/$_p/task/*; do
+                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1)) || true
+            done
+        done
+    done < /tmp/ccdmap.txt
+    echo "[pin-ccd] pinned $pinned threads"
+}
+
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+
+# Pin AFTER the server is ready, never before. T160 measured 2008.62 s to load
+# weights against 576-681 s unpinned: pinning during the load confines ~190
+# loader threads per worker to one CCD's 8 physical cores. Weight load and
+# cudagraph capture are one-time and want every core; only steady-state serving
+# wants L3 locality. One shot, no background loop.
+pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"

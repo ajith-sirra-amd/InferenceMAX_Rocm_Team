@@ -11,7 +11,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **C52 throughput** | 12,500 tok/s/GPU | **7,950.6** (T103) | **−36%** |
+| **C52 throughput** | 12,500 tok/s/GPU | **7,968** (T160) | **−36%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
@@ -23,7 +23,18 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T156 | nightly + rebased #51705 | 7,906 (−0.6%) |
 | T158 | `NCCL_MIN_NCHANNELS=32` | 7,656 (−3.2%) |
 | T157 | `gmu 0.95` | **0 — engine hung** |
-| T160 | CCD pinning | in flight |
+| **T160** | nightly + #51705 + **CCD pinning** | **7,968** — best to date |
+
+**CCD pinning is worth +0.78% at C52** (T160 7,968 vs T156 7,906, same stack, pinning
+the sole variable), and edges past the old aigmkt baseline T103 by +0.2%. Clean run:
+1,899 successful, aiperf error rate **0.105%** (2/1901), full 3,640 s profiling phase.
+
+The gain is small but it is real and it is the first C52 lever that is not negative.
+Cost: T160's weight load took **2008.62 s** against 576–681 s unpinned, because the
+pre-pin background loop fires during loading and confines ~190 loader threads per
+worker to one CCD's 8 physical cores. That is wall-clock only — it does not touch the
+serving-window throughput — but it adds ~23 min to every run. Fixed for the next run:
+pinning is now one-shot **after `wait_for_server_ready`**, background loop deleted.
 
 Settled negatives: QuickReduce FP −8.39% · EP=8 −4.7% · async −9.2% · chunk 16384 −2.5% · FP16 GEMM loses 6/8 shapes.
 **The nightly is a C1 lever, not a C52 one** — #53942 is explicitly an m=1/m=2 change and cannot apply at batch 52.

@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| C52 throughput | **12,500 tok/s/GPU** | 7,950.6 (T103) · SA 8,296 | **−57%** |
+| C52 throughput | **12,500 tok/s/GPU** | **7,968 (T160)** · SA 8,296 | **−36%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -44,11 +44,17 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
 | T156 | nightly + #51705 | 7,906 |
 | T157 | gmu 0.95 | 0 — engine hung |
 | T158 | NCCL_MIN_NCHANNELS=32 | 7,656 |
+| **T160** | **CCD pinning** | **7,968 — best** |
 | SA | reference | 8,296 |
 
-- **In flight:** T160 C52 (CCD pinning, pin applied 1,458/1,562 threads).
-  **Its number will be confounded** — weight load took **2008.62 s** because the
-  pre-pin loop ran during loading. See N1; pinning moves after server-ready.
+- **T160 C52 DONE: 7,968 tok/s/GPU**, 1,899 successful, error rate 0.105%.
+  Pinning = **+0.78%** over T156 on the identical stack. First non-negative C52
+  lever. Weight load 2008.62 s (pre-pin loop ran during the load) — wall only,
+  not the measurement; fixed by N1.
+- **In flight: T161 C52 = N1**, pinning moved one-shot to after
+  `wait_for_server_ready`, background pre-pin loop deleted. One variable vs T160.
+  Expect throughput ≈ 7,968 and ~23 min less wall. If throughput drops, the gain
+  came from pinning the loader threads too and N1 must be reverted.
 - **NEXT (user-requested): run `sa.sh` at C1 + C52.** Already staged — sa.sh
   copied over `kimik3_fp4_mi355x_mtp.sh`, image reverted to
   `aigmkt/kimi-k3-vllm:latest`. **This doubles as the crash A/B**: sa.sh has no
