@@ -136,7 +136,17 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
 - **T167 C1 also aborted, 131/148 — seventh consecutive.** Config verified back
   at T163 values (dcp-direct 0, mns 80, ladder 80, gmu 0.90, chunk 8192, async
   off, offload dram+vllm-simple).
-- **In flight: T168 C52 — exact repeat of T163, no variable changed.** This is
+- **T168 DONE. C52 = 8,103 on T163's exact config — noise floor is 0.30%.**
+  1,948 successful, error rate 0.154%. This retro-validates the ledger: chunk
+  −7.4% is 25× noise, offload +3.9% is 13×, async −1.8% is 6×. **The one weak
+  claim is CCD pinning's +0.78%, at 2.6× — provisional.** And n=2 is a point
+  estimate of spread, not a standard deviation.
+- **In flight: T169 — Phase E partial, C48 and C56.** C52's config space is
+  exhausted, so the open question is whether 52 is even the right operating
+  point; we have 40 and 52 and nothing between or above. 48 and 56 bracket it
+  and each conc is an independent measurement, so this is not a multi-variable
+  run. Expect ~3.5 h for both points.
+- **SUPERSEDED — the original T168 plan:** This is
   deliberate: the whole ledger quotes deltas of +0.78%, +2.0%, −1.8% and I have
   **never measured run-to-run variance**, so I cannot say which of those are
   real. A second sample of the best config gives the noise floor that every

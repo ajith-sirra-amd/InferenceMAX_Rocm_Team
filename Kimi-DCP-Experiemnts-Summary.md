@@ -30,7 +30,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T165 | **mns 96** | **engine died** — 5,090 partial, aborted |
 | T166 | **gmu 0.92** | **0/103 — hung in warmup** |
 | T167 | **direct DCP a2a** | **workers died at capture — op absent** |
-| T168 | **repeat of T163, no change** | in flight — measures run-to-run noise |
+| **T168** | **repeat of T163, nothing changed** | **8,103** — noise floor 0.30% |
 
 ## T165: the C1 crash is not C1-specific, and my aigmkt prediction was wrong
 
@@ -82,6 +82,26 @@ pre-pin background loop fires during loading and confines ~190 loader threads pe
 worker to one CCD's 8 physical cores. That is wall-clock only — it does not touch the
 serving-window throughput — but it adds ~23 min to every run. Fixed for the next run:
 pinning is now one-shot **after `wait_for_server_ready`**, background loop deleted.
+
+## The noise floor is 0.30%, and it mostly vindicates the ledger
+
+T168 re-ran T163's exact config and got **8,103** against **8,127** — a spread
+of **0.30%**. Every delta in the ledger can now be read against that:
+
+| claim | delta | vs noise | verdict |
+|---|--:|--:|---|
+| chunk 4096 (T164) | −7.4% | 25× | real |
+| DRAM offload (T163 vs T161) | +3.9% | 13× | real |
+| async scheduling (T162) | −1.8% | 6× | real |
+| dram+pin-after-ready vs T160 | +2.0% | 7× | real |
+| **CCD pinning (T160 vs T156)** | **+0.78%** | **2.6×** | **weakest — treat as provisional** |
+
+**Caveat on the caveat:** n=2 gives a point estimate of spread, not a confidence
+interval. 0.30% is one observation of run-to-run difference, not a standard
+deviation. The +0.78% pinning claim is the only one close enough to the floor
+that a third sample could overturn it; everything else clears by 6× or more.
+
+Best C52 stands at **8,127** (T163), replicate 8,103, mean 8,115.
 
 **The direct DCP a2a is not available on this image.** T167 flipped
 `VLLM_USE_DIRECT_DCP_A2A` 0 → 1 and every worker died during cudagraph capture:
