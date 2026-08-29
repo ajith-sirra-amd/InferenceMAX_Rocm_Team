@@ -136,6 +136,7 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
 - **T167 C1 also aborted, 131/148 — seventh consecutive.** Config verified back
   at T163 values (dcp-direct 0, mns 80, ladder 80, gmu 0.90, chunk 8192, async
   off, offload dram+vllm-simple).
+- **T168 C1 aborted too** (130/147, 15/145 = 10.345%) — eighth consecutive.
 - **T168 DONE. C52 = 8,103 on T163's exact config — noise floor is 0.30%.**
   1,948 successful, error rate 0.154%. This retro-validates the ledger: chunk
   −7.4% is 25× noise, offload +3.9% is 13×, async −1.8% is 6×. **The one weak
