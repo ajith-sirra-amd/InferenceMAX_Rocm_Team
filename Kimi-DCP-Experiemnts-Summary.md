@@ -81,6 +81,37 @@ was fixed too.
 
 **CCD pinning remains UNMEASURED.** Do not record T159 as evidence either way.
 
+## The pinning diagnostic killed a C52 run -- third bug in the same block
+
+T159 C52 reached `Application startup complete`, logged `[pin-ccd] pinned 1562
+threads`, and then went straight to `Stopping vLLM server`. **The replay never
+ran.** No throughput, no requests, ~50 min of GPU time lost.
+
+**Cause, mine:** the stray-affinities diagnostic I appended does
+
+    _stray=$(for _t in /proc/$_p/task/*; do taskset -pc "${_t##*/}" 2>/dev/null | sed ...; done | ... | wc -l)
+
+Under `set -euo pipefail`, `taskset` failing on any thread that has already
+exited makes the pipeline non-zero, the command substitution non-zero, the
+assignment non-zero, and `set -e` terminates the script -- firing
+`cleanup_agentic_services`, which stops the server.
+
+**The C1/C52 asymmetry is the proof.** C1 pinned 0 threads, so the loop body and
+the diagnostic never executed and the run completed. C52 pinned 1,562, executed
+it, and died. Same script, opposite outcomes, explained entirely by whether the
+pgrep matched.
+
+**Fix:** the diagnostic is deleted outright -- it was never load-bearing -- and
+both `pin_workers_to_ccd` call sites are now `|| true`, with the inner
+`taskset` guarded by `|| true` as well. Verified: a `set -euo pipefail` shell
+running the same loop against a nonexistent pid now survives.
+
+**Three defects have now been found in these ~20 lines**: (1) `taskset -pc <pid>`
+pinned 1 TID of ~197, (2) the pgrep pattern required a trailing underscore that
+only exists under DCP, (3) the diagnostic aborted the run under `pipefail`. Each
+one silently produced a plausible-looking log. **CCD pinning is still
+UNMEASURED.**
+
 ## CCD pinning matched zero threads -- and why
 
 T159 logged `[pin-ccd] pinned 0 threads`, so the run is not a test of pinning at
@@ -1279,7 +1310,7 @@ DCP patches require image 5a4c8d99; ac7509e2b lacks PR #51705 plumbing
 | 158 | 33212429374 | C52, **NCCL_MIN_NCHANNELS=32** | **7,656 tok/s/GPU — a 3.2% LOSS** vs T156's 7,906 on the identical config. 1801/1911 requests, KV 31,924,580 (unchanged), input 60,576 tok/s. Reverted |
 | 158b | 33212429374 | C1, NCCL_MIN_NCHANNELS=32 | 1,515 tok/s/GPU, ITL p50 **8.06** ms vs T156's 7.89 — RCCL neutral-to-slightly-worse at C1 too. **17/148 error-dropped again, identical to T156** |
 | 159a | 33222609872 | **CCD pinning C1** | **`[pin-ccd] pinned 0 threads` — the pin did NOT apply.** 1,511 tok/s/GPU, 17/148 dropped (3rd identical) — i.e. just a repeat of T158. Cause found: the pgrep pattern required a trailing underscore |
-| 159b | 33222609872 | CCD pinning C52 | in flight |
+| 159b | 33222609872 | CCD pinning C52 | **FAILED — my own bug.** Pin DID apply (1,458 then 1,562 threads) but the script exited immediately after, before the replay. `set -euo pipefail` + a `taskset \| sed` pipeline in my stray-affinities diagnostic. C1 survived only because it pinned 0 threads so that code never ran |
 | 160 | pending | CCD pinning, **pattern fixed** | re-run once the matcher is verified |
 | 1 | 32025696861 | patch [4], DCP8, bf16 | FAIL 0x1016 @134,400 |
 | 2 | 32039650984 | [4], DCP4, bf16 | FAIL 0x1016 @262,656 |

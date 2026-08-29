@@ -420,7 +420,7 @@ pin_workers_to_ccd() {
     while read -r _g _cpus; do
         for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null); do
             for _t in /proc/$_p/task/*; do
-                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1))
+                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1)) || true
             done
         done
     done < /tmp/ccdmap.txt
@@ -433,7 +433,7 @@ pin_workers_to_ccd() {
         sleep 5
     done
     for _i in 1 2 3 4 5 6; do
-        pin_workers_to_ccd
+        pin_workers_to_ccd || true
         sleep 20
     done
 ) &
@@ -442,15 +442,7 @@ PIN_BG=$!
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 wait "$PIN_BG" 2>/dev/null || true
-pin_workers_to_ccd
-if [ "$PIN_CCD" = "1" ] && [ -s /tmp/ccdmap.txt ]; then
-    while read -r _g _cpus; do
-        for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null | head -1); do
-            _stray=$(for _t in /proc/$_p/task/*; do taskset -pc "${_t##*/}" 2>/dev/null | sed 's/.*list: //'; done | sort -u | grep -vFx "$_cpus" | wc -l)
-            echo "[pin-ccd] GPU$_g pid=$_p cpus=$_cpus stray_affinities=$_stray"
-        done
-    done < /tmp/ccdmap.txt
-fi
+pin_workers_to_ccd || true
 
 
 # Fixed-length serving, not the agentic replay. The agentic path is already
