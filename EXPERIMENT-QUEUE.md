@@ -111,12 +111,28 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   `multiproc_executor.get_response` located in vLLM source before it can be
   changed. Doing this would reopen mns AND likely give the first valid C1
   number in six runs.
-- **In flight: T166 C52 = N7, `gpu-memory-utilization` 0.90 → 0.92.** One
-  variable vs T163. T163 says capacity drives the number; T165 says the
-  batch-rows axis is timeout-capped. gmu buys KV capacity **without** adding
-  batch rows, so it tests the same hypothesis on the axis that did not crash.
-  0.95 hung the engine (T157), so step rather than jump. C52 only; C1 keeps
-  0.90. Gate line `[gmu]` added. Baseline to beat: **8,127**.
+- **T166 DONE, FAILED: gmu 0.92 hangs. 0 successful / 103.** Gate lines all
+  correct (`[gmu]=0.92`, mns 80, chunk 8192). The server *started* and KV grew
+  **59.8 → 65.6 GiB (+9.7%)** — the memory is genuinely there — then it hung in
+  warmup. T157 at 0.95 hung the same way (0/57). **Two points above 0.90 hang,
+  0.90 works.** Reverted and marked settled.
+  - Consequence: **the capacity hypothesis is now closed on both axes.** More
+    batch rows kills the engine on an RPC timeout (T165); more KV memory hangs
+    it (T166/T157). T163's +3.9% from the offload was capacity that came from
+    *host* DRAM, which is the only place more of it can currently come from.
+- **In flight: T167 C52 = N9, `VLLM_USE_DIRECT_DCP_A2A` 0 → 1.** One variable
+  vs T163. The script had been **force-disabling** the direct a2a that #51705
+  added, overriding its own auto-on-with-a2a default — so the fast path has
+  never actually been measured. Collectives are 21.3% of wall and concentrated
+  in `dcp:0`, so this aims straight at the second-biggest item, and it partly
+  unblocks N3 without needing the selected-backend line from source.
+  Only the a2a var is flipped; both gathers stay 0 so the result is attributable.
+  Gate line `[dcp-direct]` added. Baseline to beat: **8,127**.
+  - **Accuracy gate stated, not skipped:** this swaps the a2a implementation, so
+    it *could* move numerics. The GSM8K gate normally runs at C1, and C1 has
+    aborted on the sentinel bug six runs straight, so the gate is unavailable
+    right now. Running perf first and flagging it: **if this lands positive it
+    must not be adopted until accuracy is confirmed**, which needs N8 first.
 
 ### Why C52 runs WITH the DRAM offload — CORRECTED
 

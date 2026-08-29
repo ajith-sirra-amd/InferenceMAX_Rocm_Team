@@ -110,9 +110,15 @@ if [ "$DCP_SIZE" -gt 1 ]; then
         --dcp-comm-backend a2a
         --cp-kv-cache-interleave-size 1
     )
-    export VLLM_USE_DIRECT_DCP_A2A=0
+    # N9: the script had been force-DISABLING the direct a2a that #51705 added,
+    # overriding its auto-on-with-a2a default. The profile's second-biggest item
+    # is collectives at 21.3% of wall, concentrated in the dcp:0 group, so the
+    # direct path is aimed straight at it. One variable: a2a only; the two
+    # gathers stay off so the change is attributable.
+    export VLLM_USE_DIRECT_DCP_A2A=1
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
+    echo "[dcp-direct] a2a=1 q_gather=0 kv_gather=0"
     export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
     export VLLM_DCP_Q_REPLICATE=1
     echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"
@@ -209,13 +215,12 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-# N7: gmu 0.90 -> 0.92. T163 says capacity drives this number, but T165 shows
-# the resident-sequence axis is capped by the RPC timeout, not by memory. gmu
-# buys KV capacity without adding batch rows, so it tests the same hypothesis
-# on the axis that did not crash. 0.95 hung the engine (T157), so step, do not
-# jump. C52 only; C1 keeps 0.90.
+# N7 SETTLED NEGATIVE: gmu > 0.90 hangs this node. T166 at 0.92 got 0/103 --
+# the server came up and KV grew 59.8 -> 65.6 GiB (+9.7%), then it hung in
+# warmup and never served a request. T157 at 0.95 hung the same way (0/57).
+# Two points above 0.90 both hang; 0.90 works. Memory headroom is NOT the
+# free capacity it looks like. Do not raise this again.
 GPU_MEM_UTIL=0.9
-if [ "${CONC:-1}" -ge 16 ] 2>/dev/null; then GPU_MEM_UTIL=0.92; fi
 echo "[gmu] gpu_memory_utilization=$GPU_MEM_UTIL conc=$CONC"
 
 VLLM_CMD=(

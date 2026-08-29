@@ -28,6 +28,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T162 | **async scheduling** (offload none) | 7,686 (−1.8% vs T161) |
 | T164 | **chunk 4096** (offload dram) | 7,528 (−7.4% vs T163) |
 | T165 | **mns 96** | **engine died** — 5,090 partial, aborted |
+| T166 | **gmu 0.92** | **0/103 — hung in warmup** |
 
 ## T165: the C1 crash is not C1-specific, and my aigmkt prediction was wrong
 
@@ -79,6 +80,13 @@ pre-pin background loop fires during loading and confines ~190 loader threads pe
 worker to one CCD's 8 physical cores. That is wall-clock only — it does not touch the
 serving-window throughput — but it adds ~23 min to every run. Fixed for the next run:
 pinning is now one-shot **after `wait_for_server_ready`**, background loop deleted.
+
+**gmu > 0.90 is settled: the headroom is not usable.** T166 at 0.92 got 0
+successful out of 103. The server started and KV grew **59.8 → 65.6 GiB
+(+9.7%)** — the memory really is there — then it hung in warmup and never
+served a request. T157 at 0.95 hung identically (0/57). Two points above 0.90
+hang, 0.90 works. Reverted, and the fallback ladder's "try gmu first" advice is
+wrong in the upward direction.
 
 Settled negatives: QuickReduce FP −8.39% · EP=8 −4.7% · **async −1.8% on the nightly** (was −9.2% on the old engine; retested T162, still the wrong sign) · **chunk: 8192 is the peak** — 4096 is −7.4% (T164), 16384 is −2.5% · FP16 GEMM loses 6/8 shapes.
 
