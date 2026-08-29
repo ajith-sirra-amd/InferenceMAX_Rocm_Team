@@ -59,11 +59,18 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
     Read as an offload A/B: **dram is worth +1.8%**, matching T103/T133 (+2.8%)
     and SA (+1.1%). The "offload OFF" rule is **withdrawn** — it was inferred
     from idle, never from throughput. Restore `dram` for best-config runs.
-- **In flight: T162 C52 = N2, async scheduling.** `--async-scheduling` enabled
-  for `CONC >= 16` only, so C1 is untouched and this is one variable at C52.
-  Targets the largest measured item: ~150 s of 403.9 s idle is host/Python,
-  dominated by ~127 H2D copies per step. Was −9.2% on the old engine.
-  Baseline to beat: **7,824** (same offload `none`).
+- **T162 DONE. N2 async scheduling = 7,686, −1.8% vs T161.** Confirmed live
+  (`'async_scheduling': True`). C1 untouched and aborted again at 15/146 —
+  third consecutive reproduction, so the crash is independent of pin timing
+  *and* async. **Async is a settled negative; reverted in the script.**
+  - **This falsifies the profile's top attribution.** ~150 s of 403.9 s idle
+    was attributed to host/Python batch prep. Async exists to overlap exactly
+    that, and it made throughput worse. Either the attribution is wrong or the
+    host work is already off the critical path. N3 is now the leading lever by
+    default, not by ranking.
+- **In flight: T163 C52 — restore `kv-offloading: dram`.** One variable vs
+  T161 (async already reverted, so the rest is T161's config). Confirms the
+  +1.8% and re-establishes the best baseline for N3. Expect ~7,950–7,970.
 - **NEXT (user-requested): run `sa.sh` at C1 + C52.** Already staged — sa.sh
   copied over `kimik3_fp4_mi355x_mtp.sh`, image reverted to
   `aigmkt/kimi-k3-vllm:latest`. **This doubles as the crash A/B**: sa.sh has no

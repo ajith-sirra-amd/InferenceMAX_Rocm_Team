@@ -154,14 +154,10 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
 fi
 
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
-# N2: async scheduling, retested on the nightly. The T124 profile puts ~150 s of
-# 403.9 s idle in host/Python -- batch-tensor build plus ~127 H2D copies per step
-# -- and async is the one lever that overlaps that with the GPU step. It was
-# -9.2% on the old engine, 175 commits ago. C52 only (k=0, no spec decode); C1
-# stays as-is so this is one variable at the point being measured.
-if [ "${CONC:-1}" -ge 16 ] 2>/dev/null; then
-    ASYNC_SCHED="${ASYNC_SCHED:-1}"
-fi
+# N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
+# 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
+# engine, but still the wrong sign after 175 commits. The host prep the profile
+# blames for ~150 s of idle is evidently not what async overlaps here.
 if [ "${ASYNC_SCHED:-0}" = "1" ]; then
     ASYNC_SCHED_ARGS=(--async-scheduling)
 else

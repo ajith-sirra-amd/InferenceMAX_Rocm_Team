@@ -25,6 +25,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T157 | `gmu 0.95` | **0 — engine hung** |
 | **T160** | nightly + #51705 + **CCD pinning**, offload **dram** | **7,968** — best to date |
 | T161 | pin after ready, offload **none** | 7,824 (−1.8%) |
+| T162 | **async scheduling** (offload none) | 7,686 (−1.8% vs T161) |
 
 **CCD pinning is worth +0.78% at C52** (T160 7,968 vs T156 7,906, same stack, pinning
 the sole variable), and edges past the old aigmkt baseline T103 by +0.2%. Clean run:
@@ -37,7 +38,14 @@ worker to one CCD's 8 physical cores. That is wall-clock only — it does not to
 serving-window throughput — but it adds ~23 min to every run. Fixed for the next run:
 pinning is now one-shot **after `wait_for_server_ready`**, background loop deleted.
 
-Settled negatives: QuickReduce FP −8.39% · EP=8 −4.7% · async −9.2% · chunk 16384 −2.5% · FP16 GEMM loses 6/8 shapes.
+Settled negatives: QuickReduce FP −8.39% · EP=8 −4.7% · **async −1.8% on the nightly** (was −9.2% on the old engine; retested T162, still the wrong sign) · chunk 16384 −2.5% · FP16 GEMM loses 6/8 shapes.
+
+**The async result matters beyond its own sign.** The profile's biggest single
+item — ~150 s of 403.9 s idle attributed to host/Python batch prep — is the
+thing async scheduling exists to overlap, and overlapping it makes throughput
+*worse*. So either that attribution is wrong, or the host work is already off
+the critical path and the idle has another cause. Treat the "37% of idle is
+host" figure as unconfirmed until something else moves it.
 **The nightly is a C1 lever, not a C52 one** — #53942 is explicitly an m=1/m=2 change and cannot apply at batch 52.
 
 ## C1 — all nightly numbers are RETRACTED
