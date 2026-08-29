@@ -51,10 +51,19 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   Pinning = **+0.78%** over T156 on the identical stack. First non-negative C52
   lever. Weight load 2008.62 s (pre-pin loop ran during the load) — wall only,
   not the measurement; fixed by N1.
-- **In flight: T161 C52 = N1**, pinning moved one-shot to after
-  `wait_for_server_ready`, background pre-pin loop deleted. One variable vs T160.
-  Expect throughput ≈ 7,968 and ~23 min less wall. If throughput drops, the gain
-  came from pinning the loader threads too and N1 must be reverted.
+- **T161 DONE. C52 = 7,824** (offload `none`), **C1 aborted again** (15/146).
+  - N1 works: weight load **176.83 s** vs 2008.62 s, pin still applied (1,554).
+  - C1 crash is **not** the pin loop — reproduces without it.
+  - **mns 80 + none did not OOM.** First success of that pair on our node.
+  - **Confound, stated:** T161 also flipped offload dram→none (sa.sh copy).
+    Read as an offload A/B: **dram is worth +1.8%**, matching T103/T133 (+2.8%)
+    and SA (+1.1%). The "offload OFF" rule is **withdrawn** — it was inferred
+    from idle, never from throughput. Restore `dram` for best-config runs.
+- **In flight: T162 C52 = N2, async scheduling.** `--async-scheduling` enabled
+  for `CONC >= 16` only, so C1 is untouched and this is one variable at C52.
+  Targets the largest measured item: ~150 s of 403.9 s idle is host/Python,
+  dominated by ~127 H2D copies per step. Was −9.2% on the old engine.
+  Baseline to beat: **7,824** (same offload `none`).
 - **NEXT (user-requested): run `sa.sh` at C1 + C52.** Already staged — sa.sh
   copied over `kimik3_fp4_mi355x_mtp.sh`, image reverted to
   `aigmkt/kimi-k3-vllm:latest`. **This doubles as the crash A/B**: sa.sh has no

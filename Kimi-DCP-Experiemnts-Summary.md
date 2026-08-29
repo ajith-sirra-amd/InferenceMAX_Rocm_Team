@@ -23,7 +23,8 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T156 | nightly + rebased #51705 | 7,906 (−0.6%) |
 | T158 | `NCCL_MIN_NCHANNELS=32` | 7,656 (−3.2%) |
 | T157 | `gmu 0.95` | **0 — engine hung** |
-| **T160** | nightly + #51705 + **CCD pinning** | **7,968** — best to date |
+| **T160** | nightly + #51705 + **CCD pinning**, offload **dram** | **7,968** — best to date |
+| T161 | pin after ready, offload **none** | 7,824 (−1.8%) |
 
 **CCD pinning is worth +0.78% at C52** (T160 7,968 vs T156 7,906, same stack, pinning
 the sole variable), and edges past the old aigmkt baseline T103 by +0.2%. Clean run:
@@ -53,9 +54,41 @@ The CCD-pinning "−2.3%" is withdrawn with them. **Root cause found** (detail b
 fault-tolerance sentinel turns that into a fatal `EngineDeadError`. No worker fault
 precedes it. Prediction: **aigmkt does not crash** — which the sa.sh run tests.
 
+## T161 — pinning after server-ready, and a rule I had backwards
+
+**Pinning after `wait_for_server_ready` works.** Weight load **176.83 s** against
+T160's 2008.62 s — 11.4× — with the pin still landing (1,554 threads). Every
+future run gets that back. `bash -n` clean, gate lines all correct.
+
+**The C1 crash is not the pinning.** T161 C1 aborted identically (`ProfileAborted`,
+15/146 = 10.274%, 131/148) with the pre-pin loop gone. The nightly's
+`engine_core_sentinel` remains the suspect.
+
+**mns 80 + `kv-offloading: none` no longer OOMs on our node.** It completed
+1,856 requests, error rate 0.161%. The 3/3 `HSA_STATUS_ERROR_OUT_OF_RESOURCES`
+history for that combination did not reproduce. The fallback ladder stays
+written down but is not currently needed.
+
+**Correction — I had the offload rule backwards.** T161 is *not* a clean
+pin-timing A/B: it also flipped the offload `dram` → `none`, because the working
+tree had been replaced by the sa.sh copy. Read as an offload A/B instead, every
+direct throughput comparison we have favours **dram**:
+
+| | dram | none | delta |
+|---|--:|--:|--:|
+| ours, mns 80 | **7,968** (T160) | 7,824 (T161) | **−1.8%** |
+| ours, T103 vs T133 (mns 80 vs 65) | 7,950.6 | 7,725.96 | −2.8% |
+| SA, mns 80 | 8,296 | 8,204 | −1.1% |
+
+The T116/T124 idle finding was real — idle 44.3% → 28.2%, >10 ms stalls −57% —
+but **it did not convert into throughput**. Removing the offload removes stalls
+*and* removes the KV capacity that keeps the batch full; the second effect is
+larger. Restore `dram` for the best-config runs.
+
 ## Rules learned the hard way
 
-- **DRAM offload OFF.** Idle 44.3% → 28.2%, >10 ms stalls −57% (T116 vs T124).
+- **DRAM offload ON at C52** (+1.1–2.8% in three independent A/Bs). The earlier
+  "offload OFF" rule was inferred from idle, not throughput, and is withdrawn.
 - **DCP OFF at C1** (+36.5% TPOT), **ON at C52**.
 - `mns` 80 + no offload OOMs on **our node only** — SA gets 8,204 with it.
 - Read the aiperf error summary **before** quoting any throughput number.
