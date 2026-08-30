@@ -2135,7 +2135,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # N1-N9), so the remaining question is whether 52 is even the best
       # operating point. We have 40 and 52 and nothing between or just above.
       # 48 and 56 bracket it; each conc is an independent measurement.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [64, 72], spec-decoding: mtp }
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [60, 56], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [52], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:

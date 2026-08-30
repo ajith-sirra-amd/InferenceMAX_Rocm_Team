@@ -179,7 +179,16 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   One run, one variable. If it beats 8,326 the peak refines upward; if not,
   C56 stands and the concurrency axis is exhausted along with the config axis,
   leaving **N8 as the only remaining lever** — and it needs vLLM source.
-- **In flight: T170 C1** (tenth attempt). GPUs busy; C60 dispatches when it lands.
+- **T170 C1 aborted — tenth consecutive, at the byte-identical 15/146 =
+  10.274%.** 131 successful of 148. Gate lines correct for the C1 arm (`[dcp]
+  DISABLED`, `[mns] max_num_seqs=8 offload=none`, ladder 1..16, chunk 8192,
+  1,490 threads pinned). Ten runs, one failure signature, no drift: this is a
+  deterministic ceiling, not a flaky one, and it is N8.
+- **T171 DISPATCHED: C60 and C56.** yaml `conc-list: [60, 56]`, parsed locally
+  and the dram/backend assertion passes. C60 is the only unmeasured point in
+  the peak bracket [56, 64); C56 rides along as a **second sample of the peak**,
+  which the ledger needs — 8,326 is currently n=1 and the whole Phase E
+  conclusion rests on it. Two points, no config variable changed.
 - **T169 C48 = 7,771 — −4.2% vs C52's 8,115 mean, 14× the noise floor.**
   1,779 successful, error rate 0.056%. Gate lines correct (mns 80, ladder 80,
   chunk 8192, gmu 0.90, offload dram). **48 is worse; the peak is at or above

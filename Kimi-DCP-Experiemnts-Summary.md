@@ -35,6 +35,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | **T169** | **C56** (best config, conc swept) | **8,326 — NEW BEST, beats SA** |
 | T170 | **C72** (best config, conc swept) | **engine died** — aborted, 43/284 = 15.1% |
 | T170 | **C64** (best config, conc swept) | 8,040 — **−3.4% vs C56** |
+| T170 | C1 (unchanged) | **aborted, tenth straight** — 15/146 = 10.274% |
 
 ## Phase E: the concurrency curve
 
