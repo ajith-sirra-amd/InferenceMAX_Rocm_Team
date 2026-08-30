@@ -220,6 +220,15 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
     eleven times across healthy and degraded nodes alike. **The C1 abort is
     deterministic and independent of node health**, which further isolates it
     to N8 rather than to anything environmental.
+- **T172 C1 aborted — twelfth straight. 15/145 = 10.345%**, 130 successful of
+  147, gate lines correct.
+  - **Precision correction to what I wrote last cycle:** I called the C1
+    signature "byte-identical". It is not quite. The *failure count* is pinned
+    at exactly **15 every time**; the *denominator* moved 146 → 145 here (130
+    successful, not 131). So the right statement is: **15 failures is the
+    invariant, the total drifts by one request.** That is still a deterministic
+    fault rather than a rate — but "byte-identical" overstated it and is
+    withdrawn.
 - **T172 DISPATCHED: C56 alone**, `conc-list: [56]`, yaml parsed and asserted.
   jobs, not three, so a degraded node shows up faster. Purpose is unchanged —
   get the second sample of the peak that T171 failed to deliver. Only after
