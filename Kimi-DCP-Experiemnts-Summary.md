@@ -49,6 +49,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T175 | C1 (unchanged) | **aborted, fifteenth** — 15/146 |
 | T176 | C1 (unchanged) | **aborted, sixteenth** — 15/145 |
 | **T176** | **C60** (hypothesis test) | **8,350 — NEW BEST, clean, HSA = 0** |
+| **T177** | **C60 repeat** | **8,333 — REPRODUCED, clean, HSA = 0** |
 
 ## Phase E: the concurrency curve
 
@@ -321,6 +322,39 @@ Honest limits on it, since I over-claimed on 8,326 before:
 - The concurrency curve is now 7,771 / 8,115 / 8,326 / **8,350** / 7,976 at
   48 / 52 / 56 / 60 / 64. Peak sits somewhere in 56–60; the exact location is
   not resolved at this noise level.
+
+### T177 C60 = 8,333: the best number now has n=2 and it is tight
+
+The repeat came back **clean: 8,333 tok/s/GPU**, 1,836 successful of 1,961,
+validated error rate **2/1838 = 0.109%**, **HSA = 0**, init 518.61 s, wall
+116 min.
+
+| C60 | tok/s/GPU |
+|---|--:|
+| T176 | 8,350 |
+| T177 | **8,333** |
+| mean | **8,342, spread 0.20%** |
+
+**This is the first best-config claim in the whole ledger that rests on two
+clean runs**, and the spread is 0.20% — tighter than the 0.30% C52 floor and 8×
+tighter than C64's 1.6%. The two C60 runs also differ enormously in `init engine`
+(1575 s vs 519 s) and still land 0.20% apart, which is reassuring: the
+throughput number is not tracking warmup weather.
+
+**Settled position, and the caveats that survive:**
+
+- **Best config = C60, 8,342 mean (n=2 clean).** Replaces the C56 8,326 one-off,
+  which stays withdrawn.
+- **It clears SA's 8,296 by 0.55%.** With C60's own spread at 0.20% that is
+  ~2.8× — the first time a lead over SA has been outside its own measurement
+  noise. Still a *small* lead, and SA's number is n=1 from my side, so I would
+  call it "ahead, modestly" and not more.
+- **C60 reliability is 2 clean in 3** (HSA 1, 0, 0). Better than it looked one
+  cycle ago, but not free: roughly a third of C60 attempts still die on HSA.
+- Curve with the best data now: 7,771 / 8,115 / 8,326* / **8,342** / 7,976 at
+  48 / 52 / 56 / 60 / 64 (*one-off). Peak at 60.
+- Gap to the 12,500 target: **−33%**. The honest position stated at the top of
+  the queue is unchanged — no stack of remaining config levers closes it.
 
 ### C1 is a genuinely different fault — confirmed, not assumed
 

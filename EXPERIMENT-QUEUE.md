@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **12,500 tok/s/GPU** | **8,350 (T176, C60 — clean, n=1)** · C64 7,976 n=2 · SA 8,296 | **−33%** |
+| Throughput | **12,500 tok/s/GPU** | **8,342 (C60, n=2 clean, spread 0.20%)** · SA 8,296 | **−33%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -289,6 +289,21 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T177 C60 = 8,333 — REPRODUCED. Clean, HSA = 0, error rate 2/1838 = 0.109%.**
+  - **C60 n=2: 8,350 / 8,333, mean 8,342, spread 0.20%.** First best-config claim
+    in this ledger resting on two clean runs. Tighter than the 0.30% C52 floor and
+    8× tighter than C64's 1.6%. The two runs had wildly different warmups
+    (1575 s vs 519 s) and still landed 0.20% apart — the number is not tracking
+    warmup weather.
+  - **SETTLED BEST CONFIG: C60, 8,342 mean.** C56's 8,326 one-off stays withdrawn.
+  - **Clears SA's 8,296 by 0.55%**, ~2.8× C60's own spread — first lead over SA
+    outside measurement noise. Small lead, SA is n=1 from my side: "ahead,
+    modestly", not more.
+  - C60 reliability: **2 clean in 3** (HSA 1, 0, 0). Better than it looked, but
+    ~a third of attempts still die on HSA.
+  - Curve: 7,771 / 8,115 / 8,326* / **8,342** / 7,976 at 48/52/56/60/64. Peak 60.
+  - **Gap to 12,500 target: −33%.** Unchanged honest position — no remaining
+    config lever closes it; needs the kernel-level work or a different stack.
 - **T176 C60 = 8,350 — NEW BEST, clean, HSA = 0.** 1,840/1,967, error rate
   **4/1844 = 0.217%**, init 1575 s, wall 122 min. The discriminating test paid off.
   - **Hypothesis updated, and narrowed.** By config: C56 = 1 clean in 5 (HSA 2,3,3,3);
