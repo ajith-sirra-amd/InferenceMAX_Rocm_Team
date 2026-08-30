@@ -289,6 +289,27 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T174 C64 = 7,912 — CLEAN, and HSA = 0. THE NODE HAS RECOVERED.**
+  1,783 successful of 1,919, validated error rate **5/1788 = 0.280%**, init
+  909.77 s, wall 113 min (T170 C64 was 115). The probe did its job: the
+  queue-exhaustion fault that killed four straight throughput attempts is gone.
+  Picking C64 over a fourth C56 answered the node question *and* bought a real
+  second sample.
+- **NOISE-FLOOR CORRECTION — this weakens a claim of mine.** C64 now has n=2:
+  8,040 (T170) and 7,912 (T174), **spread 1.6%**. The 0.30% floor I have been
+  scoring every delta against was measured **at C52** (T163/T168). At C64 the
+  same-config spread is **5.3× larger**. Noise grows with concurrency; it is not
+  one number.
+  - **Consequence:** I called C64's −3.4% vs C56 decisive at "3.1× noise".
+    Against the correct 1.6% it is ~2× — suggestive, not decisive. **The
+    peak-at-56 claim is weaker than I stated.** The bracket still holds (7,771
+    at 48, abort at 72), but **56-vs-64 is close to run-to-run variation and
+    must not be quoted as settled.**
+  - The C52 ledger is unaffected — 0.30% was measured there.
+- **NEXT: C56 replication is unblocked and worth doing again.** It was stopped
+  because the node was bad, not because the question was answered. With HSA back
+  to 0, a clean C56 would give the peak its second sample — and given the 1.6%
+  spread finding, that sample matters more than I previously thought.
 - **T174 C1 aborted — fourteenth, 15/146 again**, 131/148, gate lines correct.
   Nothing new beyond the count: the fixed-15-failures signature holds, and
   T173 already established C1 is HSA-free and distinct from the C56 fault.

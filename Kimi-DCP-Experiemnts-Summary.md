@@ -44,6 +44,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T173 | **C56 repeat #3** | **aborted — 29/191 = 15.2%; 3 HSA errors again** |
 | T173 | C1 (unchanged) | **aborted, thirteenth** — 15/146; **HSA = 0** |
 | T174 | C1 (unchanged) | **aborted, fourteenth** — 15/146, identical |
+| **T174** | **C64 repeat** (node-health probe) | **7,912 — clean, HSA = 0. Node recovered.** |
 
 ## Phase E: the concurrency curve
 
@@ -208,6 +209,41 @@ is outside my bounds** — I can dispatch jobs, not recycle the machine.
 at three.** Four runs have now been spent on this; a fifth on the same node
 would burn another hour to reproduce the same HSA abort. The Phase E curve and
 the peak-at-56 conclusion rest, as they have throughout, on T169 and T170.
+
+### T174: the node recovered, and C64 n=2 forces a noise-floor correction
+
+The C64 probe came back **clean: 7,912 tok/s/GPU**, 1,783 successful of 1,919,
+validated error rate **5/1788 = 0.280%**, and — the point of the run —
+**`HSA_STATUS` count = 0**. The queue-exhaustion fault that killed four
+consecutive throughput attempts is gone. `init engine` 909.77 s, wall 113 min,
+both in line with T170 C64's 115 min.
+
+Choosing C64 over a fourth C56 was the right call: it answered the node
+question *and* produced a real second sample.
+
+**And that second sample corrects something I have been leaning on.**
+
+| C64 | tok/s/GPU |
+|---|--:|
+| T170 | 8,040 |
+| T174 | **7,912** |
+| mean | 7,976, **spread 1.6%** |
+
+The noise floor I established from T163/T168 (8,127 vs 8,103) was **0.30%**, and
+I have been scoring every delta against it. That figure was measured **at C52**.
+At C64 the same-config spread is **1.6% — 5.3× larger.** Noise is not a single
+number for this benchmark; it grows with concurrency, which makes sense given
+how much more the scheduler is juggling.
+
+**What this costs me:** I called C64's −3.4% against C56 a real turnover backed
+by "3.1× the noise floor". Against the *correct* C64 spread of 1.6% it is about
+**2×**, which is suggestive but not decisive. The peak-at-56 claim is weaker
+than I stated. What survives is the shape — 7,771 at 48 and an abort at 72
+bracket the peak firmly — but **56-vs-64 specifically is now within shouting
+distance of run-to-run variation** and should not be quoted as settled.
+
+Every per-concurrency delta scored against 0.30% needs re-reading with this in
+mind; the C52 ledger is unaffected since 0.30% was measured there.
 
 ### C1 is a genuinely different fault — confirmed, not assumed
 
