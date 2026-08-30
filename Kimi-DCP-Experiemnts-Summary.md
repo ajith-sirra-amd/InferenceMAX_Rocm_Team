@@ -48,6 +48,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T175 | **C56 repeat #4** | **0 successful / 70 — warmup failed, HSA = 3 again** |
 | T175 | C1 (unchanged) | **aborted, fifteenth** — 15/146 |
 | T176 | C1 (unchanged) | **aborted, sixteenth** — 15/145 |
+| **T176** | **C60** (hypothesis test) | **8,350 — NEW BEST, clean, HSA = 0** |
 
 ## Phase E: the concurrency curve
 
@@ -285,6 +286,41 @@ config.** The defensible best is **C64, n=2, mean 7,976** (8,040 / 7,912) —
 lower than 8,326 but actually reproducible, and it sits below SA's 8,296 rather
 than above it. The earlier "parity with SA reached" line rested on 8,326 and no
 longer holds.
+
+### T176 C60 = 8,350: the discriminating test paid off, and it is the new best
+
+C60 came back **clean: 8,350 tok/s/GPU**, 1,840 successful of 1,967, validated
+error rate **4/1844 = 0.217%**, and **HSA = 0**. `init engine` 1575 s, wall
+122 min.
+
+**The hypothesis test resolved in the "boundary between 56 and 60" direction.**
+Updated by config:
+
+| conc | attempts | HSA counts | best clean result |
+|---|--:|---|---|
+| C1 | 3 | 0, 0, 0 | — (aborts, N8) |
+| **C56** | 5 | 2, 3, 3, 3 (+1 old clean) | 8,326, **1 clean in 5** |
+| **C60** | 2 | **1, 0** | **8,350 — 1 clean in 2** |
+| **C64** | 2 | **0, 0** | 8,040 / 7,912 — **2 clean in 2** |
+
+So "low concurrency triggers HSA" is **too strong**. C60 can run clean. What the
+data supports now is narrower: **C56 is the reliably-bad point (1 in 5), C60 is
+intermittent (1 in 2), C64 is reliable (2 in 2)** — a gradient in failure rate
+across 56 → 60 → 64 rather than a sharp boundary. That is a weaker claim than
+last cycle's, and it is the one the evidence carries.
+
+**8,350 is the best measured number on this stack** and, unlike 8,326, it comes
+from a run with a validated error rate and a clean HSA log. It clears SA's 8,296
+by **0.65%**.
+
+Honest limits on it, since I over-claimed on 8,326 before:
+- **n=1 clean** (1 of 2 attempts). Not yet reproduced.
+- The C64 spread is 1.6%, so 8,350-vs-8,326 (0.3%) and 8,350-vs-SA (0.65%) are
+  both **inside plausible run-to-run variation**. Treat 8,350 as "best observed
+  and cleanly measured", **not** as a demonstrated margin over either.
+- The concurrency curve is now 7,771 / 8,115 / 8,326 / **8,350** / 7,976 at
+  48 / 52 / 56 / 60 / 64. Peak sits somewhere in 56–60; the exact location is
+  not resolved at this noise level.
 
 ### C1 is a genuinely different fault — confirmed, not assumed
 

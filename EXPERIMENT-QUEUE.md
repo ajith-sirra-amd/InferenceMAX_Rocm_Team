@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **12,500 tok/s/GPU** | **7,976 (C64, n=2 — reproducible)** · 8,326 C56 one-off · SA 8,296 | **−36%** |
+| Throughput | **12,500 tok/s/GPU** | **8,350 (T176, C60 — clean, n=1)** · C64 7,976 n=2 · SA 8,296 | **−33%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -289,6 +289,23 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T176 C60 = 8,350 — NEW BEST, clean, HSA = 0.** 1,840/1,967, error rate
+  **4/1844 = 0.217%**, init 1575 s, wall 122 min. The discriminating test paid off.
+  - **Hypothesis updated, and narrowed.** By config: C56 = 1 clean in 5 (HSA 2,3,3,3);
+    **C60 = 1 clean in 2** (HSA 1, 0); C64 = 2 clean in 2 (HSA 0, 0). So "low conc
+    triggers HSA" is **too strong** — C60 runs clean. The supported claim is a
+    **failure-rate gradient across 56 → 60 → 64**, not a sharp boundary.
+  - **8,350 clears SA's 8,296 by 0.65%** and is the best number on this stack,
+    from a run with a validated error rate and a clean HSA log.
+  - **Limits, stated because I over-claimed on 8,326:** n=1 clean; and with the
+    C64 spread at 1.6%, both 8,350-vs-8,326 (0.3%) and 8,350-vs-SA (0.65%) sit
+    **inside run-to-run variation**. Best *observed*, not a demonstrated margin.
+  - Curve: 7,771 / 8,115 / 8,326 / **8,350** / 7,976 at 48/52/56/60/64. Peak is
+    in 56–60; not resolvable more precisely at this noise level.
+- **T177 DISPATCHED: C60 again** — the one thing worth doing is a second clean
+  sample of the new best. If it reproduces near 8,350, the number is solid and
+  C60 becomes the settled operating point; if it lands at 8,0xx or fails on HSA,
+  that is equally informative about C60's 1-in-2 reliability.
 - **T176 C1 aborted — sixteenth, 15/145.** Same invariant: 15 failures, drifting
   denominator. Count only.
 - **T175 C1 aborted — fifteenth, 15/146.** Unchanged; recorded for the count only.
