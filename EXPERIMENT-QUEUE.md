@@ -248,6 +248,34 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **NEW STANDING RULE: before invoking N8 on any `EngineDeadError`, pull the
     `server_logs_*` artifact and grep for `HSA_STATUS`.** The runner blob alone
     hides the true first cause. This run is the proof.
+- **T173 C56 aborted (29/191 = 15.2%) — and the new HSA rule cracked the whole
+  cluster of failures on its first use.** 3 `HSA_STATUS_ERROR_OUT_OF_RESOURCES`
+  in `server.log` again. I then grepped the archived artifacts for every run
+  back to the last clean number:
+
+  | run | job | HSA | outcome |
+  |---|---|--:|---|
+  | T170 | C64 | **0** | **clean — 8,040** |
+  | T171 | C60 | 1 | aborted 20.9% |
+  | T171 | C56 | 2 | aborted 16.9%, 3,194 s warmup |
+  | T172 | C56 | 3 | 0/56, server dead |
+  | T173 | C56 | 3 | aborted 15.2% |
+
+  - **My "three different failure modes" line from two cycles ago is wrong and
+    is withdrawn.** It is ONE fault at rising severity — ROCm queue allocation
+    failing — counting 0 → 1 → 2 → 3 → 3 in time order, exactly zero on the
+    last run that produced a number. The *reported symptom* (empty streams /
+    EngineDeadError / connection refused) just tracks when in the run the abort
+    lands.
+  - **Not a C56 config property.** Re-dispatching C56 cannot fix it. The node
+    is accumulating unreleased GPU queue resources across runs and needs a
+    **runner reset — outside my bounds.** Flagging for the owner.
+  - **STOPPING the C56 replication at three attempts.** Four runs spent; a
+    fifth on this node buys another HSA abort. **C56 = 8,326 stays n=1** and
+    the peak-at-56 conclusion rests on T169 + T170, where it always did.
+- **Superseded framing (kept for the record):** the entry below called node
+  health "the blocking issue" but treated the three failures as distinct. The
+  HSA table above is the corrected version.
 - **Node health is now the blocking issue, not config.** Since T170 C64 — the
   last clean throughput number — **three consecutive throughput attempts have
   failed in three different ways**: T171 C60 (empty streams), T171 C56 (3,194 s

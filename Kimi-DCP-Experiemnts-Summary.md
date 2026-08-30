@@ -41,6 +41,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T171 | C1 (unchanged) | **aborted, eleventh straight** — 15/146 = 10.274% |
 | T172 | C1 (unchanged) | **aborted, twelfth straight** — 15/145 = 10.345% |
 | T172 | **C56 repeat #2** | **0 successful / 56 — HSA out-of-resources killed the engine** |
+| T173 | **C56 repeat #3** | **aborted — 29/191 = 15.2%; 3 HSA errors again** |
 
 ## Phase E: the concurrency curve
 
@@ -169,6 +170,42 @@ What this does and does not establish, kept separate on purpose:
 **Action: every future sentinel/`EngineDeadError` diagnosis must check
 `server.log` for an HSA line before N8 is invoked.** Cheap, and it is the step
 that would have caught this earlier.
+
+### The HSA count across every run since the last clean number — one cause, not four
+
+The rule above paid off on its first use. T173 C56 aborted at 29/191 = 15.2%,
+and `server.log` again showed **three** `HSA_STATUS_ERROR_OUT_OF_RESOURCES`. So
+I went back and grepped the archived `server_logs_*` artifacts for every run
+since the last clean measurement:
+
+| run | job | HSA errors | outcome |
+|---|---|--:|---|
+| T170 | C64 | **0** | **clean — 8,040 tok/s/GPU** |
+| T171 | C60 | 1 | aborted, 20.9% |
+| T171 | C56 | 2 | aborted, 16.9% (3,194 s warmup) |
+| T172 | C56 | 3 | **0/56**, server dead before profiling |
+| T173 | C56 | 3 | aborted, 15.2% |
+
+**This overturns my "three different failure modes" framing from two cycles
+ago.** I described T171 C60 (empty streams), T171 C56 (slow warmup) and T172
+C56 (HSA) as three separate faults and concluded "node health is degraded" in a
+vague way. They are **one fault at increasing severity**: ROCm queue resources
+failing to allocate, with the count rising 0 → 1 → 2 → 3 → 3 in chronological
+order and sitting at exactly zero on the last run that produced a number.
+
+The symptom the benchmark reports — empty content streams, `EngineDeadError`,
+connection-refused — varies with *when* in the run the queue abort lands. The
+cause does not vary.
+
+**What this means practically:** this is not a config property of C56, and no
+amount of re-dispatching C56 will produce a number. The node is accumulating
+unreleased GPU queue resources across runs. **That needs a runner reset, which
+is outside my bounds** — I can dispatch jobs, not recycle the machine.
+
+**C56 = 8,326 therefore stays n=1, and I am stopping the replication attempts
+at three.** Four runs have now been spent on this; a fifth on the same node
+would burn another hour to reproduce the same HSA abort. The Phase E curve and
+the peak-at-56 conclusion rest, as they have throughout, on T169 and T170.
 
 **Phase E is closed. The settled operating point is C56 = 8,326 tok/s/GPU**,
 1,814 successful, error rate 0.220% — the best measured number on this stack and
