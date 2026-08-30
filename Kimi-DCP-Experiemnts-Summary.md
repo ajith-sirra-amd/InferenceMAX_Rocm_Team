@@ -31,6 +31,22 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T166 | **gmu 0.92** | **0/103 — hung in warmup** |
 | T167 | **direct DCP a2a** | **workers died at capture — op absent** |
 | **T168** | **repeat of T163, nothing changed** | **8,103** — noise floor 0.30% |
+| T169 | **C48** (best config, conc swept) | 7,771 — **−4.2% vs C52** |
+
+## Phase E: the concurrency curve
+
+Config space at C52 is exhausted, so the remaining question is whether 52 is the
+right operating point. Best config held fixed; only concurrency varies.
+
+| conc | tok/s/GPU | vs C52 mean (8,115) |
+|--:|--:|--:|
+| 40 | (historic, different config) | — |
+| **48** | **7,771** | **−4.2%** |
+| **52** | **8,127 / 8,103** | baseline |
+| 56 | in flight | — |
+
+−4.2% is 14× the 0.30% noise floor, so **48 is genuinely worse and the peak is
+at or above 52.** C56 decides whether 52 is the top or merely on the way up.
 
 ## T165: the C1 crash is not C1-specific, and my aigmkt prediction was wrong
 

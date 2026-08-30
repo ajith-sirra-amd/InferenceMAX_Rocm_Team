@@ -142,6 +142,10 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   −7.4% is 25× noise, offload +3.9% is 13×, async −1.8% is 6×. **The one weak
   claim is CCD pinning's +0.78%, at 2.6× — provisional.** And n=2 is a point
   estimate of spread, not a standard deviation.
+- **T169 C48 = 7,771 — −4.2% vs C52's 8,115 mean, 14× the noise floor.**
+  1,779 successful, error rate 0.056%. Gate lines correct (mns 80, ladder 80,
+  chunk 8192, gmu 0.90, offload dram). **48 is worse; the peak is at or above
+  52.** C56 now running decides whether 52 is the top.
 - **In flight: T169 — Phase E partial, C48 and C56.** C52's config space is
   exhausted, so the open question is whether 52 is even the right operating
   point; we have 40 and 52 and nothing between or above. 48 and 56 bracket it
