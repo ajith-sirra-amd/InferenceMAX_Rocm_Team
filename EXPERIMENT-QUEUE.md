@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **12,500 tok/s/GPU** | **8,326 (T169, C56 — settled peak)** · SA 8,296 | **−33%** |
+| Throughput | **12,500 tok/s/GPU** | **8,326 (T169, C56 — peak, still n=1)** · SA 8,296 | **−33%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -198,6 +198,25 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **A cliff at 60 that vanishes at 64 is not physical.** C56 and C64 both
     completed cleanly on either side. Recorded as inconclusive, **pending one
     re-run**; it is not evidence about the curve either way.
+- **T171 C56 ALSO aborted — the run is compromised, and this corrects what I
+  said about C60 last cycle.** 10/59 = 16.949%, 49 successful of 174, 1,489 is a
+  partial. Same class as C60: 10 `InvalidInferenceResult`, **zero 500s**.
+  - **`init engine` took 3,194 s** against 447 s (C60), 531 s (C72), 447 s
+    (C64) on the identical config — **6–7× every other run**. Effective
+    concurrency never passed **28** against mns 80. The node was degraded.
+  - Weight-load time is *not* the discriminator: it swung 169 s → 717 s across
+    these runs and the 717 s one (C64) is the clean 8,040 measurement.
+  - **I framed C60 as an isolated inconclusive point one cycle ago. Withdrawn.**
+    Two jobs in the same run, same signature, one of them at a concurrency that
+    had already measured clean at 8,326 — that is a run-level fault, not a
+    property of 60. **Neither T171 throughput number is usable.**
+  - The Phase E curve therefore rests on T169 + T170 exactly as before, and
+    **C56 = 8,326 is still n=1.**
+- **NEXT (dispatch when C1 lands): re-run C56 alone**, `conc-list: [56]`. Two
+  jobs, not three, so a degraded node shows up faster. Purpose is unchanged —
+  get the second sample of the peak that T171 failed to deliver. Only after
+  that does "settled peak" hold; C60 stays unmeasured and lower priority, since
+  even a good C60 cannot move a peak that C64 already bounds from above.
 - **T171 DISPATCHED: C60 and C56.** yaml `conc-list: [60, 56]`, parsed locally
   and the dram/backend assertion passes. C60 is the only unmeasured point in
   the peak bracket [56, 64); C56 rides along as a **second sample of the peak**,

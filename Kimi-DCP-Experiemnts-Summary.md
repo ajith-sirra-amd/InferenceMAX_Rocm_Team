@@ -37,6 +37,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T170 | **C64** (best config, conc swept) | 8,040 — **−3.4% vs C56** |
 | T170 | C1 (unchanged) | **aborted, tenth straight** — 15/146 = 10.274% |
 | T171 | **C60** (best config, conc swept) | **aborted early — INCONCLUSIVE**, not a cliff |
+| T171 | **C56 repeat** (peak, 2nd sample) | **aborted — 10/59 = 16.9%; warmup 3,194 s** |
 
 ## Phase E: the concurrency curve
 
@@ -84,6 +85,40 @@ background rate spiking 18× and crossing aiperf's threshold inside the first
 C64 (8,040) both completed cleanly on either side. C60 is recorded as
 **inconclusive and pending one re-run** — it is not evidence about the shape of
 the curve, and the peak-at-56 conclusion neither gains nor loses from it.
+
+### T171 C56 also aborted — the whole run is compromised, not the operating point
+
+The C56 repeat, the same concurrency that measured **8,326 cleanly in T169**,
+aborted at **10/59 = 16.949%** (aiperf 10/56 = 17.9%), 49 successful of 174.
+The 1,489 tok/s/GPU printed is a partial. Same error class as C60: **10
+`InvalidInferenceResultError`, zero HTTP 500s.**
+
+The smoking gun is the warmup:
+
+| | init engine (profile + KV + warmup) | eff. concurrency max | outcome |
+|---|--:|--:|---|
+| T170 C72 | 531 s | 85 | engine died |
+| T170 C64 | 447 s* | — | **clean, 8,040** |
+| T171 C60 | 447 s | 48 | aborted |
+| **T171 C56** | **3,194 s** | **28** | **aborted** |
+
+\*C64's own init; weight-load time is not the discriminator — it swung 169 s to
+717 s across these runs and the 717 s one (C64) is the clean measurement.
+
+**3,194 s of warmup is 6–7× every other run on the identical config.** Combined
+with effective concurrency never passing 28 against mns 80, the node was
+degraded while C56 ran.
+
+**This retracts the framing I gave C60 one cycle earlier.** I called C60 an
+isolated inconclusive point. Two consecutive jobs in the same run now show the
+same signature, one of them at a concurrency that had already measured clean.
+That is not a per-concurrency effect — **T171 as a whole is compromised**, and
+neither of its throughput numbers is usable. The Phase E curve stands on T169
+and T170 alone, which is where it stood before.
+
+**Consequence: C56 = 8,326 is still n=1.** The one attempt to replicate it
+landed on a bad node. It needs a clean re-run before the "settled peak" label
+is fully earned.
 
 **Phase E is closed. The settled operating point is C56 = 8,326 tok/s/GPU**,
 1,814 successful, error rate 0.220% — the best measured number on this stack and
