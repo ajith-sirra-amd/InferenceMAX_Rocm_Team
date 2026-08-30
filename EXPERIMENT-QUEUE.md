@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **12,500 tok/s/GPU** | **8,326 (T169, C56 — peak, still n=1)** · SA 8,296 | **−33%** |
+| Throughput | **12,500 tok/s/GPU** | **7,976 (C64, n=2 — reproducible)** · 8,326 C56 one-off · SA 8,296 | **−36%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -289,6 +289,31 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T175 C56 FAILED (0/70, warmup) with HSA = 3 — and it FALSIFIES my
+  "node degradation" model from last cycle.** I said the node had recovered on
+  the strength of one clean C64. Sorting every run by *config* rather than
+  *time*:
+
+  | conc | runs | HSA | outcome |
+  |---|--:|---|---|
+  | C1 | 2 | 0, 0 | no HSA (aborts, but N8) |
+  | **C64** | 2 | **0, 0** | **both clean: 8,040 / 7,912** |
+  | C60 | 1 | 1 | aborted |
+  | **C56** | 4 | **2, 3, 3, 3** | **all four failed** |
+
+  - **The accumulation model predicted T174 C64 ≥ 3 HSA. It was 0.** Falsified.
+    Counts do not climb with time or reset on recovery — they sort by conc.
+  - Surviving correlation: **C56 triggers HSA, C64 does not.** Five C56 attempts
+    = 1 success (T169) + 4 failures, with two clean C64 runs bracketing them.
+    Counter-intuitive (lower conc failing where higher succeeds), which is why I
+    reached for the time story. The C64-at-zero point rules it out. I am not
+    inventing a mechanism; I am reporting what the data constrains.
+  - **BEST-CONFIG CHANGE: C56 = 8,326 is a one-off that has resisted four
+    replications and should NOT be reported as best.** Defensible best is
+    **C64, n=2, mean 7,976** — reproducible, and *below* SA's 8,296. **The
+    "parity with SA" claim rested on 8,326 and is withdrawn.**
+  - Stop dispatching C56. Any further C56 work needs the HSA mechanism
+    understood first, which needs node-level access outside my bounds.
 - **T174 C64 = 7,912 — CLEAN, and HSA = 0. THE NODE HAS RECOVERED.**
   1,783 successful of 1,919, validated error rate **5/1788 = 0.280%**, init
   909.77 s, wall 113 min (T170 C64 was 115). The probe did its job: the

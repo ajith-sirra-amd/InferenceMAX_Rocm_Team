@@ -45,6 +45,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T173 | C1 (unchanged) | **aborted, thirteenth** — 15/146; **HSA = 0** |
 | T174 | C1 (unchanged) | **aborted, fourteenth** — 15/146, identical |
 | **T174** | **C64 repeat** (node-health probe) | **7,912 — clean, HSA = 0. Node recovered.** |
+| T175 | **C56 repeat #4** | **0 successful / 70 — warmup failed, HSA = 3 again** |
 
 ## Phase E: the concurrency curve
 
@@ -244,6 +245,44 @@ distance of run-to-run variation** and should not be quoted as settled.
 
 Every per-concurrency delta scored against 0.30% needs re-reading with this in
 mind; the C52 ledger is unaffected since 0.30% was measured there.
+
+### T175 falsifies my "node degradation" model. The HSA fault tracks C56, not time.
+
+C56 failed a fourth time: **0 successful of 70**, aiperf reason *"A root AgentX
+warmup request failed, so profiling was not"* started. `init engine` 1233 s.
+Per the standing rule I checked `server.log` first: **HSA = 3.**
+
+One cycle ago I said the node had recovered, on the strength of T174 C64 coming
+back clean with HSA = 0. That was too fast. Laying every run out by *config*
+instead of by *time* gives a different and much cleaner picture:
+
+| conc | runs | HSA counts | outcome |
+|---|--:|---|---|
+| **C1** | 2 | 0, 0 | no HSA ever (aborts, but for the N8 reason) |
+| **C64** | 2 | **0, 0** | **both clean — 8,040 and 7,912** |
+| C60 | 1 | 1 | aborted |
+| **C56** | 4 | **2, 3, 3, 3** | **all four failed** |
+
+**My accumulation model predicted T174 C64 would show HSA ≥ 3, since it ran
+after three HSA-3 runs. It showed 0.** The model is falsified: the counts do not
+climb with time and do not reset with a "recovery". They sort by concurrency.
+
+What actually correlates: **C56 triggers `HSA_STATUS_ERROR_OUT_OF_RESOURCES`
+and C64 does not** — five C56 attempts, one success (T169) and four failures,
+against two clean C64 runs bracketing them in time. A *lower* concurrency
+failing where a higher one succeeds is counter-intuitive, which is presumably
+why I reached for the time-based story instead. But the C64-at-zero data point
+sits in the middle of the bad C56 runs and rules it out.
+
+I am not going to invent a mechanism for it. What I can say is what the data
+constrains: it is reproducible, config-linked, and not a monotone node decay.
+
+**Practical consequence, stated plainly: C56 = 8,326 is a one-off that has
+resisted four replication attempts, and it should not be reported as the best
+config.** The defensible best is **C64, n=2, mean 7,976** (8,040 / 7,912) —
+lower than 8,326 but actually reproducible, and it sits below SA's 8,296 rather
+than above it. The earlier "parity with SA reached" line rested on 8,326 and no
+longer holds.
 
 ### C1 is a genuinely different fault — confirmed, not assumed
 
