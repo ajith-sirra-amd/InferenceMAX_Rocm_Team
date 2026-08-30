@@ -43,6 +43,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T172 | **C56 repeat #2** | **0 successful / 56 — HSA out-of-resources killed the engine** |
 | T173 | **C56 repeat #3** | **aborted — 29/191 = 15.2%; 3 HSA errors again** |
 | T173 | C1 (unchanged) | **aborted, thirteenth** — 15/146; **HSA = 0** |
+| T174 | C1 (unchanged) | **aborted, fourteenth** — 15/146, identical |
 
 ## Phase E: the concurrency curve
 

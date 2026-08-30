@@ -289,6 +289,11 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T174 C1 aborted — fourteenth, 15/146 again**, 131/148, gate lines correct.
+  Nothing new beyond the count: the fixed-15-failures signature holds, and
+  T173 already established C1 is HSA-free and distinct from the C56 fault.
+  **No further C1 diagnosis is possible from benchmark dispatches** — it is
+  N8, and N8 needs vLLM source. Recording the count and moving on.
 - **Superseded framing (kept for the record):** the entry below called node
   health "the blocking issue" but treated the three failures as distinct. The
   HSA table above is the corrected version.
