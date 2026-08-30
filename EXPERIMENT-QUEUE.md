@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| C52 throughput | **12,500 tok/s/GPU** | **8,326 (T169, C56)** · SA 8,296 | **−33%** |
+| Throughput | **12,500 tok/s/GPU** | **8,326 (T169, C56 — settled peak)** · SA 8,296 | **−33%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -166,9 +166,20 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 now caps the throughput curve as well as C1.** It was already the top
     blocked item; it is now worth more than any remaining config lever.
   - **Peak is bracketed in [56, 72).** C64 (in flight) decides it.
-- **In flight: T170 — C64, then C1.** C72 is done (aborted). If C64 > 8,326 the
-  peak is 64 and C68 is next; if C64 < 8,326 the peak is 56 and Phase E closes
-  with **C56 = 8,326** as the settled best config.
+- **T170 C64 = 8,040 — −3.4% vs C56. The curve turns over. PHASE E CLOSES.**
+  1,805 successful of 1,939, validated error rate **3/1808 = 0.166%**, all gate
+  lines correct — a clean measurement of a worse operating point.
+  - Full curve: **7,771 / 8,115 / 8,326 / 8,040 / aborted** at 48 / 52 / 56 /
+    64 / 72. Peak is **56**, and 64 lands below even the C52 mean.
+  - **Settled best config: C56 = 8,326 tok/s/GPU.** Best number on this stack.
+  - C64 took **115 min** wall against ~50–70 min elsewhere. At 64 the engine is
+    already deep in the queueing regime that kills it outright at 72 — the
+    slowdown and the C72 death are the same N8 ceiling seen from two sides.
+- **Next: C60**, the only unmeasured point inside the peak bracket [56, 64).
+  One run, one variable. If it beats 8,326 the peak refines upward; if not,
+  C56 stands and the concurrency axis is exhausted along with the config axis,
+  leaving **N8 as the only remaining lever** — and it needs vLLM source.
+- **In flight: T170 C1** (tenth attempt). GPUs busy; C60 dispatches when it lands.
 - **T169 C48 = 7,771 — −4.2% vs C52's 8,115 mean, 14× the noise floor.**
   1,779 successful, error rate 0.056%. Gate lines correct (mns 80, ladder 80,
   chunk 8192, gmu 0.90, offload dram). **48 is worse; the peak is at or above

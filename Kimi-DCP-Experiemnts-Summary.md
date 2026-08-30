@@ -34,6 +34,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T169 | **C48** (best config, conc swept) | 7,771 — **−4.2% vs C52** |
 | **T169** | **C56** (best config, conc swept) | **8,326 — NEW BEST, beats SA** |
 | T170 | **C72** (best config, conc swept) | **engine died** — aborted, 43/284 = 15.1% |
+| T170 | **C64** (best config, conc swept) | 8,040 — **−3.4% vs C56** |
 
 ## Phase E: the concurrency curve
 
@@ -45,10 +46,22 @@ right operating point. Best config held fixed; only concurrency varies.
 | **48** | 7,771 | **−4.2%** |
 | **52** | 8,127 / 8,103 (mean 8,115) | baseline |
 | **56** | **8,326** | **+2.6%** |
+| **64** | 8,040 | **−0.9%** |
 | **72** | **aborted — engine died** | — |
 
-Both 48 and 56 deltas clear the 0.30% noise floor comfortably (14× and 8.7×), so
-the rising limb is real. **72 is past the cliff**, so the peak lies in [56, 72).
+Every delta clears the 0.30% noise floor (14×, 8.7×, 3.1×), so the shape is
+real: **the curve peaks at 56 and turns over.** 64 gives back −3.4% against 56
+and lands *below* the C52 mean; 72 is past the cliff entirely.
+
+**Phase E is closed. The settled operating point is C56 = 8,326 tok/s/GPU**,
+1,814 successful, error rate 0.220% — the best measured number on this stack and
+0.4% past SA's 8,296 (1.3× noise, so parity rather than a decisive win).
+
+C64 itself was a clean run — 1,805 successful of 1,939, validated error rate
+**3/1808 = 0.166%**, all gate lines correct — so 8,040 is a real measurement of
+a worse operating point, not a degraded one. Note the wall time though: 115 min
+against ~50–70 min for the other points. At 64 the engine is already spending
+most of its time in the queueing regime that kills it outright at 72.
 
 ### T170 C72: the cliff is the same engine death, reached by load instead of mns
 
