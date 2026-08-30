@@ -488,3 +488,13 @@ Expect the peak between 40 and 56; we have 40 and 52 and nothing between.
 | EP=8 | −4.7% |
 | FP16 GEMM | loses 6 of 8 shapes |
 | MTP above CONC 4 | −85% at C40 |
+
+- **T174 DISPATCHED: C64, not C56.** Deliberate choice. C64 is the *only*
+  recent config that produced a clean number (T170: 8,040, **HSA = 0**), so this
+  run does double duty:
+  - **Node-health probe.** If C64 comes back with HSA > 0, the node is still
+    accumulating queue resources and no throughput number from it is usable —
+    diagnosed without pretending it is a config result.
+  - **A real second sample of C64** if the node has recovered, which the ledger
+    needs since every point in Phase E except C52 is n=1.
+  Re-running C56 a fourth time would have produced neither.
