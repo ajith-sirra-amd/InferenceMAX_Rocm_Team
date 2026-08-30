@@ -42,6 +42,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T172 | C1 (unchanged) | **aborted, twelfth straight** — 15/145 = 10.345% |
 | T172 | **C56 repeat #2** | **0 successful / 56 — HSA out-of-resources killed the engine** |
 | T173 | **C56 repeat #3** | **aborted — 29/191 = 15.2%; 3 HSA errors again** |
+| T173 | C1 (unchanged) | **aborted, thirteenth** — 15/146; **HSA = 0** |
 
 ## Phase E: the concurrency curve
 
@@ -206,6 +207,32 @@ is outside my bounds** — I can dispatch jobs, not recycle the machine.
 at three.** Four runs have now been spent on this; a fifth on the same node
 would burn another hour to reproduce the same HSA abort. The Phase E curve and
 the peak-at-56 conclusion rest, as they have throughout, on T169 and T170.
+
+### C1 is a genuinely different fault — confirmed, not assumed
+
+When the HSA cause emerged I wrote that it does **not** follow that the C1
+aborts share it, and kept the two separate pending evidence. T173 supplies the
+evidence. Same run, same node, same hour — the C56 job and the C1 job:
+
+| T173 job | HSA errors | sentinel | EngineDeadError | outcome |
+|---|--:|--:|--:|---|
+| C56 | **3** | yes | yes | aborted 15.2% |
+| **C1** | **0** | yes (×2) | yes (×4) | aborted 15/146 |
+
+**C1 hits the sentinel → `mq.dequeue` → `acquire_read` → `RuntimeError:
+cancelled` → `EngineDeadError` chain with zero HSA lines anywhere in
+`server.log`.** The C56 job on the same node in the same run had three.
+
+So the two faults are distinct, and the caution was right:
+
+- **C56/C60:** HSA queue exhaustion; sentinel is downstream. Needs a node reset.
+- **C1:** sentinel fires with no HSA precursor. **N8 remains the live
+  hypothesis here** — and this is the first time it has been isolated rather
+  than merely assumed. The thirteen C1 aborts, at a fixed 15 failures with a
+  drifting denominator, are not the node.
+
+That also means the N8 investigation is still worth doing; T172 weakened the
+*evidence chain* I had been using, not the hypothesis itself for C1.
 
 **Phase E is closed. The settled operating point is C56 = 8,326 tok/s/GPU**,
 1,814 successful, error rate 0.220% — the best measured number on this stack and

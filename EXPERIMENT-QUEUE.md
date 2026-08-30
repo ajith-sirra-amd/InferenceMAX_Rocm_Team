@@ -273,6 +273,22 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **STOPPING the C56 replication at three attempts.** Four runs spent; a
     fifth on this node buys another HSA abort. **C56 = 8,326 stays n=1** and
     the peak-at-56 conclusion rests on T169 + T170, where it always did.
+- **T173 C1 aborted (thirteenth, 15/146) — and it CONFIRMS C1 is a different
+  fault from the C56 HSA one.** Same run, same node, same hour:
+
+  | T173 job | HSA | sentinel | EngineDeadError | outcome |
+  |---|--:|--:|--:|---|
+  | C56 | **3** | yes | yes | aborted 15.2% |
+  | **C1** | **0** | yes ×2 | yes ×4 | aborted 15/146 |
+
+  - C1 reaches `engine_core_sentinel:179` → `mq.dequeue` → `acquire_read` →
+    `RuntimeError: cancelled` → `EngineDeadError` with **zero HSA lines** in
+    `server.log`. The C56 job beside it had three.
+  - I flagged this as an open question when the HSA cause emerged and refused to
+    fold C1 into it. That caution is now vindicated with direct evidence.
+  - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
+    assumed. T172 weakened the evidence chain I was using, not the hypothesis
+    itself. The thirteen C1 aborts are not the node.
 - **Superseded framing (kept for the record):** the entry below called node
   health "the blocking issue" but treated the three failures as distinct. The
   HSA table above is the corrected version.
