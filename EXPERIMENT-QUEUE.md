@@ -148,7 +148,11 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   ~+2.8% total; changing the operating point to 56 added +2.6% in one run.
   **C52 was inherited, never chosen.** SA parity is 0.4% — 1.3× noise, so
   parity, not a win.
-- **NEXT: C64 and C72**, staged in the yaml, dispatches when C1 lands.
+- **T169 C1 aborted again** (131/148, 15/146) — ninth consecutive. Unchanged
+  cause: the RPC dequeue timeout (N8), which needs vLLM source.
+- **In flight: T170 — C64 and C72.** Same best config, concurrency only. The
+  curve is 7,771 / 8,115 / 8,326 at 48 / 52 / 56 and still climbing, so these
+  two points either find the peak or show it is higher still.
 - **T169 C48 = 7,771 — −4.2% vs C52's 8,115 mean, 14× the noise floor.**
   1,779 successful, error rate 0.056%. Gate lines correct (mns 80, ladder 80,
   chunk 8192, gmu 0.90, offload dram). **48 is worse; the peak is at or above
