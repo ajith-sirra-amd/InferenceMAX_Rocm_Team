@@ -289,6 +289,8 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T176 C1 aborted — sixteenth, 15/145.** Same invariant: 15 failures, drifting
+  denominator. Count only.
 - **T175 C1 aborted — fifteenth, 15/146.** Unchanged; recorded for the count only.
 - **T176 DISPATCHED: C60 — a TEST of the config-linked HSA hypothesis, not a repeat.**
   C60 has been run once (HSA = 1, aborted) and sits between the four-times-failing

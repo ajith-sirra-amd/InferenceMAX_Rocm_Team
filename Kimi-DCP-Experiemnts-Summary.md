@@ -47,6 +47,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | **T174** | **C64 repeat** (node-health probe) | **7,912 — clean, HSA = 0. Node recovered.** |
 | T175 | **C56 repeat #4** | **0 successful / 70 — warmup failed, HSA = 3 again** |
 | T175 | C1 (unchanged) | **aborted, fifteenth** — 15/146 |
+| T176 | C1 (unchanged) | **aborted, sixteenth** — 15/145 |
 
 ## Phase E: the concurrency curve
 
