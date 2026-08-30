@@ -33,6 +33,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | **T168** | **repeat of T163, nothing changed** | **8,103** — noise floor 0.30% |
 | T169 | **C48** (best config, conc swept) | 7,771 — **−4.2% vs C52** |
 | **T169** | **C56** (best config, conc swept) | **8,326 — NEW BEST, beats SA** |
+| T170 | **C72** (best config, conc swept) | **engine died** — aborted, 43/284 = 15.1% |
 
 ## Phase E: the concurrency curve
 
@@ -44,9 +45,44 @@ right operating point. Best config held fixed; only concurrency varies.
 | **48** | 7,771 | **−4.2%** |
 | **52** | 8,127 / 8,103 (mean 8,115) | baseline |
 | **56** | **8,326** | **+2.6%** |
+| **72** | **aborted — engine died** | — |
 
-Both deltas clear the 0.30% noise floor comfortably (14× and 8.7×), so the curve
-is real: **throughput is still rising at 56 and the peak has not been found.**
+Both 48 and 56 deltas clear the 0.30% noise floor comfortably (14× and 8.7×), so
+the rising limb is real. **72 is past the cliff**, so the peak lies in [56, 72).
+
+### T170 C72: the cliff is the same engine death, reached by load instead of mns
+
+C72 ran to the benchmark and then died: **16× HTTP 500 `EngineCore encountered
+an issue`** plus 30 `InvalidInferenceResultError` (empty streams from the dead
+engine) → **43/284 = 15.141% > 10%** → `ProfileAborted`. The 4,275 tok/s/GPU
+printed before the abort is a partial and is **not a measurement**.
+
+Gate lines were all correct — this was not a misconfiguration:
+`[dcp] size=8 backend=a2a interleave=1`, `[mns] max_num_seqs=80 conc=72
+offload=dram`, `[chunk] 8192`, `[gmu] 0.9`, `[pin-ccd] pinned 1562 threads`,
+`graphs: dense ladder 1..80`, init 531.26 s.
+
+What the aiperf tables show at the moment of death:
+
+| | value |
+|---|--:|
+| Effective concurrency | avg 53.96, **max 85** (mns is 80) |
+| Effective decode throughput per user | **4.49 tok/s/user** avg |
+| Effective latency (CO-aware) | avg 114.6 s, **max 524.7 s** |
+| Tokens in flight | avg 1.95 M, **max 4.63 M** |
+| Prompt tokens/request | avg 111,750, 93.32% served from cache |
+
+**This is the T165 failure with a different trigger.** T165 raised `mns` 80→96
+and the engine died; here `mns` stayed at 80 and the *offered load* pushed
+effective concurrency to 85, past the batch the ladder was captured for.
+Requests queued, per-user decode collapsed to 4.5 tok/s, CO-aware latency ran to
+524 s, and the executor RPC blew its timeout exactly as before.
+
+So the two knobs are the same knob. Batch pressure — whether supplied by `mns`
+or by concurrency — hits **one** ceiling, and that ceiling is the executor RPC
+`dequeue_timeout` (**N8**), not memory: KV was never the binding resource in
+either run. N8 was already the top blocked item for C1; it now also caps the
+throughput curve. Unblocking it is worth more than any remaining config lever.
 
 **8,326 also passes SA's 8,296 for the first time** — by 0.4%, which is only
 1.3× the noise floor, so call it *parity reached*, not a decisive win.

@@ -150,9 +150,25 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   parity, not a win.
 - **T169 C1 aborted again** (131/148, 15/146) — ninth consecutive. Unchanged
   cause: the RPC dequeue timeout (N8), which needs vLLM source.
-- **In flight: T170 — C64 and C72.** Same best config, concurrency only. The
-  curve is 7,771 / 8,115 / 8,326 at 48 / 52 / 56 and still climbing, so these
-  two points either find the peak or show it is higher still.
+- **T170 C72 ABORTED — the engine died, and it is the T165 death again.**
+  16× HTTP 500 `EngineCore encountered an issue` + 30 `InvalidInferenceResult`
+  → 43/284 = **15.141% > 10%** → `ProfileAborted`. The 4,275 printed before the
+  abort is a partial, not a measurement. All gate lines correct (dcp 8/a2a/1,
+  mns 80, chunk 8192, gmu 0.9, ladder 1..80, pinned 1,562 threads, init 531 s)
+  — this was not a misconfiguration.
+  - aiperf at death: **effective concurrency max 85 against mns 80**, decode
+    **4.49 tok/s/user**, CO-aware latency max **524 s**, tokens in flight 4.63 M.
+  - **`mns` and concurrency are the same knob.** T165 raised mns 80→96 and the
+    engine died; T170 held mns at 80 and let offered load push the batch to 85
+    — identical outcome. One ceiling, and it is the executor RPC
+    `dequeue_timeout` (**N8**), not KV memory, which was never binding in
+    either run.
+  - **N8 now caps the throughput curve as well as C1.** It was already the top
+    blocked item; it is now worth more than any remaining config lever.
+  - **Peak is bracketed in [56, 72).** C64 (in flight) decides it.
+- **In flight: T170 — C64, then C1.** C72 is done (aborted). If C64 > 8,326 the
+  peak is 64 and C68 is next; if C64 < 8,326 the peak is 56 and Phase E closes
+  with **C56 = 8,326** as the settled best config.
 - **T169 C48 = 7,771 — −4.2% vs C52's 8,115 mean, 14× the noise floor.**
   1,779 successful, error rate 0.056%. Gate lines correct (mns 80, ladder 80,
   chunk 8192, gmu 0.90, offload dram). **48 is worse; the peak is at or above
