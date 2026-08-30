@@ -229,6 +229,33 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
     invariant, the total drifts by one request.** That is still a deterministic
     fault rather than a rate — but "byte-identical" overstated it and is
     withdrawn.
+- **T172 C56 FAILED 0/56 — and `server.log` shows the sentinel trace is a
+  SYMPTOM, not the fault. Root cause: `HSA_STATUS_ERROR_OUT_OF_RESOURCES`.**
+  Warmup completed clean (115/115, errors=0), `init engine` 564.61 s (normal),
+  then every profiling request hit `ClientConnectorError` — server already gone.
+  - `server.log` order of events: **three ROCm queues abort with
+    `HSA_STATUS_ERROR_OUT_OF_RESOURCES`** first, *then*
+    `engine_core_sentinel:179` → `mq.dequeue` → `acquire_read` →
+    `RuntimeError: cancelled` → `EngineDeadError`.
+  - **This weakens N8 and I am saying so directly.** I have been treating that
+    sentinel trace as the fault and prescribing "raise the RPC dequeue timeout".
+    Here it is plainly downstream of GPU-runtime resource exhaustion; no timeout
+    change would have helped. **The sentinel trace alone is no longer sufficient
+    evidence for N8.**
+  - It does *not* follow that the twelve C1 aborts are HSA. No HSA line has been
+    seen in a C1 log, and C1's fixed-15-failures signature still looks like a
+    separate deterministic fault. Keeping the two apart.
+  - **NEW STANDING RULE: before invoking N8 on any `EngineDeadError`, pull the
+    `server_logs_*` artifact and grep for `HSA_STATUS`.** The runner blob alone
+    hides the true first cause. This run is the proof.
+- **Node health is now the blocking issue, not config.** Since T170 C64 — the
+  last clean throughput number — **three consecutive throughput attempts have
+  failed in three different ways**: T171 C60 (empty streams), T171 C56 (3,194 s
+  warmup), T172 C56 (HSA out-of-resources). Config has been constant across all
+  three. **C56 = 8,326 remains n=1** and I have now spent three runs failing to
+  replicate it. If the next attempt also fails, the right call is to stop
+  re-dispatching C56 and flag the runner for the owner rather than keep burning
+  GPU hours on an unhealthy node.
 - **T172 DISPATCHED: C56 alone**, `conc-list: [56]`, yaml parsed and asserted.
   jobs, not three, so a degraded node shows up faster. Purpose is unchanged —
   get the second sample of the peak that T171 failed to deliver. Only after

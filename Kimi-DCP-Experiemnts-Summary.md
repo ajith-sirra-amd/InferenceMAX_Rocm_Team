@@ -40,6 +40,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T171 | **C56 repeat** (peak, 2nd sample) | **aborted — 10/59 = 16.9%; warmup 3,194 s** |
 | T171 | C1 (unchanged) | **aborted, eleventh straight** — 15/146 = 10.274% |
 | T172 | C1 (unchanged) | **aborted, twelfth straight** — 15/145 = 10.345% |
+| T172 | **C56 repeat #2** | **0 successful / 56 — HSA out-of-resources killed the engine** |
 
 ## Phase E: the concurrency curve
 
@@ -121,6 +122,53 @@ and T170 alone, which is where it stood before.
 **Consequence: C56 = 8,326 is still n=1.** The one attempt to replicate it
 landed on a bad node. It needs a clean re-run before the "settled peak" label
 is fully earned.
+
+### T172 C56: the sentinel trace is a SYMPTOM. The root cause is HSA out-of-resources.
+
+The second C56 attempt failed harder — **0 successful of 56 profiling requests,
+100%**. Warmup completed *cleanly* (115/115, `errors=0`), then every profiling
+request got `ClientConnectorError` on `localhost:8888`: the server was already
+gone. `init engine` was **564.61 s**, i.e. normal, so this is not the T171 C56
+slow-warmup failure either.
+
+I pulled `server.log` from the artifact rather than stopping at the runner blob,
+and it changes the picture. The first error in the run is **not** the sentinel:
+
+```
+:0:rocdevice.cpp :3582: Callback: Queue 0x74ea64600000 Aborting with error :
+    HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the
+    necessary resources.        (×3, three different queues)
+```
+
+and *then*, downstream of it:
+
+```
+engine_core_sentinel.py:179 in run_with_fault_tolerance
+    status, result = mq.dequeue(timeout=dequeue_timeout)
+shm_broadcast.py:797 in acquire_read
+    raise RuntimeError("cancelled")
+→ vllm.v1.engine.exceptions.EngineDeadError
+```
+
+**This tempers the N8 story, which I should state plainly.** I have been
+reading `engine_core_sentinel` → `mq.dequeue` → `EngineDeadError` as *the* fault
+and attributing it to an RPC `dequeue_timeout` that needs raising. In this run
+that trace is clearly **downstream**: three ROCm queues aborted with
+`HSA_STATUS_ERROR_OUT_OF_RESOURCES` first, and the sentinel then observed a
+worker that could no longer answer. Raising a timeout would not have saved it.
+
+What this does and does not establish, kept separate on purpose:
+
+- **Does:** at least one instance of the sentinel trace is caused by GPU-runtime
+  resource exhaustion, not by a timeout being too short. The sentinel trace
+  alone is therefore **not** sufficient evidence for N8.
+- **Does not:** prove the twelve C1 aborts share this cause. I have not seen an
+  HSA line in a C1 log. C1 fails at a fixed 15 failures with a drifting
+  denominator, which still looks like a distinct, deterministic fault.
+
+**Action: every future sentinel/`EngineDeadError` diagnosis must check
+`server.log` for an HSA line before N8 is invoked.** Cheap, and it is the step
+that would have caught this earlier.
 
 **Phase E is closed. The settled operating point is C56 = 8,326 tok/s/GPU**,
 1,814 successful, error rate 0.220% — the best measured number on this stack and
