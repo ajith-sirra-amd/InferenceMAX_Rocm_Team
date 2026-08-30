@@ -289,6 +289,16 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T175 C1 aborted — fifteenth, 15/146.** Unchanged; recorded for the count only.
+- **T176 DISPATCHED: C60 — a TEST of the config-linked HSA hypothesis, not a repeat.**
+  C60 has been run once (HSA = 1, aborted) and sits between the four-times-failing
+  C56 and the twice-clean C64. This run discriminates:
+  - **C60 clean, HSA = 0** → the failure boundary is between 56 and 60, and C56
+    is anomalous rather than "low concurrency is bad".
+  - **C60 HSA > 0** → the boundary is between 60 and 64, and the effect spans a
+    range rather than singling out C56.
+  Either way the hypothesis gains a real constraint. A third C64 sample would
+  only have tightened a mean I already have; this buys a discriminating fact.
 - **T175 C56 FAILED (0/70, warmup) with HSA = 3 — and it FALSIFIES my
   "node degradation" model from last cycle.** I said the node had recovered on
   the strength of one clean C64. Sorting every run by *config* rather than
