@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| C52 throughput | **12,500 tok/s/GPU** | **8,127 (T163)** · SA 8,296 | **−35%** |
+| C52 throughput | **12,500 tok/s/GPU** | **8,326 (T169, C56)** · SA 8,296 | **−33%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -142,6 +142,13 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   −7.4% is 25× noise, offload +3.9% is 13×, async −1.8% is 6×. **The one weak
   claim is CCD pinning's +0.78%, at 2.6× — provisional.** And n=2 is a point
   estimate of spread, not a standard deviation.
+- **T169 C56 = 8,326 — NEW BEST, +2.6% over C52 and past SA's 8,296.**
+  1,814 successful, error rate 0.220%. The curve is **still rising at 56**, so
+  the peak is above it. Note the framing: nine config experiments moved C52 by
+  ~+2.8% total; changing the operating point to 56 added +2.6% in one run.
+  **C52 was inherited, never chosen.** SA parity is 0.4% — 1.3× noise, so
+  parity, not a win.
+- **NEXT: C64 and C72**, staged in the yaml, dispatches when C1 lands.
 - **T169 C48 = 7,771 — −4.2% vs C52's 8,115 mean, 14× the noise floor.**
   1,779 successful, error rate 0.056%. Gate lines correct (mns 80, ladder 80,
   chunk 8192, gmu 0.90, offload dram). **48 is worse; the peak is at or above

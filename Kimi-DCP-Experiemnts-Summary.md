@@ -32,6 +32,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T167 | **direct DCP a2a** | **workers died at capture — op absent** |
 | **T168** | **repeat of T163, nothing changed** | **8,103** — noise floor 0.30% |
 | T169 | **C48** (best config, conc swept) | 7,771 — **−4.2% vs C52** |
+| **T169** | **C56** (best config, conc swept) | **8,326 — NEW BEST, beats SA** |
 
 ## Phase E: the concurrency curve
 
@@ -40,13 +41,20 @@ right operating point. Best config held fixed; only concurrency varies.
 
 | conc | tok/s/GPU | vs C52 mean (8,115) |
 |--:|--:|--:|
-| 40 | (historic, different config) | — |
-| **48** | **7,771** | **−4.2%** |
-| **52** | **8,127 / 8,103** | baseline |
-| 56 | in flight | — |
+| **48** | 7,771 | **−4.2%** |
+| **52** | 8,127 / 8,103 (mean 8,115) | baseline |
+| **56** | **8,326** | **+2.6%** |
 
-−4.2% is 14× the 0.30% noise floor, so **48 is genuinely worse and the peak is
-at or above 52.** C56 decides whether 52 is the top or merely on the way up.
+Both deltas clear the 0.30% noise floor comfortably (14× and 8.7×), so the curve
+is real: **throughput is still rising at 56 and the peak has not been found.**
+
+**8,326 also passes SA's 8,296 for the first time** — by 0.4%, which is only
+1.3× the noise floor, so call it *parity reached*, not a decisive win.
+
+The lesson worth keeping: C52 was never a tuned choice, it was inherited. Nine
+config experiments (N1–N9) moved C52 from 7,906 to 8,127, about +2.8%. Simply
+running at 56 instead added another +2.6% in one run. **The operating point was
+worth as much as the entire config search.** C64 and C72 come next.
 
 ## T165: the C1 crash is not C1-specific, and my aigmkt prediction was wrong
 
