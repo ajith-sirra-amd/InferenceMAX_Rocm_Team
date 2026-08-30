@@ -212,7 +212,15 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
     property of 60. **Neither T171 throughput number is usable.**
   - The Phase E curve therefore rests on T169 + T170 exactly as before, and
     **C56 = 8,326 is still n=1.**
-- **NEXT (dispatch when C1 lands): re-run C56 alone**, `conc-list: [56]`. Two
+- **T171 C1 aborted — eleventh straight, again the byte-identical 15/146 =
+  10.274%**, 131 successful of 148, C1 gate lines correct.
+  - **This is a useful control, not just another tally mark.** C56 and C60 in
+    the *same run* were wrecked by node degradation and failed at 16.9% and
+    20.9% — numbers that move. C1 landed on exactly the same 15/146 it has hit
+    eleven times across healthy and degraded nodes alike. **The C1 abort is
+    deterministic and independent of node health**, which further isolates it
+    to N8 rather than to anything environmental.
+- **T172 DISPATCHED: C56 alone**, `conc-list: [56]`, yaml parsed and asserted.
   jobs, not three, so a degraded node shows up faster. Purpose is unchanged —
   get the second sample of the peak that T171 failed to deliver. Only after
   that does "settled peak" hold; C60 stays unmeasured and lower priority, since

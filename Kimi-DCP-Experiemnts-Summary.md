@@ -38,6 +38,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T170 | C1 (unchanged) | **aborted, tenth straight** — 15/146 = 10.274% |
 | T171 | **C60** (best config, conc swept) | **aborted early — INCONCLUSIVE**, not a cliff |
 | T171 | **C56 repeat** (peak, 2nd sample) | **aborted — 10/59 = 16.9%; warmup 3,194 s** |
+| T171 | C1 (unchanged) | **aborted, eleventh straight** — 15/146 = 10.274% |
 
 ## Phase E: the concurrency curve
 
