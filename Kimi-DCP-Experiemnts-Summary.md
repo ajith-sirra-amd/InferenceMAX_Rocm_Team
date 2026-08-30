@@ -36,6 +36,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T170 | **C72** (best config, conc swept) | **engine died** — aborted, 43/284 = 15.1% |
 | T170 | **C64** (best config, conc swept) | 8,040 — **−3.4% vs C56** |
 | T170 | C1 (unchanged) | **aborted, tenth straight** — 15/146 = 10.274% |
+| T171 | **C60** (best config, conc swept) | **aborted early — INCONCLUSIVE**, not a cliff |
 
 ## Phase E: the concurrency curve
 
@@ -53,6 +54,36 @@ right operating point. Best config held fixed; only concurrency varies.
 Every delta clears the 0.30% noise floor (14×, 8.7×, 3.1×), so the shape is
 real: **the curve peaks at 56 and turns over.** 64 gives back −3.4% against 56
 and lands *below* the C52 mean; 72 is past the cliff entirely.
+
+### T171 C60: aborted early, and it is NOT the C72 cliff
+
+C60 tripped `ProfileAborted` at **18/176 = 10.2%**, harness validation
+**43/206 = 20.874%**. The 4,628 tok/s/GPU printed is a partial, not a
+measurement. Gate lines all correct (dcp 8/a2a/1, mns 80, chunk 8192, gmu 0.9,
+ladder 1..80, 1,562 threads pinned, init 447 s).
+
+**The failure signature is different from C72's, and the difference matters:**
+
+| | C60 (T171) | C72 (T170) |
+|---|--:|--:|
+| HTTP 500 `EngineCore` | **0** | 16 |
+| `InvalidInferenceResultError` | 54 | 30 |
+| Effective concurrency, max | **48** | 85 |
+| Requests before abort | ~206 | ~284 |
+
+C72 died: the engine threw 500s and the empty streams followed from that. C60
+shows **no engine death at all** — only empty-content responses — and effective
+concurrency never even reached 48, well under both the offered 60 and mns 80.
+There was no queueing pressure to speak of.
+
+The same error class appears at C64 at **3/1808 = 0.166%**. So C60 is that
+background rate spiking 18× and crossing aiperf's threshold inside the first
+~200 requests, not a new physical limit.
+
+**A cliff at 60 that disappears again at 64 is not physical.** C56 (8,326) and
+C64 (8,040) both completed cleanly on either side. C60 is recorded as
+**inconclusive and pending one re-run** — it is not evidence about the shape of
+the curve, and the peak-at-56 conclusion neither gains nor loses from it.
 
 **Phase E is closed. The settled operating point is C56 = 8,326 tok/s/GPU**,
 1,814 successful, error rate 0.220% — the best measured number on this stack and

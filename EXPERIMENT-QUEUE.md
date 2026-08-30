@@ -184,6 +184,20 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   DISABLED`, `[mns] max_num_seqs=8 offload=none`, ladder 1..16, chunk 8192,
   1,490 threads pinned). Ten runs, one failure signature, no drift: this is a
   deterministic ceiling, not a flaky one, and it is N8.
+- **T171 C60 aborted early — INCONCLUSIVE, and NOT the C72 cliff.** aiperf
+  `ProfileAborted` at 18/176 = 10.2%; harness 43/206 = 20.874%. 4,628 is a
+  partial. Gate lines all correct.
+  - **Zero HTTP 500s** — the engine never died. 54 `InvalidInferenceResult`
+    (empty streams) and nothing else. C72 by contrast had 16 engine 500s with
+    the empties downstream of them. Different failure, not the same one.
+  - **Effective concurrency peaked at 48** — under the offered 60 *and* under
+    mns 80. There was no queueing pressure, so the load-cliff story does not
+    apply here.
+  - Same error class runs at **3/1808 = 0.166%** at C64. C60 is that background
+    rate spiking 18× inside the first ~200 requests.
+  - **A cliff at 60 that vanishes at 64 is not physical.** C56 and C64 both
+    completed cleanly on either side. Recorded as inconclusive, **pending one
+    re-run**; it is not evidence about the curve either way.
 - **T171 DISPATCHED: C60 and C56.** yaml `conc-list: [60, 56]`, parsed locally
   and the dram/backend assertion passes. C60 is the only unmeasured point in
   the peak bracket [56, 64); C56 rides along as a **second sample of the peak**,
