@@ -311,7 +311,7 @@ echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 # again without first raising that timeout.
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
-        MAX_NUM_SEQS=80
+        MAX_NUM_SEQS=96
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi

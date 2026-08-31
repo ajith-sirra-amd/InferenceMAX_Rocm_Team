@@ -62,6 +62,15 @@ json to `/workspace/results` instead of the host workdir -- fixed to
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
 
+## PEAK FOUND: C72 = 10,632. C80 drops to 9,864 (-7.2%).
+
+Curve: 52=8,685 / 60=9,482 / 64=9,775 / **72=10,632** / 80=9,864.
+
+Next: C80 with **mns 96**. At conc 80 mns==conc (pinned 80 for DCP>1) leaving no
+headroom for the agentic lanes that spawn past nominal concurrency. If mns is the
+limiter the peak moves right; if not, C72 is the operating point and the -14.9%
+to 12,500 needs kernel work.
+
 ## NEW BEST 10,632 (T195, C72) -- +18.8% over SA, -14.9% from target
 
 C72 agentic, err 0.22%, zero faults. **aigmkt died outright at C72**; here it is

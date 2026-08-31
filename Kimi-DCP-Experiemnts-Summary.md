@@ -387,6 +387,39 @@ per-GPU is flattening (471 -> 495 -> 499 across C60/C64/C72) while total
 throughput rises, i.e. the gain is coming from more concurrent streams, not
 faster ones.
 
+## T196 — C80 = 9,864, DOWN 7.2% from C72. The peak is C72.
+
+Run 33428881369, job 99609156264. 2,253 successful / 2,420, err 0.13%, zero
+faults, `[pr-stack] applied=5`.
+
+### Full concurrency curve, nightly stack
+
+| conc | tok/s/GPU | step |
+|---|--:|--:|
+| 52 | 8,685 | -- |
+| 60 | 9,482 | +9.2% |
+| 64 | 9,775 | +3.1% |
+| **72** | **10,632** | **+8.8%** |
+| 80 | 9,864 | **-7.2%** |
+
+**Peak = C72 at 10,632.** The curve is unimodal on this stack, same shape the
+aigmkt curve had but shifted right by ~12 concurrency points and ~28% higher.
+
+**Prime suspect for the C80 drop: mns.** `MAX_NUM_SEQS` is pinned at 80 for
+DCP>1, so at conc 80 mns == conc with zero headroom, while the agentic harness
+spawns lanes *past* nominal concurrency (`1 additional request on each of 80
+lanes` in the warmup line). At C72 there were 8 slots of slack; at C80 there are
+none, so requests queue instead of batching.
+
+That is a testable claim, and it is the next run: C80 with mns 96. If throughput
+recovers, mns was the limiter and the peak moves right again. If it does not,
+C72 is the real operating point and the remaining gap to 12,500 (-14.9%) needs
+kernel work rather than tuning.
+
+Note N5 ("mns 96 KILLS THE ENGINE", T165) is an aigmkt-era finding. Every
+aigmkt conclusion about the top of this curve -- the C64 cliff, the C72 death --
+has already been falsified on this stack. It should not block the experiment.
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |
