@@ -2125,7 +2125,8 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # an a2a + KV gather + merge on each of the 24 MLA layers every step.
       # spec-decoding: mtp must stay -- the runner uses it to pick the _mtp script
       # filename. Whether MTP runs is decided in the script by CONC.
-      - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
+      # C1 row parked 2026-08-31: SA reproduction targets C52 only.
+      # - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
       # dram, not none. Three independent A/Bs favour the offload at C52:
       # T160 7,968 vs T161 7,824 (-1.8%), T103 vs T133 (-2.8%), SA 8,296 vs
       # 8,204 (-1.1%). The T116/T124 idle finding was real -- idle 44.3% ->
