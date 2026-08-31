@@ -34,8 +34,14 @@ json to `/workspace/results` instead of the host workdir -- fixed to
   on the mutable `latest` image tag, and `load_format` (fastsafetensors vs
   safetensors). Our own C60 completes clean at mns=80 on b23_07 while C56 fails
   there, so it is not purely the node. **HSA is intermittent; no fix
-  identified.** `MAX_NUM_SEQS=65` (script line 202) has no supporting evidence
-  beyond that note.
+  identified.** `MAX_NUM_SEQS=65` (script line 202) HAS been run: **T133 =
+  7,725.96** at gmu 0.90 / offload none, i.e. **-2.8% against T103's 7,950.6 at
+  mns 80** (see the gmu/mns bracket table below). It completed -- it is a
+  working mitigation that costs 2.8%, not an untested guess. (Corrected
+  2026-08-31: an earlier revision of this line claimed nobody had run it, which
+  was wrong -- the datapoint is in this same file.) Caveats: T133 was
+  offload=none where our best is dram, and it was a throughput run that
+  completed rather than a test against a reproducing HSA failure.
 
   RETRACTED 2026-08-31: this entry previously claimed the fault tracked
   `mns=80 + offload=none`, then `mns=80 + MTP`. Both wrong. MTP is OFF at every
