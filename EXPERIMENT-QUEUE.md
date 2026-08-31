@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **12,500 tok/s/GPU** | **8,342 (C60, n=2 clean, spread 0.20%)** · SA 8,296 | **−33%** |
+| Throughput | **8,342 (C60, n=2 clean, 0.20%)** — but see C1 caveat | **12,500 tok/s/GPU** · SA 8,296 | **−33%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
@@ -17,6 +17,23 @@ profile puts GPU idle at 28.2% of e2e wall. Eliminating idle *entirely* yields
 needs either a kernel-level step change (the nightly's #53942 class of work) or
 a different operating point. I will keep pushing and report the real number
 rather than a flattering one.
+
+**CAVEAT THAT MUST TRAVEL WITH THE 8,342 HEADLINE — there is no complete run.**
+The two C60 runs (T176 `33329440318`, T177 `33337236325`) are **green at the
+GitHub level** — run and both jobs report `conclusion: success`. That status is
+misleading: **the C1 arm produced no measurement in either.** aiperf hit
+`ProfileAborted` at 15/145 and 15/146 (10.3% > the 10% threshold) and the
+harness still exits 0.
+
+- The **C60 number is unaffected**: separate job, separate server launch,
+  different config (C1 is dcp=1 / mns=8 / offload=none). C60's own error rates
+  were validated at 0.217% and 0.109% with HSA = 0.
+- But **the curve has a hole at C1, and has for 18 consecutive attempts across
+  every config tried.** This is not a C60 property — no config in this campaign
+  has ever produced a passing C1.
+- **If the deliverable is the full concurrency curve rather than one operating
+  point, we do not have a submittable result.** The entire gap is N8 (executor
+  RPC `dequeue_timeout`), which needs vLLM source. Blocked on access, not ideas.
 
 ## Bounds — never cross
 

@@ -394,6 +394,27 @@ around 8,3xx would mean "a production point at 60 has real margin either side".
 It does not. The margin exists below 60 only, and how far below is now the open
 question.
 
+### The 8,342 headline comes from runs whose C1 arm produced nothing
+
+Both C60 runs report `conclusion: success` at the GitHub level, run and jobs
+alike. **That green tick is misleading.** aiperf aborted C1 in both
+(15/145 and 15/146 = 10.3%, over its 10% threshold) and the harness still exits
+0, so CI status cannot be used to tell whether a concurrency point yielded a
+number.
+
+What survives and what does not:
+
+- **Survives:** C60 = 8,342 (n=2, 0.20%). C1 and C60 are separate jobs with
+  separate server launches and materially different configs (C1: dcp=1, mns=8,
+  offload=none). C60's own validated error rates were 0.217% / 0.109%, HSA = 0.
+  The C1 abort does not contaminate the C60 measurement.
+- **Does not:** any claim to a complete curve. **C1 has failed 18 consecutive
+  times across every config in this campaign** — it is the N8 fault, not a
+  property of C60 or of any operating point I chose.
+
+**Practical consequence:** a single-operating-point result exists and is solid;
+a full-curve submission does not. Closing that gap is N8 and nothing else.
+
 ### C1 is a genuinely different fault — confirmed, not assumed
 
 When the HSA cause emerged I wrote that it does **not** follow that the C1
