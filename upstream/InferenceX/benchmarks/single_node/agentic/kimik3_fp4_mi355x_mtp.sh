@@ -4,7 +4,12 @@ set -x
 source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
-export EVAL_ONLY="${EVAL_ONLY:-false}"
+# GSM8K ACCURACY GATE. The nightly stack (overlay + #53940 a4w4 MoE kernels +
+# chunk 16384) is a large numerics change that went straight to throughput with
+# RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
+# EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
+export EVAL_ONLY="${EVAL_ONLY:-true}"
+export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
