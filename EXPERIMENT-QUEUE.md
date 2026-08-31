@@ -34,14 +34,16 @@ json to `/workspace/results` instead of the host workdir -- fixed to
   on the mutable `latest` image tag, and `load_format` (fastsafetensors vs
   safetensors). Our own C60 completes clean at mns=80 on b23_07 while C56 fails
   there, so it is not purely the node. **HSA is intermittent; no fix
-  identified.** `MAX_NUM_SEQS=65` (script line 202) HAS been run: **T133 =
-  7,725.96** at gmu 0.90 / offload none, i.e. **-2.8% against T103's 7,950.6 at
-  mns 80** (see the gmu/mns bracket table below). It completed -- it is a
-  working mitigation that costs 2.8%, not an untested guess. (Corrected
-  2026-08-31: an earlier revision of this line claimed nobody had run it, which
-  was wrong -- the datapoint is in this same file.) Caveats: T133 was
-  offload=none where our best is dram, and it was a throughput run that
-  completed rather than a test against a reproducing HSA failure.
+  identified.** `MAX_NUM_SEQS=65` (script line 202) HAS been run and completed:
+  **T133 = 7,725.96** at gmu 0.90 / offload **none**.
+
+  **But there is NO clean mns 80-vs-65 measurement.** The often-quoted -2.8%
+  against T103's 7,950.6 is **confounded**: T103 is mns 80 + **dram**, T133 is
+  mns 65 + **none**. Two variables. The offload effect alone measures -1.1% to
+  -1.8% in adjacent rows, so most or all of the 2.8% may be the offload, not
+  mns. Do not quote "mns 65 costs 2.8%" -- it is unmeasured.
+  (Two prior revisions of this line were wrong: first claiming nobody had run
+  65, then attributing the full -2.8% to mns.)
 
   RETRACTED 2026-08-31: this entry previously claimed the fault tracked
   `mns=80 + offload=none`, then `mns=80 + MTP`. Both wrong. MTP is OFF at every
@@ -108,12 +110,24 @@ unexpectedly` (multiproc_executor.py:314) after 51 min; aiperf 88/872 failed
 | SA C52 08-30 | **nightly+overlay** | amds_01 | 80 | dram | no -- **8,953** |
 
 **Three failures on aigmkt across three different nodes. Zero on the nightly.**
-The node hypothesis (b23_07 is bad) is dead. `aigmkt/kimi-k3-vllm:latest` is a
-MUTABLE tag, so the 08-26 pass is very likely a different build under the same
-name -- consistent with the weight-load time jumping 134 s -> 2,557 s between
-those dates. Working read: **the current aigmkt build is broken.**
+The node hypothesis (b23_07 is bad) is dead.
 
-Caveat: one clean nightly datapoint is not proof. T182 is the test.
+CORRECTED 2026-08-31: this section previously blamed mutable-tag drift -- that
+`aigmkt:latest` was rebuilt between 08-26 and 08-31. **Wrong.** The registry
+manifest for `aigmkt/kimi-k3-vllm:latest` is dated **2026-08-26T06:38:27Z**, six
+hours BEFORE SA's passing 08-26 run, and unchanged since. The pass and the three
+failures ran the SAME build. So aigmkt is **1 pass / 3 fails on one fixed
+image** -- intermittent, not drifted. The 134 s -> 2,557 s weight-load blowup is
+therefore environmental (node I/O, or a stale per-node enroot squashfs cache --
+SA's own launcher comments warn that a squashfs of nominally the same tag can
+differ from the registry image).
+
+Also corrected: the image config history shows
+`RUN ... bash /w/apply_kimi_k3_patches.sh`, so **the patches are BAKED INTO
+aigmkt at build time**. The earlier claim that the whole ledger is "unpatched
+stock image" was wrong. Entrypoint is `["vllm","serve"]`.
+
+Caveat: the nightly has 0 failures but on n=1. T182 is the test.
 
 ### Correction to a bound I asserted wrongly
 
