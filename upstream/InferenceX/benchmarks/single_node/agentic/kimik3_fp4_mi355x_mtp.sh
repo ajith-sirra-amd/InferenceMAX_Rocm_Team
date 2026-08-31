@@ -90,18 +90,25 @@ if [ "$K3_OVERLAY_APPLIED" = "1" ]; then export SKIP_KIMI_PATCHES=1; fi
 # NON-FATAL by design, unlike the K3 overlay: a PR that stops applying should
 # degrade to the overlay-only baseline, not kill the run. The [pr-stack] gate
 # line records which way it went, so a number is never silently mis-attributed.
-PR_STACK_PATCH="${PR_STACK_PATCH:-$K3_PATCH_DIR/vllm_pr_53940_54095_on_46638857.patch}"
+# Per-file, not one monolithic patch. T187 proved why: cudagraph_utils.py Hunk #2
+# FAILED at 362 (it is cut against a newer tree than 46638857) and `patch` is
+# all-or-nothing per invocation, so that ONE hunk vetoed all five files. Applying
+# each file separately means a stale hunk costs only its own file.
+PR_STACK_DIR="${PR_STACK_DIR:-$K3_PATCH_DIR/pr_stack}"
 PR_STACK_APPLIED=0
-if [ "${APPLY_PR_STACK:-1}" = "1" ] && [ "$K3_OVERLAY_APPLIED" = "1" ] && [ -f "$PR_STACK_PATCH" ]; then
-    if ( cd "$SITE_PKGS" && patch -p1 --forward --batch --dry-run < "$PR_STACK_PATCH" ) \
-            >/tmp/pr_stack_dryrun.log 2>&1; then
-        ( cd "$SITE_PKGS" && patch -p1 --forward --batch < "$PR_STACK_PATCH" ) && PR_STACK_APPLIED=1
-    else
-        echo "[pr-stack] does not apply on this tree, continuing without it:" >&2
-        head -30 /tmp/pr_stack_dryrun.log >&2 || true
-    fi
+PR_STACK_SKIPPED=""
+if [ "${APPLY_PR_STACK:-1}" = "1" ] && [ "$K3_OVERLAY_APPLIED" = "1" ] && [ -d "$PR_STACK_DIR" ]; then
+    for _pp in "$PR_STACK_DIR"/*.patch; do
+        [ -f "$_pp" ] || continue
+        if ( cd "$SITE_PKGS" && patch -p1 --forward --batch --dry-run < "$_pp" ) >/dev/null 2>&1; then
+            ( cd "$SITE_PKGS" && patch -p1 --forward --batch < "$_pp" ) >/dev/null 2>&1 \
+                && PR_STACK_APPLIED=$(( PR_STACK_APPLIED + 1 ))
+        else
+            PR_STACK_SKIPPED="$PR_STACK_SKIPPED $(basename "$_pp")"
+        fi
+    done
 fi
-echo "[pr-stack] applied=$PR_STACK_APPLIED (#53940 a4w4-flydsl, #54095 aiter-per-stream)"
+echo "[pr-stack] applied=$PR_STACK_APPLIED files, skipped:${PR_STACK_SKIPPED:- none} (#53940 a4w4-flydsl, #54095 aiter-per-stream)"
 
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix
@@ -508,7 +515,7 @@ elif [ "${TEST:-1}" = "1" ]; then
     # against the SAME server, so we pay the ~2.5 min weight load once instead of
     # twice. func runs first and is short; if the engine is broken we find out in
     # minutes. perf writes the official result file the CI wrapper looks for.
-    TEST_MODE="${TEST_MODE:-both}"
+    TEST_MODE="${TEST_MODE:-perf}"
     if [ "$TEST_MODE" = "both" ]; then
         echo "[test-mode] both: functionality pass then perf pass on one server"
         FUNC_ISL="${FUNC_ISL:-214000}"; FUNC_OSL="${FUNC_OSL:-874}"

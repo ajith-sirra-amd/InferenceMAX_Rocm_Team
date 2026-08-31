@@ -123,6 +123,41 @@ Comm backend was NOT the deviation -- SA's 8,953 run used `a2a`, same as ours.
 (Their current launcher defaults to `ag_rs`, but that change came later, after an
 unrelated `HSA_STATUS_ERROR_EXCEPTION 0x1016` in aiter moe_sorting on a2a.)
 
+## T187 — nightly stack SERVES. Two of my own bugs blocked the measurement.
+
+Run 33377340922, job 99441726069, C52.
+
+| gate | value |
+|---|---|
+| `[k3-overlay]` | **applied=1** |
+| `[dcp-direct]` | **overlay applied -- left at engine defaults** |
+| `[pr-stack]` | **applied=0** |
+| FUNC pass (214k/874, 104 prompts) | **5 successful**, 314.45 s, TTFT mean **43,623 ms** |
+| PERF pass (8k/1k, 645 prompts) | **0 successful**, 0.48 s |
+
+**The DCP env fix worked.** No `_ALLGATHER` hang, no HSA, no memory fault -- the
+nightly+overlay engine came up and served real traffic. T184's failure is
+resolved: our five `VLLM_USE_DIRECT_DCP_*` / `ALLOW_DCP_FULL_CUDAGRAPH` /
+`Q_REPLICATE` exports were an aigmkt workaround that broke the overlay's DCP path.
+
+**Bug 1 -- the PR stack was vetoed by one hunk.**
+`cudagraph_utils.py Hunk #2 FAILED at 362` (Hunk #1 succeeded). #54095 is cut
+against a newer tree than 46638857. `patch` is all-or-nothing per invocation, so
+that single hunk blocked all five files including #53940, which had no conflict.
+Fixed: patches split per-file under `k3_patches/pr_stack/`, applied
+independently, gate line reports applied-count and skipped names.
+
+**Bug 2 -- my FUNC pass was an overload test, not a health gate.**
+104 concurrent x 214k tokens = ~22M input tokens with no prefix cache. It got
+5/104 through at 43.6 s TTFT and left the server wedged, so the perf pass
+returned 0 successful in 0.48 s. I flagged this exact risk when building it and
+shipped it anyway. Dropped: `TEST_MODE` now defaults to `perf` (8k/1k), which is
+directly comparable to T180's C52 baseline of 5,840.48 tok/s / TPOT 75.77 ms.
+
+**Still no throughput number on the nightly stack.** Three attempts (T184 hang,
+T185/T186 leaked VRAM, T187 self-inflicted) and the headline is unchanged at
+8,342 on aigmkt against SA's 8,953.
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |
