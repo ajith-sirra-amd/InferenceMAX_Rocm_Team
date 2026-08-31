@@ -52,6 +52,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | **T177** | **C60 repeat** | **8,333 — REPRODUCED, clean, HSA = 0** |
 | T177 | C1 (unchanged) | **aborted, seventeenth** — 15/146 |
 | T178 | C1 (unchanged) | **aborted, eighteenth** — 15/146 |
+| **T178** | **C62** (cliff-edge test) | **7,966 — clean, HSA = 0. Cliff is at 60→62.** |
 
 ## Phase E: the concurrency curve
 
@@ -357,6 +358,41 @@ throughput number is not tracking warmup weather.
   48 / 52 / 56 / 60 / 64 (*one-off). Peak at 60.
 - Gap to the 12,500 target: **−33%**. The honest position stated at the top of
   the queue is unchanged — no stack of remaining config levers closes it.
+
+### T178 C62 = 7,966: the cliff is immediately past 60, and it is a step not a slope
+
+C62 came back **clean: 7,966 tok/s/GPU**, 1,777 successful of 1,906, error rate
+**2/1779 = 0.112%**, **HSA = 0**, init 623.53 s.
+
+The test resolved in the **second** branch I named when dispatching it — the
+fall starts immediately past 60, not at 64:
+
+| conc | tok/s/GPU | n |
+|--:|--:|--:|
+| 48 | 7,771 | 1 |
+| 52 | 8,115 | 2 |
+| 56 | 8,326* | 1 (4 failed) |
+| **60** | **8,342** | **2 clean, spread 0.20%** |
+| 62 | **7,966** | 1 clean |
+| 64 | 7,976 | 2 clean |
+
+**Two things worth stating plainly:**
+
+1. **C60 sits on a knife edge.** Going from 60 to 62 — a 3% change in offered
+   concurrency — costs **−4.5%** throughput. That is 22× C60's own spread, so it
+   is not noise. Anyone adopting C60 as the operating point must know there is
+   no headroom above it.
+2. **It is a step, not a slope.** C62 (7,966) and C64 (7,976) agree to 0.13% —
+   inside C64's own 1.6% spread. Throughput does not decay progressively past
+   the peak; it drops once, between 60 and 62, and then sits flat. That shape
+   suggests something discrete switches over rather than a gradual
+   queueing/contention effect. I do not have the mechanism and am not going to
+   guess one from benchmark output alone.
+
+**This partially walks back my dispatch-time framing.** I wrote that a C62
+around 8,3xx would mean "a production point at 60 has real margin either side".
+It does not. The margin exists below 60 only, and how far below is now the open
+question.
 
 ### C1 is a genuinely different fault — confirmed, not assumed
 

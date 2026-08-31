@@ -289,6 +289,21 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T178 C62 = 7,966 — clean, HSA = 0, error 2/1779 = 0.112%. The cliff is at
+  60→62, and it is a STEP.**
+  - Curve: 7,771 / 8,115 / 8,326* / **8,342** / **7,966** / 7,976 at
+    48/52/56/**60**/**62**/64.
+  - **C60 is on a knife edge: +2 concurrency = −4.5%**, 22× C60's 0.20% spread.
+    No headroom above 60. Anyone adopting it needs that caveat.
+  - **Step, not slope:** C62 (7,966) and C64 (7,976) agree to 0.13%. Throughput
+    drops once and sits flat — suggests a discrete switch, not gradual
+    contention. No mechanism from benchmark output; not guessing one.
+  - **Partially walks back my dispatch framing:** I said an 8,3xx C62 would mean
+    "margin either side" of 60. It doesn't — margin exists only *below* 60.
+- **T179 DISPATCHED: C58.** The open question the C62 result creates. If C58 is
+  also ~8,34x the plateau is 56–60 and **58 is the safer production point** —
+  same throughput, one step back from the cliff. If C58 is lower, 60 is a true
+  isolated spike and should be recommended only with the knife-edge warning.
 - **T178 C1 aborted — eighteenth, 15/146.** Count only.
 - **T177 C1 aborted — seventeenth, 15/146.** Count only; N8, needs vLLM source.
 - **T178 DISPATCHED: C62.** The curve now reads 8,326* / **8,342** / 7,976 at
