@@ -420,6 +420,33 @@ Note N5 ("mns 96 KILLS THE ENGINE", T165) is an aigmkt-era finding. Every
 aigmkt conclusion about the top of this curve -- the C64 cliff, the C72 death --
 has already been falsified on this stack. It should not block the experiment.
 
+## T197 — C80 + mns 96 = 10,159 (+3.0%). mns WAS a limiter. N5 falsified.
+
+Run 33439502712, job 99644048477. `[mns] max_num_seqs=96 conc=80 offload=dram`,
+`graphs: dense ladder 1..96 (mns=96 x 1 rows)`, `[pr-stack] applied=5`.
+2,354 successful / 2,525, err 0.30%, zero HSA, zero memfault.
+
+| C80 config | tok/s/GPU |
+|---|--:|
+| mns 80 (T196) | 9,864 |
+| **mns 96 (T197)** | **10,159 (+3.0%)** |
+| C72 mns 80 (T195) | **10,632** -- still the peak |
+
+**Two findings.**
+
+1. **mns headroom is real but partial.** Giving C80 16 slots of slack recovered
+   +3.0%, which supports the "conc == mns starves the agentic lanes" reading --
+   but it recovered only ~40% of the C72->C80 drop. Something else also degrades
+   past 72.
+
+2. **N5 is falsified.** "mns 96 KILLS THE ENGINE" (T165, aigmkt) is wrong on this
+   stack: mns 96 ran clean at err 0.30%. That is the fourth aigmkt-era
+   conclusion about the top of the curve to fall, after the C64 cliff, the C72
+   death, and the mutable-tag story.
+
+**Next: C72 + mns 96.** If mns headroom is a general win rather than a C80
+rescue, the peak should rise above 10,632. One variable against T195.
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |

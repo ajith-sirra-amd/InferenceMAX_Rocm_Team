@@ -62,6 +62,14 @@ json to `/workspace/results` instead of the host workdir -- fixed to
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
 
+## mns 96 helps (+3.0% at C80) but C72 still peaks. Next: C72 + mns 96.
+
+C80: mns80=9,864 -> mns96=**10,159**. Recovers ~40% of the C72->C80 drop, so
+mns headroom is real but is not the whole cause. **N5 ("mns 96 kills the
+engine") falsified** -- clean run, err 0.30%.
+
+Curve (mns 80): 52=8,685 / 60=9,482 / 64=9,775 / **72=10,632** / 80=9,864.
+
 ## PEAK FOUND: C72 = 10,632. C80 drops to 9,864 (-7.2%).
 
 Curve: 52=8,685 / 60=9,482 / 64=9,775 / **72=10,632** / 80=9,864.
