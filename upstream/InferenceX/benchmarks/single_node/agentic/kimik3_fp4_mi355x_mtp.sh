@@ -86,7 +86,13 @@ if [ "$K3_OVERLAY_APPLIED" = "1" ]; then export SKIP_KIMI_PATCHES=1; fi
 #
 #   #53940  a4w4 flydsl kernels for Kimi-K3 (_aiter_ops, rocm_aiter_moe,
 #           oracle/mxfp4, envs) -- AMD MoE path
-#   #54095  AITER v0.1.20 per-stream workspace (cudagraph_utils) -- multi-stream
+#   #50813  Opt-in K3 SiTUv2 A8W4 routed MoE (quark_moe) -- our script already
+#           exports VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1 and AITER_SITUV2_A8W4=1,
+#           so we were setting flags for a code path that was not present.
+#
+# DISCARDED #54095 (aiter per-stream workspace): its cudagraph_utils.py hunk 2
+# is cut against a newer tree and FAILED at line 362 on 46638857 (T187, T188,
+# T190 all logged it as skipped). Dead weight, removed.
 #
 # Excluded deliberately: #53154 and #37682 both edit files the K3 overlay
 # rewrites (amd/mla.py, layers/mla.py, rocm_aiter_mla.py) and will not apply on
@@ -113,7 +119,7 @@ if [ "${APPLY_PR_STACK:-1}" = "1" ] && [ "$K3_OVERLAY_APPLIED" = "1" ] && [ -d "
         fi
     done
 fi
-echo "[pr-stack] applied=$PR_STACK_APPLIED files, skipped:${PR_STACK_SKIPPED:- none} (#53940 a4w4-flydsl, #54095 aiter-per-stream)"
+echo "[pr-stack] applied=$PR_STACK_APPLIED files, skipped:${PR_STACK_SKIPPED:- none} (#53940 a4w4-flydsl, #50813 SiTUv2-A8W4-MoE)"
 
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix
