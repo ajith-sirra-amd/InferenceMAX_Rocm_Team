@@ -54,6 +54,64 @@ json to `/workspace/results` instead of the host workdir -- fixed to
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
 
+## SA is 7.3% AHEAD, on a nightly image (read 2026-08-31)
+
+SA run 33324464095 ("Kimi K3 current findings baseline", 2026-08-30, branch
+`amd/kimi-k3-current-baseline-20260831`), all three jobs green:
+
+| job | conc | tok/s/GPU | node | config |
+|---|---|---|---|---|
+| c1 | 1 | 1,229 | amds_03 | MTP ON k=6, mns 2, gmu 0.875, no DCP |
+| c16 | 16 | 4,208 | amds_02 | spec-none, DCP8, mns 80, gmu 0.86, chunk 8192, capture 80 |
+| c52 | 52 | **8,953** | amds_01 | spec-none, DCP8, mns 80, gmu 0.9, dram vllm-simple |
+
+**8,953 beats our best 8,342 (C60) by 7.3%, and our own C52 8,115 by 10.3%** --
+at the same concurrency, so this is not an operating-point difference.
+
+### The image is the story
+
+```
+IMAGE: vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
+```
+
+| | ours | SA c52 |
+|---|---|---|
+| image | `aigmkt/kimi-k3-vllm:latest` | **nightly 46638857** |
+| max_num_batched_tokens | 8,192 | **16,384** |
+| max_cudagraph_capture_size | 80 (dense 1..80) | **4,096** |
+| load_format | auto | fastsafetensors |
+| CCD pinning | yes (1,562 threads) | none |
+
+**Every negative result in this file was measured on aigmkt.** N4 ("8192 is the
+optimum, 16384 is -2.5%") and the LADDER_MAX<=80 cap are both contradicted by a
+faster SA run on the nightly. They are image-specific, not general.
+
+### Correction to a bound I asserted wrongly
+
+I repeatedly said a different image was "out of bounds". That was wrong. The
+hard bound is **NO Docker Hub push** -- publishing. The `image:` field is
+`configs/amd-master.yaml:1961`, inside the kimi block, which IS on the editable
+list. Pulling an existing nightly is a one-line yaml edit and always was allowed.
+Several cycles were spent treating "needs a different image" as a dead end.
+
+Related limit that is real: `apply_kimi_k3_patches.sh:156` is `patch -p1` with no
+build step (no cmake/ninja/setup.py). It can patch Python in site-packages but
+cannot produce a compiled HIP op -- which is exactly why N9 (#51705's
+`direct_dcp_a2a_lse_reduce`) failed. Compiled-kernel PRs need an image that
+already ships them, not runtime patching. Also note the patch script is never
+invoked by the live launcher (only `archive/..configurable.sh:220`), so the whole
+ledger is unpatched stock image.
+
+### Next: reproduce SA's C52 wholesale
+
+Deliberately breaks ONE-VARIABLE. Change image + chunk 16384 + capture 4096 +
+fastsafetensors together and target 8,953. Rationale: swapping only the image
+while keeping knobs tuned for aigmkt tests an unmeasured combination and would
+likely read as a regression for the wrong reason. Decompose after matching.
+
+**An image swap invalidates the ledger as a comparison set.** 8,342 must be
+re-established on the new base before any further claim means anything.
+
 ## Three-stage gate (2026-08-31, per owner)
 
 Run in order. Each stage only runs if the previous one passed.
