@@ -87,6 +87,42 @@ not the 13 s I guessed when sizing the perf mode. 520 prompts x 72.57 / 52 =
 725 s, against the 739 s measured. The perf-mode default is corrected to 72.57,
 so a 900 s target now sizes to 645 prompts rather than 3,600.
 
+## T184 — SA stack reproduction attempt 1: overlay applied, but NCCL hang
+
+Run 33365015813, job 99403791804, C52 only, agentic replay.
+
+| gate | value |
+|---|---|
+| `[k3-overlay]` | **applied=1** (`vllm_nightly_46638857_k3_c16_c52_current.patch`) |
+| engine | `v0.26.1rc1.dev1219+g46638857f` (correct nightly base) |
+| `[chunk]` | 16384 · `[load]` fastsafetensors · `[mns]` 80 offload=dram |
+| `graphs:` | dense ladder 1..80 (mns=80 x 1 rows), DCP=8 |
+| result | **ProfileAborted — 0 successful / 94 total** (94 warmup, 87 error dropped) |
+
+GitHub reported `success`. It produced no measurement. Green != passed, again.
+
+**Root cause: NCCL collective timeout, NOT HSA.**
+```
+[rank1] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=36817, OpType=_ALLGATHER)
+[rank6] Received a dump signal due to a collective timeout from rank 1
+c10::DistBackendError -> Worker proc VllmWorker-3 died unexpectedly
+```
+Died in warmup at `num_running_reqs=1, num_waiting_reqs=17` -- almost no load.
+
+**Diagnosis: our five DCP env vars are an aigmkt workaround we carried onto a
+stack that does not need them.** T167 pinned
+`VLLM_USE_DIRECT_DCP_{A2A,Q_GATHER,KV_GATHER}=0` because aigmkt lacks the
+compiled op `direct_dcp_a2a_lse_reduce`. **The K3 overlay adds that op.** By
+forcing them off we pushed DCP onto a fallback gather path SA never exercises,
+and added `VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1` + `VLLM_DCP_Q_REPLICATE=1` on top.
+SA's launcher and their 8,953 run set **none of these five**.
+
+Fix: skip all five when `K3_OVERLAY_APPLIED=1`, keep them on aigmkt.
+
+Comm backend was NOT the deviation -- SA's 8,953 run used `a2a`, same as ours.
+(Their current launcher defaults to `ag_rs`, but that change came later, after an
+unrelated `HSA_STATUS_ERROR_EXCEPTION 0x1016` in aiter moe_sorting on a2a.)
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |

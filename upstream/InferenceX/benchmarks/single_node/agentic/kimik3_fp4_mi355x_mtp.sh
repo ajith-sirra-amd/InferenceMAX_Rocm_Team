@@ -161,12 +161,25 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # aigmkt/kimi-k3-vllm does not ship. So these were never "force-disabling a
     # fast path" -- they disable an op that is absent. Re-enabling requires a
     # rebuilt image, which is out of bounds here.
-    export VLLM_USE_DIRECT_DCP_A2A=0
-    export VLLM_USE_DIRECT_DCP_Q_GATHER=0
-    export VLLM_USE_DIRECT_DCP_KV_GATHER=0
-    echo "[dcp-direct] a2a=0 q_gather=0 kv_gather=0 (op absent in this image)"
-    export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
-    export VLLM_DCP_Q_REPLICATE=1
+    # These five are an AIGMKT WORKAROUND, not a tuning choice. On aigmkt the
+    # direct-DCP op does not exist (T167: AttributeError '_OpNamespace' '_C'
+    # has no attribute 'direct_dcp_a2a_lse_reduce'), so we pinned them off.
+    #
+    # The K3 overlay ADDS that op. T184 forced them off anyway on
+    # nightly+overlay and warmup died in a hung _ALLGATHER (NCCL collective
+    # timeout, rank 1, VllmWorker-3) -- i.e. we shoved DCP onto a fallback
+    # gather path that SA never exercises. SA's launcher sets NONE of these
+    # five. So when the overlay lands, set nothing and match SA.
+    if [ "${K3_OVERLAY_APPLIED:-0}" = "1" ]; then
+        echo "[dcp-direct] overlay applied -- leaving VLLM_USE_DIRECT_DCP_*/ALLOW_DCP_FULL_CUDAGRAPH/Q_REPLICATE at engine defaults (matches SA)"
+    else
+        export VLLM_USE_DIRECT_DCP_A2A=0
+        export VLLM_USE_DIRECT_DCP_Q_GATHER=0
+        export VLLM_USE_DIRECT_DCP_KV_GATHER=0
+        echo "[dcp-direct] a2a=0 q_gather=0 kv_gather=0 (op absent in this image)"
+        export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
+        export VLLM_DCP_Q_REPLICATE=1
+    fi
     echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"
 elif [ "${DCP_COMM_ARGS_AT_1:-0}" = "1" ]; then
     CP_ARGS+=(--dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
