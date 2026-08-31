@@ -321,6 +321,26 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   also ~8,34x the plateau is 56–60 and **58 is the safer production point** —
   same throughput, one step back from the cliff. If C58 is lower, 60 is a true
   isolated spike and should be recommended only with the knife-edge warning.
+- **T179 C1 aborted — nineteenth, 15/146.**
+- **ROOT CAUSE FOUND. N8 IS WITHDRAWN.** `server.log`, read above the traceback:
+  **`Memory access fault ... Reason: Write access to a read-only page` on all 8
+  ranks in the same second**, mid-decode, engine healthy (3 running, KV 11.4%,
+  MTP AL 4.00). Then GPU-coredump handler missing -> worker dies -> executor
+  SIGTERM/SIGKILL -> `mq.dequeue` returns "cancelled" -> EngineDeadError -> 500s
+  -> 15 failures -> ProfileAborted.
+  - Reproduced in T173, T175, T178 logs: 8 memfaults, 1 worker death, **HSA=0**
+    each (so distinct from the C56 HSA fault).
+  - **I read a traceback as a cause when it was a consequence.** The
+    `mq.dequeue(timeout=...)` frame is the last link, not the first. **Raising
+    any timeout would have changed nothing.** I had already written the "check
+    server.log first" rule for the C56 HSA fault and failed to apply it here.
+  - **It is a defect, not a knob:** an illegal write in a kernel firing on every
+    rank at the same step -> replicated code (MTP/DSpark or DCP). File it against
+    the image. No dispatch can fix it.
+  - **Knock-on:** the script comment capping mns<=80 ("96 rows exceed the RPC
+    dequeue timeout") rests on the withdrawn diagnosis. T165's mns=96 failure
+    must be re-read against `server.log` before mns 80 is treated as a real
+    ceiling.
 - **T178 C1 aborted — eighteenth, 15/146.** Count only.
 - **T177 C1 aborted — seventeenth, 15/146.** Count only; N8, needs vLLM source.
 - **T178 DISPATCHED: C62.** The curve now reads 8,326* / **8,342** / 7,976 at

@@ -52,6 +52,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | **T177** | **C60 repeat** | **8,333 — REPRODUCED, clean, HSA = 0** |
 | T177 | C1 (unchanged) | **aborted, seventeenth** — 15/146 |
 | T178 | C1 (unchanged) | **aborted, eighteenth** — 15/146 |
+| T179 | C1 (unchanged) | **aborted, nineteenth** — 15/146 |
 | **T178** | **C62** (cliff-edge test) | **7,966 — clean, HSA = 0. Cliff is at 60→62.** |
 
 ## Phase E: the concurrency curve
@@ -414,6 +415,53 @@ What survives and what does not:
 
 **Practical consequence:** a single-operating-point result exists and is solid;
 a full-curve submission does not. Closing that gap is N8 and nothing else.
+
+### ROOT CAUSE FOUND, AND N8 IS WITHDRAWN: C1 dies on a GPU memory-access fault
+
+I pulled `server.log` and read *above* the traceback instead of stopping at it.
+The first event is not a timeout:
+
+```
+Memory access fault by GPU node-5 ... Reason: Write access to a read-only page
+Memory access fault by GPU node-6 ... (same)
+   ... nodes 2,3,4,5,6,7,8,9 — all eight ranks, same second
+GPU coredump: execvp failed        (handler binary absent, no dump written)
+Worker proc VllmWorker-7 died unexpectedly (exit code: None)
+[shutdown] Executor: SIGTERM count=7 -> SIGKILL count=6
+core.py:1370  mq.dequeue(timeout=dequeue_timeout) -> RuntimeError("cancelled")
+-> EngineDeadError -> HTTP 500 -> 15 failed requests -> ProfileAborted
+```
+
+**An illegal write to a read-only page, on all 8 ranks simultaneously,
+mid-decode.** The engine was healthy at that instant: 3 running requests, KV
+usage 11.4%, MTP accepting normally at AL 4.00. Nothing was saturated.
+
+Reproduced in three independently pulled logs — T173, T175, T178 — each with
+8 memory faults, 8 read-only-page reasons, 1 worker death, and **HSA = 0**,
+which also separates it cleanly from the C56 `HSA_STATUS_ERROR_OUT_OF_RESOURCES`
+fault.
+
+**N8 is withdrawn.** I named it "raise the executor RPC dequeue timeout" and
+carried it as the top blocked item for many cycles, on the strength of the
+`mq.dequeue(timeout=dequeue_timeout)` frame in the traceback. That frame is the
+**last** link in the chain, not the first: the dequeue is cancelled *because*
+the executor is already killing dead workers. **Raising any timeout would have
+changed nothing.** The mistake was reading a traceback as a cause when it was a
+consequence, and not applying to C1 the same "check server.log first" rule I had
+already written down for the C56 HSA fault.
+
+**What it actually is:** a defect — an illegal write in a kernel, firing on
+every rank at the same step, which points at replicated code (MTP/DSpark or the
+DCP path) rather than at scheduling, capacity, or any tunable. It is something
+to file against the image, not a knob to turn. No amount of benchmark dispatch
+will fix it.
+
+**Consequence for the mns ceiling.** The comment in `kimik3_fp4_mi355x_mtp.sh`
+justifying the mns<=80 cap says a 96-row batch "makes the step longer than the
+executor's RPC dequeue timeout". That rests on the diagnosis just withdrawn and
+is **not trustworthy**. T165's mns=96 failure needs re-reading against
+`server.log` before mns 80 is treated as a real ceiling — it may be the same
+memory fault, in which case the mns axis was never actually capacity-limited.
 
 ### C1 is a genuinely different fault — confirmed, not assumed
 
