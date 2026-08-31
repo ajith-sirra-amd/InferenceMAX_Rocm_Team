@@ -11,7 +11,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **throughput** | 12,500 tok/s/GPU | **9,775** (T193, C64, nightly+overlay+PRs) | **−21.8%** |
+| **throughput** | 12,500 tok/s/GPU | **10,632** (T195, C72, nightly+overlay+PRs) | **−14.9%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
@@ -352,6 +352,40 @@ at this resolution. A larger limit would be needed to separate them, and there
 is no reason to think there is anything to separate.
 
 **T193's 9,775 tok/s/GPU is now accuracy-validated.**
+
+## T195 — 10,632 tok/s/GPU at C72. Still climbing. aigmkt DIED here.
+
+Run 33418755100, job 99575730290, C72 agentic, nightly stack.
+
+| | value |
+|---|---|
+| **Throughput per GPU** | **10,632 tok/s** |
+| Requests | 2,239 successful / 2,392 total (148 warmup, 138 error dropped) |
+| Request Error Rate | 0.22% |
+| Output token throughput | 499.32 tok/s |
+| ITL mean / p50 / p90 | 108.42 / 101.49 / 142.76 ms |
+| `[pr-stack]` | applied=5, skipped: none |
+| HSA / memfault / ProfileAborted | 0 / 0 / 0 |
+
+### The concurrency curve, both stacks
+
+| conc | aigmkt | nightly stack | delta |
+|---|--:|--:|--:|
+| 52 | 8,115 | 8,685 | +7.0% |
+| 60 | 8,342 | 9,482 | +13.7% |
+| 64 | 7,976 (cliff) | 9,775 | +22.6% |
+| **72** | **DIED** | **10,632** | -- |
+
+Every aigmkt-era conclusion about the top of the curve was an artifact of that
+image. There is still no peak: 52 -> 60 -> 64 -> 72 is +9.2%, +3.1%, +8.8%.
+
+**Gap to 12,500 is now -14.9%**, from -33% this morning.
+
+Costs at C72: ITL mean 108.42 ms (from 98.43 at C64, +10%), error rate 0.22%
+(from 0.09%) -- still far under the 10% abort threshold. Output token throughput
+per-GPU is flattening (471 -> 495 -> 499 across C60/C64/C72) while total
+throughput rises, i.e. the gain is coming from more concurrent streams, not
+faster ones.
 
 ## C52 — every lever tried is flat or negative
 

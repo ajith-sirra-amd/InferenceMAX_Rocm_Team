@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **9,775 (T193, C64, nightly+overlay+5 PR files, err 0.09%)** | **12,500 tok/s/GPU** · SA 8,953 | **−21.8%** |
+| Throughput | **10,632 (T195, C72, nightly+overlay+5 PR files, err 0.22%)** | **12,500 tok/s/GPU** · SA 8,953 | **−14.9%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **T180 (2026-08-31): C1 engine is healthy.** First `TEST=1` fixed-len probe:
@@ -61,6 +61,17 @@ json to `/workspace/results` instead of the host workdir -- fixed to
 - **SA comparison is apples-to-apples.** Both 8,342 (ours) and 8,296 (SA) are
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
+
+## NEW BEST 10,632 (T195, C72) -- +18.8% over SA, -14.9% from target
+
+C72 agentic, err 0.22%, zero faults. **aigmkt died outright at C72**; here it is
+the best point yet and the curve has still not peaked (52->60->64->72 gives
++9.2%, +3.1%, +8.8%).
+
+Next: C80. Note mns is fixed at 80 for DCP>1, so at C80 conc == mns and there is
+no headroom for the agentic lanes that spawn past nominal concurrency. If C80
+flattens, mns is the next variable -- and N5's "mns 96 kills the engine" is an
+aigmkt-era finding that should not be trusted on this stack.
 
 ## NEW BEST 9,775 (T193, C64) -- +9.2% over SA, -21.8% from target
 
