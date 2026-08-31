@@ -15,6 +15,47 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
+## T180 C1 — the C1 engine is HEALTHY. Nineteen "C1 failures" were the workload, not the engine.
+
+First run of the `TEST=1` fixed-len probe, and it inverts the C1 story.
+
+| | value |
+|---|---|
+| successful requests | **10 / 10** |
+| Mean TPOT | **7.41 ms** |
+| Median TPOT | 7.41 ms · P99 7.50 ms |
+| Mean ITL | 29.59 ms |
+| Mean TTFT | 1,185.81 ms (median 639.41) |
+| Total token throughput | 1,031.73 tok/s |
+| isl/osl | 8192 / 1024, ratio 0.8 (uniform 6,830-7,936 in) |
+| node | mi355x-amd_b23_07 |
+| HSA errors | 0 |
+| memory access faults | **0** |
+
+No `Memory access fault`, no `EngineDeadError`, no `ProfileAborted`. Server came
+up, captured graphs 1..16, served 10/10 and shut down clean with
+`benchmark_exit_code=0`.
+
+**This falsifies the reading I have carried for nineteen trials.** I recorded C1
+as a broken engine on a bad node. It is not: at C1 config on b23_07 the engine
+serves fixed-length traffic perfectly, at a TPOT better than the 7.57 ms T147
+record. What kills C1 is the **agentic workload specifically** -- p50 80k-token
+prompts, 735k max, 93.3% prefix-cache reads -- not the engine, not the config,
+and not (on this evidence) the node.
+
+That reopens the C1 root cause. The `Memory access fault ... Write access to a
+read-only page` is real and still unexplained, but it is now bounded to the
+agentic path rather than being a general property of C1 on this node. PR #37682
+(zero-init ROCm MLA output buffers for cudagraph padding) stays plausible --
+long prompts pad graphs differently than 8k fixed prompts do.
+
+**The job still reported `failure`, and that was my bug.** `run_benchmark_serving`
+was pointed at `--result-dir "$RESULT_DIR"` (`/workspace/results`) while
+`benchmark-tmpl.yml:289` checks for `$RESULT_FILENAME.json` in the mounted host
+workdir. The canonical fixed-len scripts use `--result-dir /workspace/`. Fixed to
+`${INFMAX_CONTAINER_WORKSPACE:-/workspace}`. The measurement above is valid --
+it was printed in full before the wrapper looked for the file.
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |

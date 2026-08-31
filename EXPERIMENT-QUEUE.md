@@ -10,6 +10,21 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 | Throughput | **8,342 (C60, n=2 clean, 0.20%)** — but see C1 caveat | **12,500 tok/s/GPU** · SA 8,296 | **−33%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
+**T180 (2026-08-31): C1 engine is healthy.** First `TEST=1` fixed-len probe:
+**10/10 requests, TPOT 7.41 ms, ITL 29.59 ms, zero faults** on b23_07. The
+nineteen prior "C1 failures" were the *agentic workload*, not a broken engine or
+a bad node. Job reported `failure` only because my TEST branch wrote the result
+json to `/workspace/results` instead of the host workdir -- fixed to
+`${INFMAX_CONTAINER_WORKSPACE:-/workspace}`.
+
+**Two distinct faults, now separated:**
+- **C1 memory access fault** -- agentic path only; never reproduced under
+  fixed-len. Still unexplained. PR #37682 remains the candidate.
+- **HSA_STATUS_ERROR_OUT_OF_RESOURCES** -- NOT node-specific. Seen on our
+  b23_07 (C56) and on SA's mi355x-amds_02 (C52, run 33355794530). Tracks
+  `mns=80 + offload=none`. Our own script line 202 already prescribes
+  `MAX_NUM_SEQS=65`; nobody has run it.
+
 **Honest position on 12,500, restated because it drives priorities:** the T124
 profile puts GPU idle at 28.2% of e2e wall. Eliminating idle *entirely* yields
 ~11,050 tok/s/GPU. Every remaining kernel lever is single-digit percent. So

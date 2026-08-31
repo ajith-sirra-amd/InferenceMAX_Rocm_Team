@@ -396,7 +396,7 @@ elif [ "${TEST:-1}" = "1" ]; then
         --num-prompts "$TEST_NUM_PROMPTS" \
         --max-concurrency "$CONC" \
         --result-filename "$RESULT_FILENAME" \
-        --result-dir "$RESULT_DIR" \
+        --result-dir "${INFMAX_CONTAINER_WORKSPACE:-/workspace}" \
         --trust-remote-code
 else
     build_replay_cmd "$RESULT_DIR"
