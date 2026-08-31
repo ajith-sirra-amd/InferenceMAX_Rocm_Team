@@ -289,6 +289,17 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T177 C1 aborted — seventeenth, 15/146.** Count only; N8, needs vLLM source.
+- **T178 DISPATCHED: C62.** The curve now reads 8,326* / **8,342** / 7,976 at
+  56 / 60 / 64 — a **−4.4% drop between 60 and 64**, by far the sharpest move in
+  the sweep and much larger than C60's own 0.20% spread. C62 is the only
+  unmeasured point inside it and locates the cliff edge:
+  - **C62 ≈ 8,3xx** → the good plateau runs 56–62 and the fall is at 64. A
+    production point at 60 then has real margin either side.
+  - **C62 ≈ 8,0xx** → the fall starts immediately past 60, and 60 sits on a
+    knife edge — worth knowing before recommending it.
+  A third C60 sample would only tighten a mean already at 0.20% spread; this
+  buys the shape of the band around the operating point instead.
 - **T177 C60 = 8,333 — REPRODUCED. Clean, HSA = 0, error rate 2/1838 = 0.109%.**
   - **C60 n=2: 8,350 / 8,333, mean 8,342, spread 0.20%.** First best-config claim
     in this ledger resting on two clean runs. Tighter than the 0.30% C52 floor and

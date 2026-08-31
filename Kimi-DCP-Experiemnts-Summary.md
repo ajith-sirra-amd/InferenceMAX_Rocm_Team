@@ -50,6 +50,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 | T176 | C1 (unchanged) | **aborted, sixteenth** — 15/145 |
 | **T176** | **C60** (hypothesis test) | **8,350 — NEW BEST, clean, HSA = 0** |
 | **T177** | **C60 repeat** | **8,333 — REPRODUCED, clean, HSA = 0** |
+| T177 | C1 (unchanged) | **aborted, seventeenth** — 15/146 |
 
 ## Phase E: the concurrency curve
 
