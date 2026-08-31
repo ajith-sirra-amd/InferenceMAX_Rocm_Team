@@ -21,9 +21,10 @@ json to `/workspace/results` instead of the host workdir -- fixed to
 - **C1 memory access fault** -- agentic path only; never reproduced under
   fixed-len. Still unexplained. PR #37682 remains the candidate.
 - **HSA_STATUS_ERROR_OUT_OF_RESOURCES** -- NOT node-specific. Seen on our
-  b23_07 (C56) and on SA's mi355x-amds_02 (C52, run 33355794530). Tracks
-  `mns=80 + offload=none`. Our own script line 202 already prescribes
-  `MAX_NUM_SEQS=65`; nobody has run it.
+  b23_07 (C56) and on SA's mi355x-amds_02 (C52, run 33355794530). The common
+  factor is **mns=80 alone** -- ours ran `offload=dram`, SA's ran
+  `offload=none`, so offload is NOT the variable. Our own script line 202
+  already prescribes `MAX_NUM_SEQS=65`; nobody has run it.
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
 profile puts GPU idle at 28.2% of e2e wall. Eliminating idle *entirely* yields
