@@ -267,74 +267,8 @@ echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-
-# TEST=1 -> fixed-length serving benchmark instead of the agentic replay.
-#
-# Why this gate exists: a fixed-len cell is ~10 min against ~1h12m for the
-# agentic replay, and it exercises the same server on the same config. Nineteen
-# consecutive C1 agentic runs were spent discovering the engine had died -- at
-# roughly an hour each. Fixed-len answers "does this engine survive traffic at
-# all" for a tenth of the cost.
-#
-# Intended use: run TEST=1 for C1 and C52 first. If the engine is clean -- no
-# EngineDeadError, no memory-access fault, error rate under the threshold --
-# only then spend an hour on the agentic replay. If it is not clean, the
-# agentic run cannot produce a number and should not be dispatched.
-#
-# There is no kimik3 script under benchmarks/single_node/fixed_seq_len/, and the
-# runner resolves single-node non-disagg to that directory, so a `fixed-seq-len`
-# yaml scenario would fail to launch. Branching inside this launcher keeps the
-# whole thing in the one file and needs no new script.
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-# Default flipped to 1: the runner invokes this script directly and there is no
-# env passthrough from the yaml, so TEST cannot be set per-dispatch from the
-# workflow. Fixed-len is the default health probe now; set TEST=0 in the script
-# to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-1}" = "1" ]; then
-    # ISL/OSL/ratio defaults, and why they are what they are.
-    #
-    # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
-    #     lower = int(seq_len * range_ratio); upper = seq_len
-    #     seq_lens = randint(lower, upper+1)
-    # so lengths are uniform on [isl*ratio, isl]. ratio=1.0 is FIXED length;
-    # ratio=0.0 is uniform 0..isl. Higher ratio = tighter, not wider.
-    #
-    # Measured agentic distribution, from the T170 C72 aiperf tables:
-    #   prompt tokens     min 354  p50 80,155  mean 111,750  p90 214,305  max 735,739
-    #   completion tokens min 11   p50 238     mean 369      p90 874      max 2,507
-    #   prompt cache read 93.32% of prompt tokens
-    #
-    # Two honest limits on "just derive it from the agentic lengths":
-    #  1. That prompt distribution is heavily right-skewed (mean >> median).
-    #     A uniform cannot reproduce that shape -- matching the mean forces a
-    #     span far wider than the actual IQR, matching the IQR loses the tail.
-    #  2. The bigger mismatch is not length at all: agentic serves 93% of its
-    #     prompt tokens from cache, so a fixed-len run at the same ISL does
-    #     several times the prefill work. Length-matching does not fix that.
-    #
-    # Default therefore stays ratio=1.0 (fixed) because TEST=1 exists as a cheap
-    # deterministic health probe, not as a workload replica -- a fixed length is
-    # what makes it reproducible and comparable run to run. Override when you
-    # want representativeness instead: TEST_RANGE_RATIO=0.37 with
-    # TEST_ISL=214000 approximates uniform[80k, 214k], i.e. the agentic p50..p90.
-    TEST_ISL="${TEST_ISL:-8192}"
-    TEST_OSL="${TEST_OSL:-1024}"
-    TEST_RANGE_RATIO="${TEST_RANGE_RATIO:-${RANDOM_RANGE_RATIO:-1.0}}"
-    TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-$(( CONC * 10 ))}"
-    echo "[test] fixed-len serving: isl=$TEST_ISL osl=$TEST_OSL ratio=$TEST_RANGE_RATIO prompts=$TEST_NUM_PROMPTS conc=$CONC (agentic replay SKIPPED)"
-    run_benchmark_serving \
-        --model "$MODEL" \
-        --port "$PORT" \
-        --backend vllm \
-        --input-len "$TEST_ISL" \
-        --output-len "$TEST_OSL" \
-        --random-range-ratio "$TEST_RANGE_RATIO" \
-        --num-prompts "$TEST_NUM_PROMPTS" \
-        --max-concurrency "$CONC" \
-        --result-filename "$RESULT_FILENAME" \
-        --result-dir "$RESULT_DIR" \
-        --trust-remote-code
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
