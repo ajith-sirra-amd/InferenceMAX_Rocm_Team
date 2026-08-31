@@ -131,6 +131,24 @@ export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 export PYTHONNOUSERSITE=1
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600
 
+# ---- Profiling ---------------------------------------------------------------
+# PROFILE=1 turns on the torch profiler. benchmark_lib.sh:531 adds --profile to
+# run_benchmark_serving, which drives vLLM's /start_profile endpoint -- but that
+# endpoint only exists if VLLM_TORCH_PROFILER_DIR is set on the SERVER process,
+# so it has to be exported here, before VLLM_CMD, not just at bench time.
+#
+# Also caps the prompt count: the perf pass defaults to 645 prompts at C52, and
+# a torch trace over that is tens of GB and unreadable. PROFILE_PROMPTS defaults
+# to one concurrency wave, which is enough to see steady-state decode hotspots.
+if [ "${PROFILE:-0}" = "1" ]; then
+    export VLLM_TORCH_PROFILER_DIR="${VLLM_TORCH_PROFILER_DIR:-$RESULT_DIR/torch_profile}"
+    mkdir -p "$VLLM_TORCH_PROFILER_DIR"
+    TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-${PROFILE_PROMPTS:-$CONC}}"
+    export TEST_NUM_PROMPTS
+    echo "[profile] ENABLED dir=$VLLM_TORCH_PROFILER_DIR prompts=$TEST_NUM_PROMPTS conc=$CONC"
+else
+    echo "[profile] disabled"
+fi
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 SERVER_PID=""
