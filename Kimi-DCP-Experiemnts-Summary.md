@@ -273,6 +273,27 @@ Latency cost of C60 over C52: ITL mean 80.84 -> 95.82 ms (+18.5%), TTST
 different image. Attribution still unresolved -- image, overlay, chunk,
 fastsafetensors, pinning, DCP env and 4 PR files all moved together back at T188.
 
+## T192 — GSM8K PASSES on the nightly stack: exact_match 0.995
+
+Run 33404440358, job 99528474415, EVAL_ONLY=true EVAL_LIMIT=200, T190 config.
+
+```
+|gsm8k| 3|flexible-extract| 5|exact_match|^ |0.995|+- |0.005|
+|     |  |strict-match    | 5|exact_match|^ |0.995|+- |0.005|
+```
+
+**T190's 9,482 tok/s/GPU is now accuracy-validated.** The job reports `failure`
+only because the eval-only path still trips the benchmark-result-json check in
+`benchmark-tmpl.yml` -- a harness bug, not an accuracy failure.
+
+This closes the gap flagged earlier: T188/T189/T190 all ran `RUN_EVAL=false`, so
+a large numerics change (264 KB kernel overlay + #53940 a4w4 MoE kernels + chunk
+16384) had gone to throughput with no accuracy gate. It holds.
+
+**Image saved:** `kimi-k3-vllm-v2:latest` (local only, no registry push) =
+nightly-46638857 + K3 overlay + #53940. Dockerfile at
+`k3_patches/Dockerfile.kimi-k3-vllm-v2`.
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |

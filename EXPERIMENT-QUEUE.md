@@ -62,6 +62,20 @@ json to `/workspace/results` instead of the host workdir -- fixed to
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
 
+## GSM8K VALIDATED: 0.995 (T192). Image saved as kimi-k3-vllm-v2.
+
+Now PRUNING the patch set. Target: minimal patches that keep GSM8K passing AND
+throughput >= 9,482. Ablation plan, one variable each:
+
+| run | stack | question |
+|---|---|---|
+| A | overlay only (`APPLY_PR_STACK=0`) | is #53940 doing anything? |
+| B | overlay + #53940 (= v2, 9,482) | baseline, already measured |
+| C | overlay + #53940 + #50813 | does SiTUv2 A8W4 MoE add? |
+
+The 264 KB overlay is NOT ablatable at reasonable cost -- 34 files would need 34
+runs. Only the PR-stack files are prunable at this budget.
+
 ## NEW BEST 9,482 (T190, C60, nightly stack) -- AHEAD OF SA
 
 C60 agentic, 2,076/2,202 successful, error rate 0.14%, zero HSA/memfault.
