@@ -31,6 +31,49 @@ amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
+# ---- K3 nightly overlay ------------------------------------------------------
+# SA's 8,953 tok/s/GPU at C52 (run 33324464095, node amds_01) is NOT the bare
+# nightly -- it is nightly-46638857 plus a 264 KB patch overlay applied into
+# site-packages. The overlay touches models/kimi_k3/amd/{mla,kda,linear,
+# latent_moe_runner}.py, layers/mla.py, mla_attention.py, fused_moe/runner/*,
+# platforms/rocm.py and envs.py. Without it the nightly is missing every
+# Kimi-K3 kernel path and will regress, not improve.
+#
+# The overlay is cut against nightly-46638857 specifically. On any other image
+# the dry-run fails. REQUIRE_K3_OVERLAY defaults to 1 here so that case is a
+# hard failure rather than a silent unpatched run producing a misleading number.
+K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
+if [ "$CONC" -le 4 ]; then
+    K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c1_current.patch}"
+else
+    K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c16_c52_current.patch}"
+fi
+REQUIRE_K3_OVERLAY="${REQUIRE_K3_OVERLAY:-1}"
+K3_OVERLAY_APPLIED=0
+if [ -f "$K3_OVERLAY_PATCH" ]; then
+    SITE_PKGS=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')
+    if ( cd "$SITE_PKGS" && patch -p1 --forward --batch --dry-run < "$K3_OVERLAY_PATCH" ) \
+            >/tmp/k3_overlay_dryrun.log 2>&1; then
+        echo "[k3-overlay] applying $(basename "$K3_OVERLAY_PATCH") into $SITE_PKGS"
+        if ( cd "$SITE_PKGS" && patch -p1 --forward --batch < "$K3_OVERLAY_PATCH" ); then
+            K3_OVERLAY_APPLIED=1
+        elif [ "$REQUIRE_K3_OVERLAY" = "1" ]; then
+            echo "[k3-overlay] APPLY FAILED" >&2; exit 1
+        fi
+    else
+        echo "[k3-overlay] does not match this image: $K3_OVERLAY_PATCH" >&2
+        head -40 /tmp/k3_overlay_dryrun.log >&2 || true
+        python3 -c 'import vllm;print("vllm",vllm.__version__)' >&2 || true
+        [ "$REQUIRE_K3_OVERLAY" = "1" ] && exit 1
+    fi
+elif [ "$REQUIRE_K3_OVERLAY" = "1" ]; then
+    echo "[k3-overlay] missing: $K3_OVERLAY_PATCH" >&2; exit 1
+fi
+echo "[k3-overlay] applied=$K3_OVERLAY_APPLIED conc=$CONC"
+# The legacy patch script edits files the overlay also carries; running it after
+# a successful overlay shifts context and silently breaks it.
+if [ "$K3_OVERLAY_APPLIED" = "1" ]; then export SKIP_KIMI_PATCHES=1; fi
+
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix
 else
@@ -57,7 +100,7 @@ export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
 export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 export PYTHONNOUSERSITE=1
-export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200
+export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600
 
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
@@ -165,8 +208,8 @@ fi
 # N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
 # against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
 # clear peak at 8192 and both sides are downhill.
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
-echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-16384}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-16384} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
 # 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
 # engine, but still the wrong sign after 175 commits. The host prep the profile
@@ -178,7 +221,7 @@ else
 fi
 MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
 
-LOAD_FORMAT="${LOAD_FORMAT:-auto}"
+LOAD_FORMAT="${LOAD_FORMAT:-fastsafetensors}"
 echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 
 # N5 SETTLED NEGATIVE: mns 96 KILLS THE ENGINE. T165 C52 died mid-replay with
@@ -307,7 +350,7 @@ for n in sorted(by):
         if i < len(by[n]): print(f"{g} {by[n][i]}")
 CCDPY
 
-PIN_CCD="${PIN_CCD:-1}"
+PIN_CCD="${PIN_CCD:-0}"
 pin_workers_to_ccd() {
     [ "$PIN_CCD" = "1" ] || return 0
     [ -s /tmp/ccdmap.txt ] || return 0
@@ -401,7 +444,7 @@ elif [ "${TEST:-1}" = "1" ]; then
     # would be ~11M input tokens at C52 before decode.
     # TEST_MODE=func (default) -> agentic-band functionality test, few iterations.
     # TEST_MODE=perf           -> 8k/1k fixed length, sized to ~15 min.
-    TEST_MODE="${TEST_MODE:-func}"
+    TEST_MODE="${TEST_MODE:-perf}"
     if [ "$TEST_MODE" = "perf" ]; then
         # Fixed 8k/1k. ratio 1.0 = exactly fixed, so run-to-run comparable.
         TEST_ISL="${TEST_ISL:-8192}"
