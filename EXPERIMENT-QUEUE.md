@@ -155,6 +155,18 @@ likely read as a regression for the wrong reason. Decompose after matching.
 **An image swap invalidates the ledger as a comparison set.** 8,342 must be
 re-established on the new base before any further claim means anything.
 
+## T188: nightly stack is GREEN and faster (fixed-len)
+
+645/645, **6,616.31 tok/s (+13.3%)**, **TPOT 65.89 ms (-13.0%)** against T180's
+aigmkt baseline on the identical fixed-len harness. Zero HSA, zero memfault.
+`[pr-stack] applied=4 files` (only `cudagraph_utils.py` skipped -- #54095's hunk 2
+is cut against a newer tree). KV pool 51.29 GiB at chunk 16384.
+
+Costs: TTFT +42%, ITL P99 +101%. The chunk 8192->16384 trade, now measured.
+
+Perf gate PASSED -> next is the agentic replay, the only run comparable to SA's
+8,953 and our 8,342.
+
 ## Three-stage gate (2026-08-31, per owner)
 
 Run in order. Each stage only runs if the previous one passed.

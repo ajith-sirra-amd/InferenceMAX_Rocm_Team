@@ -158,6 +158,47 @@ directly comparable to T180's C52 baseline of 5,840.48 tok/s / TPOT 75.77 ms.
 T185/T186 leaked VRAM, T187 self-inflicted) and the headline is unchanged at
 8,342 on aigmkt against SA's 8,953.
 
+## T188 — FIRST GREEN ON THE NIGHTLY STACK. +13.3% throughput, -13.0% TPOT.
+
+Run 33379616710, job 99448806930, C52, fixed-len 8k/1k perf pass, 645 prompts.
+
+| gate | value |
+|---|---|
+| `[k3-overlay]` | applied=1 |
+| `[pr-stack]` | **applied=4 files**, skipped `cudagraph_utils.py` (#54095 hunk 2 stale) |
+| `[dcp-direct]` | overlay applied -- engine defaults |
+| Available KV cache | **51.29 GiB** (chunk 16384, nightly) |
+| HSA / memfault / ProfileAborted | **0 / 0 / 0** |
+
+### vs T180 (aigmkt, chunk 8192) -- same harness, same ISL/OSL, same conc
+
+| metric | T180 aigmkt | **T188 nightly** | delta |
+|---|--:|--:|--:|
+| Successful requests | 520/520 | **645/645** | both clean |
+| Total token throughput | 5,840.48 | **6,616.31** | **+13.3%** |
+| Output token throughput | 651.44 | **735.15** | **+12.9%** |
+| Mean TPOT (ms) | 75.77 | **65.89** | **-13.0%** |
+| P99 TPOT (ms) | 93.13 | **68.77** | **-26.2%** |
+| Mean ITL (ms) | 75.94 | **65.89** | -13.2% |
+| Median ITL (ms) | 37.83 | 42.36 | +12.0% (worse) |
+| P99 ITL (ms) | 501.02 | **1,008.91** | **+101% (worse)** |
+| Mean TTFT (ms) | 2,344.64 | 3,329.95 | +42% (worse) |
+| Available KV cache | 59.81 GiB | 51.29 GiB | -8.52 GiB |
+
+**Throughput and mean/P99 TPOT all improve substantially. TTFT and the ITL tail
+get worse** -- exactly the chunk 8192 -> 16384 trade predicted, and the -8.52 GiB
+KV pool is the measured cost of the bigger token budget at fixed gmu 0.9.
+
+**NOT attributable to one change.** T188 moves image (aigmkt -> nightly-46638857),
+K3 overlay (none -> applied), chunk (8192 -> 16384), load_format (auto ->
+fastsafetensors), CCD pinning (on -> off), DCP env (forced -> defaults), and adds
+4 PR-stack files. Any of these could carry the +13.3%.
+
+**Caveat: this is fixed-len, NOT comparable to SA's agentic 8,953** or to our
+agentic 8,342. Different harness, different workload (agentic serves 93.3% of
+prompt tokens from prefix cache). The agentic run is next and is the only number
+that lands against 8,953.
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |
