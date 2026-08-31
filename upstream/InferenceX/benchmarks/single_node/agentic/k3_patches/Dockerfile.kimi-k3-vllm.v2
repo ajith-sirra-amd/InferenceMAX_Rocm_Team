@@ -1,4 +1,4 @@
-# kimi-k3-vllm-v2 -- the stack validated by T190 (9,482 tok/s/GPU @ C60) and
+# kimi-k3-vllm:v2 -- the stack validated by T190 (9,482 tok/s/GPU @ C60) and
 # T192 (GSM8K exact_match 0.995 +/- 0.005, limit 200, 5-shot).
 #
 # Contents:
