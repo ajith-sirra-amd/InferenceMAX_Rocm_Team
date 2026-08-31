@@ -21,10 +21,26 @@ json to `/workspace/results` instead of the host workdir -- fixed to
 - **C1 memory access fault** -- agentic path only; never reproduced under
   fixed-len. Still unexplained. PR #37682 remains the candidate.
 - **HSA_STATUS_ERROR_OUT_OF_RESOURCES** -- NOT node-specific. Seen on our
-  b23_07 (C56) and on SA's mi355x-amds_02 (C52, run 33355794530). The common
-  factor is **mns=80 alone** -- ours ran `offload=dram`, SA's ran
-  `offload=none`, so offload is NOT the variable. Our own script line 202
-  already prescribes `MAX_NUM_SEQS=65`; nobody has run it.
+  b23_07 (C56) and on SA's mi355x-amds_02 (C52, run 33355794530). It tracks
+  **mns=80 WITH MTP enabled**, not mns=80 alone:
+
+  | | mns | MTP | offload | node | HSA |
+  |---|---|---|---|---|---|
+  | ours C56 | 80 | on | dram | b23_07 | yes |
+  | SA C52 2026-08-31 | 80 | on | none | amds_02 | yes |
+  | SA C52 2026-08-26 (run 32968517728) | 80 | **off** | none | amds_00 | **no -- 8,296** |
+
+  Mechanism: DSpark k=8 gives `SPEC_ROWS=9`, so mns=80 carries up to 720 rows
+  through attention -- 9x the queue/scratch pressure for the same mns. The
+  governing quantity is `mns x SPEC_ROWS`, not mns. `MAX_NUM_SEQS=65` (script
+  line 202) still untested. Confounds: the two SA runs are 5 days apart on the
+  mutable `latest` tag, and nodes differ.
+
+- **SA's 8,296 is a `spec-none` run.** Verified in run 32968517728:
+  `speculative_config` absent, artifacts named `..._spec-none_...`. Our 8,342
+  uses MTP + dram offload + CCD pinning. **The two numbers are not comparable
+  and "we clear SA by 0.55%" overstates our position** -- they match our
+  throughput without spending speculative decoding at all.
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
 profile puts GPU idle at 28.2% of e2e wall. Eliminating idle *entirely* yields
