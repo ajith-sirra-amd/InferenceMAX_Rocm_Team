@@ -376,15 +376,63 @@ elif [ "${TEST:-1}" = "1" ]; then
     #     prompt tokens from cache, so a fixed-len run at the same ISL does
     #     several times the prefill work. Length-matching does not fix that.
     #
-    # Default therefore stays ratio=1.0 (fixed) because TEST=1 exists as a cheap
-    # deterministic health probe, not as a workload replica -- a fixed length is
-    # what makes it reproducible and comparable run to run. Override when you
-    # want representativeness instead: TEST_RANGE_RATIO=0.37 with
-    # TEST_ISL=214000 approximates uniform[80k, 214k], i.e. the agentic p50..p90.
-    TEST_ISL="${TEST_ISL:-8192}"
-    TEST_OSL="${TEST_OSL:-1024}"
-    TEST_RANGE_RATIO="${TEST_RANGE_RATIO:-${RANDOM_RANGE_RATIO:-1.0}}"
-    TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-$(( CONC * 10 ))}"
+    # Defaults now target the agentic band, not a synthetic 8k probe. T180
+    # showed the 8k fixed-len probe is too easy to be a functionality test: C1
+    # served 10/10 at 8k while the agentic replay has failed 19 straight times.
+    # A probe that passes when the real workload fails tells us nothing.
+    #
+    #   ISL 214000 with ratio 0.37 -> uniform[79,180, 214,000] = agentic p50..p90
+    #   OSL 874    with ratio 0.37 -> uniform[323, 874]        ~ agentic p50..p90
+    #
+    # One ratio drives both input and output (confirmed in T180: isl 8192 /
+    # ratio 0.8 gave 6,830-7,936 and osl 1024 gave 858-1,012), so the output
+    # band is a compromise -- its mean lands ~600 against the agentic 369.
+    #
+    # NOT overridden from RANDOM_RANGE_RATIO any more. The workflow exports
+    # RANDOM_RANGE_RATIO=0.8, which silently won in T180 and gave ratio 0.8
+    # where the comment claimed 1.0. Default is now literal.
+    #
+    # Still does NOT reproduce the 93.3% prefix-cache hit rate, so this does
+    # several times the prefill work per token that agentic does. It is a
+    # functionality test, not a throughput comparison -- do not read tok/s from
+    # it as comparable to the agentic ledger.
+    #
+    # Iterations cut to CONC*2 (floor 4): at 214k tokens per prompt, CONC*10
+    # would be ~11M input tokens at C52 before decode.
+    # TEST_MODE=func (default) -> agentic-band functionality test, few iterations.
+    # TEST_MODE=perf           -> 8k/1k fixed length, sized to ~15 min.
+    TEST_MODE="${TEST_MODE:-func}"
+    if [ "$TEST_MODE" = "perf" ]; then
+        # Fixed 8k/1k. ratio 1.0 = exactly fixed, so run-to-run comparable.
+        TEST_ISL="${TEST_ISL:-8192}"
+        TEST_OSL="${TEST_OSL:-1024}"
+        TEST_RANGE_RATIO="${TEST_RANGE_RATIO:-1.0}"
+        # benchmark_serving.py has NO duration flag -- it takes --num-prompts and
+        # reports the duration it happened to take. So "15 minutes" has to be
+        # converted to a prompt count, and that needs a per-request latency.
+        #
+        # TEST_EST_REQ_SECONDS is that estimate: seconds per request at this
+        # concurrency. C1 is measured -- T180 did 10 prompts in 80.72 s at
+        # isl 8192 / osl 1024, i.e. 8.07 s/req. Above C4 there is NO measurement
+        # at 8k/1k, so 13 s is a guess: decode slows per-user as the batch fills.
+        # The run will therefore NOT be exactly 15 min. Read the reported
+        # "Benchmark duration (s)" and set TEST_EST_REQ_SECONDS from it to make
+        # the next one land.
+        TEST_TARGET_SECONDS="${TEST_TARGET_SECONDS:-900}"
+        if [ -z "${TEST_EST_REQ_SECONDS:-}" ]; then
+            if [ "$CONC" -le 4 ]; then TEST_EST_REQ_SECONDS=8.07; else TEST_EST_REQ_SECONDS=13; fi
+        fi
+        TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-$(awk -v t="$TEST_TARGET_SECONDS" -v c="$CONC" \
+            -v l="$TEST_EST_REQ_SECONDS" 'BEGIN{n=int(t*c/l+0.5); if(n<1)n=1; print n}')}"
+        echo "[test-mode] perf: target=${TEST_TARGET_SECONDS}s est=${TEST_EST_REQ_SECONDS}s/req -> prompts=$TEST_NUM_PROMPTS (duration is an ESTIMATE, not enforced)"
+    else
+        TEST_ISL="${TEST_ISL:-214000}"
+        TEST_OSL="${TEST_OSL:-874}"
+        TEST_RANGE_RATIO="${TEST_RANGE_RATIO:-0.37}"
+        TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-$(( CONC * 2 ))}"
+        if [ "$TEST_NUM_PROMPTS" -lt 4 ]; then TEST_NUM_PROMPTS=4; fi
+        echo "[test-mode] func: agentic-band lengths, $TEST_NUM_PROMPTS prompts"
+    fi
     echo "[test] fixed-len serving: isl=$TEST_ISL osl=$TEST_OSL ratio=$TEST_RANGE_RATIO prompts=$TEST_NUM_PROMPTS conc=$CONC (agentic replay SKIPPED)"
     run_benchmark_serving \
         --model "$MODEL" \

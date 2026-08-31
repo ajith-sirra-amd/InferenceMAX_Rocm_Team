@@ -54,6 +54,35 @@ json to `/workspace/results` instead of the host workdir -- fixed to
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
 
+## Three-stage gate (2026-08-31, per owner)
+
+Run in order. Each stage only runs if the previous one passed.
+
+| # | stage | how | C1 | C52 |
+|---|---|---|---|---|
+| 1 | **Functionality** | `TEST=1 TEST_MODE=func` -- agentic-band lengths, few iterations | 4 prompts | 104 prompts |
+| 2 | **Perf fixed-len** | `TEST=1 TEST_MODE=perf` -- 8k/1k fixed, ~15 min | 112 prompts | 3,600 prompts |
+| 3 | **Perf agentic** | `TEST=0` -- the real agentic replay | full | full |
+
+Stage 1 lengths: ISL 214,000 / OSL 874 / ratio 0.37 -> uniform[79,180, 214,000]
+in and [323, 874] out, i.e. the agentic p50..p90 band. Stage 2 is ratio 1.0,
+exactly fixed, so it is comparable run to run.
+
+**Caveat on stage 2's "15 minutes":** `benchmark_serving.py` has no duration
+flag, only `--num-prompts`. The counts above are derived from an assumed
+per-request latency (C1 8.07 s, measured in T180; C52 13 s, a guess -- no 8k/1k
+measurement exists above C4). Actual duration will differ. Read the reported
+`Benchmark duration (s)` and set `TEST_EST_REQ_SECONDS` to calibrate.
+
+**Caveat on stage 1 as a workload proxy:** it matches agentic *lengths* but not
+its 93.3% prefix-cache hit rate, so it does several times the prefill work per
+token. It is a functionality gate, not a throughput number -- do not compare its
+tok/s to the agentic ledger.
+
+**Why stage 1 exists at all:** T180's 8k probe passed C1 10/10 while the agentic
+replay has failed 19 straight times. A probe that passes when the real workload
+fails is not a gate.
+
 **Honest position on 12,500, restated because it drives priorities:** the T124
 profile puts GPU idle at 28.2% of e2e wall. Eliminating idle *entirely* yields
 ~11,050 tok/s/GPU. Every remaining kernel lever is single-digit percent. So
