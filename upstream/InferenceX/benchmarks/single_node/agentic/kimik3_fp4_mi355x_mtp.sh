@@ -324,8 +324,42 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 # wants L3 locality. One shot, no background loop.
 pin_workers_to_ccd || true
 
+# TEST=1 -> fixed-length serving benchmark instead of the agentic replay.
+#
+# Why this gate exists: a fixed-len cell is ~10 min against ~1h12m for the
+# agentic replay, and it exercises the same server on the same config. Nineteen
+# consecutive C1 agentic runs were spent discovering the engine had died -- at
+# roughly an hour each. Fixed-len answers "does this engine survive traffic at
+# all" for a tenth of the cost.
+#
+# Intended use: run TEST=1 for C1 and C52 first. If the engine is clean -- no
+# EngineDeadError, no memory-access fault, error rate under the threshold --
+# only then spend an hour on the agentic replay. If it is not clean, the
+# agentic run cannot produce a number and should not be dispatched.
+#
+# There is no kimik3 script under benchmarks/single_node/fixed_seq_len/, and the
+# runner resolves single-node non-disagg to that directory, so a `fixed-seq-len`
+# yaml scenario would fail to launch. Branching inside this launcher keeps the
+# whole thing in the one file and needs no new script.
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
+elif [ "${TEST:-0}" = "1" ]; then
+    TEST_ISL="${TEST_ISL:-8192}"
+    TEST_OSL="${TEST_OSL:-1024}"
+    TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-$(( CONC * 10 ))}"
+    echo "[test] fixed-len serving: isl=$TEST_ISL osl=$TEST_OSL prompts=$TEST_NUM_PROMPTS conc=$CONC (agentic replay SKIPPED)"
+    run_benchmark_serving \
+        --model "$MODEL" \
+        --port "$PORT" \
+        --backend vllm \
+        --input-len "$TEST_ISL" \
+        --output-len "$TEST_OSL" \
+        --random-range-ratio "${RANDOM_RANGE_RATIO:-1.0}" \
+        --num-prompts "$TEST_NUM_PROMPTS" \
+        --max-concurrency "$CONC" \
+        --result-filename "$RESULT_FILENAME" \
+        --result-dir "$RESULT_DIR" \
+        --trust-remote-code
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
