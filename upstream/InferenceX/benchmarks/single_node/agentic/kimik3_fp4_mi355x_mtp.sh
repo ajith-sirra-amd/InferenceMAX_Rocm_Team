@@ -343,7 +343,11 @@ pin_workers_to_ccd || true
 # whole thing in the one file and needs no new script.
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-elif [ "${TEST:-0}" = "1" ]; then
+# Default flipped to 1: the runner invokes this script directly and there is no
+# env passthrough from the yaml, so TEST cannot be set per-dispatch from the
+# workflow. Fixed-len is the default health probe now; set TEST=0 in the script
+# to go back to the agentic replay once an engine is proven clean.
+elif [ "${TEST:-1}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
