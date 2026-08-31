@@ -21,26 +21,38 @@ json to `/workspace/results` instead of the host workdir -- fixed to
 - **C1 memory access fault** -- agentic path only; never reproduced under
   fixed-len. Still unexplained. PR #37682 remains the candidate.
 - **HSA_STATUS_ERROR_OUT_OF_RESOURCES** -- NOT node-specific. Seen on our
-  b23_07 (C56) and on SA's mi355x-amds_02 (C52, run 33355794530). It tracks
-  **mns=80 WITH MTP enabled**, not mns=80 alone:
+  b23_07 (C56) and on SA's mi355x-amds_02 (C52, run 33355794530). **No config
+  variable explains it.** Verified from `non-default args` in each log:
 
-  | | mns | MTP | offload | node | HSA |
-  |---|---|---|---|---|---|
-  | ours C56 | 80 | on | dram | b23_07 | yes |
-  | SA C52 2026-08-31 | 80 | on | none | amds_02 | yes |
-  | SA C52 2026-08-26 (run 32968517728) | 80 | **off** | none | amds_00 | **no -- 8,296** |
+  | | mns | MTP | offload | node | ladder | HSA |
+  |---|---|---|---|---|---|---|
+  | ours C56 | 80 | off | dram | b23_07 | 80 | yes |
+  | SA C52 2026-08-31 (33355794530) | 80 | off | none | amds_02 | 80 | yes |
+  | SA C52 2026-08-26 (32968517728) | 80 | off | none | amds_00 | 80 | **no -- 8,296** |
 
-  Mechanism: DSpark k=8 gives `SPEC_ROWS=9`, so mns=80 carries up to 720 rows
-  through attention -- 9x the queue/scratch pressure for the same mns. The
-  governing quantity is `mns x SPEC_ROWS`, not mns. `MAX_NUM_SEQS=65` (script
-  line 202) still untested. Confounds: the two SA runs are 5 days apart on the
-  mutable `latest` tag, and nodes differ.
+  Between SA's pass and SA's fail the only differences are node, the 5-day gap
+  on the mutable `latest` image tag, and `load_format` (fastsafetensors vs
+  safetensors). Our own C60 completes clean at mns=80 on b23_07 while C56 fails
+  there, so it is not purely the node. **HSA is intermittent; no fix
+  identified.** `MAX_NUM_SEQS=65` (script line 202) has no supporting evidence
+  beyond that note.
 
-- **SA's 8,296 is a `spec-none` run.** Verified in run 32968517728:
-  `speculative_config` absent, artifacts named `..._spec-none_...`. Our 8,342
-  uses MTP + dram offload + CCD pinning. **The two numbers are not comparable
-  and "we clear SA by 0.55%" overstates our position** -- they match our
-  throughput without spending speculative decoding at all.
+  RETRACTED 2026-08-31: this entry previously claimed the fault tracked
+  `mns=80 + offload=none`, then `mns=80 + MTP`. Both wrong. MTP is OFF at every
+  throughput point on both sides, so SPEC_ROWS=1 and the "mns x 9 rows"
+  mechanism does not exist.
+
+- **MTP never runs above C4.** `kimik3_fp4_mi355x_mtp.sh:140-143` sets
+  `SPEC_NUM_TOKENS=8` only for CONC in {1,2,4}; everything else gets 0.
+  Confirmed empirically: our C60 (job 99326249467, 8,333 tok/s/GPU) logs
+  `speculative_config = ABSENT`. **The entire C48-C72 ledger is
+  non-speculative**, and `spec-decoding: mtp` in the yaml is only a
+  script-filename selector. Speculative decoding at high concurrency is
+  UNTESTED; `SPEC_NUM_TOKENS` is env-overridable, so it is reachable.
+
+- **SA comparison is apples-to-apples.** Both 8,342 (ours) and 8,296 (SA) are
+  spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
+  offload (dram vs none), and CCD pinning.
 
 **Honest position on 12,500, restated because it drives priorities:** the T124
 profile puts GPU idle at 28.2% of e2e wall. Eliminating idle *entirely* yields
