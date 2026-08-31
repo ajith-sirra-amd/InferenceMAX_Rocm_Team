@@ -27,37 +27,29 @@ else
 fi
 
 rocm-smi || true
-amd-smi || true
 resolve_trace_source
 install_agentic_deps
 
-if [ -n "${DCP_SIZE:-}" ]; then
-    DCP_SOURCE=matrix
-else
-    if [ "$CONC" -le 4 ]; then DCP_SIZE=1; else DCP_SIZE=8; fi
-    DCP_SOURCE=conc-fallback
-fi
-export DCP_SIZE
-echo "[dcp] size=$DCP_SIZE source=$DCP_SOURCE conc=$CONC"
-
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
-export SAFETENSORS_FAST_GPU=1
-export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
-export AITER_BF16_FP8_MOE_BOUND=0
-export VLLM_USE_BREAKABLE_CUDAGRAPH=0
-export GPU_ARCHS=gfx950
+export VLLM_ROCM_USE_AITER_MLA=1
 export VLLM_ROCM_USE_AITER_MOE=1
+export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
 export AITER_SITUV2_A8W4=1
+export AITER_BF16_FP8_MOE_BOUND=0
+export AITER_DISABLE_FMHA_OPUS=1
+export SAFETENSORS_FAST_GPU=1
+export GPU_ARCHS=gfx950
 export HSA_NO_SCRATCH_RECLAIM=1
+export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export VLLM_K3_KDA_SAFE_STAGES=1
 export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
-
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
+export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600
 export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 export PYTHONNOUSERSITE=1
-export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200
+export PYTHONHASHSEED=42
 
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
@@ -74,34 +66,14 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-export PYTHONHASHSEED=42
+# conc <= 16 -> ladder 32, else ladder 64. mns clamped to the ladder so a batch
+# can never exceed a captured graph size.
+if [ "$CONC" -le 16 ]; then LADDER=32; else LADDER=64; fi
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-$LADDER}"
+if [ "$MAX_NUM_SEQS" -gt "$LADDER" ]; then MAX_NUM_SEQS=$LADDER; fi
 
-OFFLOAD_ARGS=()
-if agentic_kv_offload_enabled; then
-    case "${KV_OFFLOAD_BACKEND:-}" in
-      vllm-simple)
-        require_agentic_kv_offload_backend "$KV_OFFLOAD_BACKEND"
-        CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
-        export PYTHONHASHSEED=42
-        SIMPLE_LAZY_OFFLOAD="${SIMPLE_LAZY_OFFLOAD:-false}"
-        OFFLOAD_ARGS=(
-            --kv-transfer-config
-            "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":$SIMPLE_LAZY_OFFLOAD}}"
-        )
-        echo "SimpleCPUOffloadConnector: ${CPU_BYTES_PER_RANK} B/rank x ${TOTAL_RANKS} ranks, lazy_offload=$SIMPLE_LAZY_OFFLOAD"
-        ;;
-      *)
-        echo "KV offload requested (KV_OFFLOADING=$KV_OFFLOADING) but backend '${KV_OFFLOAD_BACKEND:-unset}' is not handled here" >&2
-        ;;
-    esac
-fi
-
-KV_CACHE_DTYPE=fp8
-EP_ARGS=()
-if [ "${EP_SIZE:-1}" -gt 1 ]; then
-    EP_ARGS=(--enable-expert-parallel)
-    echo "EP: expert parallelism ON (EP_SIZE=$EP_SIZE)"
-fi
+if [ "$CONC" -le 4 ]; then DCP_SIZE=1; else DCP_SIZE=8; fi
+export DCP_SIZE
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
 if [ "$DCP_SIZE" -gt 1 ]; then
@@ -110,121 +82,34 @@ if [ "$DCP_SIZE" -gt 1 ]; then
         --dcp-comm-backend a2a
         --cp-kv-cache-interleave-size 1
     )
-    # N9 IMPOSSIBLE ON THIS IMAGE -- these three stay 0. T167 flipped a2a to 1
-    # and every worker died during cudagraph capture with
-    #   AttributeError: '_OpNamespace' '_C' object has no attribute
-    #                   'direct_dcp_a2a_lse_reduce'
-    # The direct DCP path needs a compiled C++ op from #51705 that
-    # aigmkt/kimi-k3-vllm does not ship. So these were never "force-disabling a
-    # fast path" -- they disable an op that is absent. Re-enabling requires a
-    # rebuilt image, which is out of bounds here.
     export VLLM_USE_DIRECT_DCP_A2A=0
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
-    echo "[dcp-direct] a2a=0 q_gather=0 kv_gather=0 (op absent in this image)"
     export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
     export VLLM_DCP_Q_REPLICATE=1
-    echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"
-elif [ "${DCP_COMM_ARGS_AT_1:-0}" = "1" ]; then
-    CP_ARGS+=(--dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
-    echo "[dcp] size=1, comm args RETAINED (a2a, interleave=1), no DCP env"
-else
-    echo "[dcp] DISABLED -- no DCP args, no DCP env"
 fi
-export VLLM_ROCM_USE_AITER_MLA=1
-export AITER_DISABLE_FMHA_OPUS=1
 
-SPEC_ENABLE="${SPEC_DECODING:-}"
-case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
-case "$CONC" in
-    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;
-    *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
-esac
-if [ "$SPEC_NUM_TOKENS" -eq 0 ]; then SPEC_ENABLE=""; fi
 SPEC_ARGS=()
-if [ "$SPEC_ENABLE" = "mtp" ]; then
-    case "$SPEC_NUM_TOKENS" in
-        1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
-        2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
-        3) SYNTHETIC_ACCEPT_LEN=3.00 ;;
-        4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
-        5) SYNTHETIC_ACCEPT_LEN=3.62 ;;
-        6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
-        7) SYNTHETIC_ACCEPT_LEN=3.84 ;;
-        8) SYNTHETIC_ACCEPT_LEN=4.00 ;;
-        *) echo "[spec] no golden AL wired for num_speculative_tokens=$SPEC_NUM_TOKENS; take it from golden_al_distribution/kimik3_dspark_probabilistic_sample_method_block_rejection_sample_method.yaml and add the case" >&2; exit 1 ;;
-    esac
-    DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-    SPEC_ARGS=(
-        --speculative-config
-        "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
-    )
-    echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN, draft kv=$DRAFT_KV_DTYPE)"
+case "$CONC" in
+    1|2|4)
+        SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
+        SPEC_ARGS=(--speculative-config "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"fp8\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"synthetic\",\"synthetic_acceptance_length\":4.0}")
+        ;;
+esac
+
+OFFLOAD_ARGS=()
+if agentic_kv_offload_enabled; then
+    CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
+    OFFLOAD_ARGS=(--kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":false}}")
 fi
 
-# N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
-# against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
-# clear peak at 8192 and both sides are downhill.
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
-echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
-# N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
-# 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
-# engine, but still the wrong sign after 175 commits. The host prep the profile
-# blames for ~150 s of idle is evidently not what async overlaps here.
-if [ "${ASYNC_SCHED:-0}" = "1" ]; then
-    ASYNC_SCHED_ARGS=(--async-scheduling)
-else
-    ASYNC_SCHED_ARGS=(--no-async-scheduling)
-fi
-MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}")
+EP_ARGS=()
+if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
-LOAD_FORMAT="${LOAD_FORMAT:-auto}"
-echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
+CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
+COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-# N5 SETTLED NEGATIVE: mns 96 KILLS THE ENGINE. T165 C52 died mid-replay with
-# EngineDeadError from engine_core_sentinel -> mq.dequeue timeout, the same
-# trace as the C1 crash. Not memory: the dump shows kv_cache_usage=0.28 and
-# num_running_reqs=45. A 96-row batch simply makes the step longer than the
-# executor's RPC dequeue timeout, and the sentinel promotes that to fatal.
-# mns 80 completed twice on this exact image (T163, T164). Do not raise it
-# again without first raising that timeout.
-if [ -z "${MAX_NUM_SEQS:-}" ]; then
-    if [ "$DCP_SIZE" -gt 1 ]; then
-        MAX_NUM_SEQS=80
-    else
-        MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
-        if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi
-        if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
-    fi
-fi
-echo "[mns] max_num_seqs=$MAX_NUM_SEQS conc=$CONC offload=${KV_OFFLOADING:-none}"
-if [ "$MAX_NUM_SEQS" -ge 80 ] && ! agentic_kv_offload_enabled; then
-    echo "[mns] note: mns=$MAX_NUM_SEQS with KV_OFFLOADING=${KV_OFFLOADING:-none}. Proven on mi355x-amds_01 (8204 tok/s/GPU); OOMs on mi355x-amd_b23_07. Export MAX_NUM_SEQS=65 if HSA_STATUS_ERROR_OUT_OF_RESOURCES."
-fi
-
-SPEC_ROWS=1
-if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 )); fi
-if [ "$CONC" -le 4 ]; then
-    LADDER_MAX=16
-elif [ "$CONC" -le 16 ]; then
-    LADDER_MAX=32
-else
-    LADDER_MAX=80
-fi
-MAX_CUDAGRAPH_CAPTURE_SIZE=$(( MAX_NUM_SEQS * SPEC_ROWS ))
-if [ "$MAX_CUDAGRAPH_CAPTURE_SIZE" -gt "$LADDER_MAX" ]; then MAX_CUDAGRAPH_CAPTURE_SIZE=$LADDER_MAX; fi
-CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")
-echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $SPEC_ROWS rows), DCP=$DCP_SIZE"
-CUDAGRAPH_MODE=FULL_AND_PIECEWISE
-COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
-
-# N7 SETTLED NEGATIVE: gmu > 0.90 hangs this node. T166 at 0.92 got 0/103 --
-# the server came up and KV grew 59.8 -> 65.6 GiB (+9.7%), then it hung in
-# warmup and never served a request. T157 at 0.95 hung the same way (0/57).
-# Two points above 0.90 both hang; 0.90 works. Memory headroom is NOT the
-# free capacity it looks like. Do not raise this again.
-GPU_MEM_UTIL=0.9
-echo "[gmu] gpu_memory_utilization=$GPU_MEM_UTIL conc=$CONC"
+echo "[cfg] conc=$CONC dcp=$DCP_SIZE mns=$MAX_NUM_SEQS ladder=1..$LADDER spec=${#SPEC_ARGS[@]} offload=${KV_OFFLOADING:-none}"
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
@@ -233,30 +118,26 @@ VLLM_CMD=(
     --trust-remote-code
     --moe-backend auto
     --tensor-parallel-size "$TP"
-    --load-format "$LOAD_FORMAT"
-    --gpu-memory-utilization "$GPU_MEM_UTIL"
+    --load-format fastsafetensors
+    --gpu-memory-utilization 0.9
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
+    --max-num-batched-tokens 16384
+    --max-model-len 1048576
+    --kv-cache-dtype fp8
     --enable-auto-tool-choice
     --tool-call-parser kimi_k3
     --reasoning-parser kimi_k3
-    --max-model-len 1048576
     --enable-prefix-caching
     --enable-prompt-tokens-details
-    --kv-cache-dtype "$KV_CACHE_DTYPE"
-    "${CHUNKED_PREFILL_ARGS[@]}"
+    --no-async-scheduling
+    --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${EP_ARGS[@]}"
     "${SPEC_ARGS[@]}"
-    "${ASYNC_SCHED_ARGS[@]}"
-    "${MLA_PREFILL_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
-
-for _a in CP_ARGS SPEC_ARGS CHUNKED_PREFILL_ARGS ASYNC_SCHED_ARGS MLA_PREFILL_ARGS OFFLOAD_ARGS COMPILATION_CONFIG_ARGS; do
-    grep -q "\${$_a\[@\]}" "$0" || echo "[orphan-check] WARNING: $_a is built but never passed to VLLM_CMD" >&2
-done
 
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
