@@ -330,6 +330,29 @@ where T190 had 4. So the +3.1% cannot be attributed to concurrency alone.
 T192's 0.995 covers the 4-file stack, not this one. Eval next, before the number
 is quoted anywhere.
 
+## T194 — GSM8K on the 5-file stack: 0.99. #50813 validated, 9,775 stands.
+
+Run 33416822894, job 99569435360, EVAL_ONLY=true EVAL_LIMIT=200, C64 config,
+`[pr-stack] applied=5 skipped:none`.
+
+```
+|gsm8k| 3|flexible-extract| 5|exact_match|^ |0.99|+- |0.0071|
+|     |  |strict-match    | 5|exact_match|^ |0.99|+- |0.0071|
+```
+
+| stack | GSM8K | run |
+|---|--:|---|
+| 4 files (overlay + #53940) | 0.995 +- 0.005 | T192 |
+| **5 files (+ #50813)** | **0.99 +- 0.0071** | T194 |
+
+**Not a regression.** At limit 200 one question is worth 0.005, so 0.995 -> 0.99
+is exactly one more wrong answer, and the intervals overlap heavily
+([0.983, 0.997] vs [0.990, 1.000]). #50813's MoE quant change is accuracy-safe
+at this resolution. A larger limit would be needed to separate them, and there
+is no reason to think there is anything to separate.
+
+**T193's 9,775 tok/s/GPU is now accuracy-validated.**
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |

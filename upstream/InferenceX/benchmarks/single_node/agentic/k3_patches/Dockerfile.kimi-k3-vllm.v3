@@ -1,0 +1,38 @@
+# kimi-k3-vllm:v3 -- validated by T193 (9,775 tok/s/GPU @ C64, err 0.09%) and
+# T194 (GSM8K exact_match 0.99 +/- 0.0071, limit 200, 5-shot).
+#
+# Contents:
+#   base    vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
+#   + K3 overlay  vllm_nightly_46638857_k3_c16_c52_current.patch  (264 KB)
+#   + PR #53940   a4w4 flydsl kernels for Kimi-K3 (4 files)
+#   + PR #50813   opt-in K3 SiTUv2 A8W4 routed MoE (1 file)
+#
+# DELIBERATELY EXCLUDED:
+#   #54095 aiter per-stream -- never applied on this base (hunk 2 fails).
+#   #52494 MLA q/kv RMSNorm -- 100% already contained in the overlay, redundant.
+#
+# #50813 (SiTUv2 A8W4 routed MoE) IS included here and validated by T194.
+# Our launcher was already exporting VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1 and
+# AITER_SITUV2_A8W4=1 before this PR was applied -- i.e. setting flags for a code
+# path that was not present.
+ARG BASE_IMAGE=vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
+FROM ${BASE_IMAGE}
+
+COPY vllm_nightly_46638857_k3_c16_c52_current.patch /tmp/k3.patch
+COPY pr_stack/vllm___aiter_ops.py.patch /tmp/pr/
+COPY pr_stack/vllm__envs.py.patch /tmp/pr/
+COPY pr_stack/vllm__model_executor__layers__fused_moe__experts__rocm_aiter_moe.py.patch /tmp/pr/
+COPY pr_stack/vllm__model_executor__layers__fused_moe__oracle__mxfp4.py.patch /tmp/pr/
+COPY pr_stack/vllm__model_executor__layers__quantization__quark__quark_moe.py.patch /tmp/pr/
+
+RUN set -eux; \
+    cd /usr/local/lib/python3.12/dist-packages; \
+    patch -p1 --forward --batch < /tmp/k3.patch; \
+    for p in /tmp/pr/*.patch; do patch -p1 --forward --batch < "$p"; done; \
+    rm -rf /tmp/k3.patch /tmp/pr; \
+    python3 -c 'import vllm; print("vllm", vllm.__version__)'
+
+LABEL k3.base="nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3" \
+      k3.overlay="vllm_nightly_46638857_k3_c16_c52_current.patch" \
+      k3.prs="53940,50813" \
+      k3.validated="T193 9775 tok/s/GPU C64 err 0.09%; T194 GSM8K 0.99"
