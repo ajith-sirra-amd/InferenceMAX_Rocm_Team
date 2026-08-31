@@ -11,7 +11,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **C52 throughput** | 12,500 tok/s/GPU | **8,685** (T189, nightly+overlay+PRs) | **−30.5%** |
+| **throughput** | 12,500 tok/s/GPU | **9,482** (T190, C60, nightly+overlay+PRs) | **−24.1%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
@@ -236,6 +236,42 @@ also differs (b23_07 vs amds_01).
 
 **Not attributable to one change** -- image, overlay, chunk 16384, fastsafetensors,
 no CCD pinning, DCP env defaults and 4 PR-stack files all moved together.
+
+## T190 — 9,482 tok/s/GPU at C60. WE ARE NOW AHEAD OF SA.
+
+Run 33390742917, job 99483607390, C60, agentic replay, nightly stack.
+
+| | value |
+|---|---|
+| **Throughput per GPU** | **9,482 tok/s** |
+| Requests | 2,076 successful / 2,202 total (123 warmup, 112 error dropped) |
+| Request Error Rate | **0.14%** |
+| Output token throughput | 471.49 tok/s |
+| ITL mean / p50 / p90 | 95.82 / 84.89 / 124.06 ms |
+| Time to Second Token mean | 163.31 ms |
+| HSA / memfault / ProfileAborted | **0 / 0 / 0** |
+| `[k3-overlay]` / `[pr-stack]` | applied=1 / applied=4 files |
+
+### Standings
+
+| | tok/s/GPU | vs T190 |
+|---|--:|--:|
+| ours C60, aigmkt (old best) | 8,342 | **+13.7%** |
+| ours C52, nightly (T189) | 8,685 | **+9.2%** |
+| SA C52, nightly (33324464095) | 8,953 | **+5.9%** |
+| **T190 C60, nightly** | **9,482** | — |
+| target | 12,500 | **-24.1%** |
+
+**First time past SA.** The C60-over-C52 gain is +9.2% on this stack, much larger
+than the +2.8% the same step gave on aigmkt (8,342 vs 8,115) -- the concurrency
+curve is steeper here, so the old peak location may not hold either.
+
+Latency cost of C60 over C52: ITL mean 80.84 -> 95.82 ms (+18.5%), TTST
+128.04 -> 163.31 ms (+27.5%). Error rate identical at 0.14%.
+
+**n=1.** Not replicated, and the old stack's C60 spread (0.20%) was measured on a
+different image. Attribution still unresolved -- image, overlay, chunk,
+fastsafetensors, pinning, DCP env and 4 PR files all moved together back at T188.
 
 ## C52 — every lever tried is flat or negative
 

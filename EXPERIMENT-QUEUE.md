@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **8,685 (T189, C52, nightly+overlay+PRs, err 0.14%)** | **12,500 tok/s/GPU** · SA 8,953 | **−30.5%** |
+| Throughput | **9,482 (T190, C60, nightly+overlay+PRs, err 0.14%)** — **ahead of SA** | **12,500 tok/s/GPU** · SA 8,953 | **−24.1%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **T180 (2026-08-31): C1 engine is healthy.** First `TEST=1` fixed-len probe:
@@ -61,6 +61,15 @@ json to `/workspace/results` instead of the host workdir -- fixed to
 - **SA comparison is apples-to-apples.** Both 8,342 (ours) and 8,296 (SA) are
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
+
+## NEW BEST 9,482 (T190, C60, nightly stack) -- AHEAD OF SA
+
+C60 agentic, 2,076/2,202 successful, error rate 0.14%, zero HSA/memfault.
+**+5.9% over SA's 8,953**, +13.7% over our old aigmkt best 8,342, +9.2% over
+T189's C52 on the same stack. Gap to 12,500 now **-24.1%** (was -33%).
+
+C60-over-C52 is +9.2% here vs +2.8% on aigmkt -- the conc curve is steeper on
+this stack, so the old peak at 60 may not be the peak any more. Next: C64.
 
 ## NEW BEST 8,685 (T189, C52, nightly stack) -- 2026-08-31
 
