@@ -86,6 +86,29 @@ IMAGE: vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
 optimum, 16384 is -2.5%") and the LADDER_MAX<=80 cap are both contradicted by a
 faster SA run on the nightly. They are image-specific, not general.
 
+### HSA fault tracks the IMAGE, not the node (2026-08-31)
+
+Third sighting, SA run 33360219789 job 99390061271, node **amds_03**, aigmkt:
+`HSA_STATUS_ERROR_OUT_OF_RESOURCES` -> `hipErrorUnknown` -> `VllmWorker-6 died
+unexpectedly` (multiproc_executor.py:314) after 51 min; aiperf 88/872 failed
+(10.09%) -> ProfileAborted. Full run: 784 successful / 979 total.
+
+| run | image | node | mns | offload | HSA |
+|---|---|---|---|---|---|
+| ours C56 | aigmkt | b23_07 | 80 | dram | yes |
+| SA C52 08-31 04:05 | aigmkt | amds_02 | 80 | none | yes |
+| SA C52 08-31 05:21 | aigmkt | amds_03 | 80 | none | yes |
+| SA C52 08-26 | aigmkt | amds_00 | 80 | none | no -- 8,296 |
+| SA C52 08-30 | **nightly+overlay** | amds_01 | 80 | dram | no -- **8,953** |
+
+**Three failures on aigmkt across three different nodes. Zero on the nightly.**
+The node hypothesis (b23_07 is bad) is dead. `aigmkt/kimi-k3-vllm:latest` is a
+MUTABLE tag, so the 08-26 pass is very likely a different build under the same
+name -- consistent with the weight-load time jumping 134 s -> 2,557 s between
+those dates. Working read: **the current aigmkt build is broken.**
+
+Caveat: one clean nightly datapoint is not proof. T182 is the test.
+
 ### Correction to a bound I asserted wrongly
 
 I repeatedly said a different image was "out of bounds". That was wrong. The
