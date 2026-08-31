@@ -56,6 +56,37 @@ workdir. The canonical fixed-len scripts use `--result-dir /workspace/`. Fixed t
 `${INFMAX_CONTAINER_WORKSPACE:-/workspace}`. The measurement above is valid --
 it was printed in full before the wrapper looked for the file.
 
+## T180 C52 — fixed-len also passes. Both engines are healthy.
+
+| | C1 | C52 |
+|---|---|---|
+| successful requests | **10 / 10** | **520 / 520** |
+| benchmark duration | 80.72 s | 739.00 s |
+| Mean TPOT | 7.41 ms | 75.77 ms |
+| Mean ITL | 29.59 ms | 75.94 ms (median 37.83) |
+| Mean TTFT | 1,185.81 ms | 2,344.64 ms (P99 24,260) |
+| Mean E2EL | 8,070 ms | 72,573 ms |
+| Total token throughput | 1,031.73 tok/s | 5,840.48 tok/s |
+| HSA / memfault | 0 / 0 | **0 / 0** |
+| isl/osl/ratio | 8192 / 1024 / 0.8 | 8192 / 1024 / 0.8 |
+
+`graphs: dense ladder 1..80 (mns=80 x 1 rows), DCP=8` -- independent
+confirmation that **SPEC_ROWS=1 at C52**, i.e. MTP is off, as established from
+the config dumps.
+
+Both jobs reported `failure` purely from the result-dir plumbing bug (writing to
+`/workspace/results` instead of the host workdir). Fixed in 88a7ecd3; both runs
+predate it. The measurements above printed in full and are valid.
+
+**Do not compare 5,840 tok/s to the agentic 8,342.** Different metric and
+different workload -- agentic serves 93.3% of prompt tokens from prefix cache,
+this does full prefill every request.
+
+**Calibration gained:** C52 at 8k/1k runs **72.57 s per request** (mean E2EL),
+not the 13 s I guessed when sizing the perf mode. 520 prompts x 72.57 / 52 =
+725 s, against the 739 s measured. The perf-mode default is corrected to 72.57,
+so a 900 s target now sizes to 645 prompts rather than 3,600.
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |

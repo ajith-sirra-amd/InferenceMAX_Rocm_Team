@@ -61,7 +61,7 @@ Run in order. Each stage only runs if the previous one passed.
 | # | stage | how | C1 | C52 |
 |---|---|---|---|---|
 | 1 | **Functionality** | `TEST=1 TEST_MODE=func` -- agentic-band lengths, few iterations | 4 prompts | 104 prompts |
-| 2 | **Perf fixed-len** | `TEST=1 TEST_MODE=perf` -- 8k/1k fixed, ~15 min | 112 prompts | 3,600 prompts |
+| 2 | **Perf fixed-len** | `TEST=1 TEST_MODE=perf` -- 8k/1k fixed, ~15 min | 112 prompts | **645 prompts** |
 | 3 | **Perf agentic** | `TEST=0` -- the real agentic replay | full | full |
 
 Stage 1 lengths: ISL 214,000 / OSL 874 / ratio 0.37 -> uniform[79,180, 214,000]
@@ -70,8 +70,9 @@ exactly fixed, so it is comparable run to run.
 
 **Caveat on stage 2's "15 minutes":** `benchmark_serving.py` has no duration
 flag, only `--num-prompts`. The counts above are derived from an assumed
-per-request latency (C1 8.07 s, measured in T180; C52 13 s, a guess -- no 8k/1k
-measurement exists above C4). Actual duration will differ. Read the reported
+per-request latency, both now MEASURED in T180: C1 8.07 s, C52 72.57 s (mean
+E2EL over 520 requests). The earlier C52 figure of 13 s was a guess and was
+wrong by 5.6x. Read the reported
 `Benchmark duration (s)` and set `TEST_EST_REQ_SECONDS` to calibrate.
 
 **Caveat on stage 1 as a workload proxy:** it matches agentic *lengths* but not

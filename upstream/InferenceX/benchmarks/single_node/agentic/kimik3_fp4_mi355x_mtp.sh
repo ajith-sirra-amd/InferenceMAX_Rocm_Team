@@ -420,7 +420,7 @@ elif [ "${TEST:-1}" = "1" ]; then
         # the next one land.
         TEST_TARGET_SECONDS="${TEST_TARGET_SECONDS:-900}"
         if [ -z "${TEST_EST_REQ_SECONDS:-}" ]; then
-            if [ "$CONC" -le 4 ]; then TEST_EST_REQ_SECONDS=8.07; else TEST_EST_REQ_SECONDS=13; fi
+            if [ "$CONC" -le 4 ]; then TEST_EST_REQ_SECONDS=8.07; else TEST_EST_REQ_SECONDS=72.57; fi
         fi
         TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-$(awk -v t="$TEST_TARGET_SECONDS" -v c="$CONC" \
             -v l="$TEST_EST_REQ_SECONDS" 'BEGIN{n=int(t*c/l+0.5); if(n<1)n=1; print n}')}"
