@@ -464,7 +464,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
 # to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-0}" = "1" ]; then
+elif [ "${TEST:-1}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
@@ -515,7 +515,7 @@ elif [ "${TEST:-0}" = "1" ]; then
     # against the SAME server, so we pay the ~2.5 min weight load once instead of
     # twice. func runs first and is short; if the engine is broken we find out in
     # minutes. perf writes the official result file the CI wrapper looks for.
-    TEST_MODE="${TEST_MODE:-perf}"
+    TEST_MODE="${TEST_MODE:-func}"
     if [ "$TEST_MODE" = "both" ]; then
         echo "[test-mode] both: functionality pass then perf pass on one server"
         FUNC_ISL="${FUNC_ISL:-214000}"; FUNC_OSL="${FUNC_OSL:-874}"
