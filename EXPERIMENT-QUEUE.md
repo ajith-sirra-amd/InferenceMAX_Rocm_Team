@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **9,482 (T190, C60, nightly+overlay+PRs, err 0.14%)** — **ahead of SA** | **12,500 tok/s/GPU** · SA 8,953 | **−24.1%** |
+| Throughput | **9,775 (T193, C64, nightly+overlay+5 PR files, err 0.09%)** | **12,500 tok/s/GPU** · SA 8,953 | **−21.8%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **T180 (2026-08-31): C1 engine is healthy.** First `TEST=1` fixed-len probe:
@@ -61,6 +61,15 @@ json to `/workspace/results` instead of the host workdir -- fixed to
 - **SA comparison is apples-to-apples.** Both 8,342 (ours) and 8,296 (SA) are
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
+
+## NEW BEST 9,775 (T193, C64) -- +9.2% over SA, -21.8% from target
+
+C64 agentic, err 0.09%, `[pr-stack] applied=5 skipped:none`. The aigmkt C64
+cliff (-4.4%) does not exist on this stack -- throughput is still climbing at 64.
+
+CAVEAT: two variables moved (conc 60->64 AND #50813 SiTUv2 A8W4 MoE landed).
+#50813 changes MoE quant math and is NOT GSM8K-validated -- T192's 0.995 covers
+the 4-file stack only. Running eval now before pushing to C72.
 
 ## GSM8K VALIDATED: 0.995 (T192). Image saved as kimi-k3-vllm-v2.
 

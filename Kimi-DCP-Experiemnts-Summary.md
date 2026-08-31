@@ -11,7 +11,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **throughput** | 12,500 tok/s/GPU | **9,482** (T190, C60, nightly+overlay+PRs) | **−24.1%** |
+| **throughput** | 12,500 tok/s/GPU | **9,775** (T193, C64, nightly+overlay+PRs) | **−21.8%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
@@ -293,6 +293,42 @@ a large numerics change (264 KB kernel overlay + #53940 a4w4 MoE kernels + chunk
 **Image saved:** `kimi-k3-vllm-v2:latest` (local only, no registry push) =
 nightly-46638857 + K3 overlay + #53940. Dockerfile at
 `k3_patches/Dockerfile.kimi-k3-vllm-v2`.
+
+## T193 — 9,775 tok/s/GPU at C64. The aigmkt cliff at 64 does NOT exist here.
+
+Run 33407055937, job 99537198147, C64 agentic, nightly stack.
+
+| | value |
+|---|---|
+| **Throughput per GPU** | **9,775 tok/s** |
+| Requests | 2,160 successful / 2,293 total (131 warmup, 116 error dropped) |
+| Request Error Rate | **0.09%** (best yet) |
+| Output token throughput | 495.36 tok/s |
+| ITL mean / p50 / p90 | 98.43 / 87.51 / 128.61 ms |
+| `[pr-stack]` | **applied=5 files, skipped: none** |
+| HSA / memfault / ProfileAborted | 0 / 0 / 0 |
+
+### The concurrency curve inverted between stacks
+
+| conc | aigmkt | nightly stack |
+|---|--:|--:|
+| 52 | 8,115 | 8,685 |
+| 60 | 8,342 | 9,482 |
+| 64 | **7,976 (-4.4% CLIFF)** | **9,775 (+3.1%, still climbing)** |
+
+The C64 cliff was a property of the OLD image, not of the model or the node.
+On the nightly stack throughput is still rising at 64 with the *lowest* error
+rate we have recorded. C72 is now worth testing -- on aigmkt it died outright.
+
+### TWO variables moved, not one
+
+T193 differs from T190 by concurrency (60 -> 64) AND by `#50813` (SiTUv2 A8W4
+routed MoE), which landed in this run -- `[pr-stack] applied=5, skipped: none`
+where T190 had 4. So the +3.1% cannot be attributed to concurrency alone.
+
+**#50813 changes MoE quantisation math and has NOT been GSM8K-validated.**
+T192's 0.995 covers the 4-file stack, not this one. Eval next, before the number
+is quoted anywhere.
 
 ## C52 — every lever tried is flat or negative
 
