@@ -325,22 +325,21 @@ fi
 
 SPEC_ROWS=1
 if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 )); fi
-if [ "$CONC" -le 4 ]; then
-    # 16 -> 32. SA's passing C1 (SemiAnalysisAI run 33249871769, job 99371577484,
-    # node mi355x-amds_03) logs "graphs: dense ladder 1..32 (mns=8 x 9 rows),
-    # DCP=1" -- their live script uses 32 here where our snapshot used 16. Their
-    # C1 completed 192/192 with zero failures; ours has aborted 19 times with a
-    # memory access fault. The node differs too (we are pinned to b23_07), and
-    # the node is the stronger suspect -- but the ladder is the only part of the
-    # difference we are allowed to change, so test it.
-    LADDER_MAX=32
-elif [ "$CONC" -le 16 ]; then
-    LADDER_MAX=32
-else
-    LADDER_MAX=80
-fi
+
+# ONE RULE: the captured ladder ALWAYS covers mns x SPEC_ROWS. No clamp below it.
+#
+# Why the old LADDER_MAX clamp is gone. A batch of N sequences with speculative
+# decoding carries N x (k+1) rows. If the ladder stops short of that, the larger
+# batches fall off the cudagraph path into eager execution -- a different
+# allocation path. That mismatch is the single config difference between SA's
+# passing C52 (capture 80, mns 80) and their HSA failure on the SAME node and
+# image (capture 65, mns 80). We were carrying the same latent mismatch at C1:
+# mns 8 x 9 rows = 72 needed, ladder clamped to 32.
+#
+# At C1 the live batch is only 1 x 9 = 9 rows, so the extra graphs are mostly
+# unused -- the cost is capture time and a little memory, and it buys removal of
+# a whole failure class. Cheap insurance.
 MAX_CUDAGRAPH_CAPTURE_SIZE=$(( MAX_NUM_SEQS * SPEC_ROWS ))
-if [ "$MAX_CUDAGRAPH_CAPTURE_SIZE" -gt "$LADDER_MAX" ]; then MAX_CUDAGRAPH_CAPTURE_SIZE=$LADDER_MAX; fi
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")
 echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $SPEC_ROWS rows), DCP=$DCP_SIZE"
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
