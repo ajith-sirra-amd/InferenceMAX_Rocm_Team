@@ -72,7 +72,7 @@ if [ "$CONC" -le 16 ]; then LADDER=32; else LADDER=64; fi
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-$LADDER}"
 if [ "$MAX_NUM_SEQS" -gt "$LADDER" ]; then MAX_NUM_SEQS=$LADDER; fi
 
-if [ "$CONC" -le 4 ]; then DCP_SIZE=1; else DCP_SIZE=8; fi
+if [ "$CONC" -le 4 ]; then DCP_SIZE=1; GPU_MEM_UTIL=0.92; else DCP_SIZE=8; GPU_MEM_UTIL=0.9; fi
 export DCP_SIZE
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
@@ -109,7 +109,7 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-echo "[cfg] conc=$CONC dcp=$DCP_SIZE mns=$MAX_NUM_SEQS ladder=1..$LADDER spec=${#SPEC_ARGS[@]} offload=${KV_OFFLOADING:-none}"
+echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec=${#SPEC_ARGS[@]} offload=${KV_OFFLOADING:-none}"
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
@@ -119,7 +119,7 @@ VLLM_CMD=(
     --moe-backend auto
     --tensor-parallel-size "$TP"
     --load-format fastsafetensors
-    --gpu-memory-utilization 0.9
+    --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
     --max-num-batched-tokens 16384
