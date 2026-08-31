@@ -110,9 +110,18 @@ if [ "$DCP_SIZE" -gt 1 ]; then
         --dcp-comm-backend a2a
         --cp-kv-cache-interleave-size 1
     )
+    # N9 IMPOSSIBLE ON THIS IMAGE -- these three stay 0. T167 flipped a2a to 1
+    # and every worker died during cudagraph capture with
+    #   AttributeError: '_OpNamespace' '_C' object has no attribute
+    #                   'direct_dcp_a2a_lse_reduce'
+    # The direct DCP path needs a compiled C++ op from #51705 that
+    # aigmkt/kimi-k3-vllm does not ship. So these were never "force-disabling a
+    # fast path" -- they disable an op that is absent. Re-enabling requires a
+    # rebuilt image, which is out of bounds here.
     export VLLM_USE_DIRECT_DCP_A2A=0
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
+    echo "[dcp-direct] a2a=0 q_gather=0 kv_gather=0 (op absent in this image)"
     export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
     export VLLM_DCP_Q_REPLICATE=1
     echo "[dcp] ENABLED size=$DCP_SIZE backend=a2a interleave=1"
@@ -153,7 +162,15 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
     echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN, draft kv=$DRAFT_KV_DTYPE)"
 fi
 
+# N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
+# against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
+# clear peak at 8192 and both sides are downhill.
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
+# N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
+# 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
+# engine, but still the wrong sign after 175 commits. The host prep the profile
+# blames for ~150 s of idle is evidently not what async overlaps here.
 if [ "${ASYNC_SCHED:-0}" = "1" ]; then
     ASYNC_SCHED_ARGS=(--async-scheduling)
 else
@@ -164,6 +181,13 @@ MLA_PREFILL_ARGS=(--attention-config "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"
 LOAD_FORMAT="${LOAD_FORMAT:-auto}"
 echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 
+# N5 SETTLED NEGATIVE: mns 96 KILLS THE ENGINE. T165 C52 died mid-replay with
+# EngineDeadError from engine_core_sentinel -> mq.dequeue timeout, the same
+# trace as the C1 crash. Not memory: the dump shows kv_cache_usage=0.28 and
+# num_running_reqs=45. A 96-row batch simply makes the step longer than the
+# executor's RPC dequeue timeout, and the sentinel promotes that to fatal.
+# mns 80 completed twice on this exact image (T163, T164). Do not raise it
+# again without first raising that timeout.
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
         MAX_NUM_SEQS=80
@@ -194,7 +218,13 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 CUDAGRAPH_MODE=FULL_AND_PIECEWISE
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
+# N7 SETTLED NEGATIVE: gmu > 0.90 hangs this node. T166 at 0.92 got 0/103 --
+# the server came up and KV grew 59.8 -> 65.6 GiB (+9.7%), then it hung in
+# warmup and never served a request. T157 at 0.95 hung the same way (0/57).
+# Two points above 0.90 both hang; 0.90 works. Memory headroom is NOT the
+# free capacity it looks like. Do not raise this again.
 GPU_MEM_UTIL=0.9
+echo "[gmu] gpu_memory_utilization=$GPU_MEM_UTIL conc=$CONC"
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
@@ -237,8 +267,74 @@ echo "Server PID: $SERVER_PID"
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
+
+# TEST=1 -> fixed-length serving benchmark instead of the agentic replay.
+#
+# Why this gate exists: a fixed-len cell is ~10 min against ~1h12m for the
+# agentic replay, and it exercises the same server on the same config. Nineteen
+# consecutive C1 agentic runs were spent discovering the engine had died -- at
+# roughly an hour each. Fixed-len answers "does this engine survive traffic at
+# all" for a tenth of the cost.
+#
+# Intended use: run TEST=1 for C1 and C52 first. If the engine is clean -- no
+# EngineDeadError, no memory-access fault, error rate under the threshold --
+# only then spend an hour on the agentic replay. If it is not clean, the
+# agentic run cannot produce a number and should not be dispatched.
+#
+# There is no kimik3 script under benchmarks/single_node/fixed_seq_len/, and the
+# runner resolves single-node non-disagg to that directory, so a `fixed-seq-len`
+# yaml scenario would fail to launch. Branching inside this launcher keeps the
+# whole thing in the one file and needs no new script.
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
+# Default flipped to 1: the runner invokes this script directly and there is no
+# env passthrough from the yaml, so TEST cannot be set per-dispatch from the
+# workflow. Fixed-len is the default health probe now; set TEST=0 in the script
+# to go back to the agentic replay once an engine is proven clean.
+elif [ "${TEST:-1}" = "1" ]; then
+    # ISL/OSL/ratio defaults, and why they are what they are.
+    #
+    # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
+    #     lower = int(seq_len * range_ratio); upper = seq_len
+    #     seq_lens = randint(lower, upper+1)
+    # so lengths are uniform on [isl*ratio, isl]. ratio=1.0 is FIXED length;
+    # ratio=0.0 is uniform 0..isl. Higher ratio = tighter, not wider.
+    #
+    # Measured agentic distribution, from the T170 C72 aiperf tables:
+    #   prompt tokens     min 354  p50 80,155  mean 111,750  p90 214,305  max 735,739
+    #   completion tokens min 11   p50 238     mean 369      p90 874      max 2,507
+    #   prompt cache read 93.32% of prompt tokens
+    #
+    # Two honest limits on "just derive it from the agentic lengths":
+    #  1. That prompt distribution is heavily right-skewed (mean >> median).
+    #     A uniform cannot reproduce that shape -- matching the mean forces a
+    #     span far wider than the actual IQR, matching the IQR loses the tail.
+    #  2. The bigger mismatch is not length at all: agentic serves 93% of its
+    #     prompt tokens from cache, so a fixed-len run at the same ISL does
+    #     several times the prefill work. Length-matching does not fix that.
+    #
+    # Default therefore stays ratio=1.0 (fixed) because TEST=1 exists as a cheap
+    # deterministic health probe, not as a workload replica -- a fixed length is
+    # what makes it reproducible and comparable run to run. Override when you
+    # want representativeness instead: TEST_RANGE_RATIO=0.37 with
+    # TEST_ISL=214000 approximates uniform[80k, 214k], i.e. the agentic p50..p90.
+    TEST_ISL="${TEST_ISL:-8192}"
+    TEST_OSL="${TEST_OSL:-1024}"
+    TEST_RANGE_RATIO="${TEST_RANGE_RATIO:-${RANDOM_RANGE_RATIO:-1.0}}"
+    TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-$(( CONC * 10 ))}"
+    echo "[test] fixed-len serving: isl=$TEST_ISL osl=$TEST_OSL ratio=$TEST_RANGE_RATIO prompts=$TEST_NUM_PROMPTS conc=$CONC (agentic replay SKIPPED)"
+    run_benchmark_serving \
+        --model "$MODEL" \
+        --port "$PORT" \
+        --backend vllm \
+        --input-len "$TEST_ISL" \
+        --output-len "$TEST_OSL" \
+        --random-range-ratio "$TEST_RANGE_RATIO" \
+        --num-prompts "$TEST_NUM_PROMPTS" \
+        --max-concurrency "$CONC" \
+        --result-filename "$RESULT_FILENAME" \
+        --result-dir "$RESULT_DIR" \
+        --trust-remote-code
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
