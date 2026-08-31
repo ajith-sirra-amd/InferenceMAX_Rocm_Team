@@ -74,6 +74,35 @@ echo "[k3-overlay] applied=$K3_OVERLAY_APPLIED conc=$CONC"
 # a successful overlay shifts context and silently breaks it.
 if [ "$K3_OVERLAY_APPLIED" = "1" ]; then export SKIP_KIMI_PATCHES=1; fi
 
+# ---- Upstream PR stack, layered ON TOP of the K3 overlay ---------------------
+# Goal is 12,500 tok/s/GPU; the overlay alone is worth ~8,953 on SA's numbers.
+# These are open vLLM PRs, all PURE PYTHON (no csrc/), so `patch -p1` into
+# site-packages is sufficient -- no image rebuild, no Docker push.
+#
+#   #53940  a4w4 flydsl kernels for Kimi-K3 (_aiter_ops, rocm_aiter_moe,
+#           oracle/mxfp4, envs) -- AMD MoE path
+#   #54095  AITER v0.1.20 per-stream workspace (cudagraph_utils) -- multi-stream
+#
+# Excluded deliberately: #53154 and #37682 both edit files the K3 overlay
+# rewrites (amd/mla.py, layers/mla.py, rocm_aiter_mla.py) and will not apply on
+# top of it; #50647 and #54255 are the NVIDIA path.
+#
+# NON-FATAL by design, unlike the K3 overlay: a PR that stops applying should
+# degrade to the overlay-only baseline, not kill the run. The [pr-stack] gate
+# line records which way it went, so a number is never silently mis-attributed.
+PR_STACK_PATCH="${PR_STACK_PATCH:-$K3_PATCH_DIR/vllm_pr_53940_54095_on_46638857.patch}"
+PR_STACK_APPLIED=0
+if [ "${APPLY_PR_STACK:-1}" = "1" ] && [ "$K3_OVERLAY_APPLIED" = "1" ] && [ -f "$PR_STACK_PATCH" ]; then
+    if ( cd "$SITE_PKGS" && patch -p1 --forward --batch --dry-run < "$PR_STACK_PATCH" ) \
+            >/tmp/pr_stack_dryrun.log 2>&1; then
+        ( cd "$SITE_PKGS" && patch -p1 --forward --batch < "$PR_STACK_PATCH" ) && PR_STACK_APPLIED=1
+    else
+        echo "[pr-stack] does not apply on this tree, continuing without it:" >&2
+        head -30 /tmp/pr_stack_dryrun.log >&2 || true
+    fi
+fi
+echo "[pr-stack] applied=$PR_STACK_APPLIED (#53940 a4w4-flydsl, #54095 aiter-per-stream)"
+
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix
 else
@@ -410,7 +439,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
 # to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-0}" = "1" ]; then
+elif [ "${TEST:-1}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
@@ -457,7 +486,28 @@ elif [ "${TEST:-0}" = "1" ]; then
     # would be ~11M input tokens at C52 before decode.
     # TEST_MODE=func (default) -> agentic-band functionality test, few iterations.
     # TEST_MODE=perf           -> 8k/1k fixed length, sized to ~15 min.
-    TEST_MODE="${TEST_MODE:-perf}"
+    # TEST_MODE=both (default): run the functionality pass AND the perf pass
+    # against the SAME server, so we pay the ~2.5 min weight load once instead of
+    # twice. func runs first and is short; if the engine is broken we find out in
+    # minutes. perf writes the official result file the CI wrapper looks for.
+    TEST_MODE="${TEST_MODE:-both}"
+    if [ "$TEST_MODE" = "both" ]; then
+        echo "[test-mode] both: functionality pass then perf pass on one server"
+        FUNC_ISL="${FUNC_ISL:-214000}"; FUNC_OSL="${FUNC_OSL:-874}"
+        FUNC_RATIO="${FUNC_RATIO:-0.37}"; FUNC_PROMPTS="${FUNC_PROMPTS:-$(( CONC * 2 ))}"
+        if [ "$FUNC_PROMPTS" -lt 4 ]; then FUNC_PROMPTS=4; fi
+        echo "[test] FUNC pass: isl=$FUNC_ISL osl=$FUNC_OSL ratio=$FUNC_RATIO prompts=$FUNC_PROMPTS conc=$CONC"
+        run_benchmark_serving \
+            --model "$MODEL" --port "$PORT" --backend vllm \
+            --input-len "$FUNC_ISL" --output-len "$FUNC_OSL" \
+            --random-range-ratio "$FUNC_RATIO" \
+            --num-prompts "$FUNC_PROMPTS" --max-concurrency "$CONC" \
+            --result-filename "${RESULT_FILENAME}_func" \
+            --result-dir "${INFMAX_CONTAINER_WORKSPACE:-/workspace}" \
+            --trust-remote-code || echo "[test] FUNC pass FAILED (continuing to perf pass)"
+        echo "[test] FUNC pass done"
+        TEST_MODE=perf
+    fi
     if [ "$TEST_MODE" = "perf" ]; then
         # Fixed 8k/1k. ratio 1.0 = exactly fixed, so run-to-run comparable.
         TEST_ISL="${TEST_ISL:-8192}"
