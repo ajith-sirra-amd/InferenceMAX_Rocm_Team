@@ -205,7 +205,14 @@ fi
 SPEC_ROWS=1
 if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 )); fi
 if [ "$CONC" -le 4 ]; then
-    LADDER_MAX=16
+    # 16 -> 32. SA's passing C1 (SemiAnalysisAI run 33249871769, job 99371577484,
+    # node mi355x-amds_03) logs "graphs: dense ladder 1..32 (mns=8 x 9 rows),
+    # DCP=1" -- their live script uses 32 here where our snapshot used 16. Their
+    # C1 completed 192/192 with zero failures; ours has aborted 19 times with a
+    # memory access fault. The node differs too (we are pinned to b23_07), and
+    # the node is the stronger suspect -- but the ladder is the only part of the
+    # difference we are allowed to change, so test it.
+    LADDER_MAX=32
 elif [ "$CONC" -le 16 ]; then
     LADDER_MAX=32
 else
