@@ -289,6 +289,7 @@ crash, not measurements. The CCD-pinning "-2.3%" is withdrawn with them.
   - **N8 remains the live hypothesis for C1**, and is now *isolated* rather than
     assumed. T172 weakened the evidence chain I was using, not the hypothesis
     itself. The thirteen C1 aborts are not the node.
+- **T178 C1 aborted — eighteenth, 15/146.** Count only.
 - **T177 C1 aborted — seventeenth, 15/146.** Count only; N8, needs vLLM source.
 - **T178 DISPATCHED: C62.** The curve now reads 8,326* / **8,342** / 7,976 at
   56 / 60 / 64 — a **−4.4% drop between 60 and 64**, by far the sharpest move in
