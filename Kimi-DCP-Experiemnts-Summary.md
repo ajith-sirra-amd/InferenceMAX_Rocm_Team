@@ -11,7 +11,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **C52 throughput** | 12,500 tok/s/GPU | **8,127** (T163) | **−35%** |
+| **C52 throughput** | 12,500 tok/s/GPU | **8,685** (T189, nightly+overlay+PRs) | **−30.5%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
@@ -198,6 +198,44 @@ fastsafetensors), CCD pinning (on -> off), DCP env (forced -> defaults), and add
 agentic 8,342. Different harness, different workload (agentic serves 93.3% of
 prompt tokens from prefix cache). The agentic run is next and is the only number
 that lands against 8,953.
+
+## T189 — NEW BEST: 8,685 tok/s/GPU at C52 on the nightly stack
+
+Run 33382611653, job 99458189050, C52, agentic replay.
+
+| | value |
+|---|---|
+| **Throughput per GPU** | **8,685 tok/s** |
+| Requests | 2,090 successful / 2,200 total (107 warmup, 95 error dropped) |
+| Request Error Rate | **0.14%** |
+| Output token throughput | 456.37 tok/s |
+| ITL mean / p50 / p90 | 80.84 / 74.84 / 105.57 ms |
+| Time to Second Token mean | 128.04 ms |
+| HSA / memfault / ProfileAborted | **0 / 0 / 0** |
+| `[k3-overlay]` / `[pr-stack]` | applied=1 / applied=4 files |
+
+### Where this puts us
+
+| | tok/s/GPU | vs T189 |
+|---|--:|--:|
+| ours C52, aigmkt (T163) | 8,115 | **+7.0%** |
+| ours C60, aigmkt (best, n=2) | 8,342 | **+4.1%** |
+| **T189 C52, nightly** | **8,685** | — |
+| SA C52, nightly (33324464095) | 8,953 | **-3.0%** |
+| target | 12,500 | **-30.5%** |
+
+**First time past 8,342.** Also the first agentic run on the nightly stack to
+produce a number at all -- T184 hung in `_ALLGATHER`, T185/T186 died on leaked
+VRAM, T187 was killed by my own overload FUNC pass.
+
+**Still 3.0% behind SA at the same concurrency**, with two known config gaps:
+cudagraph capture 80 (SA 4096) and five unaudited aigmkt-era env vars
+(`VLLM_ROCM_USE_AITER_MLA`, `VLLM_ROCM_USE_AITER_MOE`, `AITER_DISABLE_FMHA_OPUS`,
+`GPU_ARCHS`, `VLLM_ROCM_QUICK_REDUCE_QUANTIZATION`) that SA does not set. Node
+also differs (b23_07 vs amds_01).
+
+**Not attributable to one change** -- image, overlay, chunk 16384, fastsafetensors,
+no CCD pinning, DCP env defaults and 4 PR-stack files all moved together.
 
 ## C52 — every lever tried is flat or negative
 

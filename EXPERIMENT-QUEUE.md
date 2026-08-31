@@ -7,7 +7,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 
 | | target | best today | gap |
 |---|---|---|---|
-| Throughput | **8,342 (C60, n=2 clean, 0.20%)** — but see C1 caveat | **12,500 tok/s/GPU** · SA 8,296 | **−33%** |
+| Throughput | **8,685 (T189, C52, nightly+overlay+PRs, err 0.14%)** | **12,500 tok/s/GPU** · SA 8,953 | **−30.5%** |
 | C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
 
 **T180 (2026-08-31): C1 engine is healthy.** First `TEST=1` fixed-len probe:
@@ -61,6 +61,18 @@ json to `/workspace/results` instead of the host workdir -- fixed to
 - **SA comparison is apples-to-apples.** Both 8,342 (ours) and 8,296 (SA) are
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
+
+## NEW BEST 8,685 (T189, C52, nightly stack) -- 2026-08-31
+
+Agentic replay, 2,090/2,200 successful, error rate **0.14%**, zero HSA/memfault.
+Beats our old best 8,342 (C60, aigmkt) by **+4.1%** and our C52 8,115 by +7.0%.
+Still **-3.0% vs SA's 8,953** and **-30.5% from 12,500**.
+
+Remaining known gaps vs SA at C52: cudagraph capture 80 vs 4096; five aigmkt-era
+env vars SA does not set; node b23_07 vs amds_01.
+
+Next: C60 on the nightly stack -- the old curve peaked at 60, and that peak was
+never re-measured after the image change.
 
 ## SA is 7.3% AHEAD, on a nightly image (read 2026-08-31)
 
