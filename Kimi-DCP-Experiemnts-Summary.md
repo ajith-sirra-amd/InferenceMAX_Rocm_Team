@@ -3049,3 +3049,42 @@ short-circuited, 4/4 requests clean, zero faults.
 **Open decision.** If C1 latency matters, the recipe should keep a per-concurrency
 overlay (c1 cut at C<=4) and v4 needs a second baked variant. If only the
 high-conc throughput number matters, v4 as built is fine. C72 on v4 next.
+
+## T206 — C72 on kimi-k3-vllm:v4 = 10,646 tok/s/GPU. Image VALIDATED for throughput.
+
+Run 33475132750, job 99752750712. The T195 config, zero runtime patching:
+
+```
+[k3-overlay] baked into image -- runtime patching SKIPPED
+[pr-stack]   baked into image -- runtime patching SKIPPED
+[k3-image] pr-stack: 4 files (#53940 a4w4-flydsl)
+[chunk] 16384  [mns] 80 offload=dram  graphs: dense ladder 1..80  DCP=8
+```
+
+2,245 successful / 2,400, err **0.31%**, zero faults.
+TTFT mean 4,802.7 ms · ITL mean 108.11 ms · out-tok/s/user 51.61.
+
+| C72 | tok/s/GPU | stack |
+|---|--:|---|
+| T195 | 10,632 | nightly + runtime overlay + 5-file pr-stack |
+| T198 | 10,630 | same, mns 96 |
+| T199 | 10,625 | same, chunk 8192 |
+| **T206** | **10,646** | **v4 baked, 4-file pr-stack** |
+
+**1. v4 reproduces the peak.** 10,646 vs 10,632 is **+0.13%**, well inside the
+0.02-0.20% replication band. Nominally the highest number in the ledger, but it
+should be read as *equal*, not as a new best -- one run cannot separate 0.13%.
+
+**2. Dropping #50813 cost nothing**, as predicted from it being unreachable
+code. The 4-file pr-stack matches the 5-file result. That is the prune
+confirmed on GPU, not just by reading `config.json`.
+
+**3. Correction to the T205 startup claim.** Engine init here was **543.14 s**,
+essentially identical to T202's 534 s on the *runtime-patched* path. So baking
+does **not** speed up startup in general -- the ~49-minute case (T204) was
+specific to C1, where MTP forces a second model and a 1..72 ladder, and the
+runtime `patch` path apparently defeated a compile cache that the baked image
+hits. At C72 there is no startup difference worth claiming.
+
+**Image validation status: C1 done (T205), C72 done (T206). GSM8K at high conc
+is the last gate before the registry push.**
