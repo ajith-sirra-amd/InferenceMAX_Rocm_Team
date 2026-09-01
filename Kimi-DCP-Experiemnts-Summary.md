@@ -3170,3 +3170,29 @@ rest was an mns default inherited from the high-concurrency path.
 
 **This also revises the earlier "accept 9.69 ms" decision** -- C1 on the single
 v4 image is 9.06 ms, and the one-image recipe now costs almost nothing.
+
+## T209 — kv-offload dram vs none at C1: FLAT. Offload is not a C1 lever.
+
+Run 33486002752, job 99786189094. One variable vs T208: `kv-offloading dram ->
+none`. `[mns] max_num_seqs=1 conc=1 offload=none`, `graphs: dense ladder 1..9`.
+4/4 clean.
+
+| C1, v4, mns 1, chunk 8192 | T208 (dram) | T209 (none) | Δ |
+|---|--:|--:|--:|
+| Mean TPOT | 9.06 ms | 9.09 ms | +0.3% |
+| Median TPOT | 9.10 ms | 9.15 ms | +0.5% |
+| P90 TPOT | 9.26 ms | 9.29 ms | +0.3% |
+| P99 TPOT | 9.31 ms | 9.33 ms | +0.2% |
+| p50→p99.9 spread | 0.22 ms | 0.19 ms | — |
+| Mean ITL | 36.36 ms | 36.49 ms | +0.4% |
+| Mean TTFT | 15,310 ms | **14,810 ms** | **−3.3%** |
+| duration | 80.51 s | 78.58 s | −2.4% |
+
+**Hypothesis 2 falsified.** I predicted the CPU offload would add bursty latency
+at C1 and show up as a tail. It does not -- every TPOT percentile is within
+0.5%, and the spread was already collapsed by T208 anyway. The only real
+movement is TTFT (−3.3%), which is prefill, not decode.
+
+Keeping **dram**: it is neutral at C1 and worth 1-2% at C72, so one setting
+serves both. Two of four tail hypotheses are now resolved -- mns was the whole
+story, offload is inert.
