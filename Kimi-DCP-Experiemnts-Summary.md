@@ -3307,3 +3307,29 @@ TTFT 14,927 ms and ITL 34.24 ms are also the best of the three.
 distribute. A stock public tag reproduces the best number we have. Whether that
 holds at C52 -- where DCP=8 and the MoE/kernel groups matter far more -- is the
 next run.
+
+## T214 — BARE nightly-7c5dc571 at C52, DCP=8, zero patches: FUNCTIONAL PASS.
+
+Run 33491915050, job 99805197663. `[k3-overlay] applied=0 conc=52`,
+`[dcp] ENABLED size=8 backend=a2a interleave=1`, `[mns] max_num_seqs=80`,
+`graphs: dense ladder 1..80`. **104/104 successful**, 15,819,944 input /
+61,261 output tokens, duration 1,314.63 s.
+
+**Functional verdict: PASS.** DCP=8 initialises, captures, and serves at C52 on
+a stock nightly with no overlay and no PR stack. Combined with T213 (C1), both
+functional gates are clear.
+
+**Do NOT read the latency numbers as a perf result.** This is `TEST_MODE=func`:
+104 prompts of ~214k tokens each at concurrency 52, i.e. 15.8M input tokens of
+uncached prefill. TPOT 545 ms / TTFT 304 s / 46.6 out-tok/s are what a
+prefill-saturated queue looks like, not steady-state decode. There is no
+comparable func run on the patched stack, so this number stands alone.
+
+Two config notes for whoever reads the log: chunk was **8192** (the script's
+current global default, left over from the C1 work) rather than the 16384 used
+at high conc in the perf runs, and mns was **80** from the DCP>1 branch rather
+than the 65 that `old.sa.sh` would pick. Both are perf-relevant and both differ
+from the intended C52 perf config.
+
+**Next: GSM8K limit 200 at C52** -- the only valid accuracy point, since spec is
+off there. Then agentic perf at C52 and C1.
