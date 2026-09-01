@@ -99,3 +99,39 @@ Easiest and most generally useful first.
 **Caveats.** Authorship is Hyukjoon's — nothing should be filed without their
 sign-off. The overlay is cut against a July-era nightly, so every new-file hunk
 needs re-checking against current `main` before filing.
+
+---
+
+## Known limitation — read this before relying on any number here
+
+**The overlay may never land upstream, and that is a delivery risk.**
+
+Everything in this ledger, including the 10,632 tok/s/GPU peak, depends on a
+264 KB patch that:
+
+- has **no PR of its own** and no upstream provenance,
+- is authored outside this team (Hyukjoon's), so we cannot unilaterally file it,
+- is cut against `nightly-46638857` and applies to **no other base**,
+- overlaps several PRs that are all still **open or closed-unmerged**.
+
+If it does not upstream, the consequence is concrete: these numbers are only
+reproducible on an image we build and carry ourselves. A stock vLLM release will
+not reach them, and "run it with our custom docker" is not a durable answer for
+anyone outside this team.
+
+**Current decision: pursue peak performance first, solve distribution second.**
+This is deliberate, not an oversight. The ordering is defensible because the
+ablation (A/B/C/D/E) reduces the surface that would need upstreaming, and the
+measurement work is a prerequisite either way -- you cannot argue for upstreaming
+a group without knowing what it is worth.
+
+**What reduces the risk, in order of cost:**
+
+1. Prune. Every group the ablation shows is neutral is a group nobody has to
+   upstream. #50813 already fell this way at zero GPU cost.
+2. File group A (+48/-10, self-contained ROCm correctness fix) as the first PR,
+   with Hyukjoon's sign-off. Small, reviewable, and independent of K3.
+3. For groups C and D, coordinate with the existing open PRs (#53917, #54457,
+   #54546, #54639) rather than filing competing patches.
+4. Accept that group E (the Kimi-K3 AMD model path) is the hardest and may
+   remain vendor-carried for some time.
