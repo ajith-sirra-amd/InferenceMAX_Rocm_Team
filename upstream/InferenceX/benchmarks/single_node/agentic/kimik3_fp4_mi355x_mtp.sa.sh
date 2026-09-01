@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
+# Best measured config for Kimi-K3 FP4 on MI355X, for a PRE-PATCHED image
+# (kimi-k3-vllm:v4). Applies nothing at runtime -- the image already carries the
+# K3 overlay and the PR stack.
+#
+#   C1   -> TPOT 8.92 ms mean / 9.18 ms p99   (T201)
+#   C72  -> 10,632 tok/s/GPU                  (T195/T198, n=2, 0.02% spread)
 set -euo pipefail
 set -x
 source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 export EVAL_ONLY="${EVAL_ONLY:-false}"
+export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
@@ -29,6 +36,15 @@ fi
 rocm-smi || true
 resolve_trace_source
 install_agentic_deps
+
+# The image must already be patched. kimi-k3-vllm:v4 drops this manifest; the
+# legacy in-container patcher must stay off either way.
+export SKIP_KIMI_PATCHES=1
+if [ -f /etc/k3-image-manifest ]; then
+    sed 's/^/[k3-image] /' /etc/k3-image-manifest
+else
+    echo "[k3-image] WARNING: no /etc/k3-image-manifest -- image may be unpatched" >&2
+fi
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
@@ -66,36 +82,47 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# conc <= 16 -> ladder 32, else ladder 64. mns clamped to the ladder so a batch
-# can never exceed a captured graph size.
-if [ "$CONC" -le 16 ]; then LADDER=32; else LADDER=64; fi
-MAX_NUM_SEQS="${MAX_NUM_SEQS:-$LADDER}"
-if [ "$MAX_NUM_SEQS" -gt "$LADDER" ]; then MAX_NUM_SEQS=$LADDER; fi
-
-if [ "$CONC" -le 4 ]; then DCP_SIZE=1; GPU_MEM_UTIL=0.92; else DCP_SIZE=8; GPU_MEM_UTIL=0.9; fi
-export DCP_SIZE
-
-CP_ARGS=(--attention-backend ROCM_AITER_MLA)
-if [ "$DCP_SIZE" -gt 1 ]; then
-    CP_ARGS+=(
-        --decode-context-parallel-size "$DCP_SIZE"
-        --dcp-comm-backend a2a
-        --cp-kv-cache-interleave-size 1
-    )
-    export VLLM_USE_DIRECT_DCP_A2A=0
-    export VLLM_USE_DIRECT_DCP_Q_GATHER=0
-    export VLLM_USE_DIRECT_DCP_KV_GATHER=0
-    export VLLM_ALLOW_DCP_FULL_CUDAGRAPH=1
-    export VLLM_DCP_Q_REPLICATE=1
-fi
-
+# MTP fires only at CONC 1/2/4. SPEC_ROWS is how many rows one sequence occupies
+# in a batch: k+1 with k speculative tokens, 1 without.
 SPEC_ARGS=()
+SPEC_ROWS=1
 case "$CONC" in
     1|2|4)
         SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
+        SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
         SPEC_ARGS=(--speculative-config "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"fp8\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"synthetic\",\"synthetic_acceptance_length\":4.0}")
         ;;
 esac
+
+# mns tracks concurrency with headroom, capped at 80 (C72 measured identical at
+# 80 and 96, so 80 is the floor of the flat region). C1 -> 8, C72 -> 80.
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC + CONC / 4 ))}"
+if [ "$MAX_NUM_SEQS" -lt 8 ];  then MAX_NUM_SEQS=8;  fi
+if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
+
+# ONE RULE: the captured ladder ALWAYS covers mns x SPEC_ROWS. A capture smaller
+# than the largest possible batch is the signature that precedes
+# HSA_STATUS_ERROR_OUT_OF_RESOURCES. C1 -> 8x9 = 72. C72 -> 80x1 = 80.
+LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
+CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
+COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
+
+# DCP off at C<=4, 8 above. NOTE: no VLLM_USE_DIRECT_DCP_* / VLLM_DCP_Q_REPLICATE
+# overrides -- those were aigmkt-only workarounds and they hang _ALLGATHER on the
+# overlay stack (T184). Engine defaults are correct here.
+if [ "$CONC" -le 4 ]; then DCP_SIZE=1; else DCP_SIZE=8; fi
+export DCP_SIZE
+CP_ARGS=(--attention-backend ROCM_AITER_MLA)
+if [ "$DCP_SIZE" -gt 1 ]; then
+    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
+fi
+
+# 8192 at C1: p99 TPOT 12.31 -> 9.18 ms, because a 214k prompt sliced finer stops
+# stalling decode (T200 vs T201). 16384 above: measured flat at C72 (T199), and
+# larger keeps prefill cheaper.
+if [ "$CONC" -le 4 ]; then MAX_BATCHED_TOKENS=8192; else MAX_BATCHED_TOKENS=16384; fi
+
+GPU_MEM_UTIL=0.9
 
 OFFLOAD_ARGS=()
 if agentic_kv_offload_enabled; then
@@ -106,10 +133,7 @@ fi
 EP_ARGS=()
 if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
-CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
-COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"FULL_AND_PIECEWISE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
-
-echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec=${#SPEC_ARGS[@]} offload=${KV_OFFLOADING:-none}"
+echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER (mns x $SPEC_ROWS rows) chunk=$MAX_BATCHED_TOKENS spec=${#SPEC_ARGS[@]} offload=${KV_OFFLOADING:-none}"
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
@@ -122,7 +146,7 @@ VLLM_CMD=(
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
-    --max-num-batched-tokens 16384
+    --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
     --max-model-len 1048576
     --kv-cache-dtype fp8
     --enable-auto-tool-choice
