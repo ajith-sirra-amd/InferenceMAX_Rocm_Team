@@ -3743,3 +3743,55 @@ is a broken install.
 
 **Next: D-out (ABCE)**, which touches the MLA backend and has no known symbol
 shared with the other groups. Not re-dispatching C-out.
+
+## T225 — D-out (ABCE) FAILS. D is required by the rest of the overlay under DCP.
+
+Run 33567053750, job 100052593241. `[overlay-split] groups=ABCE applied=4
+failed: none` -- all four patches applied, so this is a runtime failure, not a
+patch failure. Engine core never initialised:
+
+```
+RuntimeError: Worker failed with error 'Decode Context Parallelism (DCP)
+requires attention implementations to return the softmax LSE during decode,
+but AiterMLAImpl does not. Try a different backend by setting
+--attention-backend or disable DCP.'
+```
+
+**D (ROCm AITER MLA) supplies the LSE-returning `AiterMLAImpl` that DCP needs.**
+Without it, `--attention-backend ROCM_AITER_MLA` + `--decode-context-parallel-size 8`
+is rejected at worker start.
+
+**State this precisely, because the obvious reading is too strong.** This is
+*not* proof that D is required in absolute terms -- bare upstream
+`nightly-7c5dc571` ran DCP=8 at C52 fine (T214/T215/T216), so upstream's own
+AiterMLA does satisfy the LSE contract. What T225 shows is that **dropping D
+while keeping A, B, C and E leaves an inconsistent tree**: the other groups are
+cut against D's version of the MLA backend, and the 46638857-era upstream
+AiterMLAImpl underneath does not provide LSE.
+
+So the finding is about *coupling*, same as T224: D is not detachable from this
+overlay, on this base.
+
+**Ablation, final state:**
+
+| grp | result | verdict |
+|---|---|---|
+| A | 10,719 (−0.34%) | neutral for throughput; keep as a correctness fix |
+| B | 10,747 (−0.08%) | inert at C72; required at C1 (MTP) |
+| C | **won't start** | E imports `get_mamba_prefill_checkpoint_position` from it |
+| D | **won't start** | rest of overlay needs its LSE-returning AiterMLAImpl |
+| E | not run | only remaining single-group test |
+
+**Three of five groups are now known to be non-detachable or load-bearing, and
+the two that are detachable are 8 KB of 264 KB.** The practical conclusion for
+pruning: there is almost nothing to prune. The overlay is close to minimal
+already -- what looked like five modules is one coupled unit plus two small
+independent fixes.
+
+That is a genuinely useful answer to the original question ("prune to min
+possible best preserve best perf"): **the minimum set is A+B+C+D+E minus,
+at most, B for a high-concurrency-only image.**
+
+**Next: E-out (ABCD)** -- the last single-group test. Expect another coupling
+failure (C's code paths reference E's model files), but it is cheap and closes
+the matrix.
