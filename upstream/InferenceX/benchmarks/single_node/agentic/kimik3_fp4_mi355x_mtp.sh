@@ -8,7 +8,7 @@ wait_for_amd_gpu_clean
 # chunk 16384) is a large numerics change that went straight to throughput with
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
-export EVAL_ONLY="${EVAL_ONLY:-true}"
+export EVAL_ONLY="${EVAL_ONLY:-false}"
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -354,8 +354,8 @@ fi
 # N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
 # against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
 # clear peak at 8192 and both sides are downhill.
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-16384}")
-echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-16384} conc=$CONC"
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
 # 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
 # engine, but still the wrong sign after 175 commits. The host prep the profile
@@ -593,7 +593,7 @@ elif [ "${TEST:-1}" = "1" ]; then
     # against the SAME server, so we pay the ~2.5 min weight load once instead of
     # twice. func runs first and is short; if the engine is broken we find out in
     # minutes. perf writes the official result file the CI wrapper looks for.
-    TEST_MODE="${TEST_MODE:-perf}"
+    TEST_MODE="${TEST_MODE:-func}"
     if [ "$TEST_MODE" = "both" ]; then
         echo "[test-mode] both: functionality pass then perf pass on one server"
         FUNC_ISL="${FUNC_ISL:-214000}"; FUNC_OSL="${FUNC_OSL:-874}"
