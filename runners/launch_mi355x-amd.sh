@@ -32,8 +32,25 @@ done
 
 
 set -x
-docker pull $IMAGE
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
+# Local-image support. A locally built tag (kimi-k3-vllm:v4) is in no registry,
+# so `docker pull` fails and `.RepoDigests` is empty -- the old
+# `{{index .RepoDigests 0}}` aborted with "index out of range". Fall back to the
+# image ID and stop `docker run` re-pulling. Registry images are unaffected.
+PULL_POLICY=always
+if ! docker pull "$IMAGE"; then
+    docker image inspect "$IMAGE" >/dev/null 2>&1 || {
+        echo "[image] $IMAGE is neither pullable nor present locally" >&2
+        exit 1
+    }
+    echo "[image] pull failed -- using LOCAL image $IMAGE"
+    PULL_POLICY=never
+fi
+DIGEST=$(docker inspect --format='{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' "$IMAGE" | cut -d'@' -f2)
+if [ -z "$DIGEST" ]; then
+    DIGEST=$(docker inspect --format='{{.Id}}' "$IMAGE")
+    PULL_POLICY=never
+    echo "[image] no registry digest; using local image id"
+fi
 echo "The image digest is: $DIGEST"
 
 if [[ "$FRAMEWORK" == "sglang-disagg" ]]; then
@@ -56,7 +73,7 @@ export PYTHONDONTWRITEBYTECODE=1
 
 docker run --rm --init --network host --shm-size=512g --name=$server_name \
 --ipc=host \
---ulimit memlock=-1 --ulimit stack=67108864 --pull always \
+--ulimit memlock=-1 --ulimit stack=67108864 --pull ${PULL_POLICY:-always} \
 --privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
