@@ -69,23 +69,19 @@ trap 'exit 143' TERM
 
 SPEC_ARGS=()
 SPEC_ROWS=1
-if [ "${SPEC_DECODING:-none}" = "mtp" ]; then
+if [ "$CONC" -le 4 ]; then
     SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
     SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
     SPEC_ARGS=(--speculative-config "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"fp8\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\":\"synthetic\",\"synthetic_acceptance_length\":4.0}")
-fi
-
-if [ "$CONC" -le 4 ]; then
-    MAX_NUM_SEQS="${MAX_NUM_SEQS:-1}"
-    MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"
-    DCP_DEFAULT=1
+    MAX_NUM_SEQS=1
+    MAX_BATCHED_TOKENS=8192
+    DCP_SIZE=1
 else
-    MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC + CONC / 4 ))}"
+    MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
     if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
-    MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
-    DCP_DEFAULT=8
+    MAX_BATCHED_TOKENS=16384
+    DCP_SIZE=8
 fi
-DCP_SIZE="${DCP_SIZE:-$DCP_DEFAULT}"
 export DCP_SIZE
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
@@ -108,7 +104,7 @@ fi
 EP_ARGS=()
 if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
-echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER (mns x $SPEC_ROWS) chunk=$MAX_BATCHED_TOKENS spec=${SPEC_DECODING:-none} offload=${KV_OFFLOADING:-none}"
+echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER (mns x $SPEC_ROWS) chunk=$MAX_BATCHED_TOKENS spec=${#SPEC_ARGS[@]} offload=${KV_OFFLOADING:-none}"
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
