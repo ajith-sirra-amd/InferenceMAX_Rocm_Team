@@ -626,3 +626,30 @@ same tail mechanism holds, a smaller chunk may recover part of the 27% p99 gap
 accepted when the c1 cut was retired -- without needing a second image.
 
 Cost: ~15 min per point (C1 fixed-len, 4 prompts).
+
+## C1 tail-variance hunt on v4 (reopened by user)
+
+Target: kill the p50->p99.9 spread. v4 spans **2.64 ms** (9.13 -> 11.77); the
+retired c1 cut spanned **0.22 ms**. Typical tokens are already fine (median
+9.13 vs 8.96, +1.9%) -- this is purely a tail problem.
+
+Current C1 config on v4: mns 8, ladder 1..72, gmu 0.9, chunk 8192, dcp off,
+offload dram, SPEC_ROWS 9.
+
+**Runs, one variable each, ~15 min per point (C1 fixed-len, 4 prompts):**
+
+| # | change | why this is a tail suspect |
+|---|---|---|
+| 1 | **mns 8 -> 1** (ladder 72 -> 9) | At C1 the real batch is **one sequence = 9 spec rows**, every step. We capture 72 graph sizes and use ~9. Sizes 10..72 are dead capture, and any step that lands on a mismatched bucket pays a re-dispatch. Making the ladder exactly the used shape is the cleanest way to remove graph-selection jitter. Ladder invariant still holds: 1 x 9 = 9. |
+| 2 | **offload dram -> none** | At C72 the dram offload is worth 1-2% because it keeps the batch full. At C1 there is no batch to keep full, so the CPU<->GPU KV traffic on a 214k prompt is pure added latency, and it is **bursty** -- exactly the shape that produces a tail rather than a uniform slowdown. |
+| 3 | **chunk 8192 -> 4096** | Proven mechanism on the c1 cut (16384 -> 8192 took p99 12.31 -> 9.18). Never swept below 8192, never swept at all on v4. |
+| 4 | **gmu 0.9 -> 0.92** | Weakest prior: KV is tiny at C1 so headroom should not bind. Cheap to test, and it is the one knob whose C1 value was never actually measured (0.92 was assumed, then dropped). |
+
+Run 1 and 2 first -- they are the two with a mechanism that predicts a *tail*
+specifically rather than a uniform shift. 3 and 4 are follow-ups.
+
+If none of them close it, the remaining explanation is that the `c16_c52` cut
+simply lacks a low-conc code path the `c1` cut had, and the gap is structural at
+9.69 ms mean unless we carry two overlays.
+
+Blocked until T206 (C72 on v4) finishes -- GPUs busy.
