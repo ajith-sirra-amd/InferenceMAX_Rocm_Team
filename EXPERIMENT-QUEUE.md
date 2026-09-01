@@ -703,3 +703,26 @@ T212 (agentic C72 on this base) was dispatched first by mistake and cancelled
 `v1/attention/ops/rocm_aiter_mla_reduce.py` are new files the overlay adds that
 do not exist upstream at any ref, and the `_DCPA2ABufferPool` fix is in neither
 nightly (`dcp.py` is byte-identical, 44,932 B, in both).
+
+
+## Bare-nightly starvation bisect (T218+)
+
+C1 agentic passes (1,222 tok/s/GPU, T217). C52 agentic starves (T216). The
+threshold is somewhere between, and locating it says which mechanism is at
+fault:
+
+- **If it starves at low conc too (C8/C16)** -> the prefix-cache path is broken
+  outright under DCP, and the failure is not about load.
+- **If it degrades gradually** -> it is a capacity/scheduling limit, and the
+  overlay's KV-offload group is buying headroom rather than correctness.
+
+Config held at T216's (mns 80, chunk 16384, dcp 8) so **concurrency is the only
+variable**. Note mns 80 at C16 is deliberately *not* the `old.sa.sh` value (20);
+matching T216 matters more here than tuning.
+
+| run | conc | status |
+|---|---|---|
+| T218 | 16 | dispatched |
+| next | 32 or 8 | bisect from T218's result |
+
+Reference: C52 starved with 38/107 warmup returned in 19.5 min, errors=0.
