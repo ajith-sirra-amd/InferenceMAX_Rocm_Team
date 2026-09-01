@@ -421,7 +421,7 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # C<=4 has no batch to hold, so KV headroom should not bind -- but 0.92 was
 # assumed for C1 early on and never actually measured. Last of the four tail
 # hypotheses.
-if [ "$CONC" -le 4 ]; then GPU_MEM_UTIL=0.92; else GPU_MEM_UTIL=0.9; fi
+GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61 ms
 echo "[gmu] gpu_memory_utilization=$GPU_MEM_UTIL conc=$CONC"
 
 VLLM_CMD=(

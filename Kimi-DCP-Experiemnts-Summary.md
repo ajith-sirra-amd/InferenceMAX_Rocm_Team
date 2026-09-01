@@ -3226,3 +3226,44 @@ jitter -- and mns addresses it at the source.
 
 **Keep chunk 8192 at C1.** Three of four tail hypotheses now resolved: mns was
 the cause, offload is inert, chunk is exhausted.
+
+## T211 — gmu 0.92 at C1 is a DISASTER. 2.4x worse mean TPOT. Reverted.
+
+Run 33488485414, job 99794154781. One variable vs T208: `gmu 0.9 -> 0.92`.
+`[gmu] gpu_memory_utilization=0.92 conc=1`, everything else identical.
+
+| C1, v4, mns 1, chunk 8192, dram | T208 (gmu 0.9) | T211 (gmu 0.92) | Δ |
+|---|--:|--:|--:|
+| **Mean TPOT** | **9.06 ms** | **21.61 ms** | **+139%** |
+| Median TPOT | 9.10 ms | 9.92 ms | +9.0% |
+| **P90 TPOT** | **9.26 ms** | **43.40 ms** | **+369%** |
+| P99.9 TPOT | 9.32 ms | 57.35 ms | +515% |
+| Mean ITL | 36.36 ms | 73.28 ms | +102% |
+| duration | 80.51 s | 99.06 s | +23% |
+
+**The median barely moves (9.10 -> 9.92) while p90 goes 9.26 -> 43.40.** That is
+not a uniform slowdown, it is a small number of catastrophically slow steps
+dragging the mean to 21.61 ms. Squeezing 2% more VRAM into KV leaves too little
+headroom for the cudagraph pool and the offload staging buffers, so some decode
+steps stall.
+
+**Hypothesis 4 resolved, in the opposite direction to the guess.** I expected
+gmu to be inert at C1 because KV is tiny. It is the single most damaging knob
+tested. Worth noting the old `sa.sh` hardcoded `gmu 0.92` for C1/C4 -- that value
+was never measured, and it is actively harmful.
+
+**Reverted to 0.9.**
+
+### C1 tail hunt: COMPLETE. All four hypotheses resolved.
+
+| # | change | verdict |
+|---|---|---|
+| 1 | mns 8 -> 1 (ladder 72 -> 9) | **THE FIX** -- spread 2.64 -> 0.22 ms, p99 −20.4% |
+| 2 | offload dram -> none | inert (all percentiles within 0.5%) |
+| 3 | chunk 8192 -> 4096 | inert on TPOT, +27% TTFT. Keep 8192 |
+| 4 | gmu 0.9 -> 0.92 | **harmful** (+139% mean, +369% p90). Keep 0.9 |
+
+**Final C1 config: mns 1, ladder 1..9, chunk 8192, gmu 0.9, offload dram,
+dcp off. TPOT 9.06 ms mean / 9.10 median / 9.31 p99 on kimi-k3-vllm:v4.**
+Against the retired c1 overlay cut (8.92 / 9.18) that is +1.6% mean, +1.4% p99 --
+the one-image recipe costs essentially nothing.
