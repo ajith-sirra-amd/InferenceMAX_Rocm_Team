@@ -364,11 +364,33 @@ every concurrency, no runtime patching. Launcher short-circuits on
 line 36 `{{index .RepoDigests 0}}` aborts on a local-only tag, and that file is
 outside the standing edit bounds -- needs explicit approval.
 
-**Queue after T203:**
-1. Read the rocprof CSV, rank decode kernels, pick a target.
-2. C1 GSM8K limit 200 on v4 (folding C1 onto the c16_c52 overlay is a numerics
-   change), then C1 TPOT vs T201's 8.92 ms.
-3. Attribution: C64 without #50813 (T193 moved two variables).
+**Queue (image-recipe validation, then registry push):**
+
+1. **T204 -- C1 GSM8K limit 200 on the single c16_c52 overlay.** RUNNING.
+   Numerics gate for retiring the c1 cut.
+2. **C1 perf on `kimi-k3-vllm:v4`** -- fixed-len, chunk 8192, gmu 0.9. Compare
+   to T201: TPOT 8.92 ms mean / 9.18 ms p99.
+3. **C72 on `kimi-k3-vllm:v4`** -- the T195 config with zero runtime patching.
+   Expect `[k3-overlay] baked into image`, `[pr-stack] baked into image`, and
+   10,632 +- noise.
+4. **Then push `aigmkt/kimi-k3-vllm:v4`** -- APPROVED by the user, overriding
+   the standing no-Docker-Hub-push bound. Tag matches the local tag and the
+   baked labels (`k3.overlay=c16_c52-all-conc`, `k3.pr-stack=53940,50813`).
+   Do NOT reuse the `v2` name: local `kimi-k3-vllm:v2` (`484756f4...`) is a
+   different, older build (overlay + #53940 only, no manifest), and
+   `aigmkt/kimi-k3-vllm:latest` is a third thing again. Mutable/mismatched tags
+   already cost this effort several wrong conclusions.
+   Needs `docker login` for the `aigmkt` org on b23_07.
+
+**Deferred / dropped:**
+- C72 GSM8K: DROPPED as redundant. T194 (GSM8K 0.99) and T195 have byte-identical
+  server config -- same image, overlay, 5-file pr-stack, mns 80, ladder 1..80,
+  chunk 16384, dcp 8, gmu 0.9. Only CONC differs, and mns clamps to 80 at both
+  64 and 72, so even the capture geometry matches. There is no numerics
+  difference for GSM8K to find.
+- Profiling: PARKED. Both in-tree paths are dead (T202 torch profiler absent,
+  T203 rocprofv3 queue interposition deadlocks RCCL during capture).
+- Attribution: C64 without #50813 (T193 moved two variables).
 
 ## Queue — REPRIORITISED 2026-08-29 against the T124 profile
 
