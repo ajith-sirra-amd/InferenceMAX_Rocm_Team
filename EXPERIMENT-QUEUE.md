@@ -517,6 +517,17 @@ Expect the peak between 40 and 56; we have 40 and 52 and nothing between.
     needs since every point in Phase E except C52 is n=1.
   Re-running C56 a fourth time would have produced neither.
 
+## PRIORITY: image validation first, ablation second (user directive)
+
+1. **C1 on `kimi-k3-vllm:v4`** -- lowest possible TPOT. RUNNING.
+2. **C72 on v4** -- best throughput, target 10,632 +- noise.
+3. **GSM8K at high conc on v4** -- must pass (valid only at C >= 16).
+4. Then patches/overlay ablation, then the registry push.
+
+`kimi-k3-vllm:v4` rebuilt with the 4-file pr-stack (#50813 pruned as dead code).
+Manifest reads `pr-stack: 4 files (#53940 a4w4-flydsl)`; verified in-image that
+`quark_moe.py` is unpatched and flydsl markers are present.
+
 ## Overlay + PR ablation plan (A/B/C/D/E) — prune to minimum
 
 Goal: find the smallest subset that still delivers 10,632 at C72, so there is

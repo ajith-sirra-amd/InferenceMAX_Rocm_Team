@@ -2968,3 +2968,37 @@ without it; manifest and `k3.pr-stack` label now read `53940` only.
 
 This is the first prune of the A/B/C/D/E exercise and it cost zero GPU time --
 it fell out of reading what the model config actually declares.
+
+## T204 — C1 on the c16_c52 overlay SERVES. GSM8K 0.185, exactly as predicted.
+
+Run 33469298559, job 99735620230. First run of C1 on the `c16_c52` overlay --
+every prior C1 used the retired `c1` cut, so this combination had never been
+executed. `[k3-overlay] applied=1 conc=1`, `[pr-stack] applied=5`,
+`[mns] max_num_seqs=8 conc=1 offload=dram`, `graphs: dense ladder 1..72
+(mns=8 x 9 rows), DCP=1`.
+
+**1. Liveness: PASS.** The server came up and served all 200 GSM8K questions.
+`SpecDecoding metrics: Mean acceptance length: 4.00, Accepted throughput ~90-95
+tok/s`. The single-overlay consolidation is viable at C1.
+
+**2. Engine init took ~49 minutes** vs 375 s (T200) and 335 s (T201) on the `c1`
+cut -- **8x longer at the same concurrency**. Not a hang: all 8 workers sat at
+~350% CPU with GPUs at ~1% for 49 min, then broke through to
+`Capturing model for DSpark speculator...` and GPU jumped to 800%. This is JIT
+compilation of the `c16_c52` kernels for C1+MTP shapes (72 graph sizes, 9-row
+spec batches, two models) -- shapes that overlay had never seen, because it only
+ever ran at C >= 16 where spec is off. One-off cost per configuration, but it
+must be budgeted for.
+
+**3. GSM8K 0.185 flexible / 0.170 strict -- and this is EXPECTED, not a
+regression.** `rejection_sample_method: synthetic` with
+`synthetic_acceptance_length: 4.0` accepts a fixed number of draft tokens
+regardless of what the target model would accept. The `Mean acceptance length:
+4.00` in the metrics is that constant, visible directly. The emitted text is not
+the model's distribution, so accuracy computed from it is meaningless. See the
+entry above: **GSM8K is structurally invalid at CONC <= 4.**
+
+The job reports `failure` on the eval-only harness check, as it always does.
+
+**Conclusion: C1's gates are liveness + TPOT, never GSM8K.** Liveness is now
+banked for the consolidated overlay. TPOT on v4 is next.
