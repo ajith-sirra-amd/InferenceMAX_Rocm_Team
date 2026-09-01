@@ -679,8 +679,22 @@ no carried overlay, no self-built image, reproducible by anyone.
 |---|---|---|
 | 1 | **C1 functional** (TEST=1, agentic-band lengths, 4 prompts) | does it serve at all with MTP + no patches? |
 | 2 | **C52 functional** | does it serve at high conc with DCP=8? |
-| 3 | **GSM8K limit 200 @ C52** | are the numerics sound without the overlay? |
-| 4 | **Agentic perf @ C72** | the number -- vs v4's 10,646 |
+| 3 | **GSM8K limit 200 @ C52 ONLY** | numerics without the overlay. C<=4 is structurally invalid for GSM8K (synthetic acceptance), so C52 is the only valid accuracy point. |
+| 4 | **Agentic perf @ C52** | vs aigmkt ~8,204 and nightly+overlay 8,685 (T189) |
+| 5 | **Agentic perf @ C1** | vs the C1 ledger; MTP on, DCP off |
+
+Perf comparison is at **C1 and C52**, not C72 -- those are the points with
+aigmkt-era history to compare against:
+
+| config | tok/s/GPU | stack |
+|---|--:|---|
+| aigmkt C52 | ~8,204 | aigmkt image |
+| aigmkt C60 (aigmkt best) | 8,342 | aigmkt image |
+| nightly-46638857 + overlay, C52 | 8,685 | T189 |
+| SA C52 | 8,953 | nightly + overlay |
+
+If bare 7c5dc571 lands near 8k at C52 it matches the aigmkt image with **zero**
+external patches, which is the result that would matter.
 
 T212 (agentic C72 on this base) was dispatched first by mistake and cancelled
 ~20 min in; it is superseded by step 4.
