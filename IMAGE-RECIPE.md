@@ -14,7 +14,7 @@ container at launch*:
 
 ```
 vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
-  + [k3-overlay]  SA's 264 KB K3 overlay       -> site-packages
+  + [k3-overlay]  Hyukjoon's 264 KB K3 overlay -> site-packages
   + [pr-stack]    5 per-file upstream PR hunks -> site-packages
 ```
 
@@ -56,7 +56,9 @@ drift) was falsified on this base.
 | `vllm_nightly_46638857_k3_c16_c52_current.patch` | 264,116 | `90f975fa…f64dcc0` | CONC > 4 |
 | `vllm_nightly_46638857_k3_c1_current.patch` | 232,005 | `554ec638…749a4e6d` | CONC ≤ 4 |
 
-SA's overlay, verbatim. It touches
+**Authored by Hyukjoon, not SA.** These came from a colleague and are not an
+official SemiAnalysis artifact — the SA run merely happens to use the same
+overlay. Applied verbatim. It touches
 `models/kimi_k3/amd/{mla,kda,linear,latent_moe_runner}.py`, `layers/mla.py`,
 `mla_attention.py`, `fused_moe/runner/*`, `platforms/rocm.py`, `envs.py`.
 
