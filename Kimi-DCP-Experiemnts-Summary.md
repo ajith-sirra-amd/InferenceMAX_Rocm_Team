@@ -3575,3 +3575,50 @@ one is a clean run and the other is at the error cutoff.
 usable ceiling of C16-with-10%-errors and a clean C72 at 10,646. That is a much
 sharper claim than "the overlay is worth a few percent", which is what the C1
 result alone suggested.
+
+## T221 — ablation CONTROL: split path ABCDE = 10,756 tok/s/GPU. Machinery validated.
+
+Run 33531693858, job 99936228208. `[overlay-split] groups=ABCDE applied=5
+failed: none`, `[pr-stack] applied=4 files`, mns 80, chunk 16384, dcp 8, base
+`nightly-46638857`. 2,259 successful / 2,411, **err 0.18%**, TTFT 4,484 ms,
+ITL 107.56 ms.
+
+| C72 run | tok/s/GPU | overlay delivery | pr-stack |
+|---|--:|---|---|
+| T195 | 10,632 | monolith, runtime | 5 files |
+| T198 | 10,630 | monolith, runtime (mns 96) | 5 files |
+| T206 | 10,646 | baked in v4 | 4 files |
+| **T221** | **10,756** | **split ABCDE, runtime** | **4 files** |
+
+**The split machinery works.** All five groups applied, none skipped, and the
+number lands on the peak. Leave-one-out results from here are interpretable.
+
+**On the +1.2% vs T195:** this is the highest C72 number in the ledger, but I am
+**not** claiming a new best. Two reasons to treat it as equal:
+
+1. The previous C72 replication spread was 0.02% (T195 vs T198), so +1.17% is
+   outside that band -- but those two shared an identical stack, whereas T221
+   differs from T195 in pr-stack content (4 vs 5 files). #50813 is dead code for
+   this model, so it should be inert, and T206 (also 4 files, baked) came in at
+   10,646, i.e. +0.13%. Three 4-file/5-file comparisons now sit within 1.2% of
+   each other with no consistent ordering.
+2. n=1. A single run cannot separate 1.2% when the ledger's own replication
+   evidence spans 0.02%-0.20% on identical stacks and this one is not identical.
+
+Read it as: **the split path reproduces the peak**, which is all the control had
+to establish.
+
+**Ablation can now proceed.** Leave-one-out order, one variable each against
+this 10,756 baseline:
+
+| # | groups | question |
+|---|---|---|
+| 1 | _BCDE | is A (dcp a2a buffer pool) load-bearing for throughput? |
+| 2 | A_CDE | is B (spec-decode cudagraph) inert at C72, where spec is off? |
+| 3 | AB_DE | is C (KV-offload + cache manager) the group that buys C16->C72? |
+| 4 | ABC_E | is D (ROCm AITER MLA) required? |
+| 5 | ABCD_ | is E (Kimi-K3 model path) required? |
+
+C is the one to watch: the bare-nightly curve (T216-T220) showed upstream
+collapsing above C16 on the agentic workload, and C is the KV-offload/cache
+group whose upstream PR #53917 is still open.

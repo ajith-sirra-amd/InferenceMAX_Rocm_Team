@@ -86,7 +86,7 @@ K3_OVERLAY_APPLIED=0
 # ablate that group. Purpose: prune to the minimum set that preserves 10,632, so
 # there is less to carry forward and upstream.
 K3_OVERLAY_SPLIT="${K3_OVERLAY_SPLIT:-1}"
-OVERLAY_GROUPS="${OVERLAY_GROUPS:-ABCDE}"
+OVERLAY_GROUPS="${OVERLAY_GROUPS:-BCDE}"
 if [ "$K3_OVERLAY_SPLIT" = "1" ]; then
     SITE_PKGS=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')
     SPLIT_DIR="$K3_PATCH_DIR/overlay_split"
