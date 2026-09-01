@@ -3196,3 +3196,33 @@ movement is TTFT (−3.3%), which is prefill, not decode.
 Keeping **dram**: it is neutral at C1 and worth 1-2% at C72, so one setting
 serves both. Two of four tail hypotheses are now resolved -- mns was the whole
 story, offload is inert.
+
+## T210 — chunk 4096 at C1: TPOT flat, TTFT 27% worse. Keep 8192.
+
+Run 33486985488, job 99789342628. One variable vs T208: `chunk 8192 -> 4096`.
+`[chunk] max_num_batched_tokens=4096 conc=1`, `graphs: dense ladder 1..9`,
+offload dram. 4/4 clean.
+
+| C1, v4, mns 1 | T208 (8192) | T210 (4096) | Δ |
+|---|--:|--:|--:|
+| Mean TPOT | 9.06 ms | 9.04 ms | −0.2% |
+| Median TPOT | 9.10 ms | 9.09 ms | −0.1% |
+| P90 TPOT | 9.26 ms | 9.25 ms | −0.1% |
+| P99 TPOT | 9.31 ms | 9.31 ms | 0.0% |
+| P99.9 TPOT | 9.32 ms | 9.31 ms | — |
+| Mean ITL | 36.36 ms | 36.30 ms | −0.2% |
+| **Mean TTFT** | **15,310 ms** | **19,460 ms** | **+27.1%** |
+| duration | 80.51 s | 97.08 s | +20.6% |
+
+**Chunk is exhausted as a C1 lever.** Halving it again buys nothing measurable
+on decode -- every TPOT percentile within 0.2% -- and costs 27% on TTFT because
+a 214k prompt now needs 53 slices instead of 26.
+
+This also explains the earlier 16384 -> 8192 win correctly: that step helped
+because the *tail* was real then (p99 12.31 -> 9.18 on the c1 cut). Once T208
+removed the tail via mns, there is nothing left for a smaller chunk to fix. The
+two knobs were addressing the same underlying problem -- cudagraph/scheduling
+jitter -- and mns addresses it at the source.
+
+**Keep chunk 8192 at C1.** Three of four tail hypotheses now resolved: mns was
+the cause, offload is inert, chunk is exhausted.

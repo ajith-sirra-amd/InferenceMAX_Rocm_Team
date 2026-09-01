@@ -354,8 +354,8 @@ fi
 # N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
 # against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
 # clear peak at 8192 and both sides are downhill.
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-4096}")
-echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-4096} conc=$CONC"
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
 # 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
 # engine, but still the wrong sign after 175 commits. The host prep the profile
@@ -418,7 +418,10 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # warmup and never served a request. T157 at 0.95 hung the same way (0/57).
 # Two points above 0.90 both hang; 0.90 works. Memory headroom is NOT the
 # free capacity it looks like. Do not raise this again.
-GPU_MEM_UTIL=0.9
+# C<=4 has no batch to hold, so KV headroom should not bind -- but 0.92 was
+# assumed for C1 early on and never actually measured. Last of the four tail
+# hypotheses.
+if [ "$CONC" -le 4 ]; then GPU_MEM_UTIL=0.92; else GPU_MEM_UTIL=0.9; fi
 echo "[gmu] gpu_memory_utilization=$GPU_MEM_UTIL conc=$CONC"
 
 VLLM_CMD=(
