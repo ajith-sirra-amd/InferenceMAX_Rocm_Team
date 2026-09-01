@@ -3267,3 +3267,43 @@ was never measured, and it is actively harmful.
 dcp off. TPOT 9.06 ms mean / 9.10 median / 9.31 p99 on kimi-k3-vllm:v4.**
 Against the retired c1 overlay cut (8.92 / 9.18) that is +1.6% mean, +1.4% p99 --
 the one-image recipe costs essentially nothing.
+
+## T213 — BARE nightly-7c5dc571 at C1, ZERO patches: 8.52 ms. BEST C1 EVER.
+
+Run 33490680768, job 99801237944. No overlay, no pr-stack -- confirmed by the
+gate lines:
+
+```
+IMAGE: vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb
+[k3-overlay] applied=0 conc=1
+[k3-overlay] does not match this image: ..._k3_c16_c52_current.patch
+[dcp] DISABLED -- no DCP args, no DCP env
+[mns] max_num_seqs=1 conc=1 offload=dram
+graphs: dense ladder 1..9 (mns=1 x 9 rows), DCP=1
+```
+
+4/4 clean, same workload as every other C1 run.
+
+| C1, chunk 8192, mns 1 | stack | mean | p90 | p99 | spread |
+|---|---|--:|--:|--:|--:|
+| T201 | c1 overlay, runtime, mns 8 | 8.92 ms | 9.12 | 9.18 | 0.22 ms |
+| T208 | v4 (c16_c52 + pr-stack), mns 1 | 9.06 ms | 9.26 | 9.31 | 0.22 ms |
+| **T213** | **BARE 7c5dc571, no patches** | **8.52 ms** | **8.81** | **8.90** | **0.42 ms** |
+
+**The bare newest nightly beats the full patched stack at C1 by 6.0% on mean
+and 4.4% on p99.** It also beats the retired c1 overlay cut (−4.5% mean).
+
+Why this is credible rather than a fluke: `7c5dc571` contains four of
+Hyukjoon's PRs that our v4 base does not -- **#51705** (DSpark/DCP attention and
+verification), **#53598** (DCP prefix cache hits), **#52707** (negative external
+block allocation) and **#52033** (ROCm dual-stream decode). At C1 the first two
+are exactly the DSpark path being exercised. We have been carrying a 264 KB
+overlay to approximate work that has since landed upstream, on a base that
+predates it.
+
+TTFT 14,927 ms and ITL 34.24 ms are also the best of the three.
+
+**Implication for the distribution problem:** at C1, there is nothing to
+distribute. A stock public tag reproduces the best number we have. Whether that
+holds at C52 -- where DCP=8 and the MoE/kernel groups matter far more -- is the
+next run.
