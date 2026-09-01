@@ -48,6 +48,19 @@ install_agentic_deps
 # the dry-run fails. REQUIRE_K3_OVERLAY defaults to 1 here so that case is a
 # hard failure rather than a silent unpatched run producing a misleading number.
 K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
+
+# Pre-baked image short-circuit. kimi-k3-vllm:v4 ships the overlay AND the PR
+# stack already applied and drops a manifest at /etc/k3-image-manifest. Its
+# presence is the contract: site-packages is already patched, so re-applying
+# would fail the dry-run and -- with REQUIRE_K3_OVERLAY=1 -- kill the run.
+# One overlay for every concurrency in that image; no C1-vs-C52 split.
+if [ -f /etc/k3-image-manifest ]; then
+    K3_OVERLAY_APPLIED=1
+    export SKIP_KIMI_PATCHES=1
+    echo "[k3-overlay] baked into image -- runtime patching SKIPPED"
+    echo "[pr-stack] baked into image -- runtime patching SKIPPED"
+    sed 's/^/[k3-image] /' /etc/k3-image-manifest
+else
 if [ "$CONC" -le 4 ]; then
     K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c1_current.patch}"
 else
@@ -120,6 +133,7 @@ if [ "${APPLY_PR_STACK:-1}" = "1" ] && [ "$K3_OVERLAY_APPLIED" = "1" ] && [ -d "
     done
 fi
 echo "[pr-stack] applied=$PR_STACK_APPLIED files, skipped:${PR_STACK_SKIPPED:- none} (#53940 a4w4-flydsl, #50813 SiTUv2-A8W4-MoE)"
+fi
 
 if [ -n "${DCP_SIZE:-}" ]; then
     DCP_SOURCE=matrix

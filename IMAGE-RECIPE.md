@@ -146,7 +146,79 @@ Concurrency, mns and chunk are all **closed as levers** — three independent
 knobs, all flat at the operating point. The remaining 14.9% to 12,500 is not in
 the launcher's argument space.
 
-## Optional: bake it
+## `kimi-k3-vllm:v4` — everything baked, nothing at runtime
+
+Built and verified on `b23_07`. **35.6 GB**, `docker build` exit 0, **0 failed
+hunks**, all 5 pr-stack files applied.
+
+```bash
+cd upstream/InferenceX/benchmarks/single_node/agentic
+docker build -f k3_patches/Dockerfile.kimi-k3-vllm.v4 -t kimi-k3-vllm:v4 .
+```
+
+Collapses both runtime layers into the image and **removes the C1-vs-C52
+overlay split** — one overlay for every concurrency, the `c16_c52` cut, because
+that is the one behind every throughput number in the ledger including 10,632.
+
+It drops `/etc/k3-image-manifest`:
+
+```
+k3-image: kimi-k3-vllm:v4
+base: vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
+base-digest: sha256:8908b8ab5ba28c3b81f9f42bb72e2421f06a180e001c67c4f10ff7f127c5690b
+overlay: vllm_nightly_46638857_k3_c16_c52_current.patch (all concurrencies)
+overlay-sha256: 90f975fad15722494366153ec3f32a14c4445bfa88c51ec53043b88eaf64dcc0
+pr-stack: 5 files (#53940 a4w4-flydsl, #50813 SiTUv2-A8W4-MoE)
+runtime-patching: none
+```
+
+`kimik3_fp4_mi355x_mtp.sh` short-circuits on that file: if it exists, the script
+does not touch site-packages and logs
+
+```
+[k3-overlay] baked into image -- runtime patching SKIPPED
+[pr-stack]   baked into image -- runtime patching SKIPPED
+[k3-image] ...manifest...
+```
+
+The manifest is the contract — re-applying an already-applied overlay fails the
+dry-run, and with `REQUIRE_K3_OVERLAY=1` that would kill the run.
+
+Verified inside the image: `vllm 0.26.1rc1.dev1219+g46638857f`,
+`kimi_k3/amd/latent_moe_runner.py` present, SiTUv2 markers in `quark_moe.py`,
+flydsl markers in `_aiter_ops.py`.
+
+### Two things to know before trusting a number from it
+
+1. **C1 numerics are not yet validated.** Folding C1 onto the `c16_c52` overlay
+   is a real change: the `c1` cut carried an online-quantization / weight-loading
+   subsystem (`layers/quantization/online/*`, `config/quantization.py`,
+   `model_loader/{base_loader,weight_utils}.py`, `layers/linear.py`,
+   `routed_experts.py`) that this image does not have. C72 runs the same fp4
+   model without it, so it is not load-bearing — but **C1 must re-pass GSM8K
+   (limit 200) on this image** before any C1 result from it counts.
+2. **C1 also *gains* the newer kernels**: `latent_moe_runner.py`, the KDA chunk
+   kernels, `moe_runner`/`shared_experts`, `envs.py`, and much newer
+   `simple_kv_offload/manager.py` (164 → 469 lines) and
+   `single_type_kv_cache_manager.py` (243 → 478). Those are exactly what a
+   batch-1 decode step is bound by, so C1 TPOT may well improve.
+
+### Blocked on one shared-file change
+
+`runners/launch_mi355x-amd.sh` cannot launch a local-only tag as written:
+
+| line | problem |
+|---|---|
+| 35 `docker pull $IMAGE` | fails — `kimi-k3-vllm:v4` is in no registry |
+| 36 `{{index .RepoDigests 0}}` | aborts *"index out of range"* — local images have no `RepoDigests` |
+| 59 `--pull always` | re-pulls and fails again |
+
+The fix is small and backwards compatible (tolerate a failed pull when the image
+is present locally, fall back to `.Id` for the digest, and switch to
+`--pull never` in that case), but that file is outside the standing edit bounds,
+so **it needs explicit approval before `image:` can point at `kimi-k3-vllm:v4`.**
+
+## Optional: bake overlay only
 
 `k3_patches/Dockerfile.kimi-k3-current` builds layer 0 + layer 1 as an image
 (sha256-checked `COPY` + `patch -p1` into dist-packages).
