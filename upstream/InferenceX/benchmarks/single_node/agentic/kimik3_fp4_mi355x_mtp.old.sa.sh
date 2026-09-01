@@ -82,8 +82,7 @@ if [ "$CONC" -le 4 ]; then
     MAX_BATCHED_TOKENS=8192
     DCP_SIZE=1
 else
-    MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
-    if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
+    MAX_NUM_SEQS=80
     MAX_BATCHED_TOKENS=16384
     DCP_SIZE=8
 fi

@@ -3493,3 +3493,42 @@ degradation attributed to "the missing overlay" may be our own mns default.
 That has to be ruled out before any conclusion about what the overlay is worth.
 Next run: **C16 with mns 20** (`conc + conc/4`, the `old.sa.sh` rule), one
 variable against T218's mns 80.
+
+## T219 — mns 20 at C16 is MUCH WORSE than mns 80. Hypothesis falsified, script reverted.
+
+Run 33515809560, job 99882491683. One variable vs T218: `mns 80 -> 20`
+(`conc + conc/4`). `[mns] max_num_seqs=20 conc=16`, `graphs: dense ladder 1..20`.
+
+| C16, bare nightly, chunk 16384 | T218 (mns 80) | **T219 (mns 20)** |
+|---|--:|--:|
+| Throughput per GPU | **3,591 tok/s** | **— (none)** |
+| Requests | 680 successful / 789 | **0 successful / 49** |
+| Error rate | 10.05% | 100% dropped |
+| warmup | completed | **stalled at 22/33, in_flight=11, errors=0** |
+
+**My hypothesis was wrong, and in the opposite direction.** I predicted the flat
+mns 80 was hurting via dead cudagraph capture, and that matching mns to conc
+would help. Tightening mns did not help -- it caused total starvation at a
+concurrency that previously produced a number.
+
+**Why: the agentic replay runs more lanes than the concurrency cap.** At C72 the
+logs showed `Running: 79 reqs` against conc 72, and at C52 `Running: 66-79`.
+A replayed conversation holds multiple in-flight lanes, so the engine needs
+`mns` well above `CONC`. Capping mns at 20 for a C16 replay starves it -- the
+warmup froze at 22/33 with 11 requests permanently in flight and **zero errors**,
+the same signature as T216.
+
+**Two corrections follow:**
+
+1. **T208's mns finding does NOT generalise.** Matching mns to the batch shape is
+   right at C1 with MTP, where the batch is deterministically 1 seq x 9 rows.
+   It is wrong for the DCP agentic path, where lane count is not bounded by conc.
+   I over-generalised a C1 result to high concurrency.
+2. **The T216 C52 starvation conclusion is now STRONGER, not weaker.** I flagged
+   mns 80 as a possible confound there. It was -- but in the protective
+   direction. C52 starved *despite* having the better mns setting, so the
+   confound is eliminated and the missing-overlay explanation stands.
+
+**Reverted:** the DCP>1 branch goes back to a flat `MAX_NUM_SEQS=80`. Also
+corrects `old.sa.sh`, whose `conc + conc/4` rule would have set mns 65 at C52 --
+now known to be the wrong direction.

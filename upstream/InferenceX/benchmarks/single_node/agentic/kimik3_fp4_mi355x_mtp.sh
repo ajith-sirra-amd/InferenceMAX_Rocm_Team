@@ -379,11 +379,11 @@ echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 # again without first raising that timeout.
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
-        # Track concurrency instead of a flat 80. A flat 80 captures graph sizes
-        # the batch never reaches (60 dead sizes at C16), which T208 measured as
-        # real tail cost at C1.
-        MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
-        if [ "$MAX_NUM_SEQS" -gt 80 ]; then MAX_NUM_SEQS=80; fi
+        # Flat 80. Tracking conc was tried (T219, mns 20 at C16) and caused total
+        # starvation: the agentic replay runs MORE lanes than CONC (Running: 79
+        # at conc 72), so mns must exceed conc generously. T208's match-the-batch
+        # rule is C1/MTP-specific and does not generalise here.
+        MAX_NUM_SEQS=80
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 1 ]; then MAX_NUM_SEQS=1; fi
