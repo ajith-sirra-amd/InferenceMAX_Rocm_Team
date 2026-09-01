@@ -3855,3 +3855,36 @@ partly viable, and this measurement says which parts:
 
 That is a sharper and more useful statement than the original size-ordered plan,
 and it came from five GPU runs rather than from reading the diff.
+
+## T227 — C1 chunk 2048: slightly WORSE on TPOT, 79% worse TTFT. Chunk CLOSED at 8192.
+
+Run 33568392147, job 100056773545. `kimi-k3-vllm:v4`, C1, mns 1, ladder 1..9,
+gmu 0.9, offload dram, `[chunk] max_num_batched_tokens=2048`. 4/4 clean.
+
+### Full C1 chunk sweep on v4 (identical workload throughout)
+
+| chunk | mean TPOT | median | P90 | P99 | mean TTFT | duration |
+|--:|--:|--:|--:|--:|--:|--:|
+| 16384 (T205) | 9.69 ms | 9.13 | 10.99 | 11.70 | 14,971 ms | — |
+| **8192 (T208)** | **9.06 ms** | **9.10** | **9.26** | **9.31** | 15,310 ms | 80.51 s |
+| 4096 (T210) | 9.04 ms | 9.09 | 9.25 | 9.31 | 19,460 ms | 97.08 s |
+| 2048 (T227) | 9.18 ms | 9.21 | 9.59 | 9.70 | **27,333 ms** | 128.79 s |
+
+**8192 is the floor, and the curve now has a visible bottom.** 16384 -> 8192 is
+the only step that buys anything (p99 11.70 -> 9.31). 4096 is a tie. 2048 is
+*worse* on every TPOT percentile (+1.3% mean, +4.2% p99) **and** costs 79% more
+TTFT than 8192, with duration up 60%.
+
+The 2048 TPOT regression is small but consistent across all five percentiles,
+which is what a real effect looks like rather than noise: at 2048 a 214k prompt
+needs 105 slices, and per-slice scheduling overhead starts showing up in the
+decode interleave rather than helping it.
+
+**Chunk is closed at C1: 8192.** Combined with T199 (chunk flat at C72,
+16384 vs 8192 within 0.07%), the chunk knob is now fully characterised on both
+ends of the concurrency range and needs no further runs.
+
+### C1 final, on the shipping image
+
+**mns 1, ladder 1..9, chunk 8192, gmu 0.9, dcp off, offload dram
+-> TPOT 9.06 ms mean / 9.10 median / 9.31 p99, spread 0.22 ms.**

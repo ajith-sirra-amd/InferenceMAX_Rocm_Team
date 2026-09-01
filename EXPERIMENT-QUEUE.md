@@ -790,3 +790,26 @@ Shipping set: all five. `kimi-k3-vllm:v4` already carries exactly this.
 3. Why bare upstream collapses above C16 on the agentic workload (T216-T220)
    remains unexplained at the code level. The ablation says the overlay is
    needed but not which line fixes it.
+
+
+## C1 chunk sweep: CLOSED (8192)
+
+| chunk | mean TPOT | p99 | TTFT |
+|--:|--:|--:|--:|
+| 16384 | 9.69 | 11.70 | 14,971 |
+| **8192** | **9.06** | **9.31** | 15,310 |
+| 4096 | 9.04 | 9.31 | 19,460 |
+| 2048 | 9.18 | 9.70 | 27,333 |
+
+8192 is the floor. 4096 ties on TPOT but costs 27% TTFT; 2048 is worse on both.
+No further chunk runs needed at either end of the range (C72 was flat, T199).
+
+**All config levers are now closed.** conc, mns, chunk, gmu, offload at both C1
+and C72; overlay ablation A-E; bare-upstream curve C1-C52.
+
+**Remaining open, none of which are config tuning:**
+1. Upstreaming (needs Hyukjoon): A and B filable standalone, C/D/E as one series.
+2. Code-level reason bare upstream collapses above C16 on agentic.
+3. Profiling for the last 14.9% -- both in-tree paths dead (T202 torch profiler
+   absent, T203 rocprofv3 deadlocks capture). Would need rocprofv3-attach or an
+   external tool.
