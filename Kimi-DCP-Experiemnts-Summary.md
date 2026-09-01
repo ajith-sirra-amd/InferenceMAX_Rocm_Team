@@ -2747,3 +2747,38 @@ kernel/scheduler work.
 **Next: C1 fixed-len on the nightly stack, chunk 16384 vs 8192, gmu 0.9.**
 C1 TPOT has never been measured on nightly+overlay; the standing baseline
 (7.41 ms, T180) is aigmkt. Arm A = 16384.
+
+## T200 — C1 fixed-len on nightly, agentic-band lengths, chunk 16384. TPOT 9.70 ms.
+
+Run 33464254667, job 99720753067. First C1 measurement on the nightly+overlay
+stack. `[chunk] 16384 conc=1`, `[dcp] DISABLED size=1 source=conc-fallback`,
+`[mns] max_num_seqs=8 offload=dram`, `graphs: dense ladder 1..72 (mns=8 x 9
+rows)` — MTP fires here (SPEC_ROWS 9), unlike every throughput point.
+`[test-mode] func: agentic-band lengths, 4 prompts`, isl 214000 / osl 874 /
+ratio 0.37. **4/4 successful, zero faults.**
+
+| metric | value |
+|---|--:|
+| Mean TPOT | **9.70 ms** |
+| Median TPOT | 8.97 ms |
+| P90 / P99 TPOT | 11.38 / 12.31 ms |
+| Mean ITL | 39.38 ms |
+| Mean / Median TTFT | 13,663.8 / 16,823.8 ms |
+| Output tok/s | 28.07 |
+| duration | 75.53 s (671,817 in / 2,120 out) |
+
+**1. C1 is healthy on nightly at agentic-band lengths.** 4/4 at uniform
+[79,180, 214,000] input. The C1 agentic *replay* fault (read-only-page write) is
+still unreproduced here, which keeps it pinned to the replay harness rather than
+the engine — same conclusion T180 reached on aigmkt, now on this stack.
+
+**2. Do NOT compare 9.70 ms to the 7.41 ms T180 baseline.** T180 was 8k fixed
+ISL on aigmkt; this is 214k agentic-band on nightly. Both stack and input length
+moved. The 214k figure is the one that matters for the agentic target, and it is
+the first of its kind — there is no prior C1 number at these lengths.
+
+**3. TTFT 13.7 s is prefill-bound and expected.** The fixed-len harness gets no
+prefix-cache reuse, where the real agentic workload serves 93.3% of prompt
+tokens from cache. Read TPOT/ITL from this run, not TTFT.
+
+**Next: T201 — identical, chunk 8192. Arm B.**

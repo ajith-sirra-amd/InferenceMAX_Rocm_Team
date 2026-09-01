@@ -330,17 +330,19 @@ Headline **10,632 tok/s/GPU** = **-14.9%** from 12,500, **+18.8%** over SA's
 8,953. GSM8K 0.995 (4-file pr-stack) / 0.99 (5-file). The remaining gap is not
 in the launcher's argument space.
 
-**Now running: T200 -- C1 fixed-len, agentic-band lengths, chunk 16384, gmu 0.9.**
-Arm A of the C1 chunk A/B the user asked for. C1 TPOT has never been measured on
-nightly+overlay; the 7.41 ms baseline (T180) is aigmkt. C1 takes the DCP=1 /
-mns=8 / SPEC_ROWS=9 / ladder 1..72 path, and MTP fires here (it does not at any
-throughput point).
+**T200 done: C1 nightly, agentic-band, chunk 16384 -> TPOT 9.70 ms mean /
+8.97 ms median, 4/4 clean.** First C1 number on this stack at 214k lengths.
+Not comparable to the 7.41 ms T180 baseline (that was 8k ISL on aigmkt).
 
-**Queue after T200:**
-1. T201 -- same C1 fixed-len, chunk 8192. Arm B. One variable.
-2. `PROFILE=1` hotspot run on the C72 config. Wired but never executed. This is
-   the only remaining path to the last 14.9%, per T199.
-3. Attribution: C64 without #50813 (T193 moved two variables).
+**Now running: T201 -- identical C1 fixed-len, chunk 8192.** Arm B. One
+variable. At C1 the prefill is a single 214k prompt, so unlike C72 the chunk
+actually gates how the prefill is sliced -- this is where 8k-vs-16k has a real
+mechanism to matter, on TTFT if not on TPOT.
+
+**Queue after T201:**
+1. `PROFILE=1` hotspot run on the C72 config. Wired but never executed. Per
+   T199 this is the only remaining path to the last 14.9%.
+2. Attribution: C64 without #50813 (T193 moved two variables).
 
 
 ## Queue — REPRIORITISED 2026-08-29 against the T124 profile
