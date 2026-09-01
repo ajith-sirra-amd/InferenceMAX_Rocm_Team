@@ -85,7 +85,7 @@ K3_OVERLAY_APPLIED=0
 # OVERLAY_GROUPS=ABCDE (default) is equivalent to the monolith. Drop a letter to
 # ablate that group. Purpose: prune to the minimum set that preserves 10,632, so
 # there is less to carry forward and upstream.
-K3_OVERLAY_SPLIT="${K3_OVERLAY_SPLIT:-1}"
+K3_OVERLAY_SPLIT="${K3_OVERLAY_SPLIT:-0}"
 OVERLAY_GROUPS="${OVERLAY_GROUPS:-ABCD}"
 if [ "$K3_OVERLAY_SPLIT" = "1" ]; then
     SITE_PKGS=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')
@@ -354,8 +354,8 @@ fi
 # N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
 # against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
 # clear peak at 8192 and both sides are downhill.
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-16384}")
-echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-16384} conc=$CONC"
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-2048}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-2048} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
 # 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
 # engine, but still the wrong sign after 175 commits. The host prep the profile
@@ -549,7 +549,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
 # to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-0}" = "1" ]; then
+elif [ "${TEST:-1}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
