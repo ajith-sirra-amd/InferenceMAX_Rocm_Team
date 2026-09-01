@@ -2900,3 +2900,33 @@ per attempt. **Profiling is parked** rather than iterated on blind.
 
 Also worth fixing if it is ever revisited: all 8 ranks were writing the same two
 filenames, so the CSVs would have clobbered each other anyway.
+
+## GSM8K is STRUCTURALLY INVALID at CONC <= 4. Recorded so it is never misread.
+
+The MTP/DSpark spec config used at CONC 1/2/4 is:
+
+```
+"draft_sample_method":"probabilistic",
+"rejection_sample_method":"synthetic",
+"synthetic_acceptance_length":4.0
+```
+
+`rejection_sample_method: synthetic` accepts a fixed number of draft tokens
+regardless of whether the target model would have accepted them. The emitted
+text is therefore **not** the model's true distribution, and any accuracy metric
+computed from it is meaningless. A low GSM8K at C1 is the expected behaviour of
+the harness, **not** a numerics regression.
+
+**Consequences:**
+
+1. **C1 can never be GSM8K-validated while MTP is on.** This is not a gap to
+   close; it is structural. C1's gates are (a) the engine comes up and serves,
+   and (b) TPOT.
+2. **T204 is a liveness test**, not a numerics gate. Its only signal is whether
+   the `c16_c52` overlay serves at C1. Ignore its `exact_match`.
+3. **The overlay's numerics gate already exists** at spec-free concurrency:
+   T192 (0.995, C60) and T194 (0.99, C64). C1 introduces no new kernels, only
+   different batch shapes, so those cover the overlay itself.
+
+Every GSM8K run in this ledger (T192, T194) was at C >= 60, i.e. spec-none, so
+none of the existing numbers are affected by this.
