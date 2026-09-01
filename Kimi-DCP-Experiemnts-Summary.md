@@ -2717,3 +2717,33 @@ orphan check parses `VLLM_CMD` and diffs it against defined `*_ARGS` arrays.
 - Patch [8]'s guard matched *uses* of `_decode_num_heads` rather than its assignment, reporting "already patched" against a partial application.
 - Acceptance length was misread from `sort -u | head` (the bottom five values) rather than the distribution; true mean 2.706 under `standard` rejection.
 - Kimi-K3 fp8 KV decode requires a backend accepting an fp8 query input, so the draft-causal rewrite is a consequence of the fp8 KV choice, not an independent option.
+
+## T199 — C72 + chunk 8192 = 10,625. Flat. Chunk is closed as a lever.
+
+Run 33456866208, job 99698636482. `[chunk] max_num_batched_tokens=8192 conc=72`,
+`[mns] max_num_seqs=80`, `graphs: dense ladder 1..80`, `[k3-overlay] applied=1`,
+`[pr-stack] applied=5`. 2,240 successful / 2,392, err 0.18%, zero faults.
+TTFT mean 5,378 ms · ITL mean 106.56 ms · out-tok/s/user 25.49.
+
+| C72, mns 80 | tok/s/GPU |
+|---|--:|
+| chunk 16384 (T195) | 10,632 |
+| chunk 16384 (T198, mns 96) | 10,630 |
+| chunk 8192 (T199) | **10,625** |
+| **spread** | **0.07%** |
+
+**1. Chunk size does nothing at C72.** N4's "8192 is optimal" was an aigmkt-era
+finding and is now neither confirmed nor refuted -- it is simply irrelevant on
+this stack, because 8k and 16k land within run-to-run noise (0.07%, tighter than
+the 0.02%-0.20% replication band). At agentic ISLs the prefill is already
+chunk-bound elsewhere.
+
+**2. Config tuning is done.** Concurrency (T195/T198, n=2 at 10,632/10,630),
+mns (T198, neutral), and now chunk (T199, neutral) are all closed. Three
+independent knobs at the operating point all measure flat. The remaining 14.9%
+to 12,500 is not in the launcher's argument space -- it needs the profile, then
+kernel/scheduler work.
+
+**Next: C1 fixed-len on the nightly stack, chunk 16384 vs 8192, gmu 0.9.**
+C1 TPOT has never been measured on nightly+overlay; the standing baseline
+(7.41 ms, T180) is aigmkt. Arm A = 16384.
