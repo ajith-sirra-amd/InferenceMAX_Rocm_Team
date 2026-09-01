@@ -62,8 +62,7 @@ Hyukjoon's overlay, applied verbatim. It touches
 
 ### What it is made of
 
-Hyukjoon: *"The patch I made is a mixture of PRs."* It is **not** a single
-upstream PR and has no PR number of its own. Matching hunks back to
+It is **not** a single upstream PR and has no PR number of its own. Matching hunks back to
 `vllm-project/vllm` by symbol and title:
 
 | overlay area | upstream PR | state |
