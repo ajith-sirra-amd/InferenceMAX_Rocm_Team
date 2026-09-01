@@ -3654,3 +3654,41 @@ first PR of the five.
 **Next: B-out (ACDE).** B is spec-decode cudagraph and spec is OFF at C72, so
 the expectation is another neutral result -- which would make B droppable from
 the *high-concurrency* image, though not from C1 where MTP runs.
+
+## T223 — ablation B-out (ACDE): 10,747 tok/s/GPU. B is inert at C72, as predicted.
+
+Run 33556467396, job 100018481679. `[overlay-split] groups=ACDE applied=4
+failed: none`, pr-stack 4, mns 80, chunk 16384, dcp 8. 2,260 successful / 2,413,
+err 0.22%, ITL 110.43 ms.
+
+| C72 | groups | tok/s/GPU | Δ vs control |
+|---|---|--:|--:|
+| T221 control | ABCDE | 10,756 | — |
+| T222 | BCDE (−A) | 10,719 | −0.34% |
+| **T223** | **ACDE (−B)** | **10,747** | **−0.08%** |
+
+**B (spec-decode cudagraph) is inert at C72.** −0.08% is the tightest match to
+the control yet. This was the predicted outcome and the mechanism is clear: spec
+is OFF above C4, so `dflash/cudagraph.py`, `speculator.py` and
+`config/speculative.py` are not on the execution path at all.
+
+**B is droppable from a high-concurrency-only image. It is NOT droppable
+generally** -- C1 runs MTP, and B is the spec-decode cudagraph support that path
+needs. Any "minimal set" conclusion has to be stated per concurrency regime, not
+as a single answer.
+
+**Two of five groups now measured, both neutral:**
+
+| grp | Δ at C72 | verdict |
+|---|--:|---|
+| A | −0.34% | neutral for throughput; keep -- it is a correctness fix |
+| B | −0.08% | inert at C72; needed at C1 |
+| C | ? | **next** -- KV-offload + cache manager, the one to watch |
+| D | ? | ROCm AITER MLA |
+| E | ? | Kimi-K3 model path |
+
+The interesting runs are still ahead. A and B together are only 8 KB of the
+264 KB overlay; C, D and E are 256 KB of it and carry the kernel and cache work
+that the bare-nightly collapse (T216-T220) points at.
+
+**Next: C-out (ABDE).**
