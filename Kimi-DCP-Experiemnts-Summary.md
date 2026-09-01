@@ -3795,3 +3795,63 @@ at most, B for a high-concurrency-only image.**
 **Next: E-out (ABCD)** -- the last single-group test. Expect another coupling
 failure (C's code paths reference E's model files), but it is cheap and closes
 the matrix.
+
+## T226 — E-out (ABCD) FAILS. Matrix closed: the overlay is one coupled unit + 2 small fixes.
+
+Run 33567752853, job 100054765790. `[overlay-split] groups=ABCD applied=4
+failed: none`, then:
+
+```
+ERROR [registry.py:1075] Error in inspecting model architecture
+  'KimiK3ForConditionalGeneration'
+ModuleNotFoundError: No module named
+  'vllm.model_executor.layers.fused_sigmoid_gate'
+```
+
+`fused_sigmoid_gate.py` is a **new file** that only group E creates. Without E
+it does not exist, and the K3 model code that imports it cannot load.
+
+### Ablation matrix: COMPLETE
+
+| grp | files | bytes | leave-one-out result | detachable? |
+|---|--:|--:|---|---|
+| **A** dcp a2a buffer pool | 1 | 3,555 | **10,719** (−0.34%) | **yes** |
+| **B** spec-decode cudagraph | 3 | 4,434 | **10,747** (−0.08%) | **yes**, at C>4 only |
+| **C** kv-offload + cache mgr | 9 | 76,944 | won't start -- E imports `get_mamba_prefill_checkpoint_position` | no |
+| **D** ROCm AITER MLA | 5 | 76,806 | won't start -- DCP needs its LSE-returning `AiterMLAImpl` | no |
+| **E** Kimi-K3 model path | 16 | 102,377 | won't start -- `fused_sigmoid_gate` module missing | no |
+
+Control: ABCDE = **10,756 tok/s/GPU**, err 0.18% (T221).
+
+### Answer to "prune to the minimum that preserves best perf"
+
+**There is essentially nothing to prune.** C, D and E -- **256 KB of the 264 KB**
+-- form one mutually-dependent unit: E needs a symbol from C, E needs a module
+only E defines but D's backend contract binds it, and D supplies the MLA impl
+the rest is cut against. Removing any one of them does not degrade performance,
+it prevents the server from starting.
+
+A and B are genuinely detachable and together are **8 KB (3%)**. Neither buys
+measurable throughput at C72:
+
+- **A** is a correctness fix (RCCL buffers vs FULL cudagraph replay). Measured
+  free, so keep it -- dropping it trades a real crash class for 0.34% of noise.
+- **B** is only reachable when spec is on, i.e. C<=4. A high-concurrency-only
+  image could drop it; the shipping image should not, since C1 uses MTP.
+
+**Recommended shipping set: all five. Recommended minimum for a C>4-only image:
+A+C+D+E.**
+
+### What this means for upstreaming
+
+The earlier plan in `UPSTREAM-STATUS.md` -- five PRs, easiest first -- is only
+partly viable, and this measurement says which parts:
+
+- **A and B can be filed independently.** They are self-contained, small, and
+  now have evidence they do not perturb the peak.
+- **C, D and E cannot be split as filed.** They would have to go up as one
+  series, or the shared symbols relocated first. Filing C alone would break E
+  for anyone applying both.
+
+That is a sharper and more useful statement than the original size-ordered plan,
+and it came from five GPU runs rather than from reading the diff.

@@ -764,3 +764,29 @@ ceiling ~C16. The overlay's value = (clean C72 @ 10,646) vs (C16 @ 3,591 with
 2. v4 remains the shipping image. `aigmkt/kimi-k3-vllm:v4` is pushed.
 3. Overlay A/B/C/D/E ablation on the v4 base -- still unrun, and now better
    motivated: it would say which group buys the C16->C72 range.
+
+
+## Overlay ablation: CLOSED (T221-T226)
+
+Control ABCDE = 10,756 tok/s/GPU err 0.18%.
+
+| grp | leave-one-out | detachable |
+|---|---|---|
+| A | 10,719 (-0.34%) | yes -- keep anyway, correctness fix |
+| B | 10,747 (-0.08%) | yes, at C>4 only |
+| C | won't start | no (E imports from it) |
+| D | won't start | no (DCP needs its AiterMLAImpl) |
+| E | won't start | no (defines fused_sigmoid_gate) |
+
+**Nothing meaningful to prune.** C+D+E = 256 KB of 264 KB and are one coupled
+unit. A+B = 8 KB and are free either way.
+
+Shipping set: all five. `kimi-k3-vllm:v4` already carries exactly this.
+
+**Open items:**
+1. C1 chunk sweep on v4 (parked, user's call) -- 4096/2048 vs 8192.
+2. Upstreaming: A and B filable standalone; C/D/E must go as one series.
+   Needs Hyukjoon's sign-off.
+3. Why bare upstream collapses above C16 on the agentic workload (T216-T220)
+   remains unexplained at the code level. The ablation says the overlay is
+   needed but not which line fixes it.
