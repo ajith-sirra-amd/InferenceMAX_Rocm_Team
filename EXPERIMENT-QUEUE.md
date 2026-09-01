@@ -330,40 +330,45 @@ Headline **10,632 tok/s/GPU** = **-14.9%** from 12,500, **+18.8%** over SA's
 8,953. GSM8K 0.995 (4-file pr-stack) / 0.99 (5-file). The remaining gap is not
 in the launcher's argument space.
 
-**C1 chunk A/B is DONE and is the first non-flat knob on this stack.**
+**T202 FAILED its objective: no profile was produced.** `nightly-46638857` has
+no `VLLM_TORCH_PROFILER_DIR` and no `start_profile` handler in
+`entrypoints/openai/api_server.py` -- verified in the image. The server logged
+`Unknown vLLM environment variable detected` and ignored it; `--profile` never
+reached the client either (`profile=False`). Zero traces, 52 KB artifact. The
+torch-profiler design is dead on this stack and has been deleted, not retried.
 
-| C1, 214k agentic-band | chunk 16384 (T200) | chunk 8192 (T201) |
+**Now running: T203 -- PROFILE=1 rewired to rocprofv3.** `/opt/rocm/bin/rocprofv3`
+is in the image and the tree carries `VLLM_NVTX_SCOPES_FOR_PROFILING` hooks for
+it. The server process is now wrapped in
+`rocprofv3 --kernel-trace --stats -d $RESULT_DIR/rocprof -o k3 --output-format csv`.
+Kernel trace only -- the question is which GPU kernels own the decode step, not
+which host calls happened. Same workload cap: 72 prompts (one wave), OSL 256.
+
+Known risk being taken: cudagraph capture of the 1..80 ladder generates a very
+large kernel count, so the CSV may be big. If it is unmanageable the next
+iteration attaches with `rocprofv3-attach` after `wait_for_server_ready` instead
+of wrapping the whole process.
+
+**C1/C52 config split, settled:**
+
+| | C1 | C72 |
 |---|--:|--:|
-| Mean TPOT | 9.70 ms | **8.92 ms** |
-| Median TPOT | 8.97 ms | 8.96 ms |
-| P99 TPOT | 12.31 ms | **9.18 ms** |
-| Mean TTFT | **13,663.8 ms** | 15,772.4 ms |
+| chunk | **8192** (p99 TPOT 12.31 -> 9.18 ms) | 16384 (flat either way) |
+| mns | 8 | 80 |
+| dcp | off | 8 |
 
-Median identical, p99 −25.4%, TTFT +15.4%. Chunk 8192 does not speed decode up,
-it stops decode stalling behind an oversized prefill chunk. Opposite sign to
-C72, where chunk was flat both ways (T199) because 72 concurrent requests keep
-the batch full regardless of slice size.
+**`kimi-k3-vllm:v4` is built** (35.6 GB, 0 failed hunks): base nightly +
+Hyukjoon's c16_c52 overlay + the 5-file pr-stack, all baked, one overlay for
+every concurrency, no runtime patching. Launcher short-circuits on
+`/etc/k3-image-manifest`. BLOCKED from CI use: `runners/launch_mi355x-amd.sh`
+line 36 `{{index .RepoDigests 0}}` aborts on a local-only tag, and that file is
+outside the standing edit bounds -- needs explicit approval.
 
-**Standing recommendation: chunk 8192 at C1, 16384 at C72.** Per-concurrency,
-which matches the guidance that chunk/mns/ladder need not be bound across
-C1 and C52+.
-
-**Now running: T202 -- `PROFILE=1` hotspot run on the C72 config.** First
-execution of the profile path. `TEST_MODE=perf` (8k/1k lengths), 72 prompts =
-one concurrency wave, `TEST_OSL=256` to keep eight per-rank traces inside the
-artifact upload limit. Traces land in `$RESULT_DIR/torch_profile` and the whole
-RESULT_DIR is uploaded as the `agentic_*` artifact (confirmed: that artifact is
-exactly RESULT_DIR).
-
-Caveat to read it with: 8k fixed-len gets none of the agentic 93.3% prefix-cache
-reuse, so prefill will be over-represented relative to the real workload.
-Steady-state decode at batch 72 is the part that transfers.
-
-**Queue after T202:**
-1. Act on the profile -- kernel or scheduler work. This is the only remaining
-   path to the last 14.9%; config tuning is exhausted (conc, mns, chunk all flat
-   at C72).
-2. Attribution: C64 without #50813 (T193 moved two variables).
+**Queue after T203:**
+1. Read the rocprof CSV, rank decode kernels, pick a target.
+2. C1 GSM8K limit 200 on v4 (folding C1 onto the c16_c52 overlay is a numerics
+   change), then C1 TPOT vs T201's 8.92 ms.
+3. Attribution: C64 without #50813 (T193 moved two variables).
 
 ## Queue — REPRIORITISED 2026-08-29 against the T124 profile
 

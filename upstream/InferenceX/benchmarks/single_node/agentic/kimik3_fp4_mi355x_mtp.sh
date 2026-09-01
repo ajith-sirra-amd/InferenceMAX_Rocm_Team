@@ -164,25 +164,38 @@ export PYTHONNOUSERSITE=1
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600
 
 # ---- Profiling ---------------------------------------------------------------
-# PROFILE=1 turns on the torch profiler. benchmark_lib.sh:531 adds --profile to
-# run_benchmark_serving, which drives vLLM's /start_profile endpoint -- but that
-# endpoint only exists if VLLM_TORCH_PROFILER_DIR is set on the SERVER process,
-# so it has to be exported here, before VLLM_CMD, not just at bench time.
+# T202 killed the torch-profiler design. nightly-46638857 has NO
+# VLLM_TORCH_PROFILER_DIR and NO start_profile handler in
+# entrypoints/openai/api_server.py -- the server logged "Unknown vLLM
+# environment variable detected" and the endpoint never existed, so the run
+# produced zero traces. Do not retry that path on this image.
 #
-# Also caps the prompt count: the perf pass defaults to 645 prompts at C52, and
-# a torch trace over that is tens of GB and unreadable. PROFILE_PROMPTS defaults
-# to one concurrency wave, which is enough to see steady-state decode hotspots.
+# rocprofv3 IS in the image (/opt/rocm/bin/rocprofv3) and the tree carries
+# VLLM_NVTX_SCOPES_FOR_PROFILING hooks meant for exactly this. So PROFILE=1 now
+# wraps the SERVER process in rocprofv3 kernel tracing.
+#
+# --kernel-trace only: a full HIP-API trace at batch 72 is enormous and the
+# question here is which GPU kernels own the decode step, not which host calls
+# were made. Output is one CSV per rank under $RESULT_DIR, which survives the
+# artifact upload (the agentic_* artifact is exactly RESULT_DIR).
+#
+# Still caps the workload: PROFILE_PROMPTS defaults to one concurrency wave and
+# TEST_OSL to 256, because the trace scales with kernel count, not wall-clock.
+PROFILE_WRAP=()
 if [ "${PROFILE:-1}" = "1" ]; then
-    export VLLM_TORCH_PROFILER_DIR="${VLLM_TORCH_PROFILER_DIR:-$RESULT_DIR/torch_profile}"
-    mkdir -p "$VLLM_TORCH_PROFILER_DIR"
+    PROFILE_OUT="${PROFILE_OUT:-$RESULT_DIR/rocprof}"
+    mkdir -p "$PROFILE_OUT"
+    export VLLM_NVTX_SCOPES_FOR_PROFILING=1
     TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-${PROFILE_PROMPTS:-$CONC}}"
     export TEST_NUM_PROMPTS
-    # Also shorten the decode leg. Eight TP ranks each write their own trace for
-    # the whole benchmark; at osl 1024 that is multi-GB and will not survive the
-    # artifact upload. 256 steps is still hundreds of steady-state decode
-    # iterations at batch 72 -- far more than needed to rank hotspots.
     export TEST_OSL="${TEST_OSL:-256}"
-    echo "[profile] ENABLED dir=$VLLM_TORCH_PROFILER_DIR prompts=$TEST_NUM_PROMPTS osl=$TEST_OSL conc=$CONC"
+    if command -v rocprofv3 >/dev/null 2>&1; then
+        PROFILE_WRAP=(rocprofv3 --kernel-trace --stats
+                      -d "$PROFILE_OUT" -o k3 --output-format csv --)
+        echo "[profile] rocprofv3 kernel-trace -> $PROFILE_OUT prompts=$TEST_NUM_PROMPTS osl=$TEST_OSL conc=$CONC"
+    else
+        echo "[profile] rocprofv3 NOT FOUND -- running unprofiled" >&2
+    fi
 else
     echo "[profile] disabled"
 fi
@@ -407,7 +420,7 @@ done
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 
-"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+${PROFILE_WRAP[@]+"${PROFILE_WRAP[@]}"} "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 

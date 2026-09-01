@@ -2820,3 +2820,43 @@ says it does not matter, and larger keeps prefill cheaper).
 
 **Next: T202 — `PROFILE=1` on the C72 config.** Config tuning is exhausted; this
 is the first look at where the 14.9% actually goes.
+
+## T202 — PROFILE=1 produced NO profile. The torch-profiler path does not exist on this nightly.
+
+Run 33466330013, job 99726886664. Job is green and the benchmark ran, but the
+profiling objective failed outright. Two independent causes, both fatal:
+
+```
+WARNING [envs.py:2245] Unknown vLLM environment variable detected: VLLM_TORCH_PROFILER_DIR
+Namespace(..., profile=False, ...)
+```
+
+**1. `VLLM_TORCH_PROFILER_DIR` does not exist in `nightly-46638857`.** Verified
+directly in the image: no `VLLM_TORCH_PROFILER_DIR` in `envs.py`, and **no
+`start_profile` handler in `entrypoints/openai/api_server.py`**. The only
+profiling env vars this tree has are `VLLM_CUSTOM_SCOPES_FOR_PROFILING` and
+`VLLM_NVTX_SCOPES_FOR_PROFILING`. So the `/start_profile` endpoint the whole
+`PROFILE=1` design depends on was never registered — the server ignored the var
+and warned about it.
+
+**2. `--profile` never reached the client either** (`profile=False` in the
+argument dump), so even a working endpoint would not have been driven.
+
+Artifacts confirm it: the `agentic_*` artifact is 52 KB and contains no traces.
+
+**The in-process torch profiler is a dead end on this stack.** The correct tool
+here is `rocprofv3`, which IS in the image (`/opt/rocm/bin/rocprofv3`, plus
+`rocprofv3-attach`), and the `VLLM_NVTX_SCOPES_FOR_PROFILING` hooks exist to
+annotate scopes for exactly that. Rewiring `PROFILE=1` to wrap the server in
+rocprofv3 is the next step; the torch-profiler branch should be deleted, not
+retried.
+
+### Incidental datapoint (not comparable to the ledger)
+
+The run still executed a clean C72 8k/1k fixed-len pass: **72/72 successful**,
+duration 65.02 s, 589,824 in / 18,432 out, TPOT mean 172.61 ms, TTFT mean
+20,323.6 ms, output 283.47 tok/s. Do **not** compare this to the 10,632 agentic
+figure — different lengths, no prefix-cache reuse, and the output-token metric
+is not the ledger's throughput-per-GPU metric.
+
+Engine init took 533.72 s (weights + cudagraph capture of the 1..80 ladder).
