@@ -67,7 +67,7 @@ else
 # simple_kv_offload/manager, and loses an online-quantization subsystem that C72
 # demonstrably does not need. Numerics-affecting for C1 -> GSM8K gates it.
 K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c16_c52_current.patch}"
-REQUIRE_K3_OVERLAY="${REQUIRE_K3_OVERLAY:-0}"
+REQUIRE_K3_OVERLAY="${REQUIRE_K3_OVERLAY:-1}"
 K3_OVERLAY_APPLIED=0
 
 # ---- Overlay ablation (A/B/C/D/E) -------------------------------------------
@@ -85,7 +85,7 @@ K3_OVERLAY_APPLIED=0
 # OVERLAY_GROUPS=ABCDE (default) is equivalent to the monolith. Drop a letter to
 # ablate that group. Purpose: prune to the minimum set that preserves 10,632, so
 # there is less to carry forward and upstream.
-K3_OVERLAY_SPLIT="${K3_OVERLAY_SPLIT:-0}"
+K3_OVERLAY_SPLIT="${K3_OVERLAY_SPLIT:-1}"
 OVERLAY_GROUPS="${OVERLAY_GROUPS:-ABCDE}"
 if [ "$K3_OVERLAY_SPLIT" = "1" ]; then
     SITE_PKGS=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')
