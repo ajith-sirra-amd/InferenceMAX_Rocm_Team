@@ -3532,3 +3532,46 @@ the same signature as T216.
 **Reverted:** the DCP>1 branch goes back to a flat `MAX_NUM_SEQS=80`. Also
 corrects `old.sa.sh`, whose `conc + conc/4` rule would have set mns 65 at C52 --
 now known to be the wrong direction.
+
+## T220 — BARE nightly C32: 1,843 tok/s/GPU, err 16.92%. Curve is NON-MONOTONIC.
+
+Run 33526287751, job 99917930731. Bare `nightly-7c5dc571`, mns 80, chunk 16384,
+dcp 8. 174 successful / 274, 93 error dropped, ITL 32.45 ms.
+
+(First attempt, run 33518789432, never started: `GPUs still draining prior job's
+memory after 15min`. VRAM sat at 99% with 8 orphaned KFD allocations whose PIDs
+did not exist on the host; it drained on its own after ~1 hour, well past the
+harness's 15-minute gate. Worth remembering: a failed `wait_for_amd_gpu_clean`
+is not necessarily fatal, it just needs more patience than the runner allows.)
+
+### The bare-nightly agentic curve, complete
+
+| conc | tok/s/GPU | error rate | run |
+|---|--:|--:|---|
+| 1 | 1,222 | 0.54% | T217 |
+| 16 | **3,591** | 10.05% | T218 |
+| **32** | **1,843** | **16.92%** | **T220** |
+| 52 | — (starves) | 100% | T216 |
+
+**Throughput peaks at C16 and then collapses.** C32 is *half* of C16 despite
+double the concurrency, and the error rate keeps climbing. This is not a smooth
+capacity ceiling -- it is a breakdown that begins somewhere between 16 and 32
+and completes by 52.
+
+**Revision to the T218 reading.** I described the degradation as "progressive"
+and inferred a capacity/scheduling limit. With C32 in hand that is too generous:
+throughput going *backwards* while errors rise is not what a saturated-but-
+healthy system does. Something is actively failing as lane count grows, and the
+10% at C16 was already the leading edge of it, not a healthy system at its
+limit.
+
+**Practical answer to "can we ship stock upstream?": no, not for this workload.**
+The usable ceiling is ~C16, and even there 10.05% is exactly aiperf's abort
+threshold. Against the patched stack's 10,646 tok/s/GPU at C72, bare upstream
+tops out at 3,591 at C16 -- and the comparison is not even like-for-like, since
+one is a clean run and the other is at the error cutoff.
+
+**What the overlay is worth, stated precisely:** it is the difference between a
+usable ceiling of C16-with-10%-errors and a clean C72 at 10,646. That is a much
+sharper claim than "the overlay is worth a few percent", which is what the C1
+result alone suggested.

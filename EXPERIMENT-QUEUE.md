@@ -740,3 +740,27 @@ C52 is not being re-run -- T216 already measured it with mns 80, and T219
 eliminated the mns confound in the protective direction. C32 locates the usable
 ceiling for a stock upstream image, which is the practical question behind
 "can we ship without the overlay".
+
+
+## Bare-nightly evaluation: CLOSED
+
+| conc | tok/s/GPU | err | verdict |
+|---|--:|--:|---|
+| 1 | 1,222 | 0.54% | clean; C1 fixed-len TPOT 8.52 ms BEATS the patched stack |
+| 16 | 3,591 | 10.05% | peak, but at aiperf's abort threshold |
+| 32 | 1,843 | 16.92% | throughput HALVES, errors climb |
+| 52 | starves | 100% | no result |
+
+GSM8K 0.985 at C52 (T215) -- numerics are fine; the failure is throughput/
+scheduling, not correctness.
+
+**Conclusion: stock upstream is not shippable for the agentic workload.** Usable
+ceiling ~C16. The overlay's value = (clean C72 @ 10,646) vs (C16 @ 3,591 with
+10% errors).
+
+**Open, in priority order:**
+1. Why does it break between C16 and C32? Candidate: hybrid-cache geometry
+   (#53917, still open) under DCP with many lanes.
+2. v4 remains the shipping image. `aigmkt/kimi-k3-vllm:v4` is pushed.
+3. Overlay A/B/C/D/E ablation on the v4 base -- still unrun, and now better
+   motivated: it would say which group buys the C16->C72 range.
