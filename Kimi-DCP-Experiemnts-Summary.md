@@ -2782,3 +2782,41 @@ prefix-cache reuse, where the real agentic workload serves 93.3% of prompt
 tokens from cache. Read TPOT/ITL from this run, not TTFT.
 
 **Next: T201 — identical, chunk 8192. Arm B.**
+
+## T201 — C1 chunk 8192. TPOT tail collapses, TTFT pays for it.
+
+Run 33465267859, job 99723746464. Identical to T200 except
+`[chunk] max_num_batched_tokens=8192`. Same 4 prompts, byte-identical workload
+(671,817 in / 2,120 out both runs). 4/4 successful, zero faults.
+
+| C1, agentic-band 214k | chunk 16384 (T200) | chunk 8192 (T201) | Δ |
+|---|--:|--:|--:|
+| **Mean TPOT** | 9.70 ms | **8.92 ms** | **−8.0%** |
+| Median TPOT | 8.97 ms | 8.96 ms | ~0 |
+| P90 TPOT | 11.38 ms | **9.12 ms** | −19.9% |
+| P99 TPOT | 12.31 ms | **9.18 ms** | **−25.4%** |
+| P99.9 TPOT | 12.40 ms | 9.18 ms | −26.0% |
+| Mean ITL | 39.38 ms | 35.80 ms | −9.1% |
+| **Mean TTFT** | 13,663.8 ms | **15,772.4 ms** | **+15.4%** |
+| Median TTFT | 16,823.8 ms | 19,442.2 ms | +15.6% |
+| duration | 75.53 s | 82.07 s | +8.7% |
+
+**1. The median is unchanged; the whole win is in the tail.** 8.97 → 8.96 ms at
+p50, but p99 drops 12.31 → 9.18. Chunk 8192 does not make decode faster — it
+stops decode from being *stalled* behind an oversized prefill chunk. T200's
+spread p50→p99 was 3.34 ms; T201's is 0.22 ms. That is a near-flat distribution.
+
+**2. Real tradeoff, opposite sign to C72.** Prefill throughput drops (TTFT
++15.4%, duration +8.7%) because a 214k prompt is now sliced into 26 chunks
+instead of 13. At C72 (T199) chunk was flat in both directions because 72
+concurrent requests keep the batch full regardless of slice size; at C1 there is
+exactly one request, so the slice size *is* the interleaving policy.
+
+**3. This is the first knob on this stack that is not flat.** It is also
+per-concurrency, which matches the standing guidance that chunk/mns/ladder need
+not be bound across C1 and C52+. Recommendation: **chunk 8192 at C1** (interactivity
+is the C1 objective and p99 TPOT is what a user feels), **16384 at C72** (T199
+says it does not matter, and larger keeps prefill cheaper).
+
+**Next: T202 — `PROFILE=1` on the C72 config.** Config tuning is exhausted; this
+is the first look at where the 14.9% actually goes.

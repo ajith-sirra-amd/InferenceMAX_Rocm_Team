@@ -330,20 +330,40 @@ Headline **10,632 tok/s/GPU** = **-14.9%** from 12,500, **+18.8%** over SA's
 8,953. GSM8K 0.995 (4-file pr-stack) / 0.99 (5-file). The remaining gap is not
 in the launcher's argument space.
 
-**T200 done: C1 nightly, agentic-band, chunk 16384 -> TPOT 9.70 ms mean /
-8.97 ms median, 4/4 clean.** First C1 number on this stack at 214k lengths.
-Not comparable to the 7.41 ms T180 baseline (that was 8k ISL on aigmkt).
+**C1 chunk A/B is DONE and is the first non-flat knob on this stack.**
 
-**Now running: T201 -- identical C1 fixed-len, chunk 8192.** Arm B. One
-variable. At C1 the prefill is a single 214k prompt, so unlike C72 the chunk
-actually gates how the prefill is sliced -- this is where 8k-vs-16k has a real
-mechanism to matter, on TTFT if not on TPOT.
+| C1, 214k agentic-band | chunk 16384 (T200) | chunk 8192 (T201) |
+|---|--:|--:|
+| Mean TPOT | 9.70 ms | **8.92 ms** |
+| Median TPOT | 8.97 ms | 8.96 ms |
+| P99 TPOT | 12.31 ms | **9.18 ms** |
+| Mean TTFT | **13,663.8 ms** | 15,772.4 ms |
 
-**Queue after T201:**
-1. `PROFILE=1` hotspot run on the C72 config. Wired but never executed. Per
-   T199 this is the only remaining path to the last 14.9%.
+Median identical, p99 −25.4%, TTFT +15.4%. Chunk 8192 does not speed decode up,
+it stops decode stalling behind an oversized prefill chunk. Opposite sign to
+C72, where chunk was flat both ways (T199) because 72 concurrent requests keep
+the batch full regardless of slice size.
+
+**Standing recommendation: chunk 8192 at C1, 16384 at C72.** Per-concurrency,
+which matches the guidance that chunk/mns/ladder need not be bound across
+C1 and C52+.
+
+**Now running: T202 -- `PROFILE=1` hotspot run on the C72 config.** First
+execution of the profile path. `TEST_MODE=perf` (8k/1k lengths), 72 prompts =
+one concurrency wave, `TEST_OSL=256` to keep eight per-rank traces inside the
+artifact upload limit. Traces land in `$RESULT_DIR/torch_profile` and the whole
+RESULT_DIR is uploaded as the `agentic_*` artifact (confirmed: that artifact is
+exactly RESULT_DIR).
+
+Caveat to read it with: 8k fixed-len gets none of the agentic 93.3% prefix-cache
+reuse, so prefill will be over-represented relative to the real workload.
+Steady-state decode at batch 72 is the part that transfers.
+
+**Queue after T202:**
+1. Act on the profile -- kernel or scheduler work. This is the only remaining
+   path to the last 14.9%; config tuning is exhausted (conc, mns, chunk all flat
+   at C72).
 2. Attribution: C64 without #50813 (T193 moved two variables).
-
 
 ## Queue — REPRIORITISED 2026-08-29 against the T124 profile
 

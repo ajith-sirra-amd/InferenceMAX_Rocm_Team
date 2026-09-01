@@ -158,12 +158,17 @@ export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600
 # Also caps the prompt count: the perf pass defaults to 645 prompts at C52, and
 # a torch trace over that is tens of GB and unreadable. PROFILE_PROMPTS defaults
 # to one concurrency wave, which is enough to see steady-state decode hotspots.
-if [ "${PROFILE:-0}" = "1" ]; then
+if [ "${PROFILE:-1}" = "1" ]; then
     export VLLM_TORCH_PROFILER_DIR="${VLLM_TORCH_PROFILER_DIR:-$RESULT_DIR/torch_profile}"
     mkdir -p "$VLLM_TORCH_PROFILER_DIR"
     TEST_NUM_PROMPTS="${TEST_NUM_PROMPTS:-${PROFILE_PROMPTS:-$CONC}}"
     export TEST_NUM_PROMPTS
-    echo "[profile] ENABLED dir=$VLLM_TORCH_PROFILER_DIR prompts=$TEST_NUM_PROMPTS conc=$CONC"
+    # Also shorten the decode leg. Eight TP ranks each write their own trace for
+    # the whole benchmark; at osl 1024 that is multi-GB and will not survive the
+    # artifact upload. 256 steps is still hundreds of steady-state decode
+    # iterations at batch 72 -- far more than needed to rank hotspots.
+    export TEST_OSL="${TEST_OSL:-256}"
+    echo "[profile] ENABLED dir=$VLLM_TORCH_PROFILER_DIR prompts=$TEST_NUM_PROMPTS osl=$TEST_OSL conc=$CONC"
 else
     echo "[profile] disabled"
 fi
@@ -286,8 +291,8 @@ fi
 # N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
 # against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
 # clear peak at 8192 and both sides are downhill.
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
-echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-16384}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-16384} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
 # 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
 # engine, but still the wrong sign after 175 commits. The host prep the profile
@@ -525,7 +530,7 @@ elif [ "${TEST:-1}" = "1" ]; then
     # against the SAME server, so we pay the ~2.5 min weight load once instead of
     # twice. func runs first and is short; if the engine is broken we find out in
     # minutes. perf writes the official result file the CI wrapper looks for.
-    TEST_MODE="${TEST_MODE:-func}"
+    TEST_MODE="${TEST_MODE:-perf}"
     if [ "$TEST_MODE" = "both" ]; then
         echo "[test-mode] both: functionality pass then perf pass on one server"
         FUNC_ISL="${FUNC_ISL:-214000}"; FUNC_OSL="${FUNC_OSL:-874}"
