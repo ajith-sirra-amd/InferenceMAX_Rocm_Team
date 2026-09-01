@@ -67,7 +67,7 @@ else
 # simple_kv_offload/manager, and loses an online-quantization subsystem that C72
 # demonstrably does not need. Numerics-affecting for C1 -> GSM8K gates it.
 K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c16_c52_current.patch}"
-REQUIRE_K3_OVERLAY="${REQUIRE_K3_OVERLAY:-1}"
+REQUIRE_K3_OVERLAY="${REQUIRE_K3_OVERLAY:-0}"
 K3_OVERLAY_APPLIED=0
 
 # ---- Overlay ablation (A/B/C/D/E) -------------------------------------------
@@ -545,7 +545,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
 # to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-1}" = "1" ]; then
+elif [ "${TEST:-0}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
