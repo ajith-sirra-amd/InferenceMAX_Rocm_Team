@@ -545,7 +545,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
 # to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-0}" = "1" ]; then
+elif [ "${TEST:-1}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does

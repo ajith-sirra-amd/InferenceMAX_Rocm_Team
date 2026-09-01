@@ -657,3 +657,35 @@ simply lacks a low-conc code path the `c1` cut had, and the gap is structural at
 9.69 ms mean unless we carry two overlays.
 
 Blocked until T206 (C72 on v4) finishes -- GPUs busy.
+
+## Bare new-nightly evaluation (no overlay, no pr-stack)
+
+Base: `vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb`
+(built 2026-09-01 05:31). **This is the first nightly containing #51705** --
+merged 2026-08-31 17:42, five days after our v4 base `46638857` was cut.
+Ancestry-checked against merge commit `dbb7fffddb`: 46638857 is *behind*,
+7c5dc571 is *ahead*.
+
+`REQUIRE_K3_OVERLAY=0`, `APPLY_PR_STACK` inert (overlay never applies, so the
+pr-stack gate is skipped). Nothing external is added.
+
+**Why this matters:** if a stock public nightly reaches useful throughput with
+zero patches, the distribution problem in UPSTREAM-STATUS.md largely dissolves --
+no carried overlay, no self-built image, reproducible by anyone.
+
+**Order (cheap-fail-first, per user):**
+
+| # | run | what it answers |
+|---|---|---|
+| 1 | **C1 functional** (TEST=1, agentic-band lengths, 4 prompts) | does it serve at all with MTP + no patches? |
+| 2 | **C52 functional** | does it serve at high conc with DCP=8? |
+| 3 | **GSM8K limit 200 @ C52** | are the numerics sound without the overlay? |
+| 4 | **Agentic perf @ C72** | the number -- vs v4's 10,646 |
+
+T212 (agentic C72 on this base) was dispatched first by mistake and cancelled
+~20 min in; it is superseded by step 4.
+
+**Known gaps vs the overlay, expect these to cost something:** `amd/mla.py` and
+`v1/attention/ops/rocm_aiter_mla_reduce.py` are new files the overlay adds that
+do not exist upstream at any ref, and the `_DCPA2ABufferPool` fix is in neither
+nightly (`dcp.py` is byte-identical, 44,932 B, in both).
