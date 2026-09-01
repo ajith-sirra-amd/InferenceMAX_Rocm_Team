@@ -3412,3 +3412,48 @@ where it matters most.
 
 **Not re-dispatched blind.** Next: C1 agentic perf on the same bare stack, which
 is the other requested point and is known-healthy at C1.
+
+## T217 — BARE nightly, C1 agentic replay: 1,222 tok/s/GPU, 184/187, err 0.54%.
+
+Run 33501004218, job 99834147585. Bare `nightly-7c5dc571`,
+`[k3-overlay] applied=0 conc=1`, `[dcp] DISABLED`, `[mns] 1`,
+`graphs: 1..9`, `[chunk] 8192`. MTP on.
+
+| | value |
+|---|--:|
+| **Throughput per GPU** | **1,222 tok/s** |
+| Requests | 184 successful / 187 (3 error dropped) |
+| Request error rate | 0.54% |
+| ITL mean | 6.33 ms |
+| TTFT mean | 5,201.9 ms |
+| out-tok/s/user mean | 1,138.0 |
+
+**C1 agentic PASSES on the bare nightly.** This is the first time a C1 *agentic
+replay* has completed anywhere in this ledger -- the C1 agentic workload failed
+19 consecutive times on aigmkt with a read-only-page memory fault, and was never
+retried successfully on the patched nightly stack either. A stock upstream image
+with zero patches ran it clean.
+
+The 1,222 tok/s/GPU is not comparable to the C52/C72 throughput figures: at
+concurrency 1 there is one lane, so per-GPU throughput is bounded by single-
+stream decode, not by batch efficiency. It is the correct C1 agentic number, not
+a regression against 10,646.
+
+ITL 6.33 ms mean is notably better than the 34-39 ms seen in the C1 fixed-len
+probes, because the replay hits the prefix cache the fixed-len harness cannot.
+
+### Bare-nightly evaluation: COMPLETE
+
+| gate | conc | result |
+|---|---|---|
+| agentic-band fixed-len | 1 | **PASS** TPOT 8.52 ms -- best C1 in ledger |
+| **agentic replay** | **1** | **PASS 1,222 tok/s/GPU**, err 0.54% |
+| fixed-len func | 52 | PASS 104/104 |
+| GSM8K | 52 | PASS 0.985 |
+| **agentic replay** | **52** | **FAIL -- starves, 0 successful** |
+
+**The verdict is split by concurrency, not by capability.** Unpatched upstream
+is fully healthy at C1 -- better than the patched stack, in fact -- and is fine
+at C52 for everything except the agentic replay, where it starves. The overlay's
+value is therefore concentrated in exactly one place: sustaining the
+prefix-cache-heavy agentic workload at high concurrency.
