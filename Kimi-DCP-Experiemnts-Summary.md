@@ -3002,3 +3002,50 @@ The job reports `failure` on the eval-only harness check, as it always does.
 
 **Conclusion: C1's gates are liveness + TPOT, never GSM8K.** Liveness is now
 banked for the consolidated overlay. TPOT on v4 is next.
+
+## T205 — v4 image works. Startup 8x faster. But C1 TPOT REGRESSES vs the c1 overlay.
+
+Run 33473942262, job 99749222889. First run on `kimi-k3-vllm:v4`. The local-tag
+path worked end to end -- no registry pull, `.Id` digest, `--pull never`:
+
+```
+[k3-overlay] baked into image -- runtime patching SKIPPED
+[pr-stack]   baked into image -- runtime patching SKIPPED
+[k3-image] k3-image: kimi-k3-vllm:v4
+[k3-image] pr-stack: 4 files (#53940 a4w4-flydsl)
+[k3-image] runtime-patching: none
+```
+
+Same workload as T200/T201 (4 requests, 671,817 in / 2,120 out), so directly
+comparable.
+
+| C1, agentic-band 214k, chunk 8192 | T201 (c1 overlay, runtime) | **T205 (c16_c52, baked v4)** | Δ |
+|---|--:|--:|--:|
+| Mean TPOT | **8.92 ms** | 9.69 ms | **+8.6%** |
+| Median TPOT | **8.96 ms** | 9.13 ms | +1.9% |
+| P90 TPOT | **9.12 ms** | 10.99 ms | +20.5% |
+| P99 TPOT | **9.18 ms** | 11.70 ms | **+27.5%** |
+| Mean ITL | 35.80 ms | 39.21 ms | +9.5% |
+| Mean TTFT | 15,772 ms | 14,971 ms | −5.1% |
+| duration | 82.07 s | 80.67 s | −1.7% |
+
+**1. The C1 TPOT regression is real and it is the overlay, not the image.**
+Two things changed vs T201 -- the overlay cut (c1 -> c16_c52) and the pr-stack
+(5 -> 4 files) -- but #50813 is dead code for this model, so the pr-stack change
+cannot be responsible. That leaves the overlay. **The retired `c1` cut was
+genuinely better for C1 latency**, and the "one overlay for all concurrencies"
+consolidation costs ~8.6% mean and ~27% p99 TPOT at C1.
+
+**2. Engine init: 371.95 s.** Identical to T200 (375 s) and T201 (335 s) on the
+c1 cut -- and *nothing like* T204's ~49 minutes on the SAME c16_c52 overlay
+applied at runtime. So the 49-minute compile was an artefact of the runtime
+`patch` path, not of the overlay's kernels. **Baking the patches removes it.**
+That is a concrete operational win for v4 independent of throughput: ~8x faster
+time-to-ready, repeatable.
+
+**3. v4 is validated as an image.** Manifest read correctly, both layers
+short-circuited, 4/4 requests clean, zero faults.
+
+**Open decision.** If C1 latency matters, the recipe should keep a per-concurrency
+overlay (c1 cut at C<=4) and v4 needs a second baked variant. If only the
+high-conc throughput number matters, v4 as built is fine. C72 on v4 next.
