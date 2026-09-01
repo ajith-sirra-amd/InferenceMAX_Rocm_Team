@@ -2860,3 +2860,43 @@ figure — different lengths, no prefix-cache reuse, and the output-token metric
 is not the ledger's throughput-per-GPU metric.
 
 Engine init took 533.72 s (weights + cudagraph capture of the 1..80 ladder).
+
+## T203 — rocprofv3 deadlocks the engine. Second profiling approach dead.
+
+Run 33467728728, job 99731001740. **FAILED.** rocprofv3 attached fine and opened
+its CSVs (`/workspace/results/rocprof/k3_kernel_{stats,trace}.csv`, HSA 8.20.3,
+all 8 ranks) — the profiler itself works. The engine did not survive it.
+
+```
+queue_interposition.cpp:374  Async signal handler still waiting on signal
+                             {.handle=...} after 59768832 iterations
+[rank0..7] ProcessGroupNCCL.cpp:1987  collective timeout,
+                             last enqueued NCCL work 470040, last completed 470039
+RuntimeError: Engine core initialization failed
+```
+
+**Root cause: rocprofv3's HSA queue interposition vs. cudagraph capture.** The
+profiler interposes on every HSA queue submission; its async signal handler
+spins on a signal that never clears, all 8 ranks stall one collective apart
+(470040 enqueued / 470039 completed), and RCCL declares a collective timeout.
+The engine died in `WorkerProc.wait_for_ready` — it never finished capturing the
+1..80 ladder, let alone served a request. Total wasted wall-clock 1,384 s.
+
+Note it is *capture* that breaks, not steady-state: the failure is inside engine
+init, at the point where 80 graph sizes each replay DCP a2a collectives.
+
+**Second design killed. Both in-tree profiling paths are now ruled out:**
+
+| approach | outcome |
+|---|---|
+| torch profiler (T202) | endpoint does not exist on this nightly |
+| rocprofv3 whole-process (T203) | queue interposition deadlocks RCCL during capture |
+
+`rocprofv3-attach` remains theoretically possible (attach after
+`wait_for_server_ready`, so capture is skipped) but it takes a single PID and
+vLLM's 8 ranks are separate worker processes, and the same interposition would
+still sit under the DCP a2a collectives during decode. Low confidence, high cost
+per attempt. **Profiling is parked** rather than iterated on blind.
+
+Also worth fixing if it is ever revisited: all 8 ranks were writing the same two
+filenames, so the CSVs would have clobbered each other anyway.

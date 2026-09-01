@@ -8,7 +8,7 @@ wait_for_amd_gpu_clean
 # chunk 16384) is a large numerics change that went straight to throughput with
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
-export EVAL_ONLY="${EVAL_ONLY:-false}"
+export EVAL_ONLY="${EVAL_ONLY:-true}"
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -61,11 +61,12 @@ if [ -f /etc/k3-image-manifest ]; then
     echo "[pr-stack] baked into image -- runtime patching SKIPPED"
     sed 's/^/[k3-image] /' /etc/k3-image-manifest
 else
-if [ "$CONC" -le 4 ]; then
-    K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c1_current.patch}"
-else
-    K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c16_c52_current.patch}"
-fi
+# ONE overlay for every concurrency, matching kimi-k3-vllm:v4. The c1 cut is
+# retired: it is a different, older snapshot, not a C1 tuning. Folding C1 onto
+# c16_c52 gains latent_moe_runner, the KDA chunk kernels and a much newer
+# simple_kv_offload/manager, and loses an online-quantization subsystem that C72
+# demonstrably does not need. Numerics-affecting for C1 -> GSM8K gates it.
+K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c16_c52_current.patch}"
 REQUIRE_K3_OVERLAY="${REQUIRE_K3_OVERLAY:-1}"
 K3_OVERLAY_APPLIED=0
 if [ -f "$K3_OVERLAY_PATCH" ]; then
@@ -182,7 +183,7 @@ export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600
 # Still caps the workload: PROFILE_PROMPTS defaults to one concurrency wave and
 # TEST_OSL to 256, because the trace scales with kernel count, not wall-clock.
 PROFILE_WRAP=()
-if [ "${PROFILE:-1}" = "1" ]; then
+if [ "${PROFILE:-0}" = "1" ]; then
     PROFILE_OUT="${PROFILE_OUT:-$RESULT_DIR/rocprof}"
     mkdir -p "$PROFILE_OUT"
     export VLLM_NVTX_SCOPES_FOR_PROFILING=1
