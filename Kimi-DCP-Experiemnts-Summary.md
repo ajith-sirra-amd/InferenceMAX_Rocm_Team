@@ -3692,3 +3692,54 @@ The interesting runs are still ahead. A and B together are only 8 KB of the
 that the bare-nightly collapse (T216-T220) points at.
 
 **Next: C-out (ABDE).**
+
+## T224 — C-out (ABDE) FAILS TO START. C and E are coupled; leave-one-out on C is invalid.
+
+Run 33566764806, job 100051676082. **Engine never started.**
+
+```
+ERROR [registry.py:1075] Error in inspecting model architecture
+  'KimiK3ForConditionalGeneration'
+ImportError: cannot import name 'get_mamba_prefill_checkpoint_position'
+  from 'vllm.v1.kv_cache_interface'
+```
+
+Confirmed by grepping the split patches -- the symbol is **defined in C** and
+**imported by E**:
+
+```
+C_kv_offload_cache_mgr.patch:+def get_mamba_prefill_checkpoint_position(...)
+E_kimi_k3_model_path.patch: +    get_mamba_prefill_checkpoint_position
+```
+
+**Correction to the T221 control write-up.** I verified each group applies
+independently on a pristine tree and concluded "any subset is a legal
+experiment". That verification was about `patch(1)` succeeding -- it says
+nothing about *runtime* symbol dependencies. The groups are patch-independent
+but **not** import-independent. Dropping C while keeping E is not a config, it
+is a broken install.
+
+**What this means for the ablation:**
+
+- **C cannot be leave-one-out tested against ABCDE.** The only valid tests
+  involving C are C+E dropped together (ABD), or a re-cut of the split that
+  moves the shared symbol.
+- The A and B results (T222, T223) are unaffected -- both started cleanly and
+  ran to completion, so their −0.34% / −0.08% stand.
+- D and E leave-one-out are still worth attempting, but each may hit the same
+  class of failure. The right expectation now is that **the overlay is a
+  dependency graph, not five detachable modules**, which is itself a finding
+  about how much of it could be upstreamed piecemeal.
+
+**Ablation status:**
+
+| grp | Δ at C72 | verdict |
+|---|--:|---|
+| A | −0.34% | neutral for throughput; keep (correctness fix) |
+| B | −0.08% | inert at C72; required at C1 |
+| **C** | **n/a** | **cannot be dropped alone -- E imports from it** |
+| D | ? | next |
+| E | ? | pending |
+
+**Next: D-out (ABCE)**, which touches the MLA backend and has no known symbol
+shared with the other groups. Not re-dispatching C-out.
