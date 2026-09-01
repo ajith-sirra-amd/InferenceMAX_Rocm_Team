@@ -3622,3 +3622,35 @@ this 10,756 baseline:
 C is the one to watch: the bare-nightly curve (T216-T220) showed upstream
 collapsing above C16 on the agentic workload, and C is the KV-offload/cache
 group whose upstream PR #53917 is still open.
+
+## T222 — ablation A-out (BCDE): 10,719 tok/s/GPU. Group A is NEUTRAL for throughput.
+
+Run 33544848626, job 99979890632. `[overlay-split] groups=BCDE applied=4
+failed: none`, pr-stack 4 files, mns 80, chunk 16384, dcp 8. 2,254 successful /
+2,407, err 0.22%, ITL 108.32 ms.
+
+| C72 | groups | tok/s/GPU | err |
+|---|---|--:|--:|
+| T221 control | ABCDE | 10,756 | 0.18% |
+| **T222** | **BCDE** | **10,719** | 0.22% |
+| Δ | −A | **−0.34%** | — |
+
+**A (DCP a2a buffer pool) costs nothing measurable when removed.** −0.34% is
+inside the replication band (0.02%-0.20% on identical stacks, and the T195/T206/
+T221 spread was 1.2% across near-identical ones).
+
+**Do NOT conclude A is droppable.** A is a *correctness* fix, not a perf
+feature: it keeps capture-time RCCL send/recv buffers alive so a FULL cudagraph
+cannot replay against freed addresses. The failure it prevents is a memory
+aperture violation, which either happens or does not -- it would never show up as
+a few percent of throughput. This run says only that carrying A is free, which
+is an argument for keeping it, not dropping it.
+
+For upstreaming this is the good outcome: A is the smallest group (+48/−10, one
+file), it is the one with the clearest standalone bug story, and it now has
+evidence that it does not perturb throughput. That makes it the cleanest
+first PR of the five.
+
+**Next: B-out (ACDE).** B is spec-decode cudagraph and spec is OFF at C72, so
+the expectation is another neutral result -- which would make B droppable from
+the *high-concurrency* image, though not from C1 where MTP runs.
