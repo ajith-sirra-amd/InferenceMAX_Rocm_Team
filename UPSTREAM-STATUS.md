@@ -135,3 +135,75 @@ a group without knowing what it is worth.
    #54546, #54639) rather than filing competing patches.
 4. Accept that group E (the Kimi-K3 AMD model path) is the hardest and may
    remain vendor-carried for some time.
+
+---
+
+# THE ACTUAL PR LIST — from Hyukjoon (supersedes my reverse-engineered guesses)
+
+Hyukjoon supplied the manifest. It is **not** in the patch file (I grepped: zero
+`#NNNNN` / `pull/` / `Signed-off-by` hits), which is why my earlier
+symbol-matching table was partly wrong. That table is superseded by this.
+
+## Shared stack — all arms
+
+| PR | purpose | merged? | in 46638857 (v4 base) | in 7c5dc571 |
+|---|---|---|---|---|
+| **#51705** | Kimi-K3 DSpark/DCP attention and verification | **yes** 08-31 | **no** | **yes** |
+| **#53598** | Per-group hybrid-cache geometry and DCP prefix lookup | **yes** 08-31 | **no** | **yes** |
+| **#52707** | Prevent negative external-block allocation | **yes** 08-28 | **no** | **yes** |
+| #53917 | Hybrid-cache geometry, mamba replay boundaries, failed-load recovery | open | — | — |
+| #52494 | Fuse MLA q/kv RMSNorm | open | — | — |
+| #52968 | attn res + sigmoid_mul + conv fusions | open | — | — |
+| #53166 | AITER MLA chunked-context gather and KV-index construction | open | — | — |
+| #54165 / #54163 | Preserve hybrid-mamba cache hits with DSpark/DFlash + KV connector | open | — | — |
+| #50618 | Densify strided activations before ROCm wvSplitKQ (python hunk only) | open | — | — |
+
+## C1-specific
+
+| PR | purpose | merged? |
+|---|---|---|
+| #51392 | Online quantization on top of a pre-quantized checkpoint | open |
+| #54248 | Per-token FP8 input for AITER PTPC linears | open |
+| #54254 | Fused KDA gated RMSNorm + per-token-FP8 o_proj | open |
+
+**This confirms the C1/C52 split empirically.** I found by diffing that the `c1`
+cut uniquely carries `layers/quantization/online/*`, `config/quantization.py`
+and `rmsnorm_gated_fp8_per_token.py` — those are exactly #51392, #54248, #54254.
+It also confirms the `ATOM#1752` port note found in the c1 patch belongs to
+#54254.
+
+## C16 / C52-specific
+
+| PR | purpose | merged? |
+|---|---|---|
+| **#52033** | ROCm dual-stream shared-expert (multi-stream forced OFF in the selected runs) | **yes** 08-30 |
+| #51437 | Overlap shared all-reduce with routed up-projection, local 880-token guard | open |
+
+## C16 compile / CPRR candidates (not release-clean)
+
+| ref | purpose |
+|---|---|
+| #52190 | Kimi-K3 torch.compile enablement, safe custom-op boundaries |
+| AITER #4521 | Newer MLA dispatcher, ABI, FP8 CPRR runtime base |
+| AITER #4964 | GQA/QH32 CPRR kernel dispatch, replayed on #4521 |
+| #53301 | Cross-group attention metadata reuse — later align3 candidate |
+
+## What this changes
+
+**Four of the seventeen are merged, and all four are in `7c5dc571` but NOT in
+our v4 base `46638857`** — ancestry-checked against each merge commit:
+
+```
+#51705  46638857=behind   7c5dc571=ahead
+#53598  46638857=behind   7c5dc571=ahead
+#52707  46638857=behind   7c5dc571=ahead
+#52033  46638857=behind   7c5dc571=ahead
+```
+
+So moving the base to `7c5dc571` absorbs four carried patches for free,
+including the two DCP-critical ones (#51705, #53598). The remaining thirteen are
+still open and would have to be carried either way.
+
+This also revises the upstreaming picture in section 3: the overlay is not
+mostly-unpublished work. **Most of it has PRs already open.** The blocker is
+review throughput, not authorship — which is a much better position than assumed.
