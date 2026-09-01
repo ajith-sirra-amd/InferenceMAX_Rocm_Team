@@ -3128,3 +3128,45 @@ patching, one overlay for every concurrency.
 
 **Ready for the registry push as `aigmkt/kimi-k3-vllm:v4`** -- pending
 `docker login`, which this host does not have.
+
+## T208 — mns 8 -> 1 KILLS the C1 tail. Spread 2.64 ms -> 0.22 ms.
+
+Run 33484819001, job 99782409056. One variable vs T205: `mns 8 -> 1`, so the
+captured ladder drops from 1..72 to **1..9** and matches the real batch shape.
+`[mns] max_num_seqs=1 conc=1`, `graphs: dense ladder 1..9 (mns=1 x 9 rows)`.
+Same workload, 4/4 clean.
+
+| C1, v4, chunk 8192 | T205 (mns 8, ladder 72) | **T208 (mns 1, ladder 9)** | Δ |
+|---|--:|--:|--:|
+| Mean TPOT | 9.69 ms | **9.06 ms** | **−6.5%** |
+| Median TPOT | 9.13 ms | 9.10 ms | ~0 |
+| P90 TPOT | 10.99 ms | **9.26 ms** | **−15.7%** |
+| P99 TPOT | 11.70 ms | **9.31 ms** | **−20.4%** |
+| P99.9 TPOT | 11.77 ms | **9.32 ms** | −20.8% |
+| **p50→p99.9 spread** | **2.64 ms** | **0.22 ms** | **−92%** |
+| Mean ITL | 39.21 ms | 36.36 ms | −7.3% |
+| Mean TTFT | 14,971 ms | 15,310 ms | +2.3% |
+
+**1. Hypothesis confirmed: the tail was cudagraph-size mismatch, not the
+overlay.** At C1 with MTP the batch is *always* 1 sequence x 9 spec rows -- the
+`[aiter] shape is M:9` lines confirm it directly. Capturing 1..72 meant 63 of 72
+captured sizes were dead, and steps that landed on a mismatched bucket paid for
+it. Capturing exactly 1..9 removes the jitter.
+
+**2. The v4 spread now equals the c1 cut's exactly: 0.22 ms.** That was the
+single distinguishing feature of the retired overlay, and it is reproduced here
+by a config change alone.
+
+| C1 | mean | p99 | p50→p99.9 spread |
+|---|--:|--:|--:|
+| c1 cut, runtime (T201) | 8.92 ms | 9.18 ms | 0.22 ms |
+| v4, mns 8 (T205) | 9.69 ms | 11.70 ms | 2.64 ms |
+| **v4, mns 1 (T208)** | **9.06 ms** | **9.31 ms** | **0.22 ms** |
+
+**3. The overlay penalty was mostly not the overlay.** What looked like a
+27.5% p99 regression from consolidating onto `c16_c52` is now **+1.4% p99 and
++1.6% mean** vs the c1 cut. The retired overlay is worth ~1.5%, not ~27%. The
+rest was an mns default inherited from the high-concurrency path.
+
+**This also revises the earlier "accept 9.69 ms" decision** -- C1 on the single
+v4 image is 9.06 ms, and the one-image recipe now costs almost nothing.
