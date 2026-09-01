@@ -1,0 +1,1592 @@
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/offloading/scheduler.py b/vllm/distributed/kv_transfer/kv_connector/v1/offloading/scheduler.py
+index ebc9b87e12..bc97b8df5a 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/offloading/scheduler.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/offloading/scheduler.py
+@@ -225,7 +225,7 @@ class SchedulerOffloadConfig(NamedTuple):
+ 
+         use_eagle = (
+             vllm_config.speculative_config is not None
+-            and vllm_config.speculative_config.use_eagle()
++            and vllm_config.speculative_config.use_eagle_preserves_target_kv_cache()
+         )
+         if use_eagle and not eagle_groups:
+             eagle_groups = set(range(len(kv_cache_config.kv_cache_groups)))
+diff --git a/vllm/v1/core/block_pool.py b/vllm/v1/core/block_pool.py
+index a8a6c1ca94..20cae6a7cb 100644
+--- a/vllm/v1/core/block_pool.py
++++ b/vllm/v1/core/block_pool.py
+@@ -543,6 +543,27 @@ class BlockPool:
+             )
+         return block_hash_with_group_id
+ 
++    def cache_partial_checkpoint_block(
++        self,
++        request: Request,
++        block: KVCacheBlock,
++        num_tokens: int,
++        kv_cache_group_id: int,
++        block_size: int,
++    ) -> BlockHashWithGroupId | None:
++        """Re-key an exported checkpoint at an interior hash boundary."""
++        if block.is_null:
++            return None
++        removed_hashes = self._remove_cached_block_hashes(block)
++        self._emit_block_removed_events(removed_hashes)
++        return self.cache_partial_block(
++            request=request,
++            block=block,
++            num_tokens=num_tokens,
++            kv_cache_group_id=kv_cache_group_id,
++            block_size=block_size,
++        )
++
+     def _get_partial_block_hash(
+         self,
+         request: Request,
+diff --git a/vllm/v1/core/kv_cache_coordinator.py b/vllm/v1/core/kv_cache_coordinator.py
+index 767ea00334..9ef2abf247 100644
+--- a/vllm/v1/core/kv_cache_coordinator.py
++++ b/vllm/v1/core/kv_cache_coordinator.py
+@@ -11,6 +11,7 @@ from vllm.v1.core.kv_cache_metrics import KVCacheMetricsCollector
+ from vllm.v1.core.kv_cache_utils import (
+     BlockHash,
+     KVCacheBlock,
++    dcp_world_size_for_kv_cache_spec,
+ )
+ from vllm.v1.core.single_type_kv_cache_manager import (
+     CrossAttentionManager,
+@@ -141,7 +142,9 @@ class KVCacheCoordinator(ABC):
+                 block_pool=self.block_pool,
+                 enable_caching=enable_caching,
+                 kv_cache_group_id=i,
+-                dcp_world_size=dcp_world_size,
++                dcp_world_size=dcp_world_size_for_kv_cache_spec(
++                    kv_cache_group.kv_cache_spec, dcp_world_size
++                ),
+                 pcp_world_size=pcp_world_size,
+                 scheduler_block_size=self.scheduler_block_size,
+                 needs_kv_cache_zeroing=self.kv_cache_config.needs_kv_cache_zeroing,
+@@ -506,11 +509,9 @@ class UnitaryKVCacheCoordinator(KVCacheCoordinator):
+             num_prefill_lookahead=num_prefill_lookahead,
+         )
+         self.kv_cache_spec = self.kv_cache_config.kv_cache_groups[0].kv_cache_spec
+-        self.block_size = self.kv_cache_spec.block_size
+-        self.dcp_world_size = dcp_world_size
++        self.dcp_world_size = self.single_type_managers[0].dcp_world_size
+         self.pcp_world_size = pcp_world_size
+-        if dcp_world_size > 1:
+-            self.block_size *= dcp_world_size
++        self.block_size = self.single_type_managers[0].block_size
+         # For models using only Mamba, block_size is set to max_model_len when
+         # prefix caching is disabled, and hash_block_size validation is skipped.
+         assert not enable_caching or (hash_block_size == self.block_size), (
+@@ -634,7 +635,33 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
+             )
+             for g in kv_cache_config.kv_cache_groups
+         )
+-        self.enable_partial_hash_hits = has_partial_mamba_group
++        has_dcp_partial_full_attention_group = dcp_world_size > 1 and any(
++            isinstance(g.kv_cache_spec, FullAttentionSpec)
++            and manager.block_size > hash_block_size
++            for g, manager in zip(
++                kv_cache_config.kv_cache_groups, self.single_type_managers
++            )
++        )
++        self.enable_partial_hash_hits = (
++            has_partial_mamba_group or has_dcp_partial_full_attention_group
++        )
++        speculative_partial_mamba_is_safe = all(
++            not isinstance(g.kv_cache_spec, MambaSpec)
++            or g.kv_cache_spec.num_prefill_checkpoint_blocks > 0
++            for g in kv_cache_config.kv_cache_groups
++        )
++        if (
++            self.enable_partial_hash_hits
++            and num_prefill_lookahead > 0
++            and has_partial_mamba_group
++            and not speculative_partial_mamba_is_safe
++        ):
++            self.enable_partial_hash_hits = False
++            logger.warning_once(
++                "Disabling fine-grained prefix-cache hits for speculative "
++                "decoding because Mamba partial-tail states cannot be safely "
++                "resumed across speculative request-slot churn."
++            )
+         if self.enable_partial_hash_hits:
+             unsupported_partial_hit_managers = {
+                 type(manager).__name__
+@@ -649,6 +676,9 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
+                     "cache managers require block-aligned lookups: %s.",
+                     ", ".join(sorted(unsupported_partial_hit_managers)),
+                 )
++        cache_hit_alignment_tokens = self._cache_hit_alignment_tokens
++        for manager in self.single_type_managers:
++            manager.cache_hit_alignment_tokens = cache_hit_alignment_tokens
+         self.verify_and_split_kv_cache_groups()
+ 
+     @property
+@@ -724,8 +754,31 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
+             return num_tokens
+         return round_down(num_tokens, self.scheduler_block_size)
+ 
++    def _eagle_replay_boundaries(self, request: Request) -> tuple[int, ...]:
++        """Return Mamba states needed after the dense group applies EAGLE."""
++        max_hit_length = round_down(
++            request.num_prompt_tokens - 1,
++            self._cache_hit_alignment_tokens,
++        )
++        replay_boundaries: set[int] = set()
++        for group in self.attention_groups:
++            if not isinstance(group.spec, FullAttentionSpec) or not group.use_eagle:
++                continue
++            manager = self.single_type_managers[group.group_ids[0]]
++            drop_tokens = manager.block_size
++            if (
++                self.enable_partial_hash_hits
++                and manager.supports_fine_grained_hash_lookup
++                and manager.block_size > self.hash_block_size
++            ):
++                drop_tokens = self.hash_block_size
++            if (replay_boundary := max_hit_length - drop_tokens) > 0:
++                replay_boundaries.add(replay_boundary)
++        return tuple(sorted(replay_boundaries))
++
+     def cache_blocks(self, request: Request, num_computed_tokens: int) -> None:
+         cached_num_computed_tokens = self._align_cacheable(num_computed_tokens)
++        eagle_replay_boundaries = self._eagle_replay_boundaries(request)
+         for manager in self.single_type_managers:
+             num_tokens_to_cache = cached_num_computed_tokens
+             # EAGLE groups match one block past each aligned boundary and drop
+@@ -744,14 +797,18 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
+                     num_finalized_computed_tokens,
+                     cached_num_finalized_computed_tokens + manager.block_size,
+                 )
+-            # The manager already knows the fine hit granularity
+-            # (``scheduler_block_size``); retention is passed separately so it
+-            # can keep both the coarse segment tails and the fine replay
+-            # boundary (which needs the fine value).
++            # The manager already knows its cache-hit alignment. Retention is
++            # passed separately so it can keep coarse segment tails and fine
++            # replay boundaries.
+             manager.cache_blocks(
+                 request,
+                 num_tokens_to_cache,
+                 retention_interval=self.retention_interval,
++                extra_reachable_boundaries=(
++                    eagle_replay_boundaries
++                    if isinstance(manager.kv_cache_spec, MambaSpec)
++                    else ()
++                ),
+             )
+ 
+     def find_longest_cache_hit(
+@@ -843,11 +900,12 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
+                     kv_cache_spec=spec,
+                     drop_eagle_block=drop_eagle_block,
+                     alignment_tokens=self._cache_hit_alignment_tokens,
+-                    dcp_world_size=(
+-                        self.dcp_world_size
+-                        if isinstance(spec, FullAttentionSpec)
+-                        else 1
+-                    ),
++                    dcp_world_size=self.single_type_managers[
++                        first_group_id
++                    ].dcp_world_size,
++                    pcp_world_size=self.single_type_managers[
++                        first_group_id
++                    ].pcp_world_size,
+                 )
+                 if drop_eagle_block:
+                     eagle_verified.add(idx)
+@@ -867,14 +925,15 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
+             if is_simple_hybrid:
+                 break
+ 
+-        # Truncate full attention blocks to final hit_length (if present)
+-        first_group = self.attention_groups[0]
+-        if isinstance(first_group.spec, FullAttentionSpec):
+-            group_block_size = self.single_type_managers[
+-                first_group.group_ids[0]
+-            ].block_size
++        # Full attention is downward-closed, so its cached block lists may
++        # have been resolved before a later group reduced the common hit.
++        # Trim every full-attention spec group, including draft/EAGLE groups.
++        for group in self.attention_groups:
++            if not isinstance(group.spec, FullAttentionSpec):
++                continue
++            group_block_size = self.single_type_managers[group.group_ids[0]].block_size
+             num_blocks = cdiv(hit_length, group_block_size)
+-            for group_id in first_group.group_ids:
++            for group_id in group.group_ids:
+                 if (blks := hit_blocks_by_group[group_id]) is not None:
+                     del blks[num_blocks:]
+                     hit_length_by_group[group_id] = hit_length
+@@ -904,6 +963,7 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
+         hit_lengths: list[int] = [0] * num_groups
+ 
+         for spec, group_ids, manager_cls, use_eagle in self.attention_groups:
++            manager = self.single_type_managers[group_ids[0]]
+             blocks, group_hit = manager_cls.find_longest_cache_hit(
+                 block_hashes=block_hashes,
+                 max_length=max_cache_hit_length,
+@@ -912,6 +972,8 @@ class HybridKVCacheCoordinator(KVCacheCoordinator):
+                 kv_cache_spec=spec,
+                 drop_eagle_block=use_eagle,
+                 alignment_tokens=self._cache_hit_alignment_tokens,
++                dcp_world_size=manager.dcp_world_size,
++                pcp_world_size=manager.pcp_world_size,
+             )
+             for gid, blks in zip(group_ids, blocks):
+                 hit_blocks[gid] = blks
+diff --git a/vllm/v1/core/kv_cache_manager.py b/vllm/v1/core/kv_cache_manager.py
+index d1af91b659..971af834ea 100644
+--- a/vllm/v1/core/kv_cache_manager.py
++++ b/vllm/v1/core/kv_cache_manager.py
+@@ -859,13 +859,16 @@ class KVCacheManager:
+ 
+         Returns ``{request_id: [(group_id, block_id, boundary_tokens), ...]}``
+         for the durable boundary blocks of producers' last-prompt-boundary
+-        partial tails. Only mamba "align" groups contribute; empty otherwise.
+-        A KV connector reads the referenced blocks and offloads them so a later
++        partial tails. Mamba "align" groups contribute the CoW block that
++        preserved their boundary state; full-attention groups under DCP
++        contribute the request's own boundary block, which is a durable source
++        because KV below the boundary is append-only. Empty otherwise. A KV
++        connector reads the referenced blocks and offloads them so a later
+         request can hit the sub-block prefix.
+ 
+-        Each handed-off block lives off the request block table, so it is
+-        pinned here and unpinned when the request's blocks are freed — for a
+-        producer with saved tokens, after the connector reports sends done.
++        Each handed-off block is pinned here and unpinned when the request's
++        blocks are freed — for a producer with saved tokens, after the
++        connector reports sends done.
+         """
+         offloads: dict[str, list[tuple[int, int, int]]] = {}
+         for mgr in self.coordinator.single_type_managers:
+diff --git a/vllm/v1/core/kv_cache_utils.py b/vllm/v1/core/kv_cache_utils.py
+index 337a55aa6c..11274f3f89 100644
+--- a/vllm/v1/core/kv_cache_utils.py
++++ b/vllm/v1/core/kv_cache_utils.py
+@@ -647,6 +647,28 @@ def hash_block_tokens(
+     )
+ 
+ 
++def dcp_world_size_for_kv_cache_spec(spec: KVCacheSpec, dcp_world_size: int) -> int:
++    """Return the DCP size that owns this group's block geometry.
++
++    Full-attention KV (including MLA) is sharded across DCP ranks, so prefix
++    hashing and manager ``block_size`` use the process DCP size. Other specs
++    keep replicated per-rank state (Mamba, sliding window, chunked-local) and
++    must keep ``dcp_world_size=1`` even when the process runs with DCP > 1.
++
++    Draft MLA groups on the sharded DSpark path are ``FullAttentionSpec`` /
++    ``MLAAttentionSpec`` and therefore keep the process DCP size. A replicated
++    draft group would need a different spec, not this helper.
++    """
++    if dcp_world_size <= 1:
++        return 1
++    inner = spec
++    if isinstance(spec, UniformTypeKVCacheSpecs):
++        inner = next(iter(spec.kv_cache_specs.values()))
++    if isinstance(inner, FullAttentionSpec):
++        return dcp_world_size
++    return 1
++
++
+ def resolve_kv_cache_block_sizes(
+     kv_cache_config: KVCacheConfig,
+     vllm_config: VllmConfig,
+@@ -1723,7 +1745,7 @@ def _annotate_eagle_groups_deepseek_v4(
+     kv_cache_groups: list[KVCacheGroupSpec],
+ ) -> None:
+     spec_config = vllm_config.speculative_config
+-    if spec_config is None or not spec_config.use_eagle():
++    if spec_config is None or not spec_config.use_eagle_preserves_target_kv_cache():
+         return
+     # Detection uses the merged MLA spec's model_version.
+     if not any(
+diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
+index c373d5cf5c..49a61d70e6 100644
+--- a/vllm/v1/core/sched/scheduler.py
++++ b/vllm/v1/core/sched/scheduler.py
+@@ -53,7 +53,11 @@ from vllm.v1.core.sched.request_queue import (
+ )
+ from vllm.v1.core.sched.utils import check_stop, remove_all
+ from vllm.v1.engine import EngineCoreEventType, EngineCoreOutput, EngineCoreOutputs
+-from vllm.v1.kv_cache_interface import KVCacheConfig, MambaSpec
++from vllm.v1.kv_cache_interface import (
++    KVCacheConfig,
++    MambaSpec,
++    get_mamba_prefill_checkpoint_position,
++)
+ from vllm.v1.metrics.perf import ModelMetrics, PerfStats
+ from vllm.v1.metrics.stats import (
+     PrefixCacheStats,
+@@ -254,6 +258,7 @@ class Scheduler(SchedulerInterface):
+         )
+         speculative_config = vllm_config.speculative_config
+         self.use_eagle = False
++        self.drop_last_prefix_cache_block = False
+         self.num_spec_tokens = vllm_config.num_speculative_tokens
+         self.num_lookahead_tokens = vllm_config.num_lookahead_tokens
+         # Positions past the computed tokens that the drafter reads mid-prefill.
+@@ -272,6 +277,9 @@ class Scheduler(SchedulerInterface):
+                     vllm_num_speculative_tokens=self.num_spec_tokens,
+                 )
+             self.use_eagle = speculative_config.use_eagle()
++            self.drop_last_prefix_cache_block = (
++                speculative_config.use_eagle_preserves_target_kv_cache()
++            )
+             if self.use_eagle:
+                 self.num_prefill_lookahead = (
+                     self.num_spec_tokens
+@@ -288,7 +296,7 @@ class Scheduler(SchedulerInterface):
+             max_model_len=self.max_model_len,
+             max_in_flight_tokens=vllm_config.max_in_flight_tokens,
+             enable_caching=self.cache_config.enable_prefix_caching,
+-            use_eagle=self.use_eagle,
++            use_eagle=self.drop_last_prefix_cache_block,
+             num_prefill_lookahead=self.num_prefill_lookahead,
+             log_stats=self.log_stats,
+             enable_kv_cache_events=self.enable_kv_cache_events,
+@@ -325,15 +333,10 @@ class Scheduler(SchedulerInterface):
+         self.need_mamba_block_aligned_split = (
+             self.has_mamba_layers and self.cache_config.mamba_cache_mode == "align"
+         )
+-        self.mamba_has_prefill_checkpoint_blocks = (
+-            self.has_mamba_layers
+-            # TODO: support spec decoding
+-            and not self.use_eagle
+-            and all(
+-                not isinstance(group.kv_cache_spec, MambaSpec)
+-                or group.kv_cache_spec.num_prefill_checkpoint_blocks > 0
+-                for group in kv_cache_config.kv_cache_groups
+-            )
++        self.mamba_has_prefill_checkpoint_blocks = self.has_mamba_layers and all(
++            not isinstance(group.kv_cache_spec, MambaSpec)
++            or group.kv_cache_spec.num_prefill_checkpoint_blocks > 0
++            for group in kv_cache_config.kv_cache_groups
+         )
+         # A finer prefix_match_unit is configured: a mamba partial tail entry
+         # can only be registered by a step ending exactly at the prompt's last
+@@ -409,16 +412,32 @@ class Scheduler(SchedulerInterface):
+             return num_new_tokens
+ 
+         block_size = self.cache_config.block_size
+-        # The last block-aligned position whose state can be cached. With
+-        # Eagle, FullAttn prunes the last matching block, so back off one
+-        # block to avoid a Mamba cache miss.
++        checkpoint_alignment = min(self.hash_block_size, block_size)
++        drop_last_prefix_cache_block = getattr(
++            self, "drop_last_prefix_cache_block", getattr(self, "use_eagle", False)
++        )
++        # The last block-aligned position whose state can be cached.
++        # Eagle-family drafters pollute the target's last matching
++        # full-attention block with their lookahead KV write, so back off one
++        # block to avoid a Mamba cache miss. DFlash/DSpark draft from their own
++        # KV cache and never write target blocks.
+         last_cache_position = request.num_tokens - request.num_tokens % block_size
+-        if self.use_eagle:
++        if drop_last_prefix_cache_block:
+             last_cache_position = max(last_cache_position - block_size, 0)
+ 
+         end = start + num_new_tokens
++        checkpoint_position = get_mamba_prefill_checkpoint_position(
++            request.num_tokens,
++            self.hash_block_size,
++            drop_eagle_block=drop_last_prefix_cache_block,
++        )
+         use_internal_checkpoint = (
+-            self.mamba_has_prefill_checkpoint_blocks and start % block_size == 0
++            getattr(self, "mamba_has_prefill_checkpoint_blocks", False)
++            and end >= prefill_end
++            and end % block_size != 0
++            and start % checkpoint_alignment == 0
++            and start + checkpoint_alignment <= checkpoint_position
++            and start < checkpoint_position < end
+         )
+         if use_internal_checkpoint:
+             last_cache_position = 0
+@@ -427,7 +446,7 @@ class Scheduler(SchedulerInterface):
+         # aligned. Exempt: the prompt's last chunk, whose slot decode advances
+         # to the boundary. A block too wide for one chunk advances sub-block
+         # and re-aligns at the next boundary.
+-        if end < prefill_end and not use_internal_checkpoint:
++        if end < prefill_end:
+             max_prefill_tokens = self.max_num_scheduled_tokens
+             long_prefill_threshold = self.scheduler_config.long_prefill_token_threshold
+             if long_prefill_threshold > 0:
+@@ -442,17 +461,28 @@ class Scheduler(SchedulerInterface):
+             if self.mamba_partial_cache_hit
+             else 0
+         )
++        eagle_replay_boundary = 0
++        if drop_last_prefix_cache_block and tail_boundary:
++            eagle_hit_boundary = tail_boundary - self.hash_block_size
++            eagle_replay_boundary = eagle_hit_boundary // block_size * block_size
+         stops = (
+             # Same invariant: a chunk starting mid-block stops at the boundary
+             # rather than running past it.
+-            next_block_boundary if start % block_size != 0 else 0,
++            next_block_boundary
++            if start % block_size != 0 and not use_internal_checkpoint
++            else 0,
+             # Never run past the last cacheable block boundary mid-chunk.
+             last_cache_position,
+             # Fine-grained hits: the prompt's partial-tail entry can only be
+             # registered by a chunk ending exactly at its last hash boundary.
+             tail_boundary
+-            if last_cache_position < tail_boundary < request.num_prompt_tokens
++            if not use_internal_checkpoint
++            and last_cache_position < tail_boundary < request.num_prompt_tokens
+             else 0,
++            # Fine-grained EAGLE drops one hash unit from the dense-group hit.
++            # Materialize the Mamba state at the block boundary from which the
++            # reconciled hybrid hit can replay.
++            eagle_replay_boundary,
+             # Marconi shared-prefix junction, block-floored (a sub-block
+             # junction's state is not separately cacheable): cache its state
+             # so sibling requests sharing the prefix can reuse it.
+@@ -2919,68 +2949,89 @@ class Scheduler(SchedulerInterface):
+         # these requests must be rescheduled, but only the first will recompute
+         # it. This set tracks blocks already marked for recomputation.
+         marked_invalid_block_ids: set[int] = set()
++        managers = self.kv_cache_manager.coordinator.single_type_managers
++        # num_computed_tokens is a single cross-group value, so it can only be
++        # truncated to an alignment every group agrees on. Groups whose own
++        # block is finer than the scheduler block lose a little already-computed
++        # work; a per-group boundary would leave the other groups misaligned.
++        common_block_alignment = self.block_size
+         for request in requests:
+-            is_affected = False
+-            marked_invalid_block = False
+             req_id = request.request_id
+-            # TODO (davidb): add support for hybrid memory allocator
+-            (req_block_ids,) = self.kv_cache_manager.get_block_ids(req_id)
++            req_block_ids_by_group = self.kv_cache_manager.get_block_ids(req_id)
+             # We iterate only over blocks that may contain externally computed
+             # tokens
+             req_num_computed_tokens = (
+                 request.num_computed_tokens - num_scheduled_tokens.get(req_id, 0)
+             )
+ 
+-            req_num_computed_blocks = (
+-                req_num_computed_tokens + self.block_size - 1
+-            ) // self.block_size
+-            for idx, block_id in zip(range(req_num_computed_blocks), req_block_ids):
+-                if block_id not in invalid_block_ids:
+-                    continue
+-
+-                is_affected = True
+-
+-                if block_id in marked_invalid_block_ids:
+-                    # This invalid block is shared with a previous request
+-                    # and was already marked for recomputation.
+-                    # This means this request can still consider this block
+-                    # as computed when rescheduled.
+-                    # Currently this only applies to sync loading; Async
+-                    # loading does not yet support block sharing
+-                    continue
++            invalid_positions: list[tuple[int, int]] = []
++            for manager, req_block_ids in zip(
++                managers,
++                req_block_ids_by_group,
++            ):
++                group_block_size = manager.block_size
++                req_num_computed_blocks = (
++                    req_num_computed_tokens + group_block_size - 1
++                ) // group_block_size
++                invalid_positions.extend(
++                    (idx * group_block_size, block_id)
++                    for idx, block_id in enumerate(
++                        req_block_ids[:req_num_computed_blocks]
++                    )
++                    if block_id in invalid_block_ids
++                )
+ 
+-                marked_invalid_block_ids.add(block_id)
++            if not invalid_positions:
++                continue
+ 
+-                if marked_invalid_block:
+-                    # This request has already marked an invalid block for
+-                    # recomputation and updated its num_computed_tokens.
+-                    continue
++            unmarked_positions = [
++                (token_idx, block_id)
++                for token_idx, block_id in invalid_positions
++                if block_id not in marked_invalid_block_ids
++            ]
++            marked_invalid_block_ids.update(
++                block_id for _, block_id in invalid_positions
++            )
+ 
+-                marked_invalid_block = True
+-                # Truncate the computed tokens at the first failed block
+-                request.num_computed_tokens = idx * self.block_size
+-                num_affected_tokens = (
++            if unmarked_positions:
++                # Truncate at the earliest failed token boundary across all
++                # hybrid KV-cache groups.
++                earliest_invalid_token = min(
++                    token_idx for token_idx, _ in unmarked_positions
++                )
++                request.num_computed_tokens = (
++                    earliest_invalid_token
++                    - earliest_invalid_token % common_block_alignment
++                )
++                total_affected_tokens += (
+                     req_num_computed_tokens - request.num_computed_tokens
+                 )
+-                total_affected_tokens += num_affected_tokens
+ 
+-                # collect invalid block and all downstream dependent blocks
+                 if evict_blocks:
+-                    blocks_to_evict.update(req_block_ids[idx:])
+-
+-            if is_affected:
+-                if not marked_invalid_block:
+-                    # All invalid blocks of this request are shared with
+-                    # previous requests and will be recomputed by them.
+-                    # Revert to considering only cached tokens as computed.
+-                    # Currently this only applies to sync loading; Async
+-                    # loading does not yet support block sharing
+-                    total_affected_tokens += (
+-                        request.num_computed_tokens - req_num_computed_tokens
+-                    )
+-                    request.num_computed_tokens = req_num_computed_tokens
++                    # Every group can depend on tokens after the failed
++                    # boundary, so evict each group's downstream blocks.
++                    for manager, req_block_ids in zip(
++                        managers,
++                        req_block_ids_by_group,
++                    ):
++                        first_invalid_idx = (
++                            request.num_computed_tokens // manager.block_size
++                        )
++                        blocks_to_evict.update(req_block_ids[first_invalid_idx:])
++            else:
++                # All invalid blocks are shared with previous requests and
++                # will be recomputed by them. Revert to considering only
++                # cached tokens as computed.
++                aligned_computed_tokens = (
++                    req_num_computed_tokens
++                    - req_num_computed_tokens % common_block_alignment
++                )
++                total_affected_tokens += (
++                    request.num_computed_tokens - aligned_computed_tokens
++                )
++                request.num_computed_tokens = aligned_computed_tokens
+ 
+-                affected_req_ids.add(request.request_id)
++            affected_req_ids.add(request.request_id)
+ 
+         return affected_req_ids, total_affected_tokens, blocks_to_evict
+ 
+diff --git a/vllm/v1/core/single_type_kv_cache_manager.py b/vllm/v1/core/single_type_kv_cache_manager.py
+index ceb56a5987..aa3d2cbc3c 100644
+--- a/vllm/v1/core/single_type_kv_cache_manager.py
++++ b/vllm/v1/core/single_type_kv_cache_manager.py
+@@ -6,6 +6,7 @@ from collections import defaultdict
+ from collections.abc import Sequence
+ from typing import ClassVar
+ 
++from vllm.logger import init_logger
+ from vllm.utils.math_utils import cdiv
+ from vllm.v1.core.block_pool import BlockPool
+ from vllm.v1.core.kv_cache_utils import (
+@@ -28,10 +29,14 @@ from vllm.v1.kv_cache_interface import (
+     SinkFullAttentionSpec,
+     SlidingWindowMLASpec,
+     SlidingWindowSpec,
++    get_mamba_prefill_checkpoint_position,
++    is_mamba_prefill_checkpoint_enabled,
+ )
+ from vllm.v1.kv_cache_spec_registry import KVCacheSpecRegistry
+ from vllm.v1.request import Request
+ 
++logger = init_logger(__name__)
++
+ 
+ class SingleTypeKVCacheManager(ABC):
+     """
+@@ -71,6 +76,11 @@ class SingleTypeKVCacheManager(ABC):
+                 block until the request finishes.
+         """
+         self.scheduler_block_size = scheduler_block_size
++        # Prefix-cache retention normally follows the scheduler's shared
++        # alignment. Hybrid fine-grained lookup can lower that boundary to the
++        # hash block size; the coordinator updates this after it verifies that
++        # every participating manager supports the finer lookup.
++        self.cache_hit_alignment_tokens = scheduler_block_size
+         # The block size for this manager; used for actual block allocation.
+         self.block_size = kv_cache_spec.block_size
+         self.dcp_world_size = dcp_world_size
+@@ -121,6 +131,11 @@ class SingleTypeKVCacheManager(ABC):
+         self._pending_partial_tail_offloads: list[
+             tuple[str, int, KVCacheBlock, int]
+         ] = []
++        # DCP full-attention tails do not need CoW, but still need a one-shot
++        # hand-off to an external connector after the prompt boundary is filled.
++        # The queue above is drained every step, so dedup needs its own record
++        # that survives until the request is freed.
++        self._external_partial_tail_boundaries: set[tuple[str, int]] = set()
+ 
+     @classmethod
+     def _get_num_evictable_blocks(cls, blocks: Sequence[KVCacheBlock]):
+@@ -317,9 +332,10 @@ class SingleTypeKVCacheManager(ABC):
+             return
+ 
+         req_blocks = self.req_to_blocks[request_id]
+-        allocated_blocks = self.block_pool.get_new_blocks(
+-            cdiv(num_total_computed_tokens, self.block_size) - len(req_blocks)
++        num_new_blocks = max(
++            0, cdiv(num_total_computed_tokens, self.block_size) - len(req_blocks)
+         )
++        allocated_blocks = self.block_pool.get_new_blocks(num_new_blocks)
+         req_blocks.extend(allocated_blocks)
+         if self._record_new_block_ids:
+             self.new_block_ids.extend(b.block_id for b in allocated_blocks)
+@@ -347,11 +363,28 @@ class SingleTypeKVCacheManager(ABC):
+             # Replacing in place keeps the length-based allocation below
+             # correct; the extra block was reserved by
+             # get_num_blocks_to_allocate.
+-            block_idx, source_block = self._partial_hit_reqs.pop(request_id)
+-            cow_block = self.block_pool.get_new_blocks(1)[0]
+-            self._apply_cow(request_id, block_idx, source_block, cow_block)
+-            self.new_block_ids.append(cow_block.block_id)
+-            cow_blocks.append(cow_block)
++            block_idx, _ = self._partial_hit_reqs.pop(request_id)
++            req_blocks = self.req_to_blocks[request_id]
++            if block_idx < len(req_blocks):
++                # The cached source can be replaced before allocation. Copy
++                # from the block currently owned by this request so a stale
++                # record can never leave a shared block writable in place.
++                source_block = req_blocks[block_idx]
++                cow_block = self.block_pool.get_new_blocks(1)[0]
++                self._apply_cow(request_id, block_idx, source_block, cow_block)
++                self.new_block_ids.append(cow_block.block_id)
++                cow_blocks.append(cow_block)
++            else:
++                # get_num_blocks_to_allocate reserved a block for this CoW, so
++                # a record pointing past the table means the partial hit was
++                # dropped elsewhere. Harmless, but it wastes the reservation.
++                logger.debug(
++                    "Skipping CoW for request %s: partial-hit block %d is past "
++                    "its %d allocated blocks.",
++                    request_id,
++                    block_idx,
++                    len(req_blocks),
++                )
+ 
+         req_blocks = self.req_to_blocks[request_id]
+         num_required_blocks = cdiv(num_tokens, self.block_size)
+@@ -426,6 +459,7 @@ class SingleTypeKVCacheManager(ABC):
+         request: Request,
+         num_tokens: int,
+         retention_interval: int | None = None,
++        extra_reachable_boundaries: Sequence[int] = (),
+     ) -> None:
+         """
+         Cache the blocks for the request.
+@@ -438,6 +472,8 @@ class SingleTypeKVCacheManager(ABC):
+                 keeps dense checkpointing; ``0`` keeps only the latest replay
+                 boundary; a positive multiple of ``scheduler_block_size`` keeps
+                 a tail once per that-sized segment. Only SWA acts on it.
++            extra_reachable_boundaries: Additional token positions whose state
++                must remain reusable after cross-group cache-hit reconciliation.
+         """
+         num_cached_blocks = self.num_cached_block.get(request.request_id, 0)
+         num_full_blocks = num_tokens // self.block_size
+@@ -451,11 +487,12 @@ class SingleTypeKVCacheManager(ABC):
+         reachable_boundaries = [request.num_prompt_tokens - 1]
+         if request.shared_prefix_boundary:
+             reachable_boundaries.append(request.shared_prefix_boundary)
++        reachable_boundaries.extend(extra_reachable_boundaries)
+ 
+         block_mask = self.reachable_block_mask(
+             start_block=num_cached_blocks,
+             end_block=num_full_blocks,
+-            alignment_tokens=self.scheduler_block_size,
++            alignment_tokens=self.cache_hit_alignment_tokens,
+             kv_cache_spec=self.kv_cache_spec,
+             use_eagle=self.use_eagle,
+             retention_interval=retention_interval,
+@@ -511,6 +548,16 @@ class SingleTypeKVCacheManager(ABC):
+         req_blocks = self.req_to_blocks.pop(request_id, [])
+         self.num_cached_block.pop(request_id, None)
+         self._partial_hit_reqs.pop(request_id, None)
++        self._external_partial_tail_boundaries = {
++            entry
++            for entry in self._external_partial_tail_boundaries
++            if entry[0] != request_id
++        }
++        self._pending_partial_tail_offloads = [
++            entry
++            for entry in self._pending_partial_tail_offloads
++            if entry[0] != request_id
++        ]
+         return req_blocks
+ 
+     def free(self, request_id: str) -> None:
+@@ -783,8 +830,14 @@ class FullAttentionManager(SingleTypeKVCacheManager):
+         request: Request,
+         num_tokens: int,
+         retention_interval: int | None = None,
++        extra_reachable_boundaries: Sequence[int] = (),
+     ) -> None:
+-        super().cache_blocks(request, num_tokens, retention_interval=retention_interval)
++        super().cache_blocks(
++            request,
++            num_tokens,
++            retention_interval=retention_interval,
++            extra_reachable_boundaries=extra_reachable_boundaries,
++        )
+         hash_block_size = self.block_pool.hash_block_size
+         if self.block_size == hash_block_size:
+             return
+@@ -812,13 +865,30 @@ class FullAttentionManager(SingleTypeKVCacheManager):
+         block_idx = boundary_tokens // self.block_size
+         if block_idx >= len(blocks):
+             return
+-        self.block_pool.cache_partial_block(
++        partial_hash = self.block_pool.cache_partial_block(
+             request=request,
+             block=blocks[block_idx],
+             num_tokens=boundary_tokens,
+             kv_cache_group_id=self.kv_cache_group_id,
+             block_size=self.block_size,
+         )
++        boundary_key = (request.request_id, boundary_tokens)
++        if (
++            partial_hash is not None
++            and self.dcp_world_size > 1
++            and boundary_key not in self._external_partial_tail_boundaries
++        ):
++            # Unlike Mamba align mode, full-attention KV is append-only inside
++            # the block, so the request block itself is a durable DMA source.
++            self._external_partial_tail_boundaries.add(boundary_key)
++            self._pending_partial_tail_offloads.append(
++                (
++                    request.request_id,
++                    self.kv_cache_group_id,
++                    blocks[block_idx],
++                    boundary_tokens,
++                )
++            )
+ 
+     def get_num_common_prefix_blocks(self, running_request_id: str) -> int:
+         blocks = self.req_to_blocks[running_request_id]
+@@ -917,10 +987,12 @@ class SlidingWindowManager(SingleTypeKVCacheManager):
+         )
+         assert dcp_world_size == 1, "DCP not support sliding window attn now."
+         assert pcp_world_size == 1, "PCP not support sliding window attn now."
+-        # Fine-grained partial hits are not supported for sliding window now
+-        assert alignment_tokens % kv_cache_spec.block_size == 0, (
+-            "SlidingWindowManager does not support fine-grained (partial) cache hits"
+-        )
++        # Fine-grained partial hits are not supported for sliding window now.
++        # Fall back to block-aligned hits instead of crashing the engine when
++        # the coordinator alignment is finer than this group's block size
++        # (e.g. a hybrid mamba target with a finer `prefix_match_unit`).
++        if alignment_tokens % kv_cache_spec.block_size != 0:
++            alignment_tokens = kv_cache_spec.block_size
+         block_hashes = resolve_block_hashes(
+             block_hashes,
+             block_pool.hash_block_size,
+@@ -1278,6 +1350,10 @@ class MambaManager(SingleTypeKVCacheManager):
+         self.block_size = kv_cache_spec.block_size
+         self.mamba_cache_mode = kv_cache_spec.mamba_cache_mode
+         self.num_speculative_blocks: int = kv_cache_spec.num_speculative_blocks
++        self.has_prefill_checkpoint_blocks = is_mamba_prefill_checkpoint_enabled(
++            self.mamba_cache_mode,
++            kv_cache_spec.num_prefill_checkpoint_blocks,
++        )
+         self.cached_blocks_this_step: set[BlockHashWithGroupId] = set()
+         if self.mamba_cache_mode == "align":
+             # Mapping from request ID to the index of the block
+@@ -1285,9 +1361,9 @@ class MambaManager(SingleTypeKVCacheManager):
+             self.last_state_block_idx: dict[str, int] = {}
+             # The set of the requests that have been allocated blocks
+             self._allocated_block_reqs: set[str] = set()
+-            # Number of internal checkpoint blocks required by each request's
+-            # current allocation.
+-            self._num_checkpoint_blocks: dict[str, int] = {}
++            # Reusable checkpoint boundary and its physical block-table slot
++            # selected for the current allocation.
++            self._checkpoint_allocations: dict[str, tuple[int, int] | None] = {}
+             # Requests that registered their own last-prompt-boundary partial
+             # tail (producers). On the next step's CoW the boundary state moves
+             # into a private cow_block; we record that block for connector
+@@ -1467,22 +1543,36 @@ class MambaManager(SingleTypeKVCacheManager):
+         """
+         return 0
+ 
+-    def _needs_internal_checkpoint(
++    def _get_internal_checkpoint(
+         self,
+         request_id: str,
+-        num_tokens: int,
+-        num_computed_tokens: int,
+-    ) -> bool:
++        query_start: int,
++        query_end: int,
++        checkpoint_position: int,
++    ) -> tuple[int, int] | None:
+         assert isinstance(self.kv_cache_spec, MambaSpec)
+-        checkpoint_idx = cdiv(num_tokens, self.block_size) - 2
++        hash_block_size = self.block_pool.hash_block_size
++        checkpoint_alignment = min(hash_block_size, self.block_size)
++        checkpoint_idx = cdiv(query_end, self.block_size) - 2
+         blocks = self.req_to_blocks[request_id]
+-        return (
+-            self.kv_cache_spec.num_prefill_checkpoint_blocks > 0
+-            and num_tokens % self.block_size != 0
+-            and num_computed_tokens % self.block_size == 0
++        if not (
++            self.has_prefill_checkpoint_blocks
++            and query_end % self.block_size != 0
++            and query_start % checkpoint_alignment == 0
++            and query_start + checkpoint_alignment <= checkpoint_position
++            and query_start < checkpoint_position < query_end
+             and checkpoint_idx >= 0
+-            and (checkpoint_idx >= len(blocks) or blocks[checkpoint_idx].is_null)
+-        )
++        ):
++            return None
++        if checkpoint_idx >= len(blocks):
++            return checkpoint_position, checkpoint_idx
++        if (
++            request_id in self._allocated_block_reqs
++            and checkpoint_idx >= len(blocks) - self.num_speculative_blocks
++            and not blocks[checkpoint_idx].is_null
++        ):
++            return checkpoint_position, checkpoint_idx
++        return None
+ 
+     def get_num_blocks_to_allocate(
+         self,
+@@ -1546,17 +1636,26 @@ class MambaManager(SingleTypeKVCacheManager):
+             )
+             if has_partial_hit:
+                 num_new_blocks = max(num_new_blocks, 0) + 1
+-            checkpoint_block = int(
+-                self._needs_internal_checkpoint(
+-                    request_id, num_tokens, total_computed_tokens
+-                )
++            checkpoint_position = get_mamba_prefill_checkpoint_position(
++                num_tokens,
++                self.block_pool.hash_block_size,
++                self.use_eagle,
++            )
++            checkpoint = self._get_internal_checkpoint(
++                request_id,
++                total_computed_tokens,
++                num_tokens,
++                checkpoint_position,
+             )
++            checkpoint_block = int(checkpoint is not None)
+             if not apply_admission_cap:
+-                self._num_checkpoint_blocks[request_id] = checkpoint_block
++                self._checkpoint_allocations[request_id] = checkpoint
+             if num_new_blocks > 0:
+-                num_new_blocks = 1 + int(has_partial_hit) + checkpoint_block
+-                if request_id not in self._allocated_block_reqs:
+-                    num_new_blocks += self.num_speculative_blocks
++                blocks_allocated = request_id in self._allocated_block_reqs
++                if not (checkpoint_block and blocks_allocated):
++                    num_new_blocks = 1 + int(has_partial_hit) + checkpoint_block
++                    if not blocks_allocated:
++                        num_new_blocks += self.num_speculative_blocks
+ 
+             num_evictable_computed_blocks = self._get_num_evictable_blocks(
+                 new_computed_blocks
+@@ -1588,12 +1687,17 @@ class MambaManager(SingleTypeKVCacheManager):
+             num_required_blocks = (
+                 cdiv(num_tokens, self.block_size) + self.num_speculative_blocks
+             )
+-            checkpoint_block = self._num_checkpoint_blocks.get(request_id, 0)
++            checkpoint = self._checkpoint_allocations.get(request_id)
++            checkpoint_block = int(checkpoint is not None)
+             partial_hit = self._partial_hit_reqs.get(request_id)
+             has_partial_hit = partial_hit is not None
+             # `num_required_blocks` might be less than `len(req_blocks)` if blocks are
+             # over-allocated at last round.
+-            if num_required_blocks <= len(req_blocks) and not has_partial_hit:
++            if (
++                num_required_blocks <= len(req_blocks)
++                and not has_partial_hit
++                and not checkpoint_block
++            ):
+                 self._allocated_block_reqs.add(request_id)
+                 return []
+             else:
+@@ -1623,7 +1727,7 @@ class MambaManager(SingleTypeKVCacheManager):
+                         [self._null_block for _ in range(prev_block_len, null_end)]
+                     )
+ 
+-                if blocks_allocated:
++                if blocks_allocated and not checkpoint_block:
+                     # reuse previous speculative blocks in this step
+                     for block_idx in range(
+                         prev_block_len - self.num_speculative_blocks, prev_block_len
+@@ -1633,11 +1737,24 @@ class MambaManager(SingleTypeKVCacheManager):
+                             req_blocks[block_idx] = self._null_block
+                         else:
+                             break
+-                num_new_blocks = num_required_blocks - len(req_blocks)
++                num_new_blocks = max(num_required_blocks - len(req_blocks), 0)
+                 if has_partial_hit:
+                     num_new_blocks = max(num_new_blocks, 0) + 1
++                checkpoint_needs_replacement = False
++                if checkpoint is not None:
++                    _, checkpoint_idx = checkpoint
++                    if checkpoint_idx < len(req_blocks):
++                        checkpoint_slot = req_blocks[checkpoint_idx]
++                        partial_hit_owns_slot = (
++                            partial_hit is not None and partial_hit[0] == checkpoint_idx
++                        )
++                        checkpoint_needs_replacement = checkpoint_slot.is_null or (
++                            not blocks_allocated and not partial_hit_owns_slot
++                        )
++                if checkpoint_needs_replacement:
++                    num_new_blocks += 1
+                 max_new_blocks = 1 + int(has_partial_hit) + checkpoint_block
+-                if not blocks_allocated:
++                if not blocks_allocated or checkpoint_block:
+                     max_new_blocks += self.num_speculative_blocks
+                 assert num_new_blocks <= max_new_blocks
+                 new_blocks = self.block_pool.get_new_blocks(num_new_blocks)
+@@ -1678,6 +1795,22 @@ class MambaManager(SingleTypeKVCacheManager):
+                     else:
+                         self._apply_cow(request_id, block_idx, source_block, cow_block)
+                         returned_blocks = [cow_block] + returned_blocks
++                if checkpoint_needs_replacement:
++                    checkpoint_block = new_blocks[0]
++                    new_blocks = new_blocks[1:]
++                    assert checkpoint is not None
++                    _, checkpoint_idx = checkpoint
++                    source_block = req_blocks[checkpoint_idx]
++                    if source_block.is_null:
++                        req_blocks[checkpoint_idx] = checkpoint_block
++                    else:
++                        self._apply_cow(
++                            request_id,
++                            checkpoint_idx,
++                            source_block,
++                            checkpoint_block,
++                        )
++                    returned_blocks = [checkpoint_block] + returned_blocks
+                 req_blocks.extend(new_blocks)
+                 self._allocated_block_reqs.add(request_id)
+                 self._partial_hit_reqs.pop(request_id, None)
+@@ -1688,15 +1821,8 @@ class MambaManager(SingleTypeKVCacheManager):
+         if self.mamba_cache_mode == "align":
+             self._allocated_block_reqs.discard(request_id)
+             self.last_state_block_idx.pop(request_id, None)
+-            self._num_checkpoint_blocks.pop(request_id, None)
++            self._checkpoint_allocations.pop(request_id, None)
+             self._producer_partial_tail_reqs.pop(request_id, None)
+-            # A hand-off whose request died in this same scheduling pass must
+-            # not reach the connector: its unpin hook (free) has already run.
+-            self._pending_partial_tail_offloads = [
+-                entry
+-                for entry in self._pending_partial_tail_offloads
+-                if entry[0] != request_id
+-            ]
+         return super().pop_blocks_for_free(request_id)
+ 
+     def get_num_skipped_tokens(self, num_computed_tokens: int) -> int:
+@@ -1712,9 +1838,15 @@ class MambaManager(SingleTypeKVCacheManager):
+         request: Request,
+         num_tokens: int,
+         retention_interval: int | None = None,
++        extra_reachable_boundaries: Sequence[int] = (),
+     ) -> None:
+         num_cached_blocks_before = self.num_cached_block.get(request.request_id, 0)
+-        super().cache_blocks(request, num_tokens, retention_interval=retention_interval)
++        super().cache_blocks(
++            request,
++            num_tokens,
++            retention_interval=retention_interval,
++            extra_reachable_boundaries=extra_reachable_boundaries,
++        )
+         num_cached_blocks_after = self.num_cached_block.get(request.request_id, 0)
+         if self.mamba_cache_mode == "align":
+             partial_hash = self._cache_partial_tail_block(request, num_tokens)
+@@ -1741,6 +1873,39 @@ class MambaManager(SingleTypeKVCacheManager):
+         num_tokens: int,
+     ) -> BlockHashWithGroupId | None:
+         hash_block_size = self.block_pool.hash_block_size
++        checkpoint = self._checkpoint_allocations.get(request.request_id)
++        if checkpoint is not None:
++            checkpoint_position, checkpoint_idx = checkpoint
++            if checkpoint_position > num_tokens:
++                return None
++            if checkpoint_position % self.block_size == 0:
++                return None
++            blocks = self.req_to_blocks[request.request_id]
++            assert 0 <= checkpoint_idx < len(blocks)
++            checkpoint_block = blocks[checkpoint_idx]
++            assert not checkpoint_block.is_null
++            partial_hash = self.block_pool.cache_partial_checkpoint_block(
++                request=request,
++                block=checkpoint_block,
++                num_tokens=checkpoint_position,
++                kv_cache_group_id=self.kv_cache_group_id,
++                block_size=self.block_size,
++            )
++            boundary_key = (request.request_id, checkpoint_position)
++            if (
++                partial_hash is not None
++                and boundary_key not in self._external_partial_tail_boundaries
++            ):
++                self._external_partial_tail_boundaries.add(boundary_key)
++                self._pending_partial_tail_offloads.append(
++                    (
++                        request.request_id,
++                        self.kv_cache_group_id,
++                        checkpoint_block,
++                        checkpoint_position,
++                    )
++                )
++            return partial_hash
+         if self.block_size == hash_block_size:
+             return None
+         if num_tokens % self.block_size == 0:
+@@ -1807,6 +1972,7 @@ class CrossAttentionManager(SingleTypeKVCacheManager):
+         request: Request,
+         num_tokens: int,
+         retention_interval: int | None = None,
++        extra_reachable_boundaries: Sequence[int] = (),
+     ) -> None:
+         # We do not cache blocks for cross-attention to be shared between
+         # requests, so this method is not relevant.
+diff --git a/vllm/v1/kv_cache_interface.py b/vllm/v1/kv_cache_interface.py
+index 55c9e806a5..5c5b414d8c 100644
+--- a/vllm/v1/kv_cache_interface.py
++++ b/vllm/v1/kv_cache_interface.py
+@@ -569,6 +569,14 @@ class MLAAttentionSpec(FullAttentionSpec):
+             "All attention layers in the same KV cache group must use the same "
+             "quantization method, tokens per state, and model version."
+         )
++        # The metadata builder reads this once per group, so mixing causal
++        # target layers with non-causal draft layers would route the target
++        # through the draft decode path.
++        non_causal_mtd_set = set(spec.non_causal_multi_token_decode for spec in specs)
++        assert len(non_causal_mtd_set) == 1, (
++            "All attention layers in the same KV cache group must agree on "
++            "non_causal_multi_token_decode."
++        )
+         merged_spec = cls(
+             block_size=specs[0].block_size,
+             num_kv_heads=specs[0].num_kv_heads,
+@@ -581,9 +589,7 @@ class MLAAttentionSpec(FullAttentionSpec):
+             cache_dtype_str=cache_dtype_str_set.pop(),
+             tokens_per_state=tokens_per_state_set.pop(),
+             model_version=model_version_set.pop(),
+-            non_causal_multi_token_decode=any(
+-                spec.non_causal_multi_token_decode for spec in specs
+-            ),
++            non_causal_multi_token_decode=non_causal_mtd_set.pop(),
+         )
+         for spec in specs:
+             for f in fields(AttentionSpec):
+@@ -873,6 +879,26 @@ class MambaSpec(KVCacheSpec):
+         )
+ 
+ 
++def get_mamba_prefill_checkpoint_position(
++    num_tokens: int,
++    hash_block_size: int,
++    drop_eagle_block: bool,
++) -> int:
++    """Return the reusable Mamba checkpoint boundary for a prefill."""
++    checkpoint_position = num_tokens // hash_block_size * hash_block_size
++    if drop_eagle_block:
++        checkpoint_position -= hash_block_size
++    return max(checkpoint_position, 0)
++
++
++def is_mamba_prefill_checkpoint_enabled(
++    mamba_cache_mode: str,
++    num_prefill_checkpoint_blocks: int,
++) -> bool:
++    """Return whether the backend exports internal prefill checkpoints."""
++    return mamba_cache_mode == "align" and num_prefill_checkpoint_blocks > 0
++
++
+ @dataclass(frozen=True)
+ class EncoderOnlyAttentionSpec(AttentionSpec):
+     def max_memory_usage_bytes(self, vllm_config: VllmConfig) -> int:
+diff --git a/vllm/v1/simple_kv_offload/manager.py b/vllm/v1/simple_kv_offload/manager.py
+index 0a78c5e9c6..a6a379032a 100644
+--- a/vllm/v1/simple_kv_offload/manager.py
++++ b/vllm/v1/simple_kv_offload/manager.py
+@@ -17,6 +17,10 @@ from vllm.v1.core.kv_cache_coordinator import (
+     KVCacheCoordinator,
+     get_kv_cache_coordinator,
+ )
++from vllm.v1.core.kv_cache_utils import (
++    BlockHashWithGroupId,
++    make_block_hash_with_group_id,
++)
+ from vllm.v1.core.sched.output import SchedulerOutput
+ from vllm.v1.kv_cache_interface import (
+     FullAttentionSpec,
+@@ -125,7 +129,10 @@ class SimpleCPUOffloadScheduler:
+         )
+ 
+         spec_config = vllm_config.speculative_config
+-        use_eagle = spec_config is not None and spec_config.use_eagle()
++        use_eagle = (
++            spec_config is not None
++            and spec_config.use_eagle_preserves_target_kv_cache()
++        )
+         self.cpu_coordinator: KVCacheCoordinator = get_kv_cache_coordinator(
+             kv_cache_config=self.cpu_kv_cache_config,
+             max_model_len=vllm_config.model_config.max_model_len,
+@@ -156,8 +163,6 @@ class SimpleCPUOffloadScheduler:
+ 
+         # Store metadata
+         self._lazy_mode = lazy_offload
+-        # Lazy mode: use a cursor to track the last scanned block in the GPU free queue.
+-        self._cursor: KVCacheBlock | None = None
+         if self._lazy_mode:
+             self._target_free = self._estimate_lazy_target_blocks(
+                 kv_cache_config,
+@@ -171,7 +176,11 @@ class SimpleCPUOffloadScheduler:
+         # Eager mode only
+         self._reqs_to_store: dict[str, StoreRequestState] = {}
+         self._store_event_to_reqs: dict[int, list[str]] = {}
++        self._requests_by_id: dict[str, Request] = {}
++        self._request_block_ids: dict[str, tuple[list[int], ...]] = {}
++        # Tracks stores whose GPU blocks are pinned until DMA completes.
+         self._in_flight_store_gpu_blocks: set[int] = set()
++        self._in_flight_store_hashes: set[BlockHashWithGroupId] = set()
+         self._abandoned_reqs_to_load: dict[str, LoadRequestState] = {}
+ 
+         # Event counters
+@@ -291,6 +300,9 @@ class SimpleCPUOffloadScheduler:
+         req_id = request.request_id
+         block_ids_by_group = blocks.get_block_ids()
+         num_groups = len(block_ids_by_group)
++        self._requests_by_id[req_id] = request
++        if req_id not in self._request_block_ids:
++            self._request_block_ids[req_id] = tuple([] for _ in range(num_groups))
+ 
+         # Store tracking (eager mode only). Register the request;
+         # block IDs are accumulated from scheduler_output in
+@@ -298,7 +310,7 @@ class SimpleCPUOffloadScheduler:
+         if not self._lazy_mode and req_id not in self._reqs_to_store:
+             self._reqs_to_store[req_id] = StoreRequestState(
+                 request=request,
+-                block_ids=tuple([] for _ in range(num_groups)),
++                block_ids=self._request_block_ids[req_id],
+                 num_stored_blocks=[0] * num_groups,
+             )
+ 
+@@ -308,14 +320,11 @@ class SimpleCPUOffloadScheduler:
+         pending = self._pending_cpu_hits.pop(req_id, None)
+ 
+         if num_external_tokens == 0:
++            # The scheduler may prefer an equally long local partial-tail hit
++            # after asking the connector to probe from the preceding full
++            # scheduler-block boundary. In that case the CPU hit is unused and
++            # its temporary pin only needs to be released.
+             if pending is not None:
+-                logger.warning(
+-                    "SimpleCPUOffloadScheduler: update_state_after_alloc "
+-                    "called for req_id=%s with no external tokens but "
+-                    "get_num_new_matched_tokens() unexpectedly recorded "
+-                    "a pending CPU hit; releasing the stale pin.",
+-                    req_id,
+-                )
+                 self._free_pending_cpu_hit(pending)
+             return
+ 
+@@ -331,10 +340,6 @@ class SimpleCPUOffloadScheduler:
+ 
+         cpu_hit_blocks_full, _ = pending
+ 
+-        # ``num_external_tokens`` is LCM-aligned (checked per-group below),
+-        # so this counts whole scheduler-aligned chunks of incoming tokens.
+-        num_blocks_to_load = num_external_tokens // self.block_size
+-        assert num_blocks_to_load > 0
+         num_cached_fa_blocks = sum(
+             blk.block_hash is not None for blk in blocks.blocks[self.fa_gidx]
+         )
+@@ -342,7 +347,6 @@ class SimpleCPUOffloadScheduler:
+ 
+         # Build transfer pairs across all groups.
+         total_computed_tokens = num_computed_tokens + num_external_tokens
+-        kv_cache_groups = self.cpu_kv_cache_config.kv_cache_groups
+ 
+         # The scheduler may have accepted fewer blocks than
+         # get_num_new_matched_tokens() reported.
+@@ -351,14 +355,8 @@ class SimpleCPUOffloadScheduler:
+         # the rest will be released along with the temp pin below.
+         cpu_hit_blocks: list[list[KVCacheBlock]] = []
+         for g in range(num_groups):
+-            g_block_size = (
+-                kv_cache_groups[g].kv_cache_spec.block_size * self.cp_world_size
+-            )
+-            assert num_external_tokens % g_block_size == 0, (
+-                f"num_external_tokens={num_external_tokens} not aligned to "
+-                f"group {g} block_size={g_block_size}"
+-            )
+-            n_take_g = num_external_tokens // g_block_size
++            g_block_size = self.cpu_coordinator.single_type_managers[g].block_size
++            n_take_g = cdiv(num_external_tokens, g_block_size)
+             cpu_hit_blocks.append(cpu_hit_blocks_full[g][:n_take_g])
+ 
+         gpu_block_ids: list[int] = []
+@@ -372,9 +370,7 @@ class SimpleCPUOffloadScheduler:
+                 continue
+ 
+             # Number of blocks in the computed range for this group.
+-            g_block_size = (
+-                kv_cache_groups[g].kv_cache_spec.block_size * self.cp_world_size
+-            )
++            g_block_size = self.cpu_coordinator.single_type_managers[g].block_size
+             n_computed_g = cdiv(total_computed_tokens, g_block_size)
+ 
+             # Back-trace: ext blocks sit at the tail of the computed range.
+@@ -463,20 +459,150 @@ class SimpleCPUOffloadScheduler:
+         self, scheduler_output: SchedulerOutput
+     ) -> tuple[list[int], list[int], list[str]]:
+         """Prepare store specs for the store event."""
++        self._update_request_block_ids(scheduler_output)
++        partial_gpu, partial_cpu, partial_reqs = self._prepare_partial_tail_store_specs(
++            scheduler_output
++        )
+         if self._lazy_mode:
+-            return self._prepare_lazy_store_specs()
++            store_gpu, store_cpu, store_reqs = self._prepare_lazy_store_specs()
+         else:
+-            return self._prepare_eager_store_specs(scheduler_output)
++            store_gpu, store_cpu, store_reqs = self._prepare_eager_store_specs(
++                scheduler_output
++            )
++        return (
++            partial_gpu + store_gpu,
++            partial_cpu + store_cpu,
++            list(dict.fromkeys(partial_reqs + store_reqs)),
++        )
++
++    def _update_request_block_ids(self, scheduler_output: SchedulerOutput) -> None:
++        """Track each request's complete per-group GPU block table."""
++        num_groups = len(self.cpu_kv_cache_config.kv_cache_groups)
++        for req_id, new_block_id_groups, preempted in yield_req_data(scheduler_output):
++            block_ids = self._request_block_ids.get(req_id)
++            if block_ids is None or preempted:
++                block_ids = tuple([] for _ in range(num_groups))
++                self._request_block_ids[req_id] = block_ids
++                if (state := self._reqs_to_store.get(req_id)) is not None:
++                    state.block_ids = block_ids
++                    state.num_stored_blocks = [0] * num_groups
++            if new_block_id_groups:
++                for group_id in range(min(num_groups, len(new_block_id_groups))):
++                    if new_block_id_groups[group_id] is not None:
++                        block_ids[group_id].extend(new_block_id_groups[group_id])
++
++    def _prepare_partial_tail_store_specs(
++        self, scheduler_output: SchedulerOutput
++    ) -> tuple[list[int], list[int], list[str]]:
++        """Offload hash-granular hybrid-cache boundary blocks."""
++        handoffs = scheduler_output.partial_tail_offloads
++        gpu_pool = self._gpu_block_pool
++        if (
++            not self.cpu_coordinator.enable_partial_hash_hits
++            or not handoffs
++            or gpu_pool is None
++        ):
++            return [], [], []
++
++        cpu_pool = self.cpu_block_pool
++        gpu_ids: list[int] = []
++        cpu_ids: list[int] = []
++        req_ids: list[str] = []
++
++        for req_id, entries in handoffs.items():
++            request = self._requests_by_id.get(req_id)
++            block_ids_by_group = self._request_block_ids.get(req_id)
++            if request is None or block_ids_by_group is None or not entries:
++                continue
++            boundaries = {boundary for _, _, boundary in entries}
++            assert len(boundaries) == 1
++            boundary = boundaries.pop()
++            assert boundary > 0 and boundary % self.hash_block_size == 0
++            assert boundary <= request.num_prompt_tokens
++            handoff_blocks = {
++                group_id: gpu_block_id for group_id, gpu_block_id, _ in entries
++            }
++            assert len(handoff_blocks) == len(entries)
++            assert max(handoff_blocks) < len(block_ids_by_group)
++
++            missing: list[tuple[int, BlockHashWithGroupId, int]] = []
++            normal_store_boundary = boundary // self.block_size * self.block_size
++            for group_id, (manager, group) in enumerate(
++                zip(
++                    self.cpu_coordinator.single_type_managers,
++                    self.cpu_kv_cache_config.kv_cache_groups,
++                    strict=True,
++                )
++            ):
++                block_size = manager.block_size
++                if isinstance(group.kv_cache_spec, FullAttentionSpec):
++                    first_block_idx = normal_store_boundary // block_size
++                    last_block_idx = cdiv(boundary, block_size) - 1
++                    block_indices = range(first_block_idx, last_block_idx + 1)
++                else:
++                    block_indices = ((boundary - 1) // block_size,)
++
++                for block_idx in block_indices:
++                    valid_end = min((block_idx + 1) * block_size, boundary)
++                    hash_idx = valid_end // self.hash_block_size - 1
++                    assert hash_idx < len(request.block_hashes)
++                    block_hash = request.block_hashes[hash_idx]
++                    key = make_block_hash_with_group_id(block_hash, group_id)
++                    if (
++                        key in self._in_flight_store_hashes
++                        or cpu_pool.cached_block_hash_to_block.get_one_block(key)
++                        is not None
++                    ):
++                        continue
++
++                    gpu_block_id = (
++                        handoff_blocks.get(group_id) if valid_end == boundary else None
++                    )
++                    if gpu_block_id is None:
++                        if (
++                            isinstance(group.kv_cache_spec, MambaSpec)
++                            and valid_end % block_size != 0
++                        ):
++                            missing = []
++                            break
++                        group_block_ids = block_ids_by_group[group_id]
++                        if block_idx >= len(group_block_ids):
++                            missing = []
++                            break
++                        gpu_block_id = group_block_ids[block_idx]
++                    if gpu_block_id == gpu_pool.null_block.block_id:
++                        missing = []
++                        break
++                    missing.append((gpu_block_id, key, valid_end))
++                else:
++                    continue
++                break
++
++            if not missing or len(missing) > cpu_pool.get_num_free_blocks():
++                continue
++
++            cpu_blocks = cpu_pool.get_new_blocks(len(missing))
++            request_gpu_ids = [gpu_block_id for gpu_block_id, _, _ in missing]
++            request_hashes = [key for _, key, _ in missing]
++            hash_boundaries = [valid_end for _, _, valid_end in missing]
++            for cpu_block, key, valid_end in zip(
++                cpu_blocks, request_hashes, hash_boundaries, strict=True
++            ):
++                cpu_block.set_block_hash(key, num_tokens=valid_end)
++
++            gpu_pool.touch([gpu_pool.blocks[block_id] for block_id in request_gpu_ids])
++            self._in_flight_store_gpu_blocks.update(request_gpu_ids)
++            self._in_flight_store_hashes.update(request_hashes)
++            gpu_ids.extend(request_gpu_ids)
++            cpu_ids.extend(block.block_id for block in cpu_blocks)
++            req_ids.append(req_id)
++
++        return gpu_ids, cpu_ids, req_ids
+ 
+     def _prepare_lazy_store_specs(
+         self,
+     ) -> tuple[list[int], list[int], list[str]]:
+-        """Single-pass cursor walk: offload cached GPU blocks near eviction.
+-
+-        Walks the GPU free queue from the cursor, counting blocks that are
+-        free-or-offloaded (safe for the allocator to evict). Stops when
+-        target_free blocks are covered or CPU capacity is reached.
+-        """
++        """Keep the next GPU eviction candidates recoverable from CPU."""
+         gpu_pool = self._gpu_block_pool
+         if gpu_pool is None or self._target_free <= 0:
+             return [], [], []
+@@ -485,31 +611,25 @@ class SimpleCPUOffloadScheduler:
+         cpu_pool = self.cpu_block_pool
+         num_cpu_free = cpu_pool.get_num_free_blocks()
+ 
+-        # Validate cursor: stale if block was removed from free queue.
+-        if self._cursor is not None and self._cursor.ref_cnt > 0:
+-            self._cursor = None
+-
+         gpu_ids: list[int] = []
+         block_hashes: list[bytes] = []
+-        last_visited = self._cursor
++        num_to_cover = max(0, self._target_free - len(self._in_flight_store_gpu_blocks))
+ 
+-        for covered, node in enumerate(free_queue.iter_blocks_after(self._cursor)):
+-            if covered >= self._target_free or len(gpu_ids) >= num_cpu_free:
++        for covered, node in enumerate(free_queue.iter_blocks_after(None)):
++            if covered >= num_to_cover or len(gpu_ids) >= num_cpu_free:
+                 break
+ 
+-            last_visited = node
+             bhash = node.block_hash
+ 
+             if (
+                 bhash is not None
+                 and not node.is_null
++                and bhash not in self._in_flight_store_hashes
+                 and cpu_pool.cached_block_hash_to_block.get_one_block(bhash) is None
+             ):
+                 gpu_ids.append(node.block_id)
+                 block_hashes.append(bhash)
+ 
+-        self._cursor = last_visited
+-
+         # Batch-allocate CPU blocks and stamp hashes.
+         if gpu_ids:
+             cpu_blocks = cpu_pool.get_new_blocks(len(gpu_ids))
+@@ -518,6 +638,8 @@ class SimpleCPUOffloadScheduler:
+                 cpu_blk._block_hash = bhash  # type: ignore[assignment]
+             # Touch GPU blocks to prevent eviction during async copy.
+             gpu_pool.touch([gpu_pool.blocks[bid] for bid in gpu_ids])
++            self._in_flight_store_gpu_blocks.update(gpu_ids)
++            self._in_flight_store_hashes.update(block_hashes)
+         else:
+             cpu_ids = []
+ 
+@@ -551,20 +673,11 @@ class SimpleCPUOffloadScheduler:
+         # Dedup against blocks already scheduled.
+         in_flight = self._in_flight_store_gpu_blocks
+ 
+-        for req_id, new_block_id_groups, preempted in yield_req_data(scheduler_output):
++        for req_id, _, _ in yield_req_data(scheduler_output):
+             state = self._reqs_to_store.get(req_id)
+             if state is None or state.finished:
+                 continue
+ 
+-            # Accumulate new block IDs.
+-            if preempted:
+-                state.block_ids = tuple([] for _ in range(num_groups))
+-                state.num_stored_blocks = [0] * num_groups
+-            if new_block_id_groups:
+-                for g in range(min(num_groups, len(new_block_id_groups))):
+-                    if new_block_id_groups[g] is not None:
+-                        state.block_ids[g].extend(new_block_id_groups[g])
+-
+             num_new_tokens = scheduler_output.num_scheduled_tokens.get(req_id, 0)
+             if num_new_tokens == 0:
+                 continue
+@@ -591,9 +704,7 @@ class SimpleCPUOffloadScheduler:
+                 already_stored_g = state.num_stored_blocks[g]
+                 group_gpu_ids = block_ids_by_group[g]
+ 
+-                g_block_size = (
+-                    kv_cache_groups[g].kv_cache_spec.block_size * self.cp_world_size
+-                )
++                g_block_size = self.cpu_coordinator.single_type_managers[g].block_size
+                 ready_blocks_g = aligned_tokens // g_block_size
+                 scannable = group_gpu_ids[already_stored_g:ready_blocks_g]
+ 
+@@ -612,7 +723,7 @@ class SimpleCPUOffloadScheduler:
+ 
+                     # Skip if already scheduled for store or already cached in CPU.
+                     if (
+-                        gpu_block_id in in_flight
++                        bhash_with_group in self._in_flight_store_hashes
+                         or cpu_block_pool.cached_block_hash_to_block.get_one_block(
+                             bhash_with_group
+                         )
+@@ -648,6 +759,7 @@ class SimpleCPUOffloadScheduler:
+                 merged_gpu_block_ids.extend(gpu_block_ids)
+                 merged_cpu_block_ids.extend(cpu_block_ids)
+                 in_flight.update(gpu_block_ids)
++                self._in_flight_store_hashes.update(block_hashes_to_store)
+ 
+                 # Touch GPU blocks to prevent freeing during async copy
+                 gpu_block_pool.touch(
+@@ -701,8 +813,8 @@ class SimpleCPUOffloadScheduler:
+             self._release_transfer_refs(transfer)
+             return
+ 
+-        if not self._lazy_mode:
+-            self._in_flight_store_gpu_blocks.difference_update(transfer.gpu_block_ids)
++        self._in_flight_store_gpu_blocks.difference_update(transfer.gpu_block_ids)
++        self._discard_in_flight_store_hashes(transfer.cpu_block_ids)
+ 
+         self._process_store_completion(transfer.gpu_block_ids, transfer.cpu_block_ids)
+         logger.debug(
+@@ -742,13 +854,21 @@ class SimpleCPUOffloadScheduler:
+         # Free CPU and GPU blocks' ref counts to turn them into prefix cache
+         self.cpu_block_pool.free_blocks(cpu_blocks)
+         assert self._gpu_block_pool is not None
+-        self._gpu_block_pool.free_blocks(
+-            self._gpu_block_pool.blocks[bid] for bid in gpu_block_ids
+-        )
++        gpu_blocks = [self._gpu_block_pool.blocks[bid] for bid in gpu_block_ids]
++        self._gpu_block_pool.free_blocks(gpu_blocks)
++        if self._lazy_mode:
++            # These blocks now have a durable external copy, so prefer them
++            # over unprotected cached blocks when the allocator evicts.
++            evict_first = [block for block in gpu_blocks if block.ref_cnt == 0]
++            for block in evict_first:
++                self._gpu_block_pool.free_block_queue.remove(block)
++            self._gpu_block_pool.free_block_queue.prepend_n(evict_first)
+ 
+     def _release_transfer_refs(self, transfer: TransferMeta) -> None:
+         """Release transfer refs without making copied data cacheable."""
++        self._in_flight_store_gpu_blocks.difference_update(transfer.gpu_block_ids)
+         cpu_blocks = [self.cpu_block_pool.blocks[bid] for bid in transfer.cpu_block_ids]
++        self._discard_in_flight_store_hashes(transfer.cpu_block_ids)
+         for cpu_block in cpu_blocks:
+             cpu_block.reset_hash()
+         self.cpu_block_pool.free_blocks(cpu_blocks)
+@@ -757,6 +877,12 @@ class SimpleCPUOffloadScheduler:
+             self._gpu_block_pool.blocks[bid] for bid in transfer.gpu_block_ids
+         )
+ 
++    def _discard_in_flight_store_hashes(self, cpu_block_ids: list[int]) -> None:
++        for block_id in cpu_block_ids:
++            block_hash = self.cpu_block_pool.blocks[block_id].block_hash
++            if block_hash is not None:
++                self._in_flight_store_hashes.discard(block_hash)
++
+     def has_pending_stores(self) -> bool:
+         """Return True if there are in-flight store transfers."""
+         return bool(
+@@ -795,6 +921,9 @@ class SimpleCPUOffloadScheduler:
+                 else:
+                     self._cleanup_store_request(req_id)
+ 
++        self._requests_by_id.pop(req_id, None)
++        self._request_block_ids.pop(req_id, None)
++
+         return False, None
+ 
+     def request_finished_all_groups(
+@@ -878,7 +1007,6 @@ class SimpleCPUOffloadScheduler:
+ 
+         self._abandoned_store_event_to_blocks.update(self._store_event_to_blocks)
+         self._store_event_to_blocks.clear()
+-        self._in_flight_store_gpu_blocks.clear()
+ 
+         # Loads that have not been sent to the worker cannot have running DMA.
+         # In-flight loads stay pinned and are cleaned up on completion.
+@@ -891,13 +1019,14 @@ class SimpleCPUOffloadScheduler:
+                 self._abandoned_reqs_to_load[req_id] = state
+ 
+         self._reqs_to_store.clear()
++        self._requests_by_id.clear()
++        self._request_block_ids.clear()
+         self._store_event_to_reqs.clear()
+         self._store_event_pending_counts = {
+             event_idx: count
+             for event_idx, count in self._store_event_pending_counts.items()
+             if event_idx in self._abandoned_store_event_to_blocks
+         }
+-        self._cursor = None
+         # NOTE: _load_event_counter / _store_event_counter are not
+         # reset as they are monotonic and must stay ahead of the workers
+         # high-water marks to avoid event index collisions

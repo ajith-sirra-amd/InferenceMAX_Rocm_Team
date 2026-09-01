@@ -516,3 +516,49 @@ Expect the peak between 40 and 56; we have 40 and 52 and nothing between.
   - **A real second sample of C64** if the node has recovered, which the ledger
     needs since every point in Phase E except C52 is n=1.
   Re-running C56 a fourth time would have produced neither.
+
+## Overlay + PR ablation plan (A/B/C/D/E) — prune to minimum
+
+Goal: find the smallest subset that still delivers 10,632 at C72, so there is
+less to carry forward and less to upstream.
+
+**Mechanically ready.** `k3_patches/overlay_split/` partitions the 264 KB
+overlay by concern. Recombined it is byte-identical (264,116 B, 199 hunks, 34
+files). All five groups verified to apply **independently** on a pristine
+46638857 tree and in sequence, so any subset is a legal experiment.
+
+| grp | scope | files | bytes |
+|---|---|--:|--:|
+| A | dcp a2a buffer pool (`v1/attention/ops/dcp.py`) | 1 | 3,555 |
+| B | spec-decode cudagraph (`dflash/cudagraph`, `speculator`, `config/speculative`) | 3 | 4,434 |
+| C | kv-offload + cache manager (`v1/core/*`, `simple_kv_offload`, `kv_cache_*`) | 9 | 76,944 |
+| D | ROCm AITER MLA (`backends/mla/*`, `rocm_aiter_mla_reduce`, `mla_attention`) | 5 | 76,806 |
+| E | Kimi-K3 model path (`models/kimi_k3/**`, MoE runner, `envs`, `platforms/rocm`) | 16 | 102,377 |
+
+Driver: `K3_OVERLAY_SPLIT=1 OVERLAY_GROUPS=ABCDE`. Gate line
+`[overlay-split] groups=... applied=N failed:...`. `ABCDE` == the monolith.
+
+**Sequence, all at C72 (the peak), one variable each:**
+
+| # | groups | pr-stack | tests |
+|---|---|---|---|
+| 0 | ABCDE | 5 | control — must reproduce 10,632 via the split path |
+| 1 | _BCDE | 5 | is A (dcp buffer pool) needed for throughput? |
+| 2 | A_CDE | 5 | is B needed at C72? (spec is OFF above C4 — expect droppable) |
+| 3 | AB_DE | 5 | is C needed? largest generic group |
+| 4 | ABC_E | 5 | is D needed? |
+| 5 | ABCD_ | 5 | is E needed? |
+| 6 | best | 4 | drop #50813 — also the T193 attribution gap |
+| 7 | best | 0 | drop the pr-stack entirely |
+
+Then recombine the neutral groups into one minimal set and re-verify at C72,
+plus a GSM8K limit-200 gate, since dropping any group is numerics-affecting.
+
+**Expected, to be falsified by measurement:** B should drop free at C72 (MTP is
+off above C4). A is a correctness fix for a fault we have not hit on this stack,
+so it may measure neutral but should still be kept. D and E are the kernel path
+and are unlikely to be droppable. C is the interesting one — 9 files, generic,
+and the offload it manages is worth ~1-2% by three earlier A/Bs.
+
+Cost: ~8 runs at C72. Every prior top-of-curve intuition on this stack has been
+wrong, so no group is dropped on reasoning alone.

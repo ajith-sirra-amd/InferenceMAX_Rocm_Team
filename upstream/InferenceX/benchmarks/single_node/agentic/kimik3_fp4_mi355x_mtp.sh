@@ -69,7 +69,42 @@ else
 K3_OVERLAY_PATCH="${K3_OVERLAY_PATCH:-$K3_PATCH_DIR/vllm_nightly_46638857_k3_c16_c52_current.patch}"
 REQUIRE_K3_OVERLAY="${REQUIRE_K3_OVERLAY:-1}"
 K3_OVERLAY_APPLIED=0
-if [ -f "$K3_OVERLAY_PATCH" ]; then
+
+# ---- Overlay ablation (A/B/C/D/E) -------------------------------------------
+# k3_patches/overlay_split/ carries the SAME 264 KB overlay partitioned by
+# concern. Recombined it is byte-identical to the monolith (264,116 B, 199
+# hunks, 34 files), and all five groups were verified to apply independently on
+# a pristine 46638857 tree, so any subset is a legal experiment.
+#
+#   A  dcp a2a buffer pool          1 file    3,555 B
+#   B  spec-decode cudagraph        3 files   4,434 B
+#   C  kv-offload + cache manager   9 files  76,944 B
+#   D  ROCm AITER MLA backend       5 files  76,806 B
+#   E  Kimi-K3 model path          16 files 102,377 B
+#
+# OVERLAY_GROUPS=ABCDE (default) is equivalent to the monolith. Drop a letter to
+# ablate that group. Purpose: prune to the minimum set that preserves 10,632, so
+# there is less to carry forward and upstream.
+K3_OVERLAY_SPLIT="${K3_OVERLAY_SPLIT:-0}"
+OVERLAY_GROUPS="${OVERLAY_GROUPS:-ABCDE}"
+if [ "$K3_OVERLAY_SPLIT" = "1" ]; then
+    SITE_PKGS=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')
+    SPLIT_DIR="$K3_PATCH_DIR/overlay_split"
+    SPLIT_OK=0; SPLIT_MISS=""
+    for _g in A B C D E; do
+        case "$OVERLAY_GROUPS" in *"$_g"*) ;; *) continue ;; esac
+        _gp=$(ls "$SPLIT_DIR"/${_g}_*.patch 2>/dev/null | head -1)
+        [ -n "$_gp" ] || { echo "[overlay-split] MISSING group $_g" >&2; exit 1; }
+        if ( cd "$SITE_PKGS" && patch -p1 --forward --batch < "$_gp" ) >/dev/null 2>&1; then
+            SPLIT_OK=$(( SPLIT_OK + 1 ))
+        else
+            SPLIT_MISS="$SPLIT_MISS $_g"
+        fi
+    done
+    echo "[overlay-split] groups=$OVERLAY_GROUPS applied=$SPLIT_OK failed:${SPLIT_MISS:- none}"
+    [ -n "$SPLIT_MISS" ] && [ "$REQUIRE_K3_OVERLAY" = "1" ] && exit 1
+    K3_OVERLAY_APPLIED=1
+elif [ -f "$K3_OVERLAY_PATCH" ]; then
     SITE_PKGS=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')
     if ( cd "$SITE_PKGS" && patch -p1 --forward --batch --dry-run < "$K3_OVERLAY_PATCH" ) \
             >/tmp/k3_overlay_dryrun.log 2>&1; then
