@@ -517,16 +517,20 @@ Expect the peak between 40 and 56; we have 40 and 52 and nothing between.
     needs since every point in Phase E except C52 is n=1.
   Re-running C56 a fourth time would have produced neither.
 
-## PRIORITY: image validation first, ablation second (user directive)
+## Image validation COMPLETE. Push pending docker login.
 
-1. **C1 on `kimi-k3-vllm:v4`** -- lowest possible TPOT. RUNNING.
-2. **C72 on v4** -- best throughput, target 10,632 +- noise.
-3. **GSM8K at high conc on v4** -- must pass (valid only at C >= 16).
-4. Then patches/overlay ablation, then the registry push.
+| gate | result | run |
+|---|---|---|
+| C1 latency | TPOT 9.69 ms mean / 11.70 p99 | T205 |
+| C72 throughput | **10,646 tok/s/GPU**, err 0.31% | T206 |
+| GSM8K @ C72 | **0.995** flexible + strict | T207 |
 
-`kimi-k3-vllm:v4` rebuilt with the 4-file pr-stack (#50813 pruned as dead code).
-Manifest reads `pr-stack: 4 files (#53940 a4w4-flydsl)`; verified in-image that
-`quark_moe.py` is unpatched and flydsl markers are present.
+`kimi-k3-vllm:v4` = `nightly-46638857` + c16_c52 overlay + 4-file pr-stack
+(#53940), baked, no runtime patching. Push as **`aigmkt/kimi-k3-vllm:v4`**
+(user-approved, overrides the standing no-Docker-Hub-push bound). Blocked only
+on `docker login` for the `aigmkt` org on b23_07.
+
+Next while that is pending: the C1 tail-variance hunt (below).
 
 ## Overlay + PR ablation plan (A/B/C/D/E) — prune to minimum
 

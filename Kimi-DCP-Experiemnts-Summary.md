@@ -3088,3 +3088,43 @@ hits. At C72 there is no startup difference worth claiming.
 
 **Image validation status: C1 done (T205), C72 done (T206). GSM8K at high conc
 is the last gate before the registry push.**
+
+## T207 — GSM8K 0.995 at C72 on v4. IMAGE VALIDATION COMPLETE.
+
+Run 33483325700, job 99777661590. `EVAL_ONLY=true EVAL_LIMIT=200`, C72 config,
+`kimi-k3-vllm:v4`.
+
+```
+|gsm8k|3|flexible-extract|5|exact_match|^ |0.995|+- |0.005|
+|     | |strict-match    |5|exact_match|^ |0.995|+- |0.005|
+```
+
+**Ties the best accuracy in the ledger** (T192, 0.995) and beats the 5-file
+stack's 0.99 (T194) -- consistent with #50813 having been dead code either way.
+This also closes the gap flagged earlier: no run had ever put GSM8K and the C72
+config in the same process. Now one has.
+
+The runner's local-image fallback is confirmed working end to end:
+
+```
+[image] pull failed -- using LOCAL image kimi-k3-vllm:v4
+[image] no registry digest; using local image id
+```
+
+The `pull access denied` line above it is expected, not an error -- `kimi-k3-vllm`
+is local-only. The job's `exit code 1` is the eval-only harness check, as always.
+
+### kimi-k3-vllm:v4 — all three gates PASS
+
+| gate | result | run |
+|---|---|---|
+| C1 latency | TPOT 9.69 ms mean / 9.13 median / 11.70 p99 | T205 |
+| C72 throughput | **10,646 tok/s/GPU**, err 0.31% | T206 |
+| GSM8K @ C72 | **0.995** flexible and strict | T207 |
+
+Image contents: `nightly-46638857` + Hyukjoon's `c16_c52` overlay (sha256
+`90f975fa...f64dcc0`) + 4-file pr-stack (#53940), all baked, no runtime
+patching, one overlay for every concurrency.
+
+**Ready for the registry push as `aigmkt/kimi-k3-vllm:v4`** -- pending
+`docker login`, which this host does not have.
