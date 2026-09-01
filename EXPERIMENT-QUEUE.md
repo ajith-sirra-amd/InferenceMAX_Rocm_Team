@@ -573,3 +573,28 @@ and the offload it manages is worth ~1-2% by three earlier A/Bs.
 
 Cost: ~8 runs at C72. Every prior top-of-curve intuition on this stack has been
 wrong, so no group is dropped on reasoning alone.
+
+## Decision: no separate C1 image. C1 stays on the runtime-patch path.
+
+Hyukjoon confirmed the two overlay cuts are **deliberately different PR
+selections tuned for high vs low concurrency** -- not old-vs-new snapshots as I
+had assumed. T205 measured the cost of ignoring that: folding C1 onto the
+`c16_c52` cut moved TPOT 8.92 -> 9.69 ms mean and 9.18 -> 11.70 ms p99.
+
+So the split is correct and stays:
+
+| | overlay | delivery |
+|---|---|---|
+| C <= 4 | `..._k3_c1_current.patch` | runtime patch, as today |
+| C > 4 | `..._k3_c16_c52_current.patch` | **baked into `kimi-k3-vllm:v4`** |
+
+A `v4-c1` baked variant was considered and **dropped** (user call). The only
+thing C1 gives up is the baked-image startup win (372 s vs ~49 min), which does
+not affect any measured number.
+
+Open question for Hyukjoon: the PR list is **not** in the patch file we hold
+(`90f975fa...f64dcc0`, 264,116 B) -- grepped for `#NNNNN`, `PR NNNNN`, `pull/`,
+`github.com/`, `cherry-pick`, `backport`, `Signed-off-by`, zero hits. The only
+references anywhere are in the **c1** cut: `ATOM#1752` (a port source) and
+`vLLM PR 40710` (cited as a do-not-use warning). Need either the manifest that
+accompanies the patch, or a newer revision whose header carries the list.
