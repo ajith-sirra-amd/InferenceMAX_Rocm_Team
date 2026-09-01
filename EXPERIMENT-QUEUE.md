@@ -726,3 +726,17 @@ matching T216 matters more here than tuning.
 | next | 32 or 8 | bisect from T218's result |
 
 Reference: C52 starved with 38/107 warmup returned in 19.5 min, errors=0.
+
+## Bare-nightly degradation curve (mns 80, chunk 16384, dcp 8)
+
+| conc | tok/s/GPU | err | run |
+|---|--:|--:|---|
+| 1 | 1,222 | 0.54% | T217 |
+| 16 | 3,591 | 10.05% | T218 |
+| **32** | **?** | **?** | **T220 running** |
+| 52 | starves | 100% | T216 |
+
+C52 is not being re-run -- T216 already measured it with mns 80, and T219
+eliminated the mns confound in the protective direction. C32 locates the usable
+ceiling for a stock upstream image, which is the practical question behind
+"can we ship without the overlay".
