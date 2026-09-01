@@ -60,6 +60,41 @@ Hyukjoon's overlay, applied verbatim. It touches
 `models/kimi_k3/amd/{mla,kda,linear,latent_moe_runner}.py`, `layers/mla.py`,
 `mla_attention.py`, `fused_moe/runner/*`, `platforms/rocm.py`, `envs.py`.
 
+### What it is made of
+
+Hyukjoon: *"The patch I made is a mixture of PRs."* It is **not** a single
+upstream PR and has no PR number of its own. Matching hunks back to
+`vllm-project/vllm` by symbol and title:
+
+| overlay area | upstream PR | state |
+|---|---|---|
+| `v1/attention/ops/dcp.py` — `_DCPA2ABufferPool` | [#51705](https://github.com/vllm-project/vllm/pull/51705) [ROCm][MLA][DCP] Support causal multi-token verification | closed |
+| KDA kernels — `ops/fused_qkv_conv1d.py`, `fused_sigmoid_gate.py`, `ops/third_party/kda/chunk.py`, `flash_linear_attention/ops/chunk_delta_h.py` | [#54038](https://github.com/vllm-project/vllm/pull/54038) [ROCm][Perf] Kimi-K3 Fused kernels for KDA prefill (reland) | open |
+| `v1/attention/backends/mla/triton_mla.py` cudagraph support | [#54546](https://github.com/vllm-project/vllm/pull/54546) [ROCm][MLA][DCP] Advertise Triton MLA non-causal multi-token DCP | open |
+| KV-offload / cache-manager group — `single_type_kv_cache_manager`, `simple_kv_offload/manager`, `kv_cache_coordinator`, `kv_cache_interface`, `block_pool` | [#53917](https://github.com/vllm-project/vllm/pull/53917) [Bugfix][DCP] Handle hybrid cache geometry in offload recovery · [#54457](https://github.com/vllm-project/vllm/pull/54457) [Bugfix] Do not adjust `dcp_kv_cache_interleave_size` for CPU offloading | open |
+| decode-LSE correctness | [#54639](https://github.com/vllm-project/vllm/pull/54639) [AMD][DCP] Close two decode-LSE holes left by AITER DCP support | closed |
+
+**Not matched to any public PR** — likely unpublished or squashed differently:
+`models/kimi_k3/amd/latent_moe_runner.py`, `v1/attention/ops/rocm_aiter_mla_reduce.py`
+(new file), and the `v1/core/sched/scheduler.py` hunks (+116/−65).
+
+### If it were to be split for upstreaming
+
+34 files / ~3,600 changed lines is not a reviewable PR. Natural split, easiest
+first:
+
+| # | scope | Δlines | note |
+|---|---|--:|---|
+| A | DCP a2a buffer pool (`dcp.py`) | +48/−10 | self-contained ROCm correctness fix; best first PR |
+| B | spec-decode cudagraph (`dflash/cudagraph.py`, `speculator.py`, `config/speculative.py`) | +34/−11 | small |
+| C | KV-offload + cache manager | +692/−170 | highest value (generic, not K3-specific), heaviest review |
+| D | ROCm AITER MLA backend (`rocm_aiter_mla.py` +1077/−168, `rocm_aiter_mla_reduce.py` new) | +1241/−178 | ROCm-specific |
+| E | Kimi-K3 AMD model path (`models/kimi_k3/amd/*`, MoE runner, `envs`, `platforms/rocm`) | +1550/−230 | depends on D |
+
+Authorship is Hyukjoon's — nothing should be filed without their sign-off, and
+the new-file hunks need re-checking against current upstream `main` since the
+overlay is cut against a July nightly.
+
 **Without it the nightly is missing every Kimi-K3 kernel path and regresses.**
 It is cut against `46638857` specifically — on any other image the dry-run
 fails. `REQUIRE_K3_OVERLAY` defaults to `1` so that case is a hard exit rather
