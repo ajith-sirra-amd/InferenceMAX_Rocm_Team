@@ -3333,3 +3333,31 @@ from the intended C52 perf config.
 
 **Next: GSM8K limit 200 at C52** -- the only valid accuracy point, since spec is
 off there. Then agentic perf at C52 and C1.
+
+## T215 — GSM8K 0.985 at C52 on the BARE nightly. Numerics sound without the overlay.
+
+Run 33496444778, job 99819722285. `[k3-overlay] applied=0 conc=52`,
+`[dcp] ENABLED size=8`, `[mns] 80`, `graphs: 1..80`. EVAL_ONLY, limit 200.
+
+```
+|gsm8k|3|flexible-extract|5|exact_match|^ |0.985|+- |0.0086|
+|     | |strict-match    |5|exact_match|^ |0.985|+- |0.0086|
+```
+
+| stack | GSM8K | run |
+|---|--:|---|
+| nightly-46638857 + overlay + 4 PR files | 0.995 ± 0.005 | T192 |
+| same + #50813 (5 files) | 0.99 ± 0.0071 | T194 |
+| **kimi-k3-vllm:v4** (overlay + 4 files, baked) | **0.995 ± 0.005** | T207 |
+| **BARE nightly-7c5dc571, zero patches** | **0.985 ± 0.0086** | **T215** |
+
+**Accuracy is intact.** At limit 200 each question is worth 0.005, so 0.995 ->
+0.985 is **two more wrong answers out of 200**. The confidence intervals
+([0.976, 0.994] vs [0.990, 1.000]) touch, so this is at the edge of what 200
+questions can resolve -- it is not evidence of a real regression, and it is not
+evidence of parity either. A limit-1000 run would be needed to separate them,
+and there is no strong reason to expect a difference: the overlay is kernel and
+scheduling work, not a numerics change.
+
+Both functional gates and the accuracy gate now pass on a **stock public
+nightly with nothing applied**. Only the throughput number is outstanding.
