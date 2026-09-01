@@ -3457,3 +3457,39 @@ is fully healthy at C1 -- better than the patched stack, in fact -- and is fine
 at C52 for everything except the agentic replay, where it starves. The overlay's
 value is therefore concentrated in exactly one place: sustaining the
 prefix-cache-heavy agentic workload at high concurrency.
+
+## T218 — BARE nightly C16 agentic: 3,591 tok/s/GPU but err 10.05%. Gradient, not a cliff.
+
+Run 33507877327, job 99856260535. Bare `nightly-7c5dc571`, config matched to
+T216 (mns 80, chunk 16384, dcp 8) so conc is the only variable.
+
+| | value |
+|---|--:|
+| **Throughput per GPU** | **3,591 tok/s** |
+| Requests | 680 successful / 789 (106 error dropped) |
+| **Request error rate** | **10.05%** |
+| ITL mean | 40.73 ms |
+
+**The bare nightly degrades progressively, it does not hit a wall:**
+
+| conc | tok/s/GPU | error rate | verdict |
+|---|--:|--:|---|
+| 1 (T217) | 1,222 | **0.54%** | clean |
+| 16 (T218) | 3,591 | **10.05%** | at aiperf's abort threshold |
+| 52 (T216) | — | 100% dropped | starves |
+
+10.05% is exactly aiperf's `ProfileAborted` cut-off, so C16 is the last point
+that produces a number at all. This answers the T218 question: **the failure is
+a capacity/scheduling limit, not a broken prefix-cache path.** A broken path
+would fail the same way at every concurrency; this scales with load.
+
+**Important confound, and it is ours, not upstream's.** All three runs used
+`mns 80` (the script's DCP>1 default). At C16 that captures 80 graph sizes for a
+batch that never exceeds ~20 -- 60 dead sizes. T208 measured exactly this effect
+at C1 and it cost 2.64 ms of tail spread; the fix there was matching mns to the
+real batch. **T216's C52 starvation also ran mns 80.** So some or all of the
+degradation attributed to "the missing overlay" may be our own mns default.
+
+That has to be ruled out before any conclusion about what the overlay is worth.
+Next run: **C16 with mns 20** (`conc + conc/4`, the `old.sa.sh` rule), one
+variable against T218's mns 80.
