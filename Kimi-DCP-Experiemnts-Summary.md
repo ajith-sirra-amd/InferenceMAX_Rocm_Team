@@ -2930,3 +2930,41 @@ the harness, **not** a numerics regression.
 
 Every GSM8K run in this ledger (T192, T194) was at C >= 60, i.e. spec-none, so
 none of the existing numbers are affected by this.
+
+## #50813 is DEAD CODE for this model. Pruned. Three ledger corrections follow.
+
+`#50813` patches `vllm/model_executor/layers/quantization/quark/quark_moe.py`,
+which is only reachable when the model declares Quark quantization. **It never
+loads for `moonshotai/Kimi-K3`.** Two independent proofs:
+
+1. `/data/hf_hub_cache/Kimi-K3/config.json` has **no `quantization_config`** at
+   all — no `quant_method: quark`.
+2. The MoE path actually taken in T195 is aiter flydsl, not quark:
+   ```
+   [aiter] [fused_moe] using 2stage (kernelName1='flydsl_moe1_abf16_wfp4_bf16_...',
+     ... 'ActivationType.Situv2', 'torch.float4_e2m1fn_x2', 'QuantType.per_1x32')
+   ```
+   That is #53940's path via `rocm_aiter_moe.py` / `oracle/mxfp4.py`. `Situv2`
+   appears as an **aiter kernel selection** driven by `AITER_SITUV2_A8W4=1`,
+   not by `quark_moe.py`.
+
+**Corrections to earlier entries:**
+
+1. **T194's rationale was wrong.** I justified adding #50813 as "our script
+   already exports `VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1` and
+   `AITER_SITUV2_A8W4=1`, so we were setting flags for a code path that was not
+   present." The flags are consumed by **aiter**, not by `quark_moe.py`. Adding
+   the patch did not connect them to anything.
+2. **T193's 9,775 at C64 cannot be attributed to #50813.** The queued
+   attribution run ("C64 without #50813") is unnecessary — it is provably a
+   no-op, not merely unmeasured.
+3. **T194 (0.99) vs T192 (0.995) is definitively noise.** The only stack
+   difference between them was dead code, so the one-question delta cannot be a
+   numerics effect.
+
+**Action: pruned.** `pr_stack/` 5 files -> **4**. The patch is retained at
+`k3_patches/pr_stack_disabled/` for provenance. `kimi-k3-vllm:v4` rebuilt
+without it; manifest and `k3.pr-stack` label now read `53940` only.
+
+This is the first prune of the A/B/C/D/E exercise and it cost zero GPU time --
+it fell out of reading what the model config actually declares.

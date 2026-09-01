@@ -168,7 +168,7 @@ if [ "${APPLY_PR_STACK:-1}" = "1" ] && [ "$K3_OVERLAY_APPLIED" = "1" ] && [ -d "
         fi
     done
 fi
-echo "[pr-stack] applied=$PR_STACK_APPLIED files, skipped:${PR_STACK_SKIPPED:- none} (#53940 a4w4-flydsl, #50813 SiTUv2-A8W4-MoE)"
+echo "[pr-stack] applied=$PR_STACK_APPLIED files, skipped:${PR_STACK_SKIPPED:- none} (#53940 a4w4-flydsl; #50813 pruned -- dead code for this model)"
 fi
 
 if [ -n "${DCP_SIZE:-}" ]; then

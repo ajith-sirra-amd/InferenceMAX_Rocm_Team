@@ -50,11 +50,11 @@ RUN printf '%s\n' \
     'base-digest: sha256:8908b8ab5ba28c3b81f9f42bb72e2421f06a180e001c67c4f10ff7f127c5690b' \
     'overlay: vllm_nightly_46638857_k3_c16_c52_current.patch (all concurrencies)' \
     'overlay-sha256: 90f975fad15722494366153ec3f32a14c4445bfa88c51ec53043b88eaf64dcc0' \
-    'pr-stack: 5 files (#53940 a4w4-flydsl, #50813 SiTUv2-A8W4-MoE)' \
+    'pr-stack: 4 files (#53940 a4w4-flydsl)' \
     'runtime-patching: none' \
     > /etc/k3-image-manifest
 
 LABEL org.opencontainers.image.base.digest="sha256:8908b8ab5ba28c3b81f9f42bb72e2421f06a180e001c67c4f10ff7f127c5690b"
 LABEL k3.overlay="c16_c52-all-conc"
-LABEL k3.pr-stack="53940,50813"
+LABEL k3.pr-stack="53940"
 LABEL k3.runtime-patching="none"
