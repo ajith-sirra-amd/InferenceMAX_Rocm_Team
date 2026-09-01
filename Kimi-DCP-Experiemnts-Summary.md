@@ -3361,3 +3361,54 @@ scheduling work, not a numerics change.
 
 Both functional gates and the accuracy gate now pass on a **stock public
 nightly with nothing applied**. Only the throughput number is outstanding.
+
+## T216 — BARE nightly at C52 agentic: STARVES. The overlay IS needed at high conc.
+
+Run 33497913856, job 99824310160. Bare `nightly-7c5dc571`, `[k3-overlay]
+applied=0`, `[dcp] ENABLED size=8`, `[mns] 80`, `[chunk] 16384` -- deliberately
+matching T189's config so the only variable vs 8,685 is the stack.
+
+**Result: no throughput number. The warmup phase never completed.**
+
+```
+Phase warmup progress | returned=3/107   | in_flight=52 | errors=0 | elapsed=30.0s
+Phase warmup progress | returned=30/107  | in_flight=25 | errors=0 | elapsed=300.0s
+Phase warmup progress | returned=38/107  | in_flight=17 | errors=0 | elapsed=1170.2s
+Requests: 0 successful / 70 total (70 warmup, 63 error dropped)
+```
+
+`errors=0` throughout -- nothing is failing, requests simply do not finish.
+Live sampling during the run showed long stretches of `Avg generation
+throughput: 0.0 tokens/s, Running: 1 reqs`. Progress flatlines after ~38.
+
+**This is the first hard limit of the unpatched nightly, and it is workload-
+specific, not concurrency-specific:**
+
+| workload | conc | bare nightly |
+|---|---|---|
+| fixed-len func (T214) | 52 | **PASS** 104/104 in 1,314 s |
+| GSM8K (T215) | 52 | **PASS** 0.985 |
+| **agentic replay (T216)** | **52** | **STARVES**, 38/107 warmup in 19.5 min |
+| agentic-band fixed-len (T213) | 1 | **PASS**, best TPOT in ledger |
+
+So the missing piece is not raw serving and not numerics -- it is whatever the
+agentic replay stresses that fixed-length serving does not. The obvious
+candidate is the **prefix cache**: the replay serves ~93% of its prompt tokens
+from cache, and fixed-len serves ~0%.
+
+**Hypothesis, matching Hyukjoon's manifest:** overlay group C is the KV-offload
+and cache-manager work. Of the two PRs behind it, **#53598** (per-group
+hybrid-cache geometry and DCP prefix lookup) **is** merged into this nightly,
+but **#53917** (hybrid-cache geometry, mamba replay boundaries, failed-load
+recovery) is **still open**. A broken or degenerate prefix-cache lookup under
+DCP would look exactly like this -- correct output, no errors, and each request
+re-prefilling instead of hitting cache.
+
+**Consequence for the distribution question.** The earlier read -- "at C1 there
+is nothing left to distribute" -- still stands for C1. It does **not** generalise:
+at C52 on the agentic workload the bare nightly does not merely lose
+performance, it fails to produce a result at all. The overlay is load-bearing
+where it matters most.
+
+**Not re-dispatched blind.** Next: C1 agentic perf on the same bare stack, which
+is the other requested point and is known-healthy at C1.
