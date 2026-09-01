@@ -447,6 +447,36 @@ Run 33439502712, job 99644048477. `[mns] max_num_seqs=96 conc=80 offload=dram`,
 **Next: C72 + mns 96.** If mns headroom is a general win rather than a C80
 rescue, the peak should rise above 10,632. One variable against T195.
 
+## T198 — C72 + mns 96 = 10,630. Identical to mns 80. Peak CONFIRMED n=2.
+
+Run 33448907210, job 99674166270. `[mns] max_num_seqs=96 conc=72`,
+`graphs: dense ladder 1..96`, `[pr-stack] applied=5`. 2,240 successful / 2,394,
+err 0.27%, zero faults.
+
+| C72 | tok/s/GPU |
+|---|--:|
+| mns 80 (T195) | 10,632 |
+| mns 96 (T198) | 10,630 |
+| **spread** | **0.02%** |
+
+**1. mns is neutral at C72.** The +3.0% mns 96 bought at C80 was specifically
+because conc == mns there; once concurrency is below mns, extra headroom does
+nothing. That is a clean confirmation of the C80 diagnosis rather than a general
+tuning win, and it closes mns as a lever.
+
+**2. C72 is replicated at n=2 with a 0.02% spread.** 10,632 / 10,630 across two
+independent runs an hour apart. That is by far the tightest replication in this
+ledger -- the old aigmkt C60 pair was 0.20% and C64 was 1.6%. The peak is real
+and the number is solid.
+
+### Final concurrency curve, nightly stack (mns 80 unless noted)
+
+| conc | 52 | 60 | 64 | **72** | 80 | 80 (mns 96) |
+|---|--:|--:|--:|--:|--:|--:|
+| tok/s/GPU | 8,685 | 9,482 | 9,775 | **10,632 / 10,630** | 9,864 | 10,159 |
+
+**Concurrency tuning is now exhausted.** Remaining gap to 12,500 is -14.9%.
+
 ## C52 — every lever tried is flat or negative
 
 | run | change vs T103 | tok/s/GPU |

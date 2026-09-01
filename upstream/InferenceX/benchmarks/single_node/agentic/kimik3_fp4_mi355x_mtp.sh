@@ -286,8 +286,8 @@ fi
 # N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
 # against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
 # clear peak at 8192 and both sides are downhill.
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-16384}")
-echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-16384} conc=$CONC"
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-8192}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-8192} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
 # 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
 # engine, but still the wrong sign after 175 commits. The host prep the profile
@@ -311,7 +311,7 @@ echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 # again without first raising that timeout.
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
-        MAX_NUM_SEQS=96
+        MAX_NUM_SEQS=80
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 8 ]; then MAX_NUM_SEQS=8; fi

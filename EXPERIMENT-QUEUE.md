@@ -62,6 +62,17 @@ json to `/workspace/results` instead of the host workdir -- fixed to
   spec-none. The 0.55% lead stands; remaining deltas are conc (60 vs 52),
   offload (dram vs none), and CCD pinning.
 
+## C72 = 10,632 / 10,630 (n=2, spread 0.02%). PEAK CONFIRMED. mns closed.
+
+mns 96 at C72 is identical to mns 80 -- the C80 gain was purely the conc==mns
+starvation, not a general win. Concurrency and mns are both exhausted.
+
+Curve: 52=8,685 / 60=9,482 / 64=9,775 / **72=10,632** / 80=9,864 (mns96: 10,159).
+
+Next lever: **chunk 8192 vs 16384 at C72**. N4 said 8192 was optimal, but that was
+measured on aigmkt and every aigmkt top-of-curve finding has since fallen. Chunk
+has never been A/B'd on the nightly stack. One variable against T195.
+
 ## mns 96 helps (+3.0% at C80) but C72 still peaks. Next: C72 + mns 96.
 
 C80: mns80=9,864 -> mns96=**10,159**. Recovers ~40% of the C72->C80 drop, so
