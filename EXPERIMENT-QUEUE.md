@@ -574,27 +574,32 @@ and the offload it manages is worth ~1-2% by three earlier A/Bs.
 Cost: ~8 runs at C72. Every prior top-of-curve intuition on this stack has been
 wrong, so no group is dropped on reasoning alone.
 
-## Decision: no separate C1 image. C1 stays on the runtime-patch path.
+## Decision: C1 is CLOSED. v4 is the single image for all concurrencies.
 
-Hyukjoon confirmed the two overlay cuts are **deliberately different PR
-selections tuned for high vs low concurrency** -- not old-vs-new snapshots as I
-had assumed. T205 measured the cost of ignoring that: folding C1 onto the
-`c16_c52` cut moved TPOT 8.92 -> 9.69 ms mean and 9.18 -> 11.70 ms p99.
+User call: accept the v4 C1 result as-is and do no further C1 work.
+**C1 final: TPOT 9.69 ms mean / 9.13 median / 11.70 p99** (T205, v4, chunk 8192,
+gmu 0.9, dcp off, mns 8, ladder 1..72). The `c1` overlay cut is retired.
 
-So the split is correct and stays:
+This supersedes the earlier plan to keep a per-concurrency overlay. The ~8.6%
+mean / 27% p99 TPOT the `c1` cut would have bought is knowingly given up in
+exchange for one image, one recipe, one thing to validate and ship. Recorded so
+nobody re-derives the regression later and treats it as a bug:
 
-| | overlay | delivery |
-|---|---|---|
-| C <= 4 | `..._k3_c1_current.patch` | runtime patch, as today |
-| C > 4 | `..._k3_c16_c52_current.patch` | **baked into `kimi-k3-vllm:v4`** |
+| | TPOT mean | p99 |
+|---|--:|--:|
+| c1 cut, runtime patch (T201) | 8.92 ms | 9.18 ms |
+| **c16_c52, baked v4 (T205) -- ACCEPTED** | **9.69 ms** | **11.70 ms** |
 
-A `v4-c1` baked variant was considered and **dropped** (user call). The only
-thing C1 gives up is the baked-image startup win (372 s vs ~49 min), which does
-not affect any measured number.
+Context worth keeping: Hyukjoon confirmed the two cuts are **deliberately
+different PR selections tuned for high vs low concurrency**, not old-vs-new
+snapshots. So the regression is explained, not mysterious -- we are running the
+high-conc selection at C1 by choice.
+
+No `v4-c1` variant. No further C1 runs.
 
 Open question for Hyukjoon: the PR list is **not** in the patch file we hold
 (`90f975fa...f64dcc0`, 264,116 B) -- grepped for `#NNNNN`, `PR NNNNN`, `pull/`,
 `github.com/`, `cherry-pick`, `backport`, `Signed-off-by`, zero hits. The only
-references anywhere are in the **c1** cut: `ATOM#1752` (a port source) and
+references anywhere are in the c1 cut: `ATOM#1752` (a port source) and
 `vLLM PR 40710` (cited as a do-not-use warning). Need either the manifest that
 accompanies the patch, or a newer revision whose header carries the list.
