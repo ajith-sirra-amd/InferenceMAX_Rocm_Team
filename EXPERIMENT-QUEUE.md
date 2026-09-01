@@ -603,3 +603,26 @@ Open question for Hyukjoon: the PR list is **not** in the patch file we hold
 references anywhere are in the c1 cut: `ATOM#1752` (a port source) and
 `vLLM PR 40710` (cited as a do-not-use warning). Need either the manifest that
 accompanies the patch, or a newer revision whose header carries the list.
+
+### Parked: C1 chunk-size sweep on v4 (user: "experiment that later")
+
+Not queued. Recorded so the prior work is not repeated.
+
+**Known, on the retired `c1` cut** (T200 vs T201, identical workload):
+
+| chunk | TPOT mean | p99 | TTFT mean |
+|--:|--:|--:|--:|
+| 16384 | 9.70 ms | 12.31 ms | 13,664 ms |
+| **8192** | **8.92 ms** | **9.18 ms** | 15,772 ms |
+
+Smaller chunk stops decode stalling behind an oversized prefill slice; the cost
+is prefill throughput. Mechanism is real at C1 because there is exactly one
+request, so slice size *is* the interleaving policy (unlike C72, where T199
+measured chunk flat in both directions).
+
+**Unexplored:** 4096 and 2048, and the whole sweep on the v4 / `c16_c52` stack
+where C1 currently sits at 9.69 ms mean / 11.70 ms p99 with chunk 8192. If the
+same tail mechanism holds, a smaller chunk may recover part of the 27% p99 gap
+accepted when the c1 cut was retired -- without needing a second image.
+
+Cost: ~15 min per point (C1 fixed-len, 4 prompts).
