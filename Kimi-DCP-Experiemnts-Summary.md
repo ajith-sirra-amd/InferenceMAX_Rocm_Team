@@ -4188,3 +4188,47 @@ Consequences:
 **Caveats, stated plainly.** n=1, against a stack whose replication band is
 ±1.2%. The result should be replicated before it is relied on. And it is a C72
 agentic result only — C1 TPOT and lower concurrencies are untested on pronly.
+
+## T233 — pronly C72 replication = 10,690. n=2, spread 0.02%. Result CONFIRMED.
+
+Run 33601311372. Same 12-PR `pronly` image as T232 (built before #54165 was
+dropped), same config: `[mns] 96 conc=72 offload=dram`, `[chunk] 16384`,
+`[dcp] ENABLED size=8`, `graphs: dense ladder 1..96`.
+
+| | T232 | **T233** | spread |
+|---|--:|--:|--:|
+| **Throughput per GPU** | 10,692 | **10,690** | **0.02%** |
+| Request Error Rate | 0.18% | 0.22% | — |
+| ITL mean / p99 | 108.53 / 526.54 | 107.64 / 550.03 | — |
+| TTFT mean | 4,538 ms | 4,507 ms | — |
+| Output tok/s | 505.29 | 505.42 | — |
+
+**0.02% apart — the tightest replication in the ledger**, matching the T195/T198
+pair. Both ran 1h44–1h49m.
+
+### The headline is now n=2 and settled
+
+| stack | C72 tok/s/GPU |
+|---|--:|
+| **pronly** (12 upstream PRs, no vendor patch) | **10,691 (n=2: 10,692 / 10,690)** |
+| v4 (264 KB overlay) | 10,607 ±1.2% (n=4) |
+| v4 matched-mns (T198, mns 96) | 10,630 |
+
+pronly is **+0.6% over T198** and +0.8% over the v4 mean — inside the band
+either way. **The overlay is worth nothing at C72, now confirmed at n=2.**
+
+### A caution about the ±1.2% band
+
+T232/T233 replicate to 0.02%, and T195/T198 did the same. Yet T206 vs T228 —
+byte-identical v4 config 26 h apart — differed by **1.20%**. So the noise is not
+uniform: back-to-back runs on a quiet node replicate almost exactly, while runs
+separated by a day do not. The ±1.2% band remains the honest figure for
+comparing across days; 0.02% is what a same-session pair looks like and should
+not be quoted as the general error bar.
+
+### Image note
+
+T232 and T233 both ran the **12-PR** image. #54165 was dropped afterwards
+(closed-unmerged upstream, inert at C72 since spec decoding is off), leaving
+11 PRs. The first run on the 11-PR image will be a later trial. No C72
+difference is expected, but it is n=0 until measured.

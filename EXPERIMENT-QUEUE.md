@@ -489,6 +489,13 @@ Their numbers are valid for that stack. The first run on the 11-PR image will be
 T234. Expect no difference at C72 (spec off), but it is n=0 until measured, and
 at C1 it could matter because MTP is on at CONC <= 4.
 
+**T233: pronly C72 = 10,690 — replicates T232 (10,692) to 0.02%.** n=2 confirmed,
+tightest pair in the ledger. Headline for the mergeable stack is **10,691**,
++0.6% over the matched-mns overlay run (T198). **The overlay is worth nothing at
+C72.** Note the noise is not uniform: same-session pairs replicate to 0.02%,
+but cross-day byte-identical runs differ by 1.2% (T206 vs T228) -- quote ±1.2%
+for cross-day comparisons.
+
 **T232 RESULT: pronly C72 = 10,692 — the overlay is worth NOTHING at C72.**
 The fully-mergeable stack (12 upstream PRs on `nightly-7c5dc571`, zero vendor
 patch) matches the 264 KB overlay: +0.6% over the matched-mns overlay run
