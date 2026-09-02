@@ -2,9 +2,12 @@
 
 **Newest first.** Everything below "HISTORICAL" is provenance only.
 
+*Tested and produced, not shipped* — `pronly` is a local image validated on
+b23_07, not published to a registry.
+
 ---
 
-# WHAT WE SHIP — `kimi-k3-vllm:pronly`
+# WHAT WE TESTED & PRODUCED — `kimi-k3-vllm:pronly`
 
 `nightly-7c5dc571` + **12 upstream PRs**. No vendor patch.
 **10,692 tok/s/GPU @ C72**, err 0.18%, GSM8K 0.99 (T232).
