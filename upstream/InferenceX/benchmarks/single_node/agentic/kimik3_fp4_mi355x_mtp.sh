@@ -587,7 +587,15 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # C<=4 has no batch to hold, so KV headroom should not bind -- but 0.92 was
 # assumed for C1 early on and never actually measured. Last of the four tail
 # hypotheses.
-GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61 ms
+# T242: lowered 0.90 -> 0.85 for headroom. The GPU halt that blocked T240 was
+# HSA_STATUS_ERROR_OUT_OF_RESOURCES / "Memory in use" -- 57.94 GB stranded on
+# GPU 3, cleared only by a node reboot. 0.85 buys ~5% of HBM back as slack so a
+# straggling DMA registration has somewhere to live. Ceiling for this direction
+# is 0.88; do NOT go above (0.92 and 0.95 both hang -- T211, T157).
+# Expect the GPU KV pool to SHRINK proportionally. Track it: throughput here is
+# prefill/queueing-bound, so a smaller pool may cost little -- but that is a
+# measurement, not an assumption.
+GPU_MEM_UTIL=0.85  # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61 ms
 # T234: bare images only -- see the gmu-override block above. Patched images
 # keep 0.9 so every number in the ledger stays comparable.
 if [ -n "${GPU_MEM_UTIL_OVERRIDE:-}" ]; then GPU_MEM_UTIL="$GPU_MEM_UTIL_OVERRIDE"; fi
