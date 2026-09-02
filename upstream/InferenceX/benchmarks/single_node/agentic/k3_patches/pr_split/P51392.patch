@@ -1,0 +1,77 @@
+diff --git a/vllm/models/kimi_k3/nvidia/mla.py b/vllm/models/kimi_k3/nvidia/mla.py
+index 21be0c398f..ab09f66862 100644
+--- a/vllm/models/kimi_k3/nvidia/mla.py
++++ b/vllm/models/kimi_k3/nvidia/mla.py
+@@ -42,7 +42,7 @@ from vllm.config import (
+     VllmConfig,
+     get_current_vllm_config,
+ )
+-from vllm.distributed import get_tensor_model_parallel_world_size
++from vllm.distributed import get_dcp_group, get_tensor_model_parallel_world_size
+ from vllm.forward_context import get_forward_context
+ from vllm.logger import init_logger
+ from vllm.model_executor.layers.attention.attention import (
+@@ -191,6 +191,8 @@ class MultiHeadLatentAttention(nn.Module, AttentionLayerBase):
+         self.num_heads = num_heads
+         self.num_local_heads = num_heads // tp_size
+ 
++        parallel_config = get_current_vllm_config().parallel_config
++
+         # ---- Pre-attention projections (fusable front-end) ----
+         # Two query variants: a low-rank q-LoRA path (Kimi-K3) fused with the
+         # kv-down proj, or an uncompressed q path (Kimi-Linear, ``q_lora_rank``
+@@ -339,7 +341,6 @@ class MultiHeadLatentAttention(nn.Module, AttentionLayerBase):
+         self.q_pad_num_heads = getattr(self.impl, "q_pad_num_heads", None)
+ 
+         vllm_config = get_current_vllm_config()
+-        parallel_config = vllm_config.parallel_config
+         assert parallel_config.prefill_context_parallel_size == 1, (
+             "Kimi-K3 MultiHeadLatentAttention does not support prefill context "
+             "parallelism."
+@@ -435,7 +436,6 @@ class MultiHeadLatentAttention(nn.Module, AttentionLayerBase):
+         replace_parameter(self, "W_UV", W_UV.transpose(0, 1), prefer_copy=True)
+         # (L, N, P) -> (N, P, L)
+         replace_parameter(self, "W_UK_T", W_UK.permute(1, 2, 0), prefer_copy=True)
+-
+         quant_method = (
+             self.quant_config.get_quant_method(self, prefix=self.layer_name)
+             if self.quant_config
+@@ -644,9 +644,36 @@ class MultiHeadLatentAttention(nn.Module, AttentionLayerBase):
+                 assert self.dcp_manager is not None
+                 assert self.dcp_manager.query_gather is not None
+                 mqa_q = self.dcp_manager.query_gather(mqa_q)
+-            latent_out, lse = self.impl.forward_mqa(  # type: ignore[attr-defined]
+-                mqa_q, self._attn_read_kv_cache(), attn_metadata, self
++            use_verify_window = (
++                getattr(self.impl, "supports_dcp_verify_window", False)
++                and self.dcp_world_size > 1
++                and get_dcp_group().rank_in_group == 0
++                and attn_metadata.decode is not None
++                and attn_metadata.decode.max_qo_len is not None
++                and attn_metadata.decode.max_qo_len > 1
++                and self.rotary_emb is None
+             )
++            if use_verify_window:
++                # The target uses NoPE, so the in-hand latent window already
++                # matches the cache layout expected by the dense verify stage.
++                k_window = torch.cat(
++                    [
++                        kv_c_normed[:num_mqa_tokens],
++                        k_pe[:num_mqa_tokens],
++                    ],
++                    dim=-1,
++                )
++                latent_out, lse = self.impl.forward_mqa_with_dcp_verify_window(  # type: ignore[attr-defined]
++                    mqa_q,
++                    self._attn_read_kv_cache(),
++                    attn_metadata,
++                    self,
++                    k_window,
++                )
++            else:
++                latent_out, lse = self.impl.forward_mqa(  # type: ignore[attr-defined]
++                    mqa_q, self._attn_read_kv_cache(), attn_metadata, self
++                )
+             if self.dcp_world_size > 1:
+                 assert lse is not None
+                 assert self.dcp_manager is not None
