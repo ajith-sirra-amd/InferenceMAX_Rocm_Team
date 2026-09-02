@@ -642,6 +642,29 @@ re-checking on `7c5dc571`, five weeks newer than the base those were tested on.
 
 ---
 
+## PARKED — #53940 ablation (image built, not queued)
+
+**LMCache is the priority; this waits.** Image `kimi-k3-vllm:rec-no53940` is
+**already built and import-gated** — `pr-applied: 53917 52494 52968`,
+`pr-stack: 0 files`. Drop it into the yaml and dispatch when LMCache work
+pauses; no rebuild needed.
+
+**Why it matters:** #53940 (a4w4 flydsl MoE kernels) has **never been ablated**.
+It rode in `pr_stack/` unchanged through every arm, v4 included, so it is the
+one PR in the recommended stack with **zero measurement** — currently listed as
+MUST on mechanism alone (`flydsl_moe1_abf16_wfp4_bf16_…` on the live MoE path
+in the T195 log). This arm would replace that reasoning with a number.
+
+Baseline to compare: **T236 = 10,799**.
+
+Enabling change made while building it: the pronly Dockerfile now tolerates an
+empty `pr_stack/` (`[ -e "$p" ] || continue`) and **generates** the `pr-stack:`
+manifest line from what actually applied, instead of the hard-coded
+`4 files (#53940 a4w4-flydsl)`. That line would otherwise have lied in this
+image — the same defect class already caught once on `pr-applied`.
+
+---
+
 ## RESOLVED — bare-nightly C52: gmu 0.88
 
 `HSA_STATUS_ERROR_OUT_OF_RESOURCES` at C52/DCP8/no-offload is fixed by dropping
