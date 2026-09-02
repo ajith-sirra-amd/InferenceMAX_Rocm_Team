@@ -655,10 +655,16 @@ ahead of the LMCache agentic run.
 | 4a | if agentic **fails** → **#53940 ablation**, then LMCache fix | | ~22:15Z |
 | 4b | if agentic **passes** → LMCache conc/mns sweep; #53940 in the next gap | | |
 
-**Both fit the #53940 deadline (~01:00Z 2026-09-03)** — the ablation lands
-~22:15Z either way, with ~2.75 h of slack. That is why the reorder is safe;
-if the LMCache agentic arm needed *two* attempts the slack would be gone, so
-#53940 goes into the first gap after T241 regardless of outcome.
+**#53940 deadline is SOFT** (user, ~17:00Z): *"deadline is little flexible. Not
+hard. If we getting 12,500 -> then it's the high priority."*
+
+So: if LMCache is producing real movement toward 12,500, **keep the GPUs on
+LMCache** and let #53940 slip. Run it in a genuine gap — a failed arm, a
+rebuild, or once the LMCache line of attack is exhausted — not by interrupting
+progress.
+
+If LMCache stalls or plateaus well short of 12,500, #53940 becomes the next
+useful thing and should go immediately.
 
 ---
 
