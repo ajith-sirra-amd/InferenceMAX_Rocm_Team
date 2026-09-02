@@ -1,7 +1,9 @@
 # LMCACHE — status, wiring, and the path to 12,500
 
-**Status: T239 PASSED, T240 BLOCKED by leaked VRAM.** See the T240 entry — this
-is probably an LMCache teardown defect and it will recur.
+**Status: ROOT-CAUSED.** T239 passed its benchmark then stranded 58 GB on one
+GPU at teardown. `Memory critical error … Reason: Memory in use` — LMCache still
+held DMA registrations on vLLM's KV buffers when vLLM freed them. Required a
+**node reboot**; a GPU reset did not clear it. Fix not yet applied — see below.
 This file is the single source for LMCache work; updated after every trial.
 
 ---
@@ -217,7 +219,60 @@ State after the failure, with **nothing of ours running**:
 
 **~52 GB held on exactly one GPU, by no visible process.**
 
-**Hypothesis — the LMCache MP server leaks a GPU allocation on teardown.**
+### ROOT CAUSE (from the T239 artifacts, post-reboot)
+
+The last line of `server.log`:
+
+```
+Memory critical error by agent node-0 (Agent handle: 0x5eac2930)
+on address 0x7fbb51601000. Reason: Memory in use.
+```
+
+Timeline:
+
+| time | event |
+|---|---|
+| 17:12:5x | fixed-len benchmark **completed** — 5/5, result written |
+| 17:12:58 | `EngineDeadError` — in-flight completions start returning 500 |
+| 17:12:59 | vLLM `MPClient` shutdown; `15.0s ROCm cleanup grace`; SIGTERM to EngineCore |
+| 17:12:59 | LMCache begins its own shutdown |
+| — | **`Memory critical error … Reason: Memory in use`** — ROCr refuses to release |
+| **17:13:49** | **LMCache still logging** `L1 memory usage: 38.16/1820.00 GiB` — **50 s after shutdown began, still alive** |
+
+**vLLM freed GPU memory that LMCache still had registered for DMA.** The
+`LMCacheMPConnector` registers vLLM's KV buffers with the MP server so it can
+DMA into them; those registrations outlived the vLLM teardown, so the ROCr free
+failed with *Memory in use* and ~58 GB was orphaned with no owning process.
+
+Corroborating: the server log is full of
+`pin_memory failed for chunk at ptr=… size=67108864; DMA performance may be
+degraded` — host-pinning was already failing throughout the run, so the DMA
+registration path was in a degraded state before teardown.
+
+**Not recoverable in software.** `sudo rocm-smi --gpureset -d 3` reported
+`Successfully reset GPU 3` and the 57.94 GB **did not move**. Only a node reboot
+cleared it.
+
+### The ordering bug is ours
+
+`cleanup_agentic_services` already stops LMCache before the vLLM server — but
+that trap runs at script EXIT, and **EngineCore had already died a second
+earlier**. The teardown order that matters is inside vLLM's own shutdown, which
+we do not control from the trap. Worse, LMCache needs **>50 s** to wind down and
+we allow 60 s, so it is borderline even when the ordering is right.
+
+**Fix to apply before the next LMCache arm (not yet done):**
+
+1. Stop the LMCache server **and wait for it to fully exit** *before* the vLLM
+   server is signalled — not in an EXIT trap that races the engine.
+2. Raise the wait well above 60 s; observed shutdown is 50 s+ under light load
+   and will be longer after a real agentic run.
+3. Only then let vLLM tear down, so no DMA registration outlives the buffers.
+
+Until that is in place **every LMCache run risks stranding a GPU and needing a
+reboot**, which makes an unattended sweep unsafe.
+
+**Superseded hypothesis (kept — it was wrong):** the LMCache MP server leaks a GPU allocation on teardown.
 We launch it with **`--max-gpu-workers 1`**, and **exactly one GPU** is holding
 memory. That correlation is the strongest signal available. The server is a
 separate process from vLLM; our `cleanup_agentic_services` reaps `LMCACHE_PID`,
