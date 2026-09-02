@@ -9,8 +9,10 @@ b23_07, not published to a registry.
 
 # WHAT WE TESTED & PRODUCED — `kimi-k3-vllm:pronly`
 
-`nightly-7c5dc571` + **11 upstream PRs** (4 merged, 7 open). No vendor patch.
-**10,692 tok/s/GPU @ C72**, err 0.18%, GSM8K 0.99 (T232).
+`nightly-7c5dc571` + **8 upstream PRs** (4 merged in base, 4 applied). No vendor
+patch. **10,799 tok/s/GPU @ C72**, err 0.09%, GSM8K 0.995 (T236 / T234).
+
+Started at 11 PRs and 10,692 (T232); pruning removed 3 with no measurable cost.
 
 ## PRs applied — 8 total (was 11)
 
