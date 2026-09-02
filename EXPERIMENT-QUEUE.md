@@ -508,7 +508,12 @@ Carries **#53388** (disable trailing prefix-cache block dropping), which is
 directly on the gap in item 1, plus #52832 and the 09-02 SimpleCPUOffload fix.
 Needs a fresh GSM8K gate and invalidates the n=2 baseline.
 
-### 4. LMCache — user's Phase 2 (reference recipe captured)
+### 4. LMCache — see **`LMCACHE.md`** (single source for this work)
+
+Wiring, the chunk-size trap, the DCP=8 geometry risk, patch candidates, and the
+fixed-len → GSM8K → agentic run order all live there. Summary only below.
+
+### 4b. LMCache — original notes (superseded by LMCACHE.md)
 
 **Reference: SA run 33618719560 job 100211512290, and the script at
 `SemiAnalysisAI/InferenceX@perf/k3-mi355x-lmcache-rc3-c1-c8-c14-c40`
