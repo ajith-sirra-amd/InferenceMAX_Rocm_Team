@@ -22,14 +22,21 @@ Started at 11 PRs and 10,692 (T232). Pruning removed 3 for free and found that
 Prune ladder is **closed** (T232–T238). The recommended set is **not** the
 smallest that runs — the last two prunes cost 2.27% and are worth keeping.
 
-### Still open — we apply these. **This is the entire upstreaming ask: 4 PRs.**
+### THE ASK — 4 open PRs, in priority order
 
-| PR | what it does | measured value |
-|---|---|---|
-| **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP | never tested for removal; we run `offload dram` |
-| **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | fuse MLA q/kv RMSNorm into one AITER launch | **+1.35%** (T237 dropped it: 10,799 → 10,653) |
-| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | attn_res + sigmoid_mul + conv fusions | **+0.93%** (T238 dropped it: 10,653 → 10,554) |
-| **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl MoE kernels | held constant, live on the MoE path |
+| # | PR | class | measured value | throughput if dropped |
+|--:|---|---|--:|--:|
+| **1** | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | **MUST** | unmeasured — never tested for removal | — |
+| **2** | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | **MUST** | unmeasured — never ablated | — |
+| **3** | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | good | **+1.35%** | 10,799 → 10,653 (T237) |
+| **4** | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | good | **+0.93%** | 10,653 → 10,554 (T238) |
+
+Baseline **10,799 tok/s/GPU @ C72**, err 0.09%, GSM8K 0.995, image
+`kimi-k3-vllm:pronly-nq-no50618`. Dropping both "good" PRs costs **2.27%**
+(10,799 → 10,554) — outside the ±1.2% band and monotone.
+
+**File #53917 first.** Only open must-have, largest block (27 hunks), and
+everything else composes on top of it. Detail and rationale below.
 
 ### Already merged upstream — nothing to ask for, listed for provenance
 
