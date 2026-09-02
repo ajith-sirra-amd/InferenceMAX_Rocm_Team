@@ -12,7 +12,7 @@ b23_07, not published to a registry.
 `nightly-7c5dc571` + **11 upstream PRs** (4 merged, 7 open). No vendor patch.
 **10,692 tok/s/GPU @ C72**, err 0.18%, GSM8K 0.99 (T232).
 
-## PRs applied — 11 total
+## PRs applied — 8 total (was 11)
 
 ### Already merged upstream (in the base image)
 
@@ -23,66 +23,52 @@ b23_07, not published to a registry.
 | **[#52707](https://github.com/vllm-project/vllm/pull/52707)** | clamp negative external block allocation |
 | **[#52033](https://github.com/vllm-project/vllm/pull/52033)** | ROCm dual-stream shared-expert |
 
-### Still open — we apply these, they must merge for this to be stock
+### Still open — we apply these. **This is the entire upstreaming ask.**
 
-| PR | what it does | applied as | prune status |
+| PR | what it does | applied as | status |
 |---|---|---|---|
-| **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `SimpleCPUOffloadConnector` under DCP | `pr_only/01` | keep — test last |
-| **[#51392](https://github.com/vllm-project/vllm/pull/51392)** | online quant on pre-quantized checkpoint | `pr_only/02` | **GSM8K 0.995 without it (T234)** — throughput pending |
-| **[#54254](https://github.com/vllm-project/vllm/pull/54254)** | fused KDA gated RMSNorm + per-token FP8 | `pr_only/03` | **same pair as #51392** |
-| **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | fuse MLA q/kv RMSNorm | `pr_only/04` | untested |
+| **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `SimpleCPUOffloadConnector` under DCP | `pr_only/01` | keep — test last, we run `offload dram` |
+| **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | fuse MLA q/kv RMSNorm | `pr_only/04` | **T237 testing removal now** |
 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | attn_res + sigmoid_mul + conv fusions | `pr_only/05` | untested |
-| **[#50618](https://github.com/vllm-project/vllm/pull/50618)** | densify strided activations for wvSplitKQ | `pr_only/06` | untested |
-| **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl MoE kernels | `pr_stack/` (4 files) | held constant |
+| **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl MoE kernels | `pr_stack/` (4 files) | held constant, live on the MoE path |
 
-**7 open PRs are the entire upstreaming ask.** Nothing closed, nothing vendor.
-**#51392 + #54254 may drop to 5** — T234 passed GSM8K at 0.995 without them;
-T235 is measuring throughput.
+**4 open PRs, down from 7 at T232.**
 
-Apply gotchas: **#54254 is stacked on #54248** — its diff already contains
-#54248, so applying both double-applies and fails; #54254 alone gets the whole
-per-token-FP8 chain. **#50618 is python-hunk only**; its `csrc/*.cu` hunks cannot
-apply to a prebuilt image.
+Apply gotcha: **[#50618](https://github.com/vllm-project/vllm/pull/50618) was python-hunk only** here; its `csrc/*.cu` side never
+applied, so the C++ path was stock in every arm.
+
+## PRUNED — measured, not assumed
+
+| PR | evidence | note |
+|---|---|---|
+| **[#51392](https://github.com/vllm-project/vllm/pull/51392)** + **[#54254](https://github.com/vllm-project/vllm/pull/54254)** | GSM8K 0.995 (T234), C72 10,781 (T235) | dropped as one unit — #54254 depends on #51392. Checkpoint is `mxfp4` with `quantization_config=None`, so the online-quant path had no work. |
+| **[#50618](https://github.com/vllm-project/vllm/pull/50618)** | C72 10,799, err 0.09% (T236) | **measured-safe, not proven-safe.** Guards a 12,288-byte over-read in KDA `f_b_proj` (`stride=(6288,1)` at TP8). An over-read need not fault. **First thing to restore on any stray memory fault.** |
+| **[#54165](https://github.com/vllm-project/vllm/pull/54165)** | closed-unmerged upstream; spec off at C72 | author closed it as superseded by [#54163](https://github.com/vllm-project/vllm/pull/54163) |
+| **[#50813](https://github.com/vllm-project/vllm/pull/50813)** | dead code, zero GPU cost | `quark_moe.py` unreachable — model declares no `quantization_config` |
 
 ## Measured results
 
-| trial | image | what | result |
-|---|---|---|--:|
-| T231 | pronly | GSM8K | 0.99 |
-| T232 | pronly | C72 throughput | **10,692** |
-| T233 | pronly | C72 replication | **10,690** (0.02% spread) |
-| T234 | pronly-noquant | GSM8K | **0.995** |
-| T235 | pronly-noquant | C72 throughput | *running* |
+| trial | applied PRs | what | result |
+|---|--:|---|--:|
+| T231 | 6 | GSM8K | 0.99 |
+| T232 | 6 | C72 | **10,692** |
+| T233 | 6 | C72 replication | **10,690** (0.02% spread) |
+| T234 | 4 | GSM8K | **0.995** |
+| T235 | 4 | C72 | **10,781** |
+| T236 | 3 | C72 | **10,799**, err 0.09% |
+| T237 | 2 | C72 | *running* |
 
-**Headline: 10,691 tok/s/GPU at C72 (n=2)** — statistically identical to the
-264 KB overlay it replaces (v4: 10,607 ±1.2%, n=4; matched-mns T198: 10,630).
+**10,691 / 10,781 / 10,799 across 6 / 4 / 3 applied PRs — all inside a 1.0%
+spread and inside the ±1.2% cross-day band.** Read that as **no measurable
+difference**, not a trend, and certainly not "fewer patches is faster." Each
+arm past T233 is n=1.
+
+Versus the 264 KB overlay it replaces: v4 is 10,607 ±1.2% (n=4), matched-mns
+T198 is 10,630. **The overlay is worth nothing at C72.**
 
 Noise is **not uniform**: same-session pairs replicate to 0.02% (T232/T233,
-T195/T198), but cross-day byte-identical runs differ by 1.2% (T206 vs T228).
-Quote **±1.2%** for cross-day comparisons; 0.02% is not the general error bar.
-
-## Base-bump candidate — `nightly-73029d42…`
-
-Three commits landed after our base `7c5dc571` and are in
-`nightly-73029d42441321b631779db3475031f5ec26dd6c`
-(`sha256:cef549da00e0efaeadd9338ac8f351f2b96ff71a5ab8651a99bf989458bf1684`,
-cut 2026-09-02 05:31), ancestry-verified:
-
-| PR | what | touches |
-|---|---|---|
-| **[#53388](https://github.com/vllm-project/vllm/pull/53388)** | disable trailing prefix-cache block dropping | `sched/scheduler.py`, `single_type_kv_cache_manager.py`, `kv_cache_utils.py`, `simple_kv_offload/manager.py` |
-| **[#52832](https://github.com/vllm-project/vllm/pull/52832)** | Mooncake: offload producer partial tails on finish | `sched/scheduler.py`, `kv_cache_manager.py` |
-| — | fix eager SimpleCPUOffload cache registration | `simple_kv_offload/manager.py` (09-02) |
-
-#53388 is on the prefix-cache-retention path, which is where we measured a
-93.6% → 90.0% hit-rate drop between the aigmkt stack and bare nightly.
-
-**Not taken yet** — it would invalidate the n=2 pronly baseline and needs a
-fresh GSM8K gate. Finish the prune first; do not change two things at once.
-
-**Still orphaned regardless of base:** `v1/core/block_pool.py` and
-`v1/core/kv_cache_interface.py` — no PR touches them, and no upstream commits
-since 08-31.
+T195/T198), cross-day byte-identical runs differ by 1.2% (T206 vs T228). Quote
+**±1.2%** across days.
 
 ## Risks
 
