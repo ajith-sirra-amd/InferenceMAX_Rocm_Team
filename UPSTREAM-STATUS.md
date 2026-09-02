@@ -1,54 +1,59 @@
 # UPSTREAM STATUS — what we carry, and what needs upstreaming
 
-**Newest first.** Anything below "HISTORICAL" is kept for provenance only and
-was true when written; do not act on it without checking the current section.
+**Newest first.** Everything below "HISTORICAL" is provenance only.
 
 ---
 
-## CURRENT (T232, 2026-09-02) — RESOLVED: the overlay is not needed
+# WHAT WE SHIP — `kimi-k3-vllm:pronly`
 
-**`kimi-k3-vllm:pronly` — 12 upstream PRs on `nightly-7c5dc571`, zero vendor
-patch — delivers 10,692 tok/s/GPU at C72 (err 0.18%, GSM8K 0.99).** That is
-+0.6% over the matched-mns overlay run and inside the +/-1.2% replication band.
+`nightly-7c5dc571` + **12 upstream PRs**. No vendor patch.
+**10,692 tok/s/GPU @ C72**, err 0.18%, GSM8K 0.99 (T232).
 
-**The delivery risk recorded below is therefore largely void.** Nothing in the
-unpublished 264 KB is worth measurable throughput at C72, so it does not have to
-be upstreamed for the number to be reproducible. The five PRs that fail to apply
-to `7c5dc571` (#53166, #51437, #53301, #52190, #54163) are optional rather than
-blocking.
+## PRs applied
 
-Caveats: n=1 against a +/-1.2% band, replication in flight; C72 agentic only.
-C1 TPOT on pronly is untested and #51437 owns the decode all-reduce overlap, so
-C1 is where a gap would appear if one exists.
+| PR | what it does | how it gets in |
+|---|---|---|
+| **#51705** | causal multi-token verification under DCP | merged — in base |
+| **#53598** | per-group DCP cache geometry, prefix-cache hits | merged — in base |
+| **#52707** | clamp negative external block allocation | merged — in base |
+| **#52033** | ROCm dual-stream shared-expert | merged — in base |
+| **#53917** | `SimpleCPUOffloadConnector` under DCP | `pr_only/01` |
+| **#51392** | online quant on pre-quantized checkpoint | `pr_only/02` |
+| **#54254** | fused KDA gated RMSNorm + per-token FP8 | `pr_only/03` |
+| **#52494** | fuse MLA q/kv RMSNorm | `pr_only/04` |
+| **#52968** | attn_res + sigmoid_mul + conv fusions | `pr_only/05` |
+| **#50618** | densify strided activations for wvSplitKQ | `pr_only/06` |
+| **#54165** | mamba align cache under spec decode | `pr_only/07` |
+| **#53940** | a4w4 flydsl MoE kernels | `pr_stack/` (4 files) |
 
----
+Order matters at 03: **#54254 is stacked on #54248** — its diff already contains
+#54248, so applying both double-applies and fails. #54254 alone gets the whole
+per-token-FP8 chain. #50618 is python-hunk only; its `csrc/*.cu` hunks cannot
+apply to a prebuilt image.
 
-## What we ship now
+## PRs NOT applied — optional, not blocking
 
-| image | stack | C72 | GSM8K |
-|---|---|--:|--:|
-| **`kimi-k3-vllm:pronly`** *(preferred)* | `nightly-7c5dc571` + 12 upstream PRs, **no vendor patch** | **10,692** | 0.99 |
-| `kimi-k3-vllm:v4` | `nightly-46638857` + 264 KB overlay + #53940 | 10,607 ±1.2% (n=4) | 0.995 |
+Five fail on `7c5dc571` by 1–2 hunks each (context drift, not design conflict):
+**#53166** (1 of 8), **#51437** (1 of 6), **#53301** (2), **#52190** (1 of 1),
+**#54163** (1 of 1). T232 shows they cost nothing at C72. #51437 owns the decode
+all-reduce overlap, so C1 is where a gap would show if one exists.
 
-`pronly` composition — every piece traceable to a public PR:
+Also dropped: **#50813** — dead code, `moonshotai/Kimi-K3` declares no
+`quantization_config` so `quark_moe.py` is unreachable.
 
-| source | PRs |
-|---|---|
-| merged, already in base | #51705, #53598, #52707, #52033 |
-| applied from `pr_only/` | #53917, #51392, #54254, #52494, #52968, #50618, #54165 |
-| applied from `pr_stack/` | #53940 (a4w4 flydsl) |
+## Risks
 
-**Optional, not blocking** — five PRs that fail to apply to `7c5dc571` by 1–2
-hunks each (context drift, not design conflict): #53166, #51437, #53301, #52190,
-#54163. T232 shows they cost nothing at C72. #51437 owns the decode all-reduce
-overlap, so C1 is the place to look if a gap exists.
-
-**Live risks:**
 1. **Base drift.** `nightly` moves daily (`73029d42…` landed 2026-09-02 05:31).
-   Any "nightly + patches" recipe needs a pinned digest and a rebase cadence.
-2. **#54165 is closed-unmerged** upstream; its open successor #54163 does not
-   apply. One of the twelve is therefore a closed PR.
-3. **n=1.** T232 stands against a ±1.2% replication band; T233 is in flight.
+   Pin a digest and set a rebase cadence.
+2. **#54165 is closed-unmerged** upstream; successor #54163 does not apply.
+3. **n=1** against a ±1.2% band. T233 replication in flight.
+4. **C72 agentic only.** C1 TPOT on pronly untested.
+
+## The overlay is no longer needed
+
+Hyukjoon's 264 KB patch bought **nothing measurable** at C72: pronly is +0.6%
+over the matched-mns overlay run (T198, 10,630), inside the band. The
+upstreaming risk that dominated this file is void.
 
 ---
 
@@ -125,6 +130,18 @@ review throughput, not authorship — which is a much better position than assum
 ---
 
 # HISTORICAL — superseded, kept for provenance
+
+## `kimi-k3-vllm:v4` — the overlay image, superseded by pronly
+
+`nightly-46638857` + Hyukjoon's 264 KB overlay + #53940. **10,607 ±1.2% (n=4)**
+at C72, GSM8K 0.995. Pushed as `aigmkt/kimi-k3-vllm:v4`
+(`sha256:88c8438f5aa0fc2fa01ee1736eb0f8a88e478b26a93a733f535b4f964bb197f2`).
+
+Still the reference for C1 (TPOT 9.06 ms) until pronly is measured there.
+Otherwise prefer pronly: same throughput, no vendor patch, reproducible outside
+this team.
+
+---
 
 Everything below predates T232. The reasoning was correct given what was known
 at the time; the conclusions about the overlay being load-bearing are not.
