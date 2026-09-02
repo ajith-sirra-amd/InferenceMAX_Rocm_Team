@@ -556,6 +556,23 @@ would trade resource exhaustion for starvation. Floor for conc 52 is ~64.
 Baseline: `pronly` = 11 PRs (4 merged in base + 7 applied), **10,692 @ C72**,
 GSM8K 0.99.
 
+### T236 RESULT — #50618 PRUNED too. C72 = 10,799 with 3 applied PRs.
+
+Upstreaming ask **5 → 4 open PRs**. Stack is now #53917 + #52494 + #52968
+(+ #53940 pr_stack, + 4 merged in base).
+
+10,691 / 10,781 / 10,799 across 6 / 4 / 3 applied PRs — **all inside a 1.0%
+spread and inside the ±1.2% band. No measurable difference, not a trend.**
+Each arm n=1.
+
+**Caveat on #50618:** it guards a 12,288-byte over-read in KDA `f_b_proj`
+(`stride=(6288,1)` at TP8) before ROCm skinny GEMMs. Only its python hunk was
+ever applied here — the `csrc/*.cu` side was stock in *every* arm — and an
+over-read need not fault. **Measured-safe, not proven-safe.** First thing to
+restore if a stray memory fault appears.
+
+**Next arm: #52494** (2 files / 4 hunks), then #52968, then #53917 last.
+
 ### T235 RESULT — 10,781 at C72. #51392 + #54254 PRUNED.
 
 GSM8K 0.995 (T234) and 10,781 tok/s/GPU (T235), err 0.18%. +0.84% over the

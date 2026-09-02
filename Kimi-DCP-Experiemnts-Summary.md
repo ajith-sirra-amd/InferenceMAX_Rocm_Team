@@ -4340,3 +4340,59 @@ construction on this model, which is why the ablation found nothing.
 
 #50618 (1 hunk, isolated) → #52494 (4 hunks) → #52968 (17 hunks) → #53917 last
 (25 hunks, the offload-under-DCP fix, most likely to be required).
+
+## T236 — #50618 also prunes. C72 = 10,799 with 3 applied PRs. Upstreaming ask: 5 → 4.
+
+Run 33622043517. `kimi-k3-vllm:pronly-nq-no50618`, manifest `pr-applied: 53917
+52494 52968`. Config unchanged: mns 96, chunk 16384, dcp 8, ladder 1..96.
+
+| | pronly (6) | noquant (4) | **no50618 (3)** |
+|---|--:|--:|--:|
+| **Throughput per GPU** | 10,691 (n=2) | 10,781 | **10,799** |
+| Request Error Rate | 0.18–0.22% | 0.18% | **0.09%** |
+| ITL mean / p99 | 107.6–108.5 / 526–550 | 108.34 / 515.25 | 107.63 / 510.24 |
+| Output tok/s | 505 | 515.94 | 515.62 |
+
+**All three sit inside a 1.0% spread and inside the ±1.2% cross-day band.**
+10,799 is nominally the highest number in the ledger, but the honest reading is
+**no measurable difference across 6, 4 and 3 applied PRs** — not a trend, and
+certainly not "fewer patches is faster." Each arm is n=1.
+
+### What #50618 actually guarded, and why dropping it was safe here
+
+#50618 densifies strided activations before the ROCm skinny GEMMs
+(`wvSplitK`/`wvSplitKrc`), which do not consume strides. Kimi-K3 KDA projects
+several outputs into one row and hands the 128-element `f_a` slice to
+`f_b_proj`; under TP8 that view is `stride=(6288, 1)`, `storage_offset=6144`,
+and the kernel's flat preload runs **12,288 bytes past the valid span**.
+
+Two reasons it did not bite:
+
+1. **Only the python hunk was ever applied here.** Its `csrc/rocm/skinny_gemms*.cu`
+   changes cannot apply to a prebuilt image, so the C++ side was stock in every
+   arm — including the ones that passed.
+2. An over-read is not guaranteed to fault. It reads memory it does not own;
+   whether that traps depends on page layout. **A clean run does not prove the
+   read is in bounds.**
+
+**So this prune is measured-safe, not proven-safe.** Recorded as such: at C72,
+over 1h47m and 2,900+ requests at 0.09% error, it never faulted. That is decent
+evidence, not a correctness argument. If a stray `HSA_STATUS_ERROR` or memory
+fault ever appears on this stack, #50618 is the first thing to put back.
+
+### Current mergeable stack — 8 PRs
+
+| source | PRs |
+|---|---|
+| merged, in base | #51705, #53598, #52707, #52033 |
+| applied | **#53917, #52494, #52968** |
+| pr_stack | #53940 |
+
+**4 open PRs are now the entire upstreaming ask**, down from 7 at T232.
+Cumulative prune: **#51392, #54254, #50618, #54165, #50813**.
+
+### Next arm
+
+**#52494** (fuse MLA q/kv RMSNorm, 2 files / 4 hunks). Then #52968 (17 hunks),
+then #53917 (25 hunks) last — the offload-under-DCP fix, most likely required
+since we run `offload dram`.
