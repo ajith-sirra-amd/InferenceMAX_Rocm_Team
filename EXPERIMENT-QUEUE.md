@@ -317,8 +317,15 @@ harness still exits 0.
 
 ## Current state
 
-**Config tuning is CLOSED (T195/T198/T199).** Three independent knobs measured
-flat at the C72 operating point:
+**Config tuning is CLOSED (T195/T198/T199), and the headline now carries an
+error bar (T228).** Four runs on a materially identical C72 stack give
+**10,607 tok/s/GPU +/-1.2% (n=4)**: 10,632 / 10,630 / 10,646 / 10,518. The
+cleanest pair (T206 vs T228 -- same image, same script, 26 h apart) differs by
+1.20%, so **every C72 delta below ~1.2% in this ledger is unrankable noise**.
+That includes the mns and chunk results below: they are confirmed neutral, but
+none of them identified a winner.
+
+Three independent knobs measured flat at the C72 operating point:
 
 | knob | runs | result |
 |---|---|---|
@@ -326,8 +333,8 @@ flat at the C72 operating point:
 | max-num-seqs | 80 vs 96 @ C72 | 0.02% spread -- neutral |
 | max-num-batched-tokens | 16384 vs 8192 @ C72 | 0.07% spread -- neutral |
 
-Headline **10,632 tok/s/GPU** = **-14.9%** from 12,500, **+18.8%** over SA's
-8,953. GSM8K 0.995 (4-file pr-stack) / 0.99 (5-file). The remaining gap is not
+Headline **10,607 tok/s/GPU +/-1.2% (n=4)** = **-15.1%** from 12,500, **+18.5%**
+over SA's 8,953. GSM8K 0.995 (4-file pr-stack) / 0.99 (5-file). The remaining gap is not
 in the launcher's argument space.
 
 **T202 FAILED its objective: no profile was produced.** `nightly-46638857` has

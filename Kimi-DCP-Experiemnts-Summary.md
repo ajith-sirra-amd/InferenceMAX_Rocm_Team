@@ -3888,3 +3888,50 @@ ends of the concurrency range and needs no further runs.
 
 **mns 1, ladder 1..9, chunk 8192, gmu 0.9, dcp off, offload dram
 -> TPOT 9.06 ms mean / 9.10 median / 9.31 p99, spread 0.22 ms.**
+
+## T228 — C72 on v4, n=2 replication of the headline = 10,518. Error bar is ±1.1%, not ±0.1%.
+
+Run 33569812319, job 100061132710. Byte-identical config to T206: v4 baked,
+mns 80, chunk 16384, dcp 8 a2a interleave 1, offload dram, ladder 1..80.
+
+Gates: `[k3-image] kimi-k3-vllm:v4` · `[dcp] ENABLED size=8 backend=a2a
+interleave=1` · `[chunk] 16384` · `[mns] 80 conc=72 offload=dram` ·
+`graphs: dense ladder 1..80 (mns=80 x 1 rows), DCP=8`.
+
+| metric | T228 | T206 |
+|---|--:|--:|
+| **Throughput per GPU** | **10,518** | 10,646 |
+| Request Error Rate | 0.27% | 0.31% |
+| ITL mean / p99 | 111.62 / 565.33 ms | — |
+| TTFT mean | 4,866 ms | — |
+| Output tok/s | 498.05 | — |
+
+### The point of this run: the C72 number needs an error bar
+
+Four runs now sit on a materially identical C72 stack:
+
+| trial | image / stack | tok/s/GPU |
+|---|---|--:|
+| T195 | nightly + runtime overlay + 5-file pr-stack | 10,632 |
+| T198 | same, mns 96 | 10,630 |
+| T206 | v4 baked, 4-file pr-stack | 10,646 |
+| **T228** | **v4 baked, 4-file pr-stack (repeat of T206)** | **10,518** |
+
+Mean **10,607**, range **10,518–10,646** = **1.2% spread**, ±0.6% about the mean.
+T206 vs T228 is the cleanest pair — same image, same script, same knobs, 26 h
+apart — and they differ by **1.20%**.
+
+**This retires the +1.2% claim I hedged at T206.** I wrote there that T206's
++0.14% over T195 might be real or might be noise, and that the prior replication
+spread was 0.02% (T195/T198). T228 settles it: run-to-run variance on this stack
+is **~1.2%**, roughly 60× the T195/T198 spread. That pair was a lucky draw, not
+the true noise floor. Every C72 delta in this ledger under ~1.2% — including
+T206-vs-T195, the mns 80/96 result, and the chunk 16384/8192 result — is
+**inside the noise band and cannot be ranked**.
+
+The conclusions those runs supported do not change (mns and chunk are neutral;
+that is exactly what "inside the noise band" means). What changes is the claim
+that any of them found a *winner*.
+
+**Shipping number: 10,607 tok/s/GPU ±1.2% (n=4)**, not 10,646. Against the
+12,500 target that is **−15.1%**; against SA's 8,953, **+18.5%**.
