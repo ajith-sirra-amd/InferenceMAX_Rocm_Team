@@ -276,13 +276,46 @@ mkdir -p "$RESULT_DIR"
 SERVER_PID=""
 LMCACHE_PID=""
 
-cleanup_agentic_services() {
-    if [ -n "${LMCACHE_PID:-}" ]; then
-        stop_background_process_tree "$LMCACHE_PID" "LMCache server" 60 || true
+# Stop the LMCache MP server and WAIT for it to fully exit.
+#
+# T239 stranded 58 GB on one GPU and needed a node reboot. server.log's last
+# line was:
+#   Memory critical error by agent node-0 ... Reason: Memory in use.
+# vLLM freed KV buffers that LMCacheMPConnector still had registered for DMA.
+# The registrations must be gone BEFORE vLLM tears down, so this is called
+# explicitly after the workload -- not left to the EXIT trap, which races
+# EngineCore (in T239 the engine had already died a second earlier).
+#
+# Observed shutdown took >50 s under a 5-request fixed-len load; the old 60 s
+# allowance was borderline. Budget 300 s and verify the process is actually
+# gone before returning.
+lmcache_shutdown() {
+    [ -n "${LMCACHE_PID:-}" ] || return 0
+    kill -0 "$LMCACHE_PID" 2>/dev/null || { LMCACHE_PID=""; return 0; }
+    echo "[lmcache] stopping server (pid $LMCACHE_PID) before vLLM teardown..."
+    kill -TERM "$LMCACHE_PID" 2>/dev/null || true
+    local waited=0
+    while kill -0 "$LMCACHE_PID" 2>/dev/null; do
+        [ "$waited" -ge 300 ] && break
+        sleep 2; waited=$(( waited + 2 ))
+    done
+    if kill -0 "$LMCACHE_PID" 2>/dev/null; then
+        echo "[lmcache] STILL ALIVE after ${waited}s -- SIGKILL. GPU memory may be stranded; check VRAM before the next run." >&2
+        kill -KILL "$LMCACHE_PID" 2>/dev/null || true
+        sleep 5
+    else
+        echo "[lmcache] server exited cleanly after ${waited}s"
     fi
+    LMCACHE_PID=""
+}
+
+cleanup_agentic_services() {
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
+    # LMCache first: its DMA registrations must be released before vLLM frees
+    # the buffers they point at.
+    lmcache_shutdown
     stop_background_process_tree "$SERVER_PID" "vLLM server" 60
     exit "$exit_code"
 }
@@ -798,3 +831,7 @@ else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
 fi
+
+# Release LMCache's DMA registrations while the vLLM server is still up. Doing
+# this here rather than in the EXIT trap is the T239 fix -- see lmcache_shutdown.
+lmcache_shutdown

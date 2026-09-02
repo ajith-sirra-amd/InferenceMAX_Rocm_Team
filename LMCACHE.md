@@ -1,6 +1,6 @@
 # LMCACHE — status, wiring, and the path to 12,500
 
-**Status: ROOT-CAUSED.** T239 passed its benchmark then stranded 58 GB on one
+**Status: ROOT-CAUSED and FIXED (fix not yet exercised).** T239 passed its benchmark then stranded 58 GB on one
 GPU at teardown. `Memory critical error … Reason: Memory in use` — LMCache still
 held DMA registrations on vLLM's KV buffers when vLLM freed them. Required a
 **node reboot**; a GPU reset did not clear it. Fix not yet applied — see below.
@@ -121,6 +121,36 @@ weakens the earlier "CUDA-IPC may not port" concern. It does **not** show that
 LMCache serves, and it says nothing about LMCache × DCP=8.
 
 ---
+
+## LMCache has NO GPU-VRAM tier — checked, not assumed
+
+Enumerated `lmcache server --help` (0.5.5rc3+rocm7.2):
+
+| flag | what it actually is |
+|---|---|
+| `--l1-size-gb` | under **"L1 Memory Manager"** — **host** memory |
+| `--l1-devdax-path` | `/dev/dax` or mmap-able file as the L1 arena |
+| `--gds-l1-path` | GPU-Direct **Storage** (disk), not VRAM |
+| `--max-gpu-workers` | **"Worker threads for the GPU affinity pool"** — threads, not memory |
+
+**There is no VRAM tier option.** So the hierarchy already exists, just named
+differently:
+
+| tier | what it is | sized by |
+|---|---|---|
+| GPU | **vLLM's own KV cache** — 29,656,464 tokens | `gpu-memory-utilization` |
+| L1 | LMCache host DRAM | `--l1-size-gb` |
+| L2 | optional remote/disk adapter | `--l2-adapter` |
+
+**Consequences:** LMCache cannot be configured to put L1 in VRAM; the GPU tier
+is grown with **gmu**, not with LMCache. And `--max-gpu-workers` 1 → 8 was
+*not* a fix for the stranded VRAM — it changed a thread-pool size. That
+hypothesis is withdrawn.
+
+What LMCache actually offers over `SimpleCPUOffloadConnector` is a **larger and
+smarter host tier** (1,820 GB vs 226 GB/rank, LRU eviction, prefetch policies),
+so any gain must show up as a higher **external** hit rate — 16.0–16.4% is the
+number to beat at C72.
 
 ## Concurrency is NOT fixed at 72 for this work
 
@@ -261,16 +291,26 @@ earlier**. The teardown order that matters is inside vLLM's own shutdown, which
 we do not control from the trap. Worse, LMCache needs **>50 s** to wind down and
 we allow 60 s, so it is borderline even when the ordering is right.
 
-**Fix to apply before the next LMCache arm (not yet done):**
+### FIX APPLIED (2026-09-02 ~18:20Z)
 
-1. Stop the LMCache server **and wait for it to fully exit** *before* the vLLM
-   server is signalled — not in an EXIT trap that races the engine.
-2. Raise the wait well above 60 s; observed shutdown is 50 s+ under light load
-   and will be longer after a real agentic run.
-3. Only then let vLLM tear down, so no DMA registration outlives the buffers.
+New `lmcache_shutdown()` in the launcher:
 
-Until that is in place **every LMCache run risks stranding a GPU and needing a
-reboot**, which makes an unattended sweep unsafe.
+1. **Called explicitly right after the workload**, while the vLLM server is
+   still up — *not* left to the EXIT trap, which raced EngineCore in T239.
+2. SIGTERM, then **poll until the process is actually gone, up to 300 s**
+   (observed 50 s+ under a 5-request load; an agentic run will be slower). The
+   old allowance was 60 s.
+3. SIGKILL only as a last resort, and it **prints a loud warning** that VRAM may
+   be stranded so the next run is not started blind.
+4. Idempotent — safe to call again from the trap.
+
+**Also fixed a bug I introduced in the original cleanup:** `local exit_code=$?`
+sat *after* the LMCache stop, so it captured that command's status instead of
+the script's real exit code. Every LMCache run would have reported a misleading
+exit status. Now captured first.
+
+**Still unexercised.** The fix is reasoned from the T239 log, not yet proven by
+a run.
 
 **Superseded hypothesis (kept — it was wrong):** the LMCache MP server leaks a GPU allocation on teardown.
 We launch it with **`--max-gpu-workers 1`**, and **exactly one GPU** is holding
