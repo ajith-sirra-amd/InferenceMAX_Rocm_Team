@@ -4396,3 +4396,57 @@ Cumulative prune: **#51392, #54254, #50618, #54165, #50813**.
 **#52494** (fuse MLA q/kv RMSNorm, 2 files / 4 hunks). Then #52968 (17 hunks),
 then #53917 (25 hunks) last — the offload-under-DCP fix, most likely required
 since we run `offload dram`.
+
+## T237 — #52494 prunes. C72 = 10,653 with 2 applied PRs. Upstreaming ask: 4 → 3.
+
+Run 33631955363. `kimi-k3-vllm:pronly-min52968`, manifest `pr-applied: 53917
+52968`. Config unchanged: mns 96, chunk 16384, dcp 8, ladder 1..96.
+
+| applied PRs | trial | tok/s/GPU | err | ITL mean | out tok/s |
+|--:|---|--:|--:|--:|--:|
+| 6 | T232/T233 | 10,691 (n=2) | 0.18–0.22% | 107.6–108.5 | 505 |
+| 4 | T235 | 10,781 | 0.18% | 108.34 | 515.9 |
+| 3 | T236 | 10,799 | 0.09% | 107.63 | 515.6 |
+| **2** | **T237** | **10,653** | 0.22% | 109.58 | 504.1 |
+
+**Full spread across 6/4/3/2 applied PRs: 10,653 – 10,799 = 1.37%.** That is
+marginally *wider* than the ±1.2% cross-day band, and T237 is the lowest point.
+So the honest position shifts slightly:
+
+- **T236 vs T237 is −1.35%** — right at the edge of the band. It is the largest
+  single-step drop in the prune ladder.
+- It is **n=1 against n=1**, on runs ~2 h apart the same day.
+- **I am not calling #52494 free.** The other three prunes each landed within
+  0.2% of their predecessor; this one did not. It may be noise, and the band
+  says it probably is — but "probably noise" is not the same evidence the
+  earlier prunes had.
+
+### What #52494 does, and why a real cost is plausible
+
+It fuses the MLA layer's `q_a_layernorm` / `kv_a_layernorm` pair into a single
+AITER `fused_qk_rmsnorm` launch. Kimi-K3 carries no `@support_torch_compile`, so
+`MLADualRMSNormFusionPass` never runs and those two RMSNorms otherwise stay as
+separate AITER launches — on **every MLA layer, every forward**. A ~1% cost from
+losing that is mechanically plausible, unlike the quantization chain (inert by
+construction) or #50618 (a guard, not a fast path).
+
+**Recorded as: prunes, but the weakest evidence of the four.** If a replication
+is ever run on this ladder, T237 is the arm to repeat.
+
+### Current mergeable stack — 7 PRs
+
+| source | PRs |
+|---|---|
+| merged, in base | #51705, #53598, #52707, #52033 |
+| applied | **#53917, #52968** |
+| pr_stack | #53940 |
+
+**3 open PRs are the entire upstreaming ask**, down from 7 at T232.
+Cumulative prune: #51392, #54254, #50618, #52494, #54165, #50813.
+
+### Next and last arm
+
+**#52968** (attn_res + sigmoid_mul + conv fusions, 4 files / 17 hunks). If it
+also prunes, only **#53917 + #53940** remain — and #53917 is the
+offload-under-DCP fix that we have deliberately kept for last because we run
+`offload dram` and it is the most likely to be load-bearing.

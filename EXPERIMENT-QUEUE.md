@@ -556,6 +556,21 @@ would trade resource exhaustion for starvation. Floor for conc 52 is ~64.
 Baseline: `pronly` = 11 PRs (4 merged in base + 7 applied), **10,692 @ C72**,
 GSM8K 0.99.
 
+### T237 RESULT — #52494 prunes, but weakest evidence. C72 = 10,653, 2 PRs.
+
+Upstreaming ask **4 → 3 open PRs**. Stack: #53917 + #52968 (+ #53940, + 4 merged).
+
+Ladder: 10,691 (6 PRs) / 10,781 (4) / 10,799 (3) / **10,653 (2)**. Full spread
+**1.37%** — marginally wider than the ±1.2% band, and T236→T237 is **−1.35%**,
+the largest single step. **Not calling #52494 free**: the other three prunes each
+landed within 0.2% of their predecessor. Mechanically a cost is plausible —
+#52494 fuses q_a/kv_a RMSNorm into one AITER launch on every MLA layer, and K3
+has no `@support_torch_compile` so the fusion pass never runs otherwise.
+**If any arm gets replicated, replicate T237.**
+
+**Next and last arm: #52968** (4 files / 17 hunks). If it prunes, only #53917
+(+#53940) remain — kept for last since we run `offload dram`.
+
 ### T236 RESULT — #50618 PRUNED too. C72 = 10,799 with 3 applied PRs.
 
 Upstreaming ask **5 → 4 open PRs**. Stack is now #53917 + #52494 + #52968
