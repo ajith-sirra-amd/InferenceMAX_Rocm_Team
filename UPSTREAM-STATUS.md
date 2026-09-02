@@ -26,10 +26,26 @@ smallest that runs — the last two prunes cost 2.27% and are worth keeping.
 
 | # | PR | class | measured value | throughput if dropped |
 |--:|---|---|--:|--:|
-| **1** | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | **MUST** | unmeasured — never tested for removal | — |
-| **2** | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | **MUST** | unmeasured — never ablated | — |
+| **1** | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | **MUST — PROVEN** | **load-bearing: workload does not complete without it** | 10,799 → **run never starts** (T241) |
+| **2** | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | **MUST** | unmeasured — never tested for removal | — |
 | **3** | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | good | **+1.35%** | 10,799 → 10,653 (T237) |
 | **4** | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | good | **+0.93%** | 10,653 → 10,554 (T238) |
+
+**#53940 is now the strongest-evidenced item in the ask.** T241 dropped it and
+nothing else (`pr-applied: 53917 52494 52968` identical to T236, `pr-stack: 0
+files`). The benchmark **never reached profiling**: 76 warmup primers took 3.6 h
+instead of minutes, TTFT median **345 s**, the 1800 s drain timed out with 4
+requests still in flight, 0/144 successful. **errors=0 throughout** — nothing
+crashed, the MoE path simply fell off a cliff. This is the expected signature:
+the workload is prefill-dominated (warmup ISL median 87k, mean 116k, p95 508k,
+OSL 1) and prefill on this model is MoE-GEMM-bound, which is exactly what the
+a4w4 flydsl kernels serve. The other three PRs are worth 1–2% each; this one is
+the difference between running and not running.
+
+Secondary observation: GPU KV cache capacity fell to **28,653,478** tokens from
+29,656,464 in T236 (−3.4%) with gmu identical at 0.9 — the fallback MoE path
+appears to hold more workspace. Recorded, not chased; it is far too small to
+explain a 345 s TTFT.
 
 Baseline **10,799 tok/s/GPU @ C72**, err 0.09%, GSM8K 0.995, image
 `kimi-k3-vllm:pronly-nq-no50618`. Dropping both "good" PRs costs **2.27%**
@@ -57,7 +73,7 @@ Ordered by measured cost of dropping it. Baseline for every delta is
 | # | PR | why | evidence |
 |--:|---|---|---|
 | 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | **never tested for removal** — the only applied PR with no drop arm |
-| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195 log). Rides in the separate `pr_stack/`. | held constant in every arm — never ablated |
+| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195 log). Rides in the separate `pr_stack/`. | **T241 — ablated, and the run never got past warmup.** TTFT median 345 s, 3.6 h for 76 primers, 0/144 successful, errors=0. Not a regression; a collapse. |
 
 **Neither has a measured number, and that is the honest state.** #53917 is
 load-bearing by mechanism and by the T216 starvation result; #53940 has never

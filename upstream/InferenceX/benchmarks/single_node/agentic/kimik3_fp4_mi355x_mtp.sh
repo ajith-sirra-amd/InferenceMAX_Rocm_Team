@@ -218,14 +218,17 @@ export HSA_NO_SCRATCH_RECLAIM=1
 # ever pushed gmu UP at C52 and it broke both times -- T157 gmu 0.95 hung the
 # engine, T166 gmu 0.92 gave 0/103 in warmup. Downward is untested.
 #
-# GATED on the absence of /etc/k3-image-manifest so patched images (v4, pronly)
-# keep gmu 0.9 -- changing it under them would move every number in the ledger,
-# and T211 measured gmu as violently non-neutral at C1 (0.92 -> 2.4x worse TPOT).
+# GATED on the absence of /etc/k3-image-manifest: bare images take the 0.88
+# override, patched images fall through to the GPU_MEM_UTIL default set below.
+# That default was 0.9 for the whole prune ladder and is 0.85 as of T242 -- so
+# do NOT read this branch as pinning patched images to 0.9 any more. The single
+# authoritative value is the "[gmu] gpu_memory_utilization=..." line printed
+# just before the serve command; trust that, not this one.
 if [ ! -f /etc/k3-image-manifest ]; then
     GPU_MEM_UTIL_OVERRIDE="${GPU_MEM_UTIL_OVERRIDE:-0.88}"   # 0.88 CONFIRMED working (user, SA C52)
     echo "[gmu] bare image -- override ${GPU_MEM_UTIL_OVERRIDE} for HSA_STATUS_ERROR_OUT_OF_RESOURCES"
 else
-    echo "[gmu] patched image -- 0.9 untouched"
+    echo "[gmu] patched image -- using script default (see [gmu] line below)"
 fi
 export VLLM_K3_KDA_SAFE_STAGES=1
 export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1

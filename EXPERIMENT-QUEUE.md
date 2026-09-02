@@ -401,6 +401,28 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
+**T241 (2026-09-02) closes the prune ladder's last open question: #53940 is
+load-bearing.** Dropped it alone (`pr-applied` identical to T236, `pr-stack: 0
+files`) and the run **never reached profiling** — 76 warmup primers took 3.6 h,
+TTFT median 345 s, drain timed out, 0/144 successful, **errors=0**. Not a
+regression, a collapse: the workload is prefill-dominated (warmup ISL median
+87k, OSL 1) and prefill is MoE-GEMM-bound, which is what the a4w4 flydsl kernels
+serve. GPU KV capacity 28,653,478 (−3.4% vs T236 at identical gmu 0.9).
+`UPSTREAM-STATUS.md` now ranks #53940 first in the ask.
+
+**Method note taken from T241:** ablating a kernel-path PR gets a fixed-len
+canary first. A 5-request `TEST=1` probe would have shown this in minutes
+instead of ~4 h of GPU time.
+
+**NEXT: T242 — gmu 0.90 → 0.85** (pushed, takes effect on next dispatch).
+Stability arm after the T240 halt stranded 57.94 GB and cost a reboot. Ceiling
+is 0.88; 0.92 and 0.95 both hang (T211, T157). Expect GPU KV capacity to shrink
+proportionally — **record it**; this workload is queueing-bound so the smaller
+pool may cost little, but that is a measurement, not an assumption. Runs on the
+recommended image (with #53940), so it is a clean one-variable arm vs T236.
+
+Then: LMCache relaunch (teardown fix in place, unproven) → GSM8K → agentic.
+
 **Config tuning is CLOSED (T195/T198/T199), and the headline now carries an
 error bar (T228).** Four runs on a materially identical C72 stack give
 **10,607 tok/s/GPU +/-1.2% (n=4)**: 10,632 / 10,630 / 10,646 / 10,518. The

@@ -25,6 +25,7 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 
 | trial | what | result |
 |---|---|---|
+| **T241** | **drop #53940** (a4w4 flydsl MoE) | **COLLAPSE — never reached profiling.** 76 warmup primers took 3.6 h, TTFT median **345 s**, drain timed out, 0/144 successful, **errors=0**. GPU KV 28,653,478 (−3.4% vs T236, gmu unchanged at 0.9). #53940 is load-bearing, not a tuning gain. |
 | **T240** | LMCache GSM8K | **BLOCKED — never started.** Died in the pre-run GPU-reclaim wait, 18% VRAM stranded on one GPU. No accuracy result. Fix applied: `--max-gpu-workers` 1 → 8. See `LMCACHE.md`. |
 | **T239** | LMCache fixed-len | **PASS** — 5/5, server up in 26 s, rocm backend auto-selected, chunk 12288 accepted at DCP=8 |
 | **T238** | drop #52968 | 10,554 — **prune ladder closed**; last two prunes cost 2.27% together |
@@ -4567,3 +4568,47 @@ a higher **external** hit rate. Baseline to beat at C72 with
 SimpleCPUOffload: **ext_cache_hit 16.0–16.4%**, GPU hit 74.3–74.6%.
 
 Next: T240 GSM8K (new KV connector is a major change), then T241 agentic C72.
+
+---
+
+## T241 — #53940 ablation (a4w4 flydsl MoE kernels): COLLAPSE
+
+Run 33665892734 · image `kimi-k3-vllm:rec-no53940` · C72 · gmu 0.9 · mns 96 ·
+chunk 16384 · DCP 8 · ladder 1..96 · 18:19Z → 22:14Z.
+
+**Clean one-variable arm.** Manifest: `pr-applied: 53917 52494 52968` —
+byte-identical to T236 — and `pr-stack: 0 files`, confirming #53940 is the only
+thing removed.
+
+| | T236 (with #53940) | T241 (without) |
+|---|--:|--:|
+| tok/s/GPU | **10,799** | **no result — never profiled** |
+| warmup | minutes | **3.6 h, timed out** |
+| TTFT median | — | **344,975 ms** |
+| successful requests | full run | **0 / 144** |
+| errors | 0.09% | **0** |
+| GPU KV cache capacity | 29,656,464 | **28,653,478** (−3.4%) |
+
+The benchmark aborted with `ProfileAborted / warmup_failure` after the 1800 s
+accelerated-drain timeout left 4 credits in flight. It never started profiling,
+so there is no throughput number and there cannot be one.
+
+**errors=0 is the important part.** Nothing crashed, nothing returned a bad
+status — every request was simply still being prefilled. Warmup ISL median
+87,098 / mean 115,587 / p95 507,560 with OSL 1: this phase is pure prefill, and
+prefill on K3 is MoE-GEMM-bound. Removing the a4w4 flydsl kernels drops that
+path to a fallback that is orders of magnitude slower, not percent-slower.
+
+**Consequence for the ask:** #53940 moves from "MUST on mechanism, unmeasured"
+to the best-evidenced PR in the stack. #52494 and #52968 are worth 1.35% and
+0.93%; #53940 is the difference between a run and no run. `UPSTREAM-STATUS.md`
+reordered to put it first.
+
+Secondary: KV capacity fell 3.4% at identical gmu, so the fallback MoE path
+holds more workspace. Recorded, not chased — nowhere near enough to explain a
+345 s TTFT.
+
+**Cost:** ~4 h of GPU time for a negative result that closes the last open
+question in the prune ladder. Worth it, but the lesson is that ablating a
+kernel-path PR needs a short fixed-len canary first, not a 1 h agentic replay —
+a 5-request fixed-len probe would have shown the collapse in minutes.
