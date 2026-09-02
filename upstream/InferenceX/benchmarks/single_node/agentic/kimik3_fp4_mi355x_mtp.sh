@@ -383,7 +383,10 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
         # starvation: the agentic replay runs MORE lanes than CONC (Running: 79
         # at conc 72), so mns must exceed conc generously. T208's match-the-batch
         # rule is C1/MTP-specific and does not generalise here.
-        MAX_NUM_SEQS=80
+        # T230: 96 at C76. T229 (C76, mns 80) fell 2.7% below the C72 band with
+        # only 4 slots of slack -- the C80 starvation regime (T196/T197). 96 was
+        # neutral at C72 (T198) so it cannot flatter the baseline.
+        MAX_NUM_SEQS=96
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 1 ]; then MAX_NUM_SEQS=1; fi

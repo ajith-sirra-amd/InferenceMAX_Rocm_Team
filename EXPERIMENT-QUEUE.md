@@ -325,6 +325,13 @@ cleanest pair (T206 vs T228 -- same image, same script, 26 h apart) differs by
 That includes the mns and chunk results below: they are confirmed neutral, but
 none of them identified a winner.
 
+**T229 fills the last hole in the conc curve: C76 = 10,324**, −2.7% below the
+C72 mean and outside the noise band. Curve is now 60/64/72/76/80 =
+9,482 / 9,775 / **10,607** / 10,324 / 9,864 — peak 72, gradient fall-off, no
+cliff. Caveat: mns is pinned at 80, so C76 has only 4 slots of slack and sits
+partway into the C80 starvation regime (T196/T197). **T230 = C76 + mns 96** is
+dispatched to separate conc from mns.
+
 Three independent knobs measured flat at the C72 operating point:
 
 | knob | runs | result |

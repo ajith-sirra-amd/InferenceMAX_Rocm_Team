@@ -3935,3 +3935,55 @@ that any of them found a *winner*.
 
 **Shipping number: 10,607 tok/s/GPU ±1.2% (n=4)**, not 10,646. Against the
 12,500 target that is **−15.1%**; against SA's 8,953, **+18.5%**.
+
+## T229 — C76 = 10,324. Below the C72 band. But mns confounds it; follow-up dispatched.
+
+Run 33577793675. `[mns] max_num_seqs=80 conc=76 offload=dram`, `[chunk] 16384`,
+`[dcp] ENABLED size=8 backend=a2a interleave=1`, `graphs: dense ladder 1..80`.
+
+| metric | T229 (C76) | C72 band (n=4) |
+|---|--:|--:|
+| **Throughput per GPU** | **10,324** | 10,607 ±1.2% (10,518–10,646) |
+| Request Error Rate | 0.22% | 0.22–0.31% |
+| ITL mean / p99 | 119.61 / 642.19 ms | 111.62 / 565.33 (T228) |
+| TTFT mean | 6,797 ms | 4,866 (T228) |
+| Output tok/s | 497.69 | 498.05 (T228) |
+
+**−2.7% below the C72 mean, and 1.9% below the worst C72 run.** That is outside
+the ±1.2% replication band established by T228, so the drop is real, not noise.
+
+### The conc curve, filled in
+
+| conc | tok/s/GPU |
+|---|--:|
+| 60 | 9,482 |
+| 64 | 9,775 |
+| **72** | **10,607 (n=4)** |
+| **76** | **10,324** |
+| 80 | 9,864 |
+
+The peak stays at 72. The fall-off past it is now measured as a gradient
+(−2.7% at 76, −7.0% at 80) rather than a cliff.
+
+### But this run cannot separate conc from mns, and that was foreseeable
+
+`MAX_NUM_SEQS` is pinned at 80 for DCP>1. At conc 76 that leaves **4 slots of
+slack**; at C72 there were 8. T196 established that C80 (where conc == mns,
+zero slack) lost 7.2%, and T197 recovered +3.0% of it with mns 96 — so
+"insufficient mns headroom" is a known, measured failure mode on exactly this
+axis, and C76 sits partway into it.
+
+I dispatched C76 at mns 80 deliberately, to keep one variable against the C72
+baseline. That was the right call for attribution against T228, but it means
+**T229 alone does not establish that 76 is worse than 72** — only that
+(76, mns 80) is worse than (72, mns 80).
+
+Also consistent with an mns-pressure story rather than a pure concurrency story:
+TTFT mean rose 40% (4,866 → 6,797 ms) and ITL p99 rose 14%, while output tok/s
+was flat (498.05 → 497.69). The server is doing the same work per second and
+making requests wait longer to get in — queueing, not compute saturation.
+
+**Next: T230 = C76 + mns 96.** One variable against T229. If throughput recovers
+into the C72 band, the C76 dip was mns starvation and the concurrency curve is
+flatter than it looks. If it stays at ~10,300, 72 is genuinely the peak and mns
+is closed for good.
