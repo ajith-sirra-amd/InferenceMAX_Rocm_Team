@@ -1,6 +1,7 @@
 # LMCACHE — status, wiring, and the path to 12,500
 
-**Status: T239 PASSED.** LMCache runs on ROCm at DCP=8. T240 (GSM8K) dispatched.
+**Status: T239 PASSED, T240 BLOCKED by leaked VRAM.** See the T240 entry — this
+is probably an LMCache teardown defect and it will recur.
 This file is the single source for LMCache work; updated after every trial.
 
 ---
@@ -196,6 +197,48 @@ start.
 | trial | config | result |
 |---|---|---|
 | **T239** | fixed-len (`TEST=1`), `pronly-nq-no50618`, DCP 8, conc 72, chunk 12288, l1=1949 GB | **PASS** — 5/5 requests, 920.34 tok/s total, no engine fault |
+| **T240** | GSM8K, same config | **BLOCKED — never started.** Died in the pre-run GPU-reclaim wait: `waiting for prior-job GPU memory reclaim: vram%max=18` for 90×10 s, then gave up. The eval never ran; there is no accuracy result. |
+
+### T240 — leaked VRAM, and the likely cause is LMCache
+
+The run failed *before* the server started. The runner's pre-flight loop waits
+for max VRAM across GPUs to fall to ≤10%; it sat at **18%** for the full 15 min
+window.
+
+State after the failure, with **nothing of ours running**:
+
+| | |
+|---|---|
+| GPU 0,1,2,4,5,6,7 | **0%** VRAM |
+| **GPU 3** | **18%** VRAM, **0% util** |
+| containers | none running |
+| lmcache processes | none |
+| other tenants (SA/GLM) | no active runs |
+
+**~52 GB held on exactly one GPU, by no visible process.**
+
+**Hypothesis — the LMCache MP server leaks a GPU allocation on teardown.**
+We launch it with **`--max-gpu-workers 1`**, and **exactly one GPU** is holding
+memory. That correlation is the strongest signal available. The server is a
+separate process from vLLM; our `cleanup_agentic_services` reaps `LMCACHE_PID`,
+but if its GPU-side registration is not released before the container dies, the
+allocation is orphaned with no host process to attribute it to.
+
+**Precedent:** T220 hit the same *class* of failure (orphaned KFD allocations,
+no host processes) and drained on its own after ~1 h. So this may clear
+passively — but if the cause is LMCache, **it will recur on every LMCache run**,
+which makes back-to-back LMCache arms impossible without a fix.
+
+**Do not re-dispatch until VRAM clears.** Re-dispatching into 18% just burns
+another 15-minute wait and fails identically.
+
+**If it recurs, candidate fixes, cheapest first:**
+1. `--max-gpu-workers 0` — the L1 pool is host DRAM; a GPU worker may not be
+   needed for our path at all.
+2. Explicit server shutdown (HTTP or SIGTERM) *before* container teardown,
+   rather than relying on process-tree reaping.
+3. Longer drain in the launcher's own cleanup, so the allocation is released
+   while the container still exists.
 
 ### Notes on the T239 wiring
 
