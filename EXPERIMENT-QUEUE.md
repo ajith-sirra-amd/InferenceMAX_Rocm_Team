@@ -424,6 +424,16 @@ v4's 0.995 at +/-0.0071 is indistinguishable. The job shows `failure` only
 because EVAL_ONLY writes no benchmark JSON and the post-step waits for one --
 `eval_exit=0`, 200/200 served. Not a defect.
 
+**IMAGE CHANGED MID-FLIGHT — read before interpreting T233.** `kimi-k3-vllm:pronly`
+was rebuilt at 2026-09-02 ~07:4x to **drop #54165** (closed-unmerged upstream;
+author closed it as superseded by #54163; spec decode is off at C72 so it was
+inert there). The tag now means **11 PRs (4 merged + 7 open), nothing closed**.
+
+**T232 and T233 both ran the OLD 12-PR image** — they were already dispatched.
+Their numbers are valid for that stack. The first run on the 11-PR image will be
+T234. Expect no difference at C72 (spec off), but it is n=0 until measured, and
+at C1 it could matter because MTP is on at CONC <= 4.
+
 **T232 RESULT: pronly C72 = 10,692 — the overlay is worth NOTHING at C72.**
 The fully-mergeable stack (12 upstream PRs on `nightly-7c5dc571`, zero vendor
 patch) matches the 264 KB overlay: +0.6% over the matched-mns overlay run

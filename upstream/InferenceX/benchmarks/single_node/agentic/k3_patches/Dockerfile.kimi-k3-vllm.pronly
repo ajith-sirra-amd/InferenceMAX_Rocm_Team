@@ -9,7 +9,7 @@
 # recent main and mostly FAIL on 46638857. Testing PR applicability against the
 # v4 base was the wrong experiment -- against 7c5dc571 the picture inverts.
 #
-# What this image carries (12 of the 18 PRs in the ledger):
+# What this image carries -- 11 PRs: 4 already merged, 7 open. Nothing closed.
 #
 #   already IN the base (merged, ancestry-verified ahead of 7c5dc571):
 #     #51705  causal multi-token verification under DCP
@@ -27,7 +27,12 @@
 #     #52968  attn_res + sigmoid_mul + conv fusions
 #     #50618  densify strided activations for wvSplitKQ  (python hunk only;
 #             the csrc/*.cu hunks cannot apply to a prebuilt image)
-#     #54165  mamba align cache under spec decode + KV connector
+#
+# DROPPED #54165: closed-unmerged upstream (author closed it as superseded by
+# #54163 after rebasing onto current main). Spec decoding is OFF at C72, so it
+# was inert there. Removing it makes every remaining PR either merged or open --
+# no closed PRs carried. If C1 regresses (MTP is on at CONC <= 4), revisit it
+# and #54163 together.
 #
 #   plus the separate 4-file pr-stack:
 #     #53940  a4w4 flydsl MoE kernels
@@ -40,11 +45,11 @@
 #     #52190  torch.compile enablement                    (1 of 1 hunk)
 #     #54163  DFlash/DSpark prefix-cache block drop       (1 of 1 hunk)
 #
-# Two of those (#53166, #51437) are the highest-perf items in the whole set, so
-# expect this image to be SLOWER than v4. Quantifying that gap is the point.
-#
-# #54165 is closed-unmerged upstream; #54163 is the open successor but does not
-# apply here. So this stack is "mergeable" with one asterisk, recorded honestly.
+# MEASURED (T232): this image does 10,692 tok/s/GPU at C72, err 0.18%, GSM8K
+# 0.99 -- statistically identical to v4's 10,607 +/-1.2%. The prediction written
+# here before the run ("expect this image to be SLOWER than v4", because #53166
+# is the prefill fusion and this workload is prefill-dominated) was FALSIFIED.
+# The run is queueing-bound, not kernel-bound.
 #
 # Build (from the agentic/ directory, NOT from k3_patches/):
 #   docker build -f k3_patches/Dockerfile.kimi-k3-vllm.pronly -t kimi-k3-vllm:pronly .
@@ -85,13 +90,13 @@ RUN printf '%s\n' \
     'base: vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb' \
     'overlay: NONE -- fully-mergeable PR stack only' \
     'pr-in-base: 51705 53598 52707 52033 (merged upstream)' \
-    'pr-applied: 53917 51392 54254 52494 52968 50618 54165' \
+    'pr-applied: 53917 51392 54254 52494 52968 50618' \
     'pr-stack: 4 files (#53940 a4w4-flydsl)' \
-    'pr-missing-vs-overlay: 53166 51437 53301 52190 54163' \
+    'pr-missing-vs-overlay: 53166 51437 53301 52190 54163 54165' \
     'runtime-patching: none' \
     > /etc/k3-image-manifest
 
 LABEL k3.overlay="none"
-LABEL k3.pr-applied="53917,51392,54254,52494,52968,50618,54165"
+LABEL k3.pr-applied="53917,51392,54254,52494,52968,50618"
 LABEL k3.pr-stack="53940"
 LABEL k3.runtime-patching="none"

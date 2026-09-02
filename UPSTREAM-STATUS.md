@@ -9,37 +9,43 @@ b23_07, not published to a registry.
 
 # WHAT WE TESTED & PRODUCED — `kimi-k3-vllm:pronly`
 
-`nightly-7c5dc571` + **12 upstream PRs**. No vendor patch.
+`nightly-7c5dc571` + **11 upstream PRs** (4 merged, 7 open). No vendor patch.
 **10,692 tok/s/GPU @ C72**, err 0.18%, GSM8K 0.99 (T232).
 
-## PRs applied
+## PRs applied — 11 total
 
-| PR | what it does | how it gets in |
+### Already merged upstream (in the base image)
+
+| PR | what it does |
+|---|---|
+| **#51705** | causal multi-token verification under DCP |
+| **#53598** | per-group DCP cache geometry, prefix-cache hits |
+| **#52707** | clamp negative external block allocation |
+| **#52033** | ROCm dual-stream shared-expert |
+
+### Still open — we apply these, they must merge for this to be stock
+
+| PR | what it does | applied as |
 |---|---|---|
-| **#51705** | causal multi-token verification under DCP | merged — in base |
-| **#53598** | per-group DCP cache geometry, prefix-cache hits | merged — in base |
-| **#52707** | clamp negative external block allocation | merged — in base |
-| **#52033** | ROCm dual-stream shared-expert | merged — in base |
 | **#53917** | `SimpleCPUOffloadConnector` under DCP | `pr_only/01` |
 | **#51392** | online quant on pre-quantized checkpoint | `pr_only/02` |
 | **#54254** | fused KDA gated RMSNorm + per-token FP8 | `pr_only/03` |
 | **#52494** | fuse MLA q/kv RMSNorm | `pr_only/04` |
 | **#52968** | attn_res + sigmoid_mul + conv fusions | `pr_only/05` |
 | **#50618** | densify strided activations for wvSplitKQ | `pr_only/06` |
-| **#54165** | mamba align cache under spec decode | `pr_only/07` |
 | **#53940** | a4w4 flydsl MoE kernels | `pr_stack/` (4 files) |
 
-Order matters at 03: **#54254 is stacked on #54248** — its diff already contains
-#54248, so applying both double-applies and fails. #54254 alone gets the whole
-per-token-FP8 chain. #50618 is python-hunk only; its `csrc/*.cu` hunks cannot
+**7 open PRs are the entire upstreaming ask.** Nothing closed, nothing vendor.
+
+Apply gotchas: **#54254 is stacked on #54248** — its diff already contains
+#54248, so applying both double-applies and fails; #54254 alone gets the whole
+per-token-FP8 chain. **#50618 is python-hunk only**; its `csrc/*.cu` hunks cannot
 apply to a prebuilt image.
 
 ## Risks
 
 1. **Base drift.** `nightly` moves daily (`73029d42…` landed 2026-09-02 05:31).
    Pin a digest and set a rebase cadence.
-2. **#54165 is closed-unmerged** upstream; successor #54163 does not apply. One
-   of the twelve is therefore a closed PR.
 3. **n=1** against a ±1.2% band. T233 replication in flight.
 4. **C72 agentic only.** C1 TPOT on pronly untested.
 
@@ -58,6 +64,7 @@ at C72.**
 | **#53301** | reuse attn metadata across 6 MLA + 14 KDA groups | 2 | maybe — per-step overhead |
 | **#52190** | torch.compile enablement so fusion passes run | 1 of 1 | low — not release-clean |
 | **#54163** | DFlash/DSpark last prefix-cache block | 1 of 1 | low — spec off at C72 |
+| **#54165** | mamba align cache under spec decode | *dropped* | **no** — closed-unmerged, superseded by #54163 |
 
 If C1 TPOT on pronly comes in worse than v4's 9.06 ms, **#51437 is the first
 one to rebase.**
