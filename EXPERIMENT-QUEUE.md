@@ -508,7 +508,50 @@ Carries **#53388** (disable trailing prefix-cache block dropping), which is
 directly on the gap in item 1, plus #52832 and the 09-02 SimpleCPUOffload fix.
 Needs a fresh GSM8K gate and invalidates the n=2 baseline.
 
-### 4. LMCache — user's Phase 2
+### 4. LMCache — user's Phase 2 (reference recipe captured)
+
+**Reference: SA run 33618719560, job 100211512290** (read-only). It **failed**,
+but it supplies the concrete invocation we lacked.
+
+Server (starts fine on ROCm — healthcheck passed):
+
+```
+lmcache server --host 127.0.0.1 --port 6555 \
+  --http-host 127.0.0.1 --http-port 8090 \
+  --l1-size-gb 1799 --l1-init-size-gb 10 \
+  --chunk-size 12288 --separate-object-groups \
+  --enable-extra-logging --extra-logging-interval 3
+```
+
+Connector: **`LMCacheMPConnector`**, transfer mode **`lmcache_driven`**.
+Readiness gate: `wait_for_ready --endpoint http://127.0.0.1:8090/healthcheck`.
+
+**This partly answers my earlier caveat.** I flagged that the published LMCache
+wins are B200/B300 and lean on CUDA-IPC KV export that may not port to ROCm.
+The server and connector evidently *do* come up on MI355X — so the porting
+concern is weaker than I stated. What is not yet shown is that it *serves*.
+
+**Its config is far from our operating point, and that matters:**
+
+| | SA LMCache ref | our target |
+|---|---|---|
+| image | bare `7c5dc571`, **no patches** | pronly |
+| **DCP** | **1 — off** | 8 |
+| conc | **14** | 72 |
+| mns | 28 | 96 |
+
+**Outcome: ProfileAborted.** Warmup completed 150/151, then
+`0 successful / 149 total (149 warmup, 145 error dropped)`. So it is a **recipe
+reference, not a working result** — and it failed at low concurrency with DCP
+off, which is a much easier configuration than ours.
+
+Two things follow for our attempt:
+1. We inherit the server flags and connector name — that is the real value here.
+2. We should not assume it composes with DCP=8; the reference never tested that,
+   and #53917 (our offload-under-DCP fix) targets the same layer LMCache would
+   replace.
+
+Still gated behind ruling out a geometry defect first, per below.
 
 Not wired for K3. Motivated by the same cache gap, but the published wins are
 B200/B300 CUDA leaning on CUDA-IPC KV export, which does not port to ROCm free.
