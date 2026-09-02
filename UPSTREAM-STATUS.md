@@ -9,12 +9,13 @@ b23_07, not published to a registry.
 
 # WHAT WE TESTED & PRODUCED — `kimi-k3-vllm:pronly`
 
-`nightly-7c5dc571` + **8 upstream PRs** (4 merged in base, 4 applied). No vendor
-patch. **10,799 tok/s/GPU @ C72**, err 0.09%, GSM8K 0.995 (T236 / T234).
+`nightly-7c5dc571` + **7 upstream PRs** (4 merged in base, 3 applied). No vendor
+patch. **10,653–10,799 tok/s/GPU @ C72**, GSM8K 0.995.
 
-Started at 11 PRs and 10,692 (T232); pruning removed 3 with no measurable cost.
+Started at 11 PRs and 10,692 (T232); pruning removed 4 with no clear cost.
+**Upstreaming ask is now 3 open PRs, down from 7.**
 
-## PRs applied — 8 total (was 11)
+## PRs applied — 7 total (was 11)
 
 ### Already merged upstream (in the base image)
 
@@ -29,22 +30,19 @@ Started at 11 PRs and 10,692 (T232); pruning removed 3 with no measurable cost.
 
 | PR | what it does | applied as | status |
 |---|---|---|---|
-| **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `SimpleCPUOffloadConnector` under DCP | `pr_only/01` | keep — test last, we run `offload dram` |
-| **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | fuse MLA q/kv RMSNorm | `pr_only/04` | **T237 testing removal now** |
-| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | attn_res + sigmoid_mul + conv fusions | `pr_only/05` | untested |
+| **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `SimpleCPUOffloadConnector` under DCP | `pr_only/01` | keep — never tested for removal; we run `offload dram` |
+| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | attn_res + sigmoid_mul + conv fusions | `pr_only/05` | **T238 testing removal now** |
 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl MoE kernels | `pr_stack/` (4 files) | held constant, live on the MoE path |
 
-**4 open PRs, down from 7 at T232.**
-
-Apply gotcha: **[#50618](https://github.com/vllm-project/vllm/pull/50618) was python-hunk only** here; its `csrc/*.cu` side never
-applied, so the C++ path was stock in every arm.
+**3 open PRs, down from 7 at T232.** If T238 lands in band, **2**.
 
 ## PRUNED — measured, not assumed
 
-| PR | evidence | note |
+| PR | evidence | confidence |
 |---|---|---|
-| **[#51392](https://github.com/vllm-project/vllm/pull/51392)** + **[#54254](https://github.com/vllm-project/vllm/pull/54254)** | GSM8K 0.995 (T234), C72 10,781 (T235) | dropped as one unit — #54254 depends on #51392. Checkpoint is `mxfp4` with `quantization_config=None`, so the online-quant path had no work. |
-| **[#50618](https://github.com/vllm-project/vllm/pull/50618)** | C72 10,799, err 0.09% (T236) | **measured-safe, not proven-safe.** Guards a 12,288-byte over-read in KDA `f_b_proj` (`stride=(6288,1)` at TP8). An over-read need not fault. **First thing to restore on any stray memory fault.** |
+| **[#51392](https://github.com/vllm-project/vllm/pull/51392)** + **[#54254](https://github.com/vllm-project/vllm/pull/54254)** | GSM8K 0.995 (T234), C72 10,781 (T235) | **strong** — dependency pair; checkpoint is `mxfp4` with `quantization_config=None`, so the online-quant path had no work. Inert by construction. |
+| **[#50618](https://github.com/vllm-project/vllm/pull/50618)** | C72 10,799, err 0.09% (T236) | **measured-safe, NOT proven-safe.** Guards a 12,288-byte over-read in KDA `f_b_proj` (`stride=(6288,1)` at TP8); only the python hunk ever applied, `csrc` was stock in every arm; an over-read need not fault. **First to restore on any stray memory fault.** |
+| **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | C72 10,653 (T237) | **weakest of the four.** T236→T237 is −1.35%, the largest single step, and the ladder spread (1.37%) is marginally wider than the ±1.2% band. A real cost is mechanically plausible: it fuses q_a/kv_a RMSNorm into one AITER launch on **every MLA layer, every forward**, and K3 carries no `@support_torch_compile` so `MLADualRMSNormFusionPass` never runs otherwise. **Repeat this arm first if anything is replicated.** |
 | **[#54165](https://github.com/vllm-project/vllm/pull/54165)** | closed-unmerged upstream; spec off at C72 | author closed it as superseded by [#54163](https://github.com/vllm-project/vllm/pull/54163) |
 | **[#50813](https://github.com/vllm-project/vllm/pull/50813)** | dead code, zero GPU cost | `quark_moe.py` unreachable — model declares no `quantization_config` |
 
@@ -58,19 +56,34 @@ applied, so the C++ path was stock in every arm.
 | T234 | 4 | GSM8K | **0.995** |
 | T235 | 4 | C72 | **10,781** |
 | T236 | 3 | C72 | **10,799**, err 0.09% |
-| T237 | 2 | C72 | *running* |
+| T237 | 2 | C72 | **10,653**, err 0.22% |
+| T238 | 1 | C72 | *running* |
 
-**10,691 / 10,781 / 10,799 across 6 / 4 / 3 applied PRs — all inside a 1.0%
-spread and inside the ±1.2% cross-day band.** Read that as **no measurable
-difference**, not a trend, and certainly not "fewer patches is faster." Each
-arm past T233 is n=1.
+**10,653 – 10,799 across 6/4/3/2 applied PRs = 1.37% spread.** Read as **no
+clear difference**, not a trend — but note it is now marginally wider than the
+±1.2% cross-day band, so the ladder is at the edge of what this method can
+resolve. Each arm past T233 is n=1.
 
 Versus the 264 KB overlay it replaces: v4 is 10,607 ±1.2% (n=4), matched-mns
 T198 is 10,630. **The overlay is worth nothing at C72.**
 
 Noise is **not uniform**: same-session pairs replicate to 0.02% (T232/T233,
-T195/T198), cross-day byte-identical runs differ by 1.2% (T206 vs T228). Quote
-**±1.2%** across days.
+T195/T198), cross-day byte-identical runs differ by 1.2% (T206 vs T228).
+
+## Next: LMCache, targeting 12,500
+
+The headline metric appears to be **prompt-token throughput ÷ 8**
+(10,799 × 8 = 86,392 vs live `tput_in_srv` 85,452–90,092; output was only 515
+tok/s). Stated as a strong inference, **not yet verified in code**. If it holds,
+**prefix-cache hit rate is the mechanism, not merely a lever** — a cached prompt
+token still counts as processed but costs almost nothing to serve. We capture
+**88%** against a theoretical **95–97%**.
+
+Reference wiring captured from SA (read-only) in `EXPERIMENT-QUEUE.md`:
+lmcache 0.5.5rc3+rocm7.2, `LMCacheMPConnector`, `--chunk-size 12288` (must
+divide every KV group's `tokens_per_block`; upstream docs say 768, which is the
+CUDA path and wrong here). **Open risk:** those group sizes are quoted at DCP=1;
+at DCP=8 the geometry changes, so verify from the engine log first.
 
 ## Risks
 
