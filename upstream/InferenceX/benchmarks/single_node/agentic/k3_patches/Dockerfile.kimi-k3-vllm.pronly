@@ -60,6 +60,9 @@ ARG BASE_IMAGE=vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647a
 FROM ${BASE_IMAGE}
 
 ARG SITE=/usr/local/lib/python3.12/dist-packages
+# Tag name for the manifest. Override when building a prune arm so the manifest
+# does not claim to be plain `pronly` (T234 shipped with that cosmetic defect).
+ARG IMAGE_TAG=kimi-k3-vllm:pronly
 
 COPY k3_patches/pr_only/ /tmp/pr_only/
 COPY k3_patches/pr_stack/ /tmp/pr_stack/
@@ -89,7 +92,7 @@ RUN set -eux; \
 RUN python3 -c "import vllm, vllm.models.kimi_k3.amd.mla, vllm.v1.simple_kv_offload.manager; print('[build] import gate OK')"
 
 RUN printf '%s\n' \
-    'k3-image: kimi-k3-vllm:pronly' \
+    "k3-image: ${IMAGE_TAG}" \
     'base: vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb' \
     'overlay: NONE -- fully-mergeable PR stack only' \
     'pr-in-base: 51705 53598 52707 52033 (merged upstream)' \

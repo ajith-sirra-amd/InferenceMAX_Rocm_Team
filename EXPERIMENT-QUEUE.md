@@ -451,7 +451,18 @@ would trade resource exhaustion for starvation. Floor for conc 52 is ~64.
 Baseline: `pronly` = 11 PRs (4 merged in base + 7 applied), **10,692 @ C72**,
 GSM8K 0.99.
 
-### T234 (next) — drop #51392 + #54254
+### T234 RESULT — GSM8K 0.995. Numerics gate PASSED.
+
+`pronly-noquant` (4 applied PRs) scores **0.995**, tying the best in the ledger
+and indistinguishable from full pronly's 0.99. The checkpoint is `mxfp4` with
+`quantization_config=None`, so #51392's online-quant path is not needed.
+
+**T235 dispatched: C72 throughput on `pronly-noquant`.** Baseline to beat is
+10,691 (n=2). #54254 and #52494 are perf PRs, so accuracy passing says nothing
+about tok/s. If throughput holds, the upstreaming ask drops **7 open PRs → 5**
+and 24 of 45 file-touches prune.
+
+### T234 (was) — drop #51392 + #54254
 
 Image **`kimi-k3-vllm:pronly-noquant`**, built and import-gated.
 Manifest confirms `pr-applied: 53917 52494 52968 50618`.

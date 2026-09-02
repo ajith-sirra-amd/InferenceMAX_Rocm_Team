@@ -4232,3 +4232,54 @@ T232 and T233 both ran the **12-PR** image. #54165 was dropped afterwards
 (closed-unmerged upstream, inert at C72 since spec decoding is off), leaving
 11 PRs. The first run on the 11-PR image will be a later trial. No C72
 difference is expected, but it is n=0 until measured.
+
+## T234 — GSM8K 0.995 WITHOUT #51392 + #54254. The quantization pair is prunable on numerics.
+
+Run 33610509556. `kimi-k3-vllm:pronly-noquant` — the 4-PR arm.
+Manifest (generated, not hand-written): `pr-applied: 53917 52494 52968 50618`.
+
+```
+|gsm8k|3|flexible-extract|5|exact_match|^ |0.995|+- |0.005|
+|     | |strict-match    |5|exact_match|^ |0.995|+- |0.005|
+```
+
+| stack | applied PRs | GSM8K |
+|---|--:|--:|
+| v4 (264 KB overlay) — T207 | — | 0.995 |
+| pronly (6 applied) — T231 | 6 | 0.99 |
+| **pronly-noquant (4 applied)** | **4** | **0.995** |
+
+**Ties the best accuracy in the ledger**, and is nominally *above* full pronly
+(0.99). At ±0.005 / ±0.0071 that difference is one sample — do not read it as
+"removing PRs improved accuracy." The honest statement is that all three are
+indistinguishable.
+
+### What this settles, and what it does not
+
+**Settles:** dropping the online-quantization / per-token-FP8 chain does not
+break numerics. The engine reports `quantization=mxfp4, quantization_config=None`
+— the checkpoint carries its own format and does not need #51392's online path.
+The server started, served 200/200, `eval_exit=0`.
+
+**Does not settle:** throughput. #54254 fuses KDA gated RMSNorm with per-token
+FP8, and #52494 (still present) fuses MLA q/kv RMSNorm — both are perf PRs.
+Accuracy passing says nothing about tok/s. T235 measures that.
+
+### Prune value if throughput holds
+
+| | full pronly | noquant |
+|---|--:|--:|
+| applied PRs | 6 + pr_stack | **4 + pr_stack** |
+| file-touches | 45 | **21** |
+| hunks | 129 | **56** |
+| open PRs to upstream | 7 | **5** |
+
+That is **24 of 45 file-touches and 73 of 129 hunks** removed — the single
+largest reduction available in this axis.
+
+### One cosmetic defect found
+
+The manifest's `k3-image:` line is static and still reads `kimi-k3-vllm:pronly`
+even in the `pronly-noquant` image. The `pr-applied:` line is generated and
+correct, so nothing is misreported about *content*, but the tag name is wrong.
+Worth fixing with a build ARG before this image is used by anyone else.
