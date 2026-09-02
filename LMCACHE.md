@@ -1,7 +1,7 @@
 # LMCACHE — status, wiring, and the path to 12,500
 
-**Status: NOT YET RUN.** Wiring captured, nothing dispatched. This file is the
-single source for LMCache work; update it after every LMCache trial.
+**Status: T239 DISPATCHED** (run 33656795044) — fixed-len engine check.
+This file is the single source for LMCache work; updated after every trial.
 
 ---
 
@@ -195,4 +195,24 @@ start.
 
 | trial | config | result |
 |---|---|---|
-| — | — | *nothing run yet* |
+| **T239** | fixed-len (`TEST=1`), `pronly-nq-no50618`, DCP 8, conc 72, chunk-size 12288, l1=`$TOTAL_CPU_DRAM_GB` | *running* — run 33656795044 |
+
+### Notes on the T239 wiring
+
+- **Inlined the readiness poll.** Our `benchmark_lib.sh` has no `wait_for_ready`
+  or `append_command` — those exist only in the newer SA lib. A straight port
+  would have died at the first call. The inline poll fails fast if the server
+  exits during startup and dumps the log tail.
+- `LMCACHE_PID` wired into `cleanup_agentic_services` so a failed run does not
+  leak the server process.
+- Overridable: `LMCACHE_CHUNK_SIZE`, `LMCACHE_PORT`, `LMCACHE_HTTP_PORT`,
+  `LMCACHE_VERSION`.
+- **Image is the recommended stack** (`pronly-nq-no50618`, T236 = 10,799), not
+  the minimal one — LMCache is being added to the best-measured base.
+
+### What to check in the T239 log
+
+1. `[lmcache] server READY on :8090 after Ns` — server came up at all
+2. `tokens_per_block` per KV group in the engine log — **does 12288 still
+   divide every group at DCP=8?** This is the open risk.
+3. Fixed-len completes without engine death.
