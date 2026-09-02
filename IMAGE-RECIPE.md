@@ -183,7 +183,14 @@ the launcher's argument space.
 ## `kimi-k3-vllm:v4` — everything baked, nothing at runtime
 
 Built and verified on `b23_07`. **35.6 GB**, `docker build` exit 0, **0 failed
-hunks**, all 5 pr-stack files applied.
+hunks**. **Pushed** to `aigmkt/kimi-k3-vllm:v4`, digest
+`sha256:88c8438f5aa0fc2fa01ee1736eb0f8a88e478b26a93a733f535b4f964bb197f2`.
+
+**pr-stack is 4 files, not 5.** #50813 was pruned: `quark_moe.py` is only
+reachable when the model declares Quark quantization, and `moonshotai/Kimi-K3`
+has no `quantization_config`. The `Situv2` in the kernel name comes from
+`AITER_SITUV2_A8W4=1` being read by **aiter**, not by `quark_moe.py`. T206 and
+T228 confirm no regression. Kept at `k3_patches/pr_stack_disabled/`.
 
 ```bash
 cd upstream/InferenceX/benchmarks/single_node/agentic
@@ -192,7 +199,9 @@ docker build -f k3_patches/Dockerfile.kimi-k3-vllm.v4 -t kimi-k3-vllm:v4 .
 
 Collapses both runtime layers into the image and **removes the C1-vs-C52
 overlay split** — one overlay for every concurrency, the `c16_c52` cut, because
-that is the one behind every throughput number in the ledger including 10,632.
+that is the one behind every throughput number in the ledger. Measured headline
+on this image: **10,607 tok/s/GPU +/-1.2% (n=4)** at C72 -- quote the band, not a
+point (T206 vs T228, byte-identical config 26 h apart, differ by 1.20%).
 
 It drops `/etc/k3-image-manifest`:
 
@@ -202,7 +211,7 @@ base: vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
 base-digest: sha256:8908b8ab5ba28c3b81f9f42bb72e2421f06a180e001c67c4f10ff7f127c5690b
 overlay: vllm_nightly_46638857_k3_c16_c52_current.patch (all concurrencies)
 overlay-sha256: 90f975fad15722494366153ec3f32a14c4445bfa88c51ec53043b88eaf64dcc0
-pr-stack: 5 files (#53940 a4w4-flydsl, #50813 SiTUv2-A8W4-MoE)
+pr-stack: 4 files (#53940 a4w4-flydsl)
 runtime-patching: none
 ```
 
@@ -224,7 +233,10 @@ flydsl markers in `_aiter_ops.py`.
 
 ### Two things to know before trusting a number from it
 
-1. **C1 numerics are not yet validated.** Folding C1 onto the `c16_c52` overlay
+1. ~~**C1 numerics are not yet validated.**~~ **RESOLVED (T207): GSM8K 0.995 at
+   C72 on this image**, tying the best in the ledger. C1 measured at T205/T208:
+   TPOT 9.06 ms mean / 9.31 p99 with mns 1, chunk 8192, gmu 0.9, DCP off.
+   Original concern retained below for provenance. Folding C1 onto the `c16_c52` overlay
    is a real change: the `c1` cut carried an online-quantization / weight-loading
    subsystem (`layers/quantization/online/*`, `config/quantization.py`,
    `model_loader/{base_loader,weight_utils}.py`, `layers/linear.py`,
@@ -237,9 +249,12 @@ flydsl markers in `_aiter_ops.py`.
    `single_type_kv_cache_manager.py` (243 → 478). Those are exactly what a
    batch-1 decode step is bound by, so C1 TPOT may well improve.
 
-### Blocked on one shared-file change
+### ~~Blocked on~~ RESOLVED — shared-file change applied
 
-`runners/launch_mi355x-amd.sh` cannot launch a local-only tag as written:
+`runners/launch_mi355x-amd.sh` could not launch a local-only tag as written.
+The user granted repo-wide edit rights and the fix is **in place and confirmed
+working end to end** (T207 log: `[image] pull failed -- using LOCAL image
+kimi-k3-vllm:v4`). Original diagnosis:
 
 | line | problem |
 |---|---|
@@ -249,8 +264,64 @@ flydsl markers in `_aiter_ops.py`.
 
 The fix is small and backwards compatible (tolerate a failed pull when the image
 is present locally, fall back to `.Id` for the digest, and switch to
-`--pull never` in that case), but that file is outside the standing edit bounds,
-so **it needs explicit approval before `image:` can point at `kimi-k3-vllm:v4`.**
+`--pull never` in that case), and is now applied: tolerate a failed pull when the image is present locally,
+fall back to `.Id` for the digest, and switch to `--pull never` in that case.
+
+## `kimi-k3-vllm:pronly` — the fully-mergeable stack, NO overlay
+
+The goal-B artifact: measures what a stack made only of upstream PRs delivers,
+so the cost of dropping the 264 KB unpublished overlay is a number, not a guess.
+
+```bash
+cd upstream/InferenceX/benchmarks/single_node/agentic
+docker build -f k3_patches/Dockerfile.kimi-k3-vllm.pronly -t kimi-k3-vllm:pronly .
+```
+
+**Base is the NEWEST nightly, not 46638857.** That distinction is load-bearing:
+the overlay is cut against 46638857 and applies nowhere else, but the open PRs
+are cut against recent main and mostly FAIL on 46638857. Testing PR
+applicability against the v4 base was the wrong experiment -- against
+`7c5dc571` the picture inverts, and 7 of 13 apply cleanly.
+
+Carries **12 of the 18 PRs**, all upstream-traceable, zero vendor patch:
+
+| source | PRs |
+|---|---|
+| merged, already in base | #51705, #53598, #52707, #52033 |
+| `pr_only/`, applied in order | #53917, #51392, #54254, #52494, #52968, #50618, #54165 |
+| `pr_stack/` | #53940 |
+
+Total `pr_only` = 109,726 B / 129 hunks / 45 file-touches, vs the overlay's
+264,116 B / 199 hunks / 34 files.
+
+Three things that matter when rebuilding it:
+
+1. **#54254 is STACKED on #54248.** Its diff already contains #54248, so
+   applying both double-applies and fails. Apply #54254 alone.
+2. **#50618 is python-only here.** Its `csrc/rocm/skinny_gemms*.cu` hunks cannot
+   apply to a prebuilt image.
+3. **All PR diffs are stripped to `vllm/**.py`** before applying -- no `tests/`,
+   `docs/`, or `csrc/`.
+
+Missing vs the overlay -- 5 PRs that conflict with `7c5dc571` *itself* (each
+fails standalone against the pristine base, so it is context drift, not design
+conflict): **#53166** (1 of 8 hunks), **#51437** (1 of 6), **#53301** (2),
+**#52190** (1 of 1), **#54163** (1 of 1). Also missing: the 26 overlay hunks
+(13%) that match no PR at all.
+
+**#53166 is the prefill-path fusion and this workload is prefill-dominated**
+(ISL p50 ~87k, in:out ~195:1), so expect `pronly` below 10,607. Quantifying that
+is the point.
+
+One asterisk on "fully mergeable": **#54165 is closed-unmerged** upstream; its
+open successor #54163 does not apply here.
+
+The build carries an **import gate** (`import vllm,
+vllm.models.kimi_k3.amd.mla, vllm.v1.simple_kv_offload.manager`) because
+T224/T225/T226 established that patch-independence does not imply
+import-independence.
+
+**DO NOT push to Docker Hub. Local tag only.**
 
 ## Optional: bake overlay only
 
