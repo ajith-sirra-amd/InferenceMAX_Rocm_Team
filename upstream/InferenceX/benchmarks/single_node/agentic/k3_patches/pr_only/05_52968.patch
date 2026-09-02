@@ -1,0 +1,337 @@
+diff --git a/vllm/envs.py b/vllm/envs.py
+index a24debdebd40..6eb68045dea6 100755
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -144,6 +144,8 @@
+     VLLM_ROCM_USE_AITER_MHA: bool = True
+     VLLM_ROCM_USE_AITER_FP4_ASM_GEMM: bool = False
+     VLLM_ROCM_USE_AITER_TRITON_ROPE: bool = False
++    VLLM_ROCM_USE_AITER_FUSED_QKV_CONV: bool = False
++    VLLM_ROCM_USE_FUSED_SIGMOID_GATE: bool = False
+     VLLM_ROCM_USE_AITER_FP8BMM: bool = True
+     VLLM_ROCM_USE_AITER_FP4BMM: bool = True
+     VLLM_ROCM_USE_AITER_UNIFIED_ATTENTION: bool = False
+@@ -1310,6 +1312,17 @@ def _resolve_rust_cli_path() -> str | None:
+     "VLLM_ROCM_USE_AITER_TRITON_ROPE": lambda: (
+         os.getenv("VLLM_ROCM_USE_AITER_TRITON_ROPE", "False").lower() in ("true", "1")
+     ),
++    # Whether to use the aiter fused packed-QKV causal conv1d.
++    # By default is disabled.
++    "VLLM_ROCM_USE_AITER_FUSED_QKV_CONV": lambda: (
++        os.getenv("VLLM_ROCM_USE_AITER_FUSED_QKV_CONV", "False").lower()
++        in ("true", "1")
++    ),
++    # Whether to use the aiter fused sigmoid-mul kernel.
++    # By default is disabled.
++    "VLLM_ROCM_USE_FUSED_SIGMOID_GATE": lambda: (
++        os.getenv("VLLM_ROCM_USE_FUSED_SIGMOID_GATE", "False").lower() in ("true", "1")
++    ),
+     # Whether to use aiter triton fp8 bmm kernel
+     # By default is enabled.
+     "VLLM_ROCM_USE_AITER_FP8BMM": lambda: (
+diff --git a/vllm/model_executor/layers/mla.py b/vllm/model_executor/layers/mla.py
+index 6c0e8e069fc7..255a0a643711 100644
+--- a/vllm/model_executor/layers/mla.py
++++ b/vllm/model_executor/layers/mla.py
+@@ -4,6 +4,7 @@
+ 
+ import torch
+ 
++from vllm import envs
+ from vllm.config import CacheConfig
+ from vllm.model_executor.custom_op import PluggableLayer
+ from vllm.model_executor.layers.attention import MLAAttention
+@@ -221,6 +222,13 @@ def forward(
+         )
+ 
+         if self.g_proj is not None:
+-            attn_out = attn_out * self.g_proj(hidden_states)[0].sigmoid()
++            gate = self.g_proj(hidden_states)[0]
++            if envs.VLLM_ROCM_USE_FUSED_SIGMOID_GATE:
++                from aiter.ops.triton.fusions.fused_sigmoid_mul import (
++                    fused_sigmoid_mul,
++                )
++                attn_out = fused_sigmoid_mul(attn_out, gate)
++            else:
++                attn_out = attn_out * gate.sigmoid()
+ 
+         return self.o_proj(attn_out)[0]
+diff --git a/vllm/models/kimi_k3/amd/kda.py b/vllm/models/kimi_k3/amd/kda.py
+index e20a6136e148..7b2f7faffd3f 100644
+--- a/vllm/models/kimi_k3/amd/kda.py
++++ b/vllm/models/kimi_k3/amd/kda.py
+@@ -6,6 +6,7 @@
+ from torch import nn
+ 
+ from vllm import _custom_ops as ops
++from vllm import envs
+ from vllm.compilation.breakable_cudagraph import eager_break_during_capture
+ from vllm.config import VllmConfig
+ from vllm.distributed import divide
+@@ -260,8 +261,7 @@ def forward(
+         self,
+         hidden_states: torch.Tensor,
+         positions: torch.Tensor,
+-        output: torch.Tensor,
+-    ) -> None:
++    ) -> torch.Tensor:
+         num_tokens = hidden_states.size(0)
+         projected_qkvgfab = self.in_proj_qkvgfab(hidden_states)[0]
+ 
+@@ -295,7 +295,7 @@ def forward(
+             core_attn_out=core_attn_out,
+         )
+         core_attn_out = rearrange(core_attn_out, "1 n h d -> n (h d)")
+-        output[:] = self.o_proj(core_attn_out)[0]
++        return self.o_proj(core_attn_out)[0]
+ 
+     @eager_break_during_capture
+     def _forward(
+@@ -452,38 +452,60 @@ def _forward(
+ 
+         # ---------- non-spec path (prefill or plain decode) ----------
+         core_attn_out_non_spec = None
++        non_spec_placed = False
+         if mixed_qkv_ns is not None:
+             assert g1_ns is not None and beta_ns is not None
+             if m.num_prefills > 0:
+-                q_ns, k_ns, v_ns = mixed_qkv_ns.split(
+-                    self.local_projection_size, dim=-1
+-                )
++                if envs.VLLM_ROCM_USE_AITER_FUSED_QKV_CONV:
++                    from aiter.ops.triton.gated_delta_net import (
++                        causal_conv1d_split_qkv_triton_tile_fn,
++                    )
+ 
+-                # Packed prefill conv would require copying V solely to make
+-                # it dense for KDA. Separate calls accept the strided inputs
+-                # and produce dense Q/K/V without that extra traffic.
+-                # TODO: Use packed conv once every KDA prefill backend accepts
+-                # row-strided Q/K/V directly.
+-                def _prefill_conv(
+-                    x: torch.Tensor,
+-                    state: torch.Tensor,
+-                    weight: torch.Tensor,
+-                ) -> torch.Tensor:
+-                    return causal_conv1d_fn(
+-                        x.transpose(0, 1),
+-                        weight,
++                    # One launch (fused qkv) instead of 3
++                    q_ns, k_ns, v_ns = causal_conv1d_split_qkv_triton_tile_fn(
++                        mixed_qkv_ns.transpose(0, 1),
++                        conv_weights,
+                         None,
+-                        activation="silu",
+-                        conv_states=state,
+-                        has_initial_state=has_initial_state,
++                        conv_state,
++                        non_spec_query_start_loc,
++                        self.local_projection_size,
++                        self.local_projection_size,
+                         cache_indices=non_spec_state_indices_tensor,
+-                        query_start_loc=non_spec_query_start_loc,
++                        has_initial_state=has_initial_state,
++                        activation="silu",
++                        block_m=8,
+                         metadata=m,
+-                    ).transpose(0, 1)
++                    )
++                else:
++                    q_ns, k_ns, v_ns = mixed_qkv_ns.split(
++                        self.local_projection_size, dim=-1
++                    )
+ 
+-                q_ns = _prefill_conv(q_ns, q_conv_state, q_conv_weight)
+-                k_ns = _prefill_conv(k_ns, k_conv_state, k_conv_weight)
+-                v_ns = _prefill_conv(v_ns, v_conv_state, v_conv_weight)
++                    # Packed prefill conv would require copying V solely to make
++                    # it dense for KDA. Separate calls accept the strided inputs
++                    # and produce dense Q/K/V without that extra traffic.
++                    # TODO: Use packed conv once every KDA prefill backend accepts
++                    # row-strided Q/K/V directly.
++                    def _prefill_conv(
++                        x: torch.Tensor,
++                        state: torch.Tensor,
++                        weight: torch.Tensor,
++                    ) -> torch.Tensor:
++                        return causal_conv1d_fn(
++                            x.transpose(0, 1),
++                            weight,
++                            None,
++                            activation="silu",
++                            conv_states=state,
++                            has_initial_state=has_initial_state,
++                            cache_indices=non_spec_state_indices_tensor,
++                            query_start_loc=non_spec_query_start_loc,
++                            metadata=m,
++                        ).transpose(0, 1)
++
++                    q_ns = _prefill_conv(q_ns, q_conv_state, q_conv_weight)
++                    k_ns = _prefill_conv(k_ns, k_conv_state, k_conv_weight)
++                    v_ns = _prefill_conv(v_ns, v_conv_state, v_conv_weight)
+                 q_ns, k_ns, v_ns = (
+                     rearrange(x, "n (h d) -> 1 n h d", d=self.head_dim)
+                     for x in (q_ns, k_ns, v_ns)
+@@ -560,10 +582,14 @@ def _prefill_conv(
+                 recurrent_state[prefill_state_indices] = last_recurrent_state
+ 
+                 if split_non_spec:
+-                    # Restore decode-first token order for the merge below.
+-                    core_attn_out_non_spec = torch.cat(
+-                        [core_attn_out_decode, core_attn_out_non_spec], dim=1
++                    core_attn_out_prefill = core_attn_out_non_spec
++                    core_attn_out_non_spec = core_attn_out[:, :num_actual_tokens]
++                    torch.cat(
++                        [core_attn_out_decode, core_attn_out_prefill],
++                        dim=1,
++                        out=core_attn_out_non_spec,
+                     )
++                    non_spec_placed = True
+ 
+             else:
+                 # pure-decode non-spec batch
+@@ -601,15 +627,11 @@ def _prefill_conv(
+ 
+         # ---------- merge spec and non-spec outputs ----------
+         if core_attn_out_spec is not None and core_attn_out_non_spec is not None:
+-            # Mixed batches require indexed placement in the original order.
+-            merged = torch.empty(
+-                (1, num_actual_tokens, *core_attn_out_spec.shape[2:]),
+-                dtype=core_attn_out_spec.dtype,
+-                device=core_attn_out_spec.device,
+-            )
++            merged = core_attn_out[:, :num_actual_tokens]
+             merged.index_copy_(1, spec_token_indx, core_attn_out_spec)
+             merged.index_copy_(1, non_spec_token_indx, core_attn_out_non_spec)
+-            core_attn_out[0, :num_actual_tokens] = merged[0, :num_actual_tokens]
++        elif non_spec_placed:
++            pass
+         elif core_attn_out_non_spec is not None:
+             core_attn_out[0, :num_actual_tokens] = core_attn_out_non_spec[
+                 0, :num_actual_tokens
+diff --git a/vllm/models/kimi_k3/amd/linear.py b/vllm/models/kimi_k3/amd/linear.py
+index 835c3be4dbee..9ecccaf13711 100644
+--- a/vllm/models/kimi_k3/amd/linear.py
++++ b/vllm/models/kimi_k3/amd/linear.py
+@@ -457,9 +457,8 @@ def forward(
+         self,
+         positions: torch.Tensor,
+         hidden_states: torch.Tensor,
+-        output: torch.Tensor,
+-    ) -> None:
+-        output[:] = self.mla_attn(positions, hidden_states)
++    ) -> torch.Tensor:
++        return self.mla_attn(positions, hidden_states)
+ 
+ 
+ class KimiDecoderLayer(nn.Module):
+@@ -583,24 +582,30 @@ def _run_self_attn(
+         positions: torch.Tensor,
+         hidden_states: torch.Tensor,
+     ) -> torch.Tensor:
+-        attn_output = torch.empty_like(hidden_states)
+-        self.self_attn(
++        return self.self_attn(
+             hidden_states=hidden_states,
+             positions=positions,
+-            output=attn_output,
+         )
+-        return attn_output
+ 
+     def forward(
+         self,
+         positions: torch.Tensor,
+         hidden_states: torch.Tensor,
+         residual: torch.Tensor | None,
++        pending_add: torch.Tensor | None = None,
+         **kwargs,
+-    ) -> tuple[torch.Tensor, torch.Tensor]:
++    ) -> (
++        tuple[torch.Tensor, torch.Tensor]
++        | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
++    ):
+         if self.use_attn_residuals:
+             assert residual is not None
+-            return self.forward_attn_residual(positions, hidden_states, residual)
++            return self.forward_attn_residual(
++                positions, hidden_states, residual, pending_add
++            )
++
++        # Only the attn-residual path defers the MLP add
++        assert pending_add is None
+ 
+         # Self Attention
+         if residual is None:
+@@ -621,7 +626,8 @@ def forward_attn_residual(
+         positions: torch.Tensor,
+         hidden_states: torch.Tensor,
+         block_residual: torch.Tensor,
+-    ) -> tuple[torch.Tensor, torch.Tensor]:
++        pending_add: torch.Tensor | None = None,
++    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+         prefix_sum = hidden_states
+         hidden_states = _apply_attn_res(
+             prefix_sum,
+@@ -629,6 +635,7 @@ def forward_attn_residual(
+             self.self_attention_res_proj,
+             self.self_attention_res_norm,
+             self.prev_valid_blocks,
++            delta=pending_add,
+             output_norm=self.input_layernorm,
+             block_write_idx=(self.block_write_idx if self.is_block_write_layer else -1),
+         )
+@@ -658,8 +665,7 @@ def forward_attn_residual(
+         )
+ 
+         hidden_states = self.mlp(hidden_states)
+-        prefix_sum = prefix_sum + hidden_states
+-        return prefix_sum, block_residual
++        return prefix_sum, block_residual, hidden_states
+ 
+ 
+ class KimiLinearModel(nn.Module, EagleModelMixin):
+@@ -815,23 +821,32 @@ def forward(
+             block_residual[:, : residual.size(1), :].copy_(residual)
+         residual = block_residual
+ 
++        # Each layer hands its MLP output back unsummed
++        # next layer attn-res kernel folds it
++        pending_add: torch.Tensor | None = None
+         for layer_idx, layer in enumerate(
+             self.layers[self.start_layer : self.end_layer],
+             start=self.start_layer,
+         ):
+-            hidden_states, residual = layer(
++            hidden_states, residual, pending_add = layer(
+                 positions=positions,
+                 hidden_states=hidden_states,
+                 residual=residual,
++                pending_add=pending_add,
+             )
+             if (layer_idx + 1) in self.aux_hidden_state_layers:
+-                # AMD attn-res layer already returns prefix_sum + MLP delta as
+-                # hidden_states; the override drops the block bank in residual.
++                captured = (
++                    hidden_states
++                    if pending_add is None
++                    else hidden_states + pending_add
++                )
+                 self._maybe_add_hidden_state(
+-                    aux_hidden_states, layer_idx + 1, hidden_states, residual
++                    aux_hidden_states, layer_idx + 1, captured, residual
+                 )
+ 
+         if not get_pp_group().is_last_rank:
++            if pending_add is not None:
++                hidden_states = hidden_states + pending_add
+             return IntermediateTensors(
+                 {"hidden_states": hidden_states, "residual": residual}
+             )
+@@ -842,6 +857,7 @@ def forward(
+             self.output_attn_res_proj,
+             self.output_attn_res_norm,
+             attn_res_block_num,
++            delta=pending_add,
+         )
+         # NOTE: the final norm is applied in compute_logits instead of here, so
+         # the MTP draft model receives the pre-norm hidden states.

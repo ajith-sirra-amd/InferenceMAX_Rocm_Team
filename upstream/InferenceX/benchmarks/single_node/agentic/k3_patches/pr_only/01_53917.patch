@@ -1,0 +1,622 @@
+diff --git a/vllm/config/vllm.py b/vllm/config/vllm.py
+index aadaccc82db9..103b48d70b36 100644
+--- a/vllm/config/vllm.py
++++ b/vllm/config/vllm.py
+@@ -2769,8 +2769,7 @@ def adjust_dcp_kv_cache_interleave_size(
+             )
+ 
+         if (
+-            self.kv_transfer_config is not None
+-            and self.kv_transfer_config.kv_connector is not None
++            self._requires_dcp_block_aligned_interleave()
+             and self.parallel_config.cp_kv_cache_interleave_size != local_block_size
+         ):
+             interleave = self.parallel_config.cp_kv_cache_interleave_size
+@@ -2793,14 +2792,10 @@ def validate_block_size(self) -> None:
+         """
+         block_size = self.cache_config.block_size
+ 
+-        # Skip DCP interleave-size compatibility when a KV connector is configured:
+-        # cp_kv_cache_interleave_size is pinned to block_size for PD by each worker
+-        pd_active = (
+-            self.kv_transfer_config is not None
+-            and self.kv_transfer_config.kv_connector is not None
+-            and self.kv_transfer_config.is_kv_transfer_instance
+-        )
+-        if self.parallel_config.decode_context_parallel_size > 1 and not pd_active:
++        if (
++            self.parallel_config.decode_context_parallel_size > 1
++            and not self._requires_dcp_block_aligned_interleave()
++        ):
+             assert (
+                 self.parallel_config.cp_kv_cache_interleave_size <= block_size
+                 and block_size % self.parallel_config.cp_kv_cache_interleave_size == 0
+@@ -2817,6 +2812,18 @@ def validate_block_size(self) -> None:
+                 "in the middle of a mm input"
+             )
+ 
++    def _requires_dcp_block_aligned_interleave(self) -> bool:
++        """Whether the configured connector composition needs block alignment."""
++        config = self.kv_transfer_config
++        if config is None or not config.is_kv_transfer_instance:
++            return False
++
++        from vllm.distributed.kv_transfer.kv_connector.factory import (
++            KVConnectorFactory,
++        )
++
++        return KVConnectorFactory.requires_dcp_block_aligned_interleave(config)
++
+     @model_validator(mode="after")
+     def validate_nvfp4_kv_cache_with_mla(self) -> "VllmConfig":
+         if self.model_config is None:
+diff --git a/vllm/distributed/kv_transfer/kv_connector/factory.py b/vllm/distributed/kv_transfer/kv_connector/factory.py
+index aad7999d08a2..87ba67a84a38 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/factory.py
++++ b/vllm/distributed/kv_transfer/kv_connector/factory.py
+@@ -144,6 +144,25 @@ def supports_hma_config(cls, kv_transfer_config: "KVTransferConfig") -> bool:
+ 
+         return MultiConnector.all_children_support_hma(kv_transfer_config)
+ 
++    @classmethod
++    def requires_dcp_block_aligned_interleave(
++        cls, kv_transfer_config: "KVTransferConfig"
++    ) -> bool:
++        """Return whether this connector composition requires block alignment."""
++        if kv_transfer_config.kv_connector != "MultiConnector":
++            connector_cls = cls.get_connector_class(kv_transfer_config)
++            return connector_cls.requires_dcp_block_aligned_interleave
++
++        connectors = kv_transfer_config.kv_connector_extra_config.get("connectors", [])
++        if not connectors:
++            return True
++        return any(
++            cls.requires_dcp_block_aligned_interleave(
++                KVTransferConfig(**{"engine_id": kv_transfer_config.engine_id, **child})
++            )
++            for child in connectors
++        )
++
+ 
+ # Register various connectors here.
+ # The registration should not be done in each individual file, as we want to
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/base.py b/vllm/distributed/kv_transfer/kv_connector/v1/base.py
+index 36e53828c098..1611b14d2fb8 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/base.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/base.py
+@@ -173,6 +173,14 @@ class KVConnectorBase_V1(ABC):
+     Base class for KV connectors.
+     """
+ 
++    requires_dcp_block_aligned_interleave: bool = True
++    """Whether this connector needs cp_kv_cache_interleave_size pinned to block_size
++    when decode_context_parallel_size > 1.
++
++    Connectors that only move KV within the same DCP rank (e.g. CPU offloading) should
++    set this to False.
++    """
++
+     @property
+     def supports_divergent_local_hybrid_hits(self) -> bool:
+         """Whether external hits can complete divergent local hybrid hits.
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/offloading_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/offloading_connector.py
+index a64f97805ecc..6133bbea123b 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/offloading_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/offloading_connector.py
+@@ -47,6 +47,8 @@
+ 
+ 
+ class OffloadingConnector(KVConnectorBase_V1, SupportsHMA):
++    requires_dcp_block_aligned_interleave = False
++
+     @property
+     def requires_kv_delivery(self) -> bool:
+         # Runs as kv_both, but is a best-effort cache: a dropped save is just a
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py
+index 90a421da0f5c..c498837a0065 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py
+@@ -54,6 +54,8 @@
+ class SimpleCPUOffloadConnector(KVConnectorBase_V1, SupportsHMA):
+     """CPU KV cache offloading with custom kernel transfers and BlockPool LRU."""
+ 
++    requires_dcp_block_aligned_interleave = False
++
+     @property
+     def requires_kv_delivery(self) -> bool:
+         # Runs as kv_both, but is a best-effort cache: a dropped save is just a
+diff --git a/vllm/v1/core/kv_cache_coordinator.py b/vllm/v1/core/kv_cache_coordinator.py
+index b3a9b4c03210..f58b4c2d18df 100644
+--- a/vllm/v1/core/kv_cache_coordinator.py
++++ b/vllm/v1/core/kv_cache_coordinator.py
+@@ -578,6 +578,7 @@ def __init__(
+         hash_block_size: int,
+         metrics_collector: KVCacheMetricsCollector | None = None,
+         num_prefill_lookahead: int = 0,
++        allow_partial_hash_hits: bool = True,
+     ):
+         super().__init__(
+             kv_cache_config,
+@@ -639,7 +640,9 @@ def __init__(
+             )
+             for g in kv_cache_config.kv_cache_groups
+         )
+-        self.enable_partial_hash_hits = has_partial_mamba_group
++        self.enable_partial_hash_hits = (
++            allow_partial_hash_hits and has_partial_mamba_group
++        )
+         if self.enable_partial_hash_hits:
+             unsupported_partial_hit_managers = {
+                 type(manager).__name__
+@@ -950,6 +953,7 @@ def get_kv_cache_coordinator(
+     hash_block_size: int,
+     metrics_collector: KVCacheMetricsCollector | None = None,
+     num_prefill_lookahead: int = 0,
++    allow_partial_hash_hits: bool = True,
+ ) -> KVCacheCoordinator:
+     if not enable_caching:
+         return KVCacheCoordinatorNoPrefixCache(
+@@ -993,4 +997,5 @@ def get_kv_cache_coordinator(
+         hash_block_size=hash_block_size,
+         metrics_collector=metrics_collector,
+         num_prefill_lookahead=num_prefill_lookahead,
++        allow_partial_hash_hits=allow_partial_hash_hits,
+     )
+diff --git a/vllm/v1/core/kv_cache_manager.py b/vllm/v1/core/kv_cache_manager.py
+index ef9f8da7bebc..f4c5e440ca5f 100644
+--- a/vllm/v1/core/kv_cache_manager.py
++++ b/vllm/v1/core/kv_cache_manager.py
+@@ -854,12 +854,16 @@ def take_boundary_state_offloads(
+         """Drain this step's boundary-state hand-offs for a KV connector.
+ 
+         Returns ``{request_id: [(group_id, block_id, boundary_tokens), ...]}``
+-        for mamba "align" boundary states: the
+-        request's committed boundary-state snapshots and, on a sub-block partial
+-        hit, the CoW copy of its last-prompt-boundary state. Only mamba "align"
+-        groups contribute; empty otherwise. A connector reads the referenced
+-        blocks — never resolving them positionally — and offloads them so a
+-        later request can hit that prefix.
++        for the durable boundary blocks of producers' last-prompt-boundary
++        partial tails. Mamba "align" groups contribute exact boundary-state
++        snapshots (including CoW targets for sub-block partial hits); DCP
++        full-attention groups contribute the request's own boundary block,
++        which is a durable source because KV below that boundary is
++        append-only. Empty otherwise.
++
++        A connector reads the referenced block IDs (without positional
++        resolution) and offloads them so a later request can hit that
++        sub-block prefix.
+         """
+         offloads: dict[str, list[tuple[int, int, int]]] = {}
+         for mgr in self.coordinator.single_type_managers:
+diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
+index 83ed59799ebf..dffa54748ea5 100644
+--- a/vllm/v1/core/sched/scheduler.py
++++ b/vllm/v1/core/sched/scheduler.py
+@@ -2959,68 +2959,91 @@ def _update_requests_with_invalid_blocks(
+         # these requests must be rescheduled, but only the first will recompute
+         # it. This set tracks blocks already marked for recomputation.
+         marked_invalid_block_ids: set[int] = set()
++        managers = self.kv_cache_manager.coordinator.single_type_managers
++        # num_computed_tokens is a single cross-group value, so it can only be
++        # truncated to an alignment every group agrees on. Groups whose own
++        # block is finer than the scheduler block lose a little already-computed
++        # work; a per-group boundary would leave the other groups misaligned.
++        common_block_alignment = self.block_size
+         for request in requests:
+-            is_affected = False
+-            marked_invalid_block = False
+             req_id = request.request_id
+-            # TODO (davidb): add support for hybrid memory allocator
+-            (req_block_ids,) = self.kv_cache_manager.get_block_ids(req_id)
++            req_block_ids_by_group = self.kv_cache_manager.get_block_ids(req_id)
+             # We iterate only over blocks that may contain externally computed
+             # tokens
+             req_num_computed_tokens = (
+                 request.num_computed_tokens - num_scheduled_tokens.get(req_id, 0)
+             )
+ 
+-            req_num_computed_blocks = (
+-                req_num_computed_tokens + self.block_size - 1
+-            ) // self.block_size
+-            for idx, block_id in zip(range(req_num_computed_blocks), req_block_ids):
+-                if block_id not in invalid_block_ids:
+-                    continue
+-
+-                is_affected = True
+-
+-                if block_id in marked_invalid_block_ids:
+-                    # This invalid block is shared with a previous request
+-                    # and was already marked for recomputation.
+-                    # This means this request can still consider this block
+-                    # as computed when rescheduled.
+-                    # Currently this only applies to sync loading; Async
+-                    # loading does not yet support block sharing
+-                    continue
++            invalid_positions: list[tuple[int, int]] = []
++            for manager, req_block_ids in zip(
++                managers,
++                req_block_ids_by_group,
++                strict=True,
++            ):
++                group_block_size = manager.block_size
++                req_num_computed_blocks = (
++                    req_num_computed_tokens + group_block_size - 1
++                ) // group_block_size
++                invalid_positions.extend(
++                    (idx * group_block_size, block_id)
++                    for idx, block_id in enumerate(
++                        req_block_ids[:req_num_computed_blocks]
++                    )
++                    if block_id in invalid_block_ids
++                )
+ 
+-                marked_invalid_block_ids.add(block_id)
++            if not invalid_positions:
++                continue
+ 
+-                if marked_invalid_block:
+-                    # This request has already marked an invalid block for
+-                    # recomputation and updated its num_computed_tokens.
+-                    continue
++            unmarked_positions = [
++                (token_idx, block_id)
++                for token_idx, block_id in invalid_positions
++                if block_id not in marked_invalid_block_ids
++            ]
++            marked_invalid_block_ids.update(
++                block_id for _, block_id in invalid_positions
++            )
+ 
+-                marked_invalid_block = True
+-                # Truncate the computed tokens at the first failed block
+-                request.num_computed_tokens = idx * self.block_size
+-                num_affected_tokens = (
++            if unmarked_positions:
++                # Truncate at the earliest failed token boundary across all
++                # hybrid KV-cache groups.
++                earliest_invalid_token = min(
++                    token_idx for token_idx, _ in unmarked_positions
++                )
++                request.num_computed_tokens = (
++                    earliest_invalid_token
++                    - earliest_invalid_token % common_block_alignment
++                )
++                total_affected_tokens += (
+                     req_num_computed_tokens - request.num_computed_tokens
+                 )
+-                total_affected_tokens += num_affected_tokens
+ 
+-                # collect invalid block and all downstream dependent blocks
+                 if evict_blocks:
+-                    blocks_to_evict.update(req_block_ids[idx:])
+-
+-            if is_affected:
+-                if not marked_invalid_block:
+-                    # All invalid blocks of this request are shared with
+-                    # previous requests and will be recomputed by them.
+-                    # Revert to considering only cached tokens as computed.
+-                    # Currently this only applies to sync loading; Async
+-                    # loading does not yet support block sharing
+-                    total_affected_tokens += (
+-                        request.num_computed_tokens - req_num_computed_tokens
+-                    )
+-                    request.num_computed_tokens = req_num_computed_tokens
++                    # Every group can depend on tokens after the failed
++                    # boundary, so evict each group's downstream blocks.
++                    for manager, req_block_ids in zip(
++                        managers,
++                        req_block_ids_by_group,
++                        strict=True,
++                    ):
++                        first_invalid_idx = (
++                            request.num_computed_tokens // manager.block_size
++                        )
++                        blocks_to_evict.update(req_block_ids[first_invalid_idx:])
++            else:
++                # All invalid blocks are shared with previous requests and
++                # will be recomputed by them. Revert to considering only
++                # cached tokens as computed.
++                aligned_computed_tokens = (
++                    req_num_computed_tokens
++                    - req_num_computed_tokens % common_block_alignment
++                )
++                total_affected_tokens += (
++                    request.num_computed_tokens - aligned_computed_tokens
++                )
++                request.num_computed_tokens = aligned_computed_tokens
+ 
+-                affected_req_ids.add(request.request_id)
++            affected_req_ids.add(request.request_id)
+ 
+         return affected_req_ids, total_affected_tokens, blocks_to_evict
+ 
+diff --git a/vllm/v1/core/single_type_kv_cache_manager.py b/vllm/v1/core/single_type_kv_cache_manager.py
+index 443017012f0b..4d32f88e4cdd 100644
+--- a/vllm/v1/core/single_type_kv_cache_manager.py
++++ b/vllm/v1/core/single_type_kv_cache_manager.py
+@@ -6,6 +6,7 @@
+ from collections.abc import Sequence
+ from typing import ClassVar
+ 
++from vllm.logger import init_logger
+ from vllm.utils.math_utils import cdiv
+ from vllm.v1.core.block_pool import BlockPool
+ from vllm.v1.core.kv_cache_utils import (
+@@ -33,6 +34,8 @@
+ from vllm.v1.kv_cache_spec_registry import KVCacheSpecRegistry
+ from vllm.v1.request import Request
+ 
++logger = init_logger(__name__)
++
+ 
+ class SingleTypeKVCacheManager(ABC):
+     """
+@@ -118,16 +121,20 @@ def __init__(
+         # managers (full attention, mamba "align"); harmlessly empty elsewhere.
+         self._partial_hit_reqs: dict[str, tuple[int, KVCacheBlock]] = {}
+         self._pending_cow_copies: list[tuple[KVCacheBlock, KVCacheBlock]] = []
+-        # Boundary-state offload hand-off for external KV connectors. A mamba
+-        # "align" block table is not append-only (interior states are
+-        # nulled/freed and speculative blocks relocate in place), so a
+-        # connector cannot resolve its state blocks positionally. Record
+-        # (request, group, block, exact token boundary) for each committed
+-        # boundary state so a connector can offload the right block under the
+-        # right hash. Populated only by mamba "align".
++        # Boundary-state offload hand-off for external KV connectors.
++        # For mamba "align", the block table is not append-only (interior
++        # states are nulled/freed and speculative blocks relocate in place), so
++        # connectors must use exact offered block IDs. For full attention under
++        # DCP, producers can also hand off exact boundary blocks because KV
++        # below each offered boundary is append-only.
+         self._pending_boundary_state_offloads: list[
+             tuple[str, int, KVCacheBlock, int]
+         ] = []
++        # DCP full-attention tails do not need CoW, but still need a one-shot
++        # hand-off to an external connector after the prompt boundary is filled.
++        # The queue above is drained every step, so dedup needs its own record
++        # that survives until the request is freed.
++        self._external_partial_tail_boundaries: set[tuple[str, int]] = set()
+ 
+     @classmethod
+     def _get_num_evictable_blocks(cls, blocks: Sequence[KVCacheBlock]):
+@@ -399,9 +406,10 @@ def take_pending_boundary_state_offloads(
+ 
+         Entries are ``(req_id, group_id, block, boundary_tokens)``.
+ 
+-        Only mamba "align" populates this. The blocks are not kept alive by
+-        the request block table for the whole request, so a caller that reads
+-        them asynchronously must pin them first.
++        Mamba "align" and DCP full-attention producers can populate this.
++        The blocks are not guaranteed to stay reachable via request block
++        tables for the whole request lifetime, so asynchronous callers must pin
++        before reading.
+         """
+         pending = self._pending_boundary_state_offloads
+         self._pending_boundary_state_offloads = []
+@@ -519,6 +527,16 @@ def pop_blocks_for_free(self, request_id: str) -> list[KVCacheBlock]:
+         req_blocks = self.req_to_blocks.pop(request_id, [])
+         self.num_cached_block.pop(request_id, None)
+         self._partial_hit_reqs.pop(request_id, None)
++        self._external_partial_tail_boundaries = {
++            entry
++            for entry in self._external_partial_tail_boundaries
++            if entry[0] != request_id
++        }
++        self._pending_boundary_state_offloads = [
++            entry
++            for entry in self._pending_boundary_state_offloads
++            if entry[0] != request_id
++        ]
+         return req_blocks
+ 
+     def free(self, request_id: str) -> None:
+@@ -820,13 +838,30 @@ def _cache_partial_tail_block(
+         block_idx = boundary_tokens // self.block_size
+         if block_idx >= len(blocks):
+             return
+-        self.block_pool.cache_partial_block(
++        partial_hash = self.block_pool.cache_partial_block(
+             request=request,
+             block=blocks[block_idx],
+             num_tokens=boundary_tokens,
+             kv_cache_group_id=self.kv_cache_group_id,
+             block_size=self.block_size,
+         )
++        boundary_key = (request.request_id, boundary_tokens)
++        if (
++            partial_hash is not None
++            and self.dcp_world_size > 1
++            and boundary_key not in self._external_partial_tail_boundaries
++        ):
++            # Unlike Mamba align mode, full-attention KV is append-only inside
++            # the block, so the request block itself is a durable DMA source.
++            self._external_partial_tail_boundaries.add(boundary_key)
++            self._pending_boundary_state_offloads.append(
++                (
++                    request.request_id,
++                    self.kv_cache_group_id,
++                    blocks[block_idx],
++                    boundary_tokens,
++                )
++            )
+ 
+     def get_num_common_prefix_blocks(self, running_request_id: str) -> int:
+         blocks = self.req_to_blocks[running_request_id]
+diff --git a/vllm/v1/simple_kv_offload/manager.py b/vllm/v1/simple_kv_offload/manager.py
+index 0a78c5e9c6a3..4e15b7f75122 100644
+--- a/vllm/v1/simple_kv_offload/manager.py
++++ b/vllm/v1/simple_kv_offload/manager.py
+@@ -137,6 +137,7 @@ def __init__(
+             pcp_world_size=1,
+             scheduler_block_size=self.block_size,
+             hash_block_size=self.hash_block_size,
++            allow_partial_hash_hits=not lazy_offload,
+         )
+         self.cpu_block_pool: BlockPool = self.cpu_coordinator.block_pool
+         # GPU block pool reference - bound after scheduler builds kv_cache_manager
+@@ -254,6 +255,15 @@ def get_num_new_matched_tokens(
+         if stale := self._pending_cpu_hits.pop(request.request_id, None):
+             self._free_pending_cpu_hit(stale)
+ 
++        if num_computed_tokens % self.block_size != 0:
++            logger.warning_once(
++                "SimpleCPU external lookup requires scheduler-block-aligned "
++                "local tokens, got %d tokens with scheduler block size %d.",
++                num_computed_tokens,
++                self.block_size,
++            )
++            return 0, False
++
+         num_skipped_hashes = num_computed_tokens // self.hash_block_size
+         remaining_hashes = request.block_hashes[num_skipped_hashes:]
+ 
+@@ -331,18 +341,13 @@ def update_state_after_alloc(
+ 
+         cpu_hit_blocks_full, _ = pending
+ 
+-        # ``num_external_tokens`` is LCM-aligned (checked per-group below),
+-        # so this counts whole scheduler-aligned chunks of incoming tokens.
+-        num_blocks_to_load = num_external_tokens // self.block_size
+-        assert num_blocks_to_load > 0
+         num_cached_fa_blocks = sum(
+             blk.block_hash is not None for blk in blocks.blocks[self.fa_gidx]
+         )
+         num_computed_tokens = num_cached_fa_blocks * self.fa_block_size
+-
+-        # Build transfer pairs across all groups.
+-        total_computed_tokens = num_computed_tokens + num_external_tokens
+-        kv_cache_groups = self.cpu_kv_cache_config.kv_cache_groups
++        assert num_computed_tokens % self.block_size == 0, (
++            "SimpleCPU external loads must start at a scheduler-block boundary"
++        )
+ 
+         # The scheduler may have accepted fewer blocks than
+         # get_num_new_matched_tokens() reported.
+@@ -351,14 +356,8 @@ def update_state_after_alloc(
+         # the rest will be released along with the temp pin below.
+         cpu_hit_blocks: list[list[KVCacheBlock]] = []
+         for g in range(num_groups):
+-            g_block_size = (
+-                kv_cache_groups[g].kv_cache_spec.block_size * self.cp_world_size
+-            )
+-            assert num_external_tokens % g_block_size == 0, (
+-                f"num_external_tokens={num_external_tokens} not aligned to "
+-                f"group {g} block_size={g_block_size}"
+-            )
+-            n_take_g = num_external_tokens // g_block_size
++            g_block_size = self.cpu_coordinator.single_type_managers[g].block_size
++            n_take_g = cdiv(num_external_tokens, g_block_size)
+             cpu_hit_blocks.append(cpu_hit_blocks_full[g][:n_take_g])
+ 
+         gpu_block_ids: list[int] = []
+@@ -371,14 +370,10 @@ def update_state_after_alloc(
+             if n_ext_g == 0:
+                 continue
+ 
+-            # Number of blocks in the computed range for this group.
+-            g_block_size = (
+-                kv_cache_groups[g].kv_cache_spec.block_size * self.cp_world_size
+-            )
+-            n_computed_g = cdiv(total_computed_tokens, g_block_size)
+-
+-            # Back-trace: ext blocks sit at the tail of the computed range.
+-            gpu_ext_start = n_computed_g - n_ext_g
++            g_block_size = self.cpu_coordinator.single_type_managers[g].block_size
++            # The local prefix starts on the scheduler LCM, which is also a
++            # physical block boundary for every group.
++            gpu_ext_start = num_computed_tokens // g_block_size
+             group_gpu_ids = block_ids_by_group[g]
+ 
+             for i, cpu_blk in enumerate(cpu_blocks_g):
+@@ -529,9 +524,8 @@ def _prepare_eager_store_specs(
+         """Identify newly computed blocks to offload from scheduler requests.
+ 
+         Only considers blocks whose KV data has been **confirmed computed** by
+-        the GPU. This means blocks from the current step are NOT stored until the
+-        next step. If a request finishes in the same step as its last full block,
+-        that block may be missed. (TODO: flush on finish.)
++        the GPU. Blocks scheduled in the current step can be stored here because
++        the worker orders the DMA read after the compute-done event.
+ 
+         Returns:
+             (gpu_block_ids, cpu_block_ids, req_ids) for the store event.
+@@ -551,6 +545,40 @@ def _prepare_eager_store_specs(
+         # Dedup against blocks already scheduled.
+         in_flight = self._in_flight_store_gpu_blocks
+ 
++        # Exact recurrent/partial-tail states are published after their hashes
++        # become valid. Store them before request teardown. Mamba align groups
++        # use this as their only safe source because their block tables are not
++        # positionally stable.
++        block_state = scheduler_output.kv_connector_block_state
++        boundary_offloads = (
++            block_state.boundary_state_offloads if block_state is not None else {}
++        )
++        for req_id, entries in boundary_offloads.items():
++            scheduled_for_req = False
++            for _, gpu_block_id, _ in entries:
++                gpu_block = gpu_block_pool.blocks[gpu_block_id]
++                block_hash = gpu_block.block_hash
++                if (
++                    block_hash is None
++                    or gpu_block_id in in_flight
++                    or cpu_block_pool.cached_block_hash_to_block.get_one_block(
++                        block_hash
++                    )
++                    is not None
++                    or num_free <= 0
++                ):
++                    continue
++                cpu_block = cpu_block_pool.get_new_blocks(1)[0]
++                cpu_block._block_hash = block_hash
++                merged_gpu_block_ids.append(gpu_block_id)
++                merged_cpu_block_ids.append(cpu_block.block_id)
++                in_flight.add(gpu_block_id)
++                gpu_block_pool.touch([gpu_block])
++                num_free -= 1
++                scheduled_for_req = True
++            if scheduled_for_req:
++                req_ids.append(req_id)
++
+         for req_id, new_block_id_groups, preempted in yield_req_data(scheduler_output):
+             state = self._reqs_to_store.get(req_id)
+             if state is None or state.finished:
+@@ -578,22 +606,32 @@ def _prepare_eager_store_specs(
+             block_hashes_to_store: list[bytes] = []
+             advanced_per_group: list[int] = [0] * num_groups
+             out_of_space = False
+-            # Confirmed tokens: KV data written and visible to all streams.
++            # Confirmed tokens: include tokens already computed in prior steps
++            # and tokens scheduled in the current step. Current-step stores are
++            # ordered after a compute-done event in the worker, so their KV is
++            # visible before DMA reads begin.
+             req = state.request
+-            confirmed_tokens = req.num_computed_tokens - req.num_output_placeholders
++            confirmed_tokens = (
++                req.num_computed_tokens + num_new_tokens - req.num_output_placeholders
++            )
++            confirmed_tokens = max(0, min(confirmed_tokens, req.num_tokens))
+             # Cap to blocks with confirmed KV data.
+             aligned_tokens = confirmed_tokens // self.block_size * self.block_size
+ 
+             for g in range(num_groups):
++                # Mamba align block tables relocate state blocks in place, so a
++                # connector's historical block IDs are not safe DMA sources.
++                # These groups are stored only from exact handoffs above.
++                if isinstance(kv_cache_groups[g].kv_cache_spec, MambaSpec):
++                    continue
++
+                 # FIXME (yifan): handle CPU cache eviction, where
+                 # num_stored_blocks can be stale and omit evicted blocks in
+                 # the middle of the request.
+                 already_stored_g = state.num_stored_blocks[g]
+                 group_gpu_ids = block_ids_by_group[g]
+ 
+-                g_block_size = (
+-                    kv_cache_groups[g].kv_cache_spec.block_size * self.cp_world_size
+-                )
++                g_block_size = self.cpu_coordinator.single_type_managers[g].block_size
+                 ready_blocks_g = aligned_tokens // g_block_size
+                 scannable = group_gpu_ids[already_stored_g:ready_blocks_g]
+ 

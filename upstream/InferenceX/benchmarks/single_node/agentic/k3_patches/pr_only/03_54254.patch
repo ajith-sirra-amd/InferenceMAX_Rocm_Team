@@ -1,0 +1,374 @@
+diff --git a/vllm/model_executor/kernels/linear/scaled_mm/aiter.py b/vllm/model_executor/kernels/linear/scaled_mm/aiter.py
+index b1518f21cc82..56ba2d3f1b1d 100644
+--- a/vllm/model_executor/kernels/linear/scaled_mm/aiter.py
++++ b/vllm/model_executor/kernels/linear/scaled_mm/aiter.py
+@@ -14,6 +14,8 @@
+ )
+ from vllm.model_executor.layers.quantization.utils.quant_utils import (
+     GroupShape,
++    QuantKey,
++    kFp8DynamicTokenSym,
+ )
+ from vllm.model_executor.utils import replace_parameter
+ from vllm.platforms import current_platform
+@@ -149,6 +151,14 @@ def is_supported(
+             return False, "requires aiter library to be installed."
+         return True, None
+ 
++    def input_quant_key(self) -> QuantKey | None:
++        # Advertise per-token FP8 so KDA gated-RMSNorm fusion can skip
++        # in-kernel quant. Do not return kMxfp4Dynamic: that is a different
++        # GEMM family. Do not call get_output_padding() - torch fallbacks
++        # resolve padding from compilation_config, which is unset in
++        # profile_run. This kernel does not pad activations.
++        return kFp8DynamicTokenSym
++
+     @classmethod
+     def can_implement(cls, c: FP8ScaledMMLinearLayerConfig) -> tuple[bool, str | None]:
+         is_ptpc = (
+@@ -241,6 +251,11 @@ def is_supported(
+ 
+         return True, None
+ 
++    def input_quant_key(self) -> QuantKey | None:
++        # Same PTPC consume ABI as the bpreshuffle kernel. HIPBMM stays off
++        # in this harness unless a bench enables it.
++        return kFp8DynamicTokenSym
++
+     @classmethod
+     def can_implement(cls, c: FP8ScaledMMLinearLayerConfig) -> tuple[bool, str | None]:
+         is_ptpc = (
+@@ -318,6 +333,9 @@ def is_supported(
+             compute_capability
+         )
+ 
++    def input_quant_key(self) -> QuantKey | None:
++        return kFp8DynamicTokenSym
++
+     @classmethod
+     def can_implement(cls, c: FP8ScaledMMLinearLayerConfig) -> tuple[bool, str | None]:
+         is_ptpc = (
+diff --git a/vllm/model_executor/layers/quantization/online/fp8.py b/vllm/model_executor/layers/quantization/online/fp8.py
+index a8720b2d23fd..9f579095bde8 100644
+--- a/vllm/model_executor/layers/quantization/online/fp8.py
++++ b/vllm/model_executor/layers/quantization/online/fp8.py
+@@ -22,6 +22,10 @@
+     CutlassFP8ScaledMMLinearKernel,
+     MarlinFP8ScaledMMLinearKernel,
+ )
++from vllm.model_executor.layers.fusion.quant_activation import (
++    QuantizedActivation,
++    expose_input_quant_key,
++)
+ from vllm.model_executor.layers.fused_moe import RoutedExperts
+ from vllm.model_executor.layers.fused_moe.oracle.fp8 import (
+     select_fp8_moe_backend,
+@@ -401,18 +405,21 @@ def process_weights_after_loading(self, layer: Module) -> None:
+         replace_parameter(layer, "weight_scale", weight_scale)
+ 
+         self.fp8_linear.process_weights_after_loading(layer)
++        expose_input_quant_key(layer, self.fp8_linear)
+ 
+         layer._already_called_process_weights_after_loading = True
+ 
+     def apply(
+         self,
+         layer: torch.nn.Module,
+-        x: torch.Tensor,
++        x: torch.Tensor | QuantizedActivation,
+         bias: torch.Tensor | None = None,
+     ) -> torch.Tensor:
+         # if batch invariant mode is enabled dequant
+-        if envs.VLLM_BATCH_INVARIANT and not isinstance(
+-            self.fp8_linear, CutlassFP8ScaledMMLinearKernel
++        if (
++            envs.VLLM_BATCH_INVARIANT
++            and not isinstance(self.fp8_linear, CutlassFP8ScaledMMLinearKernel)
++            and not isinstance(x, QuantizedActivation)
+         ):
+             weight_dequant = (
+                 layer.weight.to(x.dtype) * layer.weight_scale.to(x.dtype).t()
+diff --git a/vllm/models/kimi_k3/amd/kda.py b/vllm/models/kimi_k3/amd/kda.py
+index e20a6136e148..988761bc5f8e 100644
+--- a/vllm/models/kimi_k3/amd/kda.py
++++ b/vllm/models/kimi_k3/amd/kda.py
+@@ -11,11 +11,15 @@
+ from vllm.distributed import divide
+ from vllm.forward_context import get_forward_context
+ from vllm.logger import init_logger
++from vllm.model_executor.layers.fusion.quant_activation import QuantizedActivation
+ from vllm.model_executor.layers.linear import (
+     ColumnParallelLinear,
+     RowParallelLinear,
+ )
+ from vllm.model_executor.layers.mamba.gdn.base import GatedDeltaNetAttention
++from vllm.model_executor.layers.quantization.utils.quant_utils import (
++    kFp8DynamicTokenSym,
++)
+ 
+ # Generic KDA helpers, shared with Kimi-Linear. They are neither ROCm- nor
+ # K3-specific, so they are imported rather than duplicated. (nvidia/kda.py keeps
+@@ -46,11 +50,16 @@
+     make_decode_conv1d_weight_loader,
+     make_decode_norm_weight_loader,
+ )
++from vllm.models.kimi_k3.amd.ops.rmsnorm_gated_fp8_per_token import (
++    per_token_fp8_quant,
++    rmsnorm_gated_fp8_per_token,
++)
+ from vllm.models.kimi_k3.amd.ops.third_party.kda import (
+     chunk_kda_with_fused_gate,
+     fused_recurrent_kda,
+     fused_recurrent_kda_packed_decode,
+ )
++from vllm.platforms import current_platform
+ from vllm.third_party.flash_linear_attention.ops.kda import FusedRMSNormGated
+ from vllm.transformers_utils.configs.kimi_linear import KimiLinearConfig
+ from vllm.v1.attention.backend import AttentionBackend
+@@ -59,6 +68,31 @@
+ logger = init_logger(__name__)
+ 
+ 
++def _o_proj_is_ptpc_fp8(o_proj: torch.nn.Module) -> bool:
++    """True when o_proj advertised the per-token FP8 consumer ABI.
++
++    Mutually exclusive with MXFP4 fusion (kMxfp4Dynamic) on the same layer.
++    Fusion is a no-op unless Step 1 attached Fp8PtpcOnlineLinearMethod and
++    the chosen FP8 kernel returned an input_quant_key.
++    """
++    return getattr(o_proj, "input_quant_key", None) == kFp8DynamicTokenSym
++
++
++def _wrap_ptpc_activation(
++    data: torch.Tensor,
++    scale: torch.Tensor,
++    orig_dtype: torch.dtype,
++    orig_shape: torch.Size,
++) -> QuantizedActivation:
++    return QuantizedActivation(
++        data=data,
++        scale=scale,
++        orig_dtype=orig_dtype,
++        orig_shape=orig_shape,
++        quant_key=kFp8DynamicTokenSym,
++    )
++
++
+ class KimiK3DeltaAttention(GatedDeltaNetAttention):
+     def get_attn_backend(self) -> type[AttentionBackend]:
+         return KimiK3ROCmKDABackend
+@@ -294,6 +328,44 @@ def forward(
+             beta=beta,
+             core_attn_out=core_attn_out,
+         )
++        if _o_proj_is_ptpc_fp8(self.o_proj):
++            fp8_dtype = current_platform.fp8_dtype()
++            fused_already_normed = (
++                self.decode_conv1d_weight is not None
++                and self.decode_norm_weight is not None
++            )
++            # fused_kda_decode already applied gated RMSNorm. Re-running the
++            # fused producer would double-norm. Prefill / MTP skip o_norm in
++            # _forward and fuse norm+quant here.
++            attn_metadata_raw = get_forward_context().attn_metadata
++            m_meta = (
++                attn_metadata_raw.get(self.prefix)
++                if isinstance(attn_metadata_raw, dict)
++                else None
++            )
++            used_fused_decode = bool(
++                fused_already_normed
++                and m_meta is not None
++                and getattr(m_meta, "spec_sequence_masks", None) is None
++                and getattr(m_meta, "num_prefills", 1) == 0
++                and getattr(m_meta, "num_decodes", 0) > 0
++            )
++            if used_fused_decode:
++                x_2d = rearrange(core_attn_out, "1 n h d -> n (h d)")
++                q, scale = per_token_fp8_quant(x_2d, fp8_dtype)
++            else:
++                q, scale = rmsnorm_gated_fp8_per_token(
++                    core_attn_out[0],
++                    self.o_norm.weight,
++                    g2,
++                    self.o_norm.eps,
++                    fp8_dtype,
++                )
++            orig_shape = torch.Size((q.shape[0], q.shape[1]))
++            output[:] = self.o_proj(
++                _wrap_ptpc_activation(q, scale, hidden_states.dtype, orig_shape)
++            )[0]
++            return
+         core_attn_out = rearrange(core_attn_out, "1 n h d -> n (h d)")
+         output[:] = self.o_proj(core_attn_out)[0]
+ 
+@@ -616,4 +688,7 @@ def _prefill_conv(
+             ]
+         else:
+             assert core_attn_out_spec is not None
+-        core_attn_out.copy_(self.o_norm(core_attn_out, g2))
++        # PTPC fusion runs gated RMSNorm+quant in forward(); skip here so we
++        # do not double-norm. fused_kda_decode already returned above.
++        if not _o_proj_is_ptpc_fp8(self.o_proj):
++            core_attn_out.copy_(self.o_norm(core_attn_out, g2))
+diff --git a/vllm/models/kimi_k3/amd/ops/rmsnorm_gated_fp8_per_token.py b/vllm/models/kimi_k3/amd/ops/rmsnorm_gated_fp8_per_token.py
+new file mode 100644
+index 000000000000..737494f825f5
+--- /dev/null
++++ b/vllm/models/kimi_k3/amd/ops/rmsnorm_gated_fp8_per_token.py
+@@ -0,0 +1,155 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""Fused gated RMSNorm + per-token FP8 for Kimi-K3 KDA ``o_proj``.
++
++Port of ATOM ``_rmsnorm_gated_fp8_per_token_kernel`` (ATOM#1752). RMSNorm
++is per-head over ``head_dim``; the FP8 amax is **per token** across heads.
++That is the PTPC activation layout AITER ``gemm_a8w8_bpreshuffle`` wants:
++``y [tokens, heads*H] fp8``, ``scale [tokens, 1] float32``.
++
++Do not use this for group-128 FP8 (vLLM PR 40710). That ABI is a
++different GEMM.
++"""
++
++from __future__ import annotations
++
++import torch
++
++try:
++    import triton
++    import triton.language as tl
++
++    _HAS_TRITON = True
++except ImportError:  # pragma: no cover
++    _HAS_TRITON = False
++
++
++if _HAS_TRITON:
++
++    @triton.jit
++    def _rmsnorm_gated_fp8_per_token_kernel(
++        x_ptr,
++        w_ptr,
++        g_ptr,
++        y_ptr,
++        s_ptr,
++        H,
++        eps,
++        fp8_max,
++        stride_xm,
++        stride_xh,
++        stride_g_outer,
++        stride_g_head,
++        stride_ym,
++        HEADS: tl.constexpr,
++        HEADS_POW2: tl.constexpr,
++        BLOCK: tl.constexpr,
++    ):
++        tok = tl.program_id(0)
++        head_ids = tl.arange(0, HEADS_POW2)
++        cols = tl.arange(0, BLOCK)
++        mask = (head_ids[:, None] < HEADS) & (cols[None, :] < H)
++        # Padding heads are masked, but a raw offset of head_ids*stride can
++        # still form an OOB pointer on ROCm/Triton. Clamp the address index.
++        h_safe = tl.where(head_ids < HEADS, head_ids, 0)
++        x_off = tok * stride_xm + h_safe[:, None] * stride_xh + cols[None, :]
++        x = tl.load(x_ptr + x_off, mask=mask, other=0.0).to(tl.float32)
++        var = tl.sum(x * x, axis=1) / H
++        rstd = 1.0 / tl.sqrt(var + eps)
++        w = tl.load(w_ptr + cols, mask=cols < H, other=0.0).to(tl.float32)
++        g_off = tok * stride_g_outer + h_safe[:, None] * stride_g_head + cols[None, :]
++        gate = tl.load(g_ptr + g_off, mask=mask, other=0.0).to(tl.float32)
++        normed = (x * rstd[:, None] * w[None, :]) * tl.sigmoid(gate)
++        amax = tl.max(tl.abs(normed))
++        scale = amax / fp8_max
++        inv = tl.where(scale > 0.0, 1.0 / scale, 0.0)
++        q = normed * inv
++        q = tl.minimum(tl.maximum(q, -fp8_max), fp8_max)
++        y_off = tok * stride_ym + h_safe[:, None] * H + cols[None, :]
++        tl.store(y_ptr + y_off, q.to(y_ptr.dtype.element_ty), mask=mask)
++        tl.store(s_ptr + tok, scale)
++
++
++def _rmsnorm_gated_torch(
++    x: torch.Tensor, weight: torch.Tensor, gate: torch.Tensor, eps: float
++) -> torch.Tensor:
++    dtype = x.dtype
++    x_f = x.float()
++    var = x_f.pow(2).mean(dim=-1, keepdim=True)
++    xn = x_f * torch.rsqrt(var + eps)
++    return (xn.to(dtype) * weight.to(dtype)) * torch.sigmoid(gate)
++
++
++def rmsnorm_gated_fp8_per_token(
++    x: torch.Tensor,
++    weight: torch.Tensor,
++    gate: torch.Tensor,
++    eps: float,
++    quant_dtype: torch.dtype,
++) -> tuple[torch.Tensor, torch.Tensor]:
++    """Gated RMSNorm over last dim, then per-token FP8.
++
++    Args:
++        x: ``[tokens, heads, head_dim]`` (bf16)
++        weight: ``[head_dim]``
++        gate: ``[tokens, heads, head_dim]`` or a strided 3D view
++        eps: RMSNorm epsilon
++        quant_dtype: platform FP8 dtype (``float8_e4m3fn`` on gfx950)
++
++    Returns:
++        ``(y [tokens, heads*head_dim] fp8, scale [tokens, 1] float32)``
++    """
++    if x.ndim != 3:
++        raise ValueError(f"expected [t, heads, head_dim], got {tuple(x.shape)}")
++    t, heads, h = x.shape
++    fp8_max = float(torch.finfo(quant_dtype).max)
++    if not _HAS_TRITON or t == 0 or h > 8192:
++        normed = _rmsnorm_gated_torch(x, weight, gate, eps).reshape(t, heads * h)
++        amax = normed.abs().amax(dim=-1, keepdim=True).float().clamp(min=1e-12)
++        scale = amax / fp8_max
++        q = (normed.float() / scale).clamp(-fp8_max, fp8_max).to(quant_dtype)
++        return q, scale
++    x = x.contiguous()
++    out = torch.empty((t, heads * h), dtype=quant_dtype, device=x.device)
++    scale = torch.empty((t, 1), dtype=torch.float32, device=x.device)
++    if gate.ndim == 3:
++        stride_g_outer, stride_g_head = gate.stride(0), gate.stride(1)
++    else:
++        stride_g_outer, stride_g_head = gate.stride(0), 0
++    block = triton.next_power_of_2(h)
++    _rmsnorm_gated_fp8_per_token_kernel[(t,)](
++        x,
++        weight,
++        gate,
++        out,
++        scale,
++        h,
++        float(eps),
++        fp8_max,
++        x.stride(0),
++        x.stride(1),
++        stride_g_outer,
++        stride_g_head,
++        out.stride(0),
++        HEADS=heads,
++        HEADS_POW2=triton.next_power_of_2(heads),
++        BLOCK=block,
++    )
++    return out, scale
++
++
++def per_token_fp8_quant(
++    x: torch.Tensor, quant_dtype: torch.dtype
++) -> tuple[torch.Tensor, torch.Tensor]:
++    """Per-token amax FP8 of an already-normed activation ``[t, k]``.
++
++    Used when HIP ``fused_kda_decode`` already applied gated RMSNorm.
++    Re-running :func:`rmsnorm_gated_fp8_per_token` would double-norm.
++    """
++    if x.ndim != 2:
++        raise ValueError(f"expected [tokens, k], got {tuple(x.shape)}")
++    fp8_max = float(torch.finfo(quant_dtype).max)
++    amax = x.abs().amax(dim=-1, keepdim=True).float().clamp(min=1e-12)
++    scale = amax / fp8_max
++    q = (x.float() / scale).clamp(-fp8_max, fp8_max).to(quant_dtype)
++    return q, scale
