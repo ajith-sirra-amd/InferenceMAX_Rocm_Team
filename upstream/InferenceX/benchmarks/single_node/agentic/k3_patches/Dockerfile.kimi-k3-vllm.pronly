@@ -89,7 +89,11 @@ RUN set -eux; \
 # Import gate. Catches a patch that applied cleanly but left the tree broken --
 # the T224/T225/T226 failure mode, where patch-independence did not imply
 # import-independence.
-RUN python3 -c "import vllm, vllm.models.kimi_k3.amd.mla, vllm.v1.simple_kv_offload.manager; print('[build] import gate OK')"
+# Modules imported here must exist in EVERY arm. `kimi_k3.amd.mla` was in this
+# list and is created by #52494 only -- dropping that PR failed the gate by
+# construction, which looked like a finding and was not. Import the model path
+# via `linear.py`, which is present in stock.
+RUN python3 -c "import vllm, vllm.models.kimi_k3.amd.linear, vllm.v1.simple_kv_offload.manager; print('[build] import gate OK')"
 
 RUN printf '%s\n' \
     "k3-image: ${IMAGE_TAG}" \
