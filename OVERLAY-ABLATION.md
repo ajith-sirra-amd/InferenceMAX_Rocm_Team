@@ -54,7 +54,7 @@ Two caveats that cost runs to learn:
 
 ## Axis 2 — PR-bucket split (BUILT, VERIFIED, RUNS PENDING)
 
-Hyukjoon's manifest lists 17 PRs mixed into the overlay (18 with #53940, which rides in the separate pr_stack). PR boundaries are what
+Hyukjoon's manifest lists 17 PRs mixed into the overlay (18 with [#53940](https://github.com/vllm-project/vllm/pull/53940), which rides in the separate pr_stack). PR boundaries are what
 upstream reviews, so they are the more useful axis — but they do **not**
 partition the patch.
 
@@ -100,7 +100,7 @@ Ten detachable buckets, 52,038 B — **20% of the overlay**. The other 80% is RE
 
 Rebuilding the stack by applying the 17 PRs to a pristine base **will not
 build**, and this was checked rather than assumed: dry-run against pristine
-`nightly-46638857` applied only #54546. #53917, #54038, #54457 and #54639 all
+`nightly-46638857` applied only [#54546](https://github.com/vllm-project/vllm/pull/54546). [#53917](https://github.com/vllm-project/vllm/pull/53917), [#54038](https://github.com/vllm-project/vllm/pull/54038), [#54457](https://github.com/vllm-project/vllm/pull/54457) and [#54639](https://github.com/vllm-project/vllm/pull/54639) all
 failed — they are cut against much newer bases. The PRs also collide with each
 other (four touch `kda.py`, four touch `single_type_kv_cache_manager.py`).
 
@@ -111,13 +111,13 @@ by construction.
 
 ## Correction: it is 18 PRs, not 17
 
-Hyukjoon's manifest lists 17. The stack also carries **#53940 (a4w4 flydsl
+Hyukjoon's manifest lists 17. The stack also carries **[#53940](https://github.com/vllm-project/vllm/pull/53940) (a4w4 flydsl
 kernels for Kimi-K3)**, which is not in the overlay at all — it is the 4-file
 `k3_patches/pr_stack/`, applied as a separate layer. It belongs in every list
 below. Evidence it is live: the T195 server log shows
 `flydsl_moe1_abf16_wfp4_bf16_…` on the MoE path.
 
-A nineteenth, **#50813** (opt-in K3 SiTUv2 A8W4 routed MoE), was **already
+A nineteenth, **[#50813](https://github.com/vllm-project/vllm/pull/50813)** (opt-in K3 SiTUv2 A8W4 routed MoE), was **already
 pruned** at zero GPU cost: `quark_moe.py` is only reachable when the model
 declares Quark quantization, and `moonshotai/Kimi-K3` has no
 `quantization_config`. The `Situv2` in the kernel name comes from
@@ -134,24 +134,24 @@ overlay's 34 target paths.
 
 | PR | src files | in overlay | coverage |
 |---|--:|--:|---|
-| #53598, #52707, #52494, #52968, #53166, #54165, #54163, #50618, #52033, #51437 | — | — | **FULL** |
-| #51705 | 3 | 2 | 66% partial |
-| #52190 | 5 | 3 | 60% partial |
-| #53917 | 10 | 5 | 50% partial |
-| #53301 | 6 | 3 | 50% partial |
-| #54254 | 4 | 1 | 25% partial |
-| #51392 | 20 | 2 | **10% partial** |
-| #54248 | 3 | 0 | **absent** |
+| [#53598](https://github.com/vllm-project/vllm/pull/53598), [#52707](https://github.com/vllm-project/vllm/pull/52707), [#52494](https://github.com/vllm-project/vllm/pull/52494), [#52968](https://github.com/vllm-project/vllm/pull/52968), [#53166](https://github.com/vllm-project/vllm/pull/53166), [#54165](https://github.com/vllm-project/vllm/pull/54165), [#54163](https://github.com/vllm-project/vllm/pull/54163), [#50618](https://github.com/vllm-project/vllm/pull/50618), [#52033](https://github.com/vllm-project/vllm/pull/52033), [#51437](https://github.com/vllm-project/vllm/pull/51437) | — | — | **FULL** |
+| [#51705](https://github.com/vllm-project/vllm/pull/51705) | 3 | 2 | 66% partial |
+| [#52190](https://github.com/vllm-project/vllm/pull/52190) | 5 | 3 | 60% partial |
+| [#53917](https://github.com/vllm-project/vllm/pull/53917) | 10 | 5 | 50% partial |
+| [#53301](https://github.com/vllm-project/vllm/pull/53301) | 6 | 3 | 50% partial |
+| [#54254](https://github.com/vllm-project/vllm/pull/54254) | 4 | 1 | 25% partial |
+| [#51392](https://github.com/vllm-project/vllm/pull/51392) | 20 | 2 | **10% partial** |
+| [#54248](https://github.com/vllm-project/vllm/pull/54248) | 3 | 0 | **absent** |
 
 This is file-level, so a "FULL" PR may still share files with others — but the
 partials and the absence are solid, and two of them change the weighting:
 
-- **#52190 does not include `vllm/config/compilation.py`.** That file is the
+- **[#52190](https://github.com/vllm-project/vllm/pull/52190) does not include `vllm/config/compilation.py`.** That file is the
   actual torch.compile enablement. Without it K3 still carries no
   `@support_torch_compile`, so **no fusion pass runs** and the three model files
-  that did land are inert. #52190's headline benefit is not in this image.
-- **#54248 is entirely absent and #54254 is 25% present.** #54254's own body
-  says it is a no-op until #54248 *and* #51392 land. #51392 is 10% present.
+  that did land are inert. [#52190](https://github.com/vllm-project/vllm/pull/52190)'s headline benefit is not in this image.
+- **[#54248](https://github.com/vllm-project/vllm/pull/54248) is entirely absent and [#54254](https://github.com/vllm-project/vllm/pull/54254) is 25% present.** [#54254](https://github.com/vllm-project/vllm/pull/54254)'s own body
+  says it is a no-op until [#54248](https://github.com/vllm-project/vllm/pull/54248) *and* [#51392](https://github.com/vllm-project/vllm/pull/51392) land. [#51392](https://github.com/vllm-project/vllm/pull/51392) is 10% present.
   The whole C1 per-token-FP8 chain is dead here.
 
 ---
@@ -165,38 +165,38 @@ Our C72 operating point: DCP 8, **spec decoding OFF**, offload dram,
 
 | PR | why |
 |---|---|
-| **#53940** | a4w4 flydsl on the live MoE path (separate pr_stack, not overlay) |
-| #53598 | per-group DCP geometry → prefix-cache hits under DCP; we measure 73.5% hit |
-| #52707 | clamps negative external block allocation — crash guard |
-| #53917 | `SimpleCPUOffloadConnector` under DCP; we run offload dram |
-| #51705 | DCP attention support / backend registration |
+| **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl on the live MoE path (separate pr_stack, not overlay) |
+| [#53598](https://github.com/vllm-project/vllm/pull/53598) | per-group DCP geometry → prefix-cache hits under DCP; we measure 73.5% hit |
+| [#52707](https://github.com/vllm-project/vllm/pull/52707) | clamps negative external block allocation — crash guard |
+| [#53917](https://github.com/vllm-project/vllm/pull/53917) | `SimpleCPUOffloadConnector` under DCP; we run offload dram |
+| [#51705](https://github.com/vllm-project/vllm/pull/51705) | DCP attention support / backend registration |
 
 ### Tier 1 — perf-bearing at C72. Keep.
 
 | PR | weight | why |
 |---|---|---|
-| #53166 | **highest** | 4 kernels → 1 per MLA prefill context chunk; agentic ISL p50 ≈ 87k tokens, so this path dominates |
-| #51437 | high | overlaps shared all-reduce with routed up-projection at decode batch sizes |
-| #52968 | medium | attn_res / sigmoid_mul / conv1d fusions |
-| #52494 | low–med | fuses MLA q/kv RMSNorm into one AITER launch |
-| #53301 | reduced | only 50% present, so at most partial benefit |
+| [#53166](https://github.com/vllm-project/vllm/pull/53166) | **highest** | 4 kernels → 1 per MLA prefill context chunk; agentic ISL p50 ≈ 87k tokens, so this path dominates |
+| [#51437](https://github.com/vllm-project/vllm/pull/51437) | high | overlaps shared all-reduce with routed up-projection at decode batch sizes |
+| [#52968](https://github.com/vllm-project/vllm/pull/52968) | medium | attn_res / sigmoid_mul / conv1d fusions |
+| [#52494](https://github.com/vllm-project/vllm/pull/52494) | low–med | fuses MLA q/kv RMSNorm into one AITER launch |
+| [#53301](https://github.com/vllm-project/vllm/pull/53301) | reduced | only 50% present, so at most partial benefit |
 
 ### Tier 2 — prunable for goal A. Inert at this operating point.
 
 | PR | why it is inert here |
 |---|---|
-| #54165, #54163 | spec-decode paths; **spec is off at C72** |
-| #52033 | dual-stream decode; **multi-stream forced OFF** in our config |
-| #51392 | 10% present — only `nvidia/mla.py`, dead on AMD |
-| #54254 | 25% present, and a self-declared no-op without #54248 (absent) |
-| #52190 | the enablement file is missing; remaining hunks do nothing |
-| #50618 | correctness guard (KDA `f_b_proj` over-reads 12 KB at TP8) — **zero perf weight, but keep**; dropping it risks memory faults |
+| [#54165](https://github.com/vllm-project/vllm/pull/54165), [#54163](https://github.com/vllm-project/vllm/pull/54163) | spec-decode paths; **spec is off at C72** |
+| [#52033](https://github.com/vllm-project/vllm/pull/52033) | dual-stream decode; **multi-stream forced OFF** in our config |
+| [#51392](https://github.com/vllm-project/vllm/pull/51392) | 10% present — only `nvidia/mla.py`, dead on AMD |
+| [#54254](https://github.com/vllm-project/vllm/pull/54254) | 25% present, and a self-declared no-op without [#54248](https://github.com/vllm-project/vllm/pull/54248) (absent) |
+| [#52190](https://github.com/vllm-project/vllm/pull/52190) | the enablement file is missing; remaining hunks do nothing |
+| [#50618](https://github.com/vllm-project/vllm/pull/50618) | correctness guard (KDA `f_b_proj` over-reads 12 KB at TP8) — **zero perf weight, but keep**; dropping it risks memory faults |
 
 **Six of eighteen are inert at C72**, leaving twelve that plausibly matter.
 
-**These are reasoned, not measured.** Only #50813 has been confirmed prunable by
+**These are reasoned, not measured.** Only [#50813](https://github.com/vllm-project/vllm/pull/50813) has been confirmed prunable by
 experiment. `k3_patches/pr_split/` can test three of the six directly
-(#51392, #54165, #52033 have their own buckets); #54163, #52190 and #54254 sit
+([#51392](https://github.com/vllm-project/vllm/pull/51392), [#54165](https://github.com/vllm-project/vllm/pull/54165), [#52033](https://github.com/vllm-project/vllm/pull/52033) have their own buckets); [#54163](https://github.com/vllm-project/vllm/pull/54163), [#52190](https://github.com/vllm-project/vllm/pull/52190) and [#54254](https://github.com/vllm-project/vllm/pull/54254) sit
 in contested files inside REST and cannot be detached without hunk-level work.
 
 ---
@@ -207,21 +207,21 @@ Sorted by whether dropping it could plausibly move a number.
 
 | PR | what it does | perf impact |
 |---|---|---|
-| #53166 | 4 kernels → 1 per context chunk in MLA prefill (`gather_kv_b_proj`) | **high** — agentic ISL p50 is ~87k tokens, prefill-dominated |
-| #51437 | overlap shared all-reduce with routed up-projection at decode batch sizes | **high** |
-| #53301 | build attention metadata once, not per group (TP8 K3 = 6 MLA + 14 KDA groups) | **high** — per-step overhead |
-| #52190 | K3 carries no `@support_torch_compile`, so **no fusion pass ever runs** | **high**, not release-clean |
-| #52968 | attn_res, sigmoid_mul, conv1d fusions (ATOM ports) | medium |
-| #52494 | fuse MLA q/kv RMSNorm into one AITER launch | low–medium |
-| #54248 / #54254 | per-token FP8 fusions — **no-op until #51392 lands** | C1 only |
-| #52033 | dual-stream decode with hipgraphs — **multi-stream forced OFF in our config** | inert for us |
-| #54165 / #54163 | mamba align cache under spec decode — **spec is off at C72** | inert at C72 |
-| #51392 | online quantization; only `nvidia/mla.py` reaches this overlay | dead on AMD |
-| #51705 | causal multi-token verification under DCP | **required**, not perf |
-| #53598 | per-group DCP geometry → prefix-cache hits under DCP | required; indirectly large (we measure 73.5% hit) |
-| #53917 | `SimpleCPUOffloadConnector` under DCP — **we run offload dram** | required |
-| #52707 | clamp negative external block allocation | required (crash guard) |
-| #50618 | densify strided activations; KDA `f_b_proj` over-reads 12 KB at TP8 | correctness guard |
+| [#53166](https://github.com/vllm-project/vllm/pull/53166) | 4 kernels → 1 per context chunk in MLA prefill (`gather_kv_b_proj`) | **high** — agentic ISL p50 is ~87k tokens, prefill-dominated |
+| [#51437](https://github.com/vllm-project/vllm/pull/51437) | overlap shared all-reduce with routed up-projection at decode batch sizes | **high** |
+| [#53301](https://github.com/vllm-project/vllm/pull/53301) | build attention metadata once, not per group (TP8 K3 = 6 MLA + 14 KDA groups) | **high** — per-step overhead |
+| [#52190](https://github.com/vllm-project/vllm/pull/52190) | K3 carries no `@support_torch_compile`, so **no fusion pass ever runs** | **high**, not release-clean |
+| [#52968](https://github.com/vllm-project/vllm/pull/52968) | attn_res, sigmoid_mul, conv1d fusions (ATOM ports) | medium |
+| [#52494](https://github.com/vllm-project/vllm/pull/52494) | fuse MLA q/kv RMSNorm into one AITER launch | low–medium |
+| [#54248](https://github.com/vllm-project/vllm/pull/54248) / [#54254](https://github.com/vllm-project/vllm/pull/54254) | per-token FP8 fusions — **no-op until [#51392](https://github.com/vllm-project/vllm/pull/51392) lands** | C1 only |
+| [#52033](https://github.com/vllm-project/vllm/pull/52033) | dual-stream decode with hipgraphs — **multi-stream forced OFF in our config** | inert for us |
+| [#54165](https://github.com/vllm-project/vllm/pull/54165) / [#54163](https://github.com/vllm-project/vllm/pull/54163) | mamba align cache under spec decode — **spec is off at C72** | inert at C72 |
+| [#51392](https://github.com/vllm-project/vllm/pull/51392) | online quantization; only `nvidia/mla.py` reaches this overlay | dead on AMD |
+| [#51705](https://github.com/vllm-project/vllm/pull/51705) | causal multi-token verification under DCP | **required**, not perf |
+| [#53598](https://github.com/vllm-project/vllm/pull/53598) | per-group DCP geometry → prefix-cache hits under DCP | required; indirectly large (we measure 73.5% hit) |
+| [#53917](https://github.com/vllm-project/vllm/pull/53917) | `SimpleCPUOffloadConnector` under DCP — **we run offload dram** | required |
+| [#52707](https://github.com/vllm-project/vllm/pull/52707) | clamp negative external block allocation | required (crash guard) |
+| [#50618](https://github.com/vllm-project/vllm/pull/50618) | densify strided activations; KDA `f_b_proj` over-reads 12 KB at TP8 | correctness guard |
 
 ### Planned detach order
 
@@ -237,7 +237,7 @@ Functional check first (does it import and serve), perf later. Fixed-len
 
 ### Known limit of this ablation
 
-The three highest-perf PRs — **#53166, #51437, #52190** — are **not separable at
+The three highest-perf PRs — **[#53166](https://github.com/vllm-project/vllm/pull/53166), [#51437](https://github.com/vllm-project/vllm/pull/51437), [#52190](https://github.com/vllm-project/vllm/pull/52190)** — are **not separable at
 all**. They live entirely inside contested files in REST. So this experiment can
 tell us what is *droppable*; it cannot measure what is *valuable*.
 
@@ -256,7 +256,7 @@ being called prunable.
   better than A/B/C/D/E gave us, but still leaves 80% inseparable.
 - **Neither axis has found meaningful perf to prune.** The value of the work is
   upstreaming surface reduction, not throughput.
-- Four of the seventeen PRs are already merged (#51705, #53598, #52707, #52033)
+- Four of the seventeen PRs are already merged ([#51705](https://github.com/vllm-project/vllm/pull/51705), [#53598](https://github.com/vllm-project/vllm/pull/53598), [#52707](https://github.com/vllm-project/vllm/pull/52707), [#52033](https://github.com/vllm-project/vllm/pull/52033))
   and sit in `nightly-7c5dc571` but **not** in our v4 base `46638857`
   (ancestry-verified). Moving the base would absorb them for free — at the cost
   of the overlay, which is cut against 46638857 and applies to no other base.

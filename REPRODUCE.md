@@ -29,7 +29,7 @@ Read both. A is the pinned-overlay recipe. B is the mergeable path, now measured
 | overlay | `k3_patches/vllm_nightly_46638857_k3_c16_c52_current.patch` |
 | overlay sha256 | `90f975fad15722494366153ec3f32a14c4445bfa88c51ec53043b88eaf64dcc0` |
 | overlay size | 264,116 B · 199 hunks · 34 files |
-| PR stack | `k3_patches/pr_stack/` — 4 files, PR #53940 (a4w4 flydsl MoE) |
+| PR stack | `k3_patches/pr_stack/` — 4 files, PR [#53940](https://github.com/vllm-project/vllm/pull/53940) (a4w4 flydsl MoE) |
 | model | `moonshotai/Kimi-K3` (FP4), TP8, EP1 |
 
 The base digest is pinned deliberately: the `nightly-*` tag is mutable, and the
@@ -128,8 +128,8 @@ Every delta below ~1.2% at C72 is inside the noise band and cannot be ranked.
 The overlay has **no PR of its own**, is authored outside this team (Hyukjoon's),
 and is cut against `46638857`. Reconstructing the stack by applying the 17 PRs
 from Hyukjoon's manifest to a pristine base **does not build** — verified, not
-assumed: dry-run against pristine `nightly-46638857` applied only #54546;
-#53917, #54038, #54457 and #54639 all failed as they are cut against much newer
+assumed: dry-run against pristine `nightly-46638857` applied only [#54546](https://github.com/vllm-project/vllm/pull/54546);
+[#53917](https://github.com/vllm-project/vllm/pull/53917), [#54038](https://github.com/vllm-project/vllm/pull/54038), [#54457](https://github.com/vllm-project/vllm/pull/54457) and [#54639](https://github.com/vllm-project/vllm/pull/54639) all failed as they are cut against much newer
 bases. The PRs also collide with each other.
 
 So today: reproducible ✅, mergeable ❌.
@@ -141,10 +141,10 @@ Four of the seventeen are merged. All four are in `nightly-7c5dc571…` and
 
 | PR | what | 46638857 | 7c5dc571 |
 |---|---|---|---|
-| #51705 | causal multi-token verification under DCP | behind | **ahead** |
-| #53598 | per-group DCP cache geometry / prefix-cache hits | behind | **ahead** |
-| #52707 | prevent negative external block allocation | behind | **ahead** |
-| #52033 | ROCm dual-stream shared-expert | behind | **ahead** |
+| [#51705](https://github.com/vllm-project/vllm/pull/51705) | causal multi-token verification under DCP | behind | **ahead** |
+| [#53598](https://github.com/vllm-project/vllm/pull/53598) | per-group DCP cache geometry / prefix-cache hits | behind | **ahead** |
+| [#52707](https://github.com/vllm-project/vllm/pull/52707) | prevent negative external block allocation | behind | **ahead** |
+| [#52033](https://github.com/vllm-project/vllm/pull/52033) | ROCm dual-stream shared-expert | behind | **ahead** |
 
 Moving the base to `7c5dc571` absorbs those four for free. It also **costs the
 overlay**, which will not apply there. That is the whole difficulty.
@@ -174,8 +174,8 @@ is what makes high concurrency work at all — it is not a tuning nicety.
    it can be filed on correctness grounds alone.
 2. **Group B** (+34/−11, spec-decode cudagraph). Small, no K3 coupling,
    measured inert at C72 (T223).
-3. **Coordinate on C and D rather than filing competing patches** — #53917 and
-   #54457 already cover C's ground; #54546 and #54639 cover D's.
+3. **Coordinate on C and D rather than filing competing patches** — [#53917](https://github.com/vllm-project/vllm/pull/53917) and
+   [#54457](https://github.com/vllm-project/vllm/pull/54457) already cover C's ground; [#54546](https://github.com/vllm-project/vllm/pull/54546) and [#54639](https://github.com/vllm-project/vllm/pull/54639) cover D's.
 4. **Rebase the surviving delta onto `7c5dc571`.** This is the load-bearing step
    and it is real work: the overlay is cut against a July-era nightly, so every
    new-file hunk needs re-checking against current `main`.
@@ -183,11 +183,11 @@ is what makes high concurrency work at all — it is not a tuning nicety.
 
 Nothing can be filed without Hyukjoon's sign-off — the authorship is theirs.
 
-## B5. #54546 is a supplement, not a replacement
+## B5. [#54546](https://github.com/vllm-project/vllm/pull/54546) is a supplement, not a replacement
 
 It is the one candidate that applies to our base, and it is not sufficient:
 
-| | overlay | #54546 | nightly today |
+| | overlay | [#54546](https://github.com/vllm-project/vllm/pull/54546) | nightly today |
 |---|---|---|---|
 | `supports_non_causal_multi_token_dcp` | yes | yes (ROCm-gated) | absent |
 | `supports_dcp_with_varlen` | yes | yes | absent |
@@ -208,7 +208,7 @@ The third row is load-bearing. Without it the DSpark draft demotes the engine
   us, still leaves 80% inseparable.
 - **Neither axis found meaningful perf to prune.** The value is upstreaming
   surface reduction, not throughput.
-- The three highest-perf PRs — #53166, #51437, #52190 — are **not separable at
+- The three highest-perf PRs — [#53166](https://github.com/vllm-project/vllm/pull/53166), [#51437](https://github.com/vllm-project/vllm/pull/51437), [#52190](https://github.com/vllm-project/vllm/pull/52190) — are **not separable at
   all**; they live entirely in contested files. This experiment can say what is
   droppable, not what is valuable.
 

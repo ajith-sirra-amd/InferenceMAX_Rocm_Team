@@ -29,7 +29,7 @@ Verified from the T195 job log (run 33418755100, job 99575730290):
 IMAGE: vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
 Status: Image is up to date for vllm/vllm-openai-rocm:nightly-46638857...
 [k3-overlay] applied=1 conc=72
-[pr-stack] applied=5 files, skipped: none (#53940 a4w4-flydsl, #50813 SiTUv2-A8W4-MoE)
+[pr-stack] applied=5 files, skipped: none ([#53940](https://github.com/vllm-project/vllm/pull/53940) a4w4-flydsl, [#50813](https://github.com/vllm-project/vllm/pull/50813) SiTUv2-A8W4-MoE)
 ```
 
 ## Layer 0 — base image
@@ -112,14 +112,14 @@ site-packages is sufficient. No rebuild, no push.
 
 | file | bytes | PR |
 |---|--:|---|
-| `vllm___aiter_ops.py.patch` | 2,077 | #53940 |
-| `vllm__envs.py.patch` | 1,058 | #53940 |
-| `vllm__model_executor__layers__fused_moe__experts__rocm_aiter_moe.py.patch` | 1,221 | #53940 |
-| `vllm__model_executor__layers__fused_moe__oracle__mxfp4.py.patch` | 880 | #53940 |
-| `vllm__model_executor__layers__quantization__quark__quark_moe.py.patch` | 5,437 | #50813 |
+| `vllm___aiter_ops.py.patch` | 2,077 | [#53940](https://github.com/vllm-project/vllm/pull/53940) |
+| `vllm__envs.py.patch` | 1,058 | [#53940](https://github.com/vllm-project/vllm/pull/53940) |
+| `vllm__model_executor__layers__fused_moe__experts__rocm_aiter_moe.py.patch` | 1,221 | [#53940](https://github.com/vllm-project/vllm/pull/53940) |
+| `vllm__model_executor__layers__fused_moe__oracle__mxfp4.py.patch` | 880 | [#53940](https://github.com/vllm-project/vllm/pull/53940) |
+| `vllm__model_executor__layers__quantization__quark__quark_moe.py.patch` | 5,437 | [#50813](https://github.com/vllm-project/vllm/pull/50813) |
 
-- **#53940** a4w4 flydsl kernels for Kimi-K3 — the AMD MoE path.
-- **#50813** opt-in K3 SiTUv2 A8W4 routed MoE. The launcher already exported
+- **[#53940](https://github.com/vllm-project/vllm/pull/53940)** a4w4 flydsl kernels for Kimi-K3 — the AMD MoE path.
+- **[#50813](https://github.com/vllm-project/vllm/pull/50813)** opt-in K3 SiTUv2 A8W4 routed MoE. The launcher already exported
   `VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1` and `AITER_SITUV2_A8W4=1`, i.e. we
   were setting flags for a code path that was not present.
 
@@ -136,9 +136,9 @@ records which way it went, so a number is never silently mis-attributed.
 
 | PR | why |
 |---|---|
-| #54095 aiter per-stream workspace | `cudagraph_utils.py` hunk 2 is cut against a newer tree, FAILS at line 362 on 46638857 (T187/T188/T190). Removed as dead weight. |
-| #53154, #37682 | edit files the K3 overlay rewrites (`amd/mla.py`, `layers/mla.py`, `rocm_aiter_mla.py`) — will not apply on top of it |
-| #50647, #54255 | NVIDIA path |
+| [#54095](https://github.com/vllm-project/vllm/pull/54095) aiter per-stream workspace | `cudagraph_utils.py` hunk 2 is cut against a newer tree, FAILS at line 362 on 46638857 (T187/T188/T190). Removed as dead weight. |
+| [#53154](https://github.com/vllm-project/vllm/pull/53154), [#37682](https://github.com/vllm-project/vllm/pull/37682) | edit files the K3 overlay rewrites (`amd/mla.py`, `layers/mla.py`, `rocm_aiter_mla.py`) — will not apply on top of it |
+| [#50647](https://github.com/vllm-project/vllm/pull/50647), [#54255](https://github.com/vllm-project/vllm/pull/54255) | NVIDIA path |
 
 ## Numerics validation
 
@@ -186,7 +186,7 @@ Built and verified on `b23_07`. **35.6 GB**, `docker build` exit 0, **0 failed
 hunks**. **Pushed** to `aigmkt/kimi-k3-vllm:v4`, digest
 `sha256:88c8438f5aa0fc2fa01ee1736eb0f8a88e478b26a93a733f535b4f964bb197f2`.
 
-**pr-stack is 4 files, not 5.** #50813 was pruned: `quark_moe.py` is only
+**pr-stack is 4 files, not 5.** [#50813](https://github.com/vllm-project/vllm/pull/50813) was pruned: `quark_moe.py` is only
 reachable when the model declares Quark quantization, and `moonshotai/Kimi-K3`
 has no `quantization_config`. The `Situv2` in the kernel name comes from
 `AITER_SITUV2_A8W4=1` being read by **aiter**, not by `quark_moe.py`. T206 and
@@ -211,7 +211,7 @@ base: vllm/vllm-openai-rocm:nightly-46638857fdbb30e0c232c9e8f9cb1ff6d6f545c3
 base-digest: sha256:8908b8ab5ba28c3b81f9f42bb72e2421f06a180e001c67c4f10ff7f127c5690b
 overlay: vllm_nightly_46638857_k3_c16_c52_current.patch (all concurrencies)
 overlay-sha256: 90f975fad15722494366153ec3f32a14c4445bfa88c51ec53043b88eaf64dcc0
-pr-stack: 4 files (#53940 a4w4-flydsl)
+pr-stack: 4 files ([#53940](https://github.com/vllm-project/vllm/pull/53940) a4w4-flydsl)
 runtime-patching: none
 ```
 
@@ -287,45 +287,45 @@ Carries **12 of the 18 PRs**, all upstream-traceable, zero vendor patch:
 
 | source | PRs |
 |---|---|
-| merged, already in base | #51705, #53598, #52707, #52033 |
-| `pr_only/`, applied in order | #53917, #51392, #54254, #52494, #52968, #50618, #54165 |
-| `pr_stack/` | #53940 |
+| merged, already in base | [#51705](https://github.com/vllm-project/vllm/pull/51705), [#53598](https://github.com/vllm-project/vllm/pull/53598), [#52707](https://github.com/vllm-project/vllm/pull/52707), [#52033](https://github.com/vllm-project/vllm/pull/52033) |
+| `pr_only/`, applied in order | [#53917](https://github.com/vllm-project/vllm/pull/53917), [#51392](https://github.com/vllm-project/vllm/pull/51392), [#54254](https://github.com/vllm-project/vllm/pull/54254), [#52494](https://github.com/vllm-project/vllm/pull/52494), [#52968](https://github.com/vllm-project/vllm/pull/52968), [#50618](https://github.com/vllm-project/vllm/pull/50618), [#54165](https://github.com/vllm-project/vllm/pull/54165) |
+| `pr_stack/` | [#53940](https://github.com/vllm-project/vllm/pull/53940) |
 
 Total `pr_only` = 109,726 B / 129 hunks / 45 file-touches, vs the overlay's
 264,116 B / 199 hunks / 34 files.
 
 Three things that matter when rebuilding it:
 
-1. **#54254 is STACKED on #54248.** Its diff already contains #54248, so
-   applying both double-applies and fails. Apply #54254 alone.
-2. **#50618 is python-only here.** Its `csrc/rocm/skinny_gemms*.cu` hunks cannot
+1. **[#54254](https://github.com/vllm-project/vllm/pull/54254) is STACKED on [#54248](https://github.com/vllm-project/vllm/pull/54248).** Its diff already contains [#54248](https://github.com/vllm-project/vllm/pull/54248), so
+   applying both double-applies and fails. Apply [#54254](https://github.com/vllm-project/vllm/pull/54254) alone.
+2. **[#50618](https://github.com/vllm-project/vllm/pull/50618) is python-only here.** Its `csrc/rocm/skinny_gemms*.cu` hunks cannot
    apply to a prebuilt image.
 3. **All PR diffs are stripped to `vllm/**.py`** before applying -- no `tests/`,
    `docs/`, or `csrc/`.
 
 Missing vs the overlay -- 5 PRs that conflict with `7c5dc571` *itself* (each
 fails standalone against the pristine base, so it is context drift, not design
-conflict): **#53166** (1 of 8 hunks), **#51437** (1 of 6), **#53301** (2),
-**#52190** (1 of 1), **#54163** (1 of 1). Also missing: the 26 overlay hunks
+conflict): **[#53166](https://github.com/vllm-project/vllm/pull/53166)** (1 of 8 hunks), **[#51437](https://github.com/vllm-project/vllm/pull/51437)** (1 of 6), **[#53301](https://github.com/vllm-project/vllm/pull/53301)** (2),
+**[#52190](https://github.com/vllm-project/vllm/pull/52190)** (1 of 1), **[#54163](https://github.com/vllm-project/vllm/pull/54163)** (1 of 1). Also missing: the 26 overlay hunks
 (13%) that match no PR at all.
 
 **MEASURED (T232): `pronly` C72 = 10,692 tok/s/GPU, err 0.18%.** That is +0.6%
 over the matched-mns overlay run (T198, 10,630) and inside the +/-1.2% band --
 **statistically identical to v4**. GSM8K 0.99 (T231).
 
-I predicted the opposite before the run ("#53166 is the prefill-path fusion and
+I predicted the opposite before the run ("[#53166](https://github.com/vllm-project/vllm/pull/53166) is the prefill-path fusion and
 this workload is prefill-dominated, so expect pronly below 10,607"). Falsified:
-missing #53166, #51437, #53301, #52190, #54163 *and* the 26 orphan overlay hunks
+missing [#53166](https://github.com/vllm-project/vllm/pull/53166), [#51437](https://github.com/vllm-project/vllm/pull/51437), [#53301](https://github.com/vllm-project/vllm/pull/53301), [#52190](https://github.com/vllm-project/vllm/pull/52190), [#54163](https://github.com/vllm-project/vllm/pull/54163) *and* the 26 orphan overlay hunks
 costs nothing measurable at C72. The run is queueing-bound, not kernel-bound.
 
 **So the 264 KB overlay can be dropped.** Prefer this image over v4 for anything
 that has to be reproducible outside this team. Caveats: n=1 against a +/-1.2%
 band (replication in flight), and C72 agentic only -- C1 TPOT on `pronly` is
-untested, and #51437 (decode all-reduce overlap) is one of the missing five, so
+untested, and [#51437](https://github.com/vllm-project/vllm/pull/51437) (decode all-reduce overlap) is one of the missing five, so
 C1 is where a gap would show up if one exists.
 
-One asterisk on "fully mergeable": **#54165 is closed-unmerged** upstream; its
-open successor #54163 does not apply here.
+One asterisk on "fully mergeable": **[#54165](https://github.com/vllm-project/vllm/pull/54165) is closed-unmerged** upstream; its
+open successor [#54163](https://github.com/vllm-project/vllm/pull/54163) does not apply here.
 
 The build carries an **import gate** (`import vllm,
 vllm.models.kimi_k3.amd.mla, vllm.v1.simple_kv_offload.manager`) because
@@ -357,12 +357,12 @@ Kept for history. This image backed the ledger up to T~180 and topped out at
 | 2 | `kv-blockpool` | [#52707](https://github.com/vllm-project/vllm/pull/52707) — prevents negative external block allocation |
 | 3 | `pr51705` | [#51705](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` — DCP support for Kimi-K3 DSpark |
 
-**Base + #52707 + #51705 @ `e72380a5` is sufficient.**
-> Note : DCP cannot run without #51705.
+**Base + [#52707](https://github.com/vllm-project/vllm/pull/52707) + [#51705](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` is sufficient.**
+> Note : DCP cannot run without [#51705](https://github.com/vllm-project/vllm/pull/51705).
 
 > ### The `e72380a5` pin is load-bearing — read this before assuming merged PRs suffice
 >
-> **`pr51705_nightly.diff` / `pr51705_vllm.diff` are NOT PR #51705 as merged.**
+> **`pr51705_nightly.diff` / `pr51705_vllm.diff` are NOT PR [#51705](https://github.com/vllm-project/vllm/pull/51705) as merged.**
 > They are a 170 KB / 3,830-line / **24-file** snapshot of the open PR branch.
 > What actually merged upstream on 2026-08-31 touches **3** `vllm/` files:
 > `platforms/rocm.py`, `mla/rocm_aiter_mla.py`, `ops/rocm_aiter_mla_merge.py`.
@@ -375,12 +375,12 @@ Kept for history. This image backed the ledger up to T~180 and topped out at
 > `kimi_gdn_linear_attn.py`, `envs.py`, the mooncake store files, and
 > `ops/rocm_aiter_mla_reduce.py`.
 >
-> Note the last one. Ours adds **`rocm_aiter_mla_reduce.py`**; upstream #51705
+> Note the last one. Ours adds **`rocm_aiter_mla_reduce.py`**; upstream [#51705](https://github.com/vllm-project/vllm/pull/51705)
 > adds **`rocm_aiter_mla_merge.py`**. Different file, different implementation —
 > two pieces of work sharing one PR number.
 >
-> **Consequence, now measured not predicted.** `nightly-7c5dc571` has #51705 and
-> #52707 merged in, so DCP initialises and cudagraphs capture cleanly. It still
+> **Consequence, now measured not predicted.** `nightly-7c5dc571` has [#51705](https://github.com/vllm-project/vllm/pull/51705) and
+> [#52707](https://github.com/vllm-project/vllm/pull/52707) merged in, so DCP initialises and cudagraphs capture cleanly. It still
 > **starves on the agentic replay at C52** — T216 (mns 80) and the SA run
 > 33589375153 (mns 65) both flatline at 38-40/107 warmup with `errors=0`, at two
 > different ladder heights, then the server dies. Bare `7c5dc571` passes
@@ -422,11 +422,11 @@ Both under `upstream/InferenceX/benchmarks/single_node/agentic/`:
 | file | |
 |---|---|
 | patch script | [`apply_kimi_k3_patches.sh`](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/apply_kimi_k3_patches.sh) |
-| vendored #51705 diff (170 KB) | [`pr51705_vllm.diff`](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/pr51705_vllm.diff) |
+| vendored [#51705](https://github.com/vllm-project/vllm/pull/51705) diff (170 KB) | [`pr51705_vllm.diff`](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/pr51705_vllm.diff) |
 
 ## Caveats
 
-- **Pin `e72380a5`.** #51705 is open and changing — a reviewer asked to retire
+- **Pin `e72380a5`.** [#51705](https://github.com/vllm-project/vllm/pull/51705) is open and changing — a reviewer asked to retire
   `VLLM_ALLOW_DCP_FULL_CUDAGRAPH` and the author agreed. Today's PR head will not
   reproduce this image.
 - **Check `triton_mla.py` after any rebase.** The vendored diff raises
