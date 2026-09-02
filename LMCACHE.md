@@ -1,6 +1,6 @@
 # LMCACHE — status, wiring, and the path to 12,500
 
-**Status: T239 DISPATCHED** (run 33656795044) — fixed-len engine check.
+**Status: T239 PASSED.** LMCache runs on ROCm at DCP=8. T240 (GSM8K) dispatched.
 This file is the single source for LMCache work; updated after every trial.
 
 ---
@@ -195,7 +195,7 @@ start.
 
 | trial | config | result |
 |---|---|---|
-| **T239** | fixed-len (`TEST=1`), `pronly-nq-no50618`, DCP 8, conc 72, chunk-size 12288, l1=`$TOTAL_CPU_DRAM_GB` | *running* — run 33656795044 |
+| **T239** | fixed-len (`TEST=1`), `pronly-nq-no50618`, DCP 8, conc 72, chunk 12288, l1=1949 GB | **PASS** — 5/5 requests, 920.34 tok/s total, no engine fault |
 
 ### Notes on the T239 wiring
 
@@ -210,9 +210,30 @@ start.
 - **Image is the recommended stack** (`pronly-nq-no50618`, T236 = 10,799), not
   the minimal one — LMCache is being added to the best-measured base.
 
-### What to check in the T239 log
+### T239 RESULT — all three checks cleared
 
-1. `[lmcache] server READY on :8090 after Ns` — server came up at all
-2. `tokens_per_block` per KV group in the engine log — **does 12288 still
-   divide every group at DCP=8?** This is the open risk.
-3. Fixed-len completes without engine death.
+| check | result |
+|---|---|
+| server up | `[lmcache] chunk=12288 l1=1949GB port=6555` → `server READY on :8090 after 26s` |
+| ROCm path | `Auto-selected backend [rocm] for accelerator 'cuda'` on all 8 workers + EngineCore; `multi_layer_block_kv_transfer mode: ptr` |
+| **chunk geometry at DCP=8** | **no rejection.** The connector registered every KV group without complaint, so 12288 (derived from DCP=1 sizes) holds at DCP=8 |
+| fixed-len | **5/5 successful**, 920.34 tok/s total, median ITL 1254 ms, no engine fault |
+| GPU KV capacity | **29,656,464** — identical to the SimpleCPUOffload arms |
+
+**Two risks I had flagged are now closed:**
+
+1. *"CUDA-IPC may not port to ROCm"* — it does; LMCache auto-selects the rocm
+   backend. My original caveat was overstated, and the SA reference already
+   hinted at it.
+2. *"12288 may not divide every group at DCP=8"* — it does. No patch beyond
+   #53917 was needed.
+
+**Do not over-read the fixed-len numbers.** 5 requests, TTFT 40 s, ITL 1254 ms
+are a cold cache with no reuse — this arm proves the engine *works*, nothing
+about performance. The agentic replay is where LMCache either earns its keep or
+does not.
+
+**KV capacity unchanged (29,656,464)** means LMCache is not buying GPU-side
+cache — its L1 is the 1,949 GB host pool. So any gain must come from a higher
+*external* hit rate, not more GPU cache. That is the number to watch in T241:
+SimpleCPUOffload gave ext_cache_hit 16.0–16.4% at C72.

@@ -8,7 +8,7 @@ wait_for_amd_gpu_clean
 # chunk 16384) is a large numerics change that went straight to throughput with
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
-export EVAL_ONLY="${EVAL_ONLY:-false}"
+export EVAL_ONLY="${EVAL_ONLY:-true}"   # T240: GSM8K gate for LMCache
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -676,7 +676,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
 # to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-1}" = "1" ]; then
+elif [ "${TEST:-0}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does

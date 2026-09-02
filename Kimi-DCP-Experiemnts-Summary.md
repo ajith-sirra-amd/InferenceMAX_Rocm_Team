@@ -4510,3 +4510,35 @@ That matters two ways:
    T232→T237 comparisons stand.
 
 **Capacity is recorded for every run from here.**
+
+## T239 — LMCache WORKS on ROCm at DCP=8. Fixed-len 5/5, both risks closed.
+
+Run 33656795044. `kimi-k3-vllm:pronly-nq-no50618` (recommended stack) +
+LMCache 0.5.5rc3+rocm7.2, `LMCacheMPConnector`, chunk 12288, L1 1,949 GB.
+`[dcp] ENABLED size=8`, `[mns] 96 conc=72`, `graphs: dense ladder 1..96`.
+
+| check | result |
+|---|---|
+| server | READY on :8090 after **26 s** |
+| backend | `Auto-selected backend [rocm]` — all 8 workers + EngineCore |
+| chunk geometry @ DCP=8 | **accepted, no rejection** |
+| fixed-len | **5/5 successful**, 920.34 tok/s total |
+| GPU KV capacity | **29,656,464** — same as SimpleCPUOffload |
+
+**Two of my stated risks are now falsified:**
+
+1. I said the published LMCache wins lean on CUDA-IPC KV export that "may not
+   port to ROCm free." It ports — LMCache auto-selects a rocm backend.
+2. I flagged that `--chunk-size 12288` was derived from **DCP=1** group sizes
+   (1536 attention / 3072 KDA state) and might not divide at DCP=8. It does.
+   No patch beyond #53917 was required.
+
+**The fixed-len numbers mean nothing for performance** — 5 requests against a
+cold cache, TTFT 40 s. This arm proves the engine runs. Nothing more.
+
+**One thing it does tell us:** GPU KV capacity is **unchanged**. LMCache's L1 is
+the 1,949 GB *host* pool, so it buys no GPU-side cache. Any gain must come from
+a higher **external** hit rate. Baseline to beat at C72 with
+SimpleCPUOffload: **ext_cache_hit 16.0–16.4%**, GPU hit 74.3–74.6%.
+
+Next: T240 GSM8K (new KV connector is a major change), then T241 agentic C72.
