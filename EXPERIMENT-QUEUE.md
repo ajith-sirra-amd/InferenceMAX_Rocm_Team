@@ -669,6 +669,26 @@ would trade resource exhaustion for starvation. Floor for conc 52 is ~64.
 Baseline: `pronly` = 11 PRs (4 merged in base + 7 applied), **10,692 @ C72**,
 GSM8K 0.99.
 
+### T238 RESULT — PRUNE LADDER CLOSED. Last two prunes were NOT free.
+
+10,691 (6 PRs) / 10,781 (4) / **10,799 (3)** / 10,653 (2) / **10,554 (1)**.
+
+**T236 → T238 is −2.27%**, outside the band and monotone. Each single step
+looked like noise; cumulatively it is not. **#52494 (−1.35%) and #52968
+(−0.93%) each cost ~1%** — both kernel fusions on hot paths that K3 cannot get
+from inductor (no `@support_torch_compile`).
+
+**Recommended stack = T236's: #53917 + #52494 + #52968 + #53940 → 10,799.**
+That is **4 open PRs**, not 2. The extra two buy 2.27%.
+
+Free to drop, confirmed: #51392, #54254, #50618, #54165, #50813.
+
+**GPU KV capacity now tracked every run.** It was identical (29,656,464) for
+T232–T237 and rose to 29,816,030 in T238 when #52968 came out — so T238 had
+*more* cache and still scored lower.
+
+**Next: LMCache.** See `LMCACHE.md`. Order: fixed-len → GSM8K → agentic.
+
 ### T237 RESULT — #52494 prunes, but weakest evidence. C72 = 10,653, 2 PRs.
 
 Upstreaming ask **4 → 3 open PRs**. Stack: #53917 + #52968 (+ #53940, + 4 merged).

@@ -4450,3 +4450,63 @@ Cumulative prune: #51392, #54254, #50618, #52494, #54165, #50813.
 also prunes, only **#53917 + #53940** remain — and #53917 is the
 offload-under-DCP fix that we have deliberately kept for last because we run
 `offload dram` and it is the most likely to be load-bearing.
+
+## T238 — #52968 costs ~1% too. Prune ladder CLOSED, and the last two prunes were NOT free.
+
+Run 33643182788. `pronly-only53917`, `pr-applied: 53917`. mns 96, chunk 16384,
+dcp 8, ladder 1..96.
+
+### The full ladder, now with GPU KV capacity tracked
+
+| applied PRs | trial | tok/s/GPU | err | **GPU KV capacity** | GPU hit | ext hit |
+|--:|---|--:|--:|--:|--:|--:|
+| 6 | T232/T233 | 10,691 (n=2) | 0.18–0.22% | 29,656,464 | — | — |
+| 4 | T235 | 10,781 | 0.18% | 29,656,464 | — | — |
+| 3 | T236 | **10,799** | 0.09% | 29,656,464 | 74.3% | 16.4% |
+| 2 | T237 | 10,653 | 0.22% | 29,656,464 | — | — |
+| **1** | **T238** | **10,554** | 0.18% | **29,816,030** | 74.6% | 16.0% |
+
+### Correcting the earlier reading
+
+I had been calling each prune "no measurable difference" because each single
+step sat inside the ±1.2% band. Cumulatively that is wrong:
+
+**T236 (10,799) → T238 (10,554) = −2.27%**, well outside the band, and the
+ladder is **monotone decreasing** across the last three arms. The two kernel-
+fusion PRs each cost roughly 1%:
+
+| PR | step | Δ |
+|---|---|--:|
+| #52494 (fuse MLA q/kv RMSNorm) | T236→T237 | −1.35% |
+| #52968 (attn_res + sigmoid_mul + conv fusions) | T237→T238 | −0.93% |
+| **both** | **T236→T238** | **−2.27%** |
+
+**So the honest split is:**
+
+- **Genuinely free:** #51392, #54254, #50618 — 10,691 → 10,799, flat or up.
+  #51392/#54254 were inert by construction; #50618 is a guard, not a fast path.
+- **NOT free:** #52494 and #52968, ~1% each. Both are kernel fusions on hot
+  paths, and K3 carries no `@support_torch_compile` so the inductor fusion
+  passes never run — without these PRs those launches stay unfused on **every
+  layer, every forward**. A real cost is exactly what the mechanism predicts.
+
+**Recommended stack is therefore T236's, not T238's:**
+**#53917 + #52494 + #52968 + #53940** (+ 4 merged in base) = **10,799**, the
+best measured number in the ledger. That is **4 open PRs** to upstream, not 2.
+The extra 2 PRs buy 2.27%.
+
+### KV capacity is now a tracked column — and it moved
+
+Capacity was **identical (29,656,464)** across T232/T235/T236/T237 and rose to
+**29,816,030** in T238 (+159,566, +0.54%) when #52968 came out. Removing its
+fused kernels frees a little device memory, which the KV pool absorbs.
+
+That matters two ways:
+
+1. **It is a confound.** T238 is not a pure one-variable step — it had slightly
+   *more* cache and still scored *lower*, which strengthens the conclusion that
+   #52968 has real value, but it means the arm was never perfectly clean.
+2. **Every prior arm was clean on this axis** — identical capacity — so
+   T232→T237 comparisons stand.
+
+**Capacity is recorded for every run from here.**
