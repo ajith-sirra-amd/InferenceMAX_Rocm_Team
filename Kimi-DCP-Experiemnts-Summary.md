@@ -4283,3 +4283,60 @@ The manifest's `k3-image:` line is static and still reads `kimi-k3-vllm:pronly`
 even in the `pronly-noquant` image. The `pr-applied:` line is generated and
 correct, so nothing is misreported about *content*, but the tag name is wrong.
 Worth fixing with a build ARG before this image is used by anyone else.
+
+## T235 — pronly-noquant C72 = 10,781. #51392 + #54254 PRUNED. Upstreaming ask: 7 → 5.
+
+Run 33612407279. `kimi-k3-vllm:pronly-noquant`, `pr-applied: 53917 52494 52968
+50618`. Config identical to T232/T233: `[mns] 96 conc=72 offload=dram`,
+`[chunk] 16384`, `[dcp] ENABLED size=8`, `graphs: dense ladder 1..96`.
+
+| | T232 | T233 | **T235 (noquant)** |
+|---|--:|--:|--:|
+| applied PRs | 6 | 6 | **4** |
+| **Throughput per GPU** | 10,692 | 10,690 | **10,781** |
+| Request Error Rate | 0.18% | 0.22% | **0.18%** |
+| ITL mean / p99 | 108.53 / 526.54 | 107.64 / 550.03 | 108.34 / 515.25 |
+| TTFT mean | 4,538 | 4,507 | 4,530 |
+| Output tok/s | 505.29 | 505.42 | **515.94** |
+| GSM8K | — | — | **0.995** (T234) |
+
+**+0.84% over the pronly mean (10,691).** That is *inside* the ±1.2% cross-day
+band, so the honest reading is **no measurable difference**, not "faster". Both
+runs are same-day, and the same-session pairs in this ledger replicate to 0.02%
+— so a 0.84% gap is larger than a clean pair but still under the band. **Do not
+claim removing PRs improved throughput.** n=1 on this arm.
+
+### The prune stands
+
+Dropping **#51392 + #54254** costs nothing measurable on either axis:
+
+| | full pronly | **noquant** | Δ |
+|---|--:|--:|---|
+| GSM8K | 0.99 | **0.995** | indistinguishable |
+| C72 tok/s/GPU | 10,691 (n=2) | **10,781** (n=1) | inside band |
+| applied PRs | 6 + pr_stack | **4 + pr_stack** | −2 |
+| **open PRs to upstream** | **7** | **5** | **−2** |
+| file-touches | 45 | **21** | −24 |
+| hunks | 129 | **56** | −73 |
+
+**Why they were safe to drop, mechanically:** the checkpoint reports
+`quantization=mxfp4, quantization_config=None`, so #51392's online-quantization
+path — which exists to quantize the *unquantized* portions of a partially
+pre-quantized checkpoint — had no work to do here. #54254 is stacked on it and
+its own body says it is a no-op until #51392 and #54248 land. Both were inert by
+construction on this model, which is why the ablation found nothing.
+
+### Current mergeable stack — 9 PRs
+
+| source | PRs |
+|---|---|
+| merged, in base | #51705, #53598, #52707, #52033 |
+| applied | #53917, #52494, #52968, #50618 |
+| pr_stack | #53940 |
+
+**5 open PRs are now the entire upstreaming ask**, down from 7.
+
+### Next arms
+
+#50618 (1 hunk, isolated) → #52494 (4 hunks) → #52968 (17 hunks) → #53917 last
+(25 hunks, the offload-under-DCP fix, most likely to be required).

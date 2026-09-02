@@ -451,6 +451,20 @@ would trade resource exhaustion for starvation. Floor for conc 52 is ~64.
 Baseline: `pronly` = 11 PRs (4 merged in base + 7 applied), **10,692 @ C72**,
 GSM8K 0.99.
 
+### T235 RESULT — 10,781 at C72. #51392 + #54254 PRUNED.
+
+GSM8K 0.995 (T234) and 10,781 tok/s/GPU (T235), err 0.18%. +0.84% over the
+pronly mean — **inside the ±1.2% band, so no measurable difference**, not an
+improvement. n=1 on this arm.
+
+**Upstreaming ask: 7 open PRs → 5.** 24 of 45 file-touches and 73 of 129 hunks
+removed. Mechanism: the checkpoint is `mxfp4` with `quantization_config=None`,
+so #51392's online-quant path had no work; #54254 is stacked on it and is a
+self-declared no-op without it. Both inert by construction on this model.
+
+**Next arm: drop #50618** (1 hunk, `scaled_mm/rocm.py`, isolated). Then #52494
+→ #52968 → #53917 last.
+
 ### T234 RESULT — GSM8K 0.995. Numerics gate PASSED.
 
 `pronly-noquant` (4 applied PRs) scores **0.995**, tying the best in the ledger
