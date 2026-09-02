@@ -334,9 +334,17 @@ the rule is *mns must exceed the replay's lane count (which runs above CONC)*,
 not "mns is neutral" as T198 was generalised to say. Shipping number unchanged
 at 10,607 +/-1.2%.
 
-**Next: PR-prune work.** `kimi-k3-vllm:pronly` is built and import-gated -- the
-fully-mergeable stack (12 of 18 PRs, no overlay, base `nightly-7c5dc571`).
-Numerics change vs v4, so **GSM8K limit 200 gates first**.
+**T231: GSM8K 0.99 on `kimi-k3-vllm:pronly` -- the fully-mergeable stack is
+numerically sound.** No overlay, base `nightly-7c5dc571`, 12 of 18 PRs. 0.99 vs
+v4's 0.995 at +/-0.0071 is indistinguishable. The job shows `failure` only
+because EVAL_ONLY writes no benchmark JSON and the post-step waits for one --
+`eval_exit=0`, 200/200 served. Not a defect.
+
+**T232 dispatched: C72 agentic on `pronly`.** This is the run that prices the
+overlay -- v4 is 10,607 +/-1.2%, and the gap is what the 264 KB of unpublished
+patch plus the 5 conflicting PRs are worth. Prediction on record: pronly lands
+below the v4 band, because #53166 (MLA prefill fusion) is missing and this
+workload is prefill-dominated (ISL p50 ~87k, in:out ~195:1).
 
 **T229 filled the last hole in the conc curve: C76 = 10,324**, −2.7% below the
 C72 mean and outside the noise band. Curve is now 60/64/72/76/80 =

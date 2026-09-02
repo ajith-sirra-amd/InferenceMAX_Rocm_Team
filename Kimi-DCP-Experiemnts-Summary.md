@@ -4049,3 +4049,67 @@ the headline stays **10,607 ±1.2% (n=4)** — now n=5 counting T230 at C76, mea
 It does mean the launcher's flat `MAX_NUM_SEQS=80` for DCP>1 is wrong above
 conc 72, and any future conc above 72 must carry mns headroom or it will
 measure starvation and report it as a concurrency limit.
+
+## T231 — GSM8K 0.99 on kimi-k3-vllm:pronly. The mergeable stack is NUMERICALLY SOUND.
+
+Run 33592228237. `EVAL_ONLY=true EVAL_LIMIT=200`, C72 config, image
+`kimi-k3-vllm:pronly` — **no Hyukjoon overlay**, base `nightly-7c5dc571`.
+
+```
+|gsm8k|3|flexible-extract|5|exact_match|^ |0.99|+- |0.0071|
+|     | |strict-match    |5|exact_match|^ |0.99|+- |0.0071|
+```
+
+Gate lines confirm the right image ran:
+
+```
+[image] pull failed -- using LOCAL image kimi-k3-vllm:pronly
+[k3-image] base: vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb
+[k3-image] overlay: NONE -- fully-mergeable PR stack only
+[k3-image] pr-in-base:  51705 53598 52707 52033 (merged upstream)
+[k3-image] pr-applied:  53917 51392 54254 52494 52968 50618 54165
+[k3-image] pr-stack:    4 files (#53940 a4w4-flydsl)
+[k3-image] pr-missing-vs-overlay: 53166 51437 53301 52190 54163
+[dcp] size=8 conc=72
+```
+
+| stack | GSM8K |
+|---|--:|
+| v4 (overlay, 4-file pr-stack) — T207 | 0.995 |
+| nightly + overlay + 5-file — T192 | 0.995 |
+| nightly + overlay + 5-file — T194 | 0.99 |
+| **pronly (no overlay, 12 PRs)** | **0.99** |
+
+**0.99 sits inside the ledger's accuracy range**, one sample below v4's 0.995 at
+±0.0071 — i.e. indistinguishable. Dropping the 264 KB overlay and moving the
+base from `46638857` to `7c5dc571` does **not** break numerics.
+
+### The `failure` conclusion is a harness artifact, not a defect
+
+The job is marked `failure` with:
+
+```
+Run failed: Benchmark result kimik3_tp8_conc72_..._conc72_mi355x-amd_b23_07.json not found
+```
+
+`EVAL_ONLY` runs GSM8K *instead of* the benchmark, so no benchmark JSON is ever
+written, and the post-step waits ten attempts for a file that cannot exist.
+`eval_exit=0`, the server started, served 200/200 requests, and stopped cleanly.
+Same class as T180, where a TEST-mode run was reported `failure` for writing its
+result to the wrong path. **Do not read this as a pronly defect.**
+
+One cosmetic warning worth noting, unrelated to the result:
+`fatal: detected dubious ownership in repository at '/workspace'` — lm-eval
+shelling out to `git` inside the container. Harmless here.
+
+### What this unblocks
+
+The numerics gate was the precondition for trusting any throughput number from
+this image. It passed, so **T232 = C72 agentic on `pronly`** is now the
+measurement that prices the overlay: v4 delivers 10,607 ±1.2%, and the gap to
+`pronly` is what the 264 KB of unpublished patch plus the five conflicting PRs
+are actually worth.
+
+Prediction on record before the run: **pronly lands below the v4 band.** #53166
+(MLA prefill chunked-context gather, 4 kernels → 1) is missing, and this
+workload is prefill-dominated — ISL p50 ≈ 87k, in:out ≈ 195:1.
