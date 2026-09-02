@@ -346,8 +346,41 @@ Kept for history. This image backed the ledger up to T~180 and topped out at
 | 2 | `kv-blockpool` | [#52707](https://github.com/vllm-project/vllm/pull/52707) — prevents negative external block allocation |
 | 3 | `pr51705` | [#51705](https://github.com/vllm-project/vllm/pull/51705) @ `e72380a5` — DCP support for Kimi-K3 DSpark |
 
-**Base + #52707 + #51705 is sufficient.**
+**Base + #52707 + #51705 @ `e72380a5` is sufficient.**
 > Note : DCP cannot run without #51705.
+
+> ### The `e72380a5` pin is load-bearing — read this before assuming merged PRs suffice
+>
+> **`pr51705_nightly.diff` / `pr51705_vllm.diff` are NOT PR #51705 as merged.**
+> They are a 170 KB / 3,830-line / **24-file** snapshot of the open PR branch.
+> What actually merged upstream on 2026-08-31 touches **3** `vllm/` files:
+> `platforms/rocm.py`, `mla/rocm_aiter_mla.py`, `ops/rocm_aiter_mla_merge.py`.
+>
+> The 21 extra files in our snapshot are the scheduler / KV-cache / offload core:
+> `v1/core/sched/scheduler.py`, `kv_cache_coordinator.py`, `kv_cache_manager.py`,
+> `kv_cache_utils.py`, `single_type_kv_cache_manager.py`, `kv_cache_interface.py`,
+> `simple_kv_offload/manager.py`, `attention/ops/dcp.py`, `triton_mla.py`,
+> `spec_decode/speculator.py`, `dflash/cudagraph.py`, `mla_attention.py`,
+> `kimi_gdn_linear_attn.py`, `envs.py`, the mooncake store files, and
+> `ops/rocm_aiter_mla_reduce.py`.
+>
+> Note the last one. Ours adds **`rocm_aiter_mla_reduce.py`**; upstream #51705
+> adds **`rocm_aiter_mla_merge.py`**. Different file, different implementation —
+> two pieces of work sharing one PR number.
+>
+> **Consequence, now measured not predicted.** `nightly-7c5dc571` has #51705 and
+> #52707 merged in, so DCP initialises and cudagraphs capture cleanly. It still
+> **starves on the agentic replay at C52** — T216 (mns 80) and the SA run
+> 33589375153 (mns 65) both flatline at 38-40/107 warmup with `errors=0`, at two
+> different ladder heights, then the server dies. Bare `7c5dc571` passes
+> fixed-len C52 (104/104) and GSM8K C52 (0.985); only the replay fails, and that
+> is the workload serving ~93% of prompt tokens from prefix cache.
+>
+> So **"nightly + the merged PRs" does not reproduce the 8,200 era.** That era
+> was `nightly-46638857` + the 24-file snapshot (T156 7,906 / T160 7,968 /
+> T168 8,103 / T169 C56 8,326). Twenty-one of those files remain vendor-only.
+> The same content is overlay group **C plus the orphan hunks**, and the
+> ablation showed C is not detachable (T224).
 
 ## Build
 
