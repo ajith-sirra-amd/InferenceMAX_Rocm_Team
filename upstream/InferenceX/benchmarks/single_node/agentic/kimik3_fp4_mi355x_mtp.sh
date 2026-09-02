@@ -191,6 +191,40 @@ export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
 export AITER_SITUV2_A8W4=1
 export HSA_NO_SCRATCH_RECLAIM=1
+
+# T234: hipBLASLt segfault workaround -- BARE IMAGES ONLY.
+#
+# On unpatched nightly-7c5dc571 at C52/DCP8, a bf16 torch linear in
+# kimi_k3/amd/linear.py dispatches to hipblasLtMatmul and SEGFAULTS inside
+# Tensile during device-object construction:
+#
+#   TensileLite::hip::HipAMDGPU::HipAMDGPU(hipDeviceProp_tR0600 const&)
+#   TensileLite::hip::GetDevice(...) -> runContractionProblem
+#   -> rocblaslt_matmul -> hipblasLtMatmul
+#   -> at::cuda::blas::bgemm_internal_cublaslt<BFloat16,BFloat16>
+#   -> at::native::linear   (SA run 33596998428, Worker_TP2_DCP2, 07:03:06)
+#
+# TunableOp picks a backend per GEMM shape; excluding the hipBLASLt candidate
+# keeps torch off the crashing library entirely. HIPBLASLT_PRELOAD_KERNELS
+# moves Tensile's lazy init out of the dispatch path, which is where it dies.
+#
+# GATED on the absence of /etc/k3-image-manifest so patched images (v4,
+# pronly) are untouched -- they never take this dispatch anyway, because
+# #52494 and #52968 rewire kimi_k3/amd/linear.py. Changing BLAS backend
+# selection under them would silently move every number in the ledger.
+#
+# UNVERIFIED: this is a workaround for a vendor-library crash, not a fix. It
+# may relocate the failure rather than remove it. Costs a per-shape tuning
+# pass on first use, so startup is slower.
+if [ ! -f /etc/k3-image-manifest ]; then
+    export PYTORCH_TUNABLEOP_ENABLED="${PYTORCH_TUNABLEOP_ENABLED:-1}"
+    export PYTORCH_TUNABLEOP_HIPBLASLT_ENABLED="${PYTORCH_TUNABLEOP_HIPBLASLT_ENABLED:-0}"
+    export PYTORCH_TUNABLEOP_ROCBLAS_ENABLED="${PYTORCH_TUNABLEOP_ROCBLAS_ENABLED:-1}"
+    export HIPBLASLT_PRELOAD_KERNELS="${HIPBLASLT_PRELOAD_KERNELS:-1}"
+    echo "[blas] bare image -- TunableOp on, hipBLASLt EXCLUDED, Tensile preload on"
+else
+    echo "[blas] patched image -- BLAS selection untouched"
+fi
 export VLLM_K3_KDA_SAFE_STAGES=1
 export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
 

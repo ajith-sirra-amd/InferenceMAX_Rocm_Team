@@ -424,6 +424,42 @@ v4's 0.995 at +/-0.0071 is indistinguishable. The job shows `failure` only
 because EVAL_ONLY writes no benchmark JSON and the post-step waits for one --
 `eval_exit=0`, 200/200 served. Not a defect.
 
+## QUEUED — T234: bare nightly C52 agentic + hipBLASLt workaround
+
+**Dispatch when T233 clears.** Ref config: `kimik3_fp4_mi355x_mtp.old.sa.sh`
+(bare-nightly script) — mns 80, chunk 16384, DCP 8, `kv-offloading: none`.
+
+Set in `amd-master.yaml`: `image: vllm/vllm-openai-rocm:nightly-7c5dc571…`,
+`conc-list: [52]`, `kv-offloading: none`.
+
+Flags added (gated on **absence** of `/etc/k3-image-manifest`, so v4/pronly are
+untouched):
+
+```
+PYTORCH_TUNABLEOP_ENABLED=1
+PYTORCH_TUNABLEOP_HIPBLASLT_ENABLED=0    # exclude the crashing library
+PYTORCH_TUNABLEOP_ROCBLAS_ENABLED=1
+HIPBLASLT_PRELOAD_KERNELS=1              # move Tensile lazy init off dispatch
+```
+
+Gate line to verify: `[blas] bare image -- TunableOp on, hipBLASLt EXCLUDED,
+Tensile preload on`.
+
+**Target failure it addresses** — SA run 33596998428, `Worker_TP2_DCP2` 07:03:06:
+segfault in `TensileLite::hip::HipAMDGPU::HipAMDGPU(hipDeviceProp_t)` via
+`hipblasLtMatmul` ← `bgemm_internal_cublaslt<BFloat16>` ← `at::native::linear`
+in `kimi_k3/amd/linear.py`. Warmup had **completed 107/107, errors=0**; the
+crash hit at the warmup→profiling handoff.
+
+**Expectations, stated up front:** unverified workaround for a vendor-library
+crash. It may relocate the failure rather than remove it. TunableOp adds a
+per-shape tuning pass, so startup is slower and the first minutes of throughput
+will read low — *do not* call it a regression from an early instantaneous rate
+(the mistake made mid-T232). If it survives to a number, that number is on
+rocBLAS not hipBLASLt, so it is not directly comparable to a hipBLASLt run.
+
+---
+
 **IMAGE CHANGED MID-FLIGHT — read before interpreting T233.** `kimi-k3-vllm:pronly`
 was rebuilt at 2026-09-02 ~07:4x to **drop #54165** (closed-unmerged upstream;
 author closed it as superseded by #54163; spec decode is off at C72 so it was
