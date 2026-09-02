@@ -642,26 +642,23 @@ re-checking on `7c5dc571`, five weeks newer than the base those were tested on.
 
 ---
 
-## DEADLINE — #53940 ablation due by ~01:00Z 2026-09-03
+## ORDER — LMCache first, 12,500 is the priority
 
-**User-set: within 8 hours of 2026-09-02 17:00Z.** Image is built; this is a
-scheduling constraint, not a work item.
+**User-set 2026-09-02 ~17:00Z.** Supersedes the earlier plan that put #53940
+ahead of the LMCache agentic run.
 
-Budget (agentic arms run ~1h50m, fixed-len shorter):
+| slot | trial | gate | est. finish |
+|---|---|---|---|
+| now | T239 LMCache fixed-len | — | ~17:30Z |
+| 2 | T240 LMCache **GSM8K** | engine clean | ~18:15Z |
+| 3 | **T241 LMCache agentic C72** | **GSM8K passes** | ~20:15Z |
+| 4a | if agentic **fails** → **#53940 ablation**, then LMCache fix | | ~22:15Z |
+| 4b | if agentic **passes** → LMCache conc/mns sweep; #53940 in the next gap | | |
 
-| slot | trial | est. finish |
-|---|---|---|
-| now | T239 LMCache fixed-len | ~17:30Z |
-| next | T240 LMCache GSM8K | ~18:15Z |
-| then | **T241 #53940 ablation (agentic C72)** | **~20:15Z** |
-| after | T242 LMCache agentic C72 | ~22:15Z |
-
-**#53940 is slotted BEFORE the LMCache agentic run**, not after. Reason: the
-LMCache agentic arm is the one most likely to fail or need re-running, and if it
-eats two attempts the deadline is gone. The ablation is a known-good config on a
-built image — low risk, fixed cost. Do the deadline-bound work first.
-
-If any LMCache arm fails fast and frees the GPUs early, pull #53940 forward.
+**Both fit the #53940 deadline (~01:00Z 2026-09-03)** — the ablation lands
+~22:15Z either way, with ~2.75 h of slack. That is why the reorder is safe;
+if the LMCache agentic arm needed *two* attempts the slack would be gone, so
+#53940 goes into the first gap after T241 regardless of outcome.
 
 ---
 
