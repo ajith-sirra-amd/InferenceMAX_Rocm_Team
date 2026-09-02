@@ -315,6 +315,90 @@ harness still exits 0.
 - Only cancel runs I started.
 - **Accuracy gate before throughput** whenever numerics could move.
 
+## ROADMAP (user-set, 2026-09-02) — four phases, in order
+
+**Goal: land on upstream nightly + a minimal patch set that still does 10,600,
+then push for 12,500, then profile and optimize kernels.**
+
+### Phase 1 — prune to the minimum that preserves ~10,600 on upstream nightly
+
+The **overlay axis (A/B/C/D/E) is CLOSED**: only A+B are detachable (8 KB, both
+neutral at C72); C+D+E fail on imports and are one coupled 256 KB unit
+(T221-T226). There is no "F..Z" left on that axis -- the patch does not divide
+further by subsystem.
+
+The **live axis is the PR axis**:
+
+| step | what | status |
+|---|---|---|
+| 1.1 | `pronly` GSM8K gate | **DONE** — 0.99 (T231) |
+| 1.2 | `pronly` C72 throughput | **T232 running** — prices the overlay |
+| 1.3 | rebase the 5 conflicting PRs onto `7c5dc571` | pending 1.2 |
+| 1.4 | leave-one-out over `pr_split` buckets | pending 1.3 |
+
+**1.2 is the decision point.** If `pronly` lands in the v4 band we are already
+done and the overlay is prunable in full. If it lands below, the gap is owned by
+the five PRs that conflict with `7c5dc571` itself -- **#53166** (1 of 8 hunks),
+**#51437** (1 of 6), **#53301** (2), **#52190** (1 of 1), **#54163** (1 of 1).
+Each fails standalone against the pristine base, so this is context drift, not
+design conflict: a rebase, not new engineering.
+
+Order to attack in 1.3, by expected value on this workload:
+**#53166** (MLA prefill fusion; ISL p50 ~87k, in:out ~195:1) → **#51437**
+(decode all-reduce overlap; owns TPOT/ITL) → **#53301** (per-step metadata,
+6 MLA + 14 KDA groups at TP8) → #52190 → #54163.
+
+Prune target for 1.4: drop every bucket that costs nothing, keeping the result
+inside the 10,607 +/-1.2% band. Expect-free first: P51392 (NVIDIA path),
+P54165 (spec off at C72), P52033 (multi-stream off), P50618 (isolated guard).
+
+### Phase 2 — LMCache, target 12,500
+
+Not wired for K3 today: `kimik3_fp4_mi355x_mtp.sh` has zero LMCache references;
+we run `SimpleCPUOffloadConnector`. Port the server block from
+`minimaxm3_fp4_mi355x.sh` (the only live AMD script with one), confirm it starts
+on ROCm, then a single C72 arm.
+
+The case for it is the **prefix-cache gap**: the trace offers
+`theoretical_prefix_cache_hit=95.7%` and we capture **73.4%**, with
+`ext_cache_hit` ~78-79% and `kv_usage` only ~49%. Twenty-two points of available
+reuse are being left on the floor. Caveat to hold: the published LMCache wins
+are B200/B300 CUDA and lean on CUDA-IPC export of KV buffers, which does not
+port to ROCm for free. Also worth ruling out first that the gap is a
+geometry/eviction defect rather than a backend-capacity limit -- #53598, #53917
+and #54163/#54165 are all bugs in the family "prefix-cache hits structurally
+dropped under DCP/hybrid/spec".
+
+### Phase 3 — profiling, then kernel optimization
+
+**Both in-tree profiling paths are currently DEAD** and this needs solving before
+Phase 3 can start:
+- T202: `nightly-46638857` has no `VLLM_TORCH_PROFILER_DIR` and no
+  `start_profile` handler.
+- T203: `rocprofv3` deadlocks the engine during capture
+  (`queue_interposition.cpp:374 Async signal handler still waiting`, RCCL
+  collective timeout).
+
+Moving to `7c5dc571` may fix the first -- worth re-checking on `pronly`, since
+that base is five weeks newer.
+
+Standing lead for when this opens, from live aiter shape logs (2,304 lines):
+
+| N, K | count | what |
+|---|--:|---|
+| N:6288, K:7168 | 744 | KDA fused multi-output projection (TP8) |
+| N:3584, K:7168 | 744 | attention projection shard |
+| **N:1536, K:128** | 744 | **KDA `f_b_proj`** — skinny, memory-bound |
+
+`N:1536, K:128` is the standout target: K=128 is bandwidth-limited with almost
+no reuse, every logged call shows `bpreshuffle=False`, and #50618 independently
+documents a stride bug on this exact call (`stride=(6288, 1)` under TP8 -- note
+6288 matches the top shape). **Caveat: these are capture-phase enumerations, not
+runtime frequency** -- M sweeps 1..96, mirroring the cudagraph ladder. Real
+attribution needs a working profiler, which is why this is Phase 3 and not now.
+
+**Parked at user request: the GEMM microbenchmark. Do not queue it.**
+
 ## Current state
 
 **Config tuning is CLOSED (T195/T198/T199), and the headline now carries an
