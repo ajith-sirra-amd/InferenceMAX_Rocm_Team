@@ -510,8 +510,73 @@ Needs a fresh GSM8K gate and invalidates the n=2 baseline.
 
 ### 4. LMCache — user's Phase 2 (reference recipe captured)
 
-**Reference: SA run 33618719560, job 100211512290** (read-only). It **failed**,
-but it supplies the concrete invocation we lacked.
+**Reference: SA run 33618719560 job 100211512290, and the script at
+`SemiAnalysisAI/InferenceX@perf/k3-mi355x-lmcache-rc3-c1-c8-c14-c40`
+`benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh`** (both read-only).
+The run **failed**, but the script supplies the full setup we lacked.
+
+### Install (stock image + runtime deps, no torch/ROCm change)
+
+```
+lmcache==0.5.5rc3+rocm7.2
+  --find-links https://github.com/LMCache/LMCache/releases/expanded_assets/v0.5.5rc3-rocm
+sortedcontainers==2.4.0
+opentelemetry-exporter-prometheus==0.61b0
+cupy-rocm-7-0==14.1.1
+```
+installed `--no-deps`. Native libs required — `libglog.so.0`, `libjsoncpp.so.25`,
+`libibverbs.so.1`, `librdmacm.so.1`, `libnuma.so.1` (apt: `libgoogle-glog0v5
+libjsoncpp25 libibverbs1 librdmacm1 libnuma1`). Import gate:
+`import cupy; import opentelemetry.exporter.prometheus; from
+lmcache.v1.multiprocess.http_server import run_http_server`.
+
+### THE critical detail — `--chunk-size 12288`
+
+Their comment, and it is the thing that would have cost us a day:
+
+> the connector requires the chunk to be a multiple of **every** engine KV
+> group's `tokens_per_block`. The hybrid KDA/MLA layout registers attention
+> groups at **1536** and a KDA state group at **3072**. Use **12288** so it is
+> divisible by both. The multi-group layout also requires one object group per
+> sliding-window size: **`--separate-object-groups`**.
+
+The upstream Kimi-K3 recipe (docs.lmcache.ai) says **768**, which is the CUDA
+path and is **wrong for this stack**.
+
+**Open risk for us:** those group sizes are quoted at **DCP=1**. At DCP=8 the
+per-group geometry changes — that is precisely what #53598 and #53917 exist to
+handle — so **12288 may not be the right chunk for our config**. Verify
+`tokens_per_block` per group from the engine log before trusting it.
+
+### Full server invocation
+
+```
+lmcache server --host 127.0.0.1 --port 6555 \
+  --http-host 127.0.0.1 --http-port 8090 \
+  --l1-size-gb $TOTAL_CPU_DRAM_GB --l1-init-size-gb 10 \
+  --chunk-size 12288 --separate-object-groups \
+  --enable-extra-logging --extra-logging-interval 30 \
+  --max-cpu-workers 8 --max-gpu-workers 1 \
+  --eviction-policy LRU \
+  --supported-transfer-mode lmcache_driven --shm-name ""
+```
+Readiness: `wait_for_ready --endpoint http://127.0.0.1:8090/healthcheck
+--timeout 600`.
+
+### Connector
+
+```json
+{"kv_connector":"LMCacheMPConnector",
+ "kv_connector_module_path":"lmcache.integration.vllm.lmcache_mp_connector",
+ "kv_role":"kv_both",
+ "kv_connector_extra_config":{"lmcache.mp.port":6555,"lmcache.mp.mq_timeout":6000.0}}
+```
+
+`mq_timeout 6000.0` is deliberate — their note: *100k-330k-token agentic
+prefixes make single retrieves large*. Our ISL p50 is ~89k, so we need the same
+headroom.
+
+**Take the setup, not the config.** Per user: this is a wiring reference only.
 
 Server (starts fine on ROCm — healthcheck passed):
 
