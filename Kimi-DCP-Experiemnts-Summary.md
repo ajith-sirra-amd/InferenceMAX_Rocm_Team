@@ -3987,3 +3987,65 @@ making requests wait longer to get in — queueing, not compute saturation.
 into the C72 band, the C76 dip was mns starvation and the concurrency curve is
 flatter than it looks. If it stays at ~10,300, 72 is genuinely the peak and mns
 is closed for good.
+
+## T230 — C76 + mns 96 = 10,624. The C76 dip was mns starvation. mns is NOT closed.
+
+Run 33585087322. One variable against T229: `[mns] max_num_seqs=96 conc=76`,
+`graphs: dense ladder 1..96 (mns=96 x 1 rows), DCP=8`. Image `kimi-k3-vllm:v4`,
+no runtime patching. Everything else identical.
+
+| metric | T230 (mns 96) | T229 (mns 80) | Δ |
+|---|--:|--:|--:|
+| **Throughput per GPU** | **10,624** | 10,324 | **+2.91%** |
+| Request Error Rate | **0.17%** | 0.22% | best in ledger |
+| TTFT mean | **4,503 ms** | 6,797 ms | **−33.7%** |
+| TTFT p99 | 91,528 ms | 160,089 ms | −42.8% |
+| ITL mean | 115.89 ms | 119.61 ms | −3.1% |
+| Output tok/s | 515.21 | 497.69 | +3.5% |
+
+**10,624 is inside the C72 band (10,518–10,646).** So C76 is not worse than C72 —
+it is statistically tied once mns headroom is adequate.
+
+### T229's caveat is confirmed, and mns re-opens as a lever
+
+I flagged at T229 that mns 80 at conc 76 leaves only 4 slots of slack and sits
+partway into the C80 starvation regime, so the run could not separate conc from
+mns. It could not, and mns was the cause: +2.91% is well outside the ±1.2% band.
+
+The live server confirmed the mechanism mid-run: **`queue=81r/0w` and `83r/0w`
+at conc 76**. The agentic replay runs more lanes than CONC, so at mns 80 those
+81–83 lanes did not fit and requests waited to be admitted. That is precisely
+the TTFT signature — mean −33.7%, p99 −42.8% — with ITL barely moving. Queueing,
+not compute, exactly as predicted from T229's flat output tok/s.
+
+**This revises T198.** mns 96 measured neutral at C72 and I closed mns as a
+lever on that basis. The correct rule is not "mns is neutral" but:
+
+> mns must exceed the replay's actual lane count, which runs above CONC.
+> At C72 (mns 80, ~79 lanes) there was just enough slack, so raising it did
+> nothing. At C76 and C80 there is not, and raising it is worth ~3%.
+
+T198's measurement was right; the generalisation I drew from it was wrong.
+
+### The concurrency curve, corrected
+
+| conc | mns 80 | mns 96 |
+|---|--:|--:|
+| 60 | 9,482 | — |
+| 64 | 9,775 | — |
+| 72 | **10,607** (n=4) | 10,630 (T198) |
+| 76 | 10,324 | **10,624** |
+| 80 | 9,864 | ~10,160 (T197, +3.0%) |
+
+The peak is a **plateau across 72–76 at ~10,61x**, not a point at 72. The
+fall-off at 80 survives the mns correction, so 80 is genuinely past the top.
+
+### What this does and does not change
+
+It does **not** move the shipping number: 10,624 is inside the existing band, so
+the headline stays **10,607 ±1.2% (n=4)** — now n=5 counting T230 at C76, mean
+10,610. No new peak was found.
+
+It does mean the launcher's flat `MAX_NUM_SEQS=80` for DCP>1 is wrong above
+conc 72, and any future conc above 72 must carry mns headroom or it will
+measure starvation and report it as a concurrency limit.

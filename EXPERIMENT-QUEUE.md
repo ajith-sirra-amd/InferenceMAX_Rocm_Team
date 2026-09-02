@@ -325,7 +325,20 @@ cleanest pair (T206 vs T228 -- same image, same script, 26 h apart) differs by
 That includes the mns and chunk results below: they are confirmed neutral, but
 none of them identified a winner.
 
-**T229 fills the last hole in the conc curve: C76 = 10,324**, −2.7% below the
+**T230 corrects T229 and re-opens mns.** C76 + mns 96 = **10,624**, +2.91% over
+C76 + mns 80, and inside the C72 band. The C76 dip was mns starvation, not a
+concurrency limit: the replay ran **81-83 lanes at conc 76**, which does not fit
+under mns 80. TTFT mean fell 33.7% and p99 42.8% while ITL barely moved --
+queueing, not compute. The peak is a **plateau across 72-76 at ~10,61x**, and
+the rule is *mns must exceed the replay's lane count (which runs above CONC)*,
+not "mns is neutral" as T198 was generalised to say. Shipping number unchanged
+at 10,607 +/-1.2%.
+
+**Next: PR-prune work.** `kimi-k3-vllm:pronly` is built and import-gated -- the
+fully-mergeable stack (12 of 18 PRs, no overlay, base `nightly-7c5dc571`).
+Numerics change vs v4, so **GSM8K limit 200 gates first**.
+
+**T229 filled the last hole in the conc curve: C76 = 10,324**, −2.7% below the
 C72 mean and outside the noise band. Curve is now 60/64/72/76/80 =
 9,482 / 9,775 / **10,607** / 10,324 / 9,864 — peak 72, gradient fall-off, no
 cliff. Caveat: mns is pinned at 80, so C76 has only 4 slots of slack and sits

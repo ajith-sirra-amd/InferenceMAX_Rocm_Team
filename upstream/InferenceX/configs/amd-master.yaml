@@ -1958,7 +1958,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   #
   # Revert to aigmkt/kimi-k3-vllm:latest if this regresses. That image remains
   # the reference for C52, which still needs #51705 for DCP.
-  image: kimi-k3-vllm:v4
+  image: kimi-k3-vllm:pronly
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
@@ -2136,7 +2136,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # N1-N9), so the remaining question is whether 52 is even the best
       # operating point. We have 40 and 52 and nothing between or just above.
       # 48 and 56 bracket it; each conc is an independent measurement.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [76], spec-decoding: mtp }
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [64], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
