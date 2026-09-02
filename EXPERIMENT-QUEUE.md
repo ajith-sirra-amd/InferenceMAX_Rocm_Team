@@ -424,6 +424,68 @@ v4's 0.995 at +/-0.0071 is indistinguishable. The job shows `failure` only
 because EVAL_ONLY writes no benchmark JSON and the post-step waits for one --
 `eval_exit=0`, 200/200 served. Not a defect.
 
+## THE 12,500 PLAN — after pruning completes
+
+**Where we are: 10,781 at C72. Target 12,500. Gap = +15.9%.**
+
+The config space is closed (conc, mns, chunk, gmu, offload all swept and flat or
+negative). Pruning reduces upstreaming surface, it does not add throughput. So
+12,500 requires **new performance work**, and there are exactly four candidate
+sources. Ranked by expected value:
+
+### 1. The prefix-cache gap — biggest single lever
+
+| stack | theoretical | captured | gap |
+|---|--:|--:|--:|
+| aigmkt C52 | 96.5% | 93.6% | 2.9 pts |
+| bare nightly C52 | 96.4% | 90.0% | 6.4 pts |
+| **pronly C72** | **~95.1%** | **88.0%** | **7.1 pts** |
+
+Workload is prefill-dominated — `in:out ≈ 195:1`, ISL p50 ≈ 89k. Every point of
+prefix hit removes prefill work directly. Closing 7 points is worth far more
+than any config knob we have left. **Diagnose before optimising:** we do not yet
+know whether the gap is eviction, block-matching, or DCP geometry. `kv_usage`
+was only 22% when we measured the C52 gap, so it is **not** capacity.
+
+### 2. The 5 unapplied PRs — the only known perf work not in our stack
+
+| PR | what | why it could matter |
+|---|---|---|
+| **#52190** | torch.compile enablement | K3 carries no `@support_torch_compile`, so **no fusion pass runs at all** today — `norm_quant`, `act_quant`, `allreduce_rms`, `mla_dual_rms_norm` are all configured and all inert. Potentially the largest single item. |
+| **#53166** | MLA prefill chunked-context gather | 4 kernels → 1 on the prefill path, which dominates this workload |
+| **#51437** | latent-MoE all-reduce overlap | decode-side; owns TPOT/ITL |
+| **#53301** | graph-stable attn metadata reuse | per-step overhead, 6 MLA + 14 KDA groups at TP8 |
+| #54163 | DFlash/DSpark prefix-cache block | spec off at C72 |
+
+Each fails on `7c5dc571` by **1-2 hunks** — a rebase, not new engineering.
+
+### 3. Base bump to `nightly-73029d42…`
+
+Carries **#53388** (disable trailing prefix-cache block dropping), which is
+directly on the gap in item 1, plus #52832 and the 09-02 SimpleCPUOffload fix.
+Needs a fresh GSM8K gate and invalidates the n=2 baseline.
+
+### 4. LMCache — user's Phase 2
+
+Not wired for K3. Motivated by the same cache gap, but the published wins are
+B200/B300 CUDA leaning on CUDA-IPC KV export, which does not port to ROCm free.
+**Rule out a geometry defect first** — #53598, #53917, #54163/#54165 are all
+bugs in the family "prefix-cache hits structurally dropped under DCP/hybrid/spec".
+
+### Honest feasibility
+
++15.9% from four sources, none individually sized. The prefix-cache gap and
+#52190 are the two that could plausibly be worth several percent each; the rest
+look like 1-3% items. **I would not promise 12,500 from this list** — but
+diagnosing the cache gap is cheap, high-information, and has to happen before
+LMCache is worth attempting either way. That is where I would start.
+
+Profiling (Phase 3) stays blocked: both in-tree paths are dead (T202 no
+`VLLM_TORCH_PROFILER_DIR`; T203 rocprofv3 deadlocks at capture). Worth
+re-checking on `7c5dc571`, five weeks newer than the base those were tested on.
+
+---
+
 ## RESOLVED — bare-nightly C52: gmu 0.88
 
 `HSA_STATUS_ERROR_OUT_OF_RESOURCES` at C52/DCP8/no-offload is fixed by dropping
