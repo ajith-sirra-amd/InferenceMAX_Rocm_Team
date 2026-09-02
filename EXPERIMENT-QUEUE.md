@@ -642,7 +642,30 @@ re-checking on `7c5dc571`, five weeks newer than the base those were tested on.
 
 ---
 
-## PARKED — #53940 ablation (image built, not queued)
+## DEADLINE — #53940 ablation due by ~01:00Z 2026-09-03
+
+**User-set: within 8 hours of 2026-09-02 17:00Z.** Image is built; this is a
+scheduling constraint, not a work item.
+
+Budget (agentic arms run ~1h50m, fixed-len shorter):
+
+| slot | trial | est. finish |
+|---|---|---|
+| now | T239 LMCache fixed-len | ~17:30Z |
+| next | T240 LMCache GSM8K | ~18:15Z |
+| then | **T241 #53940 ablation (agentic C72)** | **~20:15Z** |
+| after | T242 LMCache agentic C72 | ~22:15Z |
+
+**#53940 is slotted BEFORE the LMCache agentic run**, not after. Reason: the
+LMCache agentic arm is the one most likely to fail or need re-running, and if it
+eats two attempts the deadline is gone. The ablation is a known-good config on a
+built image — low risk, fixed cost. Do the deadline-bound work first.
+
+If any LMCache arm fails fast and frees the GPUs early, pull #53940 forward.
+
+---
+
+## PARKED — #53940 ablation (image built, ready to dispatch)
 
 **LMCache is the priority; this waits.** Image `kimi-k3-vllm:rec-no53940` is
 **already built and import-gated** — `pr-applied: 53917 52494 52968`,
