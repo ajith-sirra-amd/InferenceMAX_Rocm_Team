@@ -642,7 +642,26 @@ re-checking on `7c5dc571`, five weeks newer than the base those were tested on.
 
 ---
 
-## ORDER — LMCache first, 12,500 is the priority
+## ORDER (2026-09-02 ~18:15Z) — PRUNE FIRST, LMCache after the teardown fix
+
+**Reason for the flip:** T239 stranded 58 GB on a GPU at teardown
+(`Memory critical error … Reason: Memory in use`). A GPU reset did not clear it;
+the node had to be **rebooted**. Running LMCache again unattended risks halting
+the GPUs with nobody to recover them.
+
+| slot | trial | status |
+|---|---|---|
+| **now** | **T241 — #53940 ablation** (`rec-no53940`, SimpleCPUOffload) | dispatched, run 33665892734 |
+| then | LMCache teardown fix (script-side, no GPU) | see `LMCACHE.md` |
+| then | T240-retry LMCache GSM8K → agentic | only after the fix |
+
+**Open question before LMCache resumes:** the run reported
+`L1 memory usage: 38.16/1820.00 GiB` and GPU KV capacity **unchanged** at
+29,656,464 — so L1 was the *host* pool, not GPU VRAM. If GPU-VRAM-as-L1 is what
+12,500 needs, that is a **different LMCache configuration** than the one we ran,
+and it should be settled before the next arm rather than discovered mid-run.
+
+## SUPERSEDED — LMCache first, 12,500 is the priority
 
 **User-set 2026-09-02 ~17:00Z.** Supersedes the earlier plan that put #53940
 ahead of the LMCache agentic run.
