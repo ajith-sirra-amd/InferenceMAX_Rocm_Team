@@ -102,7 +102,28 @@ needs re-checking against current `main` before filing.
 
 ---
 
-## Known limitation — read this before relying on any number here
+## RESOLVED (T232, 2026-09-02) — the overlay is not needed
+
+**`kimi-k3-vllm:pronly` — 12 upstream PRs on `nightly-7c5dc571`, zero vendor
+patch — delivers 10,692 tok/s/GPU at C72 (err 0.18%, GSM8K 0.99).** That is
++0.6% over the matched-mns overlay run and inside the +/-1.2% replication band.
+
+**The delivery risk recorded below is therefore largely void.** Nothing in the
+unpublished 264 KB is worth measurable throughput at C72, so it does not have to
+be upstreamed for the number to be reproducible. The five PRs that fail to apply
+to `7c5dc571` (#53166, #51437, #53301, #52190, #54163) are optional rather than
+blocking.
+
+Caveats: n=1 against a +/-1.2% band, replication in flight; C72 agentic only.
+C1 TPOT on pronly is untested and #51437 owns the decode all-reduce overlap, so
+C1 is where a gap would appear if one exists.
+
+The section below is kept as written, because the reasoning was correct given
+what was known then and the risk was real until measured.
+
+---
+
+## Known limitation (SUPERSEDED by T232) — read this before relying on any number here
 
 **The overlay may never land upstream, and that is a delivery risk.**
 

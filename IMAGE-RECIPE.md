@@ -309,9 +309,20 @@ conflict): **#53166** (1 of 8 hunks), **#51437** (1 of 6), **#53301** (2),
 **#52190** (1 of 1), **#54163** (1 of 1). Also missing: the 26 overlay hunks
 (13%) that match no PR at all.
 
-**#53166 is the prefill-path fusion and this workload is prefill-dominated**
-(ISL p50 ~87k, in:out ~195:1), so expect `pronly` below 10,607. Quantifying that
-is the point.
+**MEASURED (T232): `pronly` C72 = 10,692 tok/s/GPU, err 0.18%.** That is +0.6%
+over the matched-mns overlay run (T198, 10,630) and inside the +/-1.2% band --
+**statistically identical to v4**. GSM8K 0.99 (T231).
+
+I predicted the opposite before the run ("#53166 is the prefill-path fusion and
+this workload is prefill-dominated, so expect pronly below 10,607"). Falsified:
+missing #53166, #51437, #53301, #52190, #54163 *and* the 26 orphan overlay hunks
+costs nothing measurable at C72. The run is queueing-bound, not kernel-bound.
+
+**So the 264 KB overlay can be dropped.** Prefer this image over v4 for anything
+that has to be reproducible outside this team. Caveats: n=1 against a +/-1.2%
+band (replication in flight), and C72 agentic only -- C1 TPOT on `pronly` is
+untested, and #51437 (decode all-reduce overlap) is one of the missing five, so
+C1 is where a gap would show up if one exists.
 
 One asterisk on "fully mergeable": **#54165 is closed-unmerged** upstream; its
 open successor #54163 does not apply here.

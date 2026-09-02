@@ -5,9 +5,16 @@ Two things are asked for here, and today they are **not the same artifact**:
 | goal | status |
 |---|---|
 | **A. Reproduce 10,607 tok/s/GPU** from nightly + patches | **done, deterministic** — recipe below |
-| **B. Get there with mergeable PRs only** | **not yet possible** — gap analysis below |
+| **B. Get there with mergeable PRs only** | **DONE (T232)** — `pronly` = 10,692 at C72 |
 
-Read both. A is a recipe. B is a plan with a real blocker.
+**Update 2026-09-02:** B is no longer blocked. `kimi-k3-vllm:pronly` — 12
+upstream PRs on `nightly-7c5dc571`, no vendor patch — measured **10,692
+tok/s/GPU** at C72 (err 0.18%, GSM8K 0.99, T232), statistically identical to v4.
+Section B's gap analysis below is kept for the reasoning and the PR mechanics,
+but its premise ("not yet possible") is superseded. Prefer `pronly` for anything
+that must be reproducible outside this team.
+
+Read both. A is the pinned-overlay recipe. B is the mergeable path, now measured.
 
 ---
 
