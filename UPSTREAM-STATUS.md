@@ -31,23 +31,44 @@ Order matters at 03: **#54254 is stacked on #54248** — its diff already contai
 per-token-FP8 chain. #50618 is python-hunk only; its `csrc/*.cu` hunks cannot
 apply to a prebuilt image.
 
-## PRs NOT applied — optional, not blocking
-
-Five fail on `7c5dc571` by 1–2 hunks each (context drift, not design conflict):
-**#53166** (1 of 8), **#51437** (1 of 6), **#53301** (2), **#52190** (1 of 1),
-**#54163** (1 of 1). T232 shows they cost nothing at C72. #51437 owns the decode
-all-reduce overlap, so C1 is where a gap would show if one exists.
-
-Also dropped: **#50813** — dead code, `moonshotai/Kimi-K3` declares no
-`quantization_config` so `quark_moe.py` is unreachable.
-
 ## Risks
 
 1. **Base drift.** `nightly` moves daily (`73029d42…` landed 2026-09-02 05:31).
    Pin a digest and set a rebase cadence.
-2. **#54165 is closed-unmerged** upstream; successor #54163 does not apply.
+2. **#54165 is closed-unmerged** upstream; successor #54163 does not apply. One
+   of the twelve is therefore a closed PR.
 3. **n=1** against a ±1.2% band. T233 replication in flight.
 4. **C72 agentic only.** C1 TPOT on pronly untested.
+
+---
+
+# OPTIONAL — not applied, not needed for 10,692
+
+Five PRs fail on `7c5dc571` by 1–2 hunks each. Context drift, not design
+conflict — each is a rebase, not new engineering. **T232 shows they cost nothing
+at C72.**
+
+| PR | what it does | fails | worth rebasing? |
+|---|---|---|---|
+| **#51437** | overlap shared all-reduce with routed up-proj, decode batches | 1 of 6 hunks | **yes, for C1** — owns decode |
+| **#53166** | fuse MLA prefill chunked-context gather, 4 kernels → 1 | 1 of 8 | maybe — prefill path |
+| **#53301** | reuse attn metadata across 6 MLA + 14 KDA groups | 2 | maybe — per-step overhead |
+| **#52190** | torch.compile enablement so fusion passes run | 1 of 1 | low — not release-clean |
+| **#54163** | DFlash/DSpark last prefix-cache block | 1 of 1 | low — spec off at C72 |
+
+If C1 TPOT on pronly comes in worse than v4's 9.06 ms, **#51437 is the first
+one to rebase.**
+
+## Dropped for cause
+
+| PR | why |
+|---|---|
+| **#50813** | dead code — `moonshotai/Kimi-K3` declares no `quantization_config`, so `quark_moe.py` is unreachable. `Situv2` in the kernel name comes from `AITER_SITUV2_A8W4=1` read by **aiter**, not by `quark_moe.py`. |
+| **#54248** | superseded — #54254 is stacked on it and contains it. Applying both fails. |
+| **#54546** | partial substitute for overlay group D; missing `_cudagraph_support = UNIFORM_BATCH`, without which the DSpark draft demotes the engine FULL_AND_PIECEWISE → PIECEWISE (14.05 → 77.65 tok/s). Moot now — pronly does not need group D. |
+| #54095, #53154, #37682, #50647, #54255, #54038, #54457, #54639 | do not apply, NVIDIA-only, or superseded by the pronly result |
+
+---
 
 ## The overlay is no longer needed
 
