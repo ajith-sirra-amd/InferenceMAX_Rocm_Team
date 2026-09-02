@@ -424,39 +424,59 @@ v4's 0.995 at +/-0.0071 is indistinguishable. The job shows `failure` only
 because EVAL_ONLY writes no benchmark JSON and the post-step waits for one --
 `eval_exit=0`, 200/200 served. Not a defect.
 
-## QUEUED — T234: bare nightly C52 agentic + hipBLASLt workaround
+## PRUNING PARKED — bare-nightly C52 is the active thread
 
-**Dispatch when T233 clears.** Ref config: `kimik3_fp4_mi355x_mtp.old.sa.sh`
-(bare-nightly script) — mns 80, chunk 16384, DCP 8, `kv-offloading: none`.
+PR-prune (Phase 1.4, leave-one-out over `pr_split`) is **parked** at user
+request until bare-nightly C52 resolves. Phase 1's goal is already met
+(T232: pronly 10,692 = v4), so nothing is blocked by the pause.
 
-Set in `amd-master.yaml`: `image: vllm/vllm-openai-rocm:nightly-7c5dc571…`,
-`conc-list: [52]`, `kv-offloading: none`.
+## QUEUED — T234: bare nightly C52 agentic, gmu 0.85
 
-Flags added (gated on **absence** of `/etc/k3-image-manifest`, so v4/pronly are
-untouched):
+**Dispatch when T233 clears.** Ref config: `kimik3_fp4_mi355x_mtp.old.sa.sh` —
+mns 80, chunk 16384, DCP 8, `kv-offloading: none`, conc 52.
+**ONE variable: gmu 0.9 → 0.85.**
+
+### Root cause (corrected)
+
+SA run 33596998428, `Worker_TP2_DCP2`, 07:03:06 — the line *before* the
+traceback:
 
 ```
-PYTORCH_TUNABLEOP_ENABLED=1
-PYTORCH_TUNABLEOP_HIPBLASLT_ENABLED=0    # exclude the crashing library
-PYTORCH_TUNABLEOP_ROCBLAS_ENABLED=1
-HIPBLASLT_PRELOAD_KERNELS=1              # move Tensile lazy init off dispatch
+:0:rocdevice.cpp:3715: Callback: Queue 0x70e817200000 Aborting with error :
+HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the necessary resources
+-> hipErrorUnknown
+-> segfault in TensileLite::GetDevice / torch.cuda.current_device
+-> Worker proc died -> EngineDeadError
 ```
 
-Gate line to verify: `[blas] bare image -- TunableOp on, hipBLASLt EXCLUDED,
-Tensile preload on`.
+**The segfault frames are corpse frames.** Once the HIP context is dead, any
+device-property query faults — which is why two unrelated call sites (Triton
+autotune in `chunk_delta_h.py`, and hipBLASLt Tensile) both crashed in device
+lookups. I initially diagnosed those frames as the cause and staged a hipBLASLt
+workaround; that was wrong and has been reverted.
 
-**Target failure it addresses** — SA run 33596998428, `Worker_TP2_DCP2` 07:03:06:
-segfault in `TensileLite::hip::HipAMDGPU::HipAMDGPU(hipDeviceProp_t)` via
-`hipblasLtMatmul` ← `bgemm_internal_cublaslt<BFloat16>` ← `at::native::linear`
-in `kimi_k3/amd/linear.py`. Warmup had **completed 107/107, errors=0**; the
-crash hit at the warmup→profiling handoff.
+Warmup had completed **107/107, errors=0**; it died at the warmup→profiling
+handoff. With offload disabled the whole KV working set sits on GPU, which is
+what exhausted the queue allocation.
 
-**Expectations, stated up front:** unverified workaround for a vendor-library
-crash. It may relocate the failure rather than remove it. TunableOp adds a
-per-shape tuning pass, so startup is slower and the first minutes of throughput
-will read low — *do not* call it a regression from an early instantaneous rate
-(the mistake made mid-T232). If it survives to a number, that number is on
-rocBLAS not hipBLASLt, so it is not directly comparable to a hipBLASLt run.
+### Why gmu 0.85, and why it is gated
+
+gmu is the direct lever on the queue/scratch headroom the runtime failed to
+allocate. Direction matters: the ledger only ever pushed gmu **up** at C52 and
+it broke both times — T157 gmu 0.95 hung the engine, T166 gmu 0.92 gave 0/103
+in warmup. **Downward is untested.**
+
+Gated on the absence of `/etc/k3-image-manifest`, so **v4 and pronly keep gmu
+0.9**. Changing it under them would move every number in the ledger, and T211
+measured gmu as violently non-neutral (0.92 at C1 → 2.4× worse TPOT).
+
+Gate lines to verify: `[gmu] bare image -- override 0.85 …` and
+`[cfg] … gmu=0.85 …`.
+
+### If 0.85 is not enough
+
+Next lever, one variable at a time: **ladder/mns 65 → 52** at gmu 0.9. Both are
+resource-side; do not change them together or the result is unattributable.
 
 ---
 

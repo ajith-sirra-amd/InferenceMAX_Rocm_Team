@@ -192,38 +192,40 @@ export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATIO
 export AITER_SITUV2_A8W4=1
 export HSA_NO_SCRATCH_RECLAIM=1
 
-# T234: hipBLASLt segfault workaround -- BARE IMAGES ONLY.
+# T234: HSA_STATUS_ERROR_OUT_OF_RESOURCES workaround -- BARE IMAGES ONLY.
 #
-# On unpatched nightly-7c5dc571 at C52/DCP8, a bf16 torch linear in
-# kimi_k3/amd/linear.py dispatches to hipblasLtMatmul and SEGFAULTS inside
-# Tensile during device-object construction:
+# On unpatched nightly-7c5dc571 at C52/DCP8 with kv-offloading=none, the GPU
+# queue aborts on resource exhaustion and takes the worker with it
+# (SA run 33596998428, Worker_TP2_DCP2, 07:03:06):
 #
-#   TensileLite::hip::HipAMDGPU::HipAMDGPU(hipDeviceProp_tR0600 const&)
-#   TensileLite::hip::GetDevice(...) -> runContractionProblem
-#   -> rocblaslt_matmul -> hipblasLtMatmul
-#   -> at::cuda::blas::bgemm_internal_cublaslt<BFloat16,BFloat16>
-#   -> at::native::linear   (SA run 33596998428, Worker_TP2_DCP2, 07:03:06)
+#   :0:rocdevice.cpp:3715: Callback: Queue 0x70e817200000 Aborting with error :
+#   HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the
+#   necessary resources
+#   -> hipErrorUnknown
+#   -> segfault in TensileLite::GetDevice / torch.cuda.current_device
+#   -> Worker proc died -> EngineDeadError
 #
-# TunableOp picks a backend per GEMM shape; excluding the hipBLASLt candidate
-# keeps torch off the crashing library entirely. HIPBLASLT_PRELOAD_KERNELS
-# moves Tensile's lazy init out of the dispatch path, which is where it dies.
+# The segfault frames are CORPSE FRAMES. Once the HIP context is dead any
+# device-property query faults, which is why two unrelated call sites (Triton
+# autotune and hipBLASLt Tensile) both crashed in device lookups. The cause is
+# the queue allocation failure that precedes them.
 #
-# GATED on the absence of /etc/k3-image-manifest so patched images (v4,
-# pronly) are untouched -- they never take this dispatch anyway, because
-# #52494 and #52968 rewire kimi_k3/amd/linear.py. Changing BLAS backend
-# selection under them would silently move every number in the ledger.
+# Warmup had completed 107/107 with errors=0; it died at the warmup->profiling
+# handoff. With offload disabled the whole KV working set sits on GPU, which is
+# what exhausted the queue allocation.
 #
-# UNVERIFIED: this is a workaround for a vendor-library crash, not a fix. It
-# may relocate the failure rather than remove it. Costs a per-shape tuning
-# pass on first use, so startup is slower.
+# gmu 0.85 leaves headroom for queue/scratch. Direction matters: the ledger only
+# ever pushed gmu UP at C52 and it broke both times -- T157 gmu 0.95 hung the
+# engine, T166 gmu 0.92 gave 0/103 in warmup. Downward is untested.
+#
+# GATED on the absence of /etc/k3-image-manifest so patched images (v4, pronly)
+# keep gmu 0.9 -- changing it under them would move every number in the ledger,
+# and T211 measured gmu as violently non-neutral at C1 (0.92 -> 2.4x worse TPOT).
 if [ ! -f /etc/k3-image-manifest ]; then
-    export PYTORCH_TUNABLEOP_ENABLED="${PYTORCH_TUNABLEOP_ENABLED:-1}"
-    export PYTORCH_TUNABLEOP_HIPBLASLT_ENABLED="${PYTORCH_TUNABLEOP_HIPBLASLT_ENABLED:-0}"
-    export PYTORCH_TUNABLEOP_ROCBLAS_ENABLED="${PYTORCH_TUNABLEOP_ROCBLAS_ENABLED:-1}"
-    export HIPBLASLT_PRELOAD_KERNELS="${HIPBLASLT_PRELOAD_KERNELS:-1}"
-    echo "[blas] bare image -- TunableOp on, hipBLASLt EXCLUDED, Tensile preload on"
+    GPU_MEM_UTIL_OVERRIDE="${GPU_MEM_UTIL_OVERRIDE:-0.85}"
+    echo "[gmu] bare image -- override ${GPU_MEM_UTIL_OVERRIDE} for HSA_STATUS_ERROR_OUT_OF_RESOURCES"
 else
-    echo "[blas] patched image -- BLAS selection untouched"
+    echo "[gmu] patched image -- 0.9 untouched"
 fi
 export VLLM_K3_KDA_SAFE_STAGES=1
 export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
@@ -463,6 +465,9 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # assumed for C1 early on and never actually measured. Last of the four tail
 # hypotheses.
 GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61 ms
+# T234: bare images only -- see the gmu-override block above. Patched images
+# keep 0.9 so every number in the ledger stays comparable.
+if [ -n "${GPU_MEM_UTIL_OVERRIDE:-}" ]; then GPU_MEM_UTIL="$GPU_MEM_UTIL_OVERRIDE"; fi
 echo "[gmu] gpu_memory_utilization=$GPU_MEM_UTIL conc=$CONC"
 
 VLLM_CMD=(
