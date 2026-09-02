@@ -11,9 +11,34 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **throughput** | 12,500 tok/s/GPU | **10,632** (T195, C72, nightly+overlay+PRs) | **−14.9%** |
+| **throughput** | 12,500 tok/s/GPU | **10,799** (T236, C72, `pronly-nq-no50618`, 8 upstream PRs, no vendor patch) | **−13.6%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
+
+
+---
+
+# LATEST FIRST
+
+Newest trials are summarised here. The full chronological ledger follows below —
+it is append-only, so **the bottom of this file is the most recent detail**.
+
+| trial | what | result |
+|---|---|---|
+| **T240** | LMCache GSM8K | **BLOCKED — never started.** Died in the pre-run GPU-reclaim wait, 18% VRAM stranded on one GPU. No accuracy result. Fix applied: `--max-gpu-workers` 1 → 8. See `LMCACHE.md`. |
+| **T239** | LMCache fixed-len | **PASS** — 5/5, server up in 26 s, rocm backend auto-selected, chunk 12288 accepted at DCP=8 |
+| **T238** | drop #52968 | 10,554 — **prune ladder closed**; last two prunes cost 2.27% together |
+| **T237** | drop #52494 | 10,653 |
+| **T236** | drop #50618 | **10,799 — best in ledger.** Recommended stack. |
+| **T235** | drop #51392+#54254 | 10,781 |
+| **T233** | pronly C72 replication | 10,690 (0.02% vs T232) |
+| **T232** | pronly C72 | 10,692 — **the overlay is worth nothing at C72** |
+
+**Headline: 10,799 tok/s/GPU @ C72**, err 0.09%, GSM8K 0.995, image
+`kimi-k3-vllm:pronly-nq-no50618` — 8 upstream PRs, no vendor patch.
+Target 12,500 = **+15.8%** still to find.
+
+---
 
 ## T180 C1 — the C1 engine is HEALTHY. Nineteen "C1 failures" were the workload, not the engine.
 
