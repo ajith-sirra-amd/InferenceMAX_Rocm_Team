@@ -141,9 +141,37 @@ end (their branch: `c1-c8-c14-c40`, DCP off).
 Permission granted to apply PR patches as required (our repo / local images
 only).
 
+### Is #53917 dead under LMCache? Only a third of it.
+
+Hunk split of `pr_only/01_53917.patch`:
+
+| file | hunks | under LMCache |
+|---|--:|---|
+| `simple_kv_offload/manager.py` | 8 | **dead** |
+| `simple_cpu_offload_connector.py` | 1 | **dead** |
+| `single_type_kv_cache_manager.py` | 6 | live — per-group KV geometry |
+| `kv_cache_coordinator.py` | 4 | live |
+| `config/vllm.py` | 3 | live |
+| `sched/scheduler.py` | 1 | live |
+| `kv_cache_manager.py` | 1 | live |
+| `kv_connector/v1/base.py` | 1 | **live — connector base class** |
+| `kv_connector/factory.py` | 1 | **live — LMCacheMPConnector loads through this** |
+| `offloading_connector.py` | 1 | generic, not SimpleCPU |
+
+**9 of 27 hunks are SimpleCPU-specific and genuinely dead. 17 are not.**
+`LMCacheMPConnector` is instantiated through that factory and inherits that base
+class, and the geometry hunks are what set `tokens_per_block` per group at
+DCP=8 — the number `--chunk-size` must divide.
+
+**Plan: keep #53917 for the first LMCache run**, so a failure is attributable to
+LMCache rather than to a simultaneous prune. Then drop it as a clean
+one-variable arm. It is the one PR never tested for removal, so the arm is worth
+having either way.
+
+### Other patch candidates
+
 | PR | why it may be needed |
 |---|---|
-| **#53917** | currently our only applied PR. Nominally the `SimpleCPUOffloadConnector` fix, but most of it is **per-group KV geometry** in `kv_cache_coordinator` / `kv_cache_manager` / `single_type_kv_cache_manager` — which any connector needs under DCP. Likely still required. |
 | **#54457** | *"Do not adjust `dcp_kv_cache_interleave_size` for CP"* — #53917's declared dependency, open. Sits directly on the DCP interleave geometry that sets `tokens_per_block`, i.e. the same thing `--chunk-size` must divide. |
 | #53598 | already merged in base; per-group DCP cache geometry. |
 
