@@ -424,59 +424,58 @@ v4's 0.995 at +/-0.0071 is indistinguishable. The job shows `failure` only
 because EVAL_ONLY writes no benchmark JSON and the post-step waits for one --
 `eval_exit=0`, 200/200 served. Not a defect.
 
-## PRUNING PARKED — bare-nightly C52 is the active thread
+## RESOLVED — bare-nightly C52: gmu 0.88
 
-PR-prune (Phase 1.4, leave-one-out over `pr_split`) is **parked** at user
-request until bare-nightly C52 resolves. Phase 1's goal is already met
-(T232: pronly 10,692 = v4), so nothing is blocked by the pause.
+`HSA_STATUS_ERROR_OUT_OF_RESOURCES` at C52/DCP8/no-offload is fixed by dropping
+gmu 0.9 → **0.88** (confirmed by user on the SA side). Recorded as the default
+in `old.sa.sh` and in the bare-image override in the main launcher; **v4 and
+pronly keep 0.9**, gated on `/etc/k3-image-manifest`.
 
-## QUEUED — T234: bare nightly C52 agentic, gmu 0.85
+My staged 0.85 was a guess in the right direction; 0.88 is the measured value.
+T234 as a GPU experiment is **dropped** — the question is answered.
 
-**Dispatch when T233 clears.** Ref config: `kimik3_fp4_mi355x_mtp.old.sa.sh` —
-mns 80, chunk 16384, DCP 8, `kv-offloading: none`, conc 52.
-**ONE variable: gmu 0.9 → 0.85.**
+Root cause for the record: the queue aborted on resource exhaustion first; the
+Tensile / Triton-autotune segfaults were corpse frames (once the HIP context is
+dead, any device-property query faults). The ragged-494-slice shape hypothesis
+I built on those frames was wrong.
 
-### Root cause (corrected)
+**mns is NOT the lever here.** mns 52 at conc 52 would put mns *below* the
+replay's lane count — measured at 79 lanes @ conc 72 and 81-83 @ conc 76, so
+~55-57 @ conc 52. That is the T219 regime (mns 20 at C16 → 0/49 completed). It
+would trade resource exhaustion for starvation. Floor for conc 52 is ~64.
 
-SA run 33596998428, `Worker_TP2_DCP2`, 07:03:06 — the line *before* the
-traceback:
+---
 
-```
-:0:rocdevice.cpp:3715: Callback: Queue 0x70e817200000 Aborting with error :
-HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the necessary resources
--> hipErrorUnknown
--> segfault in TensileLite::GetDevice / torch.cuda.current_device
--> Worker proc died -> EngineDeadError
-```
+## PRUNING RESUMED — Phase 1.4, leave-one-out over `pr_only`
 
-**The segfault frames are corpse frames.** Once the HIP context is dead, any
-device-property query faults — which is why two unrelated call sites (Triton
-autotune in `chunk_delta_h.py`, and hipBLASLt Tensile) both crashed in device
-lookups. I initially diagnosed those frames as the cause and staged a hipBLASLt
-workaround; that was wrong and has been reverted.
+Baseline: `pronly` = 11 PRs (4 merged in base + 7 applied), **10,692 @ C72**,
+GSM8K 0.99.
 
-Warmup had completed **107/107, errors=0**; it died at the warmup→profiling
-handoff. With offload disabled the whole KV working set sits on GPU, which is
-what exhausted the queue allocation.
+### T234 (next) — drop #51392 + #54254
 
-### Why gmu 0.85, and why it is gated
+Image **`kimi-k3-vllm:pronly-noquant`**, built and import-gated.
+Manifest confirms `pr-applied: 53917 52494 52968 50618`.
 
-gmu is the direct lever on the queue/scratch headroom the runtime failed to
-allocate. Direction matters: the ledger only ever pushed gmu **up** at C52 and
-it broke both times — T157 gmu 0.95 hung the engine, T166 gmu 0.92 gave 0/103
-in warmup. **Downward is untested.**
+Dropped as **one unit** because they are a dependency pair — #54254's body:
+*"Depends on #54248 and on #51392"*. Splitting them is not a legal arm, the same
+lesson as overlay C/D/E.
 
-Gated on the absence of `/etc/k3-image-manifest`, so **v4 and pronly keep gmu
-0.9**. Changing it under them would move every number in the ledger, and T211
-measured gmu as violently non-neutral (0.92 at C1 → 2.4× worse TPOT).
+Value if it prunes: **24 of 45 file-touches, 73 of 129 hunks** — by far the
+largest reduction available, and it removes the entire online-quantisation and
+per-token-FP8 chain from the upstreaming ask, leaving 5 open PRs instead of 7.
 
-Gate lines to verify: `[gmu] bare image -- override 0.85 …` and
-`[cfg] … gmu=0.85 …`.
+**Numerics-affecting → GSM8K limit 200 FIRST**, then C72 throughput only if it
+passes. The engine reports `quantization=mxfp4, quantization_config=None`, so
+whether #51392 is load-bearing for this checkpoint is genuinely unknown — it may
+fail to start, which is itself a clean result.
 
-### If 0.85 is not enough
+### Order after T234
 
-Next lever, one variable at a time: **ladder/mns 65 → 52** at gmu 0.9. Both are
-resource-side; do not change them together or the result is unattributable.
+Expect-free first: **#50618** (1 hunk, isolated) → **#52494** (4 hunks) →
+**#52968** (17 hunks). **#53917 last** — it is the offload-under-DCP fix and we
+run `offload dram`; T232's `ext_cache_hit` of 46% (vs v4's 78%) suggests the
+external tier is already contributing less than assumed, so it is worth testing
+rather than assuming, but it is the most likely to be required.
 
 ---
 

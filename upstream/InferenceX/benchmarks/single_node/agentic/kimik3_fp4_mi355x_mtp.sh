@@ -222,7 +222,7 @@ export HSA_NO_SCRATCH_RECLAIM=1
 # keep gmu 0.9 -- changing it under them would move every number in the ledger,
 # and T211 measured gmu as violently non-neutral at C1 (0.92 -> 2.4x worse TPOT).
 if [ ! -f /etc/k3-image-manifest ]; then
-    GPU_MEM_UTIL_OVERRIDE="${GPU_MEM_UTIL_OVERRIDE:-0.85}"
+    GPU_MEM_UTIL_OVERRIDE="${GPU_MEM_UTIL_OVERRIDE:-0.88}"   # 0.88 CONFIRMED working (user, SA C52)
     echo "[gmu] bare image -- override ${GPU_MEM_UTIL_OVERRIDE} for HSA_STATUS_ERROR_OUT_OF_RESOURCES"
 else
     echo "[gmu] patched image -- 0.9 untouched"

@@ -70,14 +70,17 @@ COPY k3_patches/pr_stack/ /tmp/pr_stack/
 # prevent. Numeric filename prefixes fix the apply order.
 RUN set -eux; \
     cd "${SITE}"; \
+    : > /tmp/applied.txt; \
     for p in /tmp/pr_only/*.patch; do \
         echo "[build] pr-only: $(basename "$p")"; \
         patch -p1 --forward --batch < "$p"; \
+        basename "$p" | sed 's/^[0-9]*_//;s/\.patch$//' >> /tmp/applied.txt; \
     done; \
     for p in /tmp/pr_stack/*.patch; do \
         echo "[build] pr-stack: $(basename "$p")"; \
         patch -p1 --forward --batch < "$p"; \
     done; \
+    cp /tmp/applied.txt /etc/k3-pr-applied; \
     rm -rf /tmp/pr_only /tmp/pr_stack
 
 # Import gate. Catches a patch that applied cleanly but left the tree broken --
@@ -90,13 +93,15 @@ RUN printf '%s\n' \
     'base: vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb' \
     'overlay: NONE -- fully-mergeable PR stack only' \
     'pr-in-base: 51705 53598 52707 52033 (merged upstream)' \
-    'pr-applied: 53917 51392 54254 52494 52968 50618' \
+    "pr-applied: $(tr '\n' ' ' < /etc/k3-pr-applied)" \
     'pr-stack: 4 files (#53940 a4w4-flydsl)' \
     'pr-missing-vs-overlay: 53166 51437 53301 52190 54163 54165' \
     'runtime-patching: none' \
     > /etc/k3-image-manifest
 
 LABEL k3.overlay="none"
-LABEL k3.pr-applied="53917,51392,54254,52494,52968,50618"
+# NOTE: this LABEL is static and can drift from /etc/k3-image-manifest, which
+# is generated. Trust the manifest, not the label.
+LABEL k3.pr-applied="see /etc/k3-image-manifest"
 LABEL k3.pr-stack="53940"
 LABEL k3.runtime-patching="none"

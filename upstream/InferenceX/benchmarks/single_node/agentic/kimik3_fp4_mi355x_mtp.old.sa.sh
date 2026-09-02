@@ -97,7 +97,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
 fi
 
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.85}"   # T234: 0.9 hit HSA_STATUS_ERROR_OUT_OF_RESOURCES at C52/no-offload
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.88}"   # 0.9 hit HSA_STATUS_ERROR_OUT_OF_RESOURCES at C52/no-offload; 0.88 confirmed working
 
 OFFLOAD_ARGS=()
 if agentic_kv_offload_enabled; then
