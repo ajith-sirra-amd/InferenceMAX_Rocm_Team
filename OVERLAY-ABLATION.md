@@ -54,7 +54,7 @@ Two caveats that cost runs to learn:
 
 ## Axis 2 — PR-bucket split (BUILT, VERIFIED, RUNS PENDING)
 
-Hyukjoon's manifest lists 17 PRs mixed into the overlay. PR boundaries are what
+Hyukjoon's manifest lists 17 PRs mixed into the overlay (18 with #53940, which rides in the separate pr_stack). PR boundaries are what
 upstream reviews, so they are the more useful axis — but they do **not**
 partition the patch.
 
@@ -109,7 +109,99 @@ by construction.
 
 ---
 
-## Reading the 17 PRs — perf-bearing vs. required-to-run
+## Correction: it is 18 PRs, not 17
+
+Hyukjoon's manifest lists 17. The stack also carries **#53940 (a4w4 flydsl
+kernels for Kimi-K3)**, which is not in the overlay at all — it is the 4-file
+`k3_patches/pr_stack/`, applied as a separate layer. It belongs in every list
+below. Evidence it is live: the T195 server log shows
+`flydsl_moe1_abf16_wfp4_bf16_…` on the MoE path.
+
+A nineteenth, **#50813** (opt-in K3 SiTUv2 A8W4 routed MoE), was **already
+pruned** at zero GPU cost: `quark_moe.py` is only reachable when the model
+declares Quark quantization, and `moonshotai/Kimi-K3` has no
+`quantization_config`. The `Situv2` in the kernel name comes from
+`AITER_SITUV2_A8W4=1` being read by **aiter**, not by `quark_moe.py`. v4 ships a
+4-file stack instead of 5; T206 and T228 confirm no regression. Retained at
+`k3_patches/pr_stack_disabled/` for provenance.
+
+---
+
+## How much of each PR is actually present in this overlay
+
+Measured, not assumed — each PR's `vllm/` source files intersected against the
+overlay's 34 target paths.
+
+| PR | src files | in overlay | coverage |
+|---|--:|--:|---|
+| #53598, #52707, #52494, #52968, #53166, #54165, #54163, #50618, #52033, #51437 | — | — | **FULL** |
+| #51705 | 3 | 2 | 66% partial |
+| #52190 | 5 | 3 | 60% partial |
+| #53917 | 10 | 5 | 50% partial |
+| #53301 | 6 | 3 | 50% partial |
+| #54254 | 4 | 1 | 25% partial |
+| #51392 | 20 | 2 | **10% partial** |
+| #54248 | 3 | 0 | **absent** |
+
+This is file-level, so a "FULL" PR may still share files with others — but the
+partials and the absence are solid, and two of them change the weighting:
+
+- **#52190 does not include `vllm/config/compilation.py`.** That file is the
+  actual torch.compile enablement. Without it K3 still carries no
+  `@support_torch_compile`, so **no fusion pass runs** and the three model files
+  that did land are inert. #52190's headline benefit is not in this image.
+- **#54248 is entirely absent and #54254 is 25% present.** #54254's own body
+  says it is a no-op until #54248 *and* #51392 land. #51392 is 10% present.
+  The whole C1 per-token-FP8 chain is dead here.
+
+---
+
+## Weighing the 18 for goal A (reproduce 10,607 at C72)
+
+Our C72 operating point: DCP 8, **spec decoding OFF**, offload dram,
+**multi-stream OFF**, prefix caching on, eager (no torch.compile).
+
+### Tier 0 — required to run. Cannot prune.
+
+| PR | why |
+|---|---|
+| **#53940** | a4w4 flydsl on the live MoE path (separate pr_stack, not overlay) |
+| #53598 | per-group DCP geometry → prefix-cache hits under DCP; we measure 73.5% hit |
+| #52707 | clamps negative external block allocation — crash guard |
+| #53917 | `SimpleCPUOffloadConnector` under DCP; we run offload dram |
+| #51705 | DCP attention support / backend registration |
+
+### Tier 1 — perf-bearing at C72. Keep.
+
+| PR | weight | why |
+|---|---|---|
+| #53166 | **highest** | 4 kernels → 1 per MLA prefill context chunk; agentic ISL p50 ≈ 87k tokens, so this path dominates |
+| #51437 | high | overlaps shared all-reduce with routed up-projection at decode batch sizes |
+| #52968 | medium | attn_res / sigmoid_mul / conv1d fusions |
+| #52494 | low–med | fuses MLA q/kv RMSNorm into one AITER launch |
+| #53301 | reduced | only 50% present, so at most partial benefit |
+
+### Tier 2 — prunable for goal A. Inert at this operating point.
+
+| PR | why it is inert here |
+|---|---|
+| #54165, #54163 | spec-decode paths; **spec is off at C72** |
+| #52033 | dual-stream decode; **multi-stream forced OFF** in our config |
+| #51392 | 10% present — only `nvidia/mla.py`, dead on AMD |
+| #54254 | 25% present, and a self-declared no-op without #54248 (absent) |
+| #52190 | the enablement file is missing; remaining hunks do nothing |
+| #50618 | correctness guard (KDA `f_b_proj` over-reads 12 KB at TP8) — **zero perf weight, but keep**; dropping it risks memory faults |
+
+**Six of eighteen are inert at C72**, leaving twelve that plausibly matter.
+
+**These are reasoned, not measured.** Only #50813 has been confirmed prunable by
+experiment. `k3_patches/pr_split/` can test three of the six directly
+(#51392, #54165, #52033 have their own buckets); #54163, #52190 and #54254 sit
+in contested files inside REST and cannot be detached without hunk-level work.
+
+---
+
+## Reading the 18 PRs — perf-bearing vs. required-to-run
 
 Sorted by whether dropping it could plausibly move a number.
 
