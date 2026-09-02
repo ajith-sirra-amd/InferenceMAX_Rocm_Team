@@ -424,6 +424,49 @@ v4's 0.995 at +/-0.0071 is indistinguishable. The job shows `failure` only
 because EVAL_ONLY writes no benchmark JSON and the post-step waits for one --
 `eval_exit=0`, 200/200 served. Not a defect.
 
+## QUEUED (after pruning) — Hyukjoon's c1 overlay: nothing new, but test it at C1
+
+Diffed `vllm_nightly_46638857_k3_c1_current.patch` (232,005 B) against the
+c16_c52 cut we ship. **19 files are c1-only, and every one maps to a known PR:**
+
+| PR | c1-only files |
+|---|--:|
+| #51392 (online quant) | 16 |
+| #54254 (fused KDA gated RMSNorm + per-token FP8) | 2 |
+| #54248 (AITER PTPC per-token FP8) | 2 shared |
+| **no PR** | **0** |
+
+So the c1 cut adds **no unpublished content** — its whole distinct payload is
+the online-quant / per-token-FP8 chain that T234/T235 just pruned as inert at
+C72.
+
+**But that chain is plausibly live at C1, and this is worth one run:**
+
+- **#54254 fuses KDA gated RMSNorm with per-token FP8 for `o_proj`** — a pure
+  decode-path fusion. C1 is pure decode.
+- Its own accuracy section is headed *"8xMI355X, TP8, DSpark MTP"* — written
+  against the C1/MTP configuration.
+- C1 runs spec decoding (MTP at CONC <= 4); C72 does not. Different path.
+
+**There is also an unexplained gap this could bear on:** bare nightly C1 is
+**8.52 ms** TPOT (T213) while patched v4 C1 is **9.06 ms** (T208). Stock is
+*better* at C1 and nobody has explained why.
+
+### The experiment — no new images needed
+
+**C1 on `pronly` (chain present) vs C1 on `pronly-noquant` (chain absent).**
+One variable, both images already built. Config per the C1 operating point:
+MTP on, DCP off, mns 1, chunk 8192, ladder 1..9, gmu 0.9.
+
+Also worth adding as a third arm once those two land: **C1 on bare
+`nightly-7c5dc571`**, to see whether the 8.52 ms is reproducible and whether it
+survives the patches at all.
+
+**Do not run before pruning completes** — C1 arms and C72 prune arms would
+compete for the same GPUs and the prune ladder is the higher-value sequence.
+
+---
+
 ## THE 12,500 PLAN — after pruning completes
 
 **Where we are: 10,781 at C72. Target 12,500. Gap = +15.9%.**
