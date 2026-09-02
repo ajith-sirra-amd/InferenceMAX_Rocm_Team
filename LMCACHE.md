@@ -232,7 +232,16 @@ which makes back-to-back LMCache arms impossible without a fix.
 **Do not re-dispatch until VRAM clears.** Re-dispatching into 18% just burns
 another 15-minute wait and fails identically.
 
-**If it recurs, candidate fixes, cheapest first:**
+**FIX APPLIED (user, ~17:45Z): `--max-gpu-workers` = `$TP` = 8**, was 1.
+
+One GPU worker in an 8-rank deployment is asymmetric, and T240 stranded memory
+on **exactly one** GPU. Matching workers to TP addresses the asymmetry directly
+and is also simply the right shape for TP8 — the SA reference used 1, but it is
+the only value they tried. Overridable via `LMCACHE_GPU_WORKERS`. Gate line now
+prints `gpu_workers=`.
+
+**This is a hypothesis under test, not a confirmed fix.** If T240-retry still
+strands VRAM, the next candidates are:
 1. `--max-gpu-workers 0` — the L1 pool is host DRAM; a GPU worker may not be
    needed for our path at all.
 2. Explicit server shutdown (HTTP or SIGTERM) *before* container teardown,

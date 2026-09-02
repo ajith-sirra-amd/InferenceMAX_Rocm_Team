@@ -339,6 +339,11 @@ if agentic_kv_offload_enabled; then
         LMCACHE_PORT="${LMCACHE_PORT:-6555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8090}"
         LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-12288}"
+        # One GPU worker per TP rank. The SA reference used 1, and T240 then
+        # found ~52 GB stranded on EXACTLY ONE GPU after teardown with no owning
+        # process -- an asymmetry that matches a single GPU worker in an 8-rank
+        # deployment. Match workers to TP.
+        LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-$TP}"
         LMCACHE_LOG="$RESULT_DIR/lmcache_server.log"
 
         LMCACHE_CMD=(
@@ -349,13 +354,13 @@ if agentic_kv_offload_enabled; then
             --chunk-size "$LMCACHE_CHUNK_SIZE"
             --separate-object-groups
             --enable-extra-logging --extra-logging-interval 30
-            --max-cpu-workers 8 --max-gpu-workers 1
+            --max-cpu-workers 8 --max-gpu-workers "$LMCACHE_GPU_WORKERS"
             --eviction-policy LRU
             --supported-transfer-mode lmcache_driven
             --shm-name ""
         )
         printf '%q ' "${LMCACHE_CMD[@]}" > "$RESULT_DIR/lmcache_command.txt"; printf '\n' >> "$RESULT_DIR/lmcache_command.txt"
-        echo "[lmcache] chunk=$LMCACHE_CHUNK_SIZE l1=${TOTAL_CPU_DRAM_GB}GB port=$LMCACHE_PORT"
+        echo "[lmcache] chunk=$LMCACHE_CHUNK_SIZE l1=${TOTAL_CPU_DRAM_GB}GB gpu_workers=$LMCACHE_GPU_WORKERS port=$LMCACHE_PORT"
         "${LMCACHE_CMD[@]}" > "$LMCACHE_LOG" 2>&1 &
         LMCACHE_PID=$!
 
