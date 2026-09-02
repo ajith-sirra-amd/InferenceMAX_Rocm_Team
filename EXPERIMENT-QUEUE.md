@@ -424,7 +424,17 @@ v4's 0.995 at +/-0.0071 is indistinguishable. The job shows `failure` only
 because EVAL_ONLY writes no benchmark JSON and the post-step waits for one --
 `eval_exit=0`, 200/200 served. Not a defect.
 
-**T232 dispatched: C72 agentic on `pronly`.** This is the run that prices the
+**T232 RESULT: pronly C72 = 10,692 — the overlay is worth NOTHING at C72.**
+The fully-mergeable stack (12 upstream PRs on `nightly-7c5dc571`, zero vendor
+patch) matches the 264 KB overlay: +0.6% over the matched-mns overlay run
+(T198, 10,630), inside the +/-1.2% band, error rate 0.18% (best in ledger).
+**Phase 1's goal is met.** My pre-registered prediction that it would land
+below the band was falsified -- missing #53166/#51437/#53301/#52190/#54163 and
+the 26 orphan hunks costs nothing here. The 5-PR rebase (step 1.3) is therefore
+**optional, not blocking**. Caveat: n=1 against a +/-1.2% band, C72 agentic only;
+C1 TPOT on pronly is untested. **T233 = n=2 replication** before this is relied on.
+
+*(superseded)* T232 dispatched: C72 agentic on `pronly`. This is the run that prices the
 overlay -- v4 is 10,607 +/-1.2%, and the gap is what the 264 KB of unpublished
 patch plus the 5 conflicting PRs are worth. Prediction on record: pronly lands
 below the v4 band, because #53166 (MLA prefill fusion) is missing and this

@@ -4113,3 +4113,78 @@ are actually worth.
 Prediction on record before the run: **pronly lands below the v4 band.** #53166
 (MLA prefill chunked-context gather, 4 kernels → 1) is missing, and this
 workload is prefill-dominated — ISL p50 ≈ 87k, in:out ≈ 195:1.
+
+## T232 — pronly C72 = 10,692. THE OVERLAY IS WORTH NOTHING AT C72. Prediction falsified.
+
+Run 33593289468. `kimi-k3-vllm:pronly` — **no Hyukjoon overlay**, base
+`nightly-7c5dc571`, 12 of 18 PRs. `[mns] 96 conc=72 offload=dram`,
+`[chunk] 16384`, `[dcp] ENABLED size=8 backend=a2a interleave=1`,
+`graphs: dense ladder 1..96`.
+
+| metric | T232 (pronly) | T198 (overlay, mns 96) | v4 band (n=4) |
+|---|--:|--:|--:|
+| **Throughput per GPU** | **10,692** | 10,630 | 10,607 ±1.2% |
+| Request Error Rate | **0.18%** | 0.27% | 0.22–0.31% |
+| ITL mean / p99 | 108.53 / 526.54 ms | — | 111.62 / 565.33 (T228) |
+| TTFT mean / p99 | 4,538 / 110,083 ms | — | 4,866 / 114,851 (T228) |
+| Output tok/s | 505.29 | — | 498–515 |
+
+**+0.6% over the matched-mns overlay run (T198), and inside the ±1.2% band.**
+The straight comparison is T232 vs T198 — same mns 96, same chunk, same conc,
+same DCP — and they are indistinguishable.
+
+### The prediction I put on record was wrong
+
+Before dispatch I wrote: *"pronly lands below the v4 band. #53166 (MLA prefill
+chunked-context gather, 4 kernels → 1) is missing, and this workload is
+prefill-dominated — ISL p50 ≈ 87k, in:out ≈ 195:1."*
+
+It did not land below. Missing **#53166, #51437, #53301, #52190, #54163** *and*
+the 26 orphan overlay hunks costs **nothing measurable** at this operating point.
+The prefill-dominance reasoning was sound as far as it went, but it assumed the
+fused-gather kernel was on the critical path. At C72 it evidently is not — the
+run is queueing-bound, not kernel-bound, which is the same conclusion T229/T230
+reached from the mns side.
+
+I also called it wrong mid-run. At 1h03m I reported `tput_out_srv=373/s` as
+"tracking below v4" and extrapolated a 2h+ finish. The instantaneous rate was
+still climbing (373 → 394 → 401 → 405 → …), because the agentic replay warms the
+prefix cache as it goes. It finished in **1h49m**, the same as every v4 run.
+**Do not read an early instantaneous rate as a trend on this workload.**
+
+### Cache behaviour differs sharply, and it does not matter
+
+| | pronly | v4 |
+|---|--:|--:|
+| `prefix_cache_hit` | **88.0%** | 73.4% |
+| `ext_cache_hit` | **46.3%** | 78–81% |
+| `unique_in_srv` | 8.9M | 36–61M |
+| `kv_usage` | 47.4% | 49% |
+
+pronly serves far more from the GPU-side prefix cache on a much smaller working
+set, and leans on the CPU offload tier far less. Different balance, same
+throughput. Worth remembering next time `ext_cache_hit` is treated as a proxy
+for performance — here a 32-point drop in it cost nothing.
+
+### What this settles
+
+**Phase 1's goal is already met.** The target was "prune to the minimum that
+preserves ~10,600 on upstream nightly." A stack of **12 upstream PRs on
+`nightly-7c5dc571`, with zero vendor patch**, delivers 10,692 — statistically
+identical to the 264 KB overlay it replaces.
+
+Consequences:
+
+1. **The overlay does not need upstreaming.** The upstreaming risk recorded in
+   UPSTREAM-STATUS.md is largely void: nothing in the unpublished 264 KB is
+   worth measurable throughput at C72.
+2. **The 5 conflicting PRs are optional, not blocking.** #53166, #51437, #53301,
+   #52190 and #54163 were the planned Phase 1.3 rebase work. That work is no
+   longer on the critical path — it may still help elsewhere (C1 TPOT for
+   #51437, which owns decode) but it is not needed to hold 10,600.
+3. **Base drift is now the main risk**, not review throughput. This recipe rides
+   a nightly that moves daily.
+
+**Caveats, stated plainly.** n=1, against a stack whose replication band is
+±1.2%. The result should be replicated before it is relied on. And it is a C72
+agentic result only — C1 TPOT and lower concurrencies are untested on pronly.
