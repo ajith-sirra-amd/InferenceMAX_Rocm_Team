@@ -274,8 +274,12 @@ fi
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 SERVER_PID=""
+LMCACHE_PID=""
 
 cleanup_agentic_services() {
+    if [ -n "${LMCACHE_PID:-}" ]; then
+        stop_background_process_tree "$LMCACHE_PID" "LMCache server" 60 || true
+    fi
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
@@ -301,6 +305,87 @@ if agentic_kv_offload_enabled; then
             "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":$SIMPLE_LAZY_OFFLOAD}}"
         )
         echo "SimpleCPUOffloadConnector: ${CPU_BYTES_PER_RANK} B/rank x ${TOTAL_RANKS} ranks, lazy_offload=$SIMPLE_LAZY_OFFLOAD"
+        ;;
+      lmcache)
+        require_agentic_kv_offload_backend "$KV_OFFLOAD_BACKEND"
+        export PYTHONHASHSEED=42
+
+        # Wiring from the SA reference (read-only): image stays stock, only the
+        # LMCache runtime is added. --no-deps so torch/ROCm are untouched.
+        LMCACHE_VERSION="${LMCACHE_VERSION:-0.5.5rc3+rocm7.2}"
+        LMCACHE_RELEASE="v${LMCACHE_VERSION%%+*}"
+        agentic_pip_install --quiet --no-cache-dir --no-deps \
+            "sortedcontainers==2.4.0" \
+            "opentelemetry-exporter-prometheus==0.61b0" \
+            "cupy-rocm-7-0==14.1.1" \
+            "lmcache==${LMCACHE_VERSION}" \
+            --find-links "https://github.com/LMCache/LMCache/releases/expanded_assets/${LMCACHE_RELEASE}-rocm"
+
+        for _lib in libglog.so.0 libjsoncpp.so.25 libibverbs.so.1 librdmacm.so.1 libnuma.so.1; do
+            if ! ldconfig -p | grep -q "$_lib"; then
+                apt-get update -qq
+                apt-get install -y -qq libgoogle-glog0v5 libjsoncpp25 libibverbs1 librdmacm1 libnuma1
+                break
+            fi
+        done
+        python3 -c "import cupy; import opentelemetry.exporter.prometheus; from lmcache.v1.multiprocess.http_server import run_http_server"
+
+        # --chunk-size MUST divide every KV group's tokens_per_block. The hybrid
+        # KDA/MLA layout registers 1536 (attention) and 3072 (KDA state), so
+        # 12288 divides both. The upstream Kimi-K3 recipe says 768 -- that is the
+        # CUDA path and is WRONG here.
+        # OPEN RISK: those sizes are quoted at DCP=1. At DCP=8 the per-group
+        # geometry changes. Verify from the engine log before trusting 12288.
+        LMCACHE_PORT="${LMCACHE_PORT:-6555}"
+        LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8090}"
+        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-12288}"
+        LMCACHE_LOG="$RESULT_DIR/lmcache_server.log"
+
+        LMCACHE_CMD=(
+            lmcache server
+            --host 127.0.0.1 --port "$LMCACHE_PORT"
+            --http-host 127.0.0.1 --http-port "$LMCACHE_HTTP_PORT"
+            --l1-size-gb "$TOTAL_CPU_DRAM_GB" --l1-init-size-gb 10
+            --chunk-size "$LMCACHE_CHUNK_SIZE"
+            --separate-object-groups
+            --enable-extra-logging --extra-logging-interval 30
+            --max-cpu-workers 8 --max-gpu-workers 1
+            --eviction-policy LRU
+            --supported-transfer-mode lmcache_driven
+            --shm-name ""
+        )
+        printf '%q ' "${LMCACHE_CMD[@]}" > "$RESULT_DIR/lmcache_command.txt"; printf '\n' >> "$RESULT_DIR/lmcache_command.txt"
+        echo "[lmcache] chunk=$LMCACHE_CHUNK_SIZE l1=${TOTAL_CPU_DRAM_GB}GB port=$LMCACHE_PORT"
+        "${LMCACHE_CMD[@]}" > "$LMCACHE_LOG" 2>&1 &
+        LMCACHE_PID=$!
+
+        # Our benchmark_lib.sh has no wait_for_ready (that helper lives in a
+        # newer SA lib), so the readiness poll is inlined.
+        _lmc_ready=0
+        for _i in $(seq 1 600); do
+            if ! kill -0 "$LMCACHE_PID" 2>/dev/null; then
+                echo "[lmcache] server died during startup; tail of $LMCACHE_LOG:" >&2
+                tail -40 "$LMCACHE_LOG" >&2 || true
+                exit 1
+            fi
+            if curl -sf "http://127.0.0.1:${LMCACHE_HTTP_PORT}/healthcheck" >/dev/null 2>&1; then
+                _lmc_ready=1; break
+            fi
+            sleep 1
+        done
+        if [ "$_lmc_ready" != "1" ]; then
+            echo "[lmcache] healthcheck did not pass in 600s; tail of $LMCACHE_LOG:" >&2
+            tail -40 "$LMCACHE_LOG" >&2 || true
+            exit 1
+        fi
+        echo "[lmcache] server READY on :$LMCACHE_HTTP_PORT after ${_i}s"
+
+        # mq_timeout 6000 -- 100k-330k-token agentic prefixes make single
+        # retrieves large; our ISL p50 is ~89k.
+        OFFLOAD_ARGS=(
+            --kv-transfer-config
+            "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"lmcache.integration.vllm.lmcache_mp_connector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.port\":$LMCACHE_PORT,\"lmcache.mp.mq_timeout\":6000.0}}"
+        )
         ;;
       *)
         echo "KV offload requested (KV_OFFLOADING=$KV_OFFLOADING) but backend '${KV_OFFLOAD_BACKEND:-unset}' is not handled here" >&2
@@ -591,7 +676,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
 # to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-0}" = "1" ]; then
+elif [ "${TEST:-1}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
