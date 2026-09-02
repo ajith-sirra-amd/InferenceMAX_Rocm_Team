@@ -31,6 +31,52 @@ smallest that runs — the last two prunes cost 2.27% and are worth keeping.
 | **[#52707](https://github.com/vllm-project/vllm/pull/52707)** | clamp negative external block allocation |
 | **[#52033](https://github.com/vllm-project/vllm/pull/52033)** | ROCm dual-stream shared-expert |
 
+## UPSTREAMING PRIORITY — must-have vs good-to-have
+
+Ordered by measured cost of dropping it. Baseline for every delta is
+**T236 = 10,799 tok/s/GPU @ C72** on `kimi-k3-vllm:pronly-nq-no50618`.
+
+### MUST HAVE — the stack does not work without these
+
+| # | PR | why | evidence |
+|--:|---|---|---|
+| 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | **never tested for removal** — the only applied PR with no drop arm |
+| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195 log). Rides in the separate `pr_stack/`. | held constant in every arm — never ablated |
+
+**Neither has a measured number, and that is the honest state.** #53917 is
+load-bearing by mechanism and by the T216 starvation result; #53940 has never
+been removed. Both are must-have on reasoning, not on a delta.
+
+### GOOD TO HAVE — measured, worth 2.27% together
+
+| # | PR | Δ if dropped | throughput | why it costs |
+|--:|---|--:|--:|---|
+| 3 | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | **−1.35%** | 10,799 → **10,653** (T237) | fuses `q_a_layernorm`/`kv_a_layernorm` into one AITER launch. K3 carries no `@support_torch_compile`, so `MLADualRMSNormFusionPass` never runs — without the PR those stay two launches on **every MLA layer, every forward**. |
+| 4 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | **−0.93%** | 10,653 → **10,554** (T238) | attn_res + add_rmsnorm_quant fused, causal_conv1d fused for qkv, native sigmoid+mul → fused kernel. Same mechanism: inductor never fuses these for K3. |
+| | **both** | **−2.27%** | 10,799 → **10,554** | outside the ±1.2% band, monotone |
+
+### DO NOT NEED — measured free
+
+| PR | Δ if dropped | throughput |
+|---|--:|--:|
+| [#51392](https://github.com/vllm-project/vllm/pull/51392) + [#54254](https://github.com/vllm-project/vllm/pull/54254) | **+0.83%** (noise) | 10,691 → 10,781 (T235) |
+| [#50618](https://github.com/vllm-project/vllm/pull/50618) | **+0.17%** (noise) | 10,781 → 10,799 (T236) |
+| [#54165](https://github.com/vllm-project/vllm/pull/54165) | inert — spec off at C72 | — |
+| [#50813](https://github.com/vllm-project/vllm/pull/50813) | dead code | — |
+
+**Caveat on the free ones:** #50618 guards a 12,288-byte over-read in KDA
+`f_b_proj`. Measured-safe over 1h47m and 2,900+ requests, **not proven-safe** —
+an over-read need not fault. First to restore on any stray memory fault.
+
+### Filing order if upstreaming
+
+**#53917 first** — it is the only must-have that is still open, it is the
+largest single block (27 hunks), and everything else composes on top of it.
+Then #52494 and #52968, which are small, self-contained ROCm kernel fusions
+with a measured number attached — the easiest kind of PR to argue for.
+
+---
+
 ### Still open — we apply these. **This is the entire upstreaming ask: 4 PRs.**
 
 | PR | what it does | measured value |
