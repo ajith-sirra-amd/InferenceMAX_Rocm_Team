@@ -2161,8 +2161,12 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # exactly -- conc 48, mns 80, gmu 0.88, gpu-workers 1 -- but on OUR image
       # rec-no53940, which carries the 3 PRs that matter (#53917 cpu-offload,
       # #52494 mla-rmsnorm-fusion, #52968 attn-conv-fusion) and no a4w4.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5rc3+rocm7.2" }, conc-list: [64], spec-decoding: mtp }
-      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [64], spec-decoding: mtp }
+      # T257: arm 1 of 3 -- C48 WITHOUT LMCache, under SA settings (mns=2*CONC=96,
+      # mnbt 8192, gmu 0.90). Anchors the SA config against our own stack before
+      # LMCache is reintroduced at C64/C72. Compare to SA's C48.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [64], spec-decoding: mtp }
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

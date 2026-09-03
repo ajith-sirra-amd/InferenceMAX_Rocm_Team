@@ -190,6 +190,12 @@ export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export GPU_ARCHS=gfx950
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
+# T257: SA sets the AITER-side knob to INT4. Different variable from the VLLM_ROCM_
+# one above -- aiter reads it in the quick-allreduce path, not the vLLM one.
+# Left at NONE deliberately: INT4 quantizes the allreduce, so it is a NUMERICS
+# change and needs its own GSM8K-200 gate before it rides along on a perf anchor.
+# Queued separately. Set AITER_QUICK_REDUCE_QUANTIZATION=INT4 to opt in.
+export AITER_QUICK_REDUCE_QUANTIZATION="${AITER_QUICK_REDUCE_QUANTIZATION:-NONE}"
 export AITER_SITUV2_A8W4=1
 export HSA_NO_SCRATCH_RECLAIM=1
 
@@ -349,8 +355,13 @@ if agentic_kv_offload_enabled; then
 
         # Wiring from the SA reference (read-only): image stays stock, only the
         # LMCache runtime is added. --no-deps so torch/ROCm are untouched.
-        LMCACHE_VERSION="${LMCACHE_VERSION:-0.5.5rc3+rocm7.2}"
-        LMCACHE_RELEASE="v${LMCACHE_VERSION%%+*}"
+        # T257: SA pulls 0.5.5.dev89 from the rolling nightly-rocm channel, not
+        # the pinned rc3 tag. Anything with .dev in it lives under nightly-rocm.
+        LMCACHE_VERSION="${LMCACHE_VERSION:-0.5.5.dev89+rocm7.2}"
+        case "$LMCACHE_VERSION" in
+            *.dev*) LMCACHE_RELEASE="nightly" ;;
+            *)      LMCACHE_RELEASE="v${LMCACHE_VERSION%%+*}" ;;
+        esac
         agentic_pip_install --quiet --no-cache-dir --no-deps \
             "sortedcontainers==2.4.0" \
             "opentelemetry-exporter-prometheus==0.61b0" \
@@ -375,7 +386,12 @@ if agentic_kv_offload_enabled; then
         # geometry changes. Verify from the engine log before trusting 12288.
         LMCACHE_PORT="${LMCACHE_PORT:-6555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8090}"
-        LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-12288}"
+        # T257: SA pairs chunk size with DCP -- 12288 at DCP>1, 3072 at DCP=1.
+        if [ "$DCP_SIZE" -gt 1 ]; then
+            LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-12288}"
+        else
+            LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-3072}"
+        fi
         # BACK TO 1 (T253). The 1 -> TP change was reasoned from T240's stranded
         # ~52 GB "asymmetry matches a single GPU worker" -- that reasoning was
         # wrong, and the evidence now runs the other way:
@@ -387,7 +403,15 @@ if agentic_kv_offload_enabled; then
         # Every other lmcache server arg and the connector JSON match the SA
         # reference exactly; this was the only difference. --help calls it
         # "Worker threads for the GPU affinity pool" -- threads, not memory.
-        LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-1}"
+        # T257: SA scales this with DCP -- 8 workers at DCP>1, 1 at DCP=1, and
+        # pairs each with its own chunk size (12288 / 3072). T239's "workers"
+        # hypothesis was built on a log that never served a token; this is the
+        # value their working runs actually use.
+        if [ "$DCP_SIZE" -gt 1 ]; then
+            LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-8}"
+        else
+            LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-1}"
+        fi
         LMCACHE_LOG="$RESULT_DIR/lmcache_server.log"
 
         LMCACHE_CMD=(
@@ -524,8 +548,10 @@ fi
 # N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
 # against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
 # clear peak at 8192 and both sides are downhill.
-CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-16384}")
-echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-16384} conc=$CONC"
+# T257: SA uses 8192 at every concurrency and 16384 only at C1.
+if [ "$CONC" -le 1 ]; then MBT_DEFAULT=16384; else MBT_DEFAULT=8192; fi
+CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-$MBT_DEFAULT}")
+echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-$MBT_DEFAULT} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
 # 7,824 on the identical config -- -1.8%. Smaller than the -9.2% on the old
 # engine, but still the wrong sign after 175 commits. The host prep the profile
@@ -556,7 +582,12 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
         # T230: 96 at C76. T229 (C76, mns 80) fell 2.7% below the C72 band with
         # only 4 slots of slack -- the C80 starvation regime (T196/T197). 96 was
         # neutral at C72 (T198) so it cannot flatter the baseline.
-        MAX_NUM_SEQS=96
+        #
+        # T257: switched to SA's rule, mns = 2 * CONC. At C48 this is 96 -- the
+        # same value the flat rule gave -- so the C48 anchor is unaffected. It
+        # diverges only at C64 (128) and C72 (144), which is exactly where our
+        # LMCache arms have never served and SA's do.
+        MAX_NUM_SEQS=$(( 2 * CONC ))
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 1 ]; then MAX_NUM_SEQS=1; fi
@@ -617,11 +648,13 @@ GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61
 # T255: gate on the LMCache backend, not on conc. T255 must differ from T253 in
 # CONC ONLY (48 -> 72); gating on conc would have reverted gmu/mns and made it a
 # three-variable change. Non-LMCache C72 runs keep 0.90/96 and are unaffected.
-if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ]; then
-    GPU_MEM_UTIL="${GPU_MEM_UTIL_LMCACHE:-0.88}"
-    MAX_NUM_SEQS=80
-    echo "[sa-match] lmcache arm: gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS backend=${KV_OFFLOAD_BACKEND:-vllm-simple}"
+# T257: override REMOVED. SA runs gmu 0.90 / mns 2*CONC for LMCache and
+# non-LMCache alike; the 0.88/80 pair came from misreading their C48 artifact.
+# LMCache arms now differ from the baseline in the backend only.
+if [ -n "${GPU_MEM_UTIL_LMCACHE:-}" ] && [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ]; then
+    GPU_MEM_UTIL="$GPU_MEM_UTIL_LMCACHE"
 fi
+echo "[sa-match] gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS backend=${KV_OFFLOAD_BACKEND:-vllm-simple}"
 # T234: bare images only -- see the gmu-override block above. Patched images
 # keep 0.9 so every number in the ledger stays comparable.
 if [ -n "${GPU_MEM_UTIL_OVERRIDE:-}" ]; then GPU_MEM_UTIL="$GPU_MEM_UTIL_OVERRIDE"; fi
