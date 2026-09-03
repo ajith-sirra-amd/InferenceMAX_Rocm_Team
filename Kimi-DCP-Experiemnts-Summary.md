@@ -25,6 +25,7 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 
 | trial | what | result |
 |---|---|---|
+| **T244** | **same probe, `numa_balancing=0`** | **FAIL 98.6% (2/144), 0 generated tokens** — but TTFT **150,515 → 20,214 ms (7.4x)**, throughput 95 → **402 tok/s**, capture 6 min → **1m17s**, warmup **now completes** (144/144 in 1m57s). NUMA was a real contributor, **not the root cause**. Healthy is ~84k tok/s aggregate; still ~200x off. |
 | **T243** | **fixed-len health probe**, recommended image, gmu 0.9 | **FAIL 99.3% — 1/144 completed, 0 generated tokens, TTFT 150,515 ms.** Fixed-len fails too, so the collapse is NOT the agentic replay. **Leading cause: `numa_balancing=1`** — reset by the reboot, not persisted in sysctl. AMD warns against it; all 8 workers logged the warning. GPU KV 29,656,464 (= T236). |
 | **T242** | gmu 0.90 → 0.85, recommended image | **CANCELLED at 3.7 h** — same warmup collapse as T241 on the *T236 image*. Killed manually. Proves gmu is not the cause and **confounds T241**. |
 | **T241** | **drop #53940** (a4w4 flydsl MoE) | **COLLAPSE — never reached profiling.** 76 warmup primers took 3.6 h, TTFT median **345 s**, drain timed out, 0/144 successful, **errors=0**. GPU KV 28,653,478 (−3.4% vs T236, gmu unchanged at 0.9). #53940 is load-bearing, not a tuning gain. |
@@ -4681,3 +4682,52 @@ measurement must be redone on a healthy node before it is quoted.
 Cost of the error: ~8 h of GPU time across T241/T242 chasing a stack question
 while the node was the variable. The cheap fixed-len canary that would have
 caught it in ~40 min is the one T241's own write-up said to run first.
+
+---
+
+## T244 — NUMA off: large improvement, still failing. Hypothesis half-right.
+
+Run 33712514019, `pronly-nq-no50618`, gmu 0.9, `TEST=1` func probe, the only
+change from T243 being `/proc/sys/kernel/numa_balancing` 1 -> 0.
+
+| metric | T243 (NUMA on) | T244 (NUMA off) |
+|---|--:|--:|
+| successful requests | 1/144 | **2/144** |
+| Mean TTFT | 150,515 ms | **20,214 ms** (7.4x better) |
+| Total token throughput | 95 tok/s | **402 tok/s** (4.2x) |
+| generated tokens | 0 | **0** |
+| PIECEWISE 96 graphs | ~6 min | **1m17s** |
+| FULL 96 graphs | ~5-6 min | **41 s** |
+| startup complete | +25m | **+10m20s** |
+| warmup 144 reqs | never completed | **completed, 1m57s** |
+| GPU KV capacity | 29,656,464 | 29,656,464 |
+| verdict | FAIL 99.3% | **FAIL 98.6%** |
+
+**Conclusion: NUMA auto-balancing was doing real damage but is not the root
+cause.** Every startup-path metric recovered to healthy or better, and warmup
+went from never-finishing to 1m57s. Serving is still broken: 0 tokens
+generated, 402 tok/s against ~84k tok/s aggregate for a healthy C72 run (T238).
+
+**Keep it off regardless** -- the startup gains alone justify it, and AMD
+recommends it. Persist with `/etc/sysctl.d/99-numa.conf`; it is currently a
+runtime-only change that the next reboot will revert.
+
+### Caveat on this probe -- it is not the T180 canary
+
+`TEST_MODE=func` generates **agentic-band prompts: mean 151,980 input tokens,
+min 79,649, max 213,812**, at concurrency 72. The T180 baseline (10/10, TPOT
+7.41 ms) that this was being compared against is a far lighter fixed-len
+configuration. Treating this as a cheap health canary was wrong -- it is one of
+the heaviest workloads available, and a failure here does not cleanly imply the
+engine cannot serve at all.
+
+**Next diagnostic should be `TEST_MODE=perf` (8192/1024 fixed length)** -- the
+standard sizing, directly comparable to prior fixed-len numbers, and it
+separates "engine is broken" from "this 152k-token probe is too aggressive".
+
+### Also still unexplained
+
+- two unclean reboots (Sep 2 18:05, Sep 3 03:08), neither with a shutdown record
+- system journal silent from 18:18:43 to 03:29 (~9 h) with persistent storage on
+- the GH runner died at both boots
+- 657 MB `_usr_bin_python3.12.0.crash` from Sep 2 17:12 (T240 / LMCache)

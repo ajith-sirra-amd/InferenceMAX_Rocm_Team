@@ -773,7 +773,14 @@ elif [ "${TEST:-1}" = "1" ]; then
     # against the SAME server, so we pay the ~2.5 min weight load once instead of
     # twice. func runs first and is short; if the engine is broken we find out in
     # minutes. perf writes the official result file the CI wrapper looks for.
-    TEST_MODE="${TEST_MODE:-func}"
+    # T245: default flipped func -> perf. `func` generates agentic-band prompts
+    # (mean 152k tokens, max 214k) at full CONC -- one of the heaviest workloads
+    # we have, NOT a cheap canary. T243/T244 both failed it and that told us
+    # little, because no baseline exists for it. `perf` is fixed 8192/1024,
+    # ratio 1.0, run-to-run comparable, and comparable to the prior fixed-len
+    # numbers (T180: 10/10, TPOT 7.41 ms). Use perf to answer "does the engine
+    # serve at all"; switch back to func only once perf is clean.
+    TEST_MODE="${TEST_MODE:-perf}"
     if [ "$TEST_MODE" = "both" ]; then
         echo "[test-mode] both: functionality pass then perf pass on one server"
         FUNC_ISL="${FUNC_ISL:-214000}"; FUNC_OSL="${FUNC_OSL:-874}"

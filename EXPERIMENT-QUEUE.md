@@ -401,6 +401,31 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
+**T244: NUMA off is a real but PARTIAL fix. Root cause still open.**
+
+`numa_balancing` 0 (runtime only — **not persisted**, add
+`/etc/sysctl.d/99-numa.conf`). Measured gains: TTFT 150,515 → 20,214 ms (7.4x),
+throughput 95 → 402 tok/s, PIECEWISE capture 6 min → 1m17s, FULL → 41 s,
+startup +25m → +10m20s, and warmup **now completes** (144/144 in 1m57s) where
+T243's never did. Still FAIL 98.6% (2/144), 0 generated tokens, ~200x off the
+~84k tok/s aggregate a healthy C72 run gives.
+
+**CORRECTION to the T243 entry below:** T243 and T244 both ran `TEST_MODE=func`,
+which generates **214k-token prompts** (ratio 0.37 → [79k, 214k]) at CONC 72 —
+*heavier* than the agentic replay's 87k median, not a light canary. The
+inference "fixed-len fails too, therefore whole-node fault" is therefore
+**not established**. A lighter workload has not been tested since the reboot.
+
+**NEXT: `TEST_MODE=perf`** (8192/1024, ratio 1.0) — default now flipped in the
+script, comparable to prior fixed-len numbers. This is the test that has been
+missing. It separates "engine cannot serve" from "that probe is too heavy".
+
+Still unexplained: two unclean reboots (Sep 2 18:05, Sep 3 03:08, neither with a
+shutdown record), system journal silent 18:18:43 → 03:29 (~9 h) with persistent
+storage enabled, the GH runner dead at both boots, and a 657 MB
+`_usr_bin_python3.12.0.crash` from Sep 2 17:12 (T240 / LMCache).
+
+<!-- superseded:
 **NODE IS UNHEALTHY — do not dispatch benchmark runs until NUMA is fixed.**
 
 T243's fixed-len probe failed **99.3% (1/144, 0 generated tokens, TTFT 150 s)**
@@ -419,6 +444,8 @@ echo 'kernel.numa_balancing = 0' | sudo tee /etc/sysctl.d/99-numa.conf
 
 Then re-run the fixed-len probe (`TEST=1`, already set) as the gate. Only once
 that is clean should agentic runs resume.
+
+-->
 
 **T241 and T242 are void as experiments.** T242 (gmu 0.85) collapsed on the
 T236 image, and T243 collapsed on fixed-len — the same signature reproduced
