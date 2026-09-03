@@ -1,5 +1,26 @@
 # LMCACHE — status, wiring, and the path to 12,500
 
+**Status: LMCache has NEVER served successfully here. Root cause UNKNOWN.**
+
+Corrected 2026-09-03. This file previously recorded T239 as a pass; it was not.
+Both attempts failed with **zero generated tokens**:
+
+| trial | `--max-gpu-workers` | generated tokens | result |
+|---|--:|--:|---|
+| T239 | **1** (= SA reference) | **0** | FAIL 96.5% (5/144) |
+| T250 | **8** | **0** | FAIL 100% (0/144 and 0/893) |
+
+So `--max-gpu-workers` is **not** the differentiator, and the hypothesis built on
+"T239 passed with 1" is withdrawn. The 1 -> 1 revert is still correct for
+matching the SA reference, but it is **not** a fix and must not be presented as
+one.
+
+The real question is why LMCache generates zero tokens in every configuration
+while `vllm-simple` on the identical image/node/concurrency serves 893/893
+(T245). That has not been answered, and the next step is reading the LMCache
+server log itself, not another benchmark run.
+
+<!-- superseded:
 **Status: ROOT-CAUSED and FIXED (fix not yet exercised).** T239 passed its benchmark then stranded 58 GB on one
 GPU at teardown. `Memory critical error … Reason: Memory in use` — LMCache still
 held DMA registrations on vLLM's KV buffers when vLLM freed them. Required a
@@ -224,11 +245,13 @@ start.
 
 ---
 
+-->
+
 ## Trial log
 
 | trial | config | result |
 |---|---|---|
-| **T239** | fixed-len (`TEST=1`), `pronly-nq-no50618`, DCP 8, conc 72, chunk 12288, l1=1949 GB | **PASS** — 5/5 requests, 920.34 tok/s total, no engine fault |
+| **T239** | fixed-len (`TEST=1`, func 214k), `pronly-nq-no50618`, DCP 8, conc 72, chunk 12288, l1=1949 GB, **gpu-workers 1** | **FAIL — 5/144, 96.5% failure rate, 0 generated tokens.** Previously mis-recorded here as "PASS 5/5"; corrected 2026-09-03 from the run log. The 920.34 tok/s is prefill-only. |
 | **T240** | GSM8K, same config | **BLOCKED — never started.** Died in the pre-run GPU-reclaim wait: `waiting for prior-job GPU memory reclaim: vram%max=18` for 90×10 s, then gave up. The eval never ran; there is no accuracy result. |
 
 ### T240 — leaked VRAM, and the likely cause is LMCache
