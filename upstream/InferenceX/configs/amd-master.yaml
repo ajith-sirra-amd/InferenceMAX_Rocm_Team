@@ -1967,7 +1967,11 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # state UNKNOWN. If this run lands close to 10,799 the delta is not safely
   # attributable, and a same-session control on pronly-nq-no50618 is required
   # before quoting a number. A large drop is interpretable; a small one is not.
-  image: kimi-k3-vllm:rec-no53940
+  # T248: CONTROL for T247. Same session, same node, NUMA off -- the only
+  # difference from T247 is that #53940 is present. T247 gave 11,006 without it;
+  # T236's 10,799 predates the reboot with NUMA state unknown and cannot serve
+  # as the comparison. This run is what makes the #53940 delta quotable.
+  image: kimi-k3-vllm:pronly-nq-no50618
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
