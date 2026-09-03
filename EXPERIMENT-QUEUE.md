@@ -401,7 +401,35 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
-**PRUNE CLOSED. New best = 11,006 tok/s/GPU (T247, #53940 REMOVED).**
+**RUNNING — [T257: C48 without LMCache, SA settings](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33765913466).**
+Arm 1 of 3 in the SA-config sequence: **C48 no-LMCache → C64 LMCache → C72 LMCache.**
+
+**SA applies NO patches.** Their `0903_2` script has zero `patch`/`overlay`/
+`site-packages` references — stock `vllm/vllm-openai-rocm:nightly-73029d42` plus
+one `agentic_pip_install` for the LMCache runtime. Their nightly is newer than
+our `7c5dc571` base, so #53917/#52494/#52968 may already be merged in it.
+**Open, CPU-only check:** pull that nightly and grep for
+`requires_dcp_block_aligned_interleave` (#53917's marker). If present, the PR is
+merged and comes off the ask.
+
+**SA deltas now applied to the launcher** (T257 commit):
+mns = 2×CONC at DCP>1 · mnbt 8192 (16384 only at C1) · gmu 0.90 for both
+backends (the 0.88/80 LMCache override is gone — it came from misreading their
+C48 artifact) · LMCache `0.5.5.dev89` from the rolling `nightly-rocm` channel ·
+`--max-gpu-workers 8` + chunk 12288 at DCP>1.
+
+**NOT applied — needs its own GSM8K-200 gate:** SA's
+`AITER_QUICK_REDUCE_QUANTIZATION=INT4`. Quantizing the allreduce is a numerics
+change; it does not ride along on a perf anchor. Queued.
+
+**T256 cancelled at 29 min** (LMCache C64, old 0.88/80/workers-1 settings) —
+superseded by the SA config. Its `bmk-server` container survived the GH cancel
+and held all 8 GPUs at 98% VRAM until cleared before T257. **Check
+`docker ps` after every cancel; a cancelled job does not free the node.**
+
+---
+
+**PRUNE CLOSED. Best = 11,027 tok/s/GPU (n=2: T247 11,006 · T252 11,048), #53940 REMOVED.**
 
 | run | #53940 | tok/s/GPU |
 |---|---|--:|
@@ -417,20 +445,14 @@ T236-era runs (implying numa_balancing was already 0 before the Sep 2 reboot).
 **Ask is now 3 PRs:** #53917 (code-proven required), #52494 (−1.35%),
 #52968 (−0.93%, draft).
 
-**RUNNING — T249: `PIN_CCD=1` on rec-no53940.** One variable vs T247. Untested
-on a numa_balancing=0 node, and it targets the host-side locality that mattered
-this session.
+**Why LMCache has underperformed here (T253 root cause):** `store ops=1824 /
+90.27 GB` but **`retrieve ops=0`**, `ext_cache_hit` flat 0.0%. vLLM only queries
+the connector for tokens *beyond* its own prefix cache; ours hits 90.3% locally
+(SA 84.0%), so LMCache is asked for almost nothing and is pure overhead at C48.
+Whether SA's higher mns/lower mnbt changes that ratio is what C64/C72 test.
 
-**LMCache is GATED, not next.** Two preconditions, neither cleared:
-1. `/etc/sysctl.d/99-numa.conf` absent — numa_balancing=0 is runtime-only. A
-   node halt would reboot into the broken state and repeat this session.
-2. `--l1-size-gb 1949` on a 3,023 GB box where SimpleCPUOffload already holds
-   1,815 GB and only **9 GB is free**. Resolve whether the offload connector is
-   disabled under LMCache before launching, or risk repeating T240's halt.
-
-Evidence also argues LMCache is not the 12,500 lever: `kv_usage` 46–56%,
-`queue=0w`, `ext_cache_hit` 82%, GPUs at 1,100 W / 98%. Compute-bound, not
-cache-bound.
+Still outstanding, user-side: `echo 'kernel.numa_balancing = 0' | sudo tee
+/etc/sysctl.d/99-numa.conf` — three reboots have reverted it.
 
 <!-- superseded:
 **RESOLVED — engine and node are healthy (T245).**
