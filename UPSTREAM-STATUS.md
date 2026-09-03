@@ -33,7 +33,7 @@ as genuinely droppable are in **DO NOT NEED** further down.
 
 | # | PR | tag | what it does | Δ if dropped | status |
 |--:|---|---|---|--:|---|
-| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | CPU KV offload + DCP cache geometry | unmeasured | ⏳ yet to verify |
+| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | unmeasured | ⏳ yet to verify |
 | 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | unmeasured | ⏳ yet to verify |
 
 #### GOOD TO HAVE — 2 PRs, 2.27% together
@@ -45,6 +45,18 @@ as genuinely droppable are in **DO NOT NEED** further down.
 
 **Two of four have a measured delta.** The must-haves rest on mechanism and are
 **still needed** — they are pending measurement, not rejected.
+
+**#53917 note (verified by inspection, 2026-09-03):** the CPU-offload connector
+is **already in stock `nightly-7c5dc571`** — `vllm/v1/simple_kv_offload/` and
+`simple_cpu_offload_connector.py` both exist unpatched. #53917 does not add it;
+it **fixes** it, across 10 files / 622 lines, most of them the KV cache manager
+layer (`kv_cache_manager`, `kv_cache_coordinator`, `single_type_kv_cache_manager`,
+`sched/scheduler`). That is what K3 needs under DCP, where KV groups are
+heterogeneous (1536 attention / 3072 KDA) and per-group geometry must be right.
+T216's C52 starvation on bare nightly is the symptom.
+
+**Therefore the drop arm is runnable** — a `no-53917` image will still boot and
+serve, just with stock geometry. #53917 can get a real number instead of ⏳.
 
 **RETRACTED (2026-09-03): the #53940 ablation is confounded — do not cite it.**
 
