@@ -31,15 +31,15 @@ Reasoning, however sound, is *not verified*.
 
 | # | PR | tag | what it does | Δ if dropped | status |
 |--:|---|---|---|--:|---|
-| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | `SimpleCPUOffloadConnector` + per-group KV cache geometry under DCP | unmeasured | ❌ **NOT VERIFIED** — never removed |
-| 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 flydsl MoE kernels (`flydsl_moe1/moe2_abf16_wfp4_bf16`) | unmeasured | ❌ **NOT VERIFIED** — T241 ablation confounded |
+| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | CPU KV offload + DCP cache geometry | unmeasured | ❌ not verified |
+| 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | unmeasured | ❌ not verified |
 
 #### GOOD TO HAVE — 2 PRs, 2.27% together
 
 | # | PR | tag | what it does | Δ if dropped | status |
 |--:|---|---|---|--:|---|
-| 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuses MLA `q_a_layernorm` + `kv_a_layernorm` into one AITER launch | **−1.35%** (10,799 → 10,653) | ✅ **VERIFIED** — T237 |
-| 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | attn_res + add_rmsnorm_quant, causal_conv1d for qkv, sigmoid+mul fusions | **−0.93%** (10,653 → 10,554) | ✅ **VERIFIED** — T238 |
+| 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | **−1.35%** | ✅ verified (T237) |
+| 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | **−0.93%** | ✅ verified (T238) |
 
 **Two of four are verified.** Both must-haves rest on mechanism, not a measured
 delta — that is the honest state and should be said plainly when filing.
@@ -90,8 +90,8 @@ Ordered by measured cost of dropping it. Baseline for every delta is
 
 | # | PR | tag | why | evidence | status |
 |--:|---|---|---|---|---|
-| 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `cpu-offload` | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | **never tested for removal** — the only applied PR with no drop arm | ❌ NOT VERIFIED |
-| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | `a4w4-moe` | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195/T243 logs). Rides in the separate `pr_stack/`. | **CONFOUNDED — T241's ablation is void.** The same collapse reproduced in T242/T243 *with* #53940 applied, so the run measured the node, not the patch. Removal cost unmeasured; rerun required. | ❌ NOT VERIFIED |
+| 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `cpu-offload` | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | never removed | ❌ not verified |
+| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | `a4w4-moe` | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195/T243 logs). Rides in the separate `pr_stack/`. | **CONFOUNDED — T241's ablation is void.** The same collapse reproduced in T242/T243 *with* #53940 applied, so the run measured the node, not the patch. Removal cost unmeasured; rerun required. | ❌ not verified |
 
 **Neither has a measured number, and that is the honest state.** #53917 is
 load-bearing by mechanism and by the T216 starvation result; #53940 has never
@@ -101,9 +101,9 @@ been removed. Both are must-have on reasoning, not on a delta.
 
 | # | PR | tag | Δ if dropped | throughput | why it costs | status |
 |--:|---|---|--:|--:|---|---|
-| 3 | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | `mla-rmsnorm-fusion` | **−1.35%** | 10,799 → **10,653** (T237) | fuses `q_a_layernorm`/`kv_a_layernorm` into one AITER launch. K3 carries no `@support_torch_compile`, so `MLADualRMSNormFusionPass` never runs — without the PR those stay two launches on **every MLA layer, every forward**. | ✅ VERIFIED |
-| 4 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | `attn-conv-fusion` | **−0.93%** | 10,653 → **10,554** (T238) | attn_res + add_rmsnorm_quant fused, causal_conv1d fused for qkv, native sigmoid+mul → fused kernel. Same mechanism: inductor never fuses these for K3. | ✅ VERIFIED |
-| | **both** | | **−2.27%** | 10,799 → **10,554** | outside the ±1.2% band, monotone | ✅ VERIFIED |
+| 3 | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | `mla-rmsnorm-fusion` | **−1.35%** | 10,799 → **10,653** (T237) | fuses `q_a_layernorm`/`kv_a_layernorm` into one AITER launch. K3 carries no `@support_torch_compile`, so `MLADualRMSNormFusionPass` never runs — without the PR those stay two launches on **every MLA layer, every forward**. | ✅ verified |
+| 4 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | `attn-conv-fusion` | **−0.93%** | 10,653 → **10,554** (T238) | attn_res + add_rmsnorm_quant fused, causal_conv1d fused for qkv, native sigmoid+mul → fused kernel. Same mechanism: inductor never fuses these for K3. | ✅ verified |
+| | **both** | | **−2.27%** | 10,799 → **10,554** | outside the ±1.2% band, monotone | ✅ verified |
 
 ### DO NOT NEED — measured free
 
