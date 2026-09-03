@@ -21,104 +21,83 @@ Started at 11 PRs and 10,692 (T232). Pruning removed 3 for free and found that
 
 Prune ladder is **closed** (T232–[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)). The recommended set is **not** the
 smallest that runs — the last two prunes cost 2.27% and are worth keeping.
+### THE ASK — 3 PRs to upstream, 1 needs further evaluation
 
-### THE ASK — 4 open PRs
+Baseline **11,006 tok/s/GPU @ C72** ([T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914), `rec-no53940`, NUMA off).
+`Δ if dropped` = throughput change when the PR is removed.
 
-`status` = has the PR been **removed and re-measured**?
-✅ verified · ⏳ yet to verify. **⏳ does not mean "not needed"** — both must-haves
-are believed load-bearing, the drop arm simply has not been run. PRs we measured
-as genuinely droppable are in **DO NOT NEED** further down.
-
-#### MUST HAVE — 1 PR (was 2; #53940 removed on measurement)
+#### 1. MUST HAVE
 
 | # | PR | tag | what it does | PR state | Δ if dropped | status |
 |--:|---|---|---|---|--:|---|
-| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | **open** | perf unmeasured | ✅ **required** — code-proven |
-| — | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | **open** | **+2.20% to DROP** | ❌ **do not ask** — measured negative |
+| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | open | perf unmeasured | ✅ required — code-proven |
 
-
-**#53940 measured NEGATIVE at C72 (2026-09-03).** Same-session pair on a NUMA-off node: [T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914) **without** it = **11,006**; [T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710) **with** it = **10,769**. Dropping it is **+2.20%**, outside the ±1.2% band. [T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710) also replicates T236 (10,799) to 0.28%, so the baseline is sound.
-
-It does enlarge the GPU KV pool by 3.5% (29,656,464 vs 28,653,478) — but that is irrelevant here: `kv_usage` runs 46–56% with `queue=0w`, so capacity never binds.
-
-**Do not include it in the ask on throughput grounds.** Untested at C1, where MTP is on and the picture may differ.
-
-#### GOOD TO HAVE — 2 PRs, 2.27% together — in priority order
+#### 2. GOOD TO HAVE — 2.27% together, in priority order
 
 | # | PR | tag | what it does | PR state | Δ if dropped | status |
 |--:|---|---|---|---|--:|---|
-| 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | **open** | **−1.35%** | ✅ verified ([T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)) |
-| 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | ⚠️ **DRAFT** | **−0.93%** | ✅ verified ([T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)) |
+| 2 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | open | **−1.35%** | ✅ verified ([T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)) |
+| 3 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | ⚠️ draft | **−0.93%** | ✅ verified ([T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)) |
 
-**#53917 is code-proven required (CPU-only check, 2026-09-03).** No GPU run
-needed — the mechanism is decidable from source:
+#### 3. NEEDS FURTHER EVALUATION — perf measured negative at C72
 
-1. #53917 adds `requires_dcp_block_aligned_interleave` (default `True` in
+| # | PR | tag | what it does | PR state | Δ if dropped | status |
+|--:|---|---|---|---|--:|---|
+| — | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | open | **+2.20% faster without** | ⚠️ hold — C72 negative, re-evaluate |
+
+---
+
+#### Notes
+
+**Legend.** `status` = has the PR been removed and re-measured? ✅ verified ·
+⏳ yet to verify · ❌ rejected. "Verified" requires an actual drop arm; reasoning
+alone does not count.
+
+**#53917 — required, proven by code inspection (2026-09-03), no GPU run.**
+
+1. The PR adds `requires_dcp_block_aligned_interleave` (default `True` in
    `KVConnectorBase_V1`) and sets it **`False`** on `SimpleCPUOffloadConnector`.
-   Verified absent from stock `nightly-7c5dc571` — `grep` finds no occurrence.
+   Confirmed absent from stock `nightly-7c5dc571` — `grep` finds no occurrence.
 2. Stock `config/vllm.py:2772` fires for **any** connector and overwrites
    `cp_kv_cache_interleave_size = local_block_size`, logging a *"PD
-   disaggregation"* message. We are not doing PD; we are doing CPU offload.
-3. We run `--cp-kv-cache-interleave-size 1` with block sizes 1536 / 3072, so
-   **stock silently rewrites our 1 → 1536.** The PR is what makes the flag stick.
+   disaggregation"* message. We run CPU offload, not PD.
+3. We pass `--cp-kv-cache-interleave-size 1` with block sizes 1536 / 3072, so
+   **stock silently rewrites 1 → 1536.** The PR is what makes the flag stick.
 
-So the *functional* requirement is settled. What remains unmeasured is the
-**throughput cost** of that rewrite — that still needs a drop arm.
+The functional requirement is settled; the *throughput* cost of that rewrite is
+still unmeasured and needs a drop arm.
 
-**Priority order rationale.** #52494 first: larger delta (−1.35%), outside the
-±1.2% band, and the PR is open and review-ready. #52968 second: −0.93% sits
-*inside* the band at n=1, so the per-PR figure is indicative rather than proven,
-and the PR is a draft so it cannot merge yet either way. The pair's combined
-**−2.27%** is the number that holds up — outside the band and monotone across
-T236 → T237 → T238.
+**#52494 / #52968 — priority rationale.** #52494 first: larger delta, outside
+the ±1.2% band, open and review-ready. #52968 second: its −0.93% sits *inside*
+the band at n=1, so the per-PR figure is indicative rather than proven, and the
+PR is a draft so it cannot merge yet regardless. Lead with the pair's combined
+**−2.27%**, which is outside the band and monotone across T236 → T237 → T238.
+All three of those ran pre-reboot on the same day, so the NUMA issue does not
+confound them.
 
-**#52968 is still a DRAFT** — it cannot merge until the author marks it ready
-for review. That is a blocker independent of our measurements, and the cheapest
-one to clear. PR state checked 2026-09-03; the other three are open and
-review-ready.
+**#52968 is a DRAFT** — it cannot merge until the author marks it ready. That
+blocks a verified −0.93% independently of any measurement, and is the cheapest
+item on this page to clear.
 
-**Two of four have a measured delta.** The must-haves rest on mechanism and are
-**still needed** — they are pending measurement, not rejected.
+**#53940 — measured negative at C72; hold, do not reject outright.** Same-session pair on a NUMA-off node:
+[T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914) **without** it = **11,006**; [T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710)
+**with** it = **10,769**. Dropping it is **+2.20%**, outside the ±1.2% band.
+[T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710) also replicates T236 (10,799) to 0.28%, so the baseline
+is sound.
 
-**#53917 note (verified by inspection, 2026-09-03):** the CPU-offload connector
-is **already in stock `nightly-7c5dc571`** — `vllm/v1/simple_kv_offload/` and
-`simple_cpu_offload_connector.py` both exist unpatched. #53917 does not add it;
-it **fixes** it, across 10 files / 622 lines, most of them the KV cache manager
-layer (`kv_cache_manager`, `kv_cache_coordinator`, `single_type_kv_cache_manager`,
-`sched/scheduler`). That is what K3 needs under DCP, where KV groups are
-heterogeneous (1536 attention / 3072 KDA) and per-group geometry must be right.
-T216's C52 starvation on bare nightly is the symptom.
+It does enlarge the GPU KV pool by 3.5% (29,656,464 vs 28,653,478), but that is
+irrelevant here: `kv_usage` runs 46–56% with `queue=0w`, so capacity never binds.
 
-**Therefore the drop arm is runnable** — a `no-53917` image will still boot and
-serve, just with stock geometry. #53917 can get a real number instead of ⏳.
+**This is not grounds to reject the PR yet.** Three limits:
+1. **C72 only.** #53940 is untested at C1, where MTP is on and the MoE path
+   behaves differently. Every C1 number in the ledger was measured *with* it.
+2. **n=1 per arm.** T247 and T248 are single runs. The 2.20% is outside the
+   ±1.2% band but has not been replicated.
+3. **No accuracy gate.** `rec-no53940` has never run GSM8K, so 11,006 is a
+   throughput number on a stack whose numerics are unverified.
 
-**RETRACTED (2026-09-03): the #53940 ablation is confounded — do not cite it.**
-
-[T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) dropped #53940 and the run never reached profiling, and this file
-previously recorded that as proof the PR is load-bearing. That conclusion does
-not hold:
-
-- **[T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072)** ran gmu 0.85 on `pronly-nq-no50618` — the image that scored 10,799 in
-  [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517), **with #53940 present** — and collapsed with the identical signature.
-- **[T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658)** ran a fixed-len probe on that same image at the ledger's gmu 0.9 and
-  failed 99.3% (1/144, 0 generated tokens, TTFT 150 s).
-
-So the collapse reproduces without removing #53940, on two other configurations,
-including a non-agentic workload. The common factor is the **node**, not the
-patch: `numa_balancing` was reset to 1 by the reboot and is not persisted in
-sysctl. Details and fix in `Kimi-DCP-Experiemnts-Summary.md`.
-
-**#53940 stays in the ask on mechanism** — it is live on the MoE path
-(`flydsl_moe1/moe2` in the T195 and [T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) logs) and every good number in the
-ledger was measured with it applied. But its removal cost is **unmeasured**, and
-the ablation must be rerun on a healthy node before any number is quoted.
-
-Baseline **10,799 tok/s/GPU @ C72**, err 0.09%, GSM8K 0.995, image
-`kimi-k3-vllm:pronly-nq-no50618`. Dropping both "good" PRs costs **2.27%**
-(10,799 → 10,554) — outside the ±1.2% band and monotone.
-
-**File #53917 first.** Only open must-have, largest block (27 hunks), and
-everything else composes on top of it. Detail and rationale below.
+**Next steps before any verdict:** GSM8K limit 200 on `rec-no53940`, a replicate
+of T247, and a C1 arm with and without the PR.
 
 ### Already merged upstream — nothing to ask for, listed for provenance
 
@@ -134,7 +113,7 @@ everything else composes on top of it. Detail and rationale below.
 Ordered by measured cost of dropping it. Baseline for every delta is
 **[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) = 10,799 tok/s/GPU @ C72** on `kimi-k3-vllm:pronly-nq-no50618`.
 
-### MUST HAVE — the stack does not work without these
+### MUST HAVE — detail (SUPERSEDED by THE ASK above; #53940 moved to 'needs further evaluation')
 
 | # | PR | tag | why | evidence | status |
 |--:|---|---|---|---|---|
