@@ -475,3 +475,51 @@ Third unclean reboot (18:05, 03:08, 09:22), none with a shutdown record, around
 T250's completion. **Causation not established.** After it: `amdgpu` was not
 loaded and `numa_balancing` had reverted to 1; both recovered manually.
 `/etc/sysctl.d/99-numa.conf` is **still absent**.
+
+---
+
+## T253 (2026-09-03) — LMCache SERVES. First success. But slower than not using it.
+
+Run [33751362117](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33751362117)
+· image `rec-no53940` (our 3 PRs, no a4w4) · gates confirmed
+`[lmcache-match] SA reference: gmu=0.88 mns=80 conc=48`, `--max-gpu-workers 1`.
+
+| | value |
+|---|--:|
+| **Throughput per GPU** | **6,934 tok/s** |
+| request error rate | **0.13%** (2/1529) |
+| GPU KV cache | 25,268,402 (gmu 0.88) |
+| `No GPU context found` errors | **0** |
+| LMCache teardown | **clean, 30 s** |
+
+### What this settles
+
+**The failure was configuration, not a broken integration.** Matching SA's
+working configuration exactly — conc 48, mns 80, gmu 0.88, gpu-workers 1 —
+eliminated the `No GPU context found for model ... with world size 8` error that
+produced zero tokens in T239 (96.5% fail) and T250 (100% fail).
+
+It does **not** isolate which of the four knobs mattered; all four moved at once,
+deliberately, to reproduce a known-good reference before diverging from it.
+
+### But it is not the path to 12,500
+
+| config | conc | tok/s/GPU |
+|---|--:|--:|
+| ours, no LMCache ([T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914)/[T252](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33741798191)) | 72 | **11,027** |
+| SA, LMCache | 48 | 8,997 |
+| **ours, LMCache** ([T253](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33751362117)) | **48** | **6,934** |
+
+Two gaps, both unexplained:
+1. **−23% vs SA at identical settings.** Same conc/mns/gmu/gpu-workers. Remaining
+   differences: our image (`rec-no53940`) vs theirs, and node.
+2. **−37% vs our own non-LMCache baseline.** Confounded by concurrency — 48 vs
+   72 — so this is not a clean LMCache-vs-vllm-simple comparison.
+
+### Next, if LMCache is pursued further
+
+- **conc 48 without LMCache** — the missing control. Without it we cannot say how
+  much of the −37% is LMCache and how much is simply running at lower
+  concurrency.
+- Then walk conc 48 -> 72 under LMCache one step at a time and find where the
+  `No GPU context` error returns.
