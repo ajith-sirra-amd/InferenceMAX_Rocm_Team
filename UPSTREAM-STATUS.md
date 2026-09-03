@@ -33,7 +33,7 @@ as genuinely droppable are in **DO NOT NEED** further down.
 
 | # | PR | tag | what it does | PR state | Δ if dropped | status |
 |--:|---|---|---|---|--:|---|
-| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | **open** | unmeasured | ⏳ yet to verify |
+| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | **open** | perf unmeasured | ✅ **required** — code-proven |
 | 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | **open** | unmeasured | ⏳ yet to verify |
 
 #### GOOD TO HAVE — 2 PRs, 2.27% together
@@ -42,6 +42,21 @@ as genuinely droppable are in **DO NOT NEED** further down.
 |--:|---|---|---|---|--:|---|
 | 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | **open** | **−1.35%** | ✅ verified ([T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)) |
 | 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | ⚠️ **DRAFT** | **−0.93%** | ✅ verified ([T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)) |
+
+**#53917 is code-proven required (CPU-only check, 2026-09-03).** No GPU run
+needed — the mechanism is decidable from source:
+
+1. #53917 adds `requires_dcp_block_aligned_interleave` (default `True` in
+   `KVConnectorBase_V1`) and sets it **`False`** on `SimpleCPUOffloadConnector`.
+   Verified absent from stock `nightly-7c5dc571` — `grep` finds no occurrence.
+2. Stock `config/vllm.py:2772` fires for **any** connector and overwrites
+   `cp_kv_cache_interleave_size = local_block_size`, logging a *"PD
+   disaggregation"* message. We are not doing PD; we are doing CPU offload.
+3. We run `--cp-kv-cache-interleave-size 1` with block sizes 1536 / 3072, so
+   **stock silently rewrites our 1 → 1536.** The PR is what makes the flag stick.
+
+So the *functional* requirement is settled. What remains unmeasured is the
+**throughput cost** of that rewrite — that still needs a drop arm.
 
 **#52968 is still a DRAFT** — it cannot merge until the author marks it ready
 for review. That is a blocker independent of our measurements, and the cheapest
