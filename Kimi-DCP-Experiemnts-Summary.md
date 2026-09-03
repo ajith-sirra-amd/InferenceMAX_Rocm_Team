@@ -4752,6 +4752,26 @@ Run [33714864721](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/acti
 | Mean / Median ITL | 78.03 / 44.42 ms |
 | GPU KV cache | 29,656,464 (= T236) |
 
+### Anchored against a pre-reboot fixed-len run
+
+`0 failures` only proves the engine is not broken; it says nothing about whether
+latency is *right*. The anchor is **T180 C52**, fixed-len 8192/1024 measured
+before the reboot:
+
+| metric | T180 C52 (r0.8) | T245 C72 (r1.0) |
+|---|--:|--:|
+| Mean TPOT | **75.77 ms** | **78.03 ms** |
+| Mean ITL | 75.94 (med 37.83) | 78.03 (med 44.42) |
+| Mean TTFT | 2,344.64 ms | 4,540.73 ms |
+| total throughput | **5,840.48 tok/s** | **7,724.40 tok/s** |
+
+TPOT 75.77 → 78.03 ms at **+38% concurrency** (52 → 72), throughput +32%. That
+is the signature of more concurrency, not a degraded node. **The node is at full
+health, not merely functional.**
+
+Not identical configs — conc 52 vs 72, ratio 0.8 (uniform 6,830–7,936) vs 1.0
+(exactly 8,192) — so treat it as a close anchor, not a controlled A/B.
+
 ### What this closes
 
 Two independent problems were tangled together all night:
