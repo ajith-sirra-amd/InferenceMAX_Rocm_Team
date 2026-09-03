@@ -61,7 +61,7 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # because T257/T258 changed SA's *settings* while keeping our *patched* image,
 # which confounds "SA settings don't help us" with "our patches hurt".
 # Deliberately checked BEFORE the manifest branch so it wins on any image.
-K3_FORCE_STOCK="${K3_FORCE_STOCK:-1}"   # T259: stock-nightly arm
+K3_FORCE_STOCK="${K3_FORCE_STOCK:-0}"   # T262: back to OUR patched image
 if [ "$K3_FORCE_STOCK" = "1" ]; then
     K3_OVERLAY_APPLIED=0
     export SKIP_KIMI_PATCHES=1
@@ -374,7 +374,11 @@ if agentic_kv_offload_enabled; then
         # LMCache runtime is added. --no-deps so torch/ROCm are untouched.
         # T257: SA pulls 0.5.5.dev89 from the rolling nightly-rocm channel, not
         # the pinned rc3 tag. Anything with .dev in it lives under nightly-rocm.
-        LMCACHE_VERSION="${LMCACHE_VERSION:-0.5.5.dev89+rocm7.2}"
+        if [ "${K3_LEGACY_LMCACHE:-1}" = "1" ]; then
+            LMCACHE_VERSION="${LMCACHE_VERSION:-0.5.5rc3+rocm7.2}"
+        else
+            LMCACHE_VERSION="${LMCACHE_VERSION:-0.5.5.dev89+rocm7.2}"
+        fi
         case "$LMCACHE_VERSION" in
             *.dev*) LMCACHE_RELEASE="nightly" ;;
             *)      LMCACHE_RELEASE="v${LMCACHE_VERSION%%+*}" ;;
@@ -424,7 +428,9 @@ if agentic_kv_offload_enabled; then
         # pairs each with its own chunk size (12288 / 3072). T239's "workers"
         # hypothesis was built on a log that never served a token; this is the
         # value their working runs actually use.
-        if [ "$DCP_SIZE" -gt 1 ]; then
+        if [ "${K3_LEGACY_LMCACHE:-1}" = "1" ]; then
+            LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-1}"
+        elif [ "$DCP_SIZE" -gt 1 ]; then
             LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-8}"
         else
             LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-1}"
@@ -567,6 +573,8 @@ fi
 # clear peak at 8192 and both sides are downhill.
 # T257: SA uses 8192 at every concurrency and 16384 only at C1.
 if [ "$CONC" -le 1 ]; then MBT_DEFAULT=16384; else MBT_DEFAULT=8192; fi
+# T262: legacy LMCache arms ran mnbt 16384 at every conc.
+if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ] && [ "${K3_LEGACY_LMCACHE:-1}" = "1" ]; then MBT_DEFAULT=16384; fi
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-$MBT_DEFAULT}")
 echo "[chunk] max_num_batched_tokens=${MAX_BATCHED_TOKENS:-$MBT_DEFAULT} conc=$CONC"
 # N2 SETTLED NEGATIVE, do not re-enable. T162 C52 measured 7,686 against T161's
@@ -668,7 +676,16 @@ GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61
 # T257: override REMOVED. SA runs gmu 0.90 / mns 2*CONC for LMCache and
 # non-LMCache alike; the 0.88/80 pair came from misreading their C48 artifact.
 # LMCache arms now differ from the baseline in the backend only.
-if [ -n "${GPU_MEM_UTIL_LMCACHE:-}" ] && [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ]; then
+# T262: K3_LEGACY_LMCACHE=1 restores the pre-SA LMCache settings -- the exact
+# configuration T256 was carrying when it was cancelled at 29 min. Recovers that
+# datapoint. gmu/mns/mnbt are set here; workers and version are set in the
+# lmcache branch above. Only applies to the lmcache backend.
+K3_LEGACY_LMCACHE="${K3_LEGACY_LMCACHE:-1}"
+if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ] && [ "$K3_LEGACY_LMCACHE" = "1" ]; then
+    GPU_MEM_UTIL="${GPU_MEM_UTIL_LMCACHE:-0.88}"
+    MAX_NUM_SEQS=80
+    echo "[legacy-lmcache] gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS (pre-SA settings)"
+elif [ -n "${GPU_MEM_UTIL_LMCACHE:-}" ] && [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ]; then
     GPU_MEM_UTIL="$GPU_MEM_UTIL_LMCACHE"
 fi
 echo "[sa-match] gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS backend=${KV_OFFLOAD_BACKEND:-vllm-simple}"

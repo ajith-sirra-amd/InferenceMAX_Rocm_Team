@@ -459,6 +459,7 @@ numa_balancing=0. Gap to target is -11.8%.
 | T258 | ours (3 PRs) | 64 | yes | **5,808** | 8.29% | **0.0%** |
 | T259 | **stock, 0 patches** | 48 | no | **6,988** | 5.45% | — |
 | T260 | **stock, 0 patches** | 64 | yes | **4,688** | 9.93% | **0.0%** |
+| T261 | **stock, 0 patches** | 72 | yes | **3,396** | 15.45% | **0.0%** |
 
 **T260 is decisive on the LMCache fault: it is NOT our patch stack.** Zero-patch
 upstream `nightly-73029d42` shows the identical `ext_cache_hit` 0.0%. The
