@@ -401,6 +401,25 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
+### Approved order (user-confirmed 2026-09-03)
+
+1. **T257 — C48 no-LMCache, SA settings.** RUNNING.
+2. **T258 — C64 with LMCache**, current image.
+3. **T259 — C72 with LMCache**, current image.
+4. **New image build**: fold in [#54494 `dcp-q-replicate`](https://github.com/vllm-project/vllm/pull/54494) (~99 lines, 3 files).
+5. **GSM8K-200 gate** on `VLLM_DCP_Q_REPLICATE=1` — replicated vs gathered
+   projection is the same math in a different reduction order, so not bitwise-safe.
+6. **A/B at C1**, not C72. C72 is compute-bound (1,100 W, 98% util, `queue=0w`)
+   and prefill-dominated (ISL p50 54k vs OSL p50 224); the PR removes a *decode*
+   per-layer all-gather and pays in redundant q-projection compute, so it should
+   be flat-to-negative there. C1 has nothing to overlap the collective against,
+   so the per-layer latency lands straight in TPOT — and C1 TPOT (best 7.57 ms)
+   is an explicit target. Default-off (`dcp_q_replicate=False`), so it cannot
+   perturb the 11,027 baseline; the env var is a clean one-variable A/B.
+   Machinery (`DCPGroupColumnParallelLinear`, `_local_view()`, `W_UK_T`
+   all-gather) is already upstream for DSV2/3 — the PR only wires K3's
+   `q_b_proj`/`q_proj` to opt in.
+
 **RUNNING — [T257: C48 without LMCache, SA settings](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33765913466).**
 Arm 1 of 3 in the SA-config sequence: **C48 no-LMCache → C64 LMCache → C72 LMCache.**
 
