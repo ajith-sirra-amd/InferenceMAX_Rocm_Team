@@ -10,7 +10,7 @@ b23_07, not published to a registry.
 # WHAT WE TESTED & PRODUCED — `kimi-k3-vllm:rec-no53940`
 
 `nightly-7c5dc571` + **7 upstream PRs** (4 merged in base, 3 applied). No vendor
-patch. **11,006 tok/s/GPU @ C72**, err 0.30% ([T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914)).
+patch. **11,027 tok/s/GPU @ C72** (n=2: 11,006 [T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914) · 11,048 [T252](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33741798191), spread 0.38%).
 Image: `kimi-k3-vllm:rec-no53940`.
 
 **GSM8K 0.995** (strict + flexible, ±0.005, 200/200) — [T251](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33740219190).
@@ -96,8 +96,9 @@ irrelevant here: `kv_usage` runs 46–56% with `queue=0w`, so capacity never bin
 **This is not grounds to reject the PR yet.** Three limits:
 1. **C72 only.** #53940 is untested at C1, where MTP is on and the MoE path
    behaves differently. Every C1 number in the ledger was measured *with* it.
-2. **n=1 per arm.** T247 and T248 are single runs. The 2.20% is outside the
-   ±1.2% band but has not been replicated.
+2. ~~n=1 per arm.~~ **RESOLVED** — [T252](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33741798191) replicated T247:
+   **11,048** vs 11,006, spread **0.38%**. Mean 11,027, so the cost firms to
+   **−2.40%**. Still n=1 on the *with*-#53940 arm (T248).
 3. ~~No accuracy gate.~~ **RESOLVED** — [T251](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33740219190) ran GSM8K
    limit 200 on `rec-no53940`: **exact_match 0.995** (strict + flexible,
    ±0.005, 200/200), identical to T236's 0.995 on the a4w4-carrying image.

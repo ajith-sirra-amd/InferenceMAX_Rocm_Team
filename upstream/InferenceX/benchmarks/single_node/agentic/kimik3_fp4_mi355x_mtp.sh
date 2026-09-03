@@ -604,6 +604,17 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # we establish whether the node still serves traffic at all.
 # Do not raise: 0.92 and 0.95 both hang (T211, T157). 0.88 is the tested ceiling.
 GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61 ms
+# T253: LMCache-ONLY overrides. Scoped deliberately -- the C72 baseline
+# (11,027 tok/s/GPU, n=2) was measured at gmu 0.90 / mns 96 and must not move.
+# SA run 33631260867 is the only LMCache configuration known to serve:
+#   conc 48, mns 80, gmu 0.88, --max-gpu-workers 1  ->  8,997 tok/s/GPU
+# Ours has never served at conc 72 / mns 96 / gmu 0.90. Reproduce the reference,
+# then walk ONE knob at a time back toward C72.
+if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ]; then
+    GPU_MEM_UTIL="${GPU_MEM_UTIL_LMCACHE:-0.88}"
+    MAX_NUM_SEQS=80
+    echo "[lmcache-match] SA reference: gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS conc=$CONC"
+fi
 # T234: bare images only -- see the gmu-override block above. Patched images
 # keep 0.9 so every number in the ledger stays comparable.
 if [ -n "${GPU_MEM_UTIL_OVERRIDE:-}" ]; then GPU_MEM_UTIL="$GPU_MEM_UTIL_OVERRIDE"; fi
