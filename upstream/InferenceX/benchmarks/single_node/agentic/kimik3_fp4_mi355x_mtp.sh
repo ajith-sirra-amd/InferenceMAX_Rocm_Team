@@ -680,7 +680,7 @@ CCDPY
 # nodes, GPUs split 4/4, remote distance 32, ~1.8 TB of host memory pinned for
 # GPU DMA. Baseline is T247 = 11,006 on this same image; one variable.
 # Pins AFTER wait_for_server_ready -- pinning before load cost 2008 s in T160.
-PIN_CCD="${PIN_CCD:-1}"
+PIN_CCD="${PIN_CCD:-0}"
 pin_workers_to_ccd() {
     [ "$PIN_CCD" = "1" ] || return 0
     [ -s /tmp/ccdmap.txt ] || return 0
@@ -733,7 +733,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # reproduces post-reboot, and that needs the replay, not fixed-len.
 # Set TEST=1 again for a ~10 min health check before spending an hour, and when
 # you do, check the [test-mode] line in the log -- `func` is NOT a light canary.
-elif [ "${TEST:-0}" = "1" ]; then
+elif [ "${TEST:-1}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does
@@ -791,7 +791,8 @@ elif [ "${TEST:-0}" = "1" ]; then
     # ratio 1.0, run-to-run comparable, and comparable to the prior fixed-len
     # numbers (T180: 10/10, TPOT 7.41 ms). Use perf to answer "does the engine
     # serve at all"; switch back to func only once perf is clean.
-    TEST_MODE="${TEST_MODE:-perf}"
+    # T250: both = Function pass then Fixed Perf pass on one server.
+    TEST_MODE="${TEST_MODE:-both}"
     if [ "$TEST_MODE" = "both" ]; then
         echo "[test-mode] both: functionality pass then perf pass on one server"
         FUNC_ISL="${FUNC_ISL:-214000}"; FUNC_OSL="${FUNC_OSL:-874}"
