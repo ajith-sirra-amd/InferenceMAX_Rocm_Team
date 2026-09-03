@@ -1958,10 +1958,16 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   #
   # Revert to aigmkt/kimi-k3-vllm:latest if this regresses. That image remains
   # the reference for C52, which still needs #51705 for DCP.
-  # T242: back to the recommended stack after T241 proved #53940 load-bearing
-  # (dropping it collapsed prefill -- warmup never finished). This arm moves gmu
-  # 0.90 -> 0.85 only, so it is one variable vs T236 = 10,799.
-  image: kimi-k3-vllm:pronly-nq-no50618
+  # T247: #53940 ablation, REDO. T241 ran this same image but NUMA balancing was
+  # on, which collapsed the run and confounded the result -- that conclusion was
+  # retracted. NUMA is off now and T245 proved the engine healthy (893/893), so
+  # the arm is valid this time.
+  #
+  # CAVEAT on the baseline: T236's 10,799 was measured pre-reboot with the NUMA
+  # state UNKNOWN. If this run lands close to 10,799 the delta is not safely
+  # attributable, and a same-session control on pronly-nq-no50618 is required
+  # before quoting a number. A large drop is interpretable; a small one is not.
+  image: kimi-k3-vllm:rec-no53940
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
