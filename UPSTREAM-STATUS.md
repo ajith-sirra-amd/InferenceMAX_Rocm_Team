@@ -31,17 +31,22 @@ as genuinely droppable are in **DO NOT NEED** further down.
 
 #### MUST HAVE — 2 PRs
 
-| # | PR | tag | what it does | Δ if dropped | status |
-|--:|---|---|---|--:|---|
-| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | unmeasured | ⏳ yet to verify |
-| 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | unmeasured | ⏳ yet to verify |
+| # | PR | tag | what it does | PR state | Δ if dropped | status |
+|--:|---|---|---|---|--:|---|
+| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | **open** | unmeasured | ⏳ yet to verify |
+| 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | **open** | unmeasured | ⏳ yet to verify |
 
 #### GOOD TO HAVE — 2 PRs, 2.27% together
 
-| # | PR | tag | what it does | Δ if dropped | status |
-|--:|---|---|---|--:|---|
-| 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | **−1.35%** | ✅ verified (T237) |
-| 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | **−0.93%** | ✅ verified (T238) |
+| # | PR | tag | what it does | PR state | Δ if dropped | status |
+|--:|---|---|---|---|--:|---|
+| 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | **open** | **−1.35%** | ✅ verified (T237) |
+| 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | ⚠️ **DRAFT** | **−0.93%** | ✅ verified (T238) |
+
+**#52968 is still a DRAFT** — it cannot merge until the author marks it ready
+for review. That is a blocker independent of our measurements, and the cheapest
+one to clear. PR state checked 2026-09-03; the other three are open and
+review-ready.
 
 **Two of four have a measured delta.** The must-haves rest on mechanism and are
 **still needed** — they are pending measurement, not rejected.
