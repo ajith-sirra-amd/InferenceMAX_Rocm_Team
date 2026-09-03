@@ -614,10 +614,13 @@ GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61
 # differ from T253 in the backend ONLY. Tying these to the lmcache branch would
 # have made the control a three-variable change (backend + gmu + mns) and left
 # the -37% inseparable from the concurrency drop. C72 defaults untouched.
-if [ "$CONC" = "48" ]; then
-    GPU_MEM_UTIL="${GPU_MEM_UTIL_C48:-0.88}"
+# T255: gate on the LMCache backend, not on conc. T255 must differ from T253 in
+# CONC ONLY (48 -> 72); gating on conc would have reverted gmu/mns and made it a
+# three-variable change. Non-LMCache C72 runs keep 0.90/96 and are unaffected.
+if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ]; then
+    GPU_MEM_UTIL="${GPU_MEM_UTIL_LMCACHE:-0.88}"
     MAX_NUM_SEQS=80
-    echo "[sa-match] conc=48 arm: gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS backend=${KV_OFFLOAD_BACKEND:-vllm-simple}"
+    echo "[sa-match] lmcache arm: gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS backend=${KV_OFFLOAD_BACKEND:-vllm-simple}"
 fi
 # T234: bare images only -- see the gmu-override block above. Patched images
 # keep 0.9 so every number in the ledger stays comparable.
