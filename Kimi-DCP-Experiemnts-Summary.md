@@ -11,7 +11,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **throughput** | 12,500 tok/s/GPU | **10,799** ([T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517), C72, `pronly-nq-no50618`, 8 upstream PRs, no vendor patch) | **−13.6%** |
+| **throughput** | 12,500 tok/s/GPU | **11,006** ([T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914), C72, `rec-no53940`, 7 upstream PRs, no vendor patch) | **−12.0%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
@@ -41,7 +41,8 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 | **T233** | pronly C72 replication | 10,690 (0.02% vs T232) |
 | **T232** | pronly C72 | 10,692 — **the overlay is worth nothing at C72** |
 
-**Headline: 10,799 tok/s/GPU @ C72**, err 0.09%, GSM8K 0.995, image
+**Headline: 11,006 tok/s/GPU @ C72** (T247, `rec-no53940`) — GSM8K not yet run
+on this image. Last accuracy-gated: 10,799 @ C72, err 0.09%, GSM8K 0.995, image
 `kimi-k3-vllm:pronly-nq-no50618` — 8 upstream PRs, no vendor patch.
 Target 12,500 = **+15.8%** still to find.
 

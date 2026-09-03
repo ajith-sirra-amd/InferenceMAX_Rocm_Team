@@ -7,20 +7,26 @@ b23_07, not published to a registry.
 
 ---
 
-# WHAT WE TESTED & PRODUCED — `kimi-k3-vllm:pronly`
+# WHAT WE TESTED & PRODUCED — `kimi-k3-vllm:rec-no53940`
 
-`nightly-7c5dc571` + **8 upstream PRs** (4 merged in base, 4 applied). No vendor
-patch. **10,799 tok/s/GPU @ C72**, err 0.09%, GSM8K 0.995.
-Image: `kimi-k3-vllm:pronly-nq-no50618`.
+`nightly-7c5dc571` + **7 upstream PRs** (4 merged in base, 3 applied). No vendor
+patch. **11,006 tok/s/GPU @ C72**, err 0.30% ([T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914)).
+Image: `kimi-k3-vllm:rec-no53940`.
 
-Started at 11 PRs and 10,692 (T232). Pruning removed 3 for free and found that
-2 more were **not** free (2.27% combined), so the recommended stack keeps them.
-**Upstreaming ask: 4 open PRs, down from 7.**
+⚠️ **GSM8K not yet run on this image.** 11,006 is a throughput number on a stack
+whose accuracy is unverified. The last accuracy-gated config is
+`pronly-nq-no50618` at **10,799**, err 0.09%, GSM8K 0.995
+([T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)).
 
-## PRs applied — 8 total. **Recommended stack = [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)'s.**
+Started at 11 PRs and 10,692 (T232). Pruning removed 3 for free, found 2 that
+are **not** free (2.27% combined), and found #53940 to be **negative** (+2.20%
+without it). **Upstreaming ask: 3 open PRs, down from 7.**
 
-Prune ladder is **closed** (T232–[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)). The recommended set is **not** the
-smallest that runs — the last two prunes cost 2.27% and are worth keeping.
+## PRs applied — 7 total. **Recommended stack = [T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914)'s.**
+
+Prune ladder is **closed** (T232–[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788), then T247/T248 on
+#53940). The recommended set is **not** the smallest that runs — #52494 and
+#52968 cost 2.27% together and are worth keeping.
 ### THE ASK — 3 PRs to upstream, 1 needs further evaluation
 
 Baseline **11,006 tok/s/GPU @ C72** ([T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914), `rec-no53940`, NUMA off).
