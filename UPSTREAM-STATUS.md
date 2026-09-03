@@ -21,7 +21,7 @@ Started at 11 PRs and 10,692 (T232). Pruning removed 3 for free, found 2 that
 are **not** free (2.27% combined), and found #53940 to be **negative** (+2.20%
 without it). **Upstreaming ask: 3 open PRs, down from 7.**
 
-## PRs applied — 7 total. **Recommended stack = [T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914)'s.**
+## PRs applied — 3 Total. **Recommended stack = [T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914)'s.**
 
 Prune ladder is **closed** (T232–[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788), then T247/T248 on
 #53940). The recommended set is **not** the smallest that runs — #52494 and
