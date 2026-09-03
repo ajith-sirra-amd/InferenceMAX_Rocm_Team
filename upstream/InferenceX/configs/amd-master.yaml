@@ -2174,9 +2174,12 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # T258 done: C64 +LMCache on OUR image -> 5,808 tok/s/GPU, err 8.29%,
       # ext_cache_hit 0.0% (1,535 "No GPU context found ... during lookup").
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [64], spec-decoding: mtp }
-      # T259: arm 1 of the STOCK-NIGHTLY set -- C48, no LMCache. True control
-      # against T257 (8,426 on our patched image at identical settings).
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
+      # T259 done: stock C48 no-LMCache -> 6,988 tok/s/GPU (our patches = +20.6%).
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
+      # T260: arm 2 of the STOCK-NIGHTLY set -- C64 WITH LMCache. Pairs with
+      # T258 (5,808 on our image, ext_cache_hit 0.0%). If stock also shows
+      # 0.0%, the lookup fault is upstream, not our patches.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [64], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
