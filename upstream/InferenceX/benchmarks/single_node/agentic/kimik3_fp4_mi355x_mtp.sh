@@ -610,10 +610,14 @@ GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61
 #   conc 48, mns 80, gmu 0.88, --max-gpu-workers 1  ->  8,997 tok/s/GPU
 # Ours has never served at conc 72 / mns 96 / gmu 0.90. Reproduce the reference,
 # then walk ONE knob at a time back toward C72.
-if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ]; then
-    GPU_MEM_UTIL="${GPU_MEM_UTIL_LMCACHE:-0.88}"
+# Gated on CONC=48, not on the backend: T254 is the LMCache CONTROL and must
+# differ from T253 in the backend ONLY. Tying these to the lmcache branch would
+# have made the control a three-variable change (backend + gmu + mns) and left
+# the -37% inseparable from the concurrency drop. C72 defaults untouched.
+if [ "$CONC" = "48" ]; then
+    GPU_MEM_UTIL="${GPU_MEM_UTIL_C48:-0.88}"
     MAX_NUM_SEQS=80
-    echo "[lmcache-match] SA reference: gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS conc=$CONC"
+    echo "[sa-match] conc=48 arm: gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS backend=${KV_OFFLOAD_BACKEND:-vllm-simple}"
 fi
 # T234: bare images only -- see the gmu-override block above. Patched images
 # keep 0.9 so every number in the ledger stays comparable.
