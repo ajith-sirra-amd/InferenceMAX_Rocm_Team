@@ -39,7 +39,7 @@ as genuinely droppable are in **DO NOT NEED** further down.
 
 **#53940 measured NEGATIVE at C72 (2026-09-03).** Same-session pair on a NUMA-off node: [T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914) **without** it = **11,006**; [T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710) **with** it = **10,769**. Dropping it is **+2.20%**, outside the ±1.2% band. [T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710) also replicates T236 (10,799) to 0.28%, so the baseline is sound.
 
-It does enlarge the GPU KV pool by 3.5% (29,656,464 vs 28,653,478) — but that is irrelevant here:  runs 46–56% with , so capacity never binds.
+It does enlarge the GPU KV pool by 3.5% (29,656,464 vs 28,653,478) — but that is irrelevant here: `kv_usage` runs 46–56% with `queue=0w`, so capacity never binds.
 
 **Do not include it in the ask on throughput grounds.** Untested at C1, where MTP is on and the picture may differ.
 
