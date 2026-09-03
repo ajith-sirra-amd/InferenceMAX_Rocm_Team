@@ -406,11 +406,13 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 1. **T257 — C48 no-LMCache, SA settings.** RUNNING.
 2. **T258 — C64 with LMCache**, current image.
 3. **T259 — C72 with LMCache**, current image.
-3b. **T260 — LMCache `--max-gpu-workers 1` A/B** at whichever of C64/C72 serves
-   best in 2–3. One variable: `LMCACHE_GPU_WORKERS=1` against the workers-8
-   default we just adopted from SA. **Not yet tested under SA settings** — the
-   only workers-1 LMCache runs were T239 (never served a token, so it proved
-   nothing) and T253 (served, but at the old gmu 0.88 / mns 80 / mnbt 16384).
+3b. **T260 — LMCache with `--max-gpu-workers 1`, on OUR image.**
+   Image `kimi-k3-vllm:rec-no53940` = `nightly-7c5dc571` + the 3 patches
+   (#53917, #52494, #52968). **Not** stock SA nightly — the point is our patched
+   stack, LMCache on, workers 1. Run at whichever of C64/C72 serves best in 2–3.
+   One variable: `LMCACHE_GPU_WORKERS=1` vs the workers-8 default just adopted
+   from SA. **Never cleanly tested** — T239 never served a token (proved
+   nothing) and T253 served only at the old gmu 0.88 / mns 80 / mnbt 16384.
    Env-overridable, so no script edit needed.
 
 4. **New image build**: fold in [#54494 `dcp-q-replicate`](https://github.com/vllm-project/vllm/pull/54494) (~99 lines, 3 files).
