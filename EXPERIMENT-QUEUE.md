@@ -407,14 +407,21 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
    GPU KV 30,169,355. SA's C48 *with* LMCache is 8,997 — 6.8% ahead of us.
 2. **T258 — C64 with LMCache**, current image. RUNNING.
 3. **T259 — C72 with LMCache**, current image.
-3b. **T260 — LMCache with `--max-gpu-workers 1`, on OUR image.**
-   Image `kimi-k3-vllm:rec-no53940` = `nightly-7c5dc571` + the 3 patches
-   (#53917, #52494, #52968). **Not** stock SA nightly — the point is our patched
-   stack, LMCache on, workers 1. Run at whichever of C64/C72 serves best in 2–3.
-   One variable: `LMCACHE_GPU_WORKERS=1` vs the workers-8 default just adopted
-   from SA. **Never cleanly tested** — T239 never served a token (proved
-   nothing) and T253 served only at the old gmu 0.88 / mns 80 / mnbt 16384.
-   Env-overridable, so no script edit needed.
+3b. **T260 — finish the run I cancelled (replay of T256).**
+   C64 + LMCache on OUR image `kimi-k3-vllm:rec-no53940` (`nightly-7c5dc571` +
+   #53917, #52494, #52968), at the **OLD** settings T256 was carrying when I
+   killed it at 29 min: `GPU_MEM_UTIL_LMCACHE=0.88`, `MAX_NUM_SEQS=80`,
+   `MAX_BATCHED_TOKENS=16384`, `LMCACHE_GPU_WORKERS=1`,
+   `LMCACHE_VERSION=0.5.5rc3+rocm7.2`. All five are env-overridable, but the
+   runner passes no env, so they must be set in the script/yaml before dispatch.
+   T256 was healthy when cancelled (warmup 57/131, 0 errors) — this recovers the
+   datapoint rather than leaving a hole.
+
+3c. **T261 — LMCache `--max-gpu-workers 1` under SA settings.**
+   Same image. ONE variable against T258: `LMCACHE_GPU_WORKERS=1` vs the
+   workers-8 default, everything else at SA values (gmu 0.90, mns 2×CONC,
+   mnbt 8192, `0.5.5.dev89`). This is the clean A/B; 3b is the replay.
+   Run at whichever of C64/C72 serves best in 2–3.
 
 4. **New image build**: fold in [#54494 `dcp-q-replicate`](https://github.com/vllm-project/vllm/pull/54494) (~99 lines, 3 files).
 5. **GSM8K-200 gate** on `VLLM_DCP_Q_REPLICATE=1` — replicated vs gathered
