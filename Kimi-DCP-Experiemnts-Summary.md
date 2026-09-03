@@ -11,7 +11,7 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
-| **throughput** | 12,500 tok/s/GPU | **10,799** (T236, C72, `pronly-nq-no50618`, 8 upstream PRs, no vendor patch) | **−13.6%** |
+| **throughput** | 12,500 tok/s/GPU | **10,799** ([T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517), C72, `pronly-nq-no50618`, 8 upstream PRs, no vendor patch) | **−13.6%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
 
@@ -25,15 +25,15 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 
 | trial | what | result |
 |---|---|---|
-| **T244** | **same probe, `numa_balancing=0`** | **FAIL 98.6% (2/144), 0 generated tokens** — but TTFT **150,515 → 20,214 ms (7.4x)**, throughput 95 → **402 tok/s**, capture 6 min → **1m17s**, warmup **now completes** (144/144 in 1m57s). NUMA was a real contributor, **not the root cause**. Healthy is ~84k tok/s aggregate; still ~200x off. |
-| **T243** | **fixed-len health probe**, recommended image, gmu 0.9 | **FAIL 99.3% — 1/144 completed, 0 generated tokens, TTFT 150,515 ms.** Fixed-len fails too, so the collapse is NOT the agentic replay. **Leading cause: `numa_balancing=1`** — reset by the reboot, not persisted in sysctl. AMD warns against it; all 8 workers logged the warning. GPU KV 29,656,464 (= T236). |
-| **T242** | gmu 0.90 → 0.85, recommended image | **CANCELLED at 3.7 h** — same warmup collapse as T241 on the *T236 image*. Killed manually. Proves gmu is not the cause and **confounds T241**. |
-| **T241** | **drop #53940** (a4w4 flydsl MoE) | **COLLAPSE — never reached profiling.** 76 warmup primers took 3.6 h, TTFT median **345 s**, drain timed out, 0/144 successful, **errors=0**. GPU KV 28,653,478 (−3.4% vs T236, gmu unchanged at 0.9). #53940 is load-bearing, not a tuning gain. |
+| **[T244](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33712514019)** | **same probe, `numa_balancing=0`** | **FAIL 98.6% (2/144), 0 generated tokens** — but TTFT **150,515 → 20,214 ms (7.4x)**, throughput 95 → **402 tok/s**, capture 6 min → **1m17s**, warmup **now completes** (144/144 in 1m57s). NUMA was a real contributor, **not the root cause**. Healthy is ~84k tok/s aggregate; still ~200x off. |
+| **[T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658)** | **fixed-len health probe**, recommended image, gmu 0.9 | **FAIL 99.3% — 1/144 completed, 0 generated tokens, TTFT 150,515 ms.** Fixed-len fails too, so the collapse is NOT the agentic replay. **Leading cause: `numa_balancing=1`** — reset by the reboot, not persisted in sysctl. AMD warns against it; all 8 workers logged the warning. GPU KV 29,656,464 (= [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)). |
+| **[T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072)** | gmu 0.90 → 0.85, recommended image | **CANCELLED at 3.7 h** — same warmup collapse as [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) on the *[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) image*. Killed manually. Proves gmu is not the cause and **confounds [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)**. |
+| **[T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)** | **drop #53940** (a4w4 flydsl MoE) | **COLLAPSE — never reached profiling.** 76 warmup primers took 3.6 h, TTFT median **345 s**, drain timed out, 0/144 successful, **errors=0**. GPU KV 28,653,478 (−3.4% vs [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517), gmu unchanged at 0.9). #53940 is load-bearing, not a tuning gain. |
 | **T240** | LMCache GSM8K | **BLOCKED — never started.** Died in the pre-run GPU-reclaim wait, 18% VRAM stranded on one GPU. No accuracy result. Fix applied: `--max-gpu-workers` 1 → 8. See `LMCACHE.md`. |
 | **T239** | LMCache fixed-len | **PASS** — 5/5, server up in 26 s, rocm backend auto-selected, chunk 12288 accepted at DCP=8 |
-| **T238** | drop #52968 | 10,554 — **prune ladder closed**; last two prunes cost 2.27% together |
-| **T237** | drop #52494 | 10,653 |
-| **T236** | drop #50618 | **10,799 — best in ledger.** Recommended stack. |
+| **[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)** | drop #52968 | 10,554 — **prune ladder closed**; last two prunes cost 2.27% together |
+| **[T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)** | drop #52494 | 10,653 |
+| **[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)** | drop #50618 | **10,799 — best in ledger.** Recommended stack. |
 | **T235** | drop #51392+#54254 | 10,781 |
 | **T233** | pronly C72 replication | 10,690 (0.02% vs T232) |
 | **T232** | pronly C72 | 10,692 — **the overlay is worth nothing at C72** |
@@ -4370,7 +4370,7 @@ construction on this model, which is why the ablation found nothing.
 #50618 (1 hunk, isolated) → #52494 (4 hunks) → #52968 (17 hunks) → #53917 last
 (25 hunks, the offload-under-DCP fix, most likely to be required).
 
-## T236 — #50618 also prunes. C72 = 10,799 with 3 applied PRs. Upstreaming ask: 5 → 4.
+## [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) — #50618 also prunes. C72 = 10,799 with 3 applied PRs. Upstreaming ask: 5 → 4.
 
 Run 33622043517. `kimi-k3-vllm:pronly-nq-no50618`, manifest `pr-applied: 53917
 52494 52968`. Config unchanged: mns 96, chunk 16384, dcp 8, ladder 1..96.
@@ -4426,7 +4426,7 @@ Cumulative prune: **#51392, #54254, #50618, #54165, #50813**.
 then #53917 (25 hunks) last — the offload-under-DCP fix, most likely required
 since we run `offload dram`.
 
-## T237 — #52494 prunes. C72 = 10,653 with 2 applied PRs. Upstreaming ask: 4 → 3.
+## [T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) — #52494 prunes. C72 = 10,653 with 2 applied PRs. Upstreaming ask: 4 → 3.
 
 Run 33631955363. `kimi-k3-vllm:pronly-min52968`, manifest `pr-applied: 53917
 52968`. Config unchanged: mns 96, chunk 16384, dcp 8, ladder 1..96.
@@ -4435,14 +4435,14 @@ Run 33631955363. `kimi-k3-vllm:pronly-min52968`, manifest `pr-applied: 53917
 |--:|---|--:|--:|--:|--:|
 | 6 | T232/T233 | 10,691 (n=2) | 0.18–0.22% | 107.6–108.5 | 505 |
 | 4 | T235 | 10,781 | 0.18% | 108.34 | 515.9 |
-| 3 | T236 | 10,799 | 0.09% | 107.63 | 515.6 |
-| **2** | **T237** | **10,653** | 0.22% | 109.58 | 504.1 |
+| 3 | [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) | 10,799 | 0.09% | 107.63 | 515.6 |
+| **2** | **[T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)** | **10,653** | 0.22% | 109.58 | 504.1 |
 
 **Full spread across 6/4/3/2 applied PRs: 10,653 – 10,799 = 1.37%.** That is
-marginally *wider* than the ±1.2% cross-day band, and T237 is the lowest point.
+marginally *wider* than the ±1.2% cross-day band, and [T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) is the lowest point.
 So the honest position shifts slightly:
 
-- **T236 vs T237 is −1.35%** — right at the edge of the band. It is the largest
+- **[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) vs [T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) is −1.35%** — right at the edge of the band. It is the largest
   single-step drop in the prune ladder.
 - It is **n=1 against n=1**, on runs ~2 h apart the same day.
 - **I am not calling #52494 free.** The other three prunes each landed within
@@ -4460,7 +4460,7 @@ losing that is mechanically plausible, unlike the quantization chain (inert by
 construction) or #50618 (a guard, not a fast path).
 
 **Recorded as: prunes, but the weakest evidence of the four.** If a replication
-is ever run on this ladder, T237 is the arm to repeat.
+is ever run on this ladder, [T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) is the arm to repeat.
 
 ### Current mergeable stack — 7 PRs
 
@@ -4480,7 +4480,7 @@ also prunes, only **#53917 + #53940** remain — and #53917 is the
 offload-under-DCP fix that we have deliberately kept for last because we run
 `offload dram` and it is the most likely to be load-bearing.
 
-## T238 — #52968 costs ~1% too. Prune ladder CLOSED, and the last two prunes were NOT free.
+## [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788) — #52968 costs ~1% too. Prune ladder CLOSED, and the last two prunes were NOT free.
 
 Run 33643182788. `pronly-only53917`, `pr-applied: 53917`. mns 96, chunk 16384,
 dcp 8, ladder 1..96.
@@ -4491,24 +4491,24 @@ dcp 8, ladder 1..96.
 |--:|---|--:|--:|--:|--:|--:|
 | 6 | T232/T233 | 10,691 (n=2) | 0.18–0.22% | 29,656,464 | — | — |
 | 4 | T235 | 10,781 | 0.18% | 29,656,464 | — | — |
-| 3 | T236 | **10,799** | 0.09% | 29,656,464 | 74.3% | 16.4% |
-| 2 | T237 | 10,653 | 0.22% | 29,656,464 | — | — |
-| **1** | **T238** | **10,554** | 0.18% | **29,816,030** | 74.6% | 16.0% |
+| 3 | [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) | **10,799** | 0.09% | 29,656,464 | 74.3% | 16.4% |
+| 2 | [T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) | 10,653 | 0.22% | 29,656,464 | — | — |
+| **1** | **[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)** | **10,554** | 0.18% | **29,816,030** | 74.6% | 16.0% |
 
 ### Correcting the earlier reading
 
 I had been calling each prune "no measurable difference" because each single
 step sat inside the ±1.2% band. Cumulatively that is wrong:
 
-**T236 (10,799) → T238 (10,554) = −2.27%**, well outside the band, and the
+**[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) (10,799) → [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788) (10,554) = −2.27%**, well outside the band, and the
 ladder is **monotone decreasing** across the last three arms. The two kernel-
 fusion PRs each cost roughly 1%:
 
 | PR | step | Δ |
 |---|---|--:|
-| #52494 (fuse MLA q/kv RMSNorm) | T236→T237 | −1.35% |
-| #52968 (attn_res + sigmoid_mul + conv fusions) | T237→T238 | −0.93% |
-| **both** | **T236→T238** | **−2.27%** |
+| #52494 (fuse MLA q/kv RMSNorm) | [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)→[T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) | −1.35% |
+| #52968 (attn_res + sigmoid_mul + conv fusions) | [T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)→[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788) | −0.93% |
+| **both** | **[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)→[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)** | **−2.27%** |
 
 **So the honest split is:**
 
@@ -4519,24 +4519,24 @@ fusion PRs each cost roughly 1%:
   passes never run — without these PRs those launches stay unfused on **every
   layer, every forward**. A real cost is exactly what the mechanism predicts.
 
-**Recommended stack is therefore T236's, not T238's:**
+**Recommended stack is therefore [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)'s, not [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)'s:**
 **#53917 + #52494 + #52968 + #53940** (+ 4 merged in base) = **10,799**, the
 best measured number in the ledger. That is **4 open PRs** to upstream, not 2.
 The extra 2 PRs buy 2.27%.
 
 ### KV capacity is now a tracked column — and it moved
 
-Capacity was **identical (29,656,464)** across T232/T235/T236/T237 and rose to
-**29,816,030** in T238 (+159,566, +0.54%) when #52968 came out. Removing its
+Capacity was **identical (29,656,464)** across T232/T235/[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)/[T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) and rose to
+**29,816,030** in [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788) (+159,566, +0.54%) when #52968 came out. Removing its
 fused kernels frees a little device memory, which the KV pool absorbs.
 
 That matters two ways:
 
-1. **It is a confound.** T238 is not a pure one-variable step — it had slightly
+1. **It is a confound.** [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788) is not a pure one-variable step — it had slightly
    *more* cache and still scored *lower*, which strengthens the conclusion that
    #52968 has real value, but it means the arm was never perfectly clean.
 2. **Every prior arm was clean on this axis** — identical capacity — so
-   T232→T237 comparisons stand.
+   T232→[T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) comparisons stand.
 
 **Capacity is recorded for every run from here.**
 
@@ -4570,20 +4570,20 @@ the 1,949 GB *host* pool, so it buys no GPU-side cache. Any gain must come from
 a higher **external** hit rate. Baseline to beat at C72 with
 SimpleCPUOffload: **ext_cache_hit 16.0–16.4%**, GPU hit 74.3–74.6%.
 
-Next: T240 GSM8K (new KV connector is a major change), then T241 agentic C72.
+Next: T240 GSM8K (new KV connector is a major change), then [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) agentic C72.
 
 ---
 
-## T241 — #53940 ablation (a4w4 flydsl MoE kernels): COLLAPSE
+## [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) — #53940 ablation (a4w4 flydsl MoE kernels): COLLAPSE
 
 Run 33665892734 · image `kimi-k3-vllm:rec-no53940` · C72 · gmu 0.9 · mns 96 ·
 chunk 16384 · DCP 8 · ladder 1..96 · 18:19Z → 22:14Z.
 
 **Clean one-variable arm.** Manifest: `pr-applied: 53917 52494 52968` —
-byte-identical to T236 — and `pr-stack: 0 files`, confirming #53940 is the only
+byte-identical to [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) — and `pr-stack: 0 files`, confirming #53940 is the only
 thing removed.
 
-| | T236 (with #53940) | T241 (without) |
+| | [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) (with #53940) | [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) (without) |
 |---|--:|--:|
 | tok/s/GPU | **10,799** | **no result — never profiled** |
 | warmup | minutes | **3.6 h, timed out** |
@@ -4618,21 +4618,21 @@ a 5-request fixed-len probe would have shown the collapse in minutes.
 
 ---
 
-## T242 / T243 — the collapse is the NODE, not the stack. T241 is confounded.
+## [T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072) / [T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) — the collapse is the NODE, not the stack. [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) is confounded.
 
-**T242** (run 33689675072, gmu 0.85, `pronly-nq-no50618`): warmup collapse,
+**[T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072)** (run 33689675072, gmu 0.85, `pronly-nq-no50618`): warmup collapse,
 `returned=63/148`, `sent=76`, `errors=0`. Cancelled manually at 3.7 h. This ran
-the **same image that scored 10,799 in T236**, so known-good code failed.
+the **same image that scored 10,799 in [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)**, so known-good code failed.
 
-**T243** (run 33706235658, fixed-len probe, `pronly-nq-no50618`, gmu 0.9):
+**[T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658)** (run 33706235658, fixed-len probe, `pronly-nq-no50618`, gmu 0.9):
 
-| metric | T243 | baseline |
+| metric | [T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) | baseline |
 |---|--:|--:|
 | successful requests | **1 / 144 (99.3% fail)** | T180 10/10 |
 | generated tokens | **0** | — |
 | Mean TTFT | **150,515 ms** | — |
 | Mean TPOT | 0.00 (never decoded) | T180 7.41 ms |
-| GPU KV capacity | 29,656,464 | = T236 |
+| GPU KV capacity | 29,656,464 | = [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) |
 
 **Fixed-len fails too.** That kills the "agentic replay cache behaviour"
 explanation and makes this a whole-node fault.
@@ -4653,7 +4653,7 @@ stranded VRAM also reverted this to the kernel default.
 
 Why it fits every observation:
 
-- appears exactly at the reboot boundary; T236 (pre-reboot) was fine
+- appears exactly at the reboot boundary; [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) (pre-reboot) was fine
 - **degrades rather than crashes** — `errors=0` in every failed run
 - kernels resident (GPU% 90-97%) but power only 230-467 W of a 1400 W cap:
   waiting on memory, not computing
@@ -4670,27 +4670,27 @@ echo 'kernel.numa_balancing = 0' | sudo tee /etc/sysctl.d/99-numa.conf
 
 The second line matters: without it the next reboot silently reintroduces this.
 
-### Consequence for T241 — I over-claimed
+### Consequence for [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) — I over-claimed
 
-T241 was written up as a clean one-variable ablation proving #53940
-load-bearing, and `UPSTREAM-STATUS.md` was reordered around it. T242 then
+[T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) was written up as a clean one-variable ablation proving #53940
+load-bearing, and `UPSTREAM-STATUS.md` was reordered around it. [T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072) then
 reproduced the identical signature on a **different image at a different gmu**,
-and T243 reproduced it on fixed-len. **T241's result is confounded and cannot
+and [T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) reproduced it on fixed-len. **[T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)'s result is confounded and cannot
 support that claim.** #53940 may still be load-bearing on mechanism, but the
 measurement must be redone on a healthy node before it is quoted.
 
-Cost of the error: ~8 h of GPU time across T241/T242 chasing a stack question
+Cost of the error: ~8 h of GPU time across [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)/[T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072) chasing a stack question
 while the node was the variable. The cheap fixed-len canary that would have
-caught it in ~40 min is the one T241's own write-up said to run first.
+caught it in ~40 min is the one [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)'s own write-up said to run first.
 
 ---
 
-## T244 — NUMA off: large improvement, still failing. Hypothesis half-right.
+## [T244](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33712514019) — NUMA off: large improvement, still failing. Hypothesis half-right.
 
 Run 33712514019, `pronly-nq-no50618`, gmu 0.9, `TEST=1` func probe, the only
-change from T243 being `/proc/sys/kernel/numa_balancing` 1 -> 0.
+change from [T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) being `/proc/sys/kernel/numa_balancing` 1 -> 0.
 
-| metric | T243 (NUMA on) | T244 (NUMA off) |
+| metric | [T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) (NUMA on) | [T244](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33712514019) (NUMA off) |
 |---|--:|--:|
 | successful requests | 1/144 | **2/144** |
 | Mean TTFT | 150,515 ms | **20,214 ms** (7.4x better) |
@@ -4706,7 +4706,7 @@ change from T243 being `/proc/sys/kernel/numa_balancing` 1 -> 0.
 **Conclusion: NUMA auto-balancing was doing real damage but is not the root
 cause.** Every startup-path metric recovered to healthy or better, and warmup
 went from never-finishing to 1m57s. Serving is still broken: 0 tokens
-generated, 402 tok/s against ~84k tok/s aggregate for a healthy C72 run (T238).
+generated, 402 tok/s against ~84k tok/s aggregate for a healthy C72 run ([T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)).
 
 **Keep it off regardless** -- the startup gains alone justify it, and AMD
 recommends it. Persist with `/etc/sysctl.d/99-numa.conf`; it is currently a

@@ -17,9 +17,9 @@ Started at 11 PRs and 10,692 (T232). Pruning removed 3 for free and found that
 2 more were **not** free (2.27% combined), so the recommended stack keeps them.
 **Upstreaming ask: 4 open PRs, down from 7.**
 
-## PRs applied — 8 total. **Recommended stack = T236's.**
+## PRs applied — 8 total. **Recommended stack = [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)'s.**
 
-Prune ladder is **closed** (T232–T238). The recommended set is **not** the
+Prune ladder is **closed** (T232–[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)). The recommended set is **not** the
 smallest that runs — the last two prunes cost 2.27% and are worth keeping.
 
 ### THE ASK — 4 open PRs
@@ -40,8 +40,8 @@ as genuinely droppable are in **DO NOT NEED** further down.
 
 | # | PR | tag | what it does | PR state | Δ if dropped | status |
 |--:|---|---|---|---|--:|---|
-| 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | **open** | **−1.35%** | ✅ verified (T237) |
-| 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | ⚠️ **DRAFT** | **−0.93%** | ✅ verified (T238) |
+| 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | **open** | **−1.35%** | ✅ verified ([T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)) |
+| 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | ⚠️ **DRAFT** | **−0.93%** | ✅ verified ([T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)) |
 
 **#52968 is still a DRAFT** — it cannot merge until the author marks it ready
 for review. That is a blocker independent of our measurements, and the cheapest
@@ -65,13 +65,13 @@ serve, just with stock geometry. #53917 can get a real number instead of ⏳.
 
 **RETRACTED (2026-09-03): the #53940 ablation is confounded — do not cite it.**
 
-T241 dropped #53940 and the run never reached profiling, and this file
+[T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) dropped #53940 and the run never reached profiling, and this file
 previously recorded that as proof the PR is load-bearing. That conclusion does
 not hold:
 
-- **T242** ran gmu 0.85 on `pronly-nq-no50618` — the image that scored 10,799 in
-  T236, **with #53940 present** — and collapsed with the identical signature.
-- **T243** ran a fixed-len probe on that same image at the ledger's gmu 0.9 and
+- **[T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072)** ran gmu 0.85 on `pronly-nq-no50618` — the image that scored 10,799 in
+  [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517), **with #53940 present** — and collapsed with the identical signature.
+- **[T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658)** ran a fixed-len probe on that same image at the ledger's gmu 0.9 and
   failed 99.3% (1/144, 0 generated tokens, TTFT 150 s).
 
 So the collapse reproduces without removing #53940, on two other configurations,
@@ -80,7 +80,7 @@ patch: `numa_balancing` was reset to 1 by the reboot and is not persisted in
 sysctl. Details and fix in `Kimi-DCP-Experiemnts-Summary.md`.
 
 **#53940 stays in the ask on mechanism** — it is live on the MoE path
-(`flydsl_moe1/moe2` in the T195 and T243 logs) and every good number in the
+(`flydsl_moe1/moe2` in the T195 and [T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) logs) and every good number in the
 ledger was measured with it applied. But its removal cost is **unmeasured**, and
 the ablation must be rerun on a healthy node before any number is quoted.
 
@@ -103,14 +103,14 @@ everything else composes on top of it. Detail and rationale below.
 ## UPSTREAMING PRIORITY — must-have vs good-to-have
 
 Ordered by measured cost of dropping it. Baseline for every delta is
-**T236 = 10,799 tok/s/GPU @ C72** on `kimi-k3-vllm:pronly-nq-no50618`.
+**[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) = 10,799 tok/s/GPU @ C72** on `kimi-k3-vllm:pronly-nq-no50618`.
 
 ### MUST HAVE — the stack does not work without these
 
 | # | PR | tag | why | evidence | status |
 |--:|---|---|---|---|---|
 | 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `cpu-offload` | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | never removed | ⏳ yet to verify |
-| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | `a4w4-moe` | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195/T243 logs). Rides in the separate `pr_stack/`. | **CONFOUNDED — T241's ablation is void.** The same collapse reproduced in T242/T243 *with* #53940 applied, so the run measured the node, not the patch. Removal cost unmeasured; rerun required. | ⏳ yet to verify |
+| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | `a4w4-moe` | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195/[T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) logs). Rides in the separate `pr_stack/`. | **CONFOUNDED — [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)'s ablation is void.** The same collapse reproduced in [T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072)/[T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) *with* #53940 applied, so the run measured the node, not the patch. Removal cost unmeasured; rerun required. | ⏳ yet to verify |
 
 **Neither has a measured number, and that is the honest state.** #53917 is
 load-bearing by mechanism and by the T216 starvation result; #53940 has never
@@ -120,8 +120,8 @@ been removed. Both are must-have on reasoning, not on a delta.
 
 | # | PR | tag | Δ if dropped | throughput | why it costs | status |
 |--:|---|---|--:|--:|---|---|
-| 3 | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | `mla-rmsnorm-fusion` | **−1.35%** | 10,799 → **10,653** (T237) | fuses `q_a_layernorm`/`kv_a_layernorm` into one AITER launch. K3 carries no `@support_torch_compile`, so `MLADualRMSNormFusionPass` never runs — without the PR those stay two launches on **every MLA layer, every forward**. | ✅ verified |
-| 4 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | `attn-conv-fusion` | **−0.93%** | 10,653 → **10,554** (T238) | attn_res + add_rmsnorm_quant fused, causal_conv1d fused for qkv, native sigmoid+mul → fused kernel. Same mechanism: inductor never fuses these for K3. | ✅ verified |
+| 3 | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | `mla-rmsnorm-fusion` | **−1.35%** | 10,799 → **10,653** ([T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)) | fuses `q_a_layernorm`/`kv_a_layernorm` into one AITER launch. K3 carries no `@support_torch_compile`, so `MLADualRMSNormFusionPass` never runs — without the PR those stay two launches on **every MLA layer, every forward**. | ✅ verified |
+| 4 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | `attn-conv-fusion` | **−0.93%** | 10,653 → **10,554** ([T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)) | attn_res + add_rmsnorm_quant fused, causal_conv1d fused for qkv, native sigmoid+mul → fused kernel. Same mechanism: inductor never fuses these for K3. | ✅ verified |
 | | **both** | | **−2.27%** | 10,799 → **10,554** | outside the ±1.2% band, monotone | ✅ verified |
 
 ### DO NOT NEED — measured free
@@ -129,7 +129,7 @@ been removed. Both are must-have on reasoning, not on a delta.
 | PR | Δ if dropped | throughput |
 |---|--:|--:|
 | [#51392](https://github.com/vllm-project/vllm/pull/51392) + [#54254](https://github.com/vllm-project/vllm/pull/54254) | **+0.83%** (noise) | 10,691 → 10,781 (T235) |
-| [#50618](https://github.com/vllm-project/vllm/pull/50618) | **+0.17%** (noise) | 10,781 → 10,799 (T236) |
+| [#50618](https://github.com/vllm-project/vllm/pull/50618) | **+0.17%** (noise) | 10,781 → 10,799 ([T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)) |
 | [#54165](https://github.com/vllm-project/vllm/pull/54165) | inert — spec off at C72 | — |
 | [#50813](https://github.com/vllm-project/vllm/pull/50813) | dead code | — |
 
@@ -154,7 +154,7 @@ err 0.09%, GSM8K 0.995.
 | PR | evidence | confidence |
 |---|---|---|
 | **[#51392](https://github.com/vllm-project/vllm/pull/51392)** + **[#54254](https://github.com/vllm-project/vllm/pull/54254)** | GSM8K 0.995 (T234), 10,781 (T235) | **strong** — dependency pair, inert by construction: checkpoint is `mxfp4` with `quantization_config=None`, so the online-quant path had no work |
-| **[#50618](https://github.com/vllm-project/vllm/pull/50618)** | 10,799, err 0.09% (T236) | **measured-safe, NOT proven-safe** — guards a 12,288-byte over-read in KDA `f_b_proj` (`stride=(6288,1)` at TP8); only the python hunk ever applied. **First to restore on any stray memory fault.** |
+| **[#50618](https://github.com/vllm-project/vllm/pull/50618)** | 10,799, err 0.09% ([T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)) | **measured-safe, NOT proven-safe** — guards a 12,288-byte over-read in KDA `f_b_proj` (`stride=(6288,1)` at TP8); only the python hunk ever applied. **First to restore on any stray memory fault.** |
 | **[#54165](https://github.com/vllm-project/vllm/pull/54165)** | closed-unmerged; spec off at C72 | author closed it as superseded by [#54163](https://github.com/vllm-project/vllm/pull/54163) |
 | **[#50813](https://github.com/vllm-project/vllm/pull/50813)** | dead code, zero GPU cost | `quark_moe.py` unreachable |
 
@@ -164,14 +164,14 @@ err 0.09%, GSM8K 0.995.
 |--:|---|--:|--:|--:|
 | 6 | T232/T233 | 10,691 (n=2) | 0.18–0.22% | 29,656,464 |
 | 4 | T235 | 10,781 | 0.18% | 29,656,464 |
-| **3** | **T236** | **10,799** | **0.09%** | 29,656,464 |
-| 2 | T237 | 10,653 | 0.22% | 29,656,464 |
-| 1 | T238 | 10,554 | 0.18% | **29,816,030** |
+| **3** | **[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)** | **10,799** | **0.09%** | 29,656,464 |
+| 2 | [T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363) | 10,653 | 0.22% | 29,656,464 |
+| 1 | [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788) | 10,554 | 0.18% | **29,816,030** |
 
 ### A reading I had to correct
 
 Each single step sat inside the ±1.2% band, so I called them all "no measurable
-difference." **Cumulatively that was wrong.** T236 → T238 is **−2.27%**,
+difference." **Cumulatively that was wrong.** [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) → [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788) is **−2.27%**,
 outside the band and **monotone** across three arms. The two kernel-fusion PRs
 each cost ~1%, which is exactly what the mechanism predicts: K3 carries no
 `@support_torch_compile`, so inductor never fuses those launches — without the
@@ -182,9 +182,9 @@ PRs they stay unfused on every layer, every forward.
 
 ### GPU KV capacity is now tracked every run
 
-Identical (29,656,464) across T232–T237, rose to **29,816,030** (+0.54%) in T238
+Identical (29,656,464) across T232–[T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363), rose to **29,816,030** (+0.54%) in [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)
 when #52968 came out — its fused kernels free device memory the KV pool absorbs.
-So T238 had **more** cache and still scored **lower**, which strengthens the
+So [T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788) had **more** cache and still scored **lower**, which strengthens the
 conclusion but means that arm was not perfectly one-variable. Every earlier arm
 was clean on this axis.
 
