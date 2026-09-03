@@ -22,14 +22,27 @@ Started at 11 PRs and 10,692 (T232). Pruning removed 3 for free and found that
 Prune ladder is **closed** (T232–T238). The recommended set is **not** the
 smallest that runs — the last two prunes cost 2.27% and are worth keeping.
 
-### THE ASK — 4 open PRs, in priority order
+### THE ASK — 4 open PRs
 
-| # | PR | class | measured value | throughput if dropped |
-|--:|---|---|--:|--:|
-| **1** | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | **MUST** | unmeasured — never tested for removal | — |
-| **2** | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | **MUST (on mechanism)** | **ablation CONFOUNDED — see below** | not established |
-| **3** | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | good | **+1.35%** | 10,799 → 10,653 (T237) |
-| **4** | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | good | **+0.93%** | 10,653 → 10,554 (T238) |
+`status` is **VERIFIED** only when the PR was removed and the stack re-measured.
+Reasoning, however sound, is *not verified*.
+
+#### MUST HAVE — 2 PRs
+
+| # | PR | tag | what it does | Δ if dropped | status |
+|--:|---|---|---|--:|---|
+| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | `SimpleCPUOffloadConnector` + per-group KV cache geometry under DCP | unmeasured | ❌ **NOT VERIFIED** — never removed |
+| 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 flydsl MoE kernels (`flydsl_moe1/moe2_abf16_wfp4_bf16`) | unmeasured | ❌ **NOT VERIFIED** — T241 ablation confounded |
+
+#### GOOD TO HAVE — 2 PRs, 2.27% together
+
+| # | PR | tag | what it does | Δ if dropped | status |
+|--:|---|---|---|--:|---|
+| 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuses MLA `q_a_layernorm` + `kv_a_layernorm` into one AITER launch | **−1.35%** (10,799 → 10,653) | ✅ **VERIFIED** — T237 |
+| 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | attn_res + add_rmsnorm_quant, causal_conv1d for qkv, sigmoid+mul fusions | **−0.93%** (10,653 → 10,554) | ✅ **VERIFIED** — T238 |
+
+**Two of four are verified.** Both must-haves rest on mechanism, not a measured
+delta — that is the honest state and should be said plainly when filing.
 
 **RETRACTED (2026-09-03): the #53940 ablation is confounded — do not cite it.**
 
@@ -75,10 +88,10 @@ Ordered by measured cost of dropping it. Baseline for every delta is
 
 ### MUST HAVE — the stack does not work without these
 
-| # | PR | why | evidence |
-|--:|---|---|---|
-| 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | **never tested for removal** — the only applied PR with no drop arm |
-| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195/T243 logs). Rides in the separate `pr_stack/`. | **CONFOUNDED — T241's ablation is void.** The same collapse reproduced in T242/T243 *with* #53940 applied, so the run measured the node, not the patch. Removal cost unmeasured; rerun required. |
+| # | PR | tag | why | evidence | status |
+|--:|---|---|---|---|---|
+| 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `cpu-offload` | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | **never tested for removal** — the only applied PR with no drop arm | ❌ NOT VERIFIED |
+| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | `a4w4-moe` | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195/T243 logs). Rides in the separate `pr_stack/`. | **CONFOUNDED — T241's ablation is void.** The same collapse reproduced in T242/T243 *with* #53940 applied, so the run measured the node, not the patch. Removal cost unmeasured; rerun required. | ❌ NOT VERIFIED |
 
 **Neither has a measured number, and that is the honest state.** #53917 is
 load-bearing by mechanism and by the T216 starvation result; #53940 has never
@@ -86,11 +99,11 @@ been removed. Both are must-have on reasoning, not on a delta.
 
 ### GOOD TO HAVE — measured, worth 2.27% together
 
-| # | PR | Δ if dropped | throughput | why it costs |
-|--:|---|--:|--:|---|
-| 3 | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | **−1.35%** | 10,799 → **10,653** (T237) | fuses `q_a_layernorm`/`kv_a_layernorm` into one AITER launch. K3 carries no `@support_torch_compile`, so `MLADualRMSNormFusionPass` never runs — without the PR those stay two launches on **every MLA layer, every forward**. |
-| 4 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | **−0.93%** | 10,653 → **10,554** (T238) | attn_res + add_rmsnorm_quant fused, causal_conv1d fused for qkv, native sigmoid+mul → fused kernel. Same mechanism: inductor never fuses these for K3. |
-| | **both** | **−2.27%** | 10,799 → **10,554** | outside the ±1.2% band, monotone |
+| # | PR | tag | Δ if dropped | throughput | why it costs | status |
+|--:|---|---|--:|--:|---|---|
+| 3 | **[#52494](https://github.com/vllm-project/vllm/pull/52494)** | `mla-rmsnorm-fusion` | **−1.35%** | 10,799 → **10,653** (T237) | fuses `q_a_layernorm`/`kv_a_layernorm` into one AITER launch. K3 carries no `@support_torch_compile`, so `MLADualRMSNormFusionPass` never runs — without the PR those stay two launches on **every MLA layer, every forward**. | ✅ VERIFIED |
+| 4 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | `attn-conv-fusion` | **−0.93%** | 10,653 → **10,554** (T238) | attn_res + add_rmsnorm_quant fused, causal_conv1d fused for qkv, native sigmoid+mul → fused kernel. Same mechanism: inductor never fuses these for K3. | ✅ VERIFIED |
+| | **both** | | **−2.27%** | 10,799 → **10,554** | outside the ±1.2% band, monotone | ✅ VERIFIED |
 
 ### DO NOT NEED — measured free
 
