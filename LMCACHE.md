@@ -384,3 +384,71 @@ does not.
 cache — its L1 is the 1,949 GB host pool. So any gain must come from a higher
 *external* hit rate, not more GPU cache. That is the number to watch in T241:
 SimpleCPUOffload gave ext_cache_hit 16.0–16.4% at C72.
+
+---
+
+## T250 (2026-09-03) — 100% failure both passes. Root cause candidate found.
+
+Run [33736043897](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33736043897)
+· `rec-no53940` · C72 · numa_balancing=0 at launch.
+
+| stage | result |
+|---|---|
+| Function (isl 214k, 144 prompts) | **0/144 — 100% fail** |
+| Fixed Perf (isl 8192/1024, 893 prompts) | **0/893 — 100% fail** |
+
+Zero tokens generated in either. **The fixed-perf config passed 893/893 with
+914,432 tokens in T245 on `vllm-simple`** — same image, node and concurrency,
+so the KV backend is the only variable.
+
+### The failure is instant, not slow
+
+```
+warmup:    1/144 [11:29<27:24:17, 689.91s/it]   <- first request 690 s
+           144/144 [11:30]  Warmup completed.
+benchmark: 144/144 [00:00<00:00, 340.95it/s]    <- ALL failed in 0 s
+UserWarning: All requests failed. This is likely due to a misconfiguration
+```
+
+Warmup limped through at 690 s to first token; every *benchmark* request then
+failed immediately. Instant rejection, not a stall — so this is an error path,
+not a throughput problem. `kv_load_failure_policy='fail'` in the vLLM config
+turns any LMCache KV-load miss into a hard request failure, which fits.
+
+### Diff vs the SA reference recipe (read-only)
+
+`SemiAnalysisAI/InferenceX` @ `perf/k3-mi355x-lmcache-rc3-c1-c8-c14-c40`,
+`benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh`:
+
+| arg | SA reference | T250 |
+|---|---|---|
+| **`--max-gpu-workers`** | **1** | **8** |
+| `--l1-size-gb` | `$TOTAL_CPU_DRAM_GB` | same |
+| `--l1-init-size-gb` | 10 | same |
+| `--chunk-size` | 12288 | same |
+| `--max-cpu-workers` | 8 | same |
+| `--separate-object-groups`, `--eviction-policy LRU`, `--supported-transfer-mode lmcache_driven`, `--shm-name ""` | ✓ | same |
+| connector JSON (`lmcache.mp.port`, `mq_timeout 6000.0`) | ✓ | identical |
+
+**`--max-gpu-workers` is the only difference.** Our default is
+`LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-$TP}"` = 8; the reference pins 1.
+That value was changed 1 -> 8 on 2026-09-02 after I withdrew a wrong hypothesis
+about it controlling VRAM (`--help` calls it "Worker threads for the GPU
+affinity pool").
+
+**Next LMCache attempt must set `--max-gpu-workers 1`** to match the reference,
+and change nothing else.
+
+### What worked
+
+- LMCache server: `READY on :8090 after 18s`
+- **Teardown fix validated**: `server exited cleanly after 44s`, no SIGKILL, no
+  stranded-VRAM warning. T240's mechanism did not recur.
+- GPU KV pool unchanged at 28,653,478 — LMCache does not shrink the GPU tier.
+
+### Node rebooted at 09:22
+
+Third unclean reboot (18:05, 03:08, 09:22), none with a shutdown record, around
+T250's completion. **Causation not established.** After it: `amdgpu` was not
+loaded and `numa_balancing` had reverted to 1; both recovered manually.
+`/etc/sysctl.d/99-numa.conf` is **still absent**.

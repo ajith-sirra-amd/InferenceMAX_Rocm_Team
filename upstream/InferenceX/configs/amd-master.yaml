@@ -2153,7 +2153,11 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # 48 and 56 bracket it; each conc is an independent measurement.
       # T250: LMCache arm. Stage 1+2 of Function -> Fixed Perf -> Accuracy ->
       # Agentic Perf. Backend swaps vllm-simple -> lmcache; everything else held.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5rc3+rocm7.2" }, conc-list: [72], spec-decoding: mtp }
+      # T250 LMCache: 0/144 func AND 0/893 perf, 100% failure, zero tokens.
+      # The same 8k/1k perf config passed 893/893 in T245 on vllm-simple, so the
+      # backend is the variable. Reverted to vllm-simple; do NOT re-dispatch
+      # LMCache until the lmcache server log has been read and diagnosed.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [64], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:

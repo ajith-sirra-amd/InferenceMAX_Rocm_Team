@@ -25,6 +25,7 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 
 | trial | what | result |
 |---|---|---|
+| **[T250](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33736043897)** | **LMCache** stages 1+2 (Function + Fixed Perf) | **TOTAL FAILURE — 0/144 func and 0/893 perf, 100% failure both passes, zero tokens generated.** LMCache server came up in 18s and **exited cleanly in 44s** (teardown fix worked, no stranded VRAM). Node rebooted at 09:22 around job completion — third unclean reboot; causation not established. |
 | **[T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710)** | **CONTROL: #53940 present**, NUMA off | **10,769 tok/s/GPU**, err 0.13%, GPU KV 29,656,464. vs [T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914) 11,006 without it: **#53940 COSTS 2.20% at C72.** Also replicates T236 (10,799) to 0.28% — baseline is stable across the reboot. **Prediction falsified**: I forecast T248 > T247 by 1-4%; it is 2.2% lower. |
 | **[T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914)** | **#53940 ablation REDO**, NUMA off | **11,006 tok/s/GPU**, err 0.30% (7/2314), GPU KV 28,653,478. **Higher than T236's 10,799 — dropping #53940 does NOT collapse anything.** [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)'s claim is fully refuted. Delta not yet quotable: T236 predates the reboot with NUMA state unknown. Control run required. |
 | **[T245](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33714864721)** | **fixed-len perf 8192/1024, C72, NUMA off** | **PASS — 893/893, 0 failures, 914,432 tokens generated.** 7,724 tok/s total, TPOT 78.0/77.5/92.5 ms (mean/med/p99), TTFT 4,541 ms, median ITL 44.4 ms. **Engine and node are healthy** — T243/T244 failed on a 214k-token probe, not a fault. |
@@ -4805,3 +4806,50 @@ explained; none currently block benchmarking.
 
 **`numa_balancing=0` is runtime-only** — add `/etc/sysctl.d/99-numa.conf` or the
 next reboot silently reverts it and this recurs.
+
+---
+
+## T250 — LMCache: 100% failure on both passes
+
+Run 33736043897 · `rec-no53940` · C72 · gmu 0.9 · numa_balancing=0 at launch
+Backend: `vllm-simple` -> **`lmcache` 0.5.5rc3+rocm7.2**, everything else held.
+
+| stage | config | result |
+|---|---|---|
+| Function | isl 214000, osl 874, ratio 0.37, 144 prompts, conc 72 | **0/144, 100% fail** |
+| Fixed Perf | isl 8192, osl 1024, ratio 1.0, 893 prompts, conc 72 | **0/893, 100% fail** |
+
+Zero generated tokens, zero throughput, TTFT/TPOT all 0.00 in both.
+
+**The fixed-len perf pass is the damning one.** That exact config passed
+**893/893 with 914,432 tokens** in T245 on `SimpleCPUOffloadConnector`. Same
+image, same node, same concurrency — only the KV backend differs. So this is
+LMCache, not the workload and not the probe.
+
+### What did work
+
+- LMCache server: `READY on :8090 after 18s`
+- **Teardown fix validated**: `server exited cleanly after 44s`. No SIGKILL, no
+  stranded-VRAM warning. T240's failure mechanism did not recur.
+- GPU KV pool unchanged at 28,653,478 — LMCache does not shrink the GPU tier.
+
+### The reboot
+
+Node rebooted **09:22**, around job completion (started 08:56, ~26 min).
+Third unclean reboot in a row (18:05, 03:08, 09:22), none with a shutdown
+record. **Causation not established** — and unlike T240, the LMCache teardown
+demonstrably behaved. After the reboot: `amdgpu` was not loaded, and
+`numa_balancing` had reverted to 1. Both required manual recovery.
+
+### Standing risk, still unfixed
+
+`/etc/sysctl.d/99-numa.conf` is **still absent**. Every reboot silently
+reinstates the NUMA fault. That single file is the difference between a
+30-minute recovery and repeating the 2026-09-02 diagnosis chain.
+
+### Verdict on LMCache
+
+Does not serve at all in this configuration. Before any further LMCache time is
+spent, the failure mode needs reading from the LMCache server log rather than
+retried -- three stages were planned (Function, Fixed Perf, Accuracy, Agentic)
+and it did not clear stage one.
