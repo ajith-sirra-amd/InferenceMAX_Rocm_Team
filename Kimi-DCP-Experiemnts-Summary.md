@@ -25,6 +25,8 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 
 | trial | what | result |
 |---|---|---|
+| **T243** | **fixed-len health probe**, recommended image, gmu 0.9 | **FAIL 99.3% — 1/144 completed, 0 generated tokens, TTFT 150,515 ms.** Fixed-len fails too, so the collapse is NOT the agentic replay. **Leading cause: `numa_balancing=1`** — reset by the reboot, not persisted in sysctl. AMD warns against it; all 8 workers logged the warning. GPU KV 29,656,464 (= T236). |
+| **T242** | gmu 0.90 → 0.85, recommended image | **CANCELLED at 3.7 h** — same warmup collapse as T241 on the *T236 image*. Killed manually. Proves gmu is not the cause and **confounds T241**. |
 | **T241** | **drop #53940** (a4w4 flydsl MoE) | **COLLAPSE — never reached profiling.** 76 warmup primers took 3.6 h, TTFT median **345 s**, drain timed out, 0/144 successful, **errors=0**. GPU KV 28,653,478 (−3.4% vs T236, gmu unchanged at 0.9). #53940 is load-bearing, not a tuning gain. |
 | **T240** | LMCache GSM8K | **BLOCKED — never started.** Died in the pre-run GPU-reclaim wait, 18% VRAM stranded on one GPU. No accuracy result. Fix applied: `--max-gpu-workers` 1 → 8. See `LMCACHE.md`. |
 | **T239** | LMCache fixed-len | **PASS** — 5/5, server up in 26 s, rocm backend auto-selected, chunk 12288 accepted at DCP=8 |
@@ -4612,3 +4614,70 @@ holds more workspace. Recorded, not chased — nowhere near enough to explain a
 question in the prune ladder. Worth it, but the lesson is that ablating a
 kernel-path PR needs a short fixed-len canary first, not a 1 h agentic replay —
 a 5-request fixed-len probe would have shown the collapse in minutes.
+
+---
+
+## T242 / T243 — the collapse is the NODE, not the stack. T241 is confounded.
+
+**T242** (run 33689675072, gmu 0.85, `pronly-nq-no50618`): warmup collapse,
+`returned=63/148`, `sent=76`, `errors=0`. Cancelled manually at 3.7 h. This ran
+the **same image that scored 10,799 in T236**, so known-good code failed.
+
+**T243** (run 33706235658, fixed-len probe, `pronly-nq-no50618`, gmu 0.9):
+
+| metric | T243 | baseline |
+|---|--:|--:|
+| successful requests | **1 / 144 (99.3% fail)** | T180 10/10 |
+| generated tokens | **0** | — |
+| Mean TTFT | **150,515 ms** | — |
+| Mean TPOT | 0.00 (never decoded) | T180 7.41 ms |
+| GPU KV capacity | 29,656,464 | = T236 |
+
+**Fixed-len fails too.** That kills the "agentic replay cache behaviour"
+explanation and makes this a whole-node fault.
+
+### Leading cause: NUMA auto-balancing re-enabled by the reboot
+
+All 8 workers logged:
+
+```
+[aiter] WARNING: NUMA balancing is enabled, which may cause errors.
+  It is recommended to disable NUMA balancing by running
+  "sudo sh -c 'echo 0 > /proc/sys/kernel/numa_balancing'"
+```
+
+`/proc/sys/kernel/numa_balancing` = **1**, and it is **not persisted** — nothing
+in `/etc/sysctl.conf` or `/etc/sysctl.d/`. So the reboot that cleared T240's
+stranded VRAM also reverted this to the kernel default.
+
+Why it fits every observation:
+
+- appears exactly at the reboot boundary; T236 (pre-reboot) was fine
+- **degrades rather than crashes** — `errors=0` in every failed run
+- kernels resident (GPU% 90-97%) but power only 230-467 W of a 1400 W cap:
+  waiting on memory, not computing
+- hits fixed-len and agentic alike, and is image- and gmu-independent
+- page migration thrashing against large pinned GPU allocations is precisely
+  the failure AMD documents
+
+**Fix (needs sudo, outside my edit scope):**
+
+```
+sudo sh -c 'echo 0 > /proc/sys/kernel/numa_balancing'
+echo 'kernel.numa_balancing = 0' | sudo tee /etc/sysctl.d/99-numa.conf
+```
+
+The second line matters: without it the next reboot silently reintroduces this.
+
+### Consequence for T241 — I over-claimed
+
+T241 was written up as a clean one-variable ablation proving #53940
+load-bearing, and `UPSTREAM-STATUS.md` was reordered around it. T242 then
+reproduced the identical signature on a **different image at a different gmu**,
+and T243 reproduced it on fixed-len. **T241's result is confounded and cannot
+support that claim.** #53940 may still be load-bearing on mechanism, but the
+measurement must be redone on a healthy node before it is quoted.
+
+Cost of the error: ~8 h of GPU time across T241/T242 chasing a stack question
+while the node was the variable. The cheap fixed-len canary that would have
+caught it in ~40 min is the one T241's own write-up said to run first.

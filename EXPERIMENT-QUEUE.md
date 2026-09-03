@@ -401,6 +401,32 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
+**NODE IS UNHEALTHY — do not dispatch benchmark runs until NUMA is fixed.**
+
+T243's fixed-len probe failed **99.3% (1/144, 0 generated tokens, TTFT 150 s)**
+on the recommended image at gmu 0.9. Fixed-len failing rules out the agentic
+replay as the cause. All 8 workers log AMD's warning that
+`numa_balancing` is enabled; `/proc/sys/kernel/numa_balancing` = **1** and is
+**not persisted** in sysctl, so the reboot that cleared T240's stranded VRAM
+reverted it to the kernel default.
+
+**Required before the next dispatch (needs sudo, outside my edit scope):**
+
+```
+sudo sh -c 'echo 0 > /proc/sys/kernel/numa_balancing'
+echo 'kernel.numa_balancing = 0' | sudo tee /etc/sysctl.d/99-numa.conf
+```
+
+Then re-run the fixed-len probe (`TEST=1`, already set) as the gate. Only once
+that is clean should agentic runs resume.
+
+**T241 and T242 are void as experiments.** T242 (gmu 0.85) collapsed on the
+T236 image, and T243 collapsed on fixed-len — the same signature reproduced
+without touching #53940. Roughly 8 h of GPU time was spent attributing a node
+fault to the stack. `UPSTREAM-STATUS.md` has been corrected: the #53940
+ablation is retracted, not merely re-qualified.
+
+<!-- SUPERSEDED, kept for provenance:
 **T241 (2026-09-02) closes the prune ladder's last open question: #53940 is
 load-bearing.** Dropped it alone (`pr-applied` identical to T236, `pr-stack: 0
 files`) and the run **never reached profiling** — 76 warmup primers took 3.6 h,
@@ -422,6 +448,8 @@ pool may cost little, but that is a measurement, not an assumption. Runs on the
 recommended image (with #53940), so it is a clean one-variable arm vs T236.
 
 Then: LMCache relaunch (teardown fix in place, unproven) → GSM8K → agentic.
+
+-->
 
 **Config tuning is CLOSED (T195/T198/T199), and the headline now carries an
 error bar (T228).** Four runs on a materially identical C72 stack give
