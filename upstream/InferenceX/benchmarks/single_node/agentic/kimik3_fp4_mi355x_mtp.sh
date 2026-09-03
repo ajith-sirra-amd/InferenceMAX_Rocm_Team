@@ -376,11 +376,18 @@ if agentic_kv_offload_enabled; then
         LMCACHE_PORT="${LMCACHE_PORT:-6555}"
         LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8090}"
         LMCACHE_CHUNK_SIZE="${LMCACHE_CHUNK_SIZE:-12288}"
-        # One GPU worker per TP rank. The SA reference used 1, and T240 then
-        # found ~52 GB stranded on EXACTLY ONE GPU after teardown with no owning
-        # process -- an asymmetry that matches a single GPU worker in an 8-rank
-        # deployment. Match workers to TP.
-        LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-$TP}"
+        # BACK TO 1 (T253). The 1 -> TP change was reasoned from T240's stranded
+        # ~52 GB "asymmetry matches a single GPU worker" -- that reasoning was
+        # wrong, and the evidence now runs the other way:
+        #
+        #   T239  --max-gpu-workers 1  ->  PASS, 5/5, 920 tok/s, no fault
+        #   T250  --max-gpu-workers 8  ->  FAIL, 0/144 AND 0/893, 100%
+        #   SA reference recipe        ->  1
+        #
+        # Every other lmcache server arg and the connector JSON match the SA
+        # reference exactly; this was the only difference. --help calls it
+        # "Worker threads for the GPU affinity pool" -- threads, not memory.
+        LMCACHE_GPU_WORKERS="${LMCACHE_GPU_WORKERS:-1}"
         LMCACHE_LOG="$RESULT_DIR/lmcache_server.log"
 
         LMCACHE_CMD=(
