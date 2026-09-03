@@ -401,6 +401,26 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
+**RESOLVED — engine and node are healthy (T245).**
+
+Fixed-len **perf 8192/1024** at C72 with `numa_balancing=0`: **893/893 requests,
+0 failures, 914,432 tokens generated**, 7,724 tok/s total, TPOT 78.0/77.5/92.5
+ms, TTFT 4,541 ms. Compare T243/T244: **0 tokens generated**.
+
+Two tangled problems, both now understood:
+
+1. **NUMA auto-balancing on** — real, fixed. Capture 6 min → 1m17s, FULL → 41 s,
+   startup +25m → +10m, warmup never-completing → 1m57s. **Runtime-only; add
+   `/etc/sysctl.d/99-numa.conf` or the next reboot reverts it.**
+2. **Wrong probe** — T243/T244 ran `TEST_MODE=func` (214k-token prompts, heavier
+   than the agentic replay) while being called a lightweight canary. The
+   "whole-node fault" conclusion drawn from that is withdrawn.
+
+**NEXT: re-establish the agentic C72 baseline** (`TEST=0`) on the NUMA-fixed
+node and confirm ~10,799 reproduces. That validates the node for perf work and
+gives a clean baseline. **Then** redo the #53940 ablation that T241 botched.
+
+<!-- superseded:
 **T244: NUMA off is a real but PARTIAL fix. Root cause still open.**
 
 `numa_balancing` 0 (runtime only — **not persisted**, add
@@ -409,6 +429,8 @@ throughput 95 → 402 tok/s, PIECEWISE capture 6 min → 1m17s, FULL → 41 s,
 startup +25m → +10m20s, and warmup **now completes** (144/144 in 1m57s) where
 T243's never did. Still FAIL 98.6% (2/144), 0 generated tokens, ~200x off the
 ~84k tok/s aggregate a healthy C72 run gives.
+
+-->
 
 **CORRECTION to the T243 entry below:** T243 and T244 both ran `TEST_MODE=func`,
 which generates **214k-token prompts** (ratio 0.37 → [79k, 214k]) at CONC 72 —

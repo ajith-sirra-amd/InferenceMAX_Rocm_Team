@@ -722,7 +722,13 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
 # to go back to the agentic replay once an engine is proven clean.
-elif [ "${TEST:-1}" = "1" ]; then
+# T246: back to 0 (agentic replay). The fixed-len gate has served its purpose --
+# T245 proved the engine healthy (893/893, 914k tokens) once NUMA was off and
+# the probe was the right one. Next question is whether the agentic C72 number
+# reproduces post-reboot, and that needs the replay, not fixed-len.
+# Set TEST=1 again for a ~10 min health check before spending an hour, and when
+# you do, check the [test-mode] line in the log -- `func` is NOT a light canary.
+elif [ "${TEST:-0}" = "1" ]; then
     # ISL/OSL/ratio defaults, and why they are what they are.
     #
     # range_ratio in this repo is NOT +/-ratio. benchmark_serving.py:248 does

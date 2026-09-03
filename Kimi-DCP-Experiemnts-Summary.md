@@ -25,6 +25,7 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 
 | trial | what | result |
 |---|---|---|
+| **[T245](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33714864721)** | **fixed-len perf 8192/1024, C72, NUMA off** | **PASS — 893/893, 0 failures, 914,432 tokens generated.** 7,724 tok/s total, TPOT 78.0/77.5/92.5 ms (mean/med/p99), TTFT 4,541 ms, median ITL 44.4 ms. **Engine and node are healthy** — T243/T244 failed on a 214k-token probe, not a fault. |
 | **[T244](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33712514019)** | **same probe, `numa_balancing=0`** | **FAIL 98.6% (2/144), 0 generated tokens** — but TTFT **150,515 → 20,214 ms (7.4x)**, throughput 95 → **402 tok/s**, capture 6 min → **1m17s**, warmup **now completes** (144/144 in 1m57s). NUMA was a real contributor, **not the root cause**. Healthy is ~84k tok/s aggregate; still ~200x off. |
 | **[T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658)** | **fixed-len health probe**, recommended image, gmu 0.9 | **FAIL 99.3% — 1/144 completed, 0 generated tokens, TTFT 150,515 ms.** Fixed-len fails too, so the collapse is NOT the agentic replay. **Leading cause: `numa_balancing=1`** — reset by the reboot, not persisted in sysctl. AMD warns against it; all 8 workers logged the warning. GPU KV 29,656,464 (= [T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)). |
 | **[T242](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33689675072)** | gmu 0.90 → 0.85, recommended image | **CANCELLED at 3.7 h** — same warmup collapse as [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734) on the *[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517) image*. Killed manually. Proves gmu is not the cause and **confounds [T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)**. |
@@ -4731,3 +4732,53 @@ separates "engine is broken" from "this 152k-token probe is too aggressive".
 - system journal silent from 18:18:43 to 03:29 (~9 h) with persistent storage on
 - the GH runner died at both boots
 - 657 MB `_usr_bin_python3.12.0.crash` from Sep 2 17:12 (T240 / LMCache)
+
+---
+
+## T245 — engine is HEALTHY. The node was never the problem.
+
+Run [33714864721](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33714864721) · `pronly-nq-no50618` · gmu 0.9 · numa_balancing=0
+`TEST_MODE=perf`: **8192 / 1024, ratio 1.0**, 893 prompts, conc 72, ignore-eos.
+
+| metric | value |
+|---|--:|
+| successful requests | **893 / 893 (0 failures)** |
+| total generated tokens | **914,432** |
+| benchmark duration | 1,065 s |
+| output token throughput | 858.27 tok/s |
+| total token throughput | **7,724.40 tok/s** |
+| Mean TTFT | 4,540.73 ms |
+| Mean / Median / P99 TPOT | **78.03 / 77.47 / 92.52 ms** |
+| Mean / Median ITL | 78.03 / 44.42 ms |
+| GPU KV cache | 29,656,464 (= T236) |
+
+### What this closes
+
+Two independent problems were tangled together all night:
+
+1. **NUMA auto-balancing was on** (reset by the Sep 2 18:05 reboot, never
+   persisted). Real, and worth a lot: PIECEWISE capture 6 min → 1m17s, FULL
+   → 41 s, startup +25m → +10m, warmup from never-completing → 1m57s.
+2. **The probe was wrong.** T243 and T244 ran `TEST_MODE=func` — 214k-token
+   prompts at conc 72, *heavier* than the agentic replay — while being
+   described as a lightweight fixed-len canary. Failing it proved nothing, and
+   the "whole-node fault" conclusion drawn from it was withdrawn.
+
+With the right probe on a NUMA-fixed node, the engine serves cleanly.
+
+### Retractions this chain produced
+
+- **[T241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33665892734)'s #53940 ablation** — confounded, retracted from `UPSTREAM-STATUS.md`.
+- **"[T243](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33706235658) proves a whole-node fault"** — withdrawn; it was a heavier workload, not a canary.
+- **"nothing is computing"** (twice, from GPU util alone) — wrong both times;
+  once the machine was idle between phases, once it was CPU-bound in offload.
+
+### Still open, unrelated to serving
+
+Two unclean reboots (Sep 2 18:05, Sep 3 03:08, no shutdown records), a ~9 h
+system-journal blackout starting 18:18:43, the GH runner dying at both boots,
+and a 657 MB `_usr_bin_python3.12.0.crash` from Sep 2 17:12. None of these are
+explained; none currently block benchmarking.
+
+**`numa_balancing=0` is runtime-only** — add `/etc/sysctl.d/99-numa.conf` or the
+next reboot silently reverts it and this recurs.
