@@ -34,9 +34,9 @@ Baseline **11,006 tok/s/GPU @ C72** ([T247](https://github.com/ajith-sirra-amd/I
 
 #### 1. MUST HAVE
 
-| # | PR | tag | what it does | PR state | Δ if dropped | status |
-|--:|---|---|---|---|--:|---|
-| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | open | perf unmeasured | ✅ required — code-proven |
+| # | PR | tag | what it does | PR state | status |
+|--:|---|---|---|---|---|
+| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | open | ✅ required — code-proven |
 
 #### 2. GOOD TO HAVE — 2.27% together, in priority order
 

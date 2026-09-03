@@ -36,7 +36,7 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 | **T239** | LMCache fixed-len | **PASS** — 5/5, server up in 26 s, rocm backend auto-selected, chunk 12288 accepted at DCP=8 |
 | **[T238](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33643182788)** | drop #52968 | 10,554 — **prune ladder closed**; last two prunes cost 2.27% together |
 | **[T237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33631955363)** | drop #52494 | 10,653 |
-| **[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)** | drop #50618 | **10,799 — best in ledger.** Recommended stack. |
+| **[T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)** | drop #50618 | **10,799**, GSM8K 0.995 — best *accuracy-gated* config. Superseded on throughput by T247 (11,006). |
 | **T235** | drop #51392+#54254 | 10,781 |
 | **T233** | pronly C72 replication | 10,690 (0.02% vs T232) |
 | **T232** | pronly C72 | 10,692 — **the overlay is worth nothing at C72** |
