@@ -403,8 +403,9 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ### Approved order (user-confirmed 2026-09-03)
 
-1. **T257 — C48 no-LMCache, SA settings.** RUNNING.
-2. **T258 — C64 with LMCache**, current image.
+1. **T257 — C48 no-LMCache, SA settings.** DONE: **8,426 tok/s/GPU**, err 4.49%,
+   GPU KV 30,169,355. SA's C48 *with* LMCache is 8,997 — 6.8% ahead of us.
+2. **T258 — C64 with LMCache**, current image. RUNNING.
 3. **T259 — C72 with LMCache**, current image.
 3b. **T260 — LMCache with `--max-gpu-workers 1`, on OUR image.**
    Image `kimi-k3-vllm:rec-no53940` = `nightly-7c5dc571` + the 3 patches

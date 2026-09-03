@@ -2164,8 +2164,11 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # T257: arm 1 of 3 -- C48 WITHOUT LMCache, under SA settings (mns=2*CONC=96,
       # mnbt 8192, gmu 0.90). Anchors the SA config against our own stack before
       # LMCache is reintroduced at C64/C72. Compare to SA's C48.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
-      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [64], spec-decoding: mtp }
+      # T257 done: C48 no-LMCache, SA settings -> 8,426 tok/s/GPU, err 4.49%.
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
+      # T258: arm 2 of 3 -- C64 WITH LMCache, SA settings (mns 128, mnbt 8192,
+      # gmu 0.90, gpu-workers 8, chunk 12288, lmcache 0.5.5.dev89 nightly).
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [64], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
