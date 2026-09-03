@@ -458,6 +458,19 @@ numa_balancing=0. Gap to target is -11.8%.
 | T257 | ours (3 PRs) | 48 | no | **8,426** | 4.49% | — |
 | T258 | ours (3 PRs) | 64 | yes | **5,808** | 8.29% | **0.0%** |
 | T259 | **stock, 0 patches** | 48 | no | **6,988** | 5.45% | — |
+| T260 | **stock, 0 patches** | 64 | yes | **4,688** | 9.93% | **0.0%** |
+
+**T260 is decisive on the LMCache fault: it is NOT our patch stack.** Zero-patch
+upstream `nightly-73029d42` shows the identical `ext_cache_hit` 0.0%. The
+`No GPU context found ... during lookup` failure is upstream or environmental.
+LMCache is net-negative on both images: **−33% on stock**, **−31% on ours**.
+
+**GAP — the direct SA comparison has never been run.** SA's 8,997 is
+**stock + LMCache at C48**. Our four cells are C48-no-LMCache and
+C64-with-LMCache on each image; **stock + LMCache at C48 is empty**. Comparing
+our C64 LMCache numbers to SA's C48 conflates concurrency with the cache fault.
+Consider running that cell before, or instead of, T261 (stock C72 + LMCache),
+which at C64's 4,688 is very likely to come in lower still.
 
 **Two questions closed by T259:**
 
