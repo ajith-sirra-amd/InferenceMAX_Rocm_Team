@@ -29,12 +29,19 @@ smallest that runs — the last two prunes cost 2.27% and are worth keeping.
 are believed load-bearing, the drop arm simply has not been run. PRs we measured
 as genuinely droppable are in **DO NOT NEED** further down.
 
-#### MUST HAVE — 2 PRs
+#### MUST HAVE — 1 PR (was 2; #53940 removed on measurement)
 
 | # | PR | tag | what it does | PR state | Δ if dropped | status |
 |--:|---|---|---|---|--:|---|
 | 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | **open** | perf unmeasured | ✅ **required** — code-proven |
-| 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | **open** | unmeasured | ⏳ yet to verify |
+| — | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | **open** | **+2.20% to DROP** | ❌ **do not ask** — measured negative |
+
+
+**#53940 measured NEGATIVE at C72 (2026-09-03).** Same-session pair on a NUMA-off node: [T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914) **without** it = **11,006**; [T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710) **with** it = **10,769**. Dropping it is **+2.20%**, outside the ±1.2% band. [T248](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33724890710) also replicates T236 (10,799) to 0.28%, so the baseline is sound.
+
+It does enlarge the GPU KV pool by 3.5% (29,656,464 vs 28,653,478) — but that is irrelevant here:  runs 46–56% with , so capacity never binds.
+
+**Do not include it in the ask on throughput grounds.** Untested at C1, where MTP is on and the picture may differ.
 
 #### GOOD TO HAVE — 2 PRs, 2.27% together — in priority order
 
