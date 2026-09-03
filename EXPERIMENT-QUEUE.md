@@ -427,12 +427,20 @@ zero patches, exactly what SA runs.
    The runner passes no env, so both need the values written into the script or
    the kimi yaml block before dispatch.
 
+6. **T264 — C72, WITH LMCache, workers 1, partial SA uplift.** Image B.
+   Takes T263 and moves three knobs to SA values: LMCache **`0.5.5.dev89`**
+   (was `rc3`), **gmu 0.90** (was 0.88), **mns 80** held. `mnbt` stays at
+   T263's 16384 and workers stays 1. Two live variables vs T263 (lmcache
+   version + gmu) — deliberate, user-specified, not a one-variable step.
+   Isolates whether the LMCache *build* and the memory headroom matter once
+   workers is pinned at 1.
+
 **Then:**
 
-6. **New image build** = `rec-no53940` + [#54494 `dcp-q-replicate`](https://github.com/vllm-project/vllm/pull/54494) (~99 lines, 3 files).
-7. **GSM8K-200 gate** on `VLLM_DCP_Q_REPLICATE=1` — replicated vs gathered
+7. **New image build** = `rec-no53940` + [#54494 `dcp-q-replicate`](https://github.com/vllm-project/vllm/pull/54494) (~99 lines, 3 files).
+8. **GSM8K-200 gate** on `VLLM_DCP_Q_REPLICATE=1` — replicated vs gathered
    projection is the same math in a different reduction order, so not bitwise-safe.
-8. **A/B at C1**, not C72. C72 is compute-bound (1,100 W, 98% util, `queue=0w`)
+9. **A/B at C1**, not C72. C72 is compute-bound (1,100 W, 98% util, `queue=0w`)
    and prefill-dominated (ISL p50 54k vs OSL p50 224); the PR removes a *decode*
    per-layer all-gather and pays in redundant q-projection compute, so it should
    be flat-to-negative there. C1 has nothing to overlap the collective against,
