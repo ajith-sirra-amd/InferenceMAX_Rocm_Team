@@ -36,7 +36,7 @@ as genuinely droppable are in **DO NOT NEED** further down.
 | 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | fix per-group KV geometry for CPU offload under DCP | **open** | perf unmeasured | ✅ **required** — code-proven |
 | 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | **open** | unmeasured | ⏳ yet to verify |
 
-#### GOOD TO HAVE — 2 PRs, 2.27% together
+#### GOOD TO HAVE — 2 PRs, 2.27% together — in priority order
 
 | # | PR | tag | what it does | PR state | Δ if dropped | status |
 |--:|---|---|---|---|--:|---|
@@ -57,6 +57,13 @@ needed — the mechanism is decidable from source:
 
 So the *functional* requirement is settled. What remains unmeasured is the
 **throughput cost** of that rewrite — that still needs a drop arm.
+
+**Priority order rationale.** #52494 first: larger delta (−1.35%), outside the
+±1.2% band, and the PR is open and review-ready. #52968 second: −0.93% sits
+*inside* the band at n=1, so the per-PR figure is indicative rather than proven,
+and the PR is a draft so it cannot merge yet either way. The pair's combined
+**−2.27%** is the number that holds up — outside the band and monotone across
+T236 → T237 → T238.
 
 **#52968 is still a DRAFT** — it cannot merge until the author marks it ready
 for review. That is a blocker independent of our measurements, and the cheapest
