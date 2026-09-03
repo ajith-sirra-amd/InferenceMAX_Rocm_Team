@@ -451,12 +451,29 @@ zero patches, exactly what SA runs.
 replicate T248 (with-a4w4 arm is n=1); `PIN_CCD=1`, never tested with
 numa_balancing=0. Gap to target is -11.8%.
 
-**Results so far, our patched image `rec-no53940`:**
+**Results so far:**
 
-| trial | conc | LMCache | tok/s/GPU | err | ext_cache_hit |
-|---|--:|---|--:|--:|--:|
-| T257 | 48 | no | **8,426** | 4.49% | — |
-| T258 | 64 | yes | **5,808** | 8.29% | **0.0%** |
+| trial | image | conc | LMCache | tok/s/GPU | err | ext_cache_hit |
+|---|---|--:|---|--:|--:|--:|
+| T257 | ours (3 PRs) | 48 | no | **8,426** | 4.49% | — |
+| T258 | ours (3 PRs) | 64 | yes | **5,808** | 8.29% | **0.0%** |
+| T259 | **stock, 0 patches** | 48 | no | **6,988** | 5.45% | — |
+
+**Two questions closed by T259:**
+
+1. **Our 3-PR stack is worth +20.6%** (8,426 vs 6,988, same settings, image the
+   only variable). The T257/T258 confound is resolved in the patches' favour —
+   they are not flattering the SA-settings arms, they are carrying them. Also
+   +12.0% GPU KV capacity (30,169,355 vs 26,932,446).
+2. **The elevated error rate is NOT ours.** Stock shows **5.45%**, *higher* than
+   our 4.49%. So the 15x jump over the C72 baseline's 0.30% belongs to the
+   C48 / mnbt-8192 regime, not the patch stack. Drop that line of suspicion.
+
+**What this says about SA.** Their 8,997 at C48 is on stock + LMCache. Stock
+*without* LMCache is 6,988. So LMCache is worth **~+29%** to them — and it is
+exactly the thing broken for us (`ext_cache_hit` 0.0%, 1,535 lookup errors).
+Fixing LMCache is therefore the single largest lever identified so far, worth
+more than the entire patch stack.
 
 **LMCache is 31% NET NEGATIVE at C64 and the cause is now identified:**
 `lmcache_server.log` carries **1,535** copies of
