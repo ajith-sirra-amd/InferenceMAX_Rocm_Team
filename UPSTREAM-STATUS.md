@@ -24,15 +24,17 @@ smallest that runs — the last two prunes cost 2.27% and are worth keeping.
 
 ### THE ASK — 4 open PRs
 
-`status` is **VERIFIED** only when the PR was removed and the stack re-measured.
-Reasoning, however sound, is *not verified*.
+`status` = has the PR been **removed and re-measured**?
+✅ verified · ⏳ yet to verify. **⏳ does not mean "not needed"** — both must-haves
+are believed load-bearing, the drop arm simply has not been run. PRs we measured
+as genuinely droppable are in **DO NOT NEED** further down.
 
 #### MUST HAVE — 2 PRs
 
 | # | PR | tag | what it does | Δ if dropped | status |
 |--:|---|---|---|--:|---|
-| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | CPU KV offload + DCP cache geometry | unmeasured | ❌ not verified |
-| 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | unmeasured | ❌ not verified |
+| 1 | [#53917](https://github.com/vllm-project/vllm/pull/53917) | `cpu-offload` | CPU KV offload + DCP cache geometry | unmeasured | ⏳ yet to verify |
+| 2 | [#53940](https://github.com/vllm-project/vllm/pull/53940) | `a4w4-moe` | a4w4 FP4 MoE kernels | unmeasured | ⏳ yet to verify |
 
 #### GOOD TO HAVE — 2 PRs, 2.27% together
 
@@ -41,8 +43,8 @@ Reasoning, however sound, is *not verified*.
 | 3 | [#52494](https://github.com/vllm-project/vllm/pull/52494) | `mla-rmsnorm-fusion` | fuse MLA q/kv layernorm | **−1.35%** | ✅ verified (T237) |
 | 4 | [#52968](https://github.com/vllm-project/vllm/pull/52968) | `attn-conv-fusion` | fuse attn_res, conv1d, sigmoid+mul | **−0.93%** | ✅ verified (T238) |
 
-**Two of four are verified.** Both must-haves rest on mechanism, not a measured
-delta — that is the honest state and should be said plainly when filing.
+**Two of four have a measured delta.** The must-haves rest on mechanism and are
+**still needed** — they are pending measurement, not rejected.
 
 **RETRACTED (2026-09-03): the #53940 ablation is confounded — do not cite it.**
 
@@ -90,8 +92,8 @@ Ordered by measured cost of dropping it. Baseline for every delta is
 
 | # | PR | tag | why | evidence | status |
 |--:|---|---|---|---|---|
-| 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `cpu-offload` | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | never removed | ❌ not verified |
-| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | `a4w4-moe` | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195/T243 logs). Rides in the separate `pr_stack/`. | **CONFOUNDED — T241's ablation is void.** The same collapse reproduced in T242/T243 *with* #53940 applied, so the run measured the node, not the patch. Removal cost unmeasured; rerun required. | ❌ not verified |
+| 1 | **[#53917](https://github.com/vllm-project/vllm/pull/53917)** | `cpu-offload` | `SimpleCPUOffloadConnector` + per-group KV geometry under DCP. We run `offload dram`; bare nightly **starves entirely** at C52 without this class of fix (T216). 17 of its 27 hunks are generic cache geometry + connector base/factory, not SimpleCPU-specific. | never removed | ⏳ yet to verify |
+| 2 | **[#53940](https://github.com/vllm-project/vllm/pull/53940)** | `a4w4-moe` | a4w4 flydsl MoE kernels. Live on the MoE path (`flydsl_moe1_abf16_wfp4_bf16_…` in the T195/T243 logs). Rides in the separate `pr_stack/`. | **CONFOUNDED — T241's ablation is void.** The same collapse reproduced in T242/T243 *with* #53940 applied, so the run measured the node, not the patch. Removal cost unmeasured; rerun required. | ⏳ yet to verify |
 
 **Neither has a measured number, and that is the honest state.** #53917 is
 load-bearing by mechanism and by the T216 starvation result; #53940 has never
