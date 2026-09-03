@@ -523,3 +523,57 @@ Two gaps, both unexplained:
   concurrency.
 - Then walk conc 48 -> 72 under LMCache one step at a time and find where the
   `No GPU context` error returns.
+
+---
+
+## T258 (2026-09-03) — SA settings at C64 do NOT fix the hit rate
+
+[Run 33775111404](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33775111404) ·
+image `kimi-k3-vllm:rec-no53940` · conc 64 · mns 128 · mnbt 8192 · gmu 0.90 ·
+**workers 8** · chunk 12288 · LMCache **`0.5.5.dev89+rocm7.2`** (nightly channel)
+
+| metric | T258 | T257 (C48, no LMCache) |
+|---|--:|--:|
+| tok/s/GPU | **5,808** | 8,426 |
+| error rate | **8.29%** | 4.49% |
+| TPOT p90 | 325.4 ms | 104.1 ms |
+| `ext_cache_hit` | **0.0%** | n/a |
+| GPU KV | 30,123,764 | 30,169,355 |
+
+**LMCache at C64 is 31% slower than no LMCache at C48.** Every SA knob was
+matched — version, workers, chunk, mns, mnbt, gmu — and the decisive metric did
+not move off zero.
+
+### Root cause: lookups never resolve
+
+`lmcache_server.log` contains **1,535 identical** errors:
+
+```
+ERROR: No GPU context found for model /mnt/hf_hub_cache/Kimi-K3 with world size 8 during lookup!  (lookup.py)
+```
+
+That is the retrieve path failing, not a bookkeeping warning. With every lookup
+erroring out, `retrieve ops = 0` and the 1,949 GB host tier is **write-only** —
+we pay the store cost and never read a byte back. That is the whole 31%.
+
+**This is distinct from the `no lookup ipc key` message I previously chased.**
+That one is the request-END touch path (`lookup.py:563-586`, LRU bookkeeping)
+and SA's own server log has 112 of them — benign. `No GPU context found ...
+during lookup` is a different failure at a different point.
+
+### What it implies
+
+The fault is **connector/registration, not tuning**. Worth noting T253 ran
+`--max-gpu-workers 1` and *did* serve (6,934 tok/s/GPU); T258 at workers 8
+errors on every lookup. The GPU-context registry is keyed by world size 8, so
+the natural hypothesis is that the 8-worker path registers contexts the lookup
+cannot find, while the 1-worker path does not hit that mismatch.
+
+**T262/T263 (workers 1) test exactly this.** If they show non-zero
+`ext_cache_hit`, the workers-8 registration is the bug and SA's `workers 8` is
+either patched around in their image or behaving differently on their node.
+
+**Not yet checked:** whether SA's own lmcache_server.log carries this error. I
+have previously drawn a wrong conclusion by comparing against the wrong SA file
+(their *job* log has no `lookup.py` lines at all). The comparison must be
+against their `lmcache_server.log` specifically.

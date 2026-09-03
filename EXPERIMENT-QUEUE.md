@@ -451,8 +451,27 @@ zero patches, exactly what SA runs.
 replicate T248 (with-a4w4 arm is n=1); `PIN_CCD=1`, never tested with
 numa_balancing=0. Gap to target is -11.8%.
 
-**RUNNING — [T257: C48 without LMCache, SA settings](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33765913466).**
-Arm 1 of 3 in the SA-config sequence: **C48 no-LMCache → C64 LMCache → C72 LMCache.**
+**Results so far, our patched image `rec-no53940`:**
+
+| trial | conc | LMCache | tok/s/GPU | err | ext_cache_hit |
+|---|--:|---|--:|--:|--:|
+| T257 | 48 | no | **8,426** | 4.49% | — |
+| T258 | 64 | yes | **5,808** | 8.29% | **0.0%** |
+
+**LMCache is 31% NET NEGATIVE at C64 and the cause is now identified:**
+`lmcache_server.log` carries **1,535** copies of
+`No GPU context found for model ... with world size 8 during lookup!`
+Every retrieve fails, so the 1,949 GB host tier is write-only. This is a
+connector/registration fault, NOT tuning — SA's settings did not move it.
+T262/T263 (workers 1) test whether the 8-worker path is what breaks
+registration; T253 at workers 1 did serve.
+
+**Stock nightly `73029d42` verified by grep (CPU-only, no GPU time):**
+- `requires_dcp_block_aligned_interleave` **absent** -> **#53917 is NOT merged**,
+  the upstream ask stays at 3 PRs.
+- `dcp_q_replicate` (6 files) and `DCPGroupColumnParallelLinear` (3 files)
+  **present** -> confirms #54494 only needs the Kimi-K3 wiring, as its
+  description claims.
 
 **SA applies NO patches.** Their `0903_2` script has zero `patch`/`overlay`/
 `site-packages` references — stock `vllm/vllm-openai-rocm:nightly-73029d42` plus

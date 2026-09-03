@@ -55,7 +55,24 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # presence is the contract: site-packages is already patched, so re-applying
 # would fail the dry-run and -- with REQUIRE_K3_OVERLAY=1 -- kill the run.
 # One overlay for every concurrency in that image; no C1-vs-C52 split.
-if [ -f /etc/k3-image-manifest ]; then
+# T259: K3_FORCE_STOCK=1 runs a bare upstream nightly with NOTHING applied --
+# no overlay, no PR stack. This is what SemiAnalysis actually runs (verified:
+# their 0903_2 script has zero patch/overlay/site-packages references). Needed
+# because T257/T258 changed SA's *settings* while keeping our *patched* image,
+# which confounds "SA settings don't help us" with "our patches hurt".
+# Deliberately checked BEFORE the manifest branch so it wins on any image.
+K3_FORCE_STOCK="${K3_FORCE_STOCK:-1}"   # T259: stock-nightly arm
+if [ "$K3_FORCE_STOCK" = "1" ]; then
+    K3_OVERLAY_APPLIED=0
+    export SKIP_KIMI_PATCHES=1
+    export REQUIRE_K3_OVERLAY=0
+    echo "[k3-overlay] FORCE_STOCK -- no overlay, no PR stack, bare upstream image"
+    echo "[pr-stack] FORCE_STOCK -- runtime patching SKIPPED"
+    if [ -f /etc/k3-image-manifest ]; then
+        echo "[k3-image] WARNING: manifest present but FORCE_STOCK set -- image may still be pre-patched"
+        sed 's/^/[k3-image] /' /etc/k3-image-manifest
+    fi
+elif [ -f /etc/k3-image-manifest ]; then
     K3_OVERLAY_APPLIED=1
     export SKIP_KIMI_PATCHES=1
     echo "[k3-overlay] baked into image -- runtime patching SKIPPED"
