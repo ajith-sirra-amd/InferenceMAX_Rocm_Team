@@ -13,10 +13,9 @@ b23_07, not published to a registry.
 patch. **11,006 tok/s/GPU @ C72**, err 0.30% ([T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914)).
 Image: `kimi-k3-vllm:rec-no53940`.
 
-⚠️ **GSM8K not yet run on this image.** 11,006 is a throughput number on a stack
-whose accuracy is unverified. The last accuracy-gated config is
-`pronly-nq-no50618` at **10,799**, err 0.09%, GSM8K 0.995
-([T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)).
+**GSM8K 0.995** (strict + flexible, ±0.005, 200/200) — [T251](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33740219190).
+Identical to `pronly-nq-no50618`'s 0.995 ([T236](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33622043517)), so removing
+#53940 is numerically clean. Throughput **and** accuracy are both gated.
 
 Started at 11 PRs and 10,692 (T232). Pruning removed 3 for free, found 2 that
 are **not** free (2.27% combined), and found #53940 to be **negative** (+2.20%
@@ -99,11 +98,13 @@ irrelevant here: `kv_usage` runs 46–56% with `queue=0w`, so capacity never bin
    behaves differently. Every C1 number in the ledger was measured *with* it.
 2. **n=1 per arm.** T247 and T248 are single runs. The 2.20% is outside the
    ±1.2% band but has not been replicated.
-3. **No accuracy gate.** `rec-no53940` has never run GSM8K, so 11,006 is a
-   throughput number on a stack whose numerics are unverified.
+3. ~~No accuracy gate.~~ **RESOLVED** — [T251](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33740219190) ran GSM8K
+   limit 200 on `rec-no53940`: **exact_match 0.995** (strict + flexible,
+   ±0.005, 200/200), identical to T236's 0.995 on the a4w4-carrying image.
+   Removing #53940 is numerically clean.
 
-**Next steps before any verdict:** GSM8K limit 200 on `rec-no53940`, a replicate
-of T247, and a C1 arm with and without the PR.
+**Next steps before any verdict:** a replicate of T247, and a C1 arm with and
+without the PR.
 
 ### Already merged upstream — nothing to ask for, listed for provenance
 
