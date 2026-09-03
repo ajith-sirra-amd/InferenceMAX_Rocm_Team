@@ -406,6 +406,13 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 1. **T257 — C48 no-LMCache, SA settings.** RUNNING.
 2. **T258 — C64 with LMCache**, current image.
 3. **T259 — C72 with LMCache**, current image.
+3b. **T260 — LMCache `--max-gpu-workers 1` A/B** at whichever of C64/C72 serves
+   best in 2–3. One variable: `LMCACHE_GPU_WORKERS=1` against the workers-8
+   default we just adopted from SA. **Not yet tested under SA settings** — the
+   only workers-1 LMCache runs were T239 (never served a token, so it proved
+   nothing) and T253 (served, but at the old gmu 0.88 / mns 80 / mnbt 16384).
+   Env-overridable, so no script edit needed.
+
 4. **New image build**: fold in [#54494 `dcp-q-replicate`](https://github.com/vllm-project/vllm/pull/54494) (~99 lines, 3 files).
 5. **GSM8K-200 gate** on `VLLM_DCP_Q_REPLICATE=1` — replicated vs gathered
    projection is the same math in a different reduction order, so not bitwise-safe.
@@ -419,6 +426,12 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
    Machinery (`DCPGroupColumnParallelLinear`, `_local_view()`, `W_UK_T`
    all-gather) is already upstream for DSV2/3 — the PR only wires K3's
    `q_b_proj`/`q_proj` to opt in.
+
+7. **Resume the throughput line toward 12,500.** The 11,027 C72 baseline (n=2)
+   is not the end of that track — it stalled only because the node saga and
+   LMCache took the queue. Still open from before: C1 arm with/without #53940;
+   replicate T248 (with-a4w4 arm is n=1); `PIN_CCD=1`, never tested with
+   numa_balancing=0. Gap to target is −11.8%.
 
 **RUNNING — [T257: C48 without LMCache, SA settings](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33765913466).**
 Arm 1 of 3 in the SA-config sequence: **C48 no-LMCache → C64 LMCache → C72 LMCache.**
