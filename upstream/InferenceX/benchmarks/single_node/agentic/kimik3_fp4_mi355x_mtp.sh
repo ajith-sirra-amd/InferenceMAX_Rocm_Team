@@ -675,7 +675,12 @@ for n in sorted(by):
         if i < len(by[n]): print(f"{g} {by[n][i]}")
 CCDPY
 
-PIN_CCD="${PIN_CCD:-0}"
+# T249: ON. Never tested on a numa_balancing=0 node, and it targets exactly the
+# host-side CPU/NUMA locality that turned out to matter this session: 2 NUMA
+# nodes, GPUs split 4/4, remote distance 32, ~1.8 TB of host memory pinned for
+# GPU DMA. Baseline is T247 = 11,006 on this same image; one variable.
+# Pins AFTER wait_for_server_ready -- pinning before load cost 2008 s in T160.
+PIN_CCD="${PIN_CCD:-1}"
 pin_workers_to_ccd() {
     [ "$PIN_CCD" = "1" ] || return 0
     [ -s /tmp/ccdmap.txt ] || return 0

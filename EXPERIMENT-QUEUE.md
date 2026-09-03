@@ -401,7 +401,41 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
+**PRUNE CLOSED. New best = 11,006 tok/s/GPU (T247, #53940 REMOVED).**
+
+| run | #53940 | tok/s/GPU |
+|---|---|--:|
+| T236 pre-reboot | present | 10,799 |
+| T248 control | present | 10,769 |
+| **T247** | **absent** | **11,006** |
+
+#53940 (`a4w4-moe`) **costs 2.20% at C72** — outside the ±1.2% band, measured
+against a same-session control. Removed from the upstream ask. T248 replicates
+T236 to 0.28%, so the baseline is sound and NUMA-on was not degrading the
+T236-era runs (implying numa_balancing was already 0 before the Sep 2 reboot).
+
+**Ask is now 3 PRs:** #53917 (code-proven required), #52494 (−1.35%),
+#52968 (−0.93%, draft).
+
+**RUNNING — T249: `PIN_CCD=1` on rec-no53940.** One variable vs T247. Untested
+on a numa_balancing=0 node, and it targets the host-side locality that mattered
+this session.
+
+**LMCache is GATED, not next.** Two preconditions, neither cleared:
+1. `/etc/sysctl.d/99-numa.conf` absent — numa_balancing=0 is runtime-only. A
+   node halt would reboot into the broken state and repeat this session.
+2. `--l1-size-gb 1949` on a 3,023 GB box where SimpleCPUOffload already holds
+   1,815 GB and only **9 GB is free**. Resolve whether the offload connector is
+   disabled under LMCache before launching, or risk repeating T240's halt.
+
+Evidence also argues LMCache is not the 12,500 lever: `kv_usage` 46–56%,
+`queue=0w`, `ext_cache_hit` 82%, GPUs at 1,100 W / 98%. Compute-bound, not
+cache-bound.
+
+<!-- superseded:
 **RESOLVED — engine and node are healthy (T245).**
+
+-->
 
 Fixed-len **perf 8192/1024** at C72 with `numa_balancing=0`: **893/893 requests,
 0 failures, 914,432 tokens generated**, 7,724 tok/s total, TPOT 78.0/77.5/92.5
