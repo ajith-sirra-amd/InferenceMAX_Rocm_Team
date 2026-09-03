@@ -401,47 +401,47 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
-### Approved order (user-confirmed 2026-09-03)
+### Approved order (user-confirmed 2026-09-03, revised)
 
-1. **T257 — C48 no-LMCache, SA settings.** DONE: **8,426 tok/s/GPU**, err 4.49%,
-   GPU KV 30,169,355. SA's C48 *with* LMCache is 8,997 — 6.8% ahead of us.
-2. **T258 — C64 with LMCache**, current image. RUNNING.
-3. **T259 — C72 with LMCache**, current image.
-3b. **T260 — finish the run I cancelled (replay of T256).**
-   C64 + LMCache on OUR image `kimi-k3-vllm:rec-no53940` (`nightly-7c5dc571` +
-   #53917, #52494, #52968), at the **OLD** settings T256 was carrying when I
-   killed it at 29 min: `GPU_MEM_UTIL_LMCACHE=0.88`, `MAX_NUM_SEQS=80`,
-   `MAX_BATCHED_TOKENS=16384`, `LMCACHE_GPU_WORKERS=1`,
-   `LMCACHE_VERSION=0.5.5rc3+rocm7.2`. All five are env-overridable, but the
-   runner passes no env, so they must be set in the script/yaml before dispatch.
-   T256 was healthy when cancelled (warmup 57/131, 0 errors) — this recovers the
-   datapoint rather than leaving a hole.
+**Why the revision:** T257/T258 applied SA's *settings* but kept our *patched*
+image, so they confound "SA settings don't help us" with "our patches hurt".
+The stock-nightly arms below remove that confound: same script, same settings,
+zero patches, exactly what SA runs.
 
-3c. **T261 — LMCache `--max-gpu-workers 1` under SA settings.**
-   Same image. ONE variable against T258: `LMCACHE_GPU_WORKERS=1` vs the
-   workers-8 default, everything else at SA values (gmu 0.90, mns 2×CONC,
-   mnbt 8192, `0.5.5.dev89`). This is the clean A/B; 3b is the replay.
-   Run at whichever of C64/C72 serves best in 2–3.
+**Image A — stock `vllm/vllm-openai-rocm:nightly-73029d42`, NO patches** (what SA runs):
 
-4. **New image build**: fold in [#54494 `dcp-q-replicate`](https://github.com/vllm-project/vllm/pull/54494) (~99 lines, 3 files).
-5. **GSM8K-200 gate** on `VLLM_DCP_Q_REPLICATE=1` — replicated vs gathered
+1. **T259 — C48, NO LMCache.** True control against T257 (8,426 on our image).
+2. **T260 — C64, WITH LMCache.** Pairs with T258 (our image, same conc).
+3. **T261 — C72, WITH LMCache.**
+   All three at SA settings: gmu 0.90, mns 2xCONC, mnbt 8192, workers 8,
+   chunk 12288, LMCache `0.5.5.dev89`. Needs the patch step skipped and the
+   yaml image line pointed at the stock nightly.
+
+**Image B — ours, `kimi-k3-vllm:rec-no53940`** (`nightly-7c5dc571` + #53917,
+#52494, #52968):
+
+4. **T262 — C64, WITH LMCache, `--max-gpu-workers 1`.** The replay of the run I
+   cancelled at 29 min (T256, healthy at the time: warmup 57/131, 0 errors).
+   OLD settings it was carrying: gmu 0.88, mns 80, mnbt 16384, `0.5.5rc3`.
+5. **T263 — C72, WITH LMCache, workers 1.** Same image and settings as T262.
+   The runner passes no env, so both need the values written into the script or
+   the kimi yaml block before dispatch.
+
+**Then:**
+
+6. **New image build** = `rec-no53940` + [#54494 `dcp-q-replicate`](https://github.com/vllm-project/vllm/pull/54494) (~99 lines, 3 files).
+7. **GSM8K-200 gate** on `VLLM_DCP_Q_REPLICATE=1` — replicated vs gathered
    projection is the same math in a different reduction order, so not bitwise-safe.
-6. **A/B at C1**, not C72. C72 is compute-bound (1,100 W, 98% util, `queue=0w`)
+8. **A/B at C1**, not C72. C72 is compute-bound (1,100 W, 98% util, `queue=0w`)
    and prefill-dominated (ISL p50 54k vs OSL p50 224); the PR removes a *decode*
    per-layer all-gather and pays in redundant q-projection compute, so it should
    be flat-to-negative there. C1 has nothing to overlap the collective against,
-   so the per-layer latency lands straight in TPOT — and C1 TPOT (best 7.57 ms)
-   is an explicit target. Default-off (`dcp_q_replicate=False`), so it cannot
-   perturb the 11,027 baseline; the env var is a clean one-variable A/B.
-   Machinery (`DCPGroupColumnParallelLinear`, `_local_view()`, `W_UK_T`
-   all-gather) is already upstream for DSV2/3 — the PR only wires K3's
-   `q_b_proj`/`q_proj` to opt in.
+   so per-layer latency lands straight in TPOT — and C1 TPOT (best 7.57 ms) is
+   an explicit target. Default-off, so it cannot perturb the 11,027 baseline.
 
-7. **Resume the throughput line toward 12,500.** The 11,027 C72 baseline (n=2)
-   is not the end of that track — it stalled only because the node saga and
-   LMCache took the queue. Still open from before: C1 arm with/without #53940;
-   replicate T248 (with-a4w4 arm is n=1); `PIN_CCD=1`, never tested with
-   numa_balancing=0. Gap to target is −11.8%.
+**Deferred:** resume the throughput line toward 12,500 — C1 with/without #53940;
+replicate T248 (with-a4w4 arm is n=1); `PIN_CCD=1`, never tested with
+numa_balancing=0. Gap to target is -11.8%.
 
 **RUNNING — [T257: C48 without LMCache, SA settings](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33765913466).**
 Arm 1 of 3 in the SA-config sequence: **C48 no-LMCache → C64 LMCache → C72 LMCache.**
