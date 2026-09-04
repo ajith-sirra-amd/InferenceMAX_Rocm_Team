@@ -7,6 +7,20 @@
 
 # ▲ LATEST STATE
 
+## T266 — #54494 GSM8K gate PASSED (0.995)
+
+`exact_match 0.995` strict and flexible, **identical to the baseline 0.995**.
+`eval_exit=0`. The job's `failure` status is the known EVAL_ONLY result-JSON
+plumbing artifact (same as T251), not an eval failure.
+
+GPU KV **28,220,371**, 1.5% below baseline — each rank materialising the DCP
+group's full query head set. Confirms the PR is active rather than silently off.
+
+**#54494 is numerically clean. T267 running: #54494 perf at C72**, image
+`rec-qrep`, everything else at baseline. Compare against the **same-day
+control T265 = 11,019**, not the historical 11,027.
+
+
 ## T265 control — baseline HOLDS, errors are NOT ours
 
 **11,019 tok/s/GPU** on `rec-no53940` at the identical C72 config, same day as
