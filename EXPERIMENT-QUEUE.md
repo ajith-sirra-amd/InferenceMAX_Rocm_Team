@@ -5,6 +5,36 @@
 
 ---
 
+# ▲ LATEST STATE
+
+## T264 done — #54889 is NOT a demonstrated win, and errors are systemic
+
+**11,115 tok/s/GPU** vs baseline 11,027 = **+0.80%, inside the ±1.2% band.**
+Duration 3,629 s (normal), GPU KV 28,653,478 (exact baseline fingerprint), so
+the config was clean and the PR was the only variable.
+
+**The error rate is the real signal.** T264 logged **5.45%**
+`InvalidInferenceResultError` against the baseline's 0.26-0.30%. But it is NOT
+the PR:
+
+| trial | image | err% |
+|---|---|--:|
+| T247/T252 baseline | ours | **0.26-0.30** |
+| T257 C48 | ours | 4.49 |
+| T259 C48 | stock | 5.45 |
+| T260 C64 | stock | 9.93 |
+| T261 C72 | stock | 15.45 |
+| T262 C64 | ours | 12.01 |
+| T264 C72 | ours + #54889 | 5.45 |
+
+**Every run since T257 is elevated, on both images, patched and unpatched.**
+Something in the environment drifted after T247/T252. Until that is understood,
+throughput deltas measured now are not comparable to the 11,027 anchor.
+
+**T265 = BASELINE RE-ANCHOR** (running): `rec-no53940` at the identical C72
+config. If it returns ~11,0xx with ~5% errors, the drift is environmental and
+#54889 is neutral. If it returns 0.3% errors, #54889 owns them.
+
 # ▲ AUTONOMOUS PLAN (2026-09-04 → 09-08)
 
 ## Rules while unattended
