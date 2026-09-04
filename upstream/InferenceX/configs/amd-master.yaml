@@ -2187,7 +2187,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # T264: #54889 a2a-pack-mask at C72. EXACT baseline config otherwise --
       # kv-offloading dram / vllm-simple / 1949 GB, gmu 0.90, mns 96, mnbt 16384
       # -- so the only variable vs T247/T252 (11,027) is the PR.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, conc-list: [72], spec-decoding: mtp }
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
