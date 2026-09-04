@@ -7,6 +7,33 @@
 
 # ▲ LATEST STATE
 
+## T269 — the base nightly is NOT the SA gap
+
+C48 comparison set, all no-LMCache, all gmu 0.88, mnbt 8192, mns 96, DCP 8:
+
+| run | base | patches | tok/s/GPU |
+|---|---|---|--:|
+| **SA 33773561410** | `7c5dc571` | none | **10,152** *(gmu 0.90, LMCache loaded but inert)* |
+| **T257** | `7c5dc571` | 3 PRs | 8,426 |
+| **T269** | `7c5dc571` | none | **7,128** |
+| T259 | `73029d42` | none | 6,988 |
+
+**T269 vs T259 = +2.0%.** The base version accounts for almost nothing.
+**Our 3 PRs are worth +18.2%** on the same base (7,128 -> 8,426).
+**20.5% remains unexplained** between our best C48 (8,426) and SA's 10,152.
+
+**Correction:** T259 was recorded as gmu 0.90. It ran at **0.88** — the
+bare-image override fires on any image without `/etc/k3-image-manifest`, and the
+`[sa-match]` echo I read prints *before* that override. The authoritative value
+is the `[gmu]` line. Both stock runs were 0.88.
+
+**T270 running:** identical to T269 but **gmu 0.90**, matching SA exactly. This
+is the last knob we know differs apart from LMCache being loaded. The 0.88
+default exists to dodge `HSA_STATUS_ERROR_OUT_OF_RESOURCES` on this bare
+image/DCP8/no-offload combination, so the run may crash — that is itself an
+answer, since SA evidently runs 0.90 here without trouble.
+
+
 ## PHASE A CLOSED. All four user-given PRs resolved.
 
 | PR | verdict |

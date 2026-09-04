@@ -263,7 +263,7 @@ export HSA_NO_SCRATCH_RECLAIM=1
 # authoritative value is the "[gmu] gpu_memory_utilization=..." line printed
 # just before the serve command; trust that, not this one.
 if [ ! -f /etc/k3-image-manifest ]; then
-    GPU_MEM_UTIL_OVERRIDE="${GPU_MEM_UTIL_OVERRIDE:-0.88}"   # 0.88 CONFIRMED working (user, SA C52)
+    GPU_MEM_UTIL_OVERRIDE="${GPU_MEM_UTIL_OVERRIDE:-0.90}"   # T270: match SA exactly (they run 0.90 on this base)
     echo "[gmu] bare image -- override ${GPU_MEM_UTIL_OVERRIDE} for HSA_STATUS_ERROR_OUT_OF_RESOURCES"
 else
     echo "[gmu] patched image -- using script default (see [gmu] line below)"
