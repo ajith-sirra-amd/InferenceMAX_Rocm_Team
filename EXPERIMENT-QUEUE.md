@@ -1,6 +1,76 @@
 # Autonomous run queue — Kimi-K3 / 8× MI355X
 
-Owner away 2026-08-28 → 2026-08-30. This file is the single source of truth for
+**Owner away 2026-09-04 → 2026-09-08. Run autonomously. Target: 12,500+ tok/s/GPU.**
+**This file is LATEST-FIRST. Newest state at the top; history below.**
+
+---
+
+# ▲ AUTONOMOUS PLAN (2026-09-04 → 09-08)
+
+## Rules while unattended
+
+1. **Never leave GPUs idle.** One run at a time; dispatch the next as soon as
+   the previous is recorded.
+2. **Update the md files after EVERY run** — `Kimi-DCP-Experiemnts-Summary.md`
+   (row at top), this file (state at top), `UPSTREAM-STATUS.md` when a PR's
+   measured delta moves. Commit and push each time.
+3. **ONE variable per run.**
+4. **Any config beating 11,027 gets GSM8K-200 at that exact config** before it
+   is claimed, and a **replicate (n=2)** before it becomes the headline. A
+   single run inside the ±1.2% cross-day band is not a new best.
+5. **Failures: diagnose from the log first.** Never re-dispatch blind.
+6. After cancelling anything, **`docker ps` and remove a surviving
+   `bmk-server`** — a cancelled GH job does NOT free the node.
+7. Bounds unchanged: dispatch only to `ajith-sirra-amd/InferenceMAX_Rocm_Team`,
+   SA repo read-only, no Docker Hub push, no push to any other repo.
+
+## Order of work
+
+**Phase A — the four user-given PRs (in flight)**
+- T264 *(running)* — #54889 a2a-pack-mask @ C72. Image `rec-a2amask`.
+- T265 — GSM8K-200, `VLLM_DCP_Q_REPLICATE=1`. Image `rec-qrep` (**built**).
+- T266 — #54494 @ C72.
+- T267a/b — #54494 @ C1 with `dcp-size: 8` forced (control, then arm).
+  Our launcher drops to DCP=1 at CONC<=4 and the PR requires DCP active, so a
+  naive C1 A/B would compare two identical runs.
+- #54735 / #54736 — **re-dry-run every cycle.** Blocked today: their hunks
+  target code in no published nightly. The moment they apply, they jump the
+  queue (P0 correctness; they retire the CLOSED #53917 we still carry).
+
+**Phase B — SA reproduce**
+- T268 — bare `nightly-7c5dc571`, `K3_FORCE_STOCK=1`, C48, **no LMCache**,
+  mns 96 / mnbt 8192 / gmu 0.90 / DCP 8. Fills the base-version hole: SA is on
+  `7c5dc571`, our stock run T259 was on `73029d42`.
+- T269 — same plus `vllm-simple` offload.
+
+**Phase C — spec-decode bugfixes (C1/MTP path only)**
+- T270 — #54163, T271 — #54165. Both non-draft, both untested by us. Spec is
+  off at C48-C72, so these only bite at C1.
+
+**Phase D — if still short of 12,500 after A-C**
+The four draft perf PRs (#53301, #51437, #53166, #52190) were parked with
+"will see these very later". After Phases A-C are exhausted they are the only
+remaining lever toward the stated 12,500 goal, so **test them, largest first,
+one variable each, GSM8K-gated.** Flag clearly in the ledger that this
+un-parking was my call under the 12,500 objective, for review on return.
+
+**Phase E — consolidation**
+Replicate whatever the best config turns out to be to n=2, GSM8K-gate it, and
+leave `UPSTREAM-STATUS.md` stating the final ask with measured deltas.
+
+## Standing facts not to relitigate
+
+- Best: **11,027 tok/s/GPU @ C72** (n=2, T247/T252), GSM8K 0.995, image
+  `rec-no53940`, config `kv-offloading: dram` / `vllm-simple` / 1,949 GB,
+  gmu 0.90, mns 96, mnbt 16384. Gap to target **-11.8%**.
+- **LMCache is parked and inert on both sides.** SA's own run logs
+  `ext_cache_hit=0.0%`. Do not restart LMCache work.
+- **#53940 a4w4-moe costs 2.40%.** Stays out.
+- `#53917` is CLOSED upstream but still applied locally and load-bearing.
+- Cross-day noise band **±1.2%**; same-session pairs replicate to ~0.4%.
+
+---
+
 what runs next. Every wake-up: read **Current state**, act, update this file.
 
 ## Targets
