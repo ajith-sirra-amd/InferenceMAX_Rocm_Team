@@ -61,7 +61,7 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # because T257/T258 changed SA's *settings* while keeping our *patched* image,
 # which confounds "SA settings don't help us" with "our patches hurt".
 # Deliberately checked BEFORE the manifest branch so it wins on any image.
-K3_FORCE_STOCK="${K3_FORCE_STOCK:-0}"   # T262: back to OUR patched image
+K3_FORCE_STOCK="${K3_FORCE_STOCK:-1}"   # T269: SA reproduce on bare nightly
 if [ "$K3_FORCE_STOCK" = "1" ]; then
     K3_OVERLAY_APPLIED=0
     export SKIP_KIMI_PATCHES=1
@@ -200,7 +200,7 @@ fi
 # requires DCP active, so a C1 A/B under the fallback would compare two
 # identical runs. K3_FORCE_DCP overrides it for the C1 q-replicate arms.
 # Set K3_FORCE_DCP=0 to restore the fallback.
-K3_FORCE_DCP="${K3_FORCE_DCP:-8}"
+K3_FORCE_DCP="${K3_FORCE_DCP:-0}"   # T269: back to fallback (DCP8 at conc>4)
 if [ "$K3_FORCE_DCP" != "0" ]; then
     DCP_SIZE="$K3_FORCE_DCP"
     DCP_SOURCE="forced"
@@ -588,7 +588,8 @@ fi
 # T257: SA uses 8192 at every concurrency and 16384 only at C1.
 # T264: REVERTED to 16384 everywhere -- the 11,027 baseline value. The SA 8192
 # rule belonged to the parked LMCache/stock arms.
-MBT_DEFAULT=16384
+# T269: SA runs mnbt 8192 at every conc above C1. Override for the SA arms.
+MBT_DEFAULT="${K3_MNBT:-8192}"   # T269: SA value
 # T262: legacy LMCache arms ran mnbt 16384 at every conc.
 if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ] && [ "${K3_LEGACY_LMCACHE:-1}" = "1" ]; then MBT_DEFAULT=16384; fi
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-$MBT_DEFAULT}")

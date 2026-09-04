@@ -1973,10 +1973,10 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # as the comparison. This run is what makes the #53940 delta quotable.
   # T249: CCD pinning arm on the NEW BEST config. T247 (this image, no a4w4)
   # = 11,006, the best in the ledger. Only variable here is PIN_CCD=1.
-  # T266: GSM8K-200 gate for #54494 dcp-q-replicate, VLLM_DCP_Q_REPLICATE=1.
-  # T265 confirmed the baseline holds at 11,019 and that the elevated error
-  # rate is environmental, not ours.
-  image: kimi-k3-vllm:rec-qrep
+  # T269: SA REPRODUCE. Bare upstream nightly-7c5dc571 -- the SAME base SA runs
+  # -- with K3_FORCE_STOCK=1 so no overlay and no PR stack. Target: their
+  # 10,152 tok/s/GPU at C48 (run 33773561410, read-only).
+  image: vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
@@ -2190,11 +2190,12 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # -- so the only variable vs T247/T252 (11,027) is the PR.
       # T267 done: #54494 @ C72 = 11,029 vs control 11,019 (+0.09%, neutral).
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
-      # T268: C1 CONTROL for #54494. dcp-size 8 is FORCED -- our launcher would
-      # drop to DCP=1 at CONC<=4 and the PR requires DCP active, so a naive C1
-      # A/B would compare two identical runs. Image rec-qrep with
-      # VLLM_DCP_Q_REPLICATE=0, so T268 vs T269 differ in the env var ALONE.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [1], spec-decoding: mtp }
+      # T268 BLOCKED: DCP>1 and MTP are mutually exclusive (draft uses TRITON_MLA,
+      # which rejects non-causal MLA under DCP). #54494 untestable at C1 as shipped.
+      # T269: SA REPRODUCE -- C48, NO LMCache and NO offload at all (their
+      # ext_cache_hit is 0.0%, so the cache is pure overhead), mnbt 8192,
+      # mns 96, gmu 0.90, DCP 8 via fallback. Bare stock image.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

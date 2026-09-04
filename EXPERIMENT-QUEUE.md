@@ -7,6 +7,37 @@
 
 # ▲ LATEST STATE
 
+## PHASE A CLOSED. All four user-given PRs resolved.
+
+| PR | verdict |
+|---|---|
+| **#54889** a2a-pack-mask | **+0.87% at C72** (11,115 vs 11,019 control), n=1, ~2x noise. Unproven; needs a replicate. |
+| **#54494** dcp-q-replicate | **NEUTRAL at C72** (+0.09%). GSM8K 0.995 PASS. **Untestable at C1** — see below. |
+| **#54735 / #54736** | **BLOCKED** — hunks target code in no published nightly; they carry unmerged dependencies. Re-dry-run each cycle. |
+
+**#54494 cannot be tested at C1 in the configuration we ship.** Two findings
+from T268:
+1. The yaml's `dcp-size` never reaches the launcher — `DCP_SIZE` arrives empty
+   and the script's conc-fallback decides. Benign at C48-C72 (fallback gives 8)
+   but it means the matrix was never driving that knob. `K3_FORCE_DCP` added.
+2. With DCP forced to 8 at C1, engine init dies:
+   `TRITON_MLA is not valid — non-causal MLA attention with DCP not supported`.
+   The MTP draft uses TRITON_MLA, so **DCP>1 and MTP are mutually exclusive**.
+   #54494 needs DCP active; C1 ships with MTP. Testing it would mean measuring
+   a config we do not ship, for a PR already neutral where throughput is scored.
+   Not pursued.
+
+**Neither testable PR moves us toward 12,500.** Baseline 11,019-11,027, gap ~11.8%.
+
+## PHASE B running — T269 SA REPRODUCE
+
+Bare `nightly-7c5dc571` (SA's exact base) with `K3_FORCE_STOCK=1`: no overlay,
+no PR stack. C48, **no LMCache and no offload at all**, mnbt 8192, mns 96,
+gmu 0.90, DCP 8. Target: SA's **10,152**. Our patched C48 was 8,426 (T257) and
+stock-on-a-different-nightly was 6,988 (T259), so this fills the base-version
+hole in the 2x2.
+
+
 ## Phase A verdicts: both user-given testable PRs are ~neutral at C72
 
 | PR | C72 result | vs same-day control | verdict |
