@@ -463,7 +463,52 @@ numa_balancing=0. Gap to target is -11.8%.
 | T262 | ours, LEGACY (workers 1) | 64 | yes | **3,726** | 12.01% | **0.0%** |
 | T263 | ours, LEGACY (workers 1) | 72 | yes | *cancelled ~2 h, in warmup* | — | **0.0%** |
 
-## HOLDING — no run dispatched (user instruction, 2026-09-04)
+## NEW-PR TRACK (2026-09-04). LMCache PARKED.
+
+**LMCache is parked on user instruction** — handed to the LMCache team. Do not
+run further LMCache arms. The six completed runs and the root cause stay in the
+ledger below for reference.
+
+### PR status, verified against upstream
+
+| PR | role | applies to `rec-no53940`? |
+|---|---|---|
+| **#53917** `cpu-offload` | **CLOSED upstream** — we still carry it locally | already applied |
+| **#54735** `[Bugfix]` hybrid geometry | its replacement, **required** for our config | **NO** — see below |
+| #54736 `[Feature]` fine-grained hits | optional perf, stacked on #54735 | NO — 7 hunks fail |
+| **#54494** `dcp-q-replicate` (updated: + FP4/FP8 MLA BMM) | optional perf | **YES, clean** |
+| **#54889** `a2a-pack-mask` | optional perf, no numerics | **YES, clean** |
+
+**#54735/#54736 cannot be rebased locally.** Their hunks target code that exists
+in no published nightly — `manager.py` has no `primary_block_size` /
+`get_group_id` / runtime `kv_cache_utils` import on `73029d42` (09-02) or
+`27a94d1c` (09-03). They carry unmerged dependencies. Hand-resolving would mean
+porting those too, so we wait for the merge (est. 2-3 days) rather than invent a
+tree. **We take no action on the PRs themselves — local only.**
+
+**Base nightly stays at `7c5dc571`.** Checked `27a94d1c` (dev337) and
+`73029d42` (dev278); neither unblocks #54735, and moving base would drop
+#53917 from a config that depends on it.
+
+### CRITICAL: the baseline uses CPU offload
+
+T252 (11,048) ran **`kv_offloading: dram`, backend `vllm-simple`, 1,949 GB CPU
+DRAM** — not offload-free. So the SimpleCPU offload path is load-bearing for the
+headline, which is exactly why #53917's replacement matters and why we cannot
+simply drop it.
+
+### Order
+
+1. **T264 — #54889 `a2a-pack-mask`.** Pure kernel-count reduction (8 kernels ->
+   1 inside the CUDA graph), **no numerics**, so no GSM8K gate needed. One
+   variable vs the 11,027 baseline. C72 first to compare directly.
+2. **T265 — GSM8K-200 with #54494** `VLLM_DCP_Q_REPLICATE=1`. Numerics change
+   (different reduction order), gate before any perf number.
+3. **T266 — #54494 A/B at C1.** C1 is where the removed per-layer all-gather is
+   exposed; C72 is compute-bound and should be flat-to-negative.
+4. Re-check #54735/#54736 once they merge upstream.
+
+## Superseded — HOLDING note (2026-09-04)
 
 GPUs idle and clean: container removed, all 8 at 1% VRAM. **Do not dispatch
 until told.**
