@@ -9,7 +9,7 @@ wait_for_amd_gpu_clean
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
 # T251 gate PASSED (GSM8K 0.995 on rec-no53940) -- back to false.
-export EVAL_ONLY="${EVAL_ONLY:-false}"
+export EVAL_ONLY="${EVAL_ONLY:-true}"   # T266: GSM8K-200 gate for #54494
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -207,6 +207,10 @@ export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export GPU_ARCHS=gfx950
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
+# T266: #54494 dcp-q-replicate. Replicated vs gathered query projection is the
+# same math in a different reduction order, so it is a NUMERICS change and is
+# GSM8K-gated before any perf number. Inert unless DCP is active.
+export VLLM_DCP_Q_REPLICATE="${VLLM_DCP_Q_REPLICATE:-1}"
 # T257: SA sets the AITER-side knob to INT4. Different variable from the VLLM_ROCM_
 # one above -- aiter reads it in the quick-allreduce path, not the vLLM one.
 # Left at NONE deliberately: INT4 quantizes the allreduce, so it is a NUMERICS

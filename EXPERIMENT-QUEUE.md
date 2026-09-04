@@ -7,6 +7,26 @@
 
 # ▲ LATEST STATE
 
+## T265 control — baseline HOLDS, errors are NOT ours
+
+**11,019 tok/s/GPU** on `rec-no53940` at the identical C72 config, same day as
+T264. Against the 11,027 anchor that is **0.07%** — the baseline is intact and
+still trustworthy.
+
+**Error rate 5.65% on the pristine baseline image.** T264 was 5.45%. So the
+elevated rate belongs to the environment (harness/dataset), **not to #54889 and
+not to any patch of ours**. Something changed after T247/T252 (0.26-0.30%).
+Worth understanding eventually, but it is not blocking and it affects all arms
+equally, so same-day A/Bs remain valid.
+
+**#54889 same-day A/B: 11,115 (T264) vs 11,019 (T265) = +0.87%.** Same-session
+pairs replicate to ~0.4%, so this is roughly 2x noise — suggestive, not proven.
+Needs n=2 before it can be claimed. It is NOT yet a step toward 12,500.
+
+**T266 running:** GSM8K-200 gate for #54494 with `VLLM_DCP_Q_REPLICATE=1` on
+`rec-qrep`. Numerics change, so the gate precedes any perf number.
+
+
 ## T264 done — #54889 is NOT a demonstrated win, and errors are systemic
 
 **11,115 tok/s/GPU** vs baseline 11,027 = **+0.80%, inside the ±1.2% band.**

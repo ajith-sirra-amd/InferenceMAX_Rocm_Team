@@ -1973,11 +1973,10 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # as the comparison. This run is what makes the #53940 delta quotable.
   # T249: CCD pinning arm on the NEW BEST config. T247 (this image, no a4w4)
   # = 11,006, the best in the ledger. Only variable here is PIN_CCD=1.
-  # T265: BASELINE RE-ANCHOR. Back to rec-no53940, the 11,027 image, same C72
-  # config. Every run since T257 shows 4.5-15.5% errors on BOTH images, vs
-  # 0.26-0.30% at T247/T252 -- so the elevated rate is not #54889. This run
-  # tells us whether 11,027 and its error rate still hold today.
-  image: kimi-k3-vllm:rec-no53940
+  # T266: GSM8K-200 gate for #54494 dcp-q-replicate, VLLM_DCP_Q_REPLICATE=1.
+  # T265 confirmed the baseline holds at 11,019 and that the elevated error
+  # rate is environmental, not ours.
+  image: kimi-k3-vllm:rec-qrep
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
