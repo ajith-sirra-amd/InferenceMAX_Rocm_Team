@@ -460,6 +460,13 @@ numa_balancing=0. Gap to target is -11.8%.
 | T259 | **stock, 0 patches** | 48 | no | **6,988** | 5.45% | — |
 | T260 | **stock, 0 patches** | 64 | yes | **4,688** | 9.93% | **0.0%** |
 | T261 | **stock, 0 patches** | 72 | yes | **3,396** | 15.45% | **0.0%** |
+| T262 | ours, LEGACY (workers 1) | 64 | yes | **3,726** | 12.01% | **0.0%** |
+
+**Workers-1 hypothesis is dead.** T262 vs T258 (same image, same conc, only the
+settings block differs): legacy gmu 0.88 / mns 80 / mnbt 16384 / workers 1 /
+`rc3` gives **3,726 vs 5,808** — 36% worse than SA settings, and
+`ext_cache_hit` is still 0.0%. Every LMCache configuration tried (2 images x
+2 worker counts x 3 concurrencies) has zero external cache hits.
 
 **T260 is decisive on the LMCache fault: it is NOT our patch stack.** Zero-patch
 upstream `nightly-73029d42` shows the identical `ext_cache_hit` 0.0%. The

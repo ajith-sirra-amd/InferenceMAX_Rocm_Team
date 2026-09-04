@@ -640,6 +640,15 @@ if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 )); fi
 # At C1 the live batch is only 1 x 9 = 9 rows, so the extra graphs are mostly
 # unused -- the cost is capture time and a little memory, and it buys removal of
 # a whole failure class. Cheap insurance.
+# T263: resolve the legacy mns BEFORE sizing the graph ladder. In T262 the
+# ladder was built from mns=128 (SA rule) while the server ran mns 80, so 48
+# graphs were captured for batch sizes that could never occur -- wasted capture
+# time and VRAM at gmu 0.88. The gmu/mns override block further down still runs;
+# this only pre-resolves the mns half so the ladder matches what is served.
+if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ] && [ "${K3_LEGACY_LMCACHE:-1}" = "1" ]; then
+    MAX_NUM_SEQS=80
+    echo "[legacy-lmcache] mns pre-resolved to $MAX_NUM_SEQS before graph ladder"
+fi
 MAX_CUDAGRAPH_CAPTURE_SIZE=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")
 echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $SPEC_ROWS rows), DCP=$DCP_SIZE"
