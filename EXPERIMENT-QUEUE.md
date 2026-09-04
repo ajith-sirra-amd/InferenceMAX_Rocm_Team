@@ -7,6 +7,39 @@
 
 # ▲ LATEST STATE
 
+## T272 — gmu 0.92 at C72 is NEUTRAL (+0.20%). gmu is not monotonic.
+
+11,041 vs the T265 control 11,019. GPU KV rose 11.6% to 31,981,568 and bought
+nothing. No hang, no HSA fault — the ledger's "0.92 hangs" note was C1-specific
+(T211) and does not hold at C72; that note is now stale twice over.
+
+| gmu step | where | effect |
+|---|---|--:|
+| 0.88 -> 0.90 | C48, stock | **+16.9%** |
+| 0.90 -> 0.92 | C72, patched | **+0.20%** |
+
+`kv_usage` runs 40-50% in both, so neither is KV-capacity-bound. **0.90 reads as
+a threshold, not a slope** — below it something is starved, above it extra
+headroom is dead weight. Do not extrapolate gmu further; 0.95 still hung (T157).
+
+## Where the campaign stands against 12,500
+
+Nothing has moved the number. Baseline **11,019-11,041**, gap **~11.8%**.
+
+| lever | measured |
+|---|--:|
+| #54889 a2a-pack-mask | +0.87% (n=1, unproven) |
+| #54494 dcp-q-replicate | +0.09% (neutral, GSM8K 0.995) |
+| gmu 0.90 -> 0.92 | +0.20% (neutral) |
+| 3-PR stack vs stock, gmu-matched | +1.2% |
+| #54735 / #54736 | blocked upstream |
+
+**T273 running: replicate #54889.** It is the only positive signal among the
+four PRs, and the standing rule requires n=2 before a claim. `rec-a2amask`,
+C72, gmu back to 0.90, everything else at baseline. If it lands near 11,115
+again the PR is real at ~+0.9%; if it lands near 11,019 it was noise.
+
+
 ## T271 dead: LMCache `dev89` rotated out of the nightly channel
 
 `ERROR: No matching distribution found for lmcache==0.5.5.dev89+rocm7.2`. It

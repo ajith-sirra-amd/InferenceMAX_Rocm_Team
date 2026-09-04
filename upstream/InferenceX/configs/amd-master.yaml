@@ -1974,7 +1974,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # T249: CCD pinning arm on the NEW BEST config. T247 (this image, no a4w4)
   # = 11,006, the best in the ledger. Only variable here is PIN_CCD=1.
   # T272: back to OUR patched image, C72 baseline config, gmu 0.92.
-  image: kimi-k3-vllm:rec-no53940
+  image: kimi-k3-vllm:rec-a2amask
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
@@ -2196,9 +2196,11 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # T270 done: stock gmu 0.90 -> 8,329 (gmu 0.88->0.90 = +16.9%).
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
       # T271 FAILED: lmcache dev89 rotated out of the nightly channel. Parked.
-      # T272: gmu 0.92 at C72 on our image. gmu is the largest lever measured
-      # (0.88->0.90 = +16.9%). Baseline config otherwise, so gmu is the only
-      # variable vs T265 (11,019). Prior evidence against 0.92 is C1-only.
+      # T272 done: gmu 0.92 = 11,041 vs 11,019 control (+0.20%, neutral).
+      # T273: REPLICATE #54889 at C72 (image rec-a2amask, gmu back to 0.90).
+      # T264 gave 11,115 vs the 11,019 control = +0.87%, ~2x same-session noise
+      # and n=1. This is the only positive signal from the four PRs, so it gets
+      # the n=2 the standing rule requires before anything is claimed.
       - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
