@@ -7,6 +7,43 @@
 
 # ▲ LATEST STATE
 
+## ⛔ NODE BLOCKED — stranded VRAM, needs manual intervention
+
+**T273 stalled and its GPU memory did not release.** All 8 GPUs sit at **99%
+VRAM** with no container and no host-visible processes.
+`rocm-smi --showpids` lists **8 zombie KFD entries, ~305 GB each**, whose PIDs
+do not exist; `kill -9` returns "No such process". This is a kernel/driver-level
+leak that I cannot clear without root.
+
+**Do not dispatch** — the launcher opens with `wait_for_amd_gpu_clean`, which
+will block or fail (T240 died exactly this way with far less stranded memory).
+
+**What is needed (root):** reload the driver, e.g.
+`sudo modprobe -r amdgpu && sudo modprobe amdgpu`, or reboot the node. Then
+confirm `rocm-smi --showpids` is empty and VRAM reads ~1%. **Also still
+outstanding from earlier:** `echo 'kernel.numa_balancing = 0' | sudo tee
+/etc/sysctl.d/99-numa.conf` — three reboots have reverted it, and a driver
+reload/reboot will revert it again.
+
+### The stall itself
+
+Warmup froze at 52/148 for 15 minutes, `in_flight=24`, zero completions.
+GPUs 0% util at ~230 W idle; the 8 vLLM workers pegged at ~256% CPU each.
+Health endpoint returned 200 the whole time. That is a host-side spin in the
+SimpleCPU offload path (11,473 blocks / 226.89 GB, eager), not a dead engine.
+
+**Intermittent, not configuration** — T264 ran this identical image and config
+to completion an hour earlier. Worth watching: if it recurs, the offload path
+is a stability risk for the headline config, which depends on it.
+
+I cancelled at ~60 min rather than let it burn the full 2.5 h. That follows the
+T242 lesson (a dead run left running for 3.7 h with the diagnosis one command
+away), accepting the tension with the "do not cancel a running job" rule.
+
+**#54889 remains n=1 and unproven at +0.87%.** The replicate must be re-run once
+the node is healthy.
+
+
 ## T272 — gmu 0.92 at C72 is NEUTRAL (+0.20%). gmu is not monotonic.
 
 11,041 vs the T265 control 11,019. GPU KV rose 11.6% to 31,981,568 and bought
