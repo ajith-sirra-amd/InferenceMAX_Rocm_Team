@@ -577,3 +577,35 @@ either patched around in their image or behaving differently on their node.
 have previously drawn a wrong conclusion by comparing against the wrong SA file
 (their *job* log has no `lookup.py` lines at all). The comparison must be
 against their `lmcache_server.log` specifically.
+
+---
+
+## RETRACTION (2026-09-04): LMCache is inert for SemiAnalysis too
+
+SA [run 33773561410](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/33773561410)
+(read-only), branch `amd/agentx_k3_vllm_0903_2`, base
+`nightly-7c5dc571` — **the same base we use** — zero patches, LMCache
+`0.5.5.dev89`, `--max-gpu-workers 8`, `--chunk-size 12288`, mns 96, mnbt 8192,
+gmu 0.90, DCP 8, conc 48:
+
+| metric | SA | ours (T257, C48, no LMCache) |
+|---|--:|--:|
+| tok/s/GPU | **10,152** | 8,426 |
+| `ext_cache_hit` | **0.0%** | n/a |
+| `prefix_cache_hit` | 94.8-96.6% | 92.6% |
+| `No GPU context found` errors | **0** | 1,535 (T258) |
+
+**What this retracts.** I wrote that "LMCache is worth ~+29% to SA" and treated
+fixing it as the largest available lever. That was an inference from comparing
+their C48-with-LMCache to our stock C48-without, and it is wrong. Their external
+cache hit rate is zero, exactly like ours. LMCache contributes nothing to their
+number.
+
+**What survives.** Our 1,535 lookup errors are still real and still ours alone —
+SA's log has none. But since their hit rate is zero anyway, those errors are not
+what separates 10,152 from 8,426.
+
+**What actually matters now.** A **20.5% gap at C48 on the same base with nearly
+identical knobs**, with the cache inert on both sides. That is the open question.
+T268/T269 attack it directly: reproduce their exact config, then swap LMCache for
+`vllm-simple` to separate the operating point from the connector.

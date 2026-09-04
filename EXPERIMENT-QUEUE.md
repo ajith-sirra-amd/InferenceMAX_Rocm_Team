@@ -463,6 +463,34 @@ numa_balancing=0. Gap to target is -11.8%.
 | T262 | ours, LEGACY (workers 1) | 64 | yes | **3,726** | 12.01% | **0.0%** |
 | T263 | ours, LEGACY (workers 1) | 72 | yes | *cancelled ~2 h, in warmup* | — | **0.0%** |
 
+## RUN ORDER (user, 2026-09-04): PR patches -> SA reproduce -> SA + vllm-simple
+
+1. **T264** *(running)* — #54889 a2a-pack-mask @ C72, baseline config otherwise.
+2. **T265** — GSM8K-200 with #54494 `VLLM_DCP_Q_REPLICATE=1`. Numerics gate.
+3. **T266** — #54494 A/B @ **C72**. On the 12,500 track.
+4. **T267** — #54494 @ **C1**. Needs `dcp-size: 8` forced (our launcher drops to
+   DCP=1 at CONC<=4, and the PR requires DCP active), so this is TWO runs:
+   C1/DCP8 qrep-off control, then C1/DCP8 qrep-on.
+5. **T268 — SA REPRODUCE.** Their [run 33773561410](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/33773561410)
+   = **10,152 tok/s/GPU @ C48**, base `nightly-7c5dc571` (same as ours),
+   **zero patches**, LMCache `0.5.5.dev89` workers 8 chunk 12288,
+   mns 96, mnbt 8192, gmu 0.90, DCP 8. Needs the BARE `nightly-7c5dc571`
+   image + `K3_FORCE_STOCK=1`.
+6. **T269 — SA CONFIG WITH `vllm-simple`.** Same as T268 but SimpleCPU offload
+   instead of LMCache. Isolates the operating point from the connector.
+
+### CORRECTION: LMCache is inert for SA too
+
+SA's own run logs **`ext_cache_hit=0.0%`** and **zero** `No GPU context found`
+errors, with `prefix_cache_hit` 94.8-96.6%. They reach 10,152 at C48 with the
+external cache doing nothing.
+
+**This retracts the earlier claim that "LMCache is worth ~+29% to SA".** That was
+inferred from comparing their C48-with-LMCache against our stock C48-without,
+and it was wrong. LMCache is inert on both sides; the difference is elsewhere in
+their configuration. Their C48 10,152 vs our C48 8,426 (T257) is a **20.5% gap
+at nearly identical knobs** — that gap, not the cache, is the thing to chase.
+
 ## STANDING RULE (user, 2026-09-04)
 
 **Any config that beats the 11,027 baseline gets a GSM8K-200 run at that exact
