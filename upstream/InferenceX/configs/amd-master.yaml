@@ -2197,11 +2197,17 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
       # T271 FAILED: lmcache dev89 rotated out of the nightly channel. Parked.
       # T272 done: gmu 0.92 = 11,041 vs 11,019 control (+0.20%, neutral).
-      # T273: REPLICATE #54889 at C72 (image rec-a2amask, gmu back to 0.90).
-      # T264 gave 11,115 vs the 11,019 control = +0.87%, ~2x same-session noise
-      # and n=1. This is the only positive signal from the four PRs, so it gets
-      # the n=2 the standing rule requires before anything is claimed.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
+      # T277: NO-OFFLOAD CONTROL at C72. We have never run this image without
+      # the dram tier, so we have never priced what offload actually buys.
+      # The case for asking now: the SimpleCPU offload path is implicated in
+      # every stall we have seen (T273 at mnbt 16384; T275/T276 deterministically
+      # at 32768, both dying on the same trace), and T274 showed ext_cache_hit
+      # climbing 0 -> 82.6% across the whole measured hour, meaning our headline
+      # number is a warm-up average that never reaches steady state.
+      # If offload is neutral or negative we delete a whole class of instability;
+      # if it is strongly positive we have quantified it for the first time.
+      # Single variable vs T274 (11,095): mnbt back to 16384, offload off.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, total-cpu-dram-gb: 0, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

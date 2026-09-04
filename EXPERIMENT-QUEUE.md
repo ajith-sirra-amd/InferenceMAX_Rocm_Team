@@ -43,6 +43,51 @@ positive) but it is no longer a candidate.
 source hunks, 54736 fails 4 of 7 in `kv_cache_coordinator.py` alone. They carry
 unmerged dependencies. Not retryable until those land; will keep re-checking.
 
+## T276 FAILED too — and that settles mnbt 32768 as the cause
+
+[T276](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33897799242)
+died the same way: `Run aborted (warmup_failure)`, 0 successful / 81 total,
+warmup frozen at **2/148 from 90 s to 1530 s**, GPUs 0% util. GPU KV came out
+byte-identical to T275 at 27,319,963, so the config reproduced exactly.
+
+**The detail that decides it: both runs aborted on the same trace,
+`006c98de37d819e95b0840e25426bb7ca99d`.** Two independent runs failing on one
+identical trace is deterministic behaviour, not the intermittent stall. **This
+supersedes what I wrote after T275**, when only one failure was in hand and the
+honest reading was "not attributable to the knob."
+
+**Verdict: mnbt 32768 is unusable on the dram-offload path** — 2/2 failures at
+32768 against roughly 1-in-10 at 16384. Likely mechanism: at ISL median 90k a
+32768 chunk drives a much larger single SimpleCPU offload transfer, and that
+path is implicated in every stall we have logged. **mnbt reverted to 16384. Do
+not retry 32768 unless the offload backend changes.**
+
+## T277 dispatched: no-offload control at C72
+
+Cost of the last two trials: ~2.5 h of runs plus an hour of node recovery, for
+zero throughput data. So rather than take a third swing at prefill chunking,
+this run goes after the component that keeps breaking.
+
+**We have never run this image without the dram tier, so we have never priced
+what offload actually buys.** Two independent reasons to ask now:
+
+1. **It is implicated in every stall.** T273 at mnbt 16384, T275 and T276
+   deterministically at 32768 — all with the same signature of GPUs idle while
+   the host spins in the SimpleCPU path.
+2. **It never reaches steady state.** T274's `ext_cache_hit` climbed 0 → 82.6%
+   across the entire measured hour and was still rising at the end. Our headline
+   number is a warm-up average of a tier that never finishes warming.
+
+Either outcome is worth having. If offload is neutral or negative we delete a
+whole class of instability and get a faster, more reproducible baseline. If it
+is strongly positive, we have finally quantified it and know the stalls are a
+price rather than a bug to route around.
+
+Config: `kv-offloading: none`, `total-cpu-dram-gb: 0`, mnbt back to 16384,
+everything else as T274 — image `rec-a2amask`, gmu 0.90, mns 96, DCP 8 a2a.
+Single variable against T274's 11,095. `bash -n` clean, `wait_for_server_ready`
+intact, YAML parses.
+
 ## T275 FAILED in warmup — the intermittent stall, not the knob
 
 [T275](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33892548392)
@@ -861,8 +906,10 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
-**As of T276 dispatch (2026-09-04).** T275 failed in warmup and measured nothing;
-mnbt 32768 is still an open question, retried as T276. Best measured: **11,115** (T264, #54889).
+**As of T277 dispatch (2026-09-04).** mnbt 32768 is CLOSED — T275 and T276 both
+died in warmup on the same trace, so it is unusable on the dram-offload path and
+mnbt is back at 16384. T277 asks what the offload tier is worth at all.
+Best measured: **11,115** (T264, #54889).
 Baseline anchor: **11,027**. Replicated #54889 mean (n=2): **11,105 = +0.74%**,
 inside noise. Target 12,500 needs **+13.4%** over baseline — nothing tested so
 far moves more than ~1%, so the remaining gap will not come from the PR backlog.
