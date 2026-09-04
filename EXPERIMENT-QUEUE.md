@@ -461,6 +461,43 @@ numa_balancing=0. Gap to target is -11.8%.
 | T260 | **stock, 0 patches** | 64 | yes | **4,688** | 9.93% | **0.0%** |
 | T261 | **stock, 0 patches** | 72 | yes | **3,396** | 15.45% | **0.0%** |
 | T262 | ours, LEGACY (workers 1) | 64 | yes | **3,726** | 12.01% | **0.0%** |
+| T263 | ours, LEGACY (workers 1) | 72 | yes | *cancelled ~2 h, in warmup* | — | **0.0%** |
+
+## HOLDING — no run dispatched (user instruction, 2026-09-04)
+
+GPUs idle and clean: container removed, all 8 at 1% VRAM. **Do not dispatch
+until told.**
+
+### LMCache: closed, negative
+
+Six completed runs span 2 images x 2 worker counts x 3 concurrencies.
+**`ext_cache_hit` is 0.0% in every one.** LMCache is net-negative everywhere it
+was measured, and the damage scales with concurrency:
+
+| image | C48 no-cache | C64 +LMCache | C72 +LMCache |
+|---|--:|--:|--:|
+| ours (3 PRs) | **8,426** | 5,808 (SA) / 3,726 (legacy) | cancelled |
+| stock, 0 patches | 6,988 | 4,688 | 3,396 |
+
+Root cause stands: **1,535 `No GPU context found for model ... with world size 8
+during lookup!`** in `lmcache_server.log`. Every retrieve fails, so the 1,949 GB
+host tier is write-only. Invariant to image, worker count, chunk size, LMCache
+version, gmu, mns and mnbt — i.e. to everything reachable from the launcher.
+
+### What is still unanswered
+
+1. **stock + LMCache at C48** — the only cell directly comparable to SA's 8,997.
+   Never run. Every LMCache arm we have is C64/C72, the two worst points.
+2. **Does SA's `lmcache_server.log` carry the same lookup error?** Not checked.
+   Their *job* log has no `lookup.py` lines at all, so the comparison must be
+   against the server log specifically. I drew a wrong conclusion once by
+   reading the wrong file.
+3. **#54494 `dcp-q-replicate`** — image build, GSM8K-200 gate, then A/B at C1.
+
+### Best numbers still standing
+
+**11,027 tok/s/GPU @ C72** (n=2: T247 11,006 · T252 11,048), GSM8K 0.995, on
+`rec-no53940` with no LMCache. Target 12,500, gap **-11.8%**.
 
 **Workers-1 hypothesis is dead.** T262 vs T258 (same image, same conc, only the
 settings block differs): legacy gmu 0.88 / mns 80 / mnbt 16384 / workers 1 /
