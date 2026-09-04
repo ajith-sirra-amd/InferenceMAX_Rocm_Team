@@ -43,6 +43,48 @@ positive) but it is no longer a candidate.
 source hunks, 54736 fails 4 of 7 in `kv_cache_coordinator.py` alone. They carry
 unmerged dependencies. Not retryable until those land; will keep re-checking.
 
+## T275 FAILED in warmup — the intermittent stall, not the knob
+
+[T275](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33892548392)
+never produced a number. `Run aborted (warmup_failure)`, 0 successful / 94 total.
+
+The config went in correctly — `[chunk] max_num_batched_tokens=32768` with dcp/mns/gmu/load
+all matching T274 — and the server came up and captured cudagraphs. GPU KV came
+out at **27,319,963**, down 4.7% from T274's 28,653,478, which is exactly what a
+bigger prefill chunk should do and is affordable at ~50% `kv_usage`. Then warmup
+froze at **11/148 from 240 s to 780 s** with `in_flight=65` and **all 8 GPUs at
+0% util** — no completions, no errors, just stopped.
+
+**This is T273's signature, not a verdict on mnbt.** T273 hit the identical
+freeze at mnbt **16384** on this same image, and T274 then ran that same config
+straight through. So the failure mode predates the knob and **mnbt 32768 remains
+untested** — T275 measured nothing about it.
+
+One thing genuinely improved: the harness caught itself this time. AIPerf raised
+`Terminal warmup failure` and broadcast `ProfileCancelCommand` at ~30 min rather
+than hanging for an hour as T273 did.
+
+**Two operational lessons worth carrying:**
+
+1. **GitHub marks this job `success`.** The result-writing path swallows the
+   non-zero exit, so run conclusion is not a pass signal. Always confirm
+   `Requests: N successful` before trusting a green check.
+2. **Zombie VRAM again.** KFD entries of ~306 GB and ~303 GB on card0 with the
+   container gone; 6 of 8 GPUs pinned at 99%. T273's precedent says this drains
+   on its own in about an hour, so waiting comes before escalating.
+
+## T276: retry mnbt 32768, unchanged
+
+Re-running the same arm. This is not a blind re-dispatch — the log diagnoses a
+known intermittent stall that has already been observed at baseline mnbt, so the
+correct next step is to retry the untested config rather than to abandon or
+change it. If T276 stalls the same way, that becomes evidence that 32768 raises
+the stall probability, and the knob gets dropped. If it completes, we finally get
+the prefill-chunk A/B against T274's 11,095.
+
+Gated on the node releasing its stranded VRAM first — the launcher opens with
+`wait_for_amd_gpu_clean`.
+
 ## T275 dispatched: mnbt 16384 → 32768
 
 The first knob picked from workload evidence rather than from the PR backlog.
@@ -819,7 +861,8 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
-**As of T275 dispatch (2026-09-04).** Best measured: **11,115** (T264, #54889).
+**As of T276 dispatch (2026-09-04).** T275 failed in warmup and measured nothing;
+mnbt 32768 is still an open question, retried as T276. Best measured: **11,115** (T264, #54889).
 Baseline anchor: **11,027**. Replicated #54889 mean (n=2): **11,105 = +0.74%**,
 inside noise. Target 12,500 needs **+13.4%** over baseline — nothing tested so
 far moves more than ~1%, so the remaining gap will not come from the PR backlog.
