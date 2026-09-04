@@ -195,6 +195,16 @@ else
     if [ "$CONC" -le 4 ]; then DCP_SIZE=1; else DCP_SIZE=8; fi
     DCP_SOURCE=conc-fallback
 fi
+# T268: the yaml's dcp-size never reaches this script -- DCP_SIZE arrives empty
+# and the conc-fallback above decides, which forces DCP=1 at CONC<=4. #54494
+# requires DCP active, so a C1 A/B under the fallback would compare two
+# identical runs. K3_FORCE_DCP overrides it for the C1 q-replicate arms.
+# Set K3_FORCE_DCP=0 to restore the fallback.
+K3_FORCE_DCP="${K3_FORCE_DCP:-8}"
+if [ "$K3_FORCE_DCP" != "0" ]; then
+    DCP_SIZE="$K3_FORCE_DCP"
+    DCP_SOURCE="forced"
+fi
 export DCP_SIZE
 echo "[dcp] size=$DCP_SIZE source=$DCP_SOURCE conc=$CONC"
 

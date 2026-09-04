@@ -24,7 +24,18 @@ either. The C1 arms are the only place this PR can show a benefit.
 **Neither PR moves us toward 12,500.** Baseline stands at 11,019-11,027,
 gap ~11.8%.
 
-**T268 running: C1 CONTROL**, `dcp-size: 8` forced, image `rec-qrep` with
+**T268 v1 CANCELLED at 5 min — the yaml `dcp-size` is a no-op.** The launcher
+logged `[dcp] size=1 source=conc-fallback conc=1`: `DCP_SIZE` arrives empty from
+the harness, so the script's own fallback decides, and at CONC<=4 that is 1.
+q-replicate would have been inert and the A/B would have compared two identical
+runs. Cancelled rather than spend 2.5 h on a run that could not answer the
+question. **Note this also means every prior run's DCP came from the fallback,
+not the yaml** — benign at C48-C72 where the fallback gives 8, but worth knowing.
+
+**Fix:** `K3_FORCE_DCP` (default 8) added to the launcher, overriding the
+fallback. `bash -n` clean, `wait_for_server_ready` intact.
+
+**T268 re-dispatched: C1 CONTROL**, `dcp-size: 8` forced, image `rec-qrep` with
 `VLLM_DCP_Q_REPLICATE=0`. T269 will flip only the env var, so the pair is a
 true one-variable A/B. Note C1 enables MTP (spec k=8), unlike the C48-C72 arms.
 
