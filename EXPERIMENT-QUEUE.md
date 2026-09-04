@@ -16,8 +16,52 @@ container can self-resolve, so waiting is a valid first response before
 escalating to root. The `numa_balancing` sysctl item is unaffected and still
 outstanding.
 
-**T274 dispatched: the #54889 replicate**, re-running what T273 stalled on.
-Same image `rec-a2amask`, C72, gmu 0.90, mnbt 16384, mns 96, dram/vllm-simple.
+## T274 DONE — #54889 settled at n=2. Not a win. Error plague has cleared.
+
+[T274](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33882241948)
+returned **11,095 tok/s/GPU** (dur 3,624 s, 2318/2470). With T264's 11,115 that
+puts **#54889 at mean 11,105 vs baseline 11,023 = +0.74%** — inside the ±1.2%
+noise band. The two replicates agree to 0.18% of each other, so the measurement
+is tight and the effect is simply small. **#54889 is closed out: real, sub-1%,
+and not a route to 12,500.** It stays in the image (it is harmless and mildly
+positive) but it is no longer a candidate.
+
+**Two findings worth more than the throughput number:**
+
+1. **The error plague is over.** Request error rate came in at **0.172%**
+   (4/2322), against 5.45% (T264) and 5.65% (T265) at *identical* config. The
+   environmental `InvalidInferenceResultError` elevation that ran T257→T272 has
+   cleared without any action from us — which retroactively confirms it was
+   never ours. Runs from T274 forward compare directly to the pre-T257 era.
+2. **The dram tier warms for the entire hour.** `ext_cache_hit` went
+   0% → 58% → 71% → 82.6% across the measurement window and was *still climbing*
+   at the end, with `tput_out` tracking it 226 → 582 tok/s. The reported average
+   is therefore a warm-up average, not a steady-state one.
+
+**#54735 / #54736 re-checked (Nth time) — still not applicable.** Both are
+`mergeable=true` upstream but against *their* base, not ours: 54735 fails 6 of 9
+source hunks, 54736 fails 4 of 7 in `kv_cache_coordinator.py` alone. They carry
+unmerged dependencies. Not retryable until those land; will keep re-checking.
+
+## T275 dispatched: mnbt 16384 → 32768
+
+The first knob picked from workload evidence rather than from the PR backlog.
+T274's own numbers say this job is **prefill-dominated**: ISL median 90,268 /
+mean 137,861 against OSL mean 823, and `tput_in` ~91,000/s against `tput_out`
+~580/s. Nearly all the GPU time is prefill, and prefill is chunked at
+`max_num_batched_tokens`. Doubling the chunk halves the number of
+chunked-prefill iterations and the per-iteration scheduling and attention-setup
+overhead that comes with each.
+
+There is room to pay for it: `kv_usage` sits at ~50% at gmu 0.90, and T272 showed
+that extra KV capacity above 0.90 buys nothing on its own — so the headroom is
+there to be spent on batch width instead. Note the untested direction is *up*:
+16384 is baseline and 8192 was the SA arm, so we have only ever moved this knob
+downward.
+
+This is a scheduling knob — it changes batching granularity, not dtypes or
+kernels — so no GSM8K gate. Single variable: image stays `rec-a2amask`, gmu 0.90,
+mns 96, DCP 8 a2a, dram/vllm-simple. Clean A/B against T274's 11,095.
 
 ## ⛔ (resolved) NODE BLOCKED — stranded VRAM
 
@@ -774,6 +818,33 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 **Parked at user request: the GEMM microbenchmark. Do not queue it.**
 
 ## Current state
+
+**As of T275 dispatch (2026-09-04).** Best measured: **11,115** (T264, #54889).
+Baseline anchor: **11,027**. Replicated #54889 mean (n=2): **11,105 = +0.74%**,
+inside noise. Target 12,500 needs **+13.4%** over baseline — nothing tested so
+far moves more than ~1%, so the remaining gap will not come from the PR backlog.
+
+**Campaign scorecard (all inside or near noise):** #54889 +0.74% (n=2, settled) ·
+#54494 +0.09% (neutral, GSM8K 0.995 ✓) · gmu 0.92 +0.20% (neutral) · 3-PR stack
++1.2% (gmu-matched) · #54735/#54736 blocked upstream, re-checked at T274 and
+still failing 6/9 and 4/7 source hunks · LMCache parked (ext_cache_hit 0.0% for
+us *and* for SA) · #54163/#54165 untested, C1/MTP path only.
+
+**Where the headroom actually looks like it is.** T274's own telemetry is the
+best lead we have: the run is prefill-dominated (ISL median 90k vs OSL mean 823;
+`tput_in` ~91k/s vs `tput_out` ~580/s) and the offload tier warms for the whole
+measured hour (`ext_cache_hit` 0 → 82.6%, still rising at the end). That points
+at scheduling and cache-warm behaviour, not at kernels or at any single PR.
+T275 (mnbt 32768) is the first probe of that; if chunk size moves the number,
+the prefill path is the seam to keep working.
+
+**Also still open:** the ~20% gap between our gmu-matched C48 (8,426) and SA's
+10,152 remains unexplained. Base nightly accounts for +2.0%, patches +1.2%,
+gmu 0.88→0.90 +16.9% — that last one is a threshold effect, not a slope.
+
+**Housekeeping:** `numa_balancing` sysctl still outstanding on the user's side
+(reverted by three reboots). Node self-reclaimed stranded VRAM after T273
+without root action — waiting is a valid first response there.
 
 ### Approved order (user-confirmed 2026-09-03, revised)
 
