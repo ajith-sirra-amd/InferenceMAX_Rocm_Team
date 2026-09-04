@@ -463,6 +463,48 @@ numa_balancing=0. Gap to target is -11.8%.
 | T262 | ours, LEGACY (workers 1) | 64 | yes | **3,726** | 12.01% | **0.0%** |
 | T263 | ours, LEGACY (workers 1) | 72 | yes | *cancelled ~2 h, in warmup* | — | **0.0%** |
 
+## PR BACKLOG AND PRIORITIES (2026-09-04)
+
+Our image manifest carries `pr-missing-vs-overlay: 53166 51437 53301 52190
+54163 54165` -- six PRs dropped when we moved to a "fully-mergeable PR stack
+only" image. Full picture:
+
+### P0 - correctness, blocks the upstream ask
+| PR | state | note |
+|---|---|---|
+| #54735 hybrid geometry | open | replaces CLOSED #53917, **required** for our dram/vllm-simple config. Unrebasable today -- hunks target code in no published nightly. Recheck on merge. |
+| #54736 fine-grained hits | open | stacked on #54735, same block |
+
+### P1 - ready now, non-draft, testable
+| PR | state | status |
+|---|---|---|
+| #54889 a2a-pack-mask | open | **T264 running** |
+| #54494 dcp-q-replicate | open | T265-T267 |
+| #54163 spec-decode prefix-cache drop | open | **untested by us** -- affects C1/MTP only (spec is off at C48-C72) |
+| #54165 mamba align cache hits under spec | open | **untested by us** -- same, C1/MTP path |
+
+### P2 - draft perf PRs we dropped from the overlay
+All Kimi-K3 ROCm perf work, all draft so none can be in an upstream ask, but all
+testable locally:
+
+| PR | size | what |
+|---|---|---|
+| #53301 | +878/9f | reuse graph-stable attention metadata across cache groups |
+| #51437 | +631/4f | latent-MoE: overlap shared all-reduce |
+| #53166 | +216/2f | fuse MLA chunked-context gather on AITER |
+| #52190 | +142/5f | enable torch.compile so post-grad fusion passes work |
+
+Already applied: #52494 (-1.35%), #52968 (-0.93%, draft).
+Held out: #53940 a4w4-moe, costs 2.40%.
+
+### CAUTION on the "SA gap"
+
+SA's 10,152 is at **C48**. Our 11,027 is at **C72**. Our own C48 is 8,426. So the
+20.5% "gap" is measured at a concurrency we have not tuned, and **we may already
+be ahead where it counts** -- SA's best published C52 was 8,296. Do not treat
+10,152 as a deficit until we have SA at C72 or ourselves properly tuned at C48.
+T268/T269 answer the first half.
+
 ## RUN ORDER (user, 2026-09-04): PR patches -> SA reproduce -> SA + vllm-simple
 
 1. **T264** *(running)* — #54889 a2a-pack-mask @ C72, baseline config otherwise.
