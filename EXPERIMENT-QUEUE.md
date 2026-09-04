@@ -14,7 +14,16 @@ installed fine on 09-03/09-04. **Not retried** — LMCache is parked, and SA's o
 `ext_cache_hit` is 0.0%, so pinning their exact build is not worth chasing a
 rolling channel. Cost: ~6 min. **Phase B closes here.**
 
-## T272 running: gmu 0.92 at C72 — following the biggest lever we have
+## T272 v1 cancelled at 7 min — my config error, not a run failure
+
+`mnbt` was still **8192** from the T269 SA arm; I never reverted it. That would
+have made T272 a **two-variable** run (gmu 0.90->0.92 AND mnbt 16384->8192)
+against the T265 control, and useless as a gmu test. Caught in the gate lines,
+cancelled, `mnbt` restored to 16384, container removed, all 8 GPUs verified at
+1%. **Lesson: check every gate line against the intended config, not just the
+one knob under test.**
+
+## T272 v2 running: gmu 0.92 at C72 — following the biggest lever we have
 
 gmu is the largest effect measured in this whole campaign: **0.88 -> 0.90 was
 +16.9%** (T269 7,128 -> T270 8,329, same image). Our C72 baseline already runs

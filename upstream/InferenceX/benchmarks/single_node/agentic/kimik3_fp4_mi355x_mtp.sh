@@ -593,7 +593,7 @@ fi
 # T264: REVERTED to 16384 everywhere -- the 11,027 baseline value. The SA 8192
 # rule belonged to the parked LMCache/stock arms.
 # T269: SA runs mnbt 8192 at every conc above C1. Override for the SA arms.
-MBT_DEFAULT="${K3_MNBT:-8192}"   # T269: SA value
+MBT_DEFAULT="${K3_MNBT:-16384}"   # T272: BACK TO BASELINE (8192 was the SA arm)
 # T262: legacy LMCache arms ran mnbt 16384 at every conc.
 if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ] && [ "${K3_LEGACY_LMCACHE:-1}" = "1" ]; then MBT_DEFAULT=16384; fi
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-$MBT_DEFAULT}")
