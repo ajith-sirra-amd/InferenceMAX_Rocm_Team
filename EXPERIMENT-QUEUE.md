@@ -483,9 +483,9 @@ only" image. Full picture:
 | #54163 spec-decode prefix-cache drop | open | **untested by us** -- affects C1/MTP only (spec is off at C48-C72) |
 | #54165 mamba align cache hits under spec | open | **untested by us** -- same, C1/MTP path |
 
-### P2 - draft perf PRs we dropped from the overlay
-All Kimi-K3 ROCm perf work, all draft so none can be in an upstream ask, but all
-testable locally:
+### P2 - PARKED (user, 2026-09-04): the four draft perf PRs
+
+**Do not test these now.** Revisit much later. Listed only so they are not lost:
 
 | PR | size | what |
 |---|---|---|
