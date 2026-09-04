@@ -463,6 +463,13 @@ numa_balancing=0. Gap to target is -11.8%.
 | T262 | ours, LEGACY (workers 1) | 64 | yes | **3,726** | 12.01% | **0.0%** |
 | T263 | ours, LEGACY (workers 1) | 72 | yes | *cancelled ~2 h, in warmup* | — | **0.0%** |
 
+## STANDING RULE (user, 2026-09-04)
+
+**Any config that beats the 11,027 baseline gets a GSM8K-200 run at that exact
+config before it is claimed.** Applies to every new best, not only to 12,500.
+A throughput number without an accuracy gate at the same settings is not a
+result. Run the gate on the winning config, not on a neighbour.
+
 ## NEW-PR TRACK (2026-09-04). LMCache PARKED.
 
 **LMCache is parked on user instruction** — handed to the LMCache team. Do not
