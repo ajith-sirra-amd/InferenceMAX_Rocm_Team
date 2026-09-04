@@ -7,7 +7,19 @@
 
 # ▲ LATEST STATE
 
-## ⛔ NODE BLOCKED — stranded VRAM, needs manual intervention
+## ✅ NODE RECOVERED — VRAM reclaimed on its own
+
+The 8 zombie KFD entries cleared without intervention; all 8 GPUs read free.
+**No driver reload or reboot was needed** — the leak drained after roughly an
+hour. Worth knowing for next time: on this node, stranded VRAM after a killed
+container can self-resolve, so waiting is a valid first response before
+escalating to root. The `numa_balancing` sysctl item is unaffected and still
+outstanding.
+
+**T274 dispatched: the #54889 replicate**, re-running what T273 stalled on.
+Same image `rec-a2amask`, C72, gmu 0.90, mnbt 16384, mns 96, dram/vllm-simple.
+
+## ⛔ (resolved) NODE BLOCKED — stranded VRAM
 
 **T273 stalled and its GPU memory did not release.** All 8 GPUs sit at **99%
 VRAM** with no container and no host-visible processes.
