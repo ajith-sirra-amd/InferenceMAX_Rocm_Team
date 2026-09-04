@@ -61,7 +61,7 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # because T257/T258 changed SA's *settings* while keeping our *patched* image,
 # which confounds "SA settings don't help us" with "our patches hurt".
 # Deliberately checked BEFORE the manifest branch so it wins on any image.
-K3_FORCE_STOCK="${K3_FORCE_STOCK:-1}"   # T269: SA reproduce on bare nightly
+K3_FORCE_STOCK="${K3_FORCE_STOCK:-0}"   # T272: back to OUR patched image
 if [ "$K3_FORCE_STOCK" = "1" ]; then
     K3_OVERLAY_APPLIED=0
     export SKIP_KIMI_PATCHES=1
@@ -689,7 +689,7 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # 0.90 is the value behind every good number in the ledger; hold it fixed while
 # we establish whether the node still serves traffic at all.
 # Do not raise: 0.92 and 0.95 both hang (T211, T157). 0.88 is the tested ceiling.
-GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61 ms
+GPU_MEM_UTIL="${K3_GMU:-0.92}"   # T272: gmu is the biggest lever found (0.88->0.90 = +16.9%, T269/T270). Prior against 0.92 is C1-only (T211).
 # T253: LMCache-ONLY overrides. Scoped deliberately -- the C72 baseline
 # (11,027 tok/s/GPU, n=2) was measured at gmu 0.90 / mns 96 and must not move.
 # SA run 33631260867 is the only LMCache configuration known to serve:

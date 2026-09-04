@@ -1973,10 +1973,8 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # as the comparison. This run is what makes the #53940 delta quotable.
   # T249: CCD pinning arm on the NEW BEST config. T247 (this image, no a4w4)
   # = 11,006, the best in the ledger. Only variable here is PIN_CCD=1.
-  # T269: SA REPRODUCE. Bare upstream nightly-7c5dc571 -- the SAME base SA runs
-  # -- with K3_FORCE_STOCK=1 so no overlay and no PR stack. Target: their
-  # 10,152 tok/s/GPU at C48 (run 33773561410, read-only).
-  image: vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb
+  # T272: back to OUR patched image, C72 baseline config, gmu 0.92.
+  image: kimi-k3-vllm:rec-no53940
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
@@ -2197,10 +2195,11 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # mns 96, gmu 0.90, DCP 8 via fallback. Bare stock image.
       # T270 done: stock gmu 0.90 -> 8,329 (gmu 0.88->0.90 = +16.9%).
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
-      # T271: EXACT SA CONFIG -- stock base, gmu 0.90, C48, WITH LMCache
-      # dev89/workers 8/chunk 12288. Every knob now matches SA's run
-      # 33773561410 (10,152). Last cell in Phase B.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [48], spec-decoding: mtp }
+      # T271 FAILED: lmcache dev89 rotated out of the nightly channel. Parked.
+      # T272: gmu 0.92 at C72 on our image. gmu is the largest lever measured
+      # (0.88->0.90 = +16.9%). Baseline config otherwise, so gmu is the only
+      # variable vs T265 (11,019). Prior evidence against 0.92 is C1-only.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

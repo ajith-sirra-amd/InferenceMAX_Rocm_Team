@@ -7,6 +7,31 @@
 
 # ▲ LATEST STATE
 
+## T271 dead: LMCache `dev89` rotated out of the nightly channel
+
+`ERROR: No matching distribution found for lmcache==0.5.5.dev89+rocm7.2`. It
+installed fine on 09-03/09-04. **Not retried** — LMCache is parked, and SA's own
+`ext_cache_hit` is 0.0%, so pinning their exact build is not worth chasing a
+rolling channel. Cost: ~6 min. **Phase B closes here.**
+
+## T272 running: gmu 0.92 at C72 — following the biggest lever we have
+
+gmu is the largest effect measured in this whole campaign: **0.88 -> 0.90 was
++16.9%** (T269 7,128 -> T270 8,329, same image). Our C72 baseline already runs
+0.90, so the open question is whether there is headroom above it.
+
+One variable vs the T265 control (11,019): `K3_GMU=0.92`, everything else at
+baseline (`rec-no53940`, C72, dram/vllm-simple, mns 96, mnbt 16384).
+
+**Prior evidence against 0.92 is C1-only** — T211 measured it catastrophic at
+C1 (mean 9.06 -> 21.61 ms) and T157 hung at 0.95. The ledger note claiming
+"0.88 is the tested ceiling" is stale: 0.90 has run clean at C72 dozens of
+times. A hang or a regression here is a real possibility and would establish
+the ceiling; it is cheap to detect early.
+
+No GSM8K gate: gmu changes memory budget, not arithmetic.
+
+
 ## MAJOR CORRECTION: the 3-PR stack is worth ~1%, not ~20%
 
 T270 (stock, gmu **0.90**) = **8,329** vs T269 (stock, gmu **0.88**) = 7,128.
