@@ -572,7 +572,9 @@ fi
 # against T163's 8,127 -- -7.4%, far worse than 16384's -2.5%. The curve has a
 # clear peak at 8192 and both sides are downhill.
 # T257: SA uses 8192 at every concurrency and 16384 only at C1.
-if [ "$CONC" -le 1 ]; then MBT_DEFAULT=16384; else MBT_DEFAULT=8192; fi
+# T264: REVERTED to 16384 everywhere -- the 11,027 baseline value. The SA 8192
+# rule belonged to the parked LMCache/stock arms.
+MBT_DEFAULT=16384
 # T262: legacy LMCache arms ran mnbt 16384 at every conc.
 if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ] && [ "${K3_LEGACY_LMCACHE:-1}" = "1" ]; then MBT_DEFAULT=16384; fi
 CHUNKED_PREFILL_ARGS=(--max-num-batched-tokens "${MAX_BATCHED_TOKENS:-$MBT_DEFAULT}")
@@ -608,11 +610,11 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
         # only 4 slots of slack -- the C80 starvation regime (T196/T197). 96 was
         # neutral at C72 (T198) so it cannot flatter the baseline.
         #
-        # T257: switched to SA's rule, mns = 2 * CONC. At C48 this is 96 -- the
-        # same value the flat rule gave -- so the C48 anchor is unaffected. It
-        # diverges only at C64 (128) and C72 (144), which is exactly where our
-        # LMCache arms have never served and SA's do.
-        MAX_NUM_SEQS=$(( 2 * CONC ))
+        # T264: REVERTED to flat 96. SA's mns = 2*CONC was adopted for the
+        # T257-T263 LMCache/stock arms; those are parked. The 11,027 baseline
+        # (T247/T252) was measured at flat 96, so restore it -- the new-PR arms
+        # must differ from that baseline in the PR only.
+        MAX_NUM_SEQS=96
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 1 ]; then MAX_NUM_SEQS=1; fi
