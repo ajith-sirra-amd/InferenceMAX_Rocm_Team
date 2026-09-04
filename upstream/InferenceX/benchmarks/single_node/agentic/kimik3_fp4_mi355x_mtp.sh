@@ -210,7 +210,7 @@ export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATIO
 # T266: #54494 dcp-q-replicate. Replicated vs gathered query projection is the
 # same math in a different reduction order, so it is a NUMERICS change and is
 # GSM8K-gated before any perf number. Inert unless DCP is active.
-export VLLM_DCP_Q_REPLICATE="${VLLM_DCP_Q_REPLICATE:-1}"
+export VLLM_DCP_Q_REPLICATE="${VLLM_DCP_Q_REPLICATE:-0}"   # T268: C1 CONTROL, qrep OFF
 # T257: SA sets the AITER-side knob to INT4. Different variable from the VLLM_ROCM_
 # one above -- aiter reads it in the quick-allreduce path, not the vLLM one.
 # Left at NONE deliberately: INT4 quantizes the allreduce, so it is a NUMERICS

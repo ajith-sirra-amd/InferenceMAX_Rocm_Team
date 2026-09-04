@@ -7,6 +7,28 @@
 
 # ▲ LATEST STATE
 
+## Phase A verdicts: both user-given testable PRs are ~neutral at C72
+
+| PR | C72 result | vs same-day control | verdict |
+|---|--:|--:|---|
+| **#54889** a2a-pack-mask (T264) | 11,115 | +0.87% vs 11,019 | ~2x noise, n=1, **unproven** |
+| **#54494** dcp-q-replicate (T267) | 11,029 | **+0.09%** vs 11,019 | **NEUTRAL** |
+
+#54494 passed GSM8K at 0.995 (T266) and its TPOT distribution is
+indistinguishable from control (104.1/97.3/134.6/166.9 vs 103.0/98.1/134.4/168.6).
+**This confirms the earlier prediction:** at C72 we are compute-bound and
+prefill-dominated (ISL p50 ~54k, OSL p50 ~224), so removing a decode-side
+per-layer all-gather buys nothing and the redundant q-projection costs nothing
+either. The C1 arms are the only place this PR can show a benefit.
+
+**Neither PR moves us toward 12,500.** Baseline stands at 11,019-11,027,
+gap ~11.8%.
+
+**T268 running: C1 CONTROL**, `dcp-size: 8` forced, image `rec-qrep` with
+`VLLM_DCP_Q_REPLICATE=0`. T269 will flip only the env var, so the pair is a
+true one-variable A/B. Note C1 enables MTP (spec k=8), unlike the C48-C72 arms.
+
+
 ## T266 — #54494 GSM8K gate PASSED (0.995)
 
 `exact_match 0.995` strict and flexible, **identical to the baseline 0.995**.
