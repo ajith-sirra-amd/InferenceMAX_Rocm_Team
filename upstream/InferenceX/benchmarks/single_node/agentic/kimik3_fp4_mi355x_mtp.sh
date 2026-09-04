@@ -227,6 +227,10 @@ export VLLM_DCP_Q_REPLICATE="${VLLM_DCP_Q_REPLICATE:-0}"   # T268: C1 CONTROL, q
 # change and needs its own GSM8K-200 gate before it rides along on a perf anchor.
 # Queued separately. Set AITER_QUICK_REDUCE_QUANTIZATION=INT4 to opt in.
 export AITER_QUICK_REDUCE_QUANTIZATION="${AITER_QUICK_REDUCE_QUANTIZATION:-NONE}"
+# T271: 0 = SA settings (workers 8, chunk 12288, dev89, mnbt 8192).
+# 1 = the pre-SA legacy block (gmu 0.88, mns 80, mnbt 16384, workers 1, rc3).
+# Exported here so every inline ${K3_LEGACY_LMCACHE:-1} downstream sees it.
+export K3_LEGACY_LMCACHE="${K3_LEGACY_LMCACHE:-0}"
 export AITER_SITUV2_A8W4=1
 export HSA_NO_SCRATCH_RECLAIM=1
 
@@ -706,7 +710,7 @@ GPU_MEM_UTIL=0.9   # 0.92 measured CATASTROPHIC at C1 (T211): mean 9.06 -> 21.61
 # configuration T256 was carrying when it was cancelled at 29 min. Recovers that
 # datapoint. gmu/mns/mnbt are set here; workers and version are set in the
 # lmcache branch above. Only applies to the lmcache backend.
-K3_LEGACY_LMCACHE="${K3_LEGACY_LMCACHE:-1}"
+K3_LEGACY_LMCACHE="${K3_LEGACY_LMCACHE:-0}"   # T271: SA settings, not legacy
 if [ "${KV_OFFLOAD_BACKEND:-}" = "lmcache" ] && [ "$K3_LEGACY_LMCACHE" = "1" ]; then
     GPU_MEM_UTIL="${GPU_MEM_UTIL_LMCACHE:-0.88}"
     MAX_NUM_SEQS=80

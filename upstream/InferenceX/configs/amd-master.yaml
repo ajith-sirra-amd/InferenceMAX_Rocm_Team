@@ -2195,7 +2195,12 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # T269: SA REPRODUCE -- C48, NO LMCache and NO offload at all (their
       # ext_cache_hit is 0.0%, so the cache is pure overhead), mnbt 8192,
       # mns 96, gmu 0.90, DCP 8 via fallback. Bare stock image.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
+      # T270 done: stock gmu 0.90 -> 8,329 (gmu 0.88->0.90 = +16.9%).
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: none, conc-list: [48], spec-decoding: mtp }
+      # T271: EXACT SA CONFIG -- stock base, gmu 0.90, C48, WITH LMCache
+      # dev89/workers 8/chunk 12288. Every knob now matches SA's run
+      # 33773561410 (10,152). Last cell in Phase B.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [48], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

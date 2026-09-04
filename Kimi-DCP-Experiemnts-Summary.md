@@ -11,6 +11,15 @@ Kimi-K3 (2.8T MoE, 1M context, MXFP4) · vLLM ROCm · agentic replay · TP8.
 
 | | target | best measured | gap |
 |---|---|---|---|
+> **CORRECTION (2026-09-04).** Earlier rows claiming the 3-PR stack is worth
+> +20.6% (T257 vs T259) or +18.2% (T257 vs T269) were **confounded by gmu**:
+> T257 ran gmu **0.90**, T259/T269 ran **0.88**. The bare-image override fires
+> only on images without `/etc/k3-image-manifest`, so our patched image never
+> took it. GPU-KV fingerprints confirm the split: T257 30,169,355 and T270
+> 30,249,138 are the 0.90 class; T259 and T269 are both exactly 26,932,446.
+> **gmu-matched at 0.90: stock 8,329 (T270) vs patched 8,426 (T257) = +1.2%.**
+> The patch stack is worth about one percent at C48, not twenty.
+
 | **throughput** | 12,500 tok/s/GPU | **11,006** ([T247](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33717306914), C72, `rec-no53940`, 7 upstream PRs, no vendor patch) | **−12.0%** |
 | **C1 interactivity** | as low as possible | **7.71 ms** ITL p50 (T123) | — |
 | SA reference | — | C52 **8,296** · C1 **8.64** ms | we trail C52 by 4.2% |
@@ -25,6 +34,7 @@ it is append-only, so **the bottom of this file is the most recent detail**.
 
 | trial | what | result |
 |---|---|---|
+| **[T270](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33857605766)** | **SA reproduce at gmu 0.90** — identical to T269 except gmu 0.88 -> 0.90 (SA's value). Bare `nightly-7c5dc571`, zero patches, C48, no LMCache/no offload | **8,329 tok/s/GPU** vs T269's 7,128 = **gmu 0.88 -> 0.90 is worth +16.9%.** 1902/2003, err 4.29%, dur 3,630 s, GPU KV **30,249,138** (+12.3% vs 26,932,446). TPOT mean 79.8 / p50 64.6 / p90 111.6 / p95 173.3 ms. No HSA fault — the 0.88 guard was not needed here. **MAJOR CORRECTION — see below. Our 3-PR stack is worth ~+1.2%, not the +20.6% / +18.2% previously reported.** |
 | **[T269](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33849992179)** | **SA REPRODUCE** — bare `nightly-7c5dc571` (SA's base), ZERO patches, C48, **no LMCache and no offload**, mnbt 8192, mns 96, gmu **0.88**, DCP 8 | **7,128 tok/s/GPU**, 1588/1688, err 5.27%, dur 3,629 s, GPU KV 26,932,446. **vs T259 (stock, `73029d42`, same knobs) 6,988 = +2.0%. The base nightly explains almost nothing.** TPOT mean 88.3 / p50 66.5 / p90 143.7 / p95 246.7 ms. **SA gets 10,152 on this same base — we are 42% below them.** Our patched image at C48 is 8,426 (T257), so the 3 PRs are worth +18.2% over stock-same-base, leaving **20.5% unexplained**. Remaining known differences: gmu 0.88 vs their 0.90, and LMCache loaded-but-inert. |
 | **T268** [v1](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33848968921) / [v2](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33849375995) | **C1 control for #54494** — attempted twice | **BLOCKED. #54494 cannot be tested at C1 in our shipped configuration.** v1 cancelled at 5 min: the yaml `dcp-size` never reaches the launcher (`source=conc-fallback`), so DCP resolved to 1 at CONC<=4 and q-replicate was inert. Added `K3_FORCE_DCP` (default 8); v2 confirmed `[dcp] size=8 source=forced conc=1`. v2 then failed in engine init: **`ValueError: Selected backend TRITON_MLA is not valid — non-causal MLA attention with DCP not supported`**. The MTP draft runs `TRITON_MLA`, so **DCP>1 and MTP are mutually exclusive** here, and #54494 requires DCP active. C1 ships with MTP, so the PR is untestable there without changing the config we ship. Not pursued — it is already neutral at C72. |
 | **[T267](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33841612904)** | **#54494 `dcp-q-replicate` PERF @ C72**, `VLLM_DCP_Q_REPLICATE=1`, image `rec-qrep`, baseline config otherwise | **11,029 tok/s/GPU** vs the same-day control T265 **11,019** = **+0.09%. NEUTRAL at C72.** 2310/2463, err 5.60% (matches the environmental 5.45-5.65% band). dur 3,627 s. GPU KV 28,220,371. TPOT mean 104.1 / p50 97.3 / p90 134.6 / p95 166.9 ms — indistinguishable from control (103.0/98.1/134.4/168.6). **Confirms the prediction: at C72 we are compute-bound and prefill-dominated, so removing a decode-side collective buys nothing.** The C1 arms are where this PR should show, if anywhere. |

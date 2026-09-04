@@ -7,6 +7,39 @@
 
 # ▲ LATEST STATE
 
+## MAJOR CORRECTION: the 3-PR stack is worth ~1%, not ~20%
+
+T270 (stock, gmu **0.90**) = **8,329** vs T269 (stock, gmu **0.88**) = 7,128.
+**gmu alone is worth +16.9%.**
+
+I reported the patch stack as +20.6% (T257 vs T259) and then +18.2%
+(T257 vs T269). **Both were confounded by gmu.** The bare-image 0.88 override
+fires only on images lacking `/etc/k3-image-manifest`, so our patched image
+never took it and every stock arm was handicapped 17%. GPU-KV fingerprints
+prove the split: T257 30,169,355 and T270 30,249,138 are the 0.90 class;
+T259 and T269 are both exactly 26,932,446.
+
+| gmu-matched at 0.90 | tok/s/GPU |
+|---|--:|
+| stock, no patches (T270) | 8,329 |
+| ours, 3 PRs (T257) | 8,426 |
+| **delta** | **+1.2%** |
+
+**Consequence for the upstream ask:** #52494 and #52968 were justified on
+measured deltas of -1.35% and -0.93% from same-image A/Bs, which remain valid.
+But the *stack as a whole* buys ~1% at C48, not twenty. `UPSTREAM-STATUS.md`
+must not carry the inflated figure.
+
+**Also:** every stock arm (T259, T260, T261, T269) ran 17% handicapped. Their
+absolute numbers are real but their comparisons against patched runs were not.
+
+**T271 running — the exact SA cell.** Stock base, gmu 0.90, C48, **with**
+LMCache `dev89` / workers 8 / chunk 12288, mnbt 8192, mns 96, DCP 8. Every
+knob now matches SA run 33773561410 (**10,152**). If we land near 8,3xx again,
+LMCache-loaded-but-inert is not the difference and the gap is in their launcher
+or their node.
+
+
 ## T269 — the base nightly is NOT the SA gap
 
 C48 comparison set, all no-LMCache, all gmu 0.88, mnbt 8192, mns 96, DCP 8:
