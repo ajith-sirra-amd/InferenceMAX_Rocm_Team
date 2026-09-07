@@ -2,7 +2,22 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-07 09:13 IST | W1 (ends 12:30) | T278 GSM8K-200 dispatched, run 34080626724
-base moved to nightly-1970f3ed. #54736 now applies (0 hunks fail); #54165 dropped.
-images built: rec-n1970, rec-n1970-54736. offload restored to dram.
-next: T278 perf, then T279 (#54736). No work outside slots.
+2026-09-07 12:15 IST | W1 ends 12:30 | HOLDING - no dispatch (guard NO-GO, 15 min left)
+
+T278 v1 FAILED at engine init on the new nightly. No eval, no perf.
+  cause: cudagraph_mode=FULL_AND_PIECEWISE needs VLLM_USE_BREAKABLE_CUDAGRAPH=1
+         on nightly-1970f3ed; our launcher carried =0. Old base tolerated it.
+  fix:   flipped to 1, bash -n clean, wait_for_server_ready intact. Committed.
+  note:  flag is bundled with the nightly move - one variable, not separable.
+
+Done this slot: base moved to nightly-1970f3ed; #54736 now applies (0 hunks
+fail) and #54165 dropped (8 fail on new base); images rec-n1970 and
+rec-n1970-54736 built; #52494 and #53917 dropped from the stack;
+kv-offloading restored to dram after T277.
+
+Next slot W2 (9/7 23:30 - 9/8 11:30, 12h):
+  1. T278 v2 GSM8K-200  (~60m)
+  2. T278 v2 perf C72    (~105m)  vs T274 11,095
+  3. T279 #54736 GSM8K + perf
+Last safe perf dispatch in W2: 9/8 09:15 IST.
+No GPU or CPU work outside slots.

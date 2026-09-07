@@ -1009,7 +1009,7 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
-**As of 2026-09-07.** T277 closed the offload question: the dram tier is worth **2.57x** (11,095 with it vs 4,325 without), so it stays and the stalls are a price we pay. mnbt 32768 is CLOSED (T275/T276 both died deterministically on the same trace). The top lead is now T274's un-saturated `ext_cache_hit` (0 -> 82.6%, still climbing at the hour mark) on a tier worth 2.57x. Next run: **#54165**, the only backlog PR that applies cleanly, and it restores spec-decode cache hits under a KV connector -- exactly our config. Best measured: **11,115** (T264).
+**As of 2026-09-07 12:15 IST.** T278 v1 died at engine init on the new base -- `VLLM_USE_BREAKABLE_CUDAGRAPH=0` is no longer accepted by `nightly-1970f3ed`; flipped to 1 and queued as T278 v2 for W2. #54736 applies cleanly on the new base (0 hunks fail); #54165 inverted and is dropped. T277 closed the offload question: the dram tier is worth **2.57x** (11,095 with it vs 4,325 without), so it stays and the stalls are a price we pay. mnbt 32768 is CLOSED (T275/T276 both died deterministically on the same trace). The top lead is now T274's un-saturated `ext_cache_hit` (0 -> 82.6%, still climbing at the hour mark) on a tier worth 2.57x. Next run: **#54165**, the only backlog PR that applies cleanly, and it restores spec-decode cache hits under a KV connector -- exactly our config. Best measured: **11,115** (T264).
 died in warmup on the same trace, so it is unusable on the dram-offload path and
 mnbt is back at 16384. T277 asks what the offload tier is worth at all.
 Best measured: **11,115** (T264, #54889).

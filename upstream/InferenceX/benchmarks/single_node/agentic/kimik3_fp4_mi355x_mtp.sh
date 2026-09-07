@@ -213,7 +213,15 @@ export VLLM_ROCM_USE_AITER=1
 export SAFETENSORS_FAST_GPU=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
 export AITER_BF16_FP8_MOE_BOUND=0
-export VLLM_USE_BREAKABLE_CUDAGRAPH=0
+# T278 v1 died at engine init on nightly-1970f3ed:
+#   "piecewise CUDA graphs (cudagraph_mode=FULL_AND_PIECEWISE) unavailable,
+#    model is not torch-compiled and breakable CUDA graph is off.
+#    Set VLLM_USE_BREAKABLE_CUDAGRAPH=1 or cudagraph_mode=NONE/FULL."
+# The new base enforces what 7c5dc571 tolerated. =1 is the minimal fix and keeps
+# the piecewise ladder; NONE/FULL would change the graph strategy outright.
+# NOTE: this rides along with the nightly move, so T278 carries base+this flag
+# as one bundled variable. Not separable -- the old base never needed it.
+export VLLM_USE_BREAKABLE_CUDAGRAPH="${VLLM_USE_BREAKABLE_CUDAGRAPH:-1}"   # T278 v2
 export GPU_ARCHS=gfx950
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
