@@ -33,4 +33,13 @@ W2      opens 9/7 23:30 IST  -> job 6a4042f3
 W3+W4   opens 9/8 23:30 IST  -> job 58402331
 W5      opens 9/10 08:00 IST -> job 94387d43
 Each fires ~2 min after the slot opens, re-checks the guard + this file first.
-IN-SLOT POLL: job 6632d842, every 11 min, no-ops outside windows.
+VALIDATOR: .claude/preflight.sh <minutes_needed>   (exit 0 = go, 1 = abort)
+  gates: kill-switch | reservation | time-budget | gpu-free | no-zombies |
+         no-stale-container | none-in-flight | branch+clean+pushed |
+         launcher bash -n + wait_for_server_ready | yaml + image present
+  It also echoes the one-variable surface (EVAL_ONLY, mnbt, gmu, cudagraph
+  flag, image, matrix row) so the config is reviewed before anything fires.
+  Nothing dispatches unless this returns PASS.
+
+IN-SLOT POLL: job ffbe23fd, every 11 min, runs preflight first, no-ops
+outside windows. Replaces 6632d842.
