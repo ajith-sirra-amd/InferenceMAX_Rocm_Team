@@ -21,3 +21,9 @@ Next slot W2 (9/7 23:30 - 9/8 11:30, 12h):
   3. T279 #54736 GSM8K + perf
 Last safe perf dispatch in W2: 9/8 09:15 IST.
 No GPU or CPU work outside slots.
+
+--- scheduled wake-ups (durable, survive restarts) ---
+W2      opens 9/7 23:30 IST  -> job 6a4042f3
+W3+W4   opens 9/8 23:30 IST  -> job 58402331
+W5      opens 9/10 08:00 IST -> job 94387d43
+Each fires ~2 min after the slot opens, re-checks the guard + this file first.
