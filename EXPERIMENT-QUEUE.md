@@ -43,6 +43,53 @@ positive) but it is no longer a candidate.
 source hunks, 54736 fails 4 of 7 in `kv_cache_coordinator.py` alone. They carry
 unmerged dependencies. Not retryable until those land; will keep re-checking.
 
+## ⚠️ LOOP WENT DORMANT 2026-09-04 19:36 → 2026-09-07. GPUs idle ~3 days.
+
+T277 finished at 19:36 on the 4th and nothing was dispatched after it. No run
+was lost and no state is corrupt — the result was on disk and is recorded below —
+but roughly three days of node time went unused against the 12,500 target. Noting
+it plainly so the gap is not mistaken for a quiet stretch of experiments.
+
+## T277 DONE — offload is worth 2.57x. Question closed, opposite to the hope.
+
+[T277](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33903178503)
+returned **4,325 tok/s/GPU** with `kv-offloading: none`, against T274's **11,095**
+with the dram tier. **−61%.** Latency moved with it: TTFT p50 3,128 ms (from
+1,560), ITL mean 303.9 / p50 202.5 ms (from 103.5 / 96.8), and only 948 requests
+completed in the hour against 2,318. No OOM, despite the script's own
+`mns=96 with KV_OFFLOADING=none ... OOMs on mi355x-amd_b23_07` warning firing on
+this exact node.
+
+**So the stalls are a price, not a bug to route around.** Disabling offload was
+the cheap escape from the T273/T275/T276 failure family and it costs nearly two
+thirds of throughput. Offload stays.
+
+**This promotes T274's un-saturated cache to the top of the board.**
+`ext_cache_hit` climbed 0 → 82.6% across the whole measured hour and was still
+rising at the end. A tier worth 2.57x that never finishes warming inside the
+measurement window is the largest identified inefficiency in the campaign —
+larger than anything in the PR backlog, all of which has come in under ±1.2%.
+Whatever makes that tier saturate sooner is where 12,500 most plausibly lives.
+
+## Next: #54165 applies cleanly and lands exactly on this seam
+
+Re-dry-ran the backlog against `rec-a2amask` on 2026-09-07:
+
+| PR | applies? | note |
+|---|---|---|
+| #54735 | **no** — 5+ hunks fail | updated upstream today, still carries unmerged deps |
+| #54736 | **no** — 5/7 hunks fail | same |
+| #54163 | **no** — 4 hunks fail | |
+| **#54165** | **YES — 0 failed hunks** | *"Restore hybrid mamba align cache hits under spec decode with a KV connector"* |
+
+#54165 is the one that matters: we run spec-decode MTP **with** a KV connector
+(SimpleCPU offload), which is precisely the configuration whose cache hits it
+restores. Given T277 just priced that connector at 2.57x, a fix to its hit rate
+is the best-motivated experiment we have had in weeks.
+
+It changes what gets reused from cache, so it is numerics-affecting: **GSM8K-200
+gate first**, then C72 perf against T274's 11,095.
+
 ## T276 FAILED too — and that settles mnbt 32768 as the cause
 
 [T276](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33897799242)
@@ -906,7 +953,7 @@ attribution needs a working profiler, which is why this is Phase 3 and not now.
 
 ## Current state
 
-**As of T277 dispatch (2026-09-04).** mnbt 32768 is CLOSED — T275 and T276 both
+**As of 2026-09-07.** T277 closed the offload question: the dram tier is worth **2.57x** (11,095 with it vs 4,325 without), so it stays and the stalls are a price we pay. mnbt 32768 is CLOSED (T275/T276 both died deterministically on the same trace). The top lead is now T274's un-saturated `ext_cache_hit` (0 -> 82.6%, still climbing at the hour mark) on a tier worth 2.57x. Next run: **#54165**, the only backlog PR that applies cleanly, and it restores spec-decode cache hits under a KV connector -- exactly our config. Best measured: **11,115** (T264).
 died in warmup on the same trace, so it is unusable on the dram-offload path and
 mnbt is back at 16384. T277 asks what the offload tier is worth at all.
 Best measured: **11,115** (T264, #54889).
