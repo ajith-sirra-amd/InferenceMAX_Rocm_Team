@@ -71,7 +71,63 @@ measurement window is the largest identified inefficiency in the campaign —
 larger than anything in the PR backlog, all of which has come in under ±1.2%.
 Whatever makes that tier saturate sooner is where 12,500 most plausibly lives.
 
-## Next: #54165 applies cleanly and lands exactly on this seam
+## NEXT SET (2026-09-07) — rebase onto a newer nightly, then the two PRs
+
+**Why the base moves first.** Every SimpleCPU-offload PR in the backlog has been
+failing hunks against a `manager.py` that upstream has since rewritten. The cause
+is now identified: **#54325 "Populate SimpleCPUOffload BlockStored metadata"
+merged upstream 2026-09-03**, and our base `nightly-7c5dc571` was cut **2026-09-01**
+— before it. We have been trying to patch a file two days out of date, which is
+why #54325, #54735, #54736 and #54163 all fail multiple hunks.
+
+`nightly-1970f3ed` (cut 2026-09-06) **contains #54325** — verified by ancestry
+(`compare` returns `ahead` from #54325's merge commit). Moving the base is
+sanctioned by the owner ("You can update your base nightly too, if needed").
+
+**What the move does to our patch stack:**
+
+| PR | status on `nightly-1970f3ed` | action |
+|---|---|---|
+| #52494 | **merged upstream, present** | **drop** — stop double-applying |
+| #54325 | **merged upstream, present** | free, no action |
+| #53917 | closed, never merged | **drop** — #54736 supersedes it |
+| #52968 | still open | keep applying |
+| #54889 | still open | keep applying (+0.74%, n=2) |
+
+### T278 — new-nightly baseline
+Rebuild on `nightly-1970f3ed` carrying only **#52968 + #54889**. One variable:
+the base image. **GSM8K-200 gate first** (five days of kernel merges is a real
+numerics change), then C72 perf against T274's **11,095**. This also tells us
+what 5 days of upstream is worth on its own — the last such measurement was
++2.0%.
+
+### T279 — #54736 (carries #54735) on the new base
+Owner's read: *"#54736 already has #54735, so pick #54325 and #54736 directly."*
+#54325 arrives free via the base, so this is the single remaining apply.
+Dry-run against the new nightly is the gate — if it still fails hunks, it goes
+back to the blocked list and we do not burn node time on it.
+**GSM8K-200 first**, then C72. This is the highest-value arm in the set: it is a
+SimpleCPU-offload fix, and T277 priced that connector at **2.57x**.
+
+### T280 — #54165
+*"Restore hybrid mamba align cache hits under spec decode with a KV connector."*
+Applies with **zero failed hunks** on the current image (checked 09-07); re-verify
+on the new base. We run spec-decode MTP **with** a KV connector, so this is our
+exact configuration. **GSM8K-200 first**, then C72.
+
+### T281 — cache-warm probe (non-PR, and the biggest lead)
+T274's `ext_cache_hit` went 0 → 82.6% across the full measured hour and was still
+climbing at the end. On a tier worth **2.57x**, a cache that never saturates
+inside the measurement window is a larger inefficiency than anything the PR
+backlog has produced — every PR tested has landed under ±1.2%. Probe what governs
+fill rate rather than pool size (1,949 GB is not the binding constraint at ~50%
+`kv_usage`). Exact knob to be chosen from the T278/T279 logs.
+
+**Dropped and not to be retried:** mnbt 32768 (T275/T276, deterministic failure
+on the same trace), `kv-offloading: none` (T277, −61%), LMCache (parked by owner,
+`ext_cache_hit` 0.0% for us and for SA).
+
+## Superseded: #54165 applies cleanly and lands exactly on this seam
 
 Re-dry-ran the backlog against `rec-a2amask` on 2026-09-07:
 
