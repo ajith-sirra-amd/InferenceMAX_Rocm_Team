@@ -1,2 +1,8 @@
-Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below ) 
+Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
+
+--- agent status (auto-updated) ---
+2026-09-07 09:13 IST | W1 (ends 12:30) | T278 GSM8K-200 dispatched, run 34080626724
+base moved to nightly-1970f3ed. #54736 now applies (0 hunks fail); #54165 dropped.
+images built: rec-n1970, rec-n1970-54736. offload restored to dram.
+next: T278 perf, then T279 (#54736). No work outside slots.
