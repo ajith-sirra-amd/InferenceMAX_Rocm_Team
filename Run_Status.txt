@@ -29,10 +29,11 @@ Last safe perf dispatch in W2: 9/8 09:15 IST.
 No GPU or CPU work outside slots.
 
 --- scheduled wake-ups (durable, survive restarts) ---
-W2      opens 9/7 23:30 IST  -> job 6a4042f3
-W3+W4   opens 9/8 23:30 IST  -> job 58402331
-W5      opens 9/10 08:00 IST -> job 94387d43
-Each fires ~2 min after the slot opens, re-checks the guard + this file first.
+W2      opens 9/7 23:30 IST  -> job efdfe74e
+W3+W4   opens 9/8 23:30 IST  -> job af374cd6
+W5      opens 9/10 08:00 IST -> job 0a4abeeb
+All four jobs now call .claude/preflight.sh (repo-tracked). No job depends
+on /tmp any more.
 VALIDATOR: .claude/preflight.sh <minutes_needed>   (exit 0 = go, 1 = abort)
   gates: kill-switch | reservation | time-budget | gpu-free | no-zombies |
          no-stale-container | none-in-flight | branch+clean+pushed |
