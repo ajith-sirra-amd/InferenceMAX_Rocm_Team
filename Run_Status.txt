@@ -2,45 +2,38 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-07 12:15 IST | W1 ends 12:30 | HOLDING - no dispatch (guard NO-GO)
+2026-09-07 12:35 IST | W1 CLOSED | ARMED, waiting for W2 (opens 23:30 IST)
 
-W1 POSTMORTEM - 2h48m of the 4h slot was wasted.
-  T278 dispatched 09:13, FAILED 09:20 (7 min in), not noticed until 12:08.
-  Cause: nothing was polling. The slot-open wake-ups only fire at slot start,
-  so a mid-slot failure went unseen. Fixed: recurring 11-min in-slot poll
-  (job 6632d842) that no-ops outside windows and re-dispatches inside them.
+Node released clean: GPUs 0%, no bmk-server, 0 zombie KFD entries.
+Preflight: 12/13 gates PASS, only "reservation" fails (correct - outside slot).
 
-T278 v1 FAILED at engine init on the new nightly. No eval, no perf.
-  cause: cudagraph_mode=FULL_AND_PIECEWISE needs VLLM_USE_BREAKABLE_CUDAGRAPH=1
-         on nightly-1970f3ed; our launcher carried =0. Old base tolerated it.
-  fix:   flipped to 1, bash -n clean, wait_for_server_ready intact. Committed.
-  note:  flag is bundled with the nightly move - one variable, not separable.
+W1 RESULT
+  T278 v1 FAILED at engine init. nightly-1970f3ed rejects
+  VLLM_USE_BREAKABLE_CUDAGRAPH=0; flipped to 1, committed.
+  POSTMORTEM: dispatched 09:13, failed 09:20, not noticed until 12:08.
+  2h48m of a 4h slot wasted. Cause: nothing polled during the slot.
+  Fixed with the 11-min in-slot poll below.
+  Delivered anyway: base moved to nightly-1970f3ed; #54736 now applies
+  (0 hunks fail) and #54165 dropped (8 fail); images rec-n1970 and
+  rec-n1970-54736 built; #52494 + #53917 dropped from the stack;
+  kv-offloading restored to dram.
 
-Done this slot: base moved to nightly-1970f3ed; #54736 now applies (0 hunks
-fail) and #54165 dropped (8 fail on new base); images rec-n1970 and
-rec-n1970-54736 built; #52494 and #53917 dropped from the stack;
-kv-offloading restored to dram after T277.
+W2 QUEUE (9/7 23:30 - 9/8 11:30, 12h; ~5.9h of work, ~6h slack)
+  1. T278 v2 GSM8K-200   ~70m   rec-n1970, EVAL_ONLY=true (staged now)
+                                first ~7 min also validates the cudagraph fix
+  2. T278 v2 perf C72   ~105m   flip EVAL_ONLY=false; vs T274 11,095
+  3. T279 #54736 GSM8K + perf   rec-n1970-54736
+  Last safe perf dispatch: 9/8 09:15 IST.
 
-Next slot W2 (9/7 23:30 - 9/8 11:30, 12h):
-  1. T278 v2 GSM8K-200  (~60m)
-  2. T278 v2 perf C72    (~105m)  vs T274 11,095
-  3. T279 #54736 GSM8K + perf
-Last safe perf dispatch in W2: 9/8 09:15 IST.
-No GPU or CPU work outside slots.
+CONTROL CHAIN
+  1 GH runner (owner-controlled)  - agent never touches it
+  2 Run_Status.txt "Now : Run"    - kill switch, first preflight gate
+  3 .claude/preflight.sh <mins>   - 13 gates, exit 0 = go
+  4 .claude/dispatch.sh <mins>    - only sanctioned start path
 
---- scheduled wake-ups (durable, survive restarts) ---
-W2      opens 9/7 23:30 IST  -> job efdfe74e
-W3+W4   opens 9/8 23:30 IST  -> job af374cd6
-W5      opens 9/10 08:00 IST -> job 0a4abeeb
-All four jobs now call .claude/preflight.sh (repo-tracked). No job depends
-on /tmp any more.
-VALIDATOR: .claude/preflight.sh <minutes_needed>   (exit 0 = go, 1 = abort)
-  gates: kill-switch | reservation | time-budget | gpu-free | no-zombies |
-         no-stale-container | none-in-flight | branch+clean+pushed |
-         launcher bash -n + wait_for_server_ready | yaml + image present
-  It also echoes the one-variable surface (EVAL_ONLY, mnbt, gmu, cudagraph
-  flag, image, matrix row) so the config is reviewed before anything fires.
-  Nothing dispatches unless this returns PASS.
-
-IN-SLOT POLL: job ffbe23fd, every 11 min, runs preflight first, no-ops
-outside windows. Replaces 6632d842.
+SCHEDULE (durable, in ~/.claude/scheduled_tasks.json, survives restart)
+  ffbe23fd  every 11 min   in-slot poll; no-ops outside windows
+  efdfe74e  9/7  23:32 IST W2 opens
+  af374cd6  9/8  23:32 IST W3+W4 opens (13h contiguous)
+  0a4abeeb  9/10 08:02 IST W5 opens
+  Remaining reserved time: 49h across W2, W3+W4, W5.
