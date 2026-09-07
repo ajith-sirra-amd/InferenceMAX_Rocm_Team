@@ -50,9 +50,19 @@ for w in "${WINDOWS[@]}"; do
 done
 if [ "$IN" -eq 1 ]; then ok "reservation" "$WNAME, closes $WEND, ${REM}m left"
 else
+  NXT=""
   for w in "${WINDOWS[@]}"; do IFS='|' read -r s e n <<< "$w"; S=$(TZ=Asia/Kolkata date -d "$s" +%s)
-    if [ "$NOW" -lt "$S" ]; then bad "reservation" "OUTSIDE slot — $n opens in $(( (S-NOW)/60 ))m"; break; fi; done
-  [ "$FAIL" -eq 0 ] && bad "reservation" "OUTSIDE slot — no further windows"
+    if [ "$NOW" -lt "$S" ]; then NXT="$n opens in $(( (S-NOW)/60 ))m"; break; fi; done
+  bad "reservation" "OUTSIDE slot — ${NXT:-no further windows}"
+  # HARD STOP. Everything below this line touches the node: rocm-smi queries the
+  # GPU driver, git fetch and gh hit the network, docker inspects the daemon.
+  # Outside a reservation we do NONE of it -- the owner's rule is no GPU *and*
+  # no CPU work between slots, and a poll running every 11 minutes would
+  # otherwise breach that around the clock.
+  echo
+  echo "  (skipped all node-touching gates — outside reservation)"
+  echo "  ==> PREFLIGHT FAIL — ABORT, do not dispatch"
+  exit 1
 fi
 
 # 3. TIME BUDGET — never strand a job at a slot boundary ---------------------
