@@ -86,6 +86,48 @@ Two lessons worth more than the numbers:
    for 96 sizes are a few hundred MB, not 17.65 GiB. The memory was in the breakable
    runner's buffers, so only *not allocating it* returns it.
 
+### The full arc: how one guard cost us 35% of the KV pool
+
+This is the most instructive sequence in the campaign, so it is worth in full.
+
+| stage | mode requested | breakable | model compiled? | outcome | KV/GPU |
+|---|---|---|---|---|---|
+| **Before** — T274, base `7c5dc571` | `FULL_AND_PIECEWISE` | **0** | no | worked; old engine did not enforce the guard | **49.79 GiB** → 11,095 tok/s/GPU |
+| **Guard appears** — T278 v1, base `1970f3ed` | `FULL_AND_PIECEWISE` | **0** | no | **engine init dies** | — |
+| **Breakable workaround** — T278 v2, T280 | `FULL_AND_PIECEWISE` | **1** | no | boots, breakable runner allocates buffers | **32.14 GiB** (−35.5%) |
+| **Try to dodge piecewise** — T281 | `FULL` | 0 | no | **fails** — engine resolves FULL → FULL_AND_PIECEWISE, guard fires | — |
+| **Root-cause fix** — T282 | `FULL_AND_PIECEWISE` | **0** | **yes**, via #52190 | third branch of the guard is satisfied | expect **~49.79 GiB** |
+
+Three things this teaches:
+
+1. **We were relying on a check not existing.** `FULL_AND_PIECEWISE` at breakable=0
+   with an uncompiled model was never *valid* — older nightlies simply did not
+   verify it. When the guard landed, a config that had run for months died at init.
+   An upgrade did not break us; it revealed that we were already broken.
+
+2. **`FULL` is not reachable for this model.** We passed `"cudagraph_mode":"FULL"`,
+   the engine logged `CUDAGraphMode.FULL`, and then **resolved it back** to
+   `FULL_AND_PIECEWISE` — 26 occurrences in the log — because the model has
+   non-graphable regions that pure FULL cannot express. *A config value you set is
+   not necessarily the config value that runs.* Always grep the log for what the
+   engine actually resolved.
+
+3. **Pick the branch that removes the cause, not the one that silences the error.**
+   The guard has three escapes; only the third is free:
+
+   | escape | works? | cost |
+   |---|---|---|
+   | `VLLM_USE_BREAKABLE_CUDAGRAPH=1` | yes | **−17.65 GiB KV/GPU** |
+   | `cudagraph_mode=NONE` | yes | loses all graph speedup |
+   | `cudagraph_mode=FULL` | **no** — silently upgraded back | — |
+   | **torch.compile the model** (#52190) | expected | none; also un-inerts the fusion passes |
+
+**Bonus worth noting:** because K3 was never torch-compiled, its **post-grad fusion
+passes were silently inert** — `aiter::fused_qk_rmsnorm_kernel` and
+`aiter::allreduce_fusion_kernel_1stage` never ran. So enabling torch.compile is not
+only a memory fix; it may also switch on optimisations we believed were already
+active. A useful reminder that *configured* and *effective* are different things.
+
 ### The capture ladder
 
 ```
@@ -352,10 +394,12 @@ Latency terms:
 
 ## 12. Open questions
 
-1. **Why is Kimi-K3 not torch-compiled** despite `compilation-config mode:3`? If it
-   were, `FULL_AND_PIECEWISE` would work at breakable=0 with the full KV pool — the
-   exact configuration that produced 11,095. Parked draft **#52190 ("Enable
-   torch.compile")** targets this directly.
+1. ~~**Why is Kimi-K3 not torch-compiled**~~ — **being answered now.** #52190
+   ("Enable torch.compile so post-grad fusion passes work") is applied in
+   `kimi-k3-vllm:rec-d9105-tc` and under GSM8K gate as T282. If it holds, it
+   restores `FULL_AND_PIECEWISE` at breakable=0 with the full 49.79 GiB pool — the
+   exact configuration that produced 11,095 — *and* switches on fusion passes that
+   have been inert all along.
 2. **The ~20% gap to SemiAnalysis** at C48 (our gmu-matched 8,426 vs their 10,152)
    is still unexplained. Base nightly accounts for +2.0%, our patches +1.2%,
    gmu 0.88→0.90 +16.9%.
