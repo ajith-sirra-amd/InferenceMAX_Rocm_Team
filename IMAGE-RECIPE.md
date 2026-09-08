@@ -45,14 +45,31 @@ BASE  vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36  (2
 
 ### Applied by us — patched into site-packages at build
 
-| PR | State | Applies clean? | What it does | Measured gain | Head SHA |
-|---|---|---|---|---|---|
-| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | 🟡 Draft | **Yes — 0/17 fail** | Attn residual + sigmoid_mul + conv fusions | **Not isolated** — +1.2% only as a stack | `dbe3bb3fa` |
-| **[#54889](https://github.com/vllm-project/vllm/pull/54889)** | 🟢 Open | **Yes — 0/7 fail** | Fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2) — inside ±1.2% noise | `f476f47c7` |
-| **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | 🟢 Open | **Yes — 0/33 fail** | SimpleCPU serves fine-grained hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) | **T286: 12,093 (+9.0%)** — gated 0.995; confounded, share unknown | `99c7ed9ea` |
+Ordered by priority: what we would keep if forced to drop the rest.
 
-Every diff is fetched fresh and its head SHA recorded in `/etc/k3-image-manifest`.
-**No hunk in this image was hand-edited or fuzz-applied.**
+| # | PR | State | Applies clean? | What it does | Measured gain | Head SHA |
+|---|---|---|---|---|---|---|
+| **1** | **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | 🟢 Open | **Yes — 0/33 fail** | SimpleCPU serves fine-grained hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) | **T286: 12,093 (+9.0%)** — gated 0.995; confounded, share unknown | `99c7ed9ea` |
+| **2** | **[#54889](https://github.com/vllm-project/vllm/pull/54889)** | 🟢 Open | **Yes — 0/7 fail** | Fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2) — inside ±1.2% noise | `f476f47c7` |
+| **3** | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | 🟡 Draft | **Yes — 0/17 fail** | Attn residual + sigmoid_mul + conv fusions | **Not isolated** — +1.2% only as a stack | `dbe3bb3fa` |
+
+**Why this order.**
+
+1. **[#54736](https://github.com/vllm-project/vllm/pull/54736) — keep first.** The only patch present for the +9.0% jump, and
+   the only one carrying a *correctness* fix ([#54735](https://github.com/vllm-project/vllm/pull/54735)): without it,
+   replicated cache groups can map onto the wrong block geometry under DCP and either
+   assert at startup or **silently load recurrent state into the wrong blocks**. We
+   never asserted, so we may have been in the silent case for the whole campaign.
+   Its throughput share is still unproven — Option A settles that — but the
+   correctness argument alone justifies the top slot.
+2. **[#54889](https://github.com/vllm-project/vllm/pull/54889) — keep second.** The only patch ever *isolated*, at +0.74%
+   (n=2, replicates agreeing to 0.18%). Inside the noise band, so not a demonstrated
+   win, but it is real, cheap, ready (not draft) and on the hot DCP a2a path.
+3. **[#52968](https://github.com/vllm-project/vllm/pull/52968) — first to drop.** No individual number in the entire
+   campaign; only ever measured inside a 3-PR stack at +1.2% gmu-matched, and one
+   member of that stack ([#53917](https://github.com/vllm-project/vllm/pull/53917)) has since been closed. It is also the
+   only **draft** in the image. Carried because removing it would move the baseline,
+   not because it has earned its place.
 
 ### Free in the base — merged upstream, we no longer apply them
 
