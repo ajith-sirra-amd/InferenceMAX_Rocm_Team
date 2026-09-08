@@ -7,8 +7,24 @@ Predictor: 12,556 needs steady `tput_in` ≥ **104,100/s**.
 knobs while each run still improves. Switch to C1 only when the C72 ladder is
 exhausted: every remaining knob tested, or the last two gains both inside ±1.2%.
 
-**Then → C1, lowest possible TPOT.** Best C1 to date:
-**9.06 ms mean / 9.31 p99** (T205/T208). C1 is a different regime and most of the
+**Then → C1. TARGET: TPOT p90 ≤ 7 ms.** Best to date **9.06 ms mean / 9.31 p99**
+(T205/T208) — p90 not recorded, capture it this time.
+
+**Constraint:** must run the same image and patch set as the winning C72 config.
+**Free to change for C1:** chunk size, DCP, MTP/`num_speculative_tokens`, mns, ladder.
+
+**The main lever is MTP acceptance length.** With spec-decode, effective
+TPOT ≈ forward_time ÷ accepted_tokens, so raising `k` divides TPOT until the draft
+cost overtakes it. The launcher already defaults C1 to `SPEC_NUM_TOKENS=8` and
+carries the golden AL table:
+
+| k | 1 | 2 | 4 | 6 | 8 |
+|---|---|---|---|---|---|
+| accept len | 1.85 | 2.51 | 3.36 | 3.75 | **4.00** |
+
+AL rises steeply to k≈4 then flattens — 4→8 buys only +19% for 2× the draft work,
+so **k is likely already past its knee at 8**, and the sweep should test k=4 and 6
+as well as 8, not just push k higher. C1 is a different regime and most of the
 C72 findings do not carry:
 - **DCP must be 1** — DCP>1 and MTP are mutually exclusive (MTP's draft uses
   TRITON_MLA, which rejects non-causal MLA under DCP)
