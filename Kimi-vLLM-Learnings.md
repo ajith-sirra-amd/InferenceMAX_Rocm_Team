@@ -96,7 +96,9 @@ This is the most instructive sequence in the campaign, so it is worth in full.
 | **Guard appears** — T278 v1, base `1970f3ed` | `FULL_AND_PIECEWISE` | **0** | no | **engine init dies** | — |
 | **Breakable workaround** — T278 v2, T280 | `FULL_AND_PIECEWISE` | **1** | no | boots, breakable runner allocates buffers | **32.14 GiB** (−35.5%) |
 | **Try to dodge piecewise** — T281 | `FULL` | 0 | no | **fails** — engine resolves FULL → FULL_AND_PIECEWISE, guard fires | — |
-| **Root-cause fix** — T282 | `FULL_AND_PIECEWISE` | **0** | **yes**, via #52190 | third branch of the guard is satisfied | expect **~49.79 GiB** |
+| **Root-cause fix attempt** — T282 | `FULL_AND_PIECEWISE` | **0** | **yes**, via #52190 | boots, but **recovers nothing** — 32.28 GiB | 18,555,236 |
+| **Diagnosis** — T284 | `NONE` | 0 | n/a | proves the pool is the cost | **54.21 GiB / 31,217,931** |
+| **Resolution** — T285 | **`FULL_DECODE_ONLY`** | 0 | not needed | guard never fires; decode graphs kept | expect ~31 M |
 
 Three things this teaches:
 
@@ -127,6 +129,83 @@ passes were silently inert** — `aiter::fused_qk_rmsnorm_kernel` and
 `aiter::allreduce_fusion_kernel_1stage` never ran. So enabling torch.compile is not
 only a memory fix; it may also switch on optimisations we believed were already
 active. A useful reminder that *configured* and *effective* are different things.
+
+### Where the memory actually is — and the mode that fixes it
+
+I got this wrong twice before the numbers settled it. The breakdown vLLM prints at
+startup (`gpu_worker.py`, the `non-torch` line) is the ground truth:
+
+| config | weights+non-torch | peak activation | **CUDAGraph mem** | KV/GPU | KV tokens |
+|---|---|---|---|---|---|
+| T274 — `FULL_AND_PIECEWISE`, piecewise **silently absent** | 199.79 | 9.47 | **2.66 GiB** | 49.79 | 28,653,478 |
+| T280 — breakable=1 | 199.08 | 26.77 | **20.30 GiB** | 32.14 | 18,475,453 |
+| T282 — torch.compile, breakable=0 | 199.84 | 26.94 | **20.30 GiB** | 32.28 | 18,555,236 |
+| T284 — `cudagraph_mode=NONE` | — | — | **~0** | **54.21** | **31,217,931** |
+
+**The cost is the piecewise graph pool, not the breakable runner.** Breakable graphs
+and torch.compile are two different *routes to the same thing* — piecewise capture —
+so swapping one for the other recovered nothing (18,475,453 → 18,555,236, +0.4%).
+Peak activation also triples, because capture pins intermediate buffers.
+
+**`FULL_DECODE_ONLY` is the mode you want on a prefill-bound workload:**
+
+```python
+NONE               = 0
+PIECEWISE          = 1
+FULL               = 2
+FULL_DECODE_ONLY   = (FULL, NONE)        # decode_mode=FULL, mixed_mode=NONE
+FULL_AND_PIECEWISE = (FULL, PIECEWISE)
+```
+
+| mode | decode | mixed/prefill | piecewise pool | KV tokens |
+|---|---|---|---|---|
+| `FULL_AND_PIECEWISE` | full graph | piecewise | 20.3 GiB | 18.5 M |
+| `NONE` | eager | eager | 0 | 31.2 M |
+| **`FULL_DECODE_ONLY`** | **full graph** | eager | **0** | expect ~31 M |
+
+`has_piecewise_cudagraphs()` is false for it, so the guard never fires — **no
+breakable flag, no torch.compile, no patch.** It keeps graphs where they pay (pure
+decode, small kernels, CPU-starved GPU) and drops them where they don't (mixed
+batches carrying 16 k-token prefill chunks, where a 5–10 µs launch is noise against
+millisecond GEMMs).
+
+**Can you just revert the nightly's guard?** No. `_init_candidates()` builds capture
+descriptors from `cudagraph_mode` alone — `decode_mode()` / `mixed_mode()` — with no
+reference to whether a piecewise mechanism exists. `FULL_AND_PIECEWISE` therefore
+*always* creates PIECEWISE descriptors and the capture loop iterates
+`[PIECEWISE, FULL]`. Delete the guard and it attempts piecewise capture with nothing
+to produce it, failing deeper and less legibly. The guard is a fail-fast for a real
+incompatibility, not the change itself.
+
+### Reasoning about graphs from the workload, not from defaults
+
+The single most useful frame: **CUDA graphs only buy back kernel-launch overhead,
+and launch overhead only matters when the GPU is starved.**
+
+| | our numbers | graphs worth it? |
+|---|---|---|
+| prefill | 16,384-token chunks, GEMMs run for ms, `tput_in` ~91,000/s | **no** — µs of launch against ms of work |
+| decode | batch 1–96, thousands of small kernels, `tput_out` ~580/s | **yes** |
+| share of total work | prefill ≈ **99%** | — |
+
+So paying **10.2 M KV tokens** to accelerate ~1% of the work is not a two-sided
+trade — it is a near-certain loss, and it can be reasoned out *before* spending an
+hour measuring it. Check which phase dominates (`tput_in` vs `tput_out`) before
+touching any graph knob.
+
+**Does eager prefill hurt more without `--async-scheduling`?** In principle yes —
+without async the host already serialises between steps, and eager adds host work
+inside the step too. In practice, no:
+
+1. T274 ran exactly this combination — eager mixed batches, `--no-async-scheduling` —
+   and scored **11,095**, our best number.
+2. `--async-scheduling` measured **−1.8%**. If the host were the bottleneck,
+   overlapping host prep with GPU execution would have helped. It hurt — so the host
+   is not limiting, and launch overhead will not make it so.
+
+The exception is **C1**, where there is no prefill to hide behind and decode
+dominates. That is precisely why `FULL_DECODE_ONLY` beats `NONE`: it keeps decode
+graphs.
 
 ### The capture ladder
 
@@ -356,6 +435,11 @@ Latency terms:
   silently run the *old* config.
 - **n=1 is not a result.** Cross-day noise is **±1.2%**; same-session pairs replicate
   to ~0.4%. Anything under ~1.2% needs n=2 before it is claimed.
+- **Drop a fix once it stops being a fix.** #52190 (torch.compile) was applied to
+  satisfy the cudagraph guard. Switching to `FULL_DECODE_ONLY` made the guard
+  irrelevant — and #52190 silently became an *uncontrolled third variable* in what
+  was supposed to be a clean baseline. A workaround that outlives its cause becomes
+  a confound. Re-audit the config after every root-cause fix.
 - **A patch that applies is not a patch that is current.** #54736 applied to one
   nightly and failed on another purely because the author rebased; #54165 did the
   reverse. Always dry-run against the exact base you will build.
