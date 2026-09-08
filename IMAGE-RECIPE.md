@@ -65,9 +65,9 @@ BASE  vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36  (2
 
 | PR | State | Applies clean? | What it does | Measured gain | Head SHA |
 |---|---|---|---|---|---|
-| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | 🟡 Draft | **Yes — 0/17 fail** | Attn residual + sigmoid_mul + conv fusions | **Never isolated.** Only measured with #52494 + #53917 as a stack: **+1.2%** gmu-matched | `dbe3bb3fa` |
-| **[#54889](https://github.com/vllm-project/vllm/pull/54889)** | 🟢 Open | **Yes — 0/7 fail** | Fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2: 11,115 / 11,095 vs 11,023) — **inside ±1.2% noise, not a demonstrated win** | `f476f47c7` |
-| **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | 🟢 Open | **Yes — 0/33 fail** | SimpleCPU serves fine-grained hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) | **Unknown — under test as T286.** Author publishes hit-rates only, **no tok/s anywhere**: external hit 0% → 99.83% replay, 76.2% GSM8K rounds 2–3 | `99c7ed9ea` |
+| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | 🟡 Draft | **Yes — 0/17 fail** | Attn residual + sigmoid_mul + conv fusions | **Not isolated** — +1.2% only as a stack | `dbe3bb3fa` |
+| **[#54889](https://github.com/vllm-project/vllm/pull/54889)** | 🟢 Open | **Yes — 0/7 fail** | Fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2) — inside ±1.2% noise | `f476f47c7` |
+| **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | 🟢 Open | **Yes — 0/33 fail** | SimpleCPU serves fine-grained hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) | **Unknown** — T286 testing. Author gives hit-rates only, no tok/s | `99c7ed9ea` |
 
 Every diff is fetched fresh and its head SHA recorded in `/etc/k3-image-manifest`.
 **No hunk in this image was hand-edited or fuzz-applied.**
