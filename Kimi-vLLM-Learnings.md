@@ -81,10 +81,12 @@ Two lessons worth more than the numbers:
 1. **An identical fingerprint across two different bases isolates the cause.** We
    suspected 21 upstream commits; the matching KV number ruled them out in one
    comparison, with no extra run.
-2. **Don't chase a memory regression with unrelated knobs.** Trimming the cudagraph
-   capture ladder or raising `gpu-memory-utilization` were both wrong: decode graphs
-   for 96 sizes are a few hundred MB, not 17.65 GiB. The memory was in the breakable
-   runner's buffers, so only *not allocating it* returns it.
+2. **Attribute the memory before turning knobs.** I first blamed the breakable
+   runner's buffers. Wrong — see the breakdown below: the cost is the **piecewise
+   graph pool**, and breakable graphs and torch.compile are two routes to the same
+   capture. Raising `gpu-memory-utilization` was also wrong (it claws back ~11.6%
+   against a ~40% need, and spends OOM headroom). Only *not capturing piecewise*
+   returns the memory.
 
 ### The full arc: how one guard cost us 35% of the KV pool
 
@@ -120,11 +122,17 @@ Three things this teaches:
    | escape | works? | cost |
    |---|---|---|
    | `VLLM_USE_BREAKABLE_CUDAGRAPH=1` | yes | **−17.65 GiB KV/GPU** |
-   | `cudagraph_mode=NONE` | yes | loses all graph speedup |
+   | `cudagraph_mode=NONE` | yes | loses all graph speedup, incl. decode |
    | `cudagraph_mode=FULL` | **no** — silently upgraded back | — |
-   | **torch.compile the model** (#52190) | expected | none; also un-inerts the fusion passes |
+   | torch.compile the model (#52190) | boots, but **recovers no memory** | same 17.6 GiB — it enables the same piecewise capture |
+   | **`cudagraph_mode=FULL_DECODE_ONLY`** | **yes** | **none** — guard never fires, decode graphs kept |
 
-**Bonus worth noting:** because K3 was never torch-compiled, its **post-grad fusion
+**Correction to my own reasoning above:** I predicted torch.compile would recover
+the memory. It did not — 18,475,453 → 18,555,236 tokens, +0.4%. Both it and the
+breakable flag *enable piecewise capture*, and the capture is the cost. The real
+answer was a mode that never asks for piecewise at all.
+
+**Still worth noting:** because K3 was never torch-compiled, its **post-grad fusion
 passes were silently inert** — `aiter::fused_qk_rmsnorm_kernel` and
 `aiter::allreduce_fusion_kernel_1stage` never ran. So enabling torch.compile is not
 only a memory fix; it may also switch on optimisations we believed were already
