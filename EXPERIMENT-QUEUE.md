@@ -1,3 +1,44 @@
+# QUEUE — W3+W4 (opens 9/8 23:30 IST, 13 h, closes 9/9 12:30)
+
+**State:** best is **12,093 tok/s/GPU** (T286, gated GSM8K 0.995). Target 12,500 is
+**3.4%** away. Config: base `d9105ea8` + #52968 + #54889 + #54736, `FULL_DECODE_ONLY`,
+breakable=0, mns 96, mnbt 16384, gmu 0.90, KV 28,733,261.
+
+**Authorised for this slot only.** Wake-up `8e8f8935` fires 23:32 and dispatches
+item 1 ONLY, then reports and waits. Last safe perf dispatch: **9/9 10:45**.
+
+| # | run | image / change | ~min | why |
+|---|---|---|---|---|
+| **1** | **Option A — attribution** | `rec-d9105` (no #54736), else identical to T286 | 105 | T286 moved **three** things at once vs T274: new base, `FULL_DECODE_ONLY`, #54736. This is the only run that says which produced the +9.0%. **Everything below depends on the answer.** |
+| 2 | **n=2 replicate of T286** | `rec-d9105-best`, unchanged | 105 | Standing rule: nothing is claimed at n=1. 12,093 is our headline and has one sample. |
+| 3 | **#52190 torch.compile** | `rec-d9105-tc` (already built, gated 0.99) | 105 | Its post-grad fusion passes (`fused_qk_rmsnorm`, `allreduce_fusion`) have been **inert all campaign**. Untapped, and does not trade against KV. Needs its own arm — it was a confound when bundled. |
+| 4 | **Matched cudagraph ladder** | dense 56–88, sparse below, max held at 96 | 105 | **Reassessed after T288.** Decode graphs are worth ~39.5%, so this is now a *higher-risk* change, not the cheap win I called it. Only worth it if 1–3 leave us short. Must keep the hot band dense and the max at `mns × SPEC_ROWS` — clamping the max is the SA HSA-crash failure. |
+
+**If item 1 shows #54736 owns the gain** → push that thread: re-check #54163/#54165
+against this base, and look for other SimpleCPU-offload work upstream.
+**If it shows the base or `FULL_DECODE_ONLY` owns it** → #54736 is optional, and the
+remaining 3.4% is more likely in #52190 or kernel-level work.
+
+**Do not retry — settled negative**
+
+| thing | result | run |
+|---|---|---|
+| `cudagraph_mode=NONE` | **−39.5%** | T288 |
+| `kv-offloading: none` | −61% | T277 |
+| `mnbt 32768` | deterministic warmup failure, same trace twice | T275/T276 |
+| `--async-scheduling` | −1.8% | T162 |
+| gmu 0.92 | +0.20%, neutral | T272 |
+| #54494 q-replicate | +0.09%, neutral | T267 |
+| LMCache | `ext_cache_hit` 0.0% for us *and* SA | six runs |
+| More KV via any route | **T288: +2.4 M tokens bought nothing.** KV peaks at 64% — it is not the constraint | T288 |
+
+**Open question worth a run of its own:** T286's `prefix_cache_hit` 74.4% and
+`ext_cache_hit` 81.2% are *identical* to T274's, yet throughput rose 9%. The cache
+rates did not move. Whatever produced the gain, it was not "more cache hits" — item 1
+is the first step to finding out what it was.
+
+---
+
 ## W3+W4 QUEUE (opens 9/8 23:30 IST, 13h contiguous) — IN THIS ORDER
 
 **1. ~~GSM8K-200 GATE on `rec-d9105-best`~~ — DISPATCHED IN W2 as T287 (run 34191097158).**
