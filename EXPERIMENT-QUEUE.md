@@ -3,9 +3,11 @@
 **TARGET 12,556 tok/s/GPU @ C72. Best 12,093 (T286, gated 0.995). Gap +3.83%.**
 Predictor: 12,556 needs steady `tput_in` ≥ **104,100/s**.
 
-**12,556 is a floor, not a ceiling.** Do not stop on reaching it — keep stacking
-knobs while each run still improves. Switch to C1 only when the C72 ladder is
-exhausted: every remaining knob tested, or the last two gains both inside ±1.2%.
+**12,556 is a floor. 13,000 is the switch point.**
+- below 12,556 → keep pushing C72, nothing else matters
+- 12,556 – 13,000 → keep stacking knobs while each run still improves
+- **≥ 13,000 → stop C72 work and prioritise C1**, even if C72 knobs remain untested
+- also switch if the C72 ladder is exhausted, or the last two gains are both inside ±1.2%
 
 **Then → C1. TARGET: TPOT p90 ≤ 7 ms.** Best to date **9.06 ms mean / 9.31 p99**
 (T205/T208) — p90 not recorded, capture it this time.
