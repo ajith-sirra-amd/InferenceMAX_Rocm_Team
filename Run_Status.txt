@@ -2,7 +2,28 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-09 00:04 IST | W3+W4 open (closes 12:30) | T289 running
+2026-09-09 03:25 IST | *** NODE ISSUE FOUND - NEEDS ROOT ***
+
+kernel.numa_balancing = 1   and   /etc/sysctl.d/99-numa.conf is ABSENT
+node rebooted 13h33m ago - i.e. AFTER T288 (fine) and BEFORE T289 (slow)
+
+FIX (needs sudo, agent cannot do this):
+  echo 'kernel.numa_balancing = 0' | sudo tee /etc/sysctl.d/99-numa.conf
+  sudo sysctl -w kernel.numa_balancing=0
+The second line takes effect immediately; the first survives the next reboot,
+which is the part that keeps getting lost.
+
+WHY IT MATTERS: the SimpleCPU offload pool is ~1.8 TB of host memory
+(226.89 GB/rank x 8) under constant read/write. NUMA balancing migrates that
+working set continuously. Workers show ~318% CPU each - host-side thrash.
+
+EVIDENCE - three consecutive runs crawled in warmup, all after the reboot:
+  T289  bare C72     29/148 at 70 min   cancelled
+  T290  patched C76  15/156 at 41 min   cancelled
+  T291b patched C72   1/148 at  7 min   running - EXACT replicate of T286
+  T286 (before reboot) FINISHED warmup by 28 min and scored 12,093.
+T291b is the control: same image, same config, same node - only the reboot
+differs. That isolates it to node state, not to any knob.
 
 TARGETS
   C72  12,556 floor  ->  13,000 = switch to C1.  Best 12,093 (T286, gated 0.995)
