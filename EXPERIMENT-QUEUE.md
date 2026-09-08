@@ -1,6 +1,9 @@
 ## W3+W4 QUEUE (opens 9/8 23:30 IST, 13h contiguous) — IN THIS ORDER
 
-**1. GSM8K-200 GATE on `rec-d9105-best` — FIRST, BEFORE ANYTHING ELSE.** (~35 min)
+**1. ~~GSM8K-200 GATE on `rec-d9105-best`~~ — DISPATCHED IN W2 as T287 (run 34191097158).**
+Measured gate duration is **12–14 min**, not the 35 I had been budgeting (three runs: 12.2 / 12.5 / 13.8). That bad estimate nearly deferred this a whole slot for no reason.
+
+**Superseded text below kept for context.** (~35 min)
 T286 ran perf without its gate by explicit owner decision under time pressure, so
 **its number is PROVISIONAL and must not be reported until this passes.** This is
 higher-stakes than a routine gate: #54736 changes which cached KV blocks are served
