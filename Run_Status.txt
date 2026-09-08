@@ -2,16 +2,16 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-08 12:20 IST | HOLD AFTER T288 — no further dispatch without owner instruction
+2026-09-08 12:22 IST | T288 running | W3+W4 AUTHORISED (this slot only)
 
 T288 running (34193004896), cudagraph_mode=NONE, KV 31,149,545, completes ~13:18.
 AFTER IT FINISHES: record the result, then STOP. Dispatch nothing.
 
-All four scheduled cron jobs DELETED so nothing can auto-dispatch overnight:
-  ffbe23fd  11-min poll        (its prompt told me to dispatch the next queue item)
-  af374cd6  W3+W4 open 23:32   (would have started the queue tonight)
-  0a4abeeb  W5 open 9/10 08:02
-  efdfe74e  W2 open (spent)
+Scheduled jobs: the four free-running ones were deleted. ONE re-armed:
+  8e8f8935  fires 9/8 23:32 IST when W3+W4 opens
+            dispatches OPTION A ONLY, then reports and waits for a decision.
+            It will not free-run the queue.
+W5 (9/10 08:00) has NO wake-up armed — needs explicit authorisation.
 Heartbeat (.claude/heartbeat.sh) is monitor-only and never dispatches — kept.
 
 Queue is PARKED, not cancelled:
