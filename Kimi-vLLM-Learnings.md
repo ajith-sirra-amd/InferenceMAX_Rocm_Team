@@ -422,6 +422,7 @@ Latency terms:
 | Warmup frozen, **GPUs at 0% util**, requests in flight, 0 errors | host-side spin in the SimpleCPU offload path | intermittent at mnbt 16384; **deterministic at 32768** |
 | Same trace ID aborts twice | deterministic, not flaky | trust it — two identical failures is a verdict |
 | VRAM stays at 99% after a run, PIDs gone | zombie KFD entries, driver-level leak | **wait ~1 h — it self-clears.** `kill -9` says "No such process" |
+| VRAM **rising** after you cancelled a job | **`gh run cancel` does NOT stop the container.** The job goes green-cancelled while `bmk-server` keeps running and holding memory | `docker ps` after **every** cancel, then `docker rm -f bmk-server`. The `rm` may report *"did not receive an exit event"* and still succeed — check `rocm-smi`, not the exit code |
 | GH job green but `Requests: 0 successful` | result-writer swallows the non-zero exit | **never trust the green check** — grep `Requests: N successful` |
 | `InvalidInferenceResultError` at 4–15% | environmental, not ours | it cleared on its own after T274 (0.17%) |
 
@@ -439,6 +440,10 @@ Latency terms:
   the fetch with `[ -f file ]`. The PR had been rebased twice; results would have
   been attributed to code we were not running. **Record the head SHA in the image
   manifest.**
+- **Cancelling a run is not the same as stopping it.** Three cancels in one window;
+  on the third the node read 93% and *climbing* while GitHub showed the run
+  cancelled. A pre-dispatch check does not catch this — the orphan appears *after*
+  the cancel. Always `docker ps` in the cancel path itself.
 - **Dispatch resolves the branch, not your worktree.** Uncommitted or unpushed edits
   silently run the *old* config.
 - **n=1 is not a result.** Cross-day noise is **±1.2%**; same-session pairs replicate
