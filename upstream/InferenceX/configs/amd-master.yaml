@@ -1974,7 +1974,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # T249: CCD pinning arm on the NEW BEST config. T247 (this image, no a4w4)
   # = 11,006, the best in the ledger. Only variable here is PIN_CCD=1.
   # T272: back to OUR patched image, C72 baseline config, gmu 0.92.
-  image: vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36
+  image: kimi-k3-vllm:rec-d9105-best
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
@@ -2178,7 +2178,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # Stock shows the same lookup fault, so it is NOT our patch stack.
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [64], spec-decoding: mtp }
       # T261 done: stock C72 +LMCache -> 3,396 tok/s/GPU, err 15.45%.
-      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [72], spec-decoding: mtp }
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5.dev89+rocm7.2" }, conc-list: [76], spec-decoding: mtp }
       # T262 done: ours C64 +LMCache legacy/workers-1 -> 3,726 tok/s/GPU,
       # 36% BELOW T258's 5,808 at SA settings. ext_cache_hit still 0.0%.
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: lmcache, version: "0.5.5rc3+rocm7.2" }, conc-list: [64], spec-decoding: mtp }
@@ -2187,7 +2187,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # kv-offloading dram / vllm-simple / 1949 GB, gmu 0.90, mns 96, mnbt 16384
       # -- so the only variable vs T247/T252 (11,027) is the PR.
       # T267 done: #54494 @ C72 = 11,029 vs control 11,019 (+0.09%, neutral).
-      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [76], spec-decoding: mtp }
       # T268 BLOCKED: DCP>1 and MTP are mutually exclusive (draft uses TRITON_MLA,
       # which rejects non-causal MLA under DCP). #54494 untestable at C1 as shipped.
       # T269: SA REPRODUCE -- C48, NO LMCache and NO offload at all (their
@@ -2211,7 +2211,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # extra_forbidden) -- T277 v1 failed get-jobs on it. kv-offloading: none
       # is sufficient; the launcher takes TOTAL_CPU_DRAM_GB from elsewhere.
       # T278: offload RESTORED to dram -- T277 priced it at 2.57x, it is not optional.
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [76], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
