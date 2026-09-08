@@ -692,7 +692,7 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 # The engine's own error names FULL as an alternative that needs no breakable
 # graphs, so FULL should reclaim that memory. Perf trade is unknown: FULL drops
 # the piecewise path for non-graphable regions.
-CUDAGRAPH_MODE="${K3_CUDAGRAPH_MODE:-NONE}"   # T284: prefill-bound workload -- graphs buy ~1%, cost 20.3 GiB
+CUDAGRAPH_MODE="${K3_CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"   # T285: full graphs for decode, eager mixed -- what T274 was silently doing
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 # N7 SETTLED NEGATIVE: gmu > 0.90 hangs this node. T166 at 0.92 got 0/103 --
