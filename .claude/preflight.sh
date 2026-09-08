@@ -21,7 +21,11 @@ YAML=$REPO/upstream/InferenceX/configs/amd-master.yaml
 # W3 and W4 abut with no gap -> merged into one 13h block.
 WINDOWS=(
   "2026-09-07 08:30|2026-09-07 12:30|W1"
-  "2026-09-07 23:30|2026-09-08 11:30|W2"
+  # W2 extended 11:30 -> 13:30 on 2026-09-08 at 11:33 IST, on the owner's explicit
+  # instruction ("I will negotiate time slot" -> "Run" -> "Start GH Run with None
+  # .. now"). The owner holds the reservation and controls the GH runner, which is
+  # the independent interlock. Agent did NOT choose to extend on its own judgement.
+  "2026-09-07 23:30|2026-09-08 13:30|W2 (extended by owner)"
   "2026-09-08 23:30|2026-09-09 12:30|W3+W4"
   "2026-09-10 08:00|2026-09-11 08:00|W5"
 )
