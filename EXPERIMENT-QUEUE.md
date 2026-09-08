@@ -1,3 +1,46 @@
+# RUN-CONTINUOUSLY RULES — W3+W4 (closes 9/9 12:30 IST)
+
+**Target 12,500. Best 12,093 (T286, gated 0.995). Gap 3.4%.**
+
+## Mid-run predictor — calibrated, use it
+
+Steady-state `tput_in_srv` predicts the headline to within ~3%: final ≈ `tput_in / 8 × 0.965`.
+
+| run | steady tput_in | final |
+|---|---|---|
+| T286 | ~100,000/s | 12,093 |
+| T274 | ~92,000/s | 11,095 |
+| T288 | ~64,000/s | 7,310 |
+
+- **≥ 103,000/s** → on track for 12,500
+- **≥ 100,000/s** → beats current best
+- **< 92,000/s at +25 min of measurement** → cannot beat 12,093
+
+## Abort rules
+
+| condition | action |
+|---|---|
+| **Stall**: warmup flat ≥10 min, GPUs 0% util, 0 completions | **cancel now.** T273/T275/T276 signature. Then `docker ps` and `docker rm -f bmk-server` — a cancelled job does NOT stop the container |
+| **Optimisation run** below 92,000/s at +25 min | **cancel, move to next knob.** Saves ~75 min. Applies to CONC sweep, #52190, quick-reduce |
+| **Attribution run** (bare, +#52968, +#54889, +#54736) slow | **let it finish.** The number IS the deliverable; a low value is a result, not a failure |
+| Anything that cannot finish by 12:30 | do not dispatch. **Last safe perf dispatch 10:45** |
+
+## Order, and what each decides
+
+1. **T289 bare nightly** *(running)* — where the +9% came from
+2. **CONC 76** on whichever config wins — C72 was tuned in a different regime; T286 showed 0 queue waiters
+3. **CONC 80** if 76 wins, else **CONC 74**. Raise `mns` with CONC or batches fall off the graph ladder (−39.5%, T288)
+4. **#52190 torch.compile** — fusion passes inert all campaign, image built and gated 0.99
+5. **quick-reduce quantization** — **GSM8K gate first**, it changes numerics
+6. **Ladder trim** *(fallback, owner's call)* — keeps decode graphed, returns ~905k tokens (+3.2% KV). Measured: +8.4% KV bought **+6.1 pts** prefix_cache_hit (T286 77.2% → T288 83.3%), so this is worth ~+2 pts. Not enough alone; stacks with the above
+7. **n=2 replicate** of the leader
+
+## Between runs
+
+Record result, update `Kimi-DCP-Experiemnts-Summary.md` + this file + `Run_Status.txt`, commit+push, then `preflight.sh 105` and dispatch the next immediately. **Do not leave the node idle inside the slot.**
+
+---
+
 # QUEUE — W3+W4 (opens 9/8 23:30 IST, 13 h, closes 9/9 12:30)
 
 ## Plan: strip to bare, then add PRs back one at a time
