@@ -40,14 +40,21 @@ gh run list --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --workflow "End-to-End
    --limit 1 --json databaseId,status,conclusion \
    -q '.[]|"  run \(.databaseId) \(.status) \(.conclusion // "")"' 2>&1
 
-echo "--- progress ---"
-docker logs bmk-server 2>/dev/null \
-  | grep -aoE "Phase [a-z]+ progress \| returned=[0-9]+/[0-9]+ \| sent=[0-9]+ \| in_flight=[0-9]+ \| errors=[0-9]+ \| elapsed=[0-9.]+s" \
-  | tail -1 | sed 's/^/  /'
-docker logs bmk-server 2>/dev/null | grep -a "srv  " | tail -1 | cut -c1-190 | sed 's/^/  /'
-docker logs bmk-server 2>/dev/null \
-  | grep -aoE "GPU KV cache size: [0-9,]+ tokens|Throughput per GPU: [0-9]+ tok/s|exact_match.{0,24}" \
-  | sort -u | tail -3 | sed 's/^/  /'
+# ONE bounded log read per wake, cached. Previously this called docker logs 7x,
+# each re-reading a 100MB+ log -- CPU stolen from the vLLM workers mid-measurement,
+# which risks skewing the number being collected.
+HB=/tmp/hb.log
+docker logs --tail 4000 bmk-server > "$HB" 2>/dev/null
+# KV line appears early, so --tail misses it; capture once per run and cache.
+KVF=/tmp/hb.kv
+if [ ! -s "$KVF" ] || ! grep -q "GPU KV cache size" "$KVF" 2>/dev/null; then
+  docker logs bmk-server 2>/dev/null | grep -aoE "GPU KV cache size: [0-9,]+ tokens" | head -1 > "$KVF"
+fi
+
+grep -aoE "Phase [a-z]+ progress \| returned=[0-9]+/[0-9]+ \| sent=[0-9]+ \| in_flight=[0-9]+ \| errors=[0-9]+ \| elapsed=[0-9.]+s" "$HB" | tail -1 | sed 's/^/  /'
+grep -a "srv  " "$HB" | tail -1 | cut -c1-190 | sed 's/^/  /'
+sed 's/^/  /' "$KVF" 2>/dev/null
+grep -aoE "Throughput per GPU: [0-9]+ tok/s|exact_match.{0,24}" "$HB" | sort -u | tail -2 | sed 's/^/  /'
 
 echo "--- node ---"
 V=$(timeout 40 rocm-smi --showmemuse 2>/dev/null \
@@ -56,10 +63,10 @@ echo "  vram_max=${V}%  bmk-server=$(docker ps --format '{{.Names}}' 2>/dev/null
 
 # --- verdict line: compare against the reference numbers automatically -------
 # BASE = T274 11,095 tok/s/GPU @ KV 28,653,478. Anchor 11,027. Noise +/-1.2%.
-TP=$(docker logs bmk-server 2>/dev/null | grep -aoE "Throughput per GPU: [0-9]+" | tail -1 | grep -oE "[0-9]+$")
-EM=$(docker logs bmk-server 2>/dev/null | grep -aoE "exact_match\|[^|]*\| *[0-9.]+" | tail -1 | grep -oE "[0-9.]+$")
-EXT=$(docker logs bmk-server 2>/dev/null | grep -a "srv  " | tail -1 | grep -oE "ext_cache_hit=[0-9.]+" | cut -d= -f2)
-KVU=$(docker logs bmk-server 2>/dev/null | grep -a "srv  " | tail -1 | grep -oE "kv_usage=[0-9.]+" | cut -d= -f2)
+TP=$(grep -aoE "Throughput per GPU: [0-9]+" "$HB" | tail -1 | grep -oE "[0-9]+$")
+EM=$(grep -aoE "exact_match\|[^|]*\| *[0-9.]+" "$HB" | tail -1 | grep -oE "[0-9.]+$")
+EXT=$(grep -a "srv  " "$HB" | tail -1 | grep -oE "ext_cache_hit=[0-9.]+" | cut -d= -f2)
+KVU=$(grep -a "srv  " "$HB" | tail -1 | grep -oE "kv_usage=[0-9.]+" | cut -d= -f2)
 echo "--- verdict ---"
 [ -n "$TP" ] && awk -v t="$TP" 'BEGIN{d=(t-11095)/11095*100; printf "  THROUGHPUT %s tok/s/GPU  vs T274 11,095 = %+.2f%%  %s\n", t, d, (d>1.2?"WIN (outside noise)":(d<-1.2?"LOSS":"inside +/-1.2% noise"))}'
 [ -n "$EM" ] && awk -v e="$EM" 'BEGIN{printf "  GSM8K %s  %s\n", e, (e>=0.98?"PASS":"FAIL - investigate")}'
