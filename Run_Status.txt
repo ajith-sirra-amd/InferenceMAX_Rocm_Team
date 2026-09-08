@@ -2,10 +2,14 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-07 12:35 IST | W1 CLOSED | ARMED, waiting for W2 (opens 23:30 IST)
+2026-09-08 07:22 IST | W2 open, closes 11:30 | RUNNING T278 v2 GSM8K (34178067496)
 
-Node released clean: GPUs 0%, no bmk-server, 0 zombie KFD entries.
-Preflight: 12/13 gates PASS, only "reservation" fails (correct - outside slot).
+W2 LOST 7h51m. Slot opened 9/7 23:30, first dispatch 9/8 07:22.
+  The scheduled jobs DID NOT FIRE - efdfe74e is still listed as pending
+  (one-shots auto-delete after firing) and the 11-min poll ffbe23fd
+  produced nothing for 8 hours. The cron mechanism is NOT reliable and
+  should not be depended on. The reliable trigger has always been the
+  owner's repeating loop prompt.
 
 W1 RESULT
   T278 v1 FAILED at engine init. nightly-1970f3ed rejects
