@@ -27,7 +27,10 @@ cd "$REPO" || exit 0
   | grep -E "reservation|kill-switch|remaining|VERDICT|==>" | sed 's/^/  /'
 
 # If we are outside the window, stop here — no node access.
-if ! ./.claude/preflight.sh 0 2>&1 | grep -q "PASS  reservation"; then
+# NOTE: preflight colourises its output, so ANSI codes must be stripped before
+# grepping. Without the sed this never matched and the heartbeat silently
+# reported "outside reservation" while inside one.
+if ! ./.claude/preflight.sh 0 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -q "PASS  reservation"; then
   echo "  (outside reservation — no further checks)"
   exit 0
 fi
