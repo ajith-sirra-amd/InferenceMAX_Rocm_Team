@@ -9,12 +9,16 @@
 # 9/8 07:22) and 7h51m of a 12h reservation was lost. Background-task completion
 # notifications have fired reliably all session, so the chain is built on those.
 #
-#   usage:  .claude/heartbeat.sh [sleep_seconds]      default 540 (9 min)
+#   usage:  .claude/heartbeat.sh [sleep_seconds]      default 900 (15 min)
+#
+# Cadence set to 15 min on 2026-09-08 to cut token cost (~700-1100 per cycle at
+# 9 min). Worst-case blind spot is 15 min, still far tighter than the W1 failure
+# where a run died 7 min in and sat unnoticed for 2h48m.
 #
 # Deliberately cheap outside a reservation: preflight hard-stops after two date
 # comparisons when out of window, touching neither GPU nor network.
 
-SECS="${1:-540}"
+SECS="${1:-900}"
 REPO=/home/asirra/imx-repo
 sleep "$SECS"
 
