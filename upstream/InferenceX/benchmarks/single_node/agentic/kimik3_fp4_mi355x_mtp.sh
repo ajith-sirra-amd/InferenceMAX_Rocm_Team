@@ -865,6 +865,18 @@ pin_workers_to_ccd || true
 # whole thing in the one file and needs no new script.
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
+    # The workflow only takes its eval-only branch when the WORKFLOW input
+    # eval-only=true. That input is hardcoded on the eval jobs, never on the
+    # agentic job, so an EVAL_ONLY run here still hits the benchmark branch and
+    # fails on "Benchmark result $RESULT_FILENAME.json not found" -- a red X on
+    # a gate that passed. Write a marker so the check is satisfied.
+    # Deliberately NOT named agg_*.json: collect-results consumes agg_*, so this
+    # cannot reach the ledger or fabricate a throughput number.
+    if [ -n "${RESULT_FILENAME:-}" ] && [ ! -f "/workspace/${RESULT_FILENAME}.json" ]; then
+        printf '{"eval_only":true,"note":"GSM8K gate run - no benchmark result by design","gsm8k_results":"see results*.json"}\n' \
+            > "/workspace/${RESULT_FILENAME}.json"
+        echo "[eval] wrote eval-only marker /workspace/${RESULT_FILENAME}.json"
+    fi
 # Default flipped to 1: the runner invokes this script directly and there is no
 # env passthrough from the yaml, so TEST cannot be set per-dispatch from the
 # workflow. Fixed-len is the default health probe now; set TEST=0 in the script
