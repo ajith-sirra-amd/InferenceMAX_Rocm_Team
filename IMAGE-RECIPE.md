@@ -1,10 +1,90 @@
 # IMAGE RECIPE — Kimi-K3 FP4 on MI355X
 
-How to reproduce the **10,632 tok/s/GPU** C72 result (T195/T198, n=2, 0.02%
-spread) and the **9.70 ms** C1 TPOT (T200).
+> **CURRENT as of 2026-09-08.** The section below describes what is running now.
+> Everything after "## The short version" is the older overlay-based recipe and is
+> kept for history — it no longer describes any current run.
 
-> Supersedes the `aigmkt/kimi-k3-vllm:latest` recipe, kept at the bottom for
-> history. That image is no longer used by any current result.
+## Current image — `kimi-k3-vllm:rec-d9105-best`
+
+```
+BASE   vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36   (2026-09-07)
+  +    #52968  dbe3bb3fa   attn res + sigmoid_mul + conv fusions            (draft)
+  +    #54889  f476f47c7   fuse empty-shard LSE mask into A2A pack kernel
+  +    #54736  99c7ed9ea   SimpleCPU fine-grained hybrid prefix hits        (carries #54735)
+```
+
+**Free in the base** (merged upstream, no longer applied by us):
+
+| PR | note |
+|---|---|
+| #52494 | fuse MLA q/kv RMSNorm in AITER — we were **double-applying** it until 09-07 |
+| #54325 | populate SimpleCPUOffload `BlockStored` metadata — merged 09-03; this is what unblocked #54736 |
+
+**Deliberately excluded:**
+
+| PR | why |
+|---|---|
+| #53917 | closed upstream, superseded by #54735/#54736 |
+| #52190 | torch.compile — draft, 2 of 11 hunks need hand-insertion. Not a foundation for a headline number. Its own arm later |
+| #54165 | 8/33 hunks fail on this base (applied cleanly on the *old* base — it inverted) |
+| #54163 | applies, but spec-decode C1/MTP path only; no bearing on C72 |
+
+### Why this base and not the old one
+
+`#54736` is the only PR with a mechanism large enough to matter, and it **only
+applies here** — the author rebased onto recent main, so fit degrades the further
+back you go:
+
+| base | date | #54736 failed hunks |
+|---|---|---|
+| `7c5dc571` (T274, 11,095) | 09-01 | **10 / 33** |
+| `1970f3ed` | 09-06 | 2 / 33 |
+| **`d9105ea8`** | 09-07 | **0 / 33** |
+
+### Launcher config that goes with it
+
+```
+cudagraph_mode            FULL_DECODE_ONLY     <- NOT FULL_AND_PIECEWISE
+VLLM_USE_BREAKABLE_CUDAGRAPH  0
+max_num_batched_tokens    16384
+max_num_seqs              96
+gpu_memory_utilization    0.90
+DCP                       8, backend a2a, interleave 1
+kv-offloading             dram / vllm-simple
+attention backend         ROCM_AITER_MLA  (prefill: ROCM_AITER_FA)
+async scheduling          OFF  (settled negative, -1.8%)
+```
+
+**`FULL_DECODE_ONLY` is load-bearing.** New nightlies enforce a guard that rejects
+piecewise cudagraphs unless the model is torch-compiled or breakable graphs are on.
+Satisfying it either way captures piecewise graphs costing **20.3 GiB/GPU**, which
+comes straight out of KV:
+
+| cudagraph mode | CUDAGraph mem | KV/GPU | KV tokens |
+|---|---|---|---|
+| `FULL_AND_PIECEWISE` + breakable | 20.3 GiB | 32.2 | 18,475,453 |
+| `FULL_AND_PIECEWISE` + torch.compile | 20.3 GiB | 32.3 | 18,555,236 |
+| `NONE` | ~0 | 54.21 | 31,217,931 |
+| **`FULL_DECODE_ONLY`** | ~4.3 GiB | **49.93** | **28,733,261** |
+
+`has_piecewise_cudagraphs()` is false for `FULL_DECODE_ONLY`, so the guard never
+fires — no flag, no torch.compile, no patch, and decode keeps its graphs.
+
+### Build
+
+```bash
+docker pull vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36
+# fetch each PR diff FRESH -- do not reuse a cached .diff, PRs get rebased
+gh api repos/vllm-project/vllm/pulls/<N> -H "Accept: application/vnd.github.v3.diff" \
+  | awk '/^diff --git a\/tests\//{skip=1} /^diff --git a\/vllm\//{skip=0} !skip' > <N>.diff
+# apply into site-packages, record the head SHA in /etc/k3-image-manifest
+```
+
+Record the **head SHA** of every applied PR in the manifest. A cached diff from
+three days earlier was silently reused on 09-07 and would have attributed results
+to code we were not running.
+
+---
 
 ## The short version
 
