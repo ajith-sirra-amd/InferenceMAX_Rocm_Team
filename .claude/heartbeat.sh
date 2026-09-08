@@ -54,9 +54,13 @@ gh run list --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --workflow "End-to-End
 HB=/tmp/hb.log
 docker logs --tail 4000 bmk-server > "$HB" 2>/dev/null
 # KV line appears early, so --tail misses it; capture once per run and cache.
+# Keyed on container start time: the cache went stale across runs and reported
+# the PREVIOUS run's fingerprint, which is exactly how a result gets misattributed.
 KVF=/tmp/hb.kv
-if [ ! -s "$KVF" ] || ! grep -q "GPU KV cache size" "$KVF" 2>/dev/null; then
+CID=$(docker inspect -f '{{.State.StartedAt}}' bmk-server 2>/dev/null)
+if [ "$(cat /tmp/hb.kv.cid 2>/dev/null)" != "$CID" ] || [ ! -s "$KVF" ]; then
   docker logs bmk-server 2>/dev/null | grep -aoE "GPU KV cache size: [0-9,]+ tokens" | head -1 > "$KVF"
+  printf '%s' "$CID" > /tmp/hb.kv.cid
 fi
 
 grep -aoE "Phase [a-z]+ progress \| returned=[0-9]+/[0-9]+ \| sent=[0-9]+ \| in_flight=[0-9]+ \| errors=[0-9]+ \| elapsed=[0-9.]+s" "$HB" | tail -1 | sed 's/^/  /'
