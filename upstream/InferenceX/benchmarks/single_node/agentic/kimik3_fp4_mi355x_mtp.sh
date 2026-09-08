@@ -9,7 +9,7 @@ wait_for_amd_gpu_clean
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
 # T251 gate PASSED (GSM8K 0.995 on rec-no53940) -- back to false.
-export EVAL_ONLY="${EVAL_ONLY:-true}"   # T287: GSM8K gate on rec-d9105-best -- validates T286s provisional number
+export EVAL_ONLY="${EVAL_ONLY:-false}"   # T288: perf
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -692,7 +692,7 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 # The engine's own error names FULL as an alternative that needs no breakable
 # graphs, so FULL should reclaim that memory. Perf trade is unknown: FULL drops
 # the piecewise path for non-graphable regions.
-CUDAGRAPH_MODE="${K3_CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"   # T285: full graphs for decode, eager mixed -- what T274 was silently doing
+CUDAGRAPH_MODE="${K3_CUDAGRAPH_MODE:-NONE}"   # T288: NONE -- +2.48M KV tokens vs FULL_DECODE_ONLY, at the cost of eager decode
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 # N7 SETTLED NEGATIVE: gmu > 0.90 hangs this node. T166 at 0.92 got 0/103 --
