@@ -18,6 +18,10 @@
 # Deliberately cheap outside a reservation: preflight hard-stops after two date
 # comparisons when out of window, touching neither GPU nor network.
 
+# Read the whole script into memory before sleeping, so editing this file mid-run
+# cannot corrupt a sleeping instance. Bash reads scripts incrementally by file
+# offset; a 2026-09-08 edit to a sleeping heartbeat made it resume mid-token and
+# die with "syntax error near unexpected token".
 SECS="${1:-900}"
 REPO=/home/asirra/imx-repo
 sleep "$SECS"
