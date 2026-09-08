@@ -2,17 +2,28 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-08 12:22 IST | T288 running | W3+W4 AUTHORISED (this slot only)
+2026-09-08 13:25 IST | W2 done | HOLDING until 23:32
 
-T288 running (34193004896), cudagraph_mode=NONE, KV 31,149,545, completes ~13:18.
-AFTER IT FINISHES: record the result, then STOP. Dispatch nothing.
+W2 RESULTS
+  T286  12,093 tok/s/GPU  GATED 0.995   +9.0% over 11,095. New best.
+  T287  GSM8K 0.995                     confirms T286
+  T288  7,310  cudagraph_mode=NONE      -39.5%. SETTLED NEGATIVE.
+        Decode graphs are worth ~39.5%. My claim that they optimise "~1%
+        of the work" was wrong by ~40x - decode paces the pipeline because
+        a trajectory cannot start its next prefill until this turn decodes.
+  Rule: graph decode always, never bother graphing prefill.
 
-Scheduled jobs: the four free-running ones were deleted. ONE re-armed:
-  8e8f8935  fires 9/8 23:32 IST when W3+W4 opens
-            dispatches OPTION A ONLY, then reports and waits for a decision.
-            It will not free-run the queue.
-W5 (9/10 08:00) has NO wake-up armed — needs explicit authorisation.
-Heartbeat (.claude/heartbeat.sh) is monitor-only and never dispatches — kept.
+NEXT SLOT (W3+W4, 9/8 23:30 - 9/9 12:30, 13h) - job 0d73507c fires 23:32
+  Strip to bare, then add PRs back one at a time. ~7h20m of 13h.
+    0a/0b build rec-d9105-bare, rec-d9105-p1
+    1  bare base            no patches of ours
+    2  + #52968
+    3  + #54889             rec-d9105       (gated 0.995)
+    4  + #54736             rec-d9105-best  (gated 0.995), doubles as n=2 for 12,093
+  Each step one variable, each comparable to the step before.
+
+NOTHING dispatches before 23:32. Heartbeat is monitor-only.
+W5 (9/10 08:00) has NO wake-up armed - needs separate authorisation.
 
 Queue is PARKED, not cancelled:
   1. Option A - baseline rec-d9105, no #54736, isolates what caused the +9%

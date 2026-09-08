@@ -1,23 +1,46 @@
 # QUEUE — W3+W4 (opens 9/8 23:30 IST, 13 h, closes 9/9 12:30)
 
-**State:** best is **12,093 tok/s/GPU** (T286, gated GSM8K 0.995). Target 12,500 is
-**3.4%** away. Config: base `d9105ea8` + #52968 + #54889 + #54736, `FULL_DECODE_ONLY`,
-breakable=0, mns 96, mnbt 16384, gmu 0.90, KV 28,733,261.
+## Plan: strip to bare, then add PRs back one at a time
 
-**Authorised for this slot only.** Wake-up `8e8f8935` fires 23:32 and dispatches
-item 1 ONLY, then reports and waits. Last safe perf dispatch: **9/9 10:45**.
+Best today is **12,093** (T286, gated 0.995) on base `d9105ea8` + three PRs +
+`FULL_DECODE_ONLY`. We do not know what any single PR contributes — T286 moved three
+things at once. This slot decomposes it properly: run the bare base, then add each PR
+in turn. **Every step is one variable, and every step is directly comparable to the
+one before it.**
 
-| # | run | image / change | ~min | why |
+| # | run | image | contains | ~min |
 |---|---|---|---|---|
-| **1** | **Option A — attribution** | `rec-d9105` (no #54736), else identical to T286 | 105 | T286 moved **three** things at once vs T274: new base, `FULL_DECODE_ONLY`, #54736. This is the only run that says which produced the +9.0%. **Everything below depends on the answer.** |
-| 2 | **n=2 replicate of T286** | `rec-d9105-best`, unchanged | 105 | Standing rule: nothing is claimed at n=1. 12,093 is our headline and has one sample. |
-| 3 | **#52190 torch.compile** | `rec-d9105-tc` (already built, gated 0.99) | 105 | Its post-grad fusion passes (`fused_qk_rmsnorm`, `allreduce_fusion`) have been **inert all campaign**. Untapped, and does not trade against KV. Needs its own arm — it was a confound when bundled. |
-| 4 | **Matched cudagraph ladder** | dense 56–88, sparse below, max held at 96 | 105 | **Reassessed after T288.** Decode graphs are worth ~39.5%, so this is now a *higher-risk* change, not the cheap win I called it. Only worth it if 1–3 leave us short. Must keep the hot band dense and the max at `mns × SPEC_ROWS` — clamping the max is the SA HSA-crash failure. |
+| 0a | build | `rec-d9105-bare` | base only, manifest so it takes the patched-image code path | 10 |
+| 0b | build | `rec-d9105-p1` | + #52968 | 10 |
+| **1** | **bare base** | `rec-d9105-bare` | nothing of ours | 105 |
+| **2** | **+ #52968** | `rec-d9105-p1` | #52968 | 105 |
+| **3** | **+ #54889** | `rec-d9105` *(built, gated 0.995)* | #52968 #54889 | 105 |
+| **4** | **+ #54736** | `rec-d9105-best` *(built, gated 0.995)* | #52968 #54889 #54736 | 105 |
 
-**If item 1 shows #54736 owns the gain** → push that thread: re-check #54163/#54165
-against this base, and look for other SimpleCPU-offload work upstream.
-**If it shows the base or `FULL_DECODE_ONLY` owns it** → #54736 is optional, and the
-remaining 3.4% is more likely in #52190 or kernel-level work.
+Run 4 is a replicate of T286, so it doubles as the **n=2** the standing rule needs
+for 12,093. Total ≈ 7 h 20 m in a 13 h slot; last safe perf dispatch **9/9 10:45**.
+
+**Held constant across all four:** base `d9105ea8`, `FULL_DECODE_ONLY`,
+breakable=0, mns 96, mnbt 16384, gmu 0.90, DCP 8 a2a, dram/vllm-simple, C72.
+
+**Gates:** not needed per step — every image is a subset of `rec-d9105-best`, which
+gated at 0.995, and the bare base is pure upstream. Gate only if a step becomes the
+new headline.
+
+**What each step answers**
+
+| step | tells us |
+|---|---|
+| 1 | What upstream + one config flag is worth on its own. If this is ~11,900, the entire patch stack is worth ~1.5% and the 12,093 is reproducible from upstream with no unmerged PRs. |
+| 2 − 1 | #52968's individual share — **never measured in this campaign** |
+| 3 − 2 | #54889 on this base (was +0.74% on the old one) |
+| 4 − 3 | **#54736's share** — the open question behind the whole +9.0% |
+
+**Note on the base:** "bare" still carries #52494 and #54325, which merged upstream.
+So step 1 is not zero-improvement; it is *zero unmerged patches*, which is the number
+that matters for reproducibility outside this team.
+
+---
 
 **Do not retry — settled negative**
 
