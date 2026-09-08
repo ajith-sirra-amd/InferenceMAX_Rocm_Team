@@ -63,34 +63,36 @@ BASE  vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36  (2
 
 ### Applied by us — patched into site-packages at build
 
-| PR | head SHA | applies clean? | state | what it does | measured gain |
+| PR | state | applies clean? | what it does | measured gain | head SHA |
 |---|---|---|---|---|---|
-| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | `dbe3bb3fa` | **yes — 0/17 hunks fail** | open, **DRAFT** | attn residual + sigmoid_mul + conv fusions | **never isolated.** Only ever measured with [#52494](https://github.com/vllm-project/vllm/pull/52494)+[#53917](https://github.com/vllm-project/vllm/pull/53917) as a stack: **+1.2%** gmu-matched |
-| **[#54889](https://github.com/vllm-project/vllm/pull/54889)** | `f476f47c7` | **yes — 0/7 hunks fail** | open, ready | fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2: 11,115 / 11,095 vs 11,023) — **inside ±1.2% noise, NOT a demonstrated win** |
-| **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | `99c7ed9ea` | **yes — 0/33 hunks fail** | open, ready | lets SimpleCPU serve *fine-grained* hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) in its stack | **UNKNOWN — under test as T286.** Author reports hit-rates only, **no tok/s figure anywhere**: external hit 0%→99.83% on replay, 76.2% on GSM8K rounds 2–3 |
+| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | 🟡 draft | **yes — 0/17 fail** | attn residual + sigmoid_mul + conv fusions | **never isolated.** Only measured with #52494+#53917 as a stack: **+1.2%** gmu-matched | `dbe3bb3fa` |
+| **[#54889](https://github.com/vllm-project/vllm/pull/54889)** | 🟢 open | **yes — 0/7 fail** | fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2: 11,115 / 11,095 vs 11,023) — **inside ±1.2% noise, NOT a demonstrated win** | `f476f47c7` |
+| **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | 🟢 open | **yes — 0/33 fail** | SimpleCPU serves *fine-grained* hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) | **UNKNOWN — under test as T286.** Author publishes hit-rates only, **no tok/s anywhere**: external hit 0%→99.83% replay, 76.2% GSM8K rounds 2–3 | `99c7ed9ea` |
 
 Every diff is fetched fresh and its head SHA recorded in `/etc/k3-image-manifest`.
 **No hunk in this image was hand-edited or fuzz-applied.**
 
 ### Free in the base — merged upstream, we no longer apply them
 
-| PR | state | note |
-|---|---|---|
-| [#52494](https://github.com/vllm-project/vllm/pull/52494) | **merged** | fuse MLA q/kv RMSNorm in AITER. We were **double-applying** this until 09-07 |
-| [#54325](https://github.com/vllm-project/vllm/pull/54325) | **merged** 09-03 | populates SimpleCPUOffload `BlockStored` metadata. This is the change that unblocked [#54736](https://github.com/vllm-project/vllm/pull/54736) |
+| PR | state | note | merged |
+|---|---|---|---|
+| [#52494](https://github.com/vllm-project/vllm/pull/52494) | 🔵 merged | fuse MLA q/kv RMSNorm in AITER. We were **double-applying** this until 09-07 | pre-09-01 |
+| [#54325](https://github.com/vllm-project/vllm/pull/54325) | 🔵 merged | populates SimpleCPUOffload `BlockStored` metadata — **this is what unblocked #54736** | 2026-09-03 |
 
 ### Deliberately excluded
 
-| PR | state | applies? | why excluded |
-|---|---|---|---|
-| [#53917](https://github.com/vllm-project/vllm/pull/53917) | **CLOSED** | — | never merged; superseded by [#54735](https://github.com/vllm-project/vllm/pull/54735)/[#54736](https://github.com/vllm-project/vllm/pull/54736) |
-| [#52190](https://github.com/vllm-project/vllm/pull/52190) | open, **DRAFT** | **no — 2/11 hunks need hand-insertion** | torch.compile. fuzz=3 misplaces the hunks and yields invalid Python. Not a foundation for a headline number — gets its own arm later |
-| [#54165](https://github.com/vllm-project/vllm/pull/54165) | open | **no — 8/33 hunks fail** on this base | applied cleanly on the *old* base and **inverted** when the base moved |
-| [#54163](https://github.com/vllm-project/vllm/pull/54163) | open | yes — 0/3 | applies, but spec-decode C1/MTP path only. No bearing on C72 throughput |
+| PR | state | what it does | applies? | why excluded |
+|---|---|---|---|---|
+| [#53917](https://github.com/vllm-project/vllm/pull/53917) | 🔴 closed | handled DCP hybrid cache geometry in the offload path | — | never merged; **superseded by [#54735](https://github.com/vllm-project/vllm/pull/54735)/[#54736](https://github.com/vllm-project/vllm/pull/54736)**, which do the same job properly |
+| [#52190](https://github.com/vllm-project/vllm/pull/52190) | 🟡 draft | enables `torch.compile` so post-grad fusion passes actually run — `aiter::fused_qk_rmsnorm_kernel`, `aiter::allreduce_fusion_kernel_1stage`. **These have been inert all campaign** | **no — 2/11 need hand-insertion** | fuzz=3 misplaces the hunks and yields invalid Python. Also recovers **no** KV memory (T282: 18,555,236 vs 18,475,453) since it enables the same piecewise capture. Own arm later |
+| [#54165](https://github.com/vllm-project/vllm/pull/54165) | 🟢 open | restores hybrid mamba-align cache hits under spec-decode **with a KV connector** — our exact configuration | **no — 8/33 fail** | applied cleanly on the *old* base and **inverted** when the base moved to `d9105ea8` |
+| [#54163](https://github.com/vllm-project/vllm/pull/54163) | 🟢 open | stops DFlash/DSpark dropping the last prefix-cache block (mamba align context recompute) | yes — 0/3 | spec-decode C1/MTP path only. **DCP 8 and MTP are mutually exclusive**, so it cannot affect our C72 runs |
 
-**Bottom line on gains: nothing in this image is a proven win.** [#54889](https://github.com/vllm-project/vllm/pull/54889) is the only
-patch ever isolated and it sits inside the noise band. [#52968](https://github.com/vllm-project/vllm/pull/52968) has no individual
-number at all. [#54736](https://github.com/vllm-project/vllm/pull/54736) is the one with a mechanism large enough to matter and its
+> 🟢 open · 🟡 draft · 🔵 merged · 🔴 closed
+
+**Bottom line on gains: nothing in this image is a proven win.** #54889 is the only
+patch ever isolated and it sits inside the noise band. #52968 has no individual
+number at all. #54736 is the one with a mechanism large enough to matter, and its
 throughput effect is exactly what T286 is measuring.
 
 ### Why this base and not the old one
@@ -276,7 +278,7 @@ only its own file.
 the overlay-only baseline instead of killing the run. The `[pr-stack]` gate line
 records which way it went, so a number is never silently mis-attributed.
 
-### Deliberately excluded
+### Deliberately excluded (superseded pronly stack — historical)
 
 | PR | why |
 |---|---|
