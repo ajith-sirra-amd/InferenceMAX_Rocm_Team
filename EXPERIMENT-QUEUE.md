@@ -3,7 +3,11 @@
 **TARGET 12,556 tok/s/GPU @ C72. Best 12,093 (T286, gated 0.995). Gap +3.83%.**
 Predictor: 12,556 needs steady `tput_in` ≥ **104,100/s**.
 
-**On reaching 12,556 → switch to C1, lowest possible TPOT.** Best C1 to date:
+**12,556 is a floor, not a ceiling.** Do not stop on reaching it — keep stacking
+knobs while each run still improves. Switch to C1 only when the C72 ladder is
+exhausted: every remaining knob tested, or the last two gains both inside ±1.2%.
+
+**Then → C1, lowest possible TPOT.** Best C1 to date:
 **9.06 ms mean / 9.31 p99** (T205/T208). C1 is a different regime and most of the
 C72 findings do not carry:
 - **DCP must be 1** — DCP>1 and MTP are mutually exclusive (MTP's draft uses
