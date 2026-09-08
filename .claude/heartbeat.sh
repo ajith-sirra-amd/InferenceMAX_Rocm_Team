@@ -53,3 +53,15 @@ echo "--- node ---"
 V=$(timeout 40 rocm-smi --showmemuse 2>/dev/null \
      | grep -oE "GPU Memory Allocated \(VRAM%\): [0-9]+" | awk '{if($NF>m)m=$NF}END{print m+0}')
 echo "  vram_max=${V}%  bmk-server=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -c '^bmk-server$')"
+
+# --- verdict line: compare against the reference numbers automatically -------
+# BASE = T274 11,095 tok/s/GPU @ KV 28,653,478. Anchor 11,027. Noise +/-1.2%.
+TP=$(docker logs bmk-server 2>/dev/null | grep -aoE "Throughput per GPU: [0-9]+" | tail -1 | grep -oE "[0-9]+$")
+EM=$(docker logs bmk-server 2>/dev/null | grep -aoE "exact_match\|[^|]*\| *[0-9.]+" | tail -1 | grep -oE "[0-9.]+$")
+EXT=$(docker logs bmk-server 2>/dev/null | grep -a "srv  " | tail -1 | grep -oE "ext_cache_hit=[0-9.]+" | cut -d= -f2)
+KVU=$(docker logs bmk-server 2>/dev/null | grep -a "srv  " | tail -1 | grep -oE "kv_usage=[0-9.]+" | cut -d= -f2)
+echo "--- verdict ---"
+[ -n "$TP" ] && awk -v t="$TP" 'BEGIN{d=(t-11095)/11095*100; printf "  THROUGHPUT %s tok/s/GPU  vs T274 11,095 = %+.2f%%  %s\n", t, d, (d>1.2?"WIN (outside noise)":(d<-1.2?"LOSS":"inside +/-1.2% noise"))}'
+[ -n "$EM" ] && awk -v e="$EM" 'BEGIN{printf "  GSM8K %s  %s\n", e, (e>=0.98?"PASS":"FAIL - investigate")}'
+[ -n "$EXT" ] && echo "  ext_cache_hit=${EXT}%  kv_usage=${KVU}%   (T274 ref: 0->82.6% over the hour, kv_usage 45-55%)"
+[ -z "$TP" ] && [ -z "$EM" ] && echo "  no result yet"
