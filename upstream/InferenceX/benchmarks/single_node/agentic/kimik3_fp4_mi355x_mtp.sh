@@ -61,7 +61,7 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # because T257/T258 changed SA's *settings* while keeping our *patched* image,
 # which confounds "SA settings don't help us" with "our patches hurt".
 # Deliberately checked BEFORE the manifest branch so it wins on any image.
-K3_FORCE_STOCK="${K3_FORCE_STOCK:-0}"   # T272: back to OUR patched image
+K3_FORCE_STOCK="${K3_FORCE_STOCK:-1}"   # T289: bare nightly, no patches
 if [ "$K3_FORCE_STOCK" = "1" ]; then
     K3_OVERLAY_APPLIED=0
     export SKIP_KIMI_PATCHES=1
@@ -692,7 +692,7 @@ echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $
 # The engine's own error names FULL as an alternative that needs no breakable
 # graphs, so FULL should reclaim that memory. Perf trade is unknown: FULL drops
 # the piecewise path for non-graphable regions.
-CUDAGRAPH_MODE="${K3_CUDAGRAPH_MODE:-NONE}"   # T288: NONE -- +2.48M KV tokens vs FULL_DECODE_ONLY, at the cost of eager decode
+CUDAGRAPH_MODE="${K3_CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"   # T289: NONE was -39.5% (T288), settled negative
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 # N7 SETTLED NEGATIVE: gmu > 0.90 hangs this node. T166 at 0.92 got 0/103 --
