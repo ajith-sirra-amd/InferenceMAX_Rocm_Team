@@ -84,3 +84,18 @@ echo "--- verdict ---"
 [ -n "$EM" ] && awk -v e="$EM" 'BEGIN{printf "  GSM8K %s  %s\n", e, (e>=0.98?"PASS":"FAIL - investigate")}'
 [ -n "$EXT" ] && echo "  ext_cache_hit=${EXT}%  kv_usage=${KVU}%   (T274 ref: 0->82.6% over the hour, kv_usage 45-55%)"
 [ -z "$TP" ] && [ -z "$EM" ] && echo "  no result yet"
+
+# --- heartbeat checks the AGENT --------------------------------------------
+# Inside a slot the node must never be idle. If there is no run in flight and
+# the GPUs are free, the agent has failed to dispatch - say so loudly.
+RS=$(gh run list --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --workflow "End-to-End Tests" \
+     --limit 1 --json status -q '.[].status' 2>/dev/null)
+if [ "$RS" = "completed" ] && [ "${V:-100}" -le 10 ]; then
+  echo "  *** ALERT: NODE IDLE INSIDE SLOT - no run in flight, GPUs free."
+  echo "  *** The agent has not dispatched. Record the last result and dispatch"
+  echo "  *** the next queue item NOW (see RUN-CONTINUOUSLY RULES in EXPERIMENT-QUEUE.md)."
+fi
+# Backstop check: a recurring cron must exist, since this chain has died 4x today.
+if ! grep -q '"cron"' /home/asirra/.claude/scheduled_tasks.json 2>/dev/null; then
+  echo "  *** ALERT: no durable cron armed - the heartbeat is the ONLY wake-up."
+fi
