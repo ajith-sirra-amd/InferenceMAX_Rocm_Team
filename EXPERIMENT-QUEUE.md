@@ -1,6 +1,22 @@
 # RUN-CONTINUOUSLY RULES — W3+W4 (closes 9/9 12:30 IST)
 
-**Target 12,500. Best 12,093 (T286, gated 0.995). Gap 3.4%.**
+**TARGET 12,556 tok/s/GPU @ C72. Best 12,093 (T286, gated 0.995). Gap +3.83%.**
+Predictor: 12,556 needs steady `tput_in` ≥ **104,100/s**.
+
+**On reaching 12,556 → switch to C1, lowest possible TPOT.** Best C1 to date:
+**9.06 ms mean / 9.31 p99** (T205/T208). C1 is a different regime and most of the
+C72 findings do not carry:
+- **DCP must be 1** — DCP>1 and MTP are mutually exclusive (MTP's draft uses
+  TRITON_MLA, which rejects non-causal MLA under DCP)
+- **MTP spec-decode is ON** at CONC≤4, so `SPEC_ROWS = k+1` and the graph ladder
+  is `mns × SPEC_ROWS`
+- **Decode graphs are critical.** At C1 there is no prefill to hide behind, so
+  `cudagraph_mode=NONE` would be far worse than the −39.5% it cost at C72.
+  `FULL_DECODE_ONLY` is right for the same reason it is right at C72
+- **KV is irrelevant** — a single sequence never pressures the pool, so gmu, the
+  ladder trim and offload sizing all stop mattering
+- What *does* matter at C1: per-step launch and kernel latency — so #52190's
+  fusion passes and quick-reduce become the primary levers, not CONC
 
 ## Mid-run predictor — calibrated, use it
 
