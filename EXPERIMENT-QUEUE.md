@@ -1,25 +1,30 @@
 ## W3+W4 QUEUE (opens 9/8 23:30 IST, 13h contiguous) — IN THIS ORDER
 
-**1. OPTION A — the baseline we still do not have.** Every throughput number we
-own (11,095 / 11,115 / the 11,027 anchor) is from the OLD base `7c5dc571`. There
-is no perf number on `d9105ea8` at all. T285 was that control and was cancelled
-9 min in. Without it, T286's result cannot be attributed — a 11,400 could be
-#54736 or could be the newer base.
-   image `kimi-k3-vllm:rec-d9105` (gated GSM8K 0.995), FULL_DECODE_ONLY, C72.
-   ~105 min.
+**1. GSM8K-200 GATE on `rec-d9105-best` — FIRST, BEFORE ANYTHING ELSE.** (~35 min)
+T286 ran perf without its gate by explicit owner decision under time pressure, so
+**its number is PROVISIONAL and must not be reported until this passes.** This is
+higher-stakes than a routine gate: #54736 changes which cached KV blocks are served
+and #54735 fixes block geometry whose failure mode is *silent* wrong-block loads. A
+broken prefix-cache path serves more hits, skips more prefill and therefore runs
+FASTER — so a bug here masquerades as a win, in exactly the number we would most
+want to believe. 35 minutes decides whether all of W2's output is real.
+  `EVAL_ONLY=true`, image `kimi-k3-vllm:rec-d9105-best`.
 
-**2. GSM8K-200 gate on `rec-d9105-best`** — T286 ran perf BEFORE its gate, by
-explicit owner decision under time pressure. **T286's number is PROVISIONAL and
-must not be claimed until this passes at that exact config.**  ~35 min.
+**2. OPTION A — the baseline we still do not have.** (~105 min) Every throughput
+number we own (11,095 / 11,115 / the 11,027 anchor) is from the OLD base
+`7c5dc571`. There is no perf number on `d9105ea8` at all. T285 was that control and
+was cancelled 9 min in, so T286 has nothing to be attributed against — 11,400 could
+be #54736 or could just be the newer base.
+  image `kimi-k3-vllm:rec-d9105` (gated 0.995), FULL_DECODE_ONLY, C72.
 
-**3. #52190 torch.compile as its own one-variable arm** — gate then perf on top
-of whichever of the above wins. Its fusion passes
-(`aiter::fused_qk_rmsnorm_kernel`, `allreduce_fusion_kernel_1stage`) have been
-inert all campaign, so there may be something there — but it is a draft with 2
-hand-inserted hunks and must be credited on its own evidence.
+**3. #52190 torch.compile as its own one-variable arm** — gate then perf, on top of
+whichever of the above wins. Its fusion passes (`aiter::fused_qk_rmsnorm_kernel`,
+`allreduce_fusion_kernel_1stage`) have been inert all campaign, so there may be
+something there — but it is a draft with 2 hand-inserted hunks and must be credited
+on its own evidence.
 
-**4. Replicate the winner to n=2**, per the standing rule, before anything is
-called a result.
+**4. Replicate the winner to n=2**, per the standing rule, before anything is called
+a result.
 
 Last safe perf dispatch in this block: **9/9 10:15 IST**.
 
