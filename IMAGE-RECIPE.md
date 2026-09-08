@@ -16,10 +16,10 @@ n=2, spread 0.18%. Baseline anchor 11,027; cross-day noise ±1.2%.
 
 ```
 BASE   vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb   (2026-09-01)
-  +    #53917   DCP hybrid cache geometry in offload      (since CLOSED upstream)
-  +    #52494   fuse MLA q/kv RMSNorm in AITER            (since MERGED upstream)
-  +    #52968   attn res + sigmoid_mul + conv fusions     (draft)
-  +    #54889   fuse empty-shard LSE mask into A2A pack
+  +    [#53917](https://github.com/vllm-project/vllm/pull/53917)   DCP hybrid cache geometry in offload      (since CLOSED upstream)
+  +    [#52494](https://github.com/vllm-project/vllm/pull/52494)   fuse MLA q/kv RMSNorm in AITER            (since MERGED upstream)
+  +    [#52968](https://github.com/vllm-project/vllm/pull/52968)   attn res + sigmoid_mul + conv fusions     (draft)
+  +    [#54889](https://github.com/vllm-project/vllm/pull/54889)   fuse empty-shard LSE mask into A2A pack
        = kimi-k3-vllm:rec-a2amask
 ```
 
@@ -45,9 +45,9 @@ gave it *no piecewise graphs at all*. Newer engines enforce a guard and refuse. 
 breakable=0. That yields 49.93 GiB / 28,733,261 tokens — within 0.3% of the original
 pool — and is the supported spelling of what T274 was accidentally doing.
 
-**Attribution, honestly:** none of the four patches is a demonstrated win. #54889 is
+**Attribution, honestly:** none of the four patches is a demonstrated win. [#54889](https://github.com/vllm-project/vllm/pull/54889) is
 the only one ever isolated, at **+0.74%** (n=2), inside the ±1.2% noise band.
-#52494/#52968/#53917 were only ever measured together at **+1.2%** gmu-matched. The
+[#52494](https://github.com/vllm-project/vllm/pull/52494)/[#52968](https://github.com/vllm-project/vllm/pull/52968)/[#53917](https://github.com/vllm-project/vllm/pull/53917) were only ever measured together at **+1.2%** gmu-matched. The
 11,095 is mostly *base + config*, not the patch stack.
 
 ---
@@ -65,9 +65,9 @@ BASE  vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36  (2
 
 | PR | head SHA | applies clean? | state | what it does | measured gain |
 |---|---|---|---|---|---|
-| **#52968** | `dbe3bb3fa` | **yes — 0/17 hunks fail** | open, **DRAFT** | attn residual + sigmoid_mul + conv fusions | **never isolated.** Only ever measured with #52494+#53917 as a stack: **+1.2%** gmu-matched |
-| **#54889** | `f476f47c7` | **yes — 0/7 hunks fail** | open, ready | fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2: 11,115 / 11,095 vs 11,023) — **inside ±1.2% noise, NOT a demonstrated win** |
-| **#54736** | `99c7ed9ea` | **yes — 0/33 hunks fail** | open, ready | lets SimpleCPU serve *fine-grained* hybrid prefix hits instead of reconciling to zero. **Carries #54735** (DCP hybrid block-geometry fix) in its stack | **UNKNOWN — under test as T286.** Author reports hit-rates only, **no tok/s figure anywhere**: external hit 0%→99.83% on replay, 76.2% on GSM8K rounds 2–3 |
+| **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | `dbe3bb3fa` | **yes — 0/17 hunks fail** | open, **DRAFT** | attn residual + sigmoid_mul + conv fusions | **never isolated.** Only ever measured with [#52494](https://github.com/vllm-project/vllm/pull/52494)+[#53917](https://github.com/vllm-project/vllm/pull/53917) as a stack: **+1.2%** gmu-matched |
+| **[#54889](https://github.com/vllm-project/vllm/pull/54889)** | `f476f47c7` | **yes — 0/7 hunks fail** | open, ready | fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2: 11,115 / 11,095 vs 11,023) — **inside ±1.2% noise, NOT a demonstrated win** |
+| **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | `99c7ed9ea` | **yes — 0/33 hunks fail** | open, ready | lets SimpleCPU serve *fine-grained* hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) in its stack | **UNKNOWN — under test as T286.** Author reports hit-rates only, **no tok/s figure anywhere**: external hit 0%→99.83% on replay, 76.2% on GSM8K rounds 2–3 |
 
 Every diff is fetched fresh and its head SHA recorded in `/etc/k3-image-manifest`.
 **No hunk in this image was hand-edited or fuzz-applied.**
@@ -76,30 +76,30 @@ Every diff is fetched fresh and its head SHA recorded in `/etc/k3-image-manifest
 
 | PR | state | note |
 |---|---|---|
-| #52494 | **merged** | fuse MLA q/kv RMSNorm in AITER. We were **double-applying** this until 09-07 |
-| #54325 | **merged** 09-03 | populates SimpleCPUOffload `BlockStored` metadata. This is the change that unblocked #54736 |
+| [#52494](https://github.com/vllm-project/vllm/pull/52494) | **merged** | fuse MLA q/kv RMSNorm in AITER. We were **double-applying** this until 09-07 |
+| [#54325](https://github.com/vllm-project/vllm/pull/54325) | **merged** 09-03 | populates SimpleCPUOffload `BlockStored` metadata. This is the change that unblocked [#54736](https://github.com/vllm-project/vllm/pull/54736) |
 
 ### Deliberately excluded
 
 | PR | state | applies? | why excluded |
 |---|---|---|---|
-| #53917 | **CLOSED** | — | never merged; superseded by #54735/#54736 |
-| #52190 | open, **DRAFT** | **no — 2/11 hunks need hand-insertion** | torch.compile. fuzz=3 misplaces the hunks and yields invalid Python. Not a foundation for a headline number — gets its own arm later |
-| #54165 | open | **no — 8/33 hunks fail** on this base | applied cleanly on the *old* base and **inverted** when the base moved |
-| #54163 | open | yes — 0/3 | applies, but spec-decode C1/MTP path only. No bearing on C72 throughput |
+| [#53917](https://github.com/vllm-project/vllm/pull/53917) | **CLOSED** | — | never merged; superseded by [#54735](https://github.com/vllm-project/vllm/pull/54735)/[#54736](https://github.com/vllm-project/vllm/pull/54736) |
+| [#52190](https://github.com/vllm-project/vllm/pull/52190) | open, **DRAFT** | **no — 2/11 hunks need hand-insertion** | torch.compile. fuzz=3 misplaces the hunks and yields invalid Python. Not a foundation for a headline number — gets its own arm later |
+| [#54165](https://github.com/vllm-project/vllm/pull/54165) | open | **no — 8/33 hunks fail** on this base | applied cleanly on the *old* base and **inverted** when the base moved |
+| [#54163](https://github.com/vllm-project/vllm/pull/54163) | open | yes — 0/3 | applies, but spec-decode C1/MTP path only. No bearing on C72 throughput |
 
-**Bottom line on gains: nothing in this image is a proven win.** #54889 is the only
-patch ever isolated and it sits inside the noise band. #52968 has no individual
-number at all. #54736 is the one with a mechanism large enough to matter and its
+**Bottom line on gains: nothing in this image is a proven win.** [#54889](https://github.com/vllm-project/vllm/pull/54889) is the only
+patch ever isolated and it sits inside the noise band. [#52968](https://github.com/vllm-project/vllm/pull/52968) has no individual
+number at all. [#54736](https://github.com/vllm-project/vllm/pull/54736) is the one with a mechanism large enough to matter and its
 throughput effect is exactly what T286 is measuring.
 
 ### Why this base and not the old one
 
-`#54736` is the only PR with a mechanism large enough to matter, and it **only
+`[#54736](https://github.com/vllm-project/vllm/pull/54736)` is the only PR with a mechanism large enough to matter, and it **only
 applies here** — the author rebased onto recent main, so fit degrades the further
 back you go:
 
-| base | date | #54736 failed hunks |
+| base | date | [#54736](https://github.com/vllm-project/vllm/pull/54736) failed hunks |
 |---|---|---|
 | `7c5dc571` (T274, 11,095) | 09-01 | **10 / 33** |
 | `1970f3ed` | 09-06 | 2 / 33 |
