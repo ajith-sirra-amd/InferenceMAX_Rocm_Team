@@ -2,8 +2,8 @@
 
 | | Result | Image | Status |
 |---|---|---|---|
-| **Running now** | Under test (T286) | `kimi-k3-vllm:rec-d9105-best` | [Section 1](#1-current-image--kimi-k3-vllmrec-d9105-best) |
-| **Peak measured** | **11,115 / 11,095** tok/s/GPU @ C72 | `kimi-k3-vllm:rec-a2amask` | [Section 2](#2-peak-recipe--11115--11095-tokgpu--c72) |
+| **Best measured** | **12,093** tok/s/GPU @ C72 — *provisional, not gated* | `kimi-k3-vllm:rec-d9105-best` | [Section 1](#1-current-image--kimi-k3-vllmrec-d9105-best) |
+| Previous peak (gated) | 11,115 / 11,095 tok/s/GPU @ C72 | `kimi-k3-vllm:rec-a2amask` | [Section 2](#2-peak-recipe--11115--11095-tokgpu--c72) |
 | Superseded | 10,632 (overlay / v4 / pronly) | various | [Section 3](#3-superseded--historical-only) |
 | Superseded | 8,342 (aigmkt) | `aigmkt/kimi-k3-vllm:latest` | [Section 3](#3-superseded--historical-only) |
 
@@ -12,6 +12,21 @@
 
 
 # 1. Current image — `kimi-k3-vllm:rec-d9105-best`
+
+> **Result: 12,093 tok/s/GPU @ C72** ([T286](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34184741785)),
+> +9.0% over the previous peak of 11,095 and outside the ±1.2% noise band.
+> Error rate 0.155%; ITL p50 improved to 85.6 ms from 96.8.
+>
+> ⚠️ **Provisional. Do not quote this number yet.** It ran perf *before* its
+> GSM8K gate, and a broken prefix-cache path would produce exactly this
+> signature — more hits, less prefill, higher throughput. The gate is the first
+> dispatch of the next slot. It is also confounded three ways versus T274 (new
+> base, `FULL_DECODE_ONLY`, #54736); Option A isolates #54736's share.
+>
+> **Open puzzle:** final `prefix_cache_hit` 74.4% and `ext_cache_hit` 81.2% are
+> essentially identical to T274. The cache *rates* did not move, yet throughput
+> did — so the gain is not simply "more cache hits".
+
 
 ```
 BASE  vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36  (2026-09-07)
@@ -23,7 +38,7 @@ BASE  vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36  (2
 |---|---|---|---|---|---|
 | **[#52968](https://github.com/vllm-project/vllm/pull/52968)** | 🟡 Draft | **Yes — 0/17 fail** | Attn residual + sigmoid_mul + conv fusions | **Not isolated** — +1.2% only as a stack | `dbe3bb3fa` |
 | **[#54889](https://github.com/vllm-project/vllm/pull/54889)** | 🟢 Open | **Yes — 0/7 fail** | Fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2) — inside ±1.2% noise | `f476f47c7` |
-| **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | 🟢 Open | **Yes — 0/33 fail** | SimpleCPU serves fine-grained hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) | **Unknown** — T286 testing. Author gives hit-rates only, no tok/s | `99c7ed9ea` |
+| **[#54736](https://github.com/vllm-project/vllm/pull/54736)** | 🟢 Open | **Yes — 0/33 fail** | SimpleCPU serves fine-grained hybrid prefix hits instead of reconciling to zero. **Carries [#54735](https://github.com/vllm-project/vllm/pull/54735)** (DCP hybrid block-geometry fix) | **T286: 12,093 (+9.0%)** — provisional, ungated, confounded | `99c7ed9ea` |
 
 Every diff is fetched fresh and its head SHA recorded in `/etc/k3-image-manifest`.
 **No hunk in this image was hand-edited or fuzz-applied.**
