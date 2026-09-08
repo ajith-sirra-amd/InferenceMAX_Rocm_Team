@@ -1,3 +1,28 @@
+## W3+W4 QUEUE (opens 9/8 23:30 IST, 13h contiguous) — IN THIS ORDER
+
+**1. OPTION A — the baseline we still do not have.** Every throughput number we
+own (11,095 / 11,115 / the 11,027 anchor) is from the OLD base `7c5dc571`. There
+is no perf number on `d9105ea8` at all. T285 was that control and was cancelled
+9 min in. Without it, T286's result cannot be attributed — a 11,400 could be
+#54736 or could be the newer base.
+   image `kimi-k3-vllm:rec-d9105` (gated GSM8K 0.995), FULL_DECODE_ONLY, C72.
+   ~105 min.
+
+**2. GSM8K-200 gate on `rec-d9105-best`** — T286 ran perf BEFORE its gate, by
+explicit owner decision under time pressure. **T286's number is PROVISIONAL and
+must not be claimed until this passes at that exact config.**  ~35 min.
+
+**3. #52190 torch.compile as its own one-variable arm** — gate then perf on top
+of whichever of the above wins. Its fusion passes
+(`aiter::fused_qk_rmsnorm_kernel`, `allreduce_fusion_kernel_1stage`) have been
+inert all campaign, so there may be something there — but it is a draft with 2
+hand-inserted hunks and must be credited on its own evidence.
+
+**4. Replicate the winner to n=2**, per the standing rule, before anything is
+called a result.
+
+Last safe perf dispatch in this block: **9/9 10:15 IST**.
+
 # Autonomous run queue — Kimi-K3 / 8× MI355X
 
 **Owner away 2026-09-04 → 2026-09-08. Run autonomously. Target: 12,500+ tok/s/GPU.**
