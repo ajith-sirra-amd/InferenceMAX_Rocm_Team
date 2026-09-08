@@ -124,6 +124,16 @@ IMG=$(awk '/^kimik3-fp4-mi355x-vllm-agentic-mtp:/{f=1} f&&/^  image:/{print $2;e
 if [ -n "$IMG" ] && docker image inspect "$IMG" >/dev/null 2>&1; then ok "image present" "$IMG"
 else bad "image present" "${IMG:-<none>} not found locally — build it first"; fi
 
+# 10b. CONFIG FINGERPRINT — the launcher must still be OURS, not SA's.
+# If upstream/InferenceX is ever re-imported clean from SA, these paths still
+# resolve and every other gate still passes, but the run would silently use SA
+# defaults (FULL_AND_PIECEWISE, mns 80, gmu 0.88) and we would not find out
+# until the KV fingerprint came back at 18.5M instead of 28.7M.
+for pat in 'FULL_DECODE_ONLY' 'VLLM_USE_BREAKABLE_CUDAGRAPH' 'K3_FORCE_STOCK'; do
+  if grep -q "$pat" "$LAUNCHER"; then ok "cfg:$pat" "present"
+  else bad "cfg:$pat" "MISSING — launcher looks like a clean SA copy, not ours"; fi
+done
+
 # 11. ECHO THE ONE-VARIABLE SURFACE for human review ------------------------
 echo
 echo "  config surface (confirm ONE variable changed vs the comparison run):"
