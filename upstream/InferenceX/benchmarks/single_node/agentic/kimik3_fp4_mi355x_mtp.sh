@@ -9,7 +9,7 @@ wait_for_amd_gpu_clean
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
 # T251 gate PASSED (GSM8K 0.995 on rec-no53940) -- back to false.
-export EVAL_ONLY="${EVAL_ONLY:-true}"   # T278: NEW NIGHTLY 1970f3ed -- numerics gate before perf
+export EVAL_ONLY="${EVAL_ONLY:-true}"   # T280: base d9105ea8 -- numerics gate before perf
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
