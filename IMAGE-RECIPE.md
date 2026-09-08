@@ -13,22 +13,31 @@
 
 # 1. Current image — `kimi-k3-vllm:rec-d9105-best`
 
-> **Result: 12,093 tok/s/GPU @ C72** ([T286](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34184741785)),
-> +9.0% over the previous peak of 11,095 and outside the ±1.2% noise band.
-> Error rate 0.155%; ITL p50 improved to 85.6 ms from 96.8.
->
-> ✅ **GATED — GSM8K 0.995** ([T287](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34191097158),
-> both filters, ±0.005). Best accuracy in the campaign, matching the baseline
-> anchor. The number is confirmed.
->
-> Still **confounded three ways** versus T274 — new base, `FULL_DECODE_ONLY`, and
-> #54736 — so the *attribution* is open even though the result is not. Option A
-> isolates #54736's share.
->
-> **Open puzzle:** final `prefix_cache_hit` 74.4% and `ext_cache_hit` 81.2% are
-> essentially identical to T274. The cache *rates* did not move, yet throughput
-> did — so the gain is not simply "more cache hits".
+| | Value | Evidence |
+|---|---|---|
+| **Throughput** | **12,093 tok/s/GPU @ C72** | [T286](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34184741785) |
+| vs previous peak | **+9.0%** over 11,095 — outside the ±1.2% band | T274 |
+| **GSM8K-200** | **0.995** flexible & strict (±0.005), `eval_exit=0` | [T287](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34191097158) |
+| Error rate | 0.155% (4 / 2,582) | T286 |
+| ITL mean / p50 | 96.9 / **85.6** ms (was 103.5 / 96.8) | T286 |
+| TTFT p50 | 1,564 ms (unchanged) | T286 |
+| Requests | 2,578 successful / 2,730 | T286 |
+| GPU KV | 49.93 GiB → **28,733,261 tokens** | T286 |
+| Distance to 12,500 | **3.4%** | |
 
+✅ **Gated.** 0.995 is the campaign's best accuracy and matches the baseline anchor
+exactly, so [#54736](https://github.com/vllm-project/vllm/pull/54736) is not serving
+corrupted prefixes — the throughput is real work.
+
+⚠️ **Attribution is still open.** The run differs from T274 in three ways at once:
+new base, `FULL_DECODE_ONLY`, and [#54736](https://github.com/vllm-project/vllm/pull/54736).
+Notably the cache **rates did not move** — final `prefix_cache_hit` 74.4% and
+`ext_cache_hit` 81.2%, against T274's 73.4% / 82.6%. So the gain is *not* simply
+"more cache hits", and which of the three produced it is unknown. Option A
+(`rec-d9105`, same base and mode, without #54736) isolates it.
+
+> Note: an `EVAL_ONLY` job reports GitHub status `failure` because it writes GSM8K
+> output rather than a benchmark JSON. Check `exact_match`, not the check mark.
 
 ```
 BASE  vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36  (2026-09-07)
