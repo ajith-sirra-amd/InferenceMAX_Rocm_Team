@@ -44,6 +44,7 @@ if ! ./.claude/preflight.sh 0 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -q "PASS  
 fi
 
 echo "--- run ---"
+RS0=$(gh run list --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --workflow "End-to-End Tests" --limit 1 --json status -q '.[].status' 2>/dev/null)
 gh run list --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --workflow "End-to-End Tests" \
    --limit 1 --json databaseId,status,conclusion \
    -q '.[]|"  run \(.databaseId) \(.status) \(.conclusion // "")"' 2>&1
@@ -71,7 +72,16 @@ grep -aoE "Throughput per GPU: [0-9]+ tok/s|exact_match.{0,24}" "$HB" | sort -u 
 echo "--- node ---"
 V=$(timeout 40 rocm-smi --showmemuse 2>/dev/null \
      | grep -oE "GPU Memory Allocated \(VRAM%\): [0-9]+" | awk '{if($NF>m)m=$NF}END{print m+0}')
-echo "  vram_max=${V}%  bmk-server=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -c '^bmk-server$')"
+BMK=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -c '^bmk-server$')
+echo "  vram_max=${V}%  bmk-server=$BMK"
+# A run that is in_progress with NO container is a distinct failure state:
+# the job is hung before Launch job script (e.g. actions/checkout). T291 sat
+# 24 min that way with GPUs idle while four polls reported "loading".
+if [ "$RS0" = "in_progress" ] && [ "$BMK" -eq 0 ] && [ "${V:-100}" -le 10 ]; then
+  echo "  *** ALERT: run in_progress but NO container and GPUs idle."
+  echo "  *** Job is hung before the server starts - check gh run view <id> steps."
+  echo "  *** If stuck in checkout/setup: cancel and re-dispatch, it will not recover."
+fi
 
 # --- verdict line: compare against the reference numbers automatically -------
 # BASE = T274 11,095 tok/s/GPU @ KV 28,653,478. Anchor 11,027. Noise +/-1.2%.
