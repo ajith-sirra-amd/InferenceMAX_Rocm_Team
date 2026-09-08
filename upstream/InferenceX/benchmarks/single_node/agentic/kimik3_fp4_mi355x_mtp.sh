@@ -221,7 +221,7 @@ export AITER_BF16_FP8_MOE_BOUND=0
 # the piecewise ladder; NONE/FULL would change the graph strategy outright.
 # NOTE: this rides along with the nightly move, so T278 carries base+this flag
 # as one bundled variable. Not separable -- the old base never needed it.
-export VLLM_USE_BREAKABLE_CUDAGRAPH="${VLLM_USE_BREAKABLE_CUDAGRAPH:-1}"   # T278 v2
+export VLLM_USE_BREAKABLE_CUDAGRAPH="${VLLM_USE_BREAKABLE_CUDAGRAPH:-0}"   # T281: back to 0 -- FULL mode needs no breakable graphs, and =1 cost 17.65 GiB KV/GPU
 export GPU_ARCHS=gfx950
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
@@ -684,7 +684,15 @@ fi
 MAX_CUDAGRAPH_CAPTURE_SIZE=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$MAX_CUDAGRAPH_CAPTURE_SIZE")
 echo "graphs: dense ladder 1..$MAX_CUDAGRAPH_CAPTURE_SIZE (mns=$MAX_NUM_SEQS x $SPEC_ROWS rows), DCP=$DCP_SIZE"
-CUDAGRAPH_MODE=FULL_AND_PIECEWISE
+# T281: FULL_AND_PIECEWISE forces VLLM_USE_BREAKABLE_CUDAGRAPH=1 on the new
+# nightlies, and that flag costs 17.65 GiB of KV per GPU:
+#   flag=0 (T274)            49.79 GiB/GPU  ->  28,653,478 KV tokens
+#   flag=1 (T278 v2, T280)   32.14 GiB/GPU  ->  18,475,453 KV tokens  (-35.5%)
+# Identical on BOTH bases, so the base is innocent -- it is purely the flag.
+# The engine's own error names FULL as an alternative that needs no breakable
+# graphs, so FULL should reclaim that memory. Perf trade is unknown: FULL drops
+# the piecewise path for non-graphable regions.
+CUDAGRAPH_MODE="${K3_CUDAGRAPH_MODE:-FULL}"   # T281
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 # N7 SETTLED NEGATIVE: gmu > 0.90 hangs this node. T166 at 0.92 got 0/103 --
