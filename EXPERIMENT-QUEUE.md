@@ -14,14 +14,21 @@ Steady-state `tput_in_srv` predicts the headline to within ~3%: final ≈ `tput_
 
 - **≥ 103,000/s** → on track for 12,500
 - **≥ 100,000/s** → beats current best
-- **< 92,000/s at +25 min of measurement** → cannot beat 12,093
+- **< 60,000/s at +25 min** → hopeless, cancel
+- **< 92,000/s at +50 min** → heading below 12,093, cancel
+
+Two-stage deliberately: a single early gate risks killing a run that is only
+ramping slowly. T288 read 66,600/s at +30 min — above the 60k gate, correctly
+survived it, then failed the 50-min gate. T286 was already at ~99,800/s by +21 min
+and passes both comfortably.
 
 ## Abort rules
 
 | condition | action |
 |---|---|
 | **Stall**: warmup flat ≥10 min, GPUs 0% util, 0 completions | **cancel now.** T273/T275/T276 signature. Then `docker ps` and `docker rm -f bmk-server` — a cancelled job does NOT stop the container |
-| **Optimisation run** below 92,000/s at +25 min | **cancel, move to next knob.** Saves ~75 min. Applies to CONC sweep, #52190, quick-reduce |
+| **Optimisation run** `tput_in` **< 60,000/s at +25 min** | **cancel.** Nothing recovers from that. Applies to CONC sweep, #52190, quick-reduce |
+| **Optimisation run** `tput_in` **< 92,000/s at +50 min** | **cancel.** Heading for ~11,100 or below, i.e. under the current best — no point finishing |
 | **Attribution run** (bare, +#52968, +#54889, +#54736) slow | **let it finish.** The number IS the deliverable; a low value is a result, not a failure |
 | Anything that cannot finish by 12:30 | do not dispatch. **Last safe perf dispatch 10:45** |
 
