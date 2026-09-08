@@ -58,27 +58,40 @@ the only one ever isolated, at **+0.74%** (n=2), inside the ±1.2% noise band.
 ## Current image — `kimi-k3-vllm:rec-d9105-best`
 
 ```
-BASE   vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36   (2026-09-07)
-  +    #52968  dbe3bb3fa   attn res + sigmoid_mul + conv fusions            (draft)
-  +    #54889  f476f47c7   fuse empty-shard LSE mask into A2A pack kernel
-  +    #54736  99c7ed9ea   SimpleCPU fine-grained hybrid prefix hits        (carries #54735)
+BASE  vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36  (2026-09-07)
 ```
 
-**Free in the base** (merged upstream, no longer applied by us):
+### Applied by us — patched into site-packages at build
 
-| PR | note |
-|---|---|
-| #52494 | fuse MLA q/kv RMSNorm in AITER — we were **double-applying** it until 09-07 |
-| #54325 | populate SimpleCPUOffload `BlockStored` metadata — merged 09-03; this is what unblocked #54736 |
+| PR | head SHA | applies clean? | state | what it does | measured gain |
+|---|---|---|---|---|---|
+| **#52968** | `dbe3bb3fa` | **yes — 0/17 hunks fail** | open, **DRAFT** | attn residual + sigmoid_mul + conv fusions | **never isolated.** Only ever measured with #52494+#53917 as a stack: **+1.2%** gmu-matched |
+| **#54889** | `f476f47c7` | **yes — 0/7 hunks fail** | open, ready | fuses the empty-shard LSE mask into the A2A pack kernel (DCP path) | **+0.74%** (n=2: 11,115 / 11,095 vs 11,023) — **inside ±1.2% noise, NOT a demonstrated win** |
+| **#54736** | `99c7ed9ea` | **yes — 0/33 hunks fail** | open, ready | lets SimpleCPU serve *fine-grained* hybrid prefix hits instead of reconciling to zero. **Carries #54735** (DCP hybrid block-geometry fix) in its stack | **UNKNOWN — under test as T286.** Author reports hit-rates only, **no tok/s figure anywhere**: external hit 0%→99.83% on replay, 76.2% on GSM8K rounds 2–3 |
 
-**Deliberately excluded:**
+Every diff is fetched fresh and its head SHA recorded in `/etc/k3-image-manifest`.
+**No hunk in this image was hand-edited or fuzz-applied.**
 
-| PR | why |
-|---|---|
-| #53917 | closed upstream, superseded by #54735/#54736 |
-| #52190 | torch.compile — draft, 2 of 11 hunks need hand-insertion. Not a foundation for a headline number. Its own arm later |
-| #54165 | 8/33 hunks fail on this base (applied cleanly on the *old* base — it inverted) |
-| #54163 | applies, but spec-decode C1/MTP path only; no bearing on C72 |
+### Free in the base — merged upstream, we no longer apply them
+
+| PR | state | note |
+|---|---|---|
+| #52494 | **merged** | fuse MLA q/kv RMSNorm in AITER. We were **double-applying** this until 09-07 |
+| #54325 | **merged** 09-03 | populates SimpleCPUOffload `BlockStored` metadata. This is the change that unblocked #54736 |
+
+### Deliberately excluded
+
+| PR | state | applies? | why excluded |
+|---|---|---|---|
+| #53917 | **CLOSED** | — | never merged; superseded by #54735/#54736 |
+| #52190 | open, **DRAFT** | **no — 2/11 hunks need hand-insertion** | torch.compile. fuzz=3 misplaces the hunks and yields invalid Python. Not a foundation for a headline number — gets its own arm later |
+| #54165 | open | **no — 8/33 hunks fail** on this base | applied cleanly on the *old* base and **inverted** when the base moved |
+| #54163 | open | yes — 0/3 | applies, but spec-decode C1/MTP path only. No bearing on C72 throughput |
+
+**Bottom line on gains: nothing in this image is a proven win.** #54889 is the only
+patch ever isolated and it sits inside the noise band. #52968 has no individual
+number at all. #54736 is the one with a mechanism large enough to matter and its
+throughput effect is exactly what T286 is measuring.
 
 ### Why this base and not the old one
 
