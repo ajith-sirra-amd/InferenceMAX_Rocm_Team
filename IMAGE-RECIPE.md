@@ -1,7 +1,58 @@
 # IMAGE RECIPE — Kimi-K3 FP4 on MI355X
 
+> **PEAK RESULT — 11,115 / 11,095 tok/s/GPU @ C72** (T264 / T274, n=2, spread
+> 0.18%). Recipe in "## Peak recipe" below. The older 10,632 overlay recipe is kept
+> at the bottom for history.
+
 > **CURRENT as of 2026-09-08.** The section below describes what is running now.
-> Everything after "## The short version" is the older overlay-based recipe and is
+> Everything after "
+---
+
+## Peak recipe — 11,115 / 11,095 tok/s/GPU @ C72
+
+n=2, spread 0.18%. Baseline anchor 11,027; cross-day noise ±1.2%.
+[T264](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33827886861)
+· [T274](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33882241948)
+
+```
+BASE   vllm/vllm-openai-rocm:nightly-7c5dc571cbd1064ecc8a9b1045637ff647aa22cb   (2026-09-01)
+  +    #53917   DCP hybrid cache geometry in offload      (since CLOSED upstream)
+  +    #52494   fuse MLA q/kv RMSNorm in AITER            (since MERGED upstream)
+  +    #52968   attn res + sigmoid_mul + conv fusions     (draft)
+  +    #54889   fuse empty-shard LSE mask into A2A pack
+       = kimi-k3-vllm:rec-a2amask
+```
+
+| knob | value |
+|---|---|
+| cudagraph_mode | `FULL_AND_PIECEWISE` **with piecewise silently absent** — see caveat |
+| `VLLM_USE_BREAKABLE_CUDAGRAPH` | 0 |
+| GPU KV | **49.79 GiB/GPU → 28,653,478 tokens** |
+| CUDAGraph mem | 2.66 GiB |
+| gmu / mnbt / mns | 0.90 / 16384 / 96 |
+| DCP | 8, backend a2a, interleave 1 |
+| kv-offloading | dram / vllm-simple, 226.89 GB/rank |
+| async scheduling | OFF |
+| GSM8K | 0.995 |
+
+**Caveat — this recipe will NOT boot on a nightly newer than ~09-05.** It asked for
+`FULL_AND_PIECEWISE` on a model that is not torch-compiled, and old engines silently
+gave it *no piecewise graphs at all*. Newer engines enforce a guard and refuse. The
+11,095 was therefore achieved with **full decode graphs only** — 2.66 GiB — which is
+`FULL_DECODE_ONLY` semantics in all but name.
+
+**To reproduce on a current base:** use `cudagraph_mode=FULL_DECODE_ONLY` with
+breakable=0. That yields 49.93 GiB / 28,733,261 tokens — within 0.3% of the original
+pool — and is the supported spelling of what T274 was accidentally doing.
+
+**Attribution, honestly:** none of the four patches is a demonstrated win. #54889 is
+the only one ever isolated, at **+0.74%** (n=2), inside the ±1.2% noise band.
+#52494/#52968/#53917 were only ever measured together at **+1.2%** gmu-matched. The
+11,095 is mostly *base + config*, not the patch stack.
+
+---
+
+## The short version" is the older overlay-based recipe and is
 > kept for history — it no longer describes any current run.
 
 ## Current image — `kimi-k3-vllm:rec-d9105-best`
