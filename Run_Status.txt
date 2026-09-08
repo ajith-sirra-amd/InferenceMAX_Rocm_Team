@@ -2,34 +2,33 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-08 13:25 IST | W2 done | HOLDING until 23:32
+2026-09-09 00:04 IST | W3+W4 open (closes 12:30) | T289 running
 
-W2 RESULTS
-  T286  12,093 tok/s/GPU  GATED 0.995   +9.0% over 11,095. New best.
-  T287  GSM8K 0.995                     confirms T286
-  T288  7,310  cudagraph_mode=NONE      -39.5%. SETTLED NEGATIVE.
-        Decode graphs are worth ~39.5%. My claim that they optimise "~1%
-        of the work" was wrong by ~40x - decode paces the pipeline because
-        a trajectory cannot start its next prefill until this turn decodes.
-  Rule: graph decode always, never bother graphing prefill.
+TARGETS
+  C72  12,556 floor  ->  13,000 = switch to C1.  Best 12,093 (T286, gated 0.995)
+  C1   TPOT p90 <= 7 ms.  Best to date 9.06 mean / 9.31 p99 (p90 never recorded)
 
-NEXT SLOT (W3+W4, 9/8 23:30 - 9/9 12:30, 13h) - job 0d73507c fires 23:32
-  Strip to bare, then add PRs back one at a time. ~7h20m of 13h.
-    0a/0b build rec-d9105-bare, rec-d9105-p1
-    1  bare base            no patches of ours
-    2  + #52968
-    3  + #54889             rec-d9105       (gated 0.995)
-    4  + #54736             rec-d9105-best  (gated 0.995), doubles as n=2 for 12,093
-  Each step one variable, each comparable to the step before.
+T289 (34262536380) BARE nightly d9105ea8, K3_FORCE_STOCK=1, no patches
+  gate lines OK: FORCE_STOCK, gmu 0.90, FULL_DECODE_ONLY
+  KV 28,881,430 (+148k vs patched -> patches cost ~nothing, clean A/B)
+  dispatched 23:51, ETA ~01:36
+  DECIDES: did the +9.0% come from the base or from the patches?
+    >= 11,950  base owns it -> strip all 3 PRs, reproducible from stock upstream
+    <= 11,250  patches own it (~all #54736) -> keep the stack
+    between    mixed -> isolate #54736 next
 
-NOTHING dispatches before 23:32. Heartbeat is monitor-only.
-W5 (9/10 08:00) has NO wake-up armed - needs separate authorisation.
+QUEUE AFTER T289: CONC 76 -> CONC 80 or 74 -> #52190 -> quick-reduce (gate first)
+  -> ladder trim (fallback) -> n=2 replicate.  Last safe perf dispatch 10:45.
 
-Queue is PARKED, not cancelled:
-  1. Option A - baseline rec-d9105, no #54736, isolates what caused the +9%
-  2. #52190 torch.compile as its own arm (fusion passes inert all campaign)
-  3. Replicate the winner to n=2
-  4. Matched cudagraph ladder (dense 56-88) if T288 says decode graphs matter
+ABORT RULES (optimisation runs only; attribution runs always finish)
+  tput_in < 60,000/s at +25 min      -> cancel
+  tput_in < 92,000/s at +50 min      -> cancel
+  warmup flat 10+ min AND GPUs 0%    -> cancel, then docker rm -f bmk-server
+  predictor: final ~= tput_in/8 x 0.965; 12,556 needs ~104,100/s
+
+WATCHDOGS
+  heartbeat 15 min - also ALERTS if the node sits idle inside a slot (checks me)
+  cron 404de0f0 every 17 min - relaunches the heartbeat if it is missing
 
 W1 RESULT
   T278 v1 FAILED at engine init. nightly-1970f3ed rejects
