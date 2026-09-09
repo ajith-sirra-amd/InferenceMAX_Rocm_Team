@@ -35,7 +35,22 @@ export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MLA=1
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
+# Quick-reduce: quantizes the allreduce payload to cut interconnect traffic.
+# Values: FP | INT8 | INT6 | INT4 | INT3 | NONE.  Lower = less traffic, more
+# numeric loss. NONE disables it and the two companions below are inert.
+#
+# CHANGES NUMERICS -- run the GSM8K-200 gate BEFORE trusting any perf number.
+# Anchor is 0.995; treat anything below ~0.98 as a fail and back off a level.
+#
+# Precedent on this same hardware: minimaxm3_fp4_mi355x_mtp.sh:131-133 runs
+# INT4 / CAST_BF16_TO_FP16=0 / MIN_SIZE_KB=256. Start there rather than guess.
+#   CAST_BF16_TO_FP16=0  MI3xx lacks a bf16 asm path, so vLLM casts bf16->fp16
+#                        by default. 0 keeps bf16 and avoids a second rounding.
+#   MIN_SIZE_KB=256      skip quick-reduce for small allreduces, where the
+#                        quantize/dequantize costs more than the transfer saves.
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
+export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
 export AITER_SITUV2_A8W4=1
 export AITER_BF16_FP8_MOE_BOUND=0
 export AITER_DISABLE_FMHA_OPUS=1
