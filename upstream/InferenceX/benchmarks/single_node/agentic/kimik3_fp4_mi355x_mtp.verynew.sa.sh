@@ -39,6 +39,11 @@ export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
 # Values: FP | INT8 | INT6 | INT4 | INT3 | NONE.  Lower = less traffic, more
 # numeric loss. NONE disables it and the two companions below are inert.
 #
+# DEFAULT IS INT4 (owner decision 2026-09-09). This is ON unless a run sets
+# VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=NONE explicitly. NOT YET GSM8K-GATED on
+# Kimi-K3 -- the INT4 precedent is MiniMax-M3, a different model. Gate before
+# trusting any accuracy-sensitive result from this script.
+#
 # CHANGES NUMERICS -- run the GSM8K-200 gate BEFORE trusting any perf number.
 # Anchor is 0.995; treat anything below ~0.98 as a fail and back off a level.
 #
@@ -48,7 +53,7 @@ export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
 #                        by default. 0 keeps bf16 and avoids a second rounding.
 #   MIN_SIZE_KB=256      skip quick-reduce for small allreduces, where the
 #                        quantize/dequantize costs more than the transfer saves.
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
 export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
 export AITER_SITUV2_A8W4=1
