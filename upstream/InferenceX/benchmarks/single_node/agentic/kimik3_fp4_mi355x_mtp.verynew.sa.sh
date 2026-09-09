@@ -53,9 +53,26 @@ export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
 #                        by default. 0 keeps bf16 and avoids a second rounding.
 #   MIN_SIZE_KB=256      skip quick-reduce for small allreduces, where the
 #                        quantize/dequantize costs more than the transfer saves.
+# ===== ACTIVE: quick-reduce ON, INT4 =========================================
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
 export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
+
+# ===== ALTERNATIVE: quick-reduce OFF (upstream stock) ========================
+# Comment the THREE lines above, uncomment the THREE below.
+#export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
+#export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-1}"
+#export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
+#
+# Back off one level at a time if INT4 fails the GSM8K gate. Swap INT4 for:
+#   INT6   less loss, less saving
+#   INT8   conservative
+#   FP     least loss, smallest saving -- skip unless INT8 also fails
+#   INT3   NOT recommended: nothing in this repo uses it
+#
+# WARNING -- do NOT leave both blocks uncommented. These use ${VAR:-default},
+# so the FIRST assignment wins and the second is silently ignored: the file
+# would read as OFF while the run is actually INT4. Exactly one block active.
 export AITER_SITUV2_A8W4=1
 export AITER_BF16_FP8_MOE_BOUND=0
 export AITER_DISABLE_FMHA_OPUS=1
