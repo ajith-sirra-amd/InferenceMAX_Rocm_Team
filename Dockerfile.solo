@@ -1,0 +1,10 @@
+FROM vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36
+COPY 54736.solo.diff /tmp/
+RUN SP=$(python3 -c "import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))") && cd "$SP" && \
+    patch -p1 --forward --batch < /tmp/54736.solo.diff && \
+    find vllm -name '*.rej' | grep . && exit 1 || true && \
+    python3 -c "import vllm.v1.simple_kv_offload.manager, vllm.v1.core.kv_cache_coordinator; print('OK imports')" && \
+    { echo "k3-image: kimi-k3-vllm:rec-d9105-54736only"; \
+      echo "base: nightly-d9105ea8 (2026-09-07)"; \
+      echo "pr-applied: 54736(99c7ed9ea) ONLY - carries 54735"; \
+      echo "NOT applied: 52968, 54889"; } > /etc/k3-image-manifest
