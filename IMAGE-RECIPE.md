@@ -1,5 +1,45 @@
 # Image recipe — Kimi-K3 FP4 on MI355X
 
+## aigmkt/kimi-k3-vllm:v5 — PUSHED 2026-09-09 11:48 IST
+
+```
+digest  sha256:ef537a60e63fb80b77f36373f7777ace3e14708669335a69d8d3b27bee42d998
+config  sha256:1c9c7a81feb3f26bde7b4d27ed9cfd480ec28fab00b0745be7cabd63d54af768
+local   kimi-k3-vllm:rec-d9105-best      size 36.6 GB
+base    vllm/vllm-openai-rocm:nightly-d9105ea8001e0a6d77a96327d17515bb5791fb36
+vllm    0.28.1rc1.dev472+gd9105ea80
+```
+
+| PR | head | status | measured |
+|---|---|---|---|
+| [#54736](https://github.com/vllm-project/vllm/pull/54736) | `99c7ed9ea` | open | load-bearing — bare could not finish warmup (T289) |
+| [#52968](https://github.com/vllm-project/vllm/pull/52968) | `dbe3bb3fa` | **DRAFT** | never isolated, effect unknown |
+| [#54889](https://github.com/vllm-project/vllm/pull/54889) | `f476f47c7` | open | +0.74%, inside noise |
+
+**Two caveats that belong on the tag.**
+1. **#54736 is pinned pre-rebase.** Upstream has since moved `99c7ed9ea` -> `68c54aca6`.
+   The measured numbers were taken on `99c7ed9ea`, so the image is self-consistent,
+   but it ships code two revisions behind the PR.
+2. **#52968 is a draft PR** — unmerged, and may change or be abandoned.
+
+**Verification done before pushing** (not just filenames — distinctive added
+lines from each diff, grepped inside the image):
+`get_boundary_store_stats` (54736), `VLLM_ROCM_USE_AITER_FUSED_QKV_CONV` (52968),
+LSE-mask docstring (54889). All present. Local image ID == running T297 container
+image ID == remote config digest.
+
+**Push was ~75 s, not the feared 18 min for 36.6 GB:** Docker Hub cross-repo
+mounted the base layers from `vllm/vllm-openai-rocm`, so only our patch layers
+uploaded. Check for shared public base layers before budgeting a push window.
+
+**Numbers this tag carries:** T286 12,093 (GSM8K 0.995) and T297 (same image,
+byte-identical ID) — see the summary for the final T297 figure.
+
+**Older tags:** `:v4` (35.6 GB) and `:latest` (35.7 GB) both predate this
+campaign and are ~14% slower. v5 supersedes both.
+
+---
+
 | | Result | Image | Status |
 |---|---|---|---|
 | **Best measured** | **12,093** tok/s/GPU @ C72 — **gated, GSM8K 0.995** | `kimi-k3-vllm:rec-d9105-best` | [Section 1](#1-current-image--kimi-k3-vllmrec-d9105-best) |
