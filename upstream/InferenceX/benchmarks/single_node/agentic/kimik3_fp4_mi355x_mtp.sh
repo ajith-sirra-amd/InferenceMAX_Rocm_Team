@@ -245,7 +245,7 @@ export VLLM_ROCM_USE_AITER_MOE=1
 # INT8 if it fails. Precedent for the triple is minimaxm3_fp4_mi355x_mtp.sh:131,
 # same hardware but a DIFFERENT MODEL, so it proves the kernel works here, not
 # that K3 accuracy survives it.
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"   # W5-3 PERF. Gate passed 0.995 (run 34386690877), so INT4 is cleared for a perf number.
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"   # W5-4: back to NONE. INT4 GSM8K gate PASSED 0.995, but 0/3 INT4 perf runs survived the RCCL stall vs 4/6 on NONE (p~0.19, suggestive not proven). Parked on cost, not on accuracy.
 export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
 # T266: #54494 dcp-q-replicate. Replicated vs gathered query projection is the
