@@ -1,3 +1,33 @@
+# QUEUE — W5 (opens 9/10 08:00 IST, 24 h, closes 9/11 08:00)
+
+**Target 12,556 floor · 13,000 → switch to C1.** Best **12,093** (T286, gated 0.995).
+Gap **+3.8%**.
+
+**No tuning knob in this campaign has been worth more than ~1.5%.** The only large
+move was `FULL_DECODE_ONLY`, and that repaired a regression rather than finding
+headroom. So 12,556 likely needs two or three wins stacked, or #52190 being
+structurally worth several percent.
+
+| # | run | why | gate |
+|---|---|---|---|
+| **1** | **#52190 torch.compile** — image `rec-d9105-tc` (built, gated 0.99) | Its post-grad fusion passes (`aiter::fused_qk_rmsnorm_kernel`, `aiter::allreduce_fusion_kernel_1stage`) have been **inert the whole campaign** — `has_compiled_submodule(model)` is false, so they never ran. Not tuning: dead code being switched on. **The only non-incremental candidate left.** | already gated |
+| 2 | **quick-reduce quantization** — `AITER_QUICK_REDUCE_QUANTIZATION` / `VLLM_ROCM_QUICK_REDUCE_QUANTIZATION` off `NONE` | DCP 8 + a2a means collectives are on the hot path. Never tried. | **GSM8K-200 first** — changes numerics |
+| 3 | **CONC 64 / 68** | The sweep has only gone **up**. T294 hints 76 < 72, so downward is unexplored in the current regime. | none needed |
+| 4 | **mnbt 24576** | Between 16384 (works) and 32768 (deterministic failure). Midpoint untested. | none needed |
+| 5 | **n=2 replicates** of whatever leads, plus 12,093 itself | Both current numbers are n=1. Standing rule: nothing is claimed at n=1. | |
+| 6 | **C1 TPOT** — target **p90 ≤ 7 ms** | Only after C72 is settled or ≥13,000. Sweep `SPEC_NUM_TOKENS` **downward** (8→6→4): golden AL flattens (3.36/3.75/4.00), so less draft work may beat a marginally longer accept run. **Record p90 — it has never been captured.** | |
+
+**Do not spend runs on** — measured and settled: host `dram-utilization` (tier is
+1.4× the working set, never evicts) · gmu (0.92 neutral) · more GPU KV ·
+`cudagraph_mode=NONE` (−39.5%) · `kv-offloading: none` (−61%) · async scheduling
+(−1.8%) · mnbt 32768 (deterministic failure) · LMCache (`ext_cache_hit` 0.0%).
+
+**If 1–4 all land inside noise**, 12,500 is not in the launcher's argument space and
+the next move is profiling — still blocked: no `VLLM_TORCH_PROFILER_DIR` (T202) and
+`rocprofv3` deadlocks the engine (T203). Re-check both on `d9105ea8`.
+
+---
+
 # RUN-CONTINUOUSLY RULES — W3+W4 (closes 9/9 12:30 IST)
 
 **TARGET 12,556 tok/s/GPU @ C72. Best 12,093 (T286, gated 0.995). Gap +3.83%.**
