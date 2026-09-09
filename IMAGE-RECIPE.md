@@ -32,8 +32,9 @@ image ID == remote config digest.
 mounted the base layers from `vllm/vllm-openai-rocm`, so only our patch layers
 uploaded. Check for shared public base layers before budgeting a push window.
 
-**Numbers this tag carries:** T286 12,093 (GSM8K 0.995) and T297 (same image,
-byte-identical ID) — see the summary for the final T297 figure.
+**Numbers this tag carries: 12,123 tok/s/GPU, n=2** — T286 **12,093** (GSM8K
+**0.995**) and T297 **12,153** (+0.50%, inside noise). Same image, byte-identical
+image ID, KV fingerprint 28,733,261 on both. err 0.155% / 0.193%.
 
 **Older tags:** `:v4` (35.6 GB) and `:latest` (35.7 GB) both predate this
 campaign and are ~14% slower. v5 supersedes both.
