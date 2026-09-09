@@ -55,11 +55,24 @@ NEW TOOLING (both launchers, committed)
 W5 QUEUE  (2026-09-09 23:30 -> 2026-09-10 23:59, ~24.5h)
   0. git pull FIRST -- owner may push code tested off-server
   1. quick-reduce INT4 GSM8K-200 gate      ~30m   NUMERICS. anchor 0.995
-  2. quick-reduce INT4 perf C72            ~105m  only if gate passes
-  3. #52190 torch.compile (rec-d9105-tc)   ~105m  PIN FULL_DECODE_ONLY
-  4. prefix-cache investigation            ~105m  biggest lever, see below
-  5. mnbt 24576                            ~105m  untested midpoint
-  6. C1 TPOT p90 <= 7 ms                    ~60m
+  2. C72 with #54736 ONLY -- RETRY         ~105m  owner asked 2026-09-09
+       Third attempt at this cell. T296 died to the RCCL desync; the 2x2
+       still has no same-CONC comparison of all-3 vs 54736-only.
+       USE THE BAKED IMAGE kimi-k3-vllm:rec-d9105-54736only.
+       Do NOT use bare nightly + APPLY_PR_54736=1 for this: K3_FORCE_STOCK
+       skips the K3 OVERLAY too, and the overlay is not optional -- bare
+       runs (T289/T292) were far slower or broken. The toggles are for
+       attribution ON TOP of a stock base, not a substitute for the image.
+       Compare against 12,123 (T286+T297 mean, all 3 patches, same CONC).
+       If it matches, #52968 (a DRAFT PR) and #54889 earn nothing and v6
+       can drop them. If it is clearly lower, they are load-bearing and v5
+       is right as shipped.
+       Budget TWO attempts -- this cell has died twice already.
+  3. quick-reduce INT4 perf C72            ~105m  only if gate passes
+  4. #52190 torch.compile (rec-d9105-tc)   ~105m  PIN FULL_DECODE_ONLY
+  5. prefix-cache investigation            ~105m  biggest lever, see below
+  6. mnbt 24576                            ~105m  untested midpoint
+  7. C1 TPOT p90 <= 7 ms                    ~60m
   Fix first: heartbeat reports "no result yet" for completed runs (looks
   for agg_*.json on host; results only exist in run artifacts), and has
   no time-budget check so it demands dispatches that cannot fit.
