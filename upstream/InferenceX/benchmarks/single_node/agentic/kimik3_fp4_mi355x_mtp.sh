@@ -9,7 +9,7 @@ wait_for_amd_gpu_clean
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
 # T251 gate PASSED (GSM8K 0.995 on rec-no53940) -- back to false.
-export EVAL_ONLY="${EVAL_ONLY:-true}"   # W5-1: GSM8K-200 gate for quick-reduce INT4
+export EVAL_ONLY="${EVAL_ONLY:-false}"   # W5-2: perf
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -245,7 +245,7 @@ export VLLM_ROCM_USE_AITER_MOE=1
 # INT8 if it fails. Precedent for the triple is minimaxm3_fp4_mi355x_mtp.sh:131,
 # same hardware but a DIFFERENT MODEL, so it proves the kernel works here, not
 # that K3 accuracy survives it.
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"   # W5-2 is an ATTRIBUTION run vs the 12,123 baseline -- INT4 would confound it. GATE PASSED 0.995, flip back to INT4 for the perf run.
 export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
 # T266: #54494 dcp-q-replicate. Replicated vs gathered query projection is the
