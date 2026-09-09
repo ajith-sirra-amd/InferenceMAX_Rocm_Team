@@ -1,3 +1,25 @@
+## NEXT DISPATCH (immediately after T295, ~10:46)
+
+**T296 — C72 with #54736 ONLY.** Image `kimi-k3-vllm:rec-d9105-54736only`,
+conc-list [72], mns 96 (flat below C72), everything else identical.
+
+Completes the 2×2 so CONC and patches are isolated independently for the first
+time — every comparison we have today moves two variables at once:
+
+| | C72 | C76 |
+|---|---|---|
+| all 3 patches | T286 **12,093** | T295 *running* |
+| #54736 only | **T296 ← this run** | T294 **11,858** |
+
+Then: T294−T296 = the CONC effect at fixed patches; T295−T294 = the patch effect
+at fixed CONC; T286−T296 = the patch effect at C72.
+
+**Boundary risk, accepted by the owner:** T295 ends ~10:46 and a 105-min run lands
+~12:31, one minute past the 12:30 close. Node release takes a few minutes anyway.
+If it overruns, cancel at 12:30 and the partial is discarded.
+
+---
+
 # QUEUE — W5 (opens 9/10 08:00 IST, 24 h, closes 9/11 08:00)
 
 **Target 12,556 floor · 13,000 → switch to C1.** Best **12,093** (T286, gated 0.995).
