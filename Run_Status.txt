@@ -2,82 +2,67 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-09 03:25 IST | *** NODE ISSUE FOUND - NEEDS ROOT ***
+2026-09-09 09:45 IST | RUNNING T296 | slot W3+W4 closes 12:40
 
-kernel.numa_balancing = 1   and   /etc/sysctl.d/99-numa.conf is ABSENT
-node rebooted 13h33m ago - i.e. AFTER T288 (fine) and BEFORE T289 (slow)
+NODE REBOOTED 09:40 by owner. Clean: VRAM 0%, 0 zombie KFD entries,
+runner service came back on its own. numa_balancing = 0 WITHOUT
+intervention -- /etc/sysctl.d/99-numa.conf survived its first reboot,
+so that fix is now proven persistent. All 17 preflight gates pass.
 
-FIX (needs sudo, agent cannot do this):
-  echo 'kernel.numa_balancing = 0' | sudo tee /etc/sysctl.d/99-numa.conf
-  sudo sysctl -w kernel.numa_balancing=0
-The second line takes effect immediately; the first survives the next reboot,
-which is the part that keeps getting lost.
+T296 (34310095396) C72, #54736 as the ONLY patch, image rec-d9105-54736only
+  mns 96, gmu 0.90, mnbt 16384, FULL_DECODE_ONLY, DCP 8 a2a, dram/vllm-simple
+  dispatched 09:43, ETA ~11:28. Completes the 2x2.
 
-WHY IT MATTERS: the SimpleCPU offload pool is ~1.8 TB of host memory
-(226.89 GB/rank x 8) under constant read/write. NUMA balancing migrates that
-working set continuously. Workers show ~318% CPU each - host-side thrash.
-
-EVIDENCE - three consecutive runs crawled in warmup, all after the reboot:
-  T289  bare C72     29/148 at 70 min   cancelled
-  T290  patched C76  15/156 at 41 min   cancelled
-  T291b patched C72   1/148 at  7 min   running - EXACT replicate of T286
-  T286 (before reboot) FINISHED warmup by 28 min and scored 12,093.
-T291b is the control: same image, same config, same node - only the reboot
-differs. That isolates it to node state, not to any knob.
+THE 2x2 (isolating CONC from the patch set)
+                #54736 only        all 3 patches
+  C72           T296 RUNNING       T286  12,093  OK
+  C76           T294  11,858 OK    T295  STALLED, no result
+  Only C76/all-3 has no number. T295 is n=1 and the stall signature
+  (flat warmup, GPUs 0%, workers ~330% CPU, 0 errors) predates C76 --
+  same thing hit T273/T275/T276 at C48/C72. Not a concurrency ceiling:
+  C76 completed in T294 at the same mns 112.
 
 TARGETS
-  C72  12,556 floor  ->  13,000 = switch to C1.  Best 12,093 (T286, gated 0.995)
-  C1   TPOT p90 <= 7 ms.  Best to date 9.06 mean / 9.31 p99 (p90 never recorded)
+  C72  12,556 floor -> 13,000 = switch to C1.  Best 12,093 (T286, gated 0.995)
+  C1   TPOT p90 <= 7 ms.  Best 9.06 mean / 9.31 p99 (p90 never recorded)
+  predictor: final ~= tput_in/8 x 0.965; 12,556 needs ~104,100/s
+  USE THE STEADY-STATE MEAN, NEVER A PEAK SAMPLE (that error cost T294 a
+  bad projection: peak 102,498 -> predicted 12,365, actual 11,858).
 
-T289 (34262536380) BARE nightly d9105ea8, K3_FORCE_STOCK=1, no patches
-  gate lines OK: FORCE_STOCK, gmu 0.90, FULL_DECODE_ONLY
-  KV 28,881,430 (+148k vs patched -> patches cost ~nothing, clean A/B)
-  dispatched 23:51, ETA ~01:36
-  DECIDES: did the +9.0% come from the base or from the patches?
-    >= 11,950  base owns it -> strip all 3 PRs, reproducible from stock upstream
-    <= 11,250  patches own it (~all #54736) -> keep the stack
-    between    mixed -> isolate #54736 next
+OPEN QUESTION THAT MAY MATTER MORE THAN THROUGHPUT
+  T292 bare nightly = 10.4% InvalidInferenceResultError (empty completions)
+  T294 with #54736  =  0.187%.  Same node, NUMA off in both. 56x.
+  #54735 (carried by #54736) is a silent wrong-block geometry fix under
+  DCP+hybrid. If a second bare run reproduces this, #54736 is MANDATORY
+  for correctness, not optional for speed -- and that changes what v5 needs.
 
-QUEUE AFTER T289: CONC 76 -> CONC 80 or 74 -> #52190 -> quick-reduce (gate first)
-  -> ladder trim (fallback) -> n=2 replicate.  Last safe perf dispatch 10:45.
+AFTER T296, IF TIME (last safe perf dispatch 10:55 for a 105-min run)
+  re-run C76/all-3 to fill the 2x2. Otherwise the slot ends with T296.
+
+DEFERRED TO W5 (9/10 08:00 -> 9/11 08:00, 24h)
+  #52190 torch.compile -> quick-reduce (GSM8K gate FIRST, changes numerics)
+  -> CONC 64/68 -> n=2 replicate of the leader -> bare re-run for the
+  correctness question -> mnbt 24576 -> C1 TPOT p90 <= 7 ms
 
 ABORT RULES (optimisation runs only; attribution runs always finish)
   tput_in < 60,000/s at +25 min      -> cancel
   tput_in < 92,000/s at +50 min      -> cancel
   warmup flat 10+ min AND GPUs 0%    -> cancel, then docker rm -f bmk-server
-  predictor: final ~= tput_in/8 x 0.965; 12,556 needs ~104,100/s
+  warmup crawling BUT GPUs busy      -> check numa_balancing FIRST
 
-WATCHDOGS
-  heartbeat 15 min - also ALERTS if the node sits idle inside a slot (checks me)
-  cron 404de0f0 every 17 min - relaunches the heartbeat if it is missing
-
-W1 RESULT
-  T278 v1 FAILED at engine init. nightly-1970f3ed rejects
-  VLLM_USE_BREAKABLE_CUDAGRAPH=0; flipped to 1, committed.
-  POSTMORTEM: dispatched 09:13, failed 09:20, not noticed until 12:08.
-  2h48m of a 4h slot wasted. Cause: nothing polled during the slot.
-  Fixed with the 11-min in-slot poll below.
-  Delivered anyway: base moved to nightly-1970f3ed; #54736 now applies
-  (0 hunks fail) and #54165 dropped (8 fail); images rec-n1970 and
-  rec-n1970-54736 built; #52494 + #53917 dropped from the stack;
-  kv-offloading restored to dram.
-
-W2 QUEUE (9/7 23:30 - 9/8 11:30, 12h; ~5.9h of work, ~6h slack)
-  1. T278 v2 GSM8K-200   ~70m   rec-n1970, EVAL_ONLY=true (staged now)
-                                first ~7 min also validates the cudagraph fix
-  2. T278 v2 perf C72   ~105m   flip EVAL_ONLY=false; vs T274 11,095
-  3. T279 #54736 GSM8K + perf   rec-n1970-54736
-  Last safe perf dispatch: 9/8 09:15 IST.
+NODE RECOVERY (learned the hard way 2026-09-09)
+  Stranded VRAM with PIDs that no longer exist:
+    sudo rocm-smi --gpureset -d N   DOES NOT WORK. It reports
+    "Successfully reset GPU 0" and VRAM stays at 99%. No live process
+    to detach, so there is nothing for it to release.
+    modprobe -r amdgpu / reload: recorded as failed on this same leak.
+    What works: WAIT (~1h, T273 self-cleared) or REBOOT (what we did).
+  After any reboot, verify: cat /proc/sys/kernel/numa_balancing  -> 0
 
 CONTROL CHAIN
   1 GH runner (owner-controlled)  - agent never touches it
   2 Run_Status.txt "Now : Run"    - kill switch, first preflight gate
-  3 .claude/preflight.sh <mins>   - 13 gates, exit 0 = go
+  3 .claude/preflight.sh <mins>   - 17 gates, exit 0 = go
   4 .claude/dispatch.sh <mins>    - only sanctioned start path
 
-SCHEDULE (durable, in ~/.claude/scheduled_tasks.json, survives restart)
-  ffbe23fd  every 11 min   in-slot poll; no-ops outside windows
-  efdfe74e  9/7  23:32 IST W2 opens
-  af374cd6  9/8  23:32 IST W3+W4 opens (13h contiguous)
-  0a4abeeb  9/10 08:02 IST W5 opens
-  Remaining reserved time: 49h across W2, W3+W4, W5.
+DOCKER HUB: nothing pushed. Agreed tag when owner says go: aigmkt/kimi-k3-vllm:v5
