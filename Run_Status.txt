@@ -84,6 +84,27 @@ BIGGEST OPEN LEVER
   Also unexplained: ext_cache_hit read 82% live but 19.2% in agg_bmk.json.
   Those cannot both be right and the inconsistency may be the clue.
 
+CONC SWEEP -- CONDITIONAL, not scheduled (owner raised 2026-09-09)
+  C74 / C70 / C68 in that order, ONLY if one of these triggers fires:
+    - the prefix-cache investigation shows hit rate is CONC-sensitive
+    - quick-reduce AND torch.compile both come back flat, and slot time
+      remains
+  *** mns IS COUPLED TO CONC ***  the launcher does
+      if CONC <= 72 -> mns 96, else mns 112
+  So C68 and C70 are CLEAN single-variable tests (mns stays 96).
+  C74 CROSSES THE BOUNDARY and silently becomes mns 112 -- two variables,
+  uninterpretable, the same confound that wrecked T294. If running C74,
+  pin MAX_NUM_SEQS=96 explicitly. Peak running at C72 was 85, so C74 should
+  reach ~88, still under 96 and safely on the cudagraph ladder.
+  PRIOR IS AGAINST GOING DOWN: queue=72r/0w means zero waiting, i.e. we are
+  client-limited, not server-limited. Throughput ~ CONC x per-trajectory
+  rate, so C68 ~ -5% and C70 ~ -3% is the expected outcome. The only
+  mechanism that could reverse it is prefix cache residency, and kv_usage
+  at 50% says the working set already fits, so that mechanism is weak.
+  C74 has the better prior: zero queue depth is direct evidence of headroom.
+  COST: ~105m per run and ~1 in 3 dies, so a 3-point sweep is realistically
+  ~5 runs ~= 9h of a 24.5h slot. Do not spend that on the weakest lever.
+
 NOT WORTH IT (measured today, do not spend a slot)
   ladder trim 1..10   96 sizes = 2.85 GiB / 51 s, so 10 sizes is ~0.30 GiB
                       = +0.6% KV we cannot use. And it would WRECK C1,
