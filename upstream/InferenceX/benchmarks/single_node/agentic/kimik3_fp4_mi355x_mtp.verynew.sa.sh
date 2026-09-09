@@ -29,8 +29,6 @@ fi
 rocm-smi || true
 resolve_trace_source
 install_agentic_deps
-[ -f /etc/k3-image-manifest ] && sed 's/^/[k3-image] /' /etc/k3-image-manifest \
-    || echo "[k3-image] none -- bare upstream image, no patches applied"
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
