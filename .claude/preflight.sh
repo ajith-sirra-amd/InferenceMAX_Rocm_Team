@@ -83,6 +83,14 @@ if [ -z "$VRAM" ]; then warn "gpu free" "rocm-smi unreadable/timed out — verif
 elif [ "$VRAM" -le 10 ]; then ok "gpu free" "max VRAM ${VRAM}%"
 else bad "gpu free" "max VRAM ${VRAM}% — wait_for_amd_gpu_clean will fail (needs <=10%)"; fi
 
+# 4b. NUMA BALANCING MUST BE OFF -------------------------------------------
+# Resets to 1 on every reboot. With a ~1.8 TB host offload pool the kernel
+# migrates that working set continuously: warmup crawls while GPUs look busy,
+# workers sit at ~300% CPU. Cost 2026-09-09: four runs, ~7 h of a 13 h slot.
+NB=$(cat /proc/sys/kernel/numa_balancing 2>/dev/null)
+if [ "$NB" = "0" ]; then ok "numa_balancing" "0 (off)"
+else bad "numa_balancing" "$NB - MUST be 0. sudo sysctl -w kernel.numa_balancing=0"; fi
+
 # 5. NO ZOMBIE KFD ENTRIES — the stranded-VRAM failure from T273/T275/T276 ----
 Z=$(timeout 40 rocm-smi --showpids 2>/dev/null | grep -c UNKNOWN)
 if [ "${Z:-0}" -eq 0 ]; then ok "no zombies" "0 orphan KFD entries"

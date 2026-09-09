@@ -70,6 +70,18 @@ sed 's/^/  /' "$KVF" 2>/dev/null
 grep -aoE "Throughput per GPU: [0-9]+ tok/s|exact_match.{0,24}" "$HB" | sort -u | tail -2 | sed 's/^/  /'
 
 echo "--- node ---"
+# numa_balancing MUST be 0. It resets to 1 on reboot, and with a ~1.8 TB host
+# offload pool the kernel migrates that working set continuously - warmup crawls
+# while GPUs look busy. Cost on 2026-09-09: four runs and ~7 h of a 13 h slot
+# before it was found. First thing to check when a run is slow.
+NB=$(cat /proc/sys/kernel/numa_balancing 2>/dev/null)
+if [ "$NB" != "0" ]; then
+  echo "  *** ALERT: numa_balancing=$NB (must be 0). Runs will crawl."
+  echo "  ***   sudo sysctl -w kernel.numa_balancing=0"
+  echo "  ***   echo 'kernel.numa_balancing = 0' | sudo tee /etc/sysctl.d/99-numa.conf"
+else
+  echo "  numa_balancing=0 ok"
+fi
 V=$(timeout 40 rocm-smi --showmemuse 2>/dev/null \
      | grep -oE "GPU Memory Allocated \(VRAM%\): [0-9]+" | awk '{if($NF>m)m=$NF}END{print m+0}')
 BMK=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -c '^bmk-server$')

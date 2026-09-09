@@ -64,6 +64,7 @@ and passes both comfortably.
 
 | condition | action |
 |---|---|
+| **Run is slow** — warmup crawling, GPUs busy, 0 errors | **CHECK `cat /proc/sys/kernel/numa_balancing` FIRST.** Must be 0. It resets to 1 on every reboot, and with a ~1.8 TB host offload pool the kernel migrates that working set continuously. Cost on 2026-09-09: four runs and ~7 h of a 13 h slot before it was found. Fix: `sudo sysctl -w kernel.numa_balancing=0` — **passwordless sudo IS available on this node**, verify with `sudo -n true` rather than assuming |
 | **Stall**: warmup flat ≥10 min, GPUs 0% util, 0 completions | **cancel now.** T273/T275/T276 signature. Then `docker ps` and `docker rm -f bmk-server` — a cancelled job does NOT stop the container |
 | **Optimisation run** `tput_in` **< 60,000/s at +25 min** | **cancel.** Nothing recovers from that. Applies to CONC sweep, #52190, quick-reduce |
 | **Optimisation run** `tput_in` **< 92,000/s at +50 min** | **cancel.** Heading for ~11,100 or below, i.e. under the current best — no point finishing |
