@@ -61,7 +61,7 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # because T257/T258 changed SA's *settings* while keeping our *patched* image,
 # which confounds "SA settings don't help us" with "our patches hurt".
 # Deliberately checked BEFORE the manifest branch so it wins on any image.
-K3_FORCE_STOCK="${K3_FORCE_STOCK:-1}"   # T292: bare nightly, no patches (numa now off)
+K3_FORCE_STOCK="${K3_FORCE_STOCK:-0}"   # T293: patched image
 if [ "$K3_FORCE_STOCK" = "1" ]; then
     K3_OVERLAY_APPLIED=0
     export SKIP_KIMI_PATCHES=1
@@ -644,7 +644,12 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
         # T257-T263 LMCache/stock arms; those are parked. The 11,027 baseline
         # (T247/T252) was measured at flat 96, so restore it -- the new-PR arms
         # must differ from that baseline in the PR only.
-        MAX_NUM_SEQS=96
+        # T293: mns must stay above the PEAK RUNNING COUNT or batches fall off
+        # the cudagraph ladder into eager execution -- T288 priced eager decode
+        # at -39.5%. Peak observed at C72 was 88, i.e. CONC+16, leaving only 8
+        # of slack against 96. At C76 that likely breaches, so scale with CONC
+        # above 72 while keeping flat 96 at/below it (the proven 12,093 config).
+        if [ "$CONC" -le 72 ]; then MAX_NUM_SEQS=96; else MAX_NUM_SEQS=112; fi
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 1 ]; then MAX_NUM_SEQS=1; fi
