@@ -51,46 +51,10 @@ export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 export PYTHONNOUSERSITE=1
 export PYTHONHASHSEED=42
 
-# ---- Per-PR runtime toggles -------------------------------------------------
-# APPLY_PR_<num>=1 applies k3_patches/runtime/<num>.diff into site-packages.
-# All default to 0, so this block is inert on a stock nightly unless a run opts
-# in. The three PRs touch disjoint files, so any 1/0 combination is valid and
-# order does not matter.
-#
-#   APPLY_PR_54736=1  SimpleCPU fine-grained hybrid prefix hits (carries 54735
-#                     geometry fix). The only one measured as load-bearing.
-#   APPLY_PR_52968=1  DRAFT PR. Never isolated; effect unknown.
-#   APPLY_PR_54889=1  Fuse empty-shard LSE mask into A2A pack kernel.
-#                     Replicated at +0.74%, inside noise.
-#
-# Only valid on an image WITHOUT the PRs baked in. Against a pre-patched image
-# the hunks are already present, `patch --forward` exits non-zero, and the PR is
-# reported failed when nothing is actually wrong.
-K3_RT_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches/runtime"
-if [ -d "$K3_RT_DIR" ]; then
-    _rt_sp=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))' 2>/dev/null || echo "")
-    _rt_on=""; _rt_off=""; _rt_bad=""
-    if [ -n "$_rt_sp" ]; then
-        for _rt_f in "$K3_RT_DIR"/*.diff; do
-            [ -f "$_rt_f" ] || continue
-            _rt_n=$(basename "$_rt_f" .diff)
-            _rt_v="APPLY_PR_${_rt_n}"
-            if [ "${!_rt_v:-0}" != "1" ]; then _rt_off="$_rt_off $_rt_n"; continue; fi
-            # dry-run first: patch is all-or-nothing per file, so a partial
-            # apply would leave site-packages in a state no manifest describes.
-            if patch -p1 -d "$_rt_sp" --forward --batch --dry-run < "$_rt_f" >/dev/null 2>&1; then
-                if patch -p1 -d "$_rt_sp" --forward --batch < "$_rt_f" >/dev/null 2>&1; then
-                    _rt_on="$_rt_on $_rt_n"
-                else
-                    _rt_bad="$_rt_bad $_rt_n"
-                fi
-            else
-                _rt_bad="$_rt_bad $_rt_n"
-            fi
-        done
-    fi
-    echo "[pr] on:${_rt_on:- none} off:${_rt_off:- none} failed:${_rt_bad:- none} site=${_rt_sp:-unresolved}"
-fi
+# Per-PR runtime patching: APPLY_PR_54736=1 APPLY_PR_52968=1 APPLY_PR_54889=1
+# All default 0. The three PRs touch disjoint files, so any combination is
+# valid. Only meaningful on an image without the PRs already baked in.
+"$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
