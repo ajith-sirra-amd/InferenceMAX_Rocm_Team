@@ -50,9 +50,19 @@ install_agentic_deps
 # hard failure rather than a silent unpatched run producing a misleading number.
 K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 
-# Per-PR runtime patching: APPLY_PR_54736=1 APPLY_PR_52968=1 APPLY_PR_54889=1
-# All default 0. The three PRs touch disjoint files, so any combination is
-# valid. Only meaningful on an image without the PRs already baked in.
+# Per-PR runtime patching. Flip a flag to 1 to apply that PR. The three touch
+# disjoint files, so any combination is valid and order does not matter. Only
+# meaningful on an image WITHOUT the PRs already baked in -- against a patched
+# image the hunks are present, patch --forward exits non-zero, and the PR is
+# reported failed when nothing is wrong.
+#   54736  SimpleCPU fine-grained hybrid prefix hits (carries 54735). The only
+#          one measured as load-bearing: bare could not finish warmup (T289).
+#   52968  DRAFT PR. Never isolated; effect unknown.
+#   54889  Fuse empty-shard LSE mask into A2A pack kernel. +0.74%, inside noise.
+# export is required: apply_prs.sh is a subprocess and will not see plain vars.
+export APPLY_PR_54736="${APPLY_PR_54736:-0}"
+export APPLY_PR_52968="${APPLY_PR_52968:-0}"
+export APPLY_PR_54889="${APPLY_PR_54889:-0}"
 "$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 # Pre-baked image short-circuit. kimi-k3-vllm:v4 ships the overlay AND the PR
