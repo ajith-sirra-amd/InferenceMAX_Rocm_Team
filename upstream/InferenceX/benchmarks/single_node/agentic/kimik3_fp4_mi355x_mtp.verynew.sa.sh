@@ -29,7 +29,8 @@ fi
 rocm-smi || true
 resolve_trace_source
 install_agentic_deps
-sed 's/^/[k3-image] /' /etc/k3-image-manifest
+[ -f /etc/k3-image-manifest ] && sed 's/^/[k3-image] /' /etc/k3-image-manifest \
+    || echo "[k3-image] none -- bare upstream image, no patches applied"
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
@@ -67,18 +68,33 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-if [ "$CONC" -le 4 ]; then DCP_SIZE="${DCP_SIZE:-1}"; else DCP_SIZE="${DCP_SIZE:-8}"; fi
-export DCP_SIZE
-
+# C1 is latency-bound and C72/C76 are throughput-bound; they need different
+# geometry. DCP>1 and MTP are mutually exclusive - the MTP draft uses TRITON_MLA,
+# which rejects non-causal MLA under DCP - so C1 runs DCP 1 + MTP, and the high
+# concurrencies run DCP 8 without spec-decode.
 SPEC_ARGS=()
 SPEC_ROWS=1
-if [ "$CONC" -le 4 ]; then
-    SPEC_ARGS=(--speculative-config '{"method":"mtp","num_speculative_tokens":1}')
-    SPEC_ROWS=2
-fi
+case "$CONC" in
+    1|2|4)
+        DCP_SIZE="${DCP_SIZE:-1}"
+        SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
+        SPEC_ARGS=(--speculative-config "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"fp8\"}")
+        SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
+        MAX_NUM_SEQS="${MAX_NUM_SEQS:-4}"
+        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"
+        ;;
+    *)
+        DCP_SIZE="${DCP_SIZE:-8}"
+        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
+        # mns must stay above the peak running count or batches fall off the
+        # cudagraph ladder into eager execution, measured at -39.5%.
+        # Peak observed at C72 was 88, i.e. CONC+16.
+        if [ "$CONC" -le 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
+        else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
+        ;;
+esac
+export DCP_SIZE
 
-MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
-MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
@@ -100,7 +116,7 @@ fi
 EP_ARGS=()
 if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
-echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=${KV_OFFLOADING:-none}"
+echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=${KV_OFFLOADING:-none}"
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
