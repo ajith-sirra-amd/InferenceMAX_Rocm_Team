@@ -2,57 +2,50 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-09 23:55 IST | W5 open until Thu 23:59 | W5-2 dispatched
+2026-09-10 09:45 IST | *** REBOOT RECOMMENDED *** | W5 closes Thu 23:59
 
-W5-1 quick-reduce INT4 GSM8K-200 GATE: **PASSED**  run 34386690877
-  |gsm8k|flexible-extract|exact_match| 0.995 +/- 0.005
-  |gsm8k|strict-match    |exact_match| 0.995 +/- 0.005   eval_exit=0
-  Exactly the baseline anchor. INT4 allreduce quantization costs nothing
-  measurable in K3 accuracy, so perf is now allowed to ride on it.
-  Confirmed active in the log, not just configured:
-    Using ['QUICK_REDUCE','AITER_CUSTOM','PYNCCL'] for the TP group
-    quantization codec threshold = 256 KB
-  NOTE the score is NOT in agg_bmk.json and the "Upload eval results" step
-  is SKIPPED. Read it from the JOB log:
-    gh api repos/<slug>/actions/jobs/<jobid>/logs | grep exact_match
-  agg_bmk.json only carries the eval_only marker by design.
+W5-8 (#56036 AITER KDA prefill) DIED to the RCCL stall - flat at 25/148
+from 210s to 510s, GPUs 0%. No number obtained. Sixth death.
 
-W5-2 RUNNING: C72, #54736 ONLY, image rec-d9105-54736only
-  quick-reduce forced back to NONE -- this is an ATTRIBUTION run against
-  the 12,123 baseline (T286 12,093 + T297 12,153) and INT4 would confound
-  it. Flip back to INT4 for W5-3, the perf run.
-  Third attempt at this cell: T295 and T296 both died to the RCCL desync.
-  Decides whether #52968 (a DRAFT PR shipped inside v5) and #54889 earn
-  their place, or whether v6 can drop them.
+REBOOT IS THE ONLY THING THAT WORKS. Tested and useless:
+  rocm-smi --gpureset      no-op, reports success, VRAM unchanged
+  docker stop -t 60        73s, SIGTERM ignored, ends in SIGKILL anyway
+  watchdog death           leaves the node just as dirty
+A worker ends up in D state (uninterruptible) inside the driver; SIGKILL
+cannot touch it. After this cancel: GPUs 0 and 2 still at 98%, other six
+released - the wedged worker holds only its own devices.
 
-W5 QUEUE
-  1. quick-reduce INT4 GSM8K gate      DONE - PASSED 0.995
-  2. C72 #54736 only (retry)           RUNNING
-  3. quick-reduce INT4 perf C72        ~105m  gate cleared, expect upside
-  4. #52190 torch.compile              ~105m  PIN FULL_DECODE_ONLY
-  5. prefix-cache investigation        ~105m  biggest lever
-  6. mnbt 24576                        ~105m
-  7. C1 TPOT p90 <= 7 ms                ~60m
-  Conditional: CONC 74/70/68 -- see the note below, mns is coupled to CONC.
+TIMELINE SINCE THE 09-09 09:40 REBOOT
+  T297  10:26 OK | W5-1 23:33 OK | W5-2 23:52 OK
+  W5-3  01:37 DIED | W5-3b 02:32 DIED | W5-3c 04:02 DIED | W5-4 04:49 DIED
+  W5-5  05:26 OK | W5-6 07:24 OK (C1, light) | W5-8 09:24 DIED
+  Three clean, then six deaths in nine. Break at ~01:30, ~16h after reboot.
 
-TARGETS
-  C72  12,556 floor -> 13,000 = switch to C1.  Best 12,123 (n=2)
-  C1   TPOT p90 <= 7 ms.  Best 9.06 mean / 9.31 p99 (p90 never recorded)
-  predictor: read tput_in_srv ONCE at +50 min. It is a SLIDING WINDOW, not
-  a cumulative mean -- +/-3%. Never project off a peak.
+NOT THE CAUSE - all ruled out by evidence:
+  config      every config has both died and survived
+  INT4        looked causal at 0/3 until W5-4 died on NONE
+  a bad GPU   the silent rank group changes run to run (1,4,7 in T296;
+              2,3,5 in W5-3c)
+  #56036      died the same way as runs without it
+What is left: host/driver state degrading with uptime, in the DCP
+_ALLGATHER_BASE path.
 
-CONC SWEEP -- CONDITIONAL. mns IS COUPLED TO CONC:
-  if CONC <= 72 -> mns 96, else mns 112. So C68/C70 are clean single-variable
-  tests; C74 crosses the boundary and silently becomes mns 112, the same
-  confound that wrecked T294. Pin MAX_NUM_SEQS=96 if running C74.
-  Prior is against going down: queue=0 waiting means we are client-limited.
+COST: 6 deaths x 30-75 min = 4-6h of this slot. This is now the dominant
+constraint, larger than any knob under test.
 
-NODE RECOVERY: stranded VRAM with dead PIDs -- rocm-smi --gpureset does NOT
-  work (verified, reports success, VRAM stays 99%). Wait ~1h or reboot.
-  After any cancel: docker stop -t 60 BEFORE docker rm -f. SIGKILL is what
-  strands the KFD entries.
+AFTER REBOOT, DISPATCH W5-8 AGAIN FIRST
+  image rec-d9105-54736only + APPLY_PR_56036=1 (already staged, gate line
+  confirmed [pr] on: 56036 failed: none). #56036 never produced a number
+  and is still the best-motivated candidate: the workload is ~170:1
+  prefill-to-decode and it replaces the prefill attention kernel.
+  Compare against W5-2 = 11,990 (same image, no #56036).
 
-CONSTRAINTS: no sudo unless asked | no Docker Hub pushes | push only to
-  ajith-sirra-amd/InferenceMAX_Rocm_Team chore/sa-agentx-v1.0 | never cancel
-  a run I did not start. Owner runs from a separate mirror branch; preflight
-  gate 7 scans 15 runs on ALL branches.
+BEST SO FAR
+  C72 12,161 (W5-5, run 34419076768); reproducible baseline 12,123 n=2
+      (T286 34184741785 + T297 34312880044). Target 12,556, gap -3.2%.
+  C1  TPOT p90 9.28 ms (W5-6, run 34427307392). Target 7 ms, +33%.
+
+PR STACK NOW
+  needed:  54736 (carries 54735)
+  testing: 56036
+  parked:  52968 (draft, collides with 56036 on kda.py), 54889 (+0.74%)
