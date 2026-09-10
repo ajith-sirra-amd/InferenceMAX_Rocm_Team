@@ -2,50 +2,52 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-10 09:45 IST | *** REBOOT RECOMMENDED *** | W5 closes Thu 23:59
+2026-09-10 11:52 IST | W5-8d running (#56036, C72, attempt 4) | slot extended open-ended
 
-W5-8 (#56036 AITER KDA prefill) DIED to the RCCL stall - flat at 25/148
-from 210s to 510s, GPUs 0%. No number obtained. Sixth death.
+RUNNING: W5-8d run 34444347014. #56036 AITER KDA prefill, C72,
+rec-d9105-54736only. First attempt with 279GB free (was ~30GB) after
+cleaning stale kimi images -- tests whether disk pressure was a
+compounding factor in the recent RCCL death cluster.
+compare vs W5-2 = 11,990.
 
-REBOOT IS THE ONLY THING THAT WORKS. Tested and useless:
-  rocm-smi --gpureset      no-op, reports success, VRAM unchanged
-  docker stop -t 60        73s, SIGTERM ignored, ends in SIGKILL anyway
-  watchdog death           leaves the node just as dirty
-A worker ends up in D state (uninterruptible) inside the driver; SIGKILL
-cannot touch it. After this cancel: GPUs 0 and 2 still at 98%, other six
-released - the wedged worker holds only its own devices.
+QUEUED, NOT TOP PRIORITY (owner 2026-09-10): W5-9, C1 block-rejection MTP
+  Staged and pushed (commit 7a77ecca), not dispatched.
+  #55966 (open, applies clean 0 failed hunks) adds non-causal draft-block
+  support to ROCM_AITER_MLA -- the reason C1's draft was pinned to
+  TRITON_MLA. Owner-specified config:
+    attention_backend ROCM_AITER_MLA, rejection_sample_method BLOCK, k=7
+  This is not a workaround -- golden_al_distribution/*_block_rejection_
+  sample_method.yaml (already in our repo) has the SAME AL numbers we
+  hardcode (1.85..4.00) and states it was measured WITH
+  rejection_sample_method=block. "synthetic" was the proxy; "block" is
+  the reference method. May reproduce golden AL on our hw, may not --
+  either is a real result.
+  Dispatch AFTER the C72 queue (below) is worked through, not before.
 
-TIMELINE SINCE THE 09-09 09:40 REBOOT
-  T297  10:26 OK | W5-1 23:33 OK | W5-2 23:52 OK
-  W5-3  01:37 DIED | W5-3b 02:32 DIED | W5-3c 04:02 DIED | W5-4 04:49 DIED
-  W5-5  05:26 OK | W5-6 07:24 OK (C1, light) | W5-8 09:24 DIED
-  Three clean, then six deaths in nine. Break at ~01:30, ~16h after reboot.
+DOCKER CLEANUP (2026-09-10, owner instruction): removed 13 stale
+  kimi-k3-vllm images (v2/v3, local v4 cache, pronly*, rec-a2amask,
+  rec-no53940, rec-qrep, rec-n1970*, dup rec-d9105-54736) + build cache.
+  Root disk 30G -> 279G free. Kept rec-d9105-best/=v5, -54736only, -tc,
+  rec-d9105 (all still referenced). Did NOT touch rocm/kimi-private:* or
+  rocm/pytorch-private:* (6 weeks old, different naming, not this
+  campaign, unclear ownership) -- left alone per owner correction.
 
-NOT THE CAUSE - all ruled out by evidence:
-  config      every config has both died and survived
-  INT4        looked causal at 0/3 until W5-4 died on NONE
-  a bad GPU   the silent rank group changes run to run (1,4,7 in T296;
-              2,3,5 in W5-3c)
-  #56036      died the same way as runs without it
-What is left: host/driver state degrading with uptime, in the DCP
-_ALLGATHER_BASE path.
-
-COST: 6 deaths x 30-75 min = 4-6h of this slot. This is now the dominant
-constraint, larger than any knob under test.
-
-AFTER REBOOT, DISPATCH W5-8 AGAIN FIRST
-  image rec-d9105-54736only + APPLY_PR_56036=1 (already staged, gate line
-  confirmed [pr] on: 56036 failed: none). #56036 never produced a number
-  and is still the best-motivated candidate: the workload is ~170:1
-  prefill-to-decode and it replaces the prefill attention kernel.
-  Compare against W5-2 = 11,990 (same image, no #56036).
+RCCL DEATHS: 8 total. Node rebooted 2026-09-10 04:27 IST after the 7th.
+  Post-reboot: 3 runs clean (T297,W5-1,W5-2 pattern) then W5-8/8b/8c all
+  died before this reboot cycle even reached 3 clean runs -- W5-8 died
+  1st post-reboot run (this reboot), then W5-8b was itself post ANOTHER
+  reboot and died 2nd run, W5-8c died 1st run of ITS cycle. The 3-clean
+  pattern from the original reboot is not holding on repeat reboots.
+  #56036 has never produced a number across 3 attempts (W5-8/8b/8c).
 
 BEST SO FAR
   C72 12,161 (W5-5, run 34419076768); reproducible baseline 12,123 n=2
       (T286 34184741785 + T297 34312880044). Target 12,556, gap -3.2%.
   C1  TPOT p90 9.28 ms (W5-6, run 34427307392). Target 7 ms, +33%.
 
-PR STACK NOW
+PR STACK
   needed:  54736 (carries 54735)
-  testing: 56036
-  parked:  52968 (draft, collides with 56036 on kda.py), 54889 (+0.74%)
+  testing: 56036 (0/3 so far, disk-pressure confound now removed)
+  queued:  55966 (C1 only, deprioritised)
+  parked:  52968 (draft, collides with 56036/55966 nothing, collides with
+           56036 on kda.py specifically), 54889 (+0.74%)
