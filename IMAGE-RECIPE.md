@@ -1,5 +1,52 @@
 # Image recipe — Kimi-K3 FP4 on MI355X
 
+## Current best number and CURRENT PR PREFERENCE (2026-09-10)
+
+**Best measured: 12,161 tok/s/GPU** (W5-5, C72, all 3 patches, mnbt 24576).
+Baseline **12,123**, n=2 (T286 12,093 + T297 12,153). Target **12,556** — gap **−3.2%**.
+**C1 TPOT p90 = 9.28 ms** (W5-6, first ever p90) vs the 7 ms target — **+33%**.
+
+### The PR stack changed on 2026-09-10
+
+| PR | status | evidence | verdict |
+|---|---|---|---|
+| [#54736](https://github.com/vllm-project/vllm/pull/54736) (+[#54735](https://github.com/vllm-project/vllm/pull/54735)) | open | T289 bare **could not finish warmup** (29/148 in 70 min) vs T286's 28 min | **KEEP — load-bearing** |
+| [#56036](https://github.com/vllm-project/vllm/pull/56036) | open, new | AITER KDA prefill for K3 on ROCm. Under test as W5-8 | **PROMOTED — see below** |
+| [#54889](https://github.com/vllm-project/vllm/pull/54889) | open | replicated n=2 at **+0.74%**, inside noise | **PARKED** |
+| [#52968](https://github.com/vllm-project/vllm/pull/52968) | **DRAFT** | never isolated; W5-2 bounds it + #54889 at **≤1% combined** | **PARKED** |
+
+Parked diffs live in `k3_patches/parked/`; active ones in `k3_patches/runtime/`.
+
+**Why #56036 outranks everything else tried.** The workload is roughly **170:1
+prefill-to-decode** — `tput_in ≈ 96,000/s` vs `tput_out ≈ 570/s`, `isl p50 ≈ 80,000`
+vs `osl p50 ≈ 243`. Every knob tested in W5 (quick-reduce INT4, mnbt 24576, patch
+permutations) adjusts scheduling or communication and all landed inside noise.
+#56036 replaces the **prefill attention kernel** with AITER FlashKDA plus a fused
+BF16 QKV causal Conv1D. It is Kimi-K3-specific, ROCm-specific, and the author
+tested it on 8× MI355X.
+
+**Parking #52968 is what unblocked it.** #56036 failed hunk 6 of 7 against
+`rec-d9105-best`; the cause was #52968's conv-fusion edits to `kimi_k3/amd/kda.py`
+colliding with #56036's rewrite of that same prefill conv path. Against
+`rec-d9105-54736only` it applies with **0 failed hunks**. Note this breaks the
+"all APPLY_PR_* combinations are valid" property — that held for the original
+three (disjoint files); #52968 and #56036 both touch `kda.py`.
+
+**No base change is required.** `aiter.ops.triton.kimi_delta_attn` is present in
+our existing image and exports `chunk_kimi_delta_attn`. I earlier reported it
+missing and recommended a newer nightly — that was **wrong**: it is a package
+DIRECTORY and my check tested for a `.py` FILE. The `nightly-385dce36` pull was
+unnecessary.
+
+### v5 implication
+
+`aigmkt/kimi-k3-vllm:v5` ships **both** parked PRs, including draft code, for a
+combined ≤1%. A v6 on `base + #54736 (+#56036 if it wins)` would be faster to
+justify and free of unmerged draft code. **Not pushing anything without an
+explicit instruction.**
+
+---
+
 ## aigmkt/kimi-k3-vllm:v5 — PUSHED 2026-09-09 11:48 IST
 
 ```
