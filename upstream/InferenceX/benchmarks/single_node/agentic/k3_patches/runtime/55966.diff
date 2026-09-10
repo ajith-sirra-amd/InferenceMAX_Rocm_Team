@@ -1,0 +1,248 @@
+diff --git a/vllm/_aiter_ops.py b/vllm/_aiter_ops.py
+index 9bb018b3d33d..edb5b577fa88 100644
+--- a/vllm/_aiter_ops.py
++++ b/vllm/_aiter_ops.py
+@@ -575,10 +575,11 @@ def _rocm_aiter_mla_decode_fwd_impl(
+     reduce_indptr: torch.Tensor | None = None,
+     reduce_final_map: torch.Tensor | None = None,
+     reduce_partial_map: torch.Tensor | None = None,
++    causal: bool = True,
+ ) -> None:
+     from aiter.mla import mla_decode_fwd
+ 
+-    kwargs: dict[str, float | torch.Tensor | None] = {
++    kwargs: dict[str, float | torch.Tensor | None | bool] = {
+         "sm_scale": sm_scale,
+         "logit_cap": logit_cap,
+     }
+@@ -588,6 +589,8 @@ def _rocm_aiter_mla_decode_fwd_impl(
+         kwargs["q_scale"] = q_scale
+         kwargs["kv_scale"] = kv_scale
+ 
++    kwargs["causal"] = causal
++
+     if work_meta_data is not None:
+         assert work_indptr is not None, (
+             "work_indptr must be provided with work_meta_data"
+@@ -1959,6 +1962,26 @@ def fuse_sigmoid_in_kernel(cls, aiter_topK_meta_data: object) -> bool:
+     def is_mla_enabled(cls) -> bool:
+         return cls._AITER_ENABLED and cls._MLA_ENABLED
+ 
++    @classmethod
++    @if_aiter_supported
++    def mla_decode_supports_non_causal(cls) -> bool:
++        """Whether installed aiter.mla.mla_decode_fwd accepts `causal`.
++
++        Added in aiter v0.1.20. A missing argument is a hard error rather
++        than a boolean the caller can use to pick another MLA backend.
++        """
++        import inspect
++
++        from aiter.mla import mla_decode_fwd
++
++        if "causal" not in inspect.signature(mla_decode_fwd).parameters:
++            raise RuntimeError(
++                "ROCM_AITER_MLA requires aiter.mla.mla_decode_fwd(..., causal=). "
++                "The installed aiter is causal-only; upgrade aiter rather than "
++                "falling back to another MLA backend."
++            )
++        return True
++
+     @classmethod
+     @if_aiter_supported
+     def is_mha_enabled(cls) -> bool:
+@@ -2779,6 +2802,7 @@ def mla_decode_fwd(
+         reduce_indptr: torch.Tensor | None = None,
+         reduce_final_map: torch.Tensor | None = None,
+         reduce_partial_map: torch.Tensor | None = None,
++        causal: bool = True,
+     ):
+         torch.ops.vllm.rocm_aiter_mla_decode_fwd(
+             q,
+@@ -2799,6 +2823,7 @@ def mla_decode_fwd(
+             reduce_indptr=reduce_indptr,
+             reduce_final_map=reduce_final_map,
+             reduce_partial_map=reduce_partial_map,
++            causal=causal,
+         )
+ 
+     @staticmethod
+diff --git a/vllm/model_executor/layers/attention/mla_attention.py b/vllm/model_executor/layers/attention/mla_attention.py
+index a572d94522a7..c4e5ceceb8c0 100644
+--- a/vllm/model_executor/layers/attention/mla_attention.py
++++ b/vllm/model_executor/layers/attention/mla_attention.py
+@@ -200,6 +200,7 @@
+ """
+ 
+ import functools
++import inspect
+ import itertools
+ import math
+ from abc import abstractmethod
+@@ -2397,6 +2398,7 @@ def _build_decode(
+         query_start_loc_device: torch.Tensor,
+         num_decode_tokens: int,
+         dcp_tot_seq_lens_device: torch.Tensor | None,
++        causal: bool = True,
+     ) -> MLACommonDecodeMetadata:
+         return MLACommonDecodeMetadata(
+             block_table=block_table_tensor,
+@@ -2564,7 +2566,7 @@ def build(
+                     (max_seq_len + num_partitions - 1) // num_partitions
+                 ) * self.cp_kv_cache_interleave_size
+ 
+-            decode_metadata = self._build_decode(
++            decode_kwargs: dict = dict(
+                 block_table_tensor=block_table_tensor[:num_decodes, ...],
+                 seq_lens_device=seq_lens[:num_decodes],
+                 max_seq_len=max_seq_len,
+@@ -2573,6 +2575,11 @@ def build(
+                 num_decode_tokens=num_decode_tokens,
+                 dcp_tot_seq_lens_device=dcp_tot_seq_lens_device,
+             )
++            # Only backends that consume the mask (Aiter/FlashMLA/FA MLA)
++            # accept this argument. Dots3 NOTE's NVIDIA override does not.
++            if "causal" in inspect.signature(self._build_decode).parameters:
++                decode_kwargs["causal"] = not non_causal_decode
++            decode_metadata = self._build_decode(**decode_kwargs)
+ 
+         attn_metadata = self.metadata_cls(
+             num_reqs=common_attn_metadata.num_reqs,
+diff --git a/vllm/v1/attention/backends/mla/flashattn_mla.py b/vllm/v1/attention/backends/mla/flashattn_mla.py
+index 084a1f4ce6c9..e31dfbd479a6 100644
+--- a/vllm/v1/attention/backends/mla/flashattn_mla.py
++++ b/vllm/v1/attention/backends/mla/flashattn_mla.py
+@@ -195,6 +195,7 @@ def _build_decode(
+         query_start_loc_device: torch.Tensor,
+         num_decode_tokens: int,
+         dcp_tot_seq_lens_device: torch.Tensor | None,
++        causal: bool = True,
+     ) -> FlashAttnMLADecodeMetadata:
+         query_lens_cpu = query_start_loc_cpu[1:] - query_start_loc_cpu[:-1]
+         max_query_len = query_lens_cpu.max().item()
+diff --git a/vllm/v1/attention/backends/mla/flashmla.py b/vllm/v1/attention/backends/mla/flashmla.py
+index 8ebfbbba796c..6f29886a5b54 100644
+--- a/vllm/v1/attention/backends/mla/flashmla.py
++++ b/vllm/v1/attention/backends/mla/flashmla.py
+@@ -159,6 +159,7 @@ def _build_decode(
+         query_start_loc_device: torch.Tensor,
+         num_decode_tokens: int,
+         dcp_tot_seq_lens_device: torch.Tensor | None,
++        causal: bool = True,
+     ) -> FlashMLADecodeMetadata:
+         query_lens_cpu = query_start_loc_cpu[1:] - query_start_loc_cpu[:-1]
+         # we use the max but all should be the same due to uniform length requirement
+diff --git a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+index c341bfc3486e..e2ac11c1330b 100644
+--- a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
++++ b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+@@ -251,6 +251,10 @@ def get_supported_kernel_block_sizes() -> list[int | MultipleOf]:
+     def get_name() -> str:
+         return "ROCM_AITER_MLA"
+ 
++    @classmethod
++    def supports_non_causal(cls) -> bool:
++        return bool(rocm_aiter_ops.mla_decode_supports_non_causal())
++
+     @staticmethod
+     def get_impl_cls() -> type["AiterMLAImpl"]:
+         return AiterMLAImpl
+@@ -346,6 +350,9 @@ class AiterMLAMetadataBuilder(MLACommonMetadataBuilder[AiterMLAMetadata]):
+     #  https://github.com/vllm-project/vllm/issues/22945
+     _cudagraph_support: ClassVar[AttentionCGSupport] = AttentionCGSupport.UNIFORM_BATCH
+     query_len_support: ClassVar[QueryLenSupport] = QueryLenSupport.UNIFORM
++    # Served by passing the mask to the kernel; _build_decode turns away the
++    # shapes AITER has no non-causal kernel for.
++    supports_non_causal_multi_token_decode: ClassVar[bool] = True
+ 
+     @staticmethod
+     def _uniform_padded_mtp_qo_len(
+@@ -916,6 +923,7 @@ def _build_decode(
+         query_start_loc_device: torch.Tensor,
+         num_decode_tokens: int,
+         dcp_tot_seq_lens_device: torch.Tensor | None,
++        causal: bool = True,
+     ) -> AiterMLADecodeMetadata:
+         device = self.device
+         num_reqs = seq_lens_device.size(0)
+@@ -968,6 +976,7 @@ def _build_decode(
+             int(max_qo_len),
+             self._kv_cache_dtype_str,
+             self.dcp_world_size,
++            causal,
+         )
+         use_segmented_dcp_verify = (
+             self._supports_segmented_dcp_verify and max_qo_len > 1
+@@ -1045,14 +1054,32 @@ def _build_decode(
+             # A padded rank has no bf16 persistent kernel past qlen 4 where the
+             # gfx950 fold is absent; the non-persistent entry covers it. fp8
+             # keeps the schedule -- its fold rejects non-persistent outright.
++            # A non-causal block keeps it too: what the fold drops past qlen 4
++            # is the block's causal staircase, which a non-causal block does
++            # not have, and the schedule is the only thing carrying its mask.
+             and (
+-                self._decode_num_heads >= AiterMLAHelper._AITER_MIN_MLA_HEADS
++                not causal
++                or self._decode_num_heads >= AiterMLAHelper._AITER_MIN_MLA_HEADS
+                 or max_qo_len <= AiterMLAHelper._ASM_PADDED_MAX_PS_QLEN
+                 or is_quantized_kv_cache(self._kv_cache_dtype_str)
+             )
+             and max_qo_len >= 1
+             and max_qo_len <= self._mtp_decode_qlen
+         )
++        if (
++            not causal
++            and max_qo_len == 2
++            and is_quantized_kv_cache(self._kv_cache_dtype_str)
++        ):
++            # AITER's fp8 dispatch folds (gqa 16, qlen 3 or 4) onto the
++            # qseqlen-4 kernel but never lists 2, so the lookup would land on a
++            # causal-only entry -- and a missing kernel aborts the process
++            # rather than raising. The bf16 fold has no such hole. Drop this
++            # once the pinned AITER folds that length.
++            raise ValueError(
++                "AITER has no non-causal fp8 MLA kernel for a 2-token query "
++                "block. Pin the draft to TRITON_MLA for this speculative config."
++            )
+         if use_persistent_metadata:
+             from aiter import get_mla_metadata_v1
+ 
+@@ -1065,7 +1092,7 @@ def _build_decode(
+                 paged_kv_last_page_len,
+                 self._num_attention_heads,
+                 1,
+-                True,
++                causal,
+                 self._mla_work_meta_data,
+                 self._mla_work_info_set,
+                 self._mla_work_indptr,
+@@ -1362,6 +1389,7 @@ def use_gluon_verify(
+         max_qo_len: int,
+         kv_cache_dtype: str,
+         dcp_world_size: int = 1,
++        causal: bool = True,
+     ) -> bool:
+         """Whether a small-head multi-token verify uses native Gluon MTP.
+ 
+@@ -1374,7 +1402,13 @@ def use_gluon_verify(
+ 
+         DCP verify is excluded: its per-row causal windows are served by the
+         segmented path, which Gluon's MTP entry cannot express.
++
++        Gluon masks the block causally with no way to turn it off, so a
++        non-causal block takes the padded asm decode whatever the head count
++        -- padding is what gives it a kernel there.
+         """
++        if not causal:
++            return False
+         if max_qo_len <= 1 or dcp_world_size > 1:
+             return False
+         if is_quantized_kv_cache(kv_cache_dtype):
+@@ -1972,6 +2006,7 @@ def forward_mqa(
+                 decode.paged_kv_indptr,
+                 decode.paged_kv_indices,
+                 decode.paged_kv_last_page_len,
++                causal=attn_metadata.causal,
+                 **mla_kwargs,
+             )
+ 

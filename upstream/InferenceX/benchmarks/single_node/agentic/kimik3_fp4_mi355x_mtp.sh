@@ -595,7 +595,7 @@ export AITER_DISABLE_FMHA_OPUS=1
 SPEC_ENABLE="${SPEC_DECODING:-}"
 case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
 case "$CONC" in
-    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;   # C1 k=4 probe parked mid-run; back to the golden default.
+    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-7}" ;;   # W5-9 (owner 2026-09-10): k=7 with the real block-rejection config.
     *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
 esac
 if [ "$SPEC_NUM_TOKENS" -eq 0 ]; then SPEC_ENABLE=""; fi
@@ -613,11 +613,31 @@ if [ "$SPEC_ENABLE" = "mtp" ]; then
         *) echo "[spec] no golden AL wired for num_speculative_tokens=$SPEC_NUM_TOKENS; take it from golden_al_distribution/kimik3_dspark_probabilistic_sample_method_block_rejection_sample_method.yaml and add the case" >&2; exit 1 ;;
     esac
     DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-    SPEC_ARGS=(
-        --speculative-config
-        "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
-    )
-    echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN, draft kv=$DRAFT_KV_DTYPE)"
+    # W5-9 (owner 2026-09-10): the golden AL table above was measured WITH
+    # rejection_sample_method=block (see golden_al_distribution/*_block_rejection_
+    # sample_method.yaml -- identical numbers). "synthetic" was a proxy that forces
+    # the golden AL artificially; "block" is the real reference method -- it may
+    # reproduce the golden AL on our hardware, or it may not, and either answer is
+    # informative. ROCM_AITER_MLA requires #55966 (non-causal draft-block support,
+    # applies clean, 0 failed hunks) -- without it AITER MLA rejects the draft's
+    # non-causal attention. Set DRAFT_REJECTION_METHOD=synthetic to fall back to
+    # the old TRITON_MLA/synthetic-AL path if block needs to be ruled out.
+    DRAFT_ATTN_BACKEND="${DRAFT_ATTN_BACKEND:-ROCM_AITER_MLA}"
+    DRAFT_REJECTION_METHOD="${DRAFT_REJECTION_METHOD:-block}"
+    export APPLY_PR_55966="${APPLY_PR_55966:-1}"
+    if [ "$DRAFT_REJECTION_METHOD" = "block" ]; then
+        SPEC_ARGS=(
+            --speculative-config
+            "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"$DRAFT_ATTN_BACKEND\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"block\"}"
+        )
+        echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, LIVE block rejection, golden AL ref=$SYNTHETIC_ACCEPT_LEN, attn=$DRAFT_ATTN_BACKEND, draft kv=$DRAFT_KV_DTYPE)"
+    else
+        SPEC_ARGS=(
+            --speculative-config
+            "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}"
+        )
+        echo "MTP: speculative decoding ON (k=$SPEC_NUM_TOKENS, synthetic accept=$SYNTHETIC_ACCEPT_LEN, draft kv=$DRAFT_KV_DTYPE)"
+    fi
 fi
 
 # N4 SETTLED: 8192 is the optimum, do not move it. T164 measured 4096 at 7,528
