@@ -306,13 +306,27 @@ else
     echo "[gmu] patched image -- using script default (see [gmu] line below)"
 fi
 export VLLM_K3_KDA_SAFE_STAGES=1
-export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-0}"   # Run 2 of the W5-14b sequential chain (owner 2026-09-10):
-                                                                                                    # testing =0. W5-14 log showed gmu 0.90 effectively runs at
-                                                                                                    # ~0.885-0.887 with profiling on (=1, the vLLM v0.21+ default,
-                                                                                                    # unexamined all campaign) -- disabling should free ~1.3-1.5%
-                                                                                                    # back to KV pool. No CI input passes arbitrary env vars, so
-                                                                                                    # this default itself carries the one-off change; revert to
-                                                                                                    # :-1 after this run unless the result says otherwise.
+export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}"   # SETTLED NEGATIVE 2026-09-10 (Run 2, run 34494646076).
+                                                                                                    # =0 DID free KV as predicted -- 31,309,111 tokens vs 28,881,430
+                                                                                                    # baseline, +8.4%, far more than the ~1.3-1.5% expected. But the
+                                                                                                    # engine then HUNG IN WARMUP: flat 2/148 for the full 600 s,
+                                                                                                    # GPUs 0%, workers ~330% CPU, NO RCCL watchdog line (so this is
+                                                                                                    # NOT the _ALLGATHER_BASE desync class).
+                                                                                                    # ROOT CAUSE, observed directly for the first time:
+                                                                                                    #   kworker/u512:N+kfd_restore_wq pinned at ~90% CPU.
+                                                                                                    # That is the AMD KFD driver's memory evict/restore queue. With
+                                                                                                    # cudagraph memory unaccounted, vLLM over-allocates KV, the
+                                                                                                    # allocation "succeeds", and the driver then thrashes evicting
+                                                                                                    # and restoring GPU buffers forever. Nothing executes -> GPUs
+                                                                                                    # idle while CPUs spin. kfd_restore_wq stayed at ~91% even after
+                                                                                                    # the workers were SIGKILLed to zombies, which is also why VRAM
+                                                                                                    # strands after this failure.
+                                                                                                    # THIS EXPLAINS N7/T166/T157 (gmu 0.92/0.95: "KV grew ~9.7%,
+                                                                                                    # then hung in warmup, never served a request") -- same
+                                                                                                    # over-allocation, same thrash, reached via gmu instead.
+                                                                                                    # vLLM's own warning even recommends raising gmu 0.90->~0.914 to
+                                                                                                    # compensate, i.e. it recommends walking straight into N7.
+                                                                                                    # DO NOT set 0. DO NOT raise gmu above 0.90. Both are the same bug.
 
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
 export AIPERF_HTTP_TCP_USER_TIMEOUT=900000

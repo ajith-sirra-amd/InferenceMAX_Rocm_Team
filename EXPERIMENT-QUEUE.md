@@ -11,14 +11,16 @@ mid-run KV reading (28,972,610, +0.83% vs EP=1) salvaged from it.
 vs EP=1 -- still slightly UP, so EP=8 costs throughput, not KV). **EP=1 wins**
 -- runs 2-4 below all use EP=1.
 
-**Run 2 (READY TO DISPATCH):** `rec-d9105-54736only`, C72, mnbt 16384,
-**EP=1**,
-**`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0`** (new lever — launcher already
-patched to accept the override, see `kimik3_fp4_mi355x_mtp.sh` line ~307).
-One variable vs Run 1's winning config: does disabling CUDA-graph memory
-profiling recover the ~1.3-1.5% GPU memory it reserves defensively (the W5-14
-log line: gmu 0.90 effectively runs at ~0.885-0.887 with profiling on)? Watch
-KV cache size at boot against Run 1's fingerprint — predicted direction is up.
+**Run 2 (W5-15, DONE, run 34494646076): SETTLED NEGATIVE — hung in warmup, no
+throughput number, but a major diagnostic win.** `CUDAGRAPHS=0` freed **+8.4%
+KV** (31,309,111 vs 28,881,430) — then the engine hung: flat 2/148 for the full
+600 s, GPUs 0%, **no RCCL watchdog line ever**, and `kfd_restore_wq` at ~90% CPU.
+**Root cause: GPU memory over-allocation → AMD KFD evict/restore thrash.** Same
+bug as N7/T166/T157 (gmu>0.90), reached by a different route. `=1` restored in
+the launcher. **Do not set 0; do not raise gmu above 0.90.** Full write-up in
+Kimi-DCP-Experiemnts-Summary.md and the failure-mode table in
+Kimi-vLLM-Learnings.md §8 (new row, so this is distinguishable from the RCCL
+desync in future: absence of watchdog line + presence of `kfd_restore_wq`).
 
 **mnbt 24576/32768 replicate runs (formerly "Run 3/4" here): DEPROIORITIZED,
 not cancelled.** Superseded in queue order by the NV-comparison push below,
@@ -56,10 +58,21 @@ found C80 with mns==conc==80 (zero slack) cost -7.2%, and explicitly noted
 follow-up was never run. This time C80 gets 60 slots of slack (mns 140),
 not zero.
 
-**Open dependency before dispatch:** `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS`
-currently defaults to `0` in the launcher (Run 2's setting). Decide whether
-Run 3 keeps `0` or reverts to `1` based on Run 2's result once it lands —
-do not dispatch Run 3 with an unexamined 4th variable riding along by default.
+**Open dependency: RESOLVED.** `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS` is
+back to `1` (Run 2 settled it negative — it causes the KFD thrash hang). Run 3
+carries no 4th variable.
+
+**REVISIT `dram-utilization 0.72` BEFORE DISPATCHING.** Staged at 0.72 (up from
+0.65) before Run 2's triage revealed host RAM is already at **2,136 / 3,023 GB
+used, only 13 GB free** (8 workers x ~247 GB RSS = the CPU offload tier). The
+old note says 0.80 OOM'd the host and 0.65 is the "known-safe ceiling" — with
+only 13 GB genuinely free, 0.72 has less headroom than it looked when staged,
+and a host OOM would be a worse failure than a slow run. **Options:** (a) keep
+0.65 and test MNS+CONC only, isolating the NV-derived levers that actually
+matter; (b) go to 0.68 as a smaller step; (c) keep 0.72 and accept the risk.
+Recommend (a) — DRAM was the weakest-motivated of the three anyway (NV's
+advantage was mns/KV-saturation, not host DRAM), and dropping it also makes
+this a 2-variable run instead of 3.
 
 **Watch for:** the historical N5 finding (this file) that mns=96 once killed
 the engine via an executor RPC/dequeue timeout on an older config/image —

@@ -2,8 +2,24 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-10 20:36 IST | W5-14b done: EP=8 clean = 11,378.2, -5.1% vs EP=1.
-  EP=1 wins. Dispatching Run 2 (CUDAGRAPHS=0) next in the sequential chain.
+2026-09-10 21:12 IST | W5-15 (CUDAGRAPHS=0) hung in warmup, cancelled.
+  ROOT-CAUSED a failure class that has been unexplained all campaign --
+  see below. Node cleaning up (VRAM stranded, kfd_restore_wq unwinding).
+
+NEW ROOT CAUSE FOUND (W5-15, the most useful thing this slot produced)
+  Symptom: warmup flat at a tiny count, GPUs 0%, workers ~330% CPU,
+    and crucially NO RCCL watchdog line ever.
+  Cause:   kworker/u512:N+kfd_restore_wq pinned ~90% CPU = the AMD KFD
+    driver's GPU-memory evict/restore queue thrashing. vLLM
+    over-allocates KV, allocation "succeeds", driver then pages GPU
+    buffers in/out forever. Nothing executes.
+  Trigger: anything inflating KV past what VRAM can hold --
+    CUDAGRAPHS=0 (+8.4% KV, this run) and gmu>0.90 (N7/T166 +9.7%,
+    T157) are THE SAME BUG by two routes. Both now settled negative.
+  Bonus:   kfd_restore_wq keeps burning CPU after workers are killed to
+    zombies -- that is also the stranded-VRAM mechanism.
+  How to tell apart from the RCCL desync: no watchdog line + presence
+    of kfd_restore_wq in ps. Recorded in Kimi-vLLM-Learnings.md sec 8.
 
 RESULTS THIS SLOT (all C72 unless noted, 12,123 baseline / 11,990 = #54736-only ref)
   EP=8    (clean, #54736-only)  11,378.2  (-5.1%)   KV +0.47% (up, not down)
