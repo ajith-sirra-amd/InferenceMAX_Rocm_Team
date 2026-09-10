@@ -62,17 +62,15 @@ not zero.
 back to `1` (Run 2 settled it negative — it causes the KFD thrash hang). Run 3
 carries no 4th variable.
 
-**REVISIT `dram-utilization 0.72` BEFORE DISPATCHING.** Staged at 0.72 (up from
-0.65) before Run 2's triage revealed host RAM is already at **2,136 / 3,023 GB
-used, only 13 GB free** (8 workers x ~247 GB RSS = the CPU offload tier). The
-old note says 0.80 OOM'd the host and 0.65 is the "known-safe ceiling" — with
-only 13 GB genuinely free, 0.72 has less headroom than it looked when staged,
-and a host OOM would be a worse failure than a slow run. **Options:** (a) keep
-0.65 and test MNS+CONC only, isolating the NV-derived levers that actually
-matter; (b) go to 0.68 as a smaller step; (c) keep 0.72 and accept the risk.
-Recommend (a) — DRAM was the weakest-motivated of the three anyway (NV's
-advantage was mns/KV-saturation, not host DRAM), and dropping it also makes
-this a 2-variable run instead of 3.
+**`dram-utilization 0.72` CONFIRMED OK — an earlier concern here was wrong and
+is retracted.** I briefly flagged 0.72 as risky on the basis of `free -g`
+showing only 13 GB **free** during Run 2's triage. That was a misreading:
+`free` excludes reclaimable page cache. The number that governs whether an
+allocation succeeds is **`available`, which was 887-908 GB**. Going 0.65 ->
+0.72 adds roughly +211 GB of offload tier (~1,965 -> ~2,176 GB of 3,023 GB
+total), comfortably inside `available`. Still well under the 0.80 that
+historically OOM'd the host. **Dispatch at 0.72 as instructed.** Lesson worth
+keeping: read `available`, not `free`, when sizing the CPU offload tier.
 
 **Watch for:** the historical N5 finding (this file) that mns=96 once killed
 the engine via an executor RPC/dequeue timeout on an older config/image —
