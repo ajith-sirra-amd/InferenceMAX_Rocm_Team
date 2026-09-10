@@ -62,7 +62,7 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
 export APPLY_PR_54736="${APPLY_PR_54736:-0}"   # already BAKED into rec-d9105-54736only; leave 0 there
 export APPLY_PR_56036="${APPLY_PR_56036:-0}"   # W5-8d MEASURED -2.3% vs baseline. Dropped, do not re-enable without new evidence.
-export APPLY_PR_52190="${APPLY_PR_52190:-0}"   # W5-11: parked pending owner call (draft PR, same standard as #52968). Was staged for W5-10.
+export APPLY_PR_52190="${APPLY_PR_52190:-1}"   # W5-12 (owner instruction 2026-09-10): torch.compile fusion passes -- try it.
 "$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 # Pre-baked image short-circuit. kimi-k3-vllm:v4 ships the overlay AND the PR
