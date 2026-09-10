@@ -9,7 +9,7 @@ wait_for_amd_gpu_clean
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
 # T251 gate PASSED (GSM8K 0.995 on rec-no53940) -- back to false.
-export EVAL_ONLY="${EVAL_ONLY:-true}"   # W5-2: perf
+export EVAL_ONLY="${EVAL_ONLY:-false}"   # W5-2: perf
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -231,9 +231,9 @@ export SAFETENSORS_FAST_GPU=1
 # A4W4 GATE (2026-09-11): ATOM ships AITER_SITUV2_A4W4=1 (fp4 MoE activations)
 # where we ship A8W4 (fp8). aiter/fused_moe.py:900 checks A8W4 FIRST, so A8W4
 # must be 0 or A4W4 is dead. NUMERICS change -> GSM8K-200 gate before any perf run.
-export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4="${VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4:-0}"
-export AITER_SITUV2_A8W4="${AITER_SITUV2_A8W4:-0}"
-export AITER_SITUV2_A4W4="${AITER_SITUV2_A4W4:-1}"
+export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4="${VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4:-1}"
+export AITER_SITUV2_A8W4="${AITER_SITUV2_A8W4:-1}"
+export AITER_SITUV2_A4W4="${AITER_SITUV2_A4W4:-0}"
 export AITER_FLYDSL_STAGE2_FP8="${AITER_FLYDSL_STAGE2_FP8:-1}"   # ATOM runs this; supported in our aiter (fused_moe.py:2092). Raises loudly if model_dim not divisible.
 export AITER_BF16_FP8_MOE_BOUND=0
 # T278 v1 died at engine init on nightly-1970f3ed:
@@ -270,7 +270,7 @@ export AITER_QUICK_REDUCE_QUANTIZATION="${AITER_QUICK_REDUCE_QUANTIZATION:-NONE}
 # 1 = the pre-SA legacy block (gmu 0.88, mns 80, mnbt 16384, workers 1, rc3).
 # Exported here so every inline ${K3_LEGACY_LMCACHE:-1} downstream sees it.
 export K3_LEGACY_LMCACHE="${K3_LEGACY_LMCACHE:-0}"
-export AITER_SITUV2_A8W4="${AITER_SITUV2_A8W4:-0}"   # A4W4 gate: was hardcoded 1, now overridable (see A4W4 block above)
+export AITER_SITUV2_A8W4="${AITER_SITUV2_A8W4:-1}"   # A4W4 gate: was hardcoded 1, now overridable (see A4W4 block above)
 export HSA_NO_SCRATCH_RECLAIM=1
 
 # T234: HSA_STATUS_ERROR_OUT_OF_RESOURCES workaround -- BARE IMAGES ONLY.
