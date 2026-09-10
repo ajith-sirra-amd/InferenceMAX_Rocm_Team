@@ -5,6 +5,7 @@ set -x
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
  export EVAL_FRAMEWORK="lm-eval"
+ export AIPERF_WARMUP_REQUESTS_PER_LANE=1
  
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
  
