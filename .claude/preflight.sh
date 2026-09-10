@@ -31,7 +31,11 @@ WINDOWS=(
   # Without this the time-budget gate refuses T296 - at 10:46 it sees 104 min
   # against a 105-min requirement and blocks the last run of the slot.
   "2026-09-08 23:30|2026-09-09 12:40|W3+W4 (+10m overrun allowed by owner)"
-  "2026-09-09 23:30|2026-09-10 23:59|W5 (owner 2026-09-09: 23:30 tonight + all of Thu)"
+  # W5 EXTENDED OPEN-ENDED by the owner on 2026-09-10: "I got you slot extended.
+  # no worries about slot time from now. I will tell you if you need to know."
+  # End date is a placeholder, not a known boundary - the owner will say when it
+  # changes. Do NOT infer a deadline from it or refuse a dispatch on time budget.
+  "2026-09-09 23:30|2026-09-30 23:59|W5 (extended open-ended by owner 2026-09-10)"
 )
 
 FAIL=0
