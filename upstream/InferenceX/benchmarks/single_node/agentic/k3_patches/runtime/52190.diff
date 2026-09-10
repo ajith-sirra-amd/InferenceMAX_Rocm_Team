@@ -1,0 +1,257 @@
+diff --git a/vllm/config/compilation.py b/vllm/config/compilation.py
+--- a/vllm/config/compilation.py
++++ b/vllm/config/compilation.py
+@@ -774,6 +774,7 @@
+         "vllm::linear_attention",
+         "vllm::qwen_gdn_attention_core",
+         "vllm::qwen_gdn_attention_core_fused_norm_packed",
++        "vllm::kimi_kda_attention_core",
+         "vllm::gdn_attention_core_xpu",
+         "vllm::olmo_hybrid_gdn_full_forward",
+         "vllm::sparse_attn_indexer",
+diff --git a/vllm/models/kimi_k3/amd/kda.py b/vllm/models/kimi_k3/amd/kda.py
+--- a/vllm/models/kimi_k3/amd/kda.py
++++ b/vllm/models/kimi_k3/amd/kda.py
+@@ -40,6 +40,7 @@
+ )
+ from vllm.model_executor.model_loader.weight_utils import sharded_weight_loader
+ from vllm.model_executor.utils import set_weight_attrs
++from vllm.utils.torch_utils import direct_register_custom_op
+ from vllm.models.kimi_k3.amd.kda_metadata import KimiK3ROCmKDABackend
+ from vllm.models.kimi_k3.amd.ops.kda_decode import (
+     is_fused_kda_decode_supported,
+diff --git a/vllm/models/kimi_k3/amd/kda.py b/vllm/models/kimi_k3/amd/kda.py
+index 868a1df171f5..e226beb7234b 100644
+--- a/vllm/models/kimi_k3/amd/kda.py
++++ b/vllm/models/kimi_k3/amd/kda.py
+@@ -229,12 +230,13 @@ def forward(
+             device=hidden_states.device,
+         )
+ 
+-        self._forward(
+-            mixed_qkv=mixed_qkv,
+-            g1=g1,
+-            g2=g2,
+-            beta=beta,
+-            core_attn_out=core_attn_out,
++        torch.ops.vllm.kimi_kda_attention_core(
++            mixed_qkv,
++            g1,
++            g2,
++            beta,
++            core_attn_out,
++            self.prefix,
+         )
+         core_attn_out = rearrange(core_attn_out, "1 n h d -> n (h d)")
+         output[:] = self.o_proj(core_attn_out)[0]
+@@ -528,3 +530,48 @@ def _prefill_conv(
+         else:
+             assert core_attn_out_spec is not None
+         core_attn_out.copy_(self.o_norm(core_attn_out, g2))
++
++
++def kimi_kda_attention_core(
++    mixed_qkv: torch.Tensor,
++    g1: torch.Tensor,
++    g2: torch.Tensor,
++    beta: torch.Tensor,
++    core_attn_out: torch.Tensor,
++    layer_name: str,
++) -> None:
++    """Custom-op wrapper around the KDA conv1d + recurrent/chunk core.
++
++    ``core_attn_out`` is mutated in place. Registering this as a custom op
++    (and listing it in ``splitting_ops``) keeps the KDA branch visible to
++    torch.compile: without it the call has no compiler-visible effect and
++    the whole linear-attention path is eliminated from the graph.
++    """
++    forward_context = get_forward_context()
++    self = forward_context.no_compile_layers[layer_name]
++    self._forward(
++        mixed_qkv=mixed_qkv,
++        g1=g1,
++        g2=g2,
++        beta=beta,
++        core_attn_out=core_attn_out,
++    )
++
++
++def kimi_kda_attention_core_fake(
++    mixed_qkv: torch.Tensor,
++    g1: torch.Tensor,
++    g2: torch.Tensor,
++    beta: torch.Tensor,
++    core_attn_out: torch.Tensor,
++    layer_name: str,
++) -> None:
++    return
++
++
++direct_register_custom_op(
++    op_name="kimi_kda_attention_core",
++    op_func=kimi_kda_attention_core,
++    mutates_args=["core_attn_out"],
++    fake_impl=kimi_kda_attention_core_fake,
++)
+diff --git a/vllm/models/kimi_k3/amd/latent_moe_runner.py b/vllm/models/kimi_k3/amd/latent_moe_runner.py
+index db1c078b5d80..657bac5d6d8d 100644
+--- a/vllm/models/kimi_k3/amd/latent_moe_runner.py
++++ b/vllm/models/kimi_k3/amd/latent_moe_runner.py
+@@ -45,13 +45,17 @@ def __init__(
+         if self._tail_shardable:
+             assert up_proj is not None
+             self._up_proj_shard_size = up_proj.weight.shape[0] // tp_size
++            logger.info_once(
++                "Kimi-K3 latent-MoE tail: up-projecting only this rank's "
++                "hidden shard into the shared output.",
++                scope="global",
++            )
+         else:
+             logger.warning_once(
+                 "K3 latent-MoE tail is not shardable under this config, "
+                 "falling back to the replicated up-projection.",
+                 scope="global",
+             )
+-        self._logged_sharded_tail = False
+ 
+     def _shard_up_proj_tail(
+         self,
+@@ -62,14 +66,6 @@ def _shard_up_proj_tail(
+         """
+         Tier 2: column-parallel up-projection folded into the final reduce.
+         """
+-        if not self._logged_sharded_tail:
+-            self._logged_sharded_tail = True
+-            logger.info_once(
+-                "Kimi-K3 latent-MoE tail: up-projecting only this rank's "
+-                "hidden shard into the shared output.",
+-                scope="global",
+-            )
+-
+         transform = self.routed_output_transform
+         assert transform is not None
+ 
+diff --git a/vllm/models/kimi_k3/amd/linear.py b/vllm/models/kimi_k3/amd/linear.py
+index 5cb916ef54ee..e439fd6b99e4 100644
+--- a/vllm/models/kimi_k3/amd/linear.py
++++ b/vllm/models/kimi_k3/amd/linear.py
+@@ -7,6 +7,7 @@
+ import torch
+ from torch import nn
+ 
++from vllm.compilation.decorators import support_torch_compile
+ from vllm.config import CacheConfig, VllmConfig
+ from vllm.distributed import (
+     get_pp_group,
+@@ -662,6 +663,7 @@ def forward_attn_residual(
+         return prefix_sum, block_residual
+ 
+ 
++@support_torch_compile
+ class KimiLinearModel(nn.Module, EagleModelMixin):
+     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+         super().__init__()
+diff --git a/vllm/models/kimi_k3/amd/ops/attn_res.py b/vllm/models/kimi_k3/amd/ops/attn_res.py
+index 5802e603670a..6afa0188d55d 100644
+--- a/vllm/models/kimi_k3/amd/ops/attn_res.py
++++ b/vllm/models/kimi_k3/amd/ops/attn_res.py
+@@ -11,6 +11,7 @@
+ import torch
+ 
+ from vllm.triton_utils import tl, triton
++from vllm.utils.torch_utils import direct_register_custom_op
+ 
+ 
+ @triton.jit
+@@ -136,7 +137,7 @@ def _attn_res_kernel(
+     )
+ 
+ 
+-def attn_res(
++def _attn_res_impl(
+     prefix: torch.Tensor,
+     delta: torch.Tensor | None,
+     blocks: torch.Tensor,
+@@ -191,3 +192,82 @@ def attn_res(
+         num_stages=2,
+     )
+     return output
++
++
++def _kimi_attn_res(
++    prefix: torch.Tensor,
++    delta: torch.Tensor | None,
++    blocks: torch.Tensor,
++    norm_weight: torch.Tensor,
++    qk_weight: torch.Tensor,
++    output_norm_weight: torch.Tensor | None,
++    num_blocks: int,
++    block_write_idx: int,
++    eps: float,
++    output_norm_eps: float,
++) -> torch.Tensor:
++    return _attn_res_impl(
++        prefix, delta, blocks, norm_weight, qk_weight, output_norm_weight,
++        num_blocks, block_write_idx, eps, output_norm_eps,
++    )
++
++
++def _kimi_attn_res_fake(
++    prefix: torch.Tensor,
++    delta: torch.Tensor | None,
++    blocks: torch.Tensor,
++    norm_weight: torch.Tensor,
++    qk_weight: torch.Tensor,
++    output_norm_weight: torch.Tensor | None,
++    num_blocks: int,
++    block_write_idx: int,
++    eps: float,
++    output_norm_eps: float,
++) -> torch.Tensor:
++    return prefix.new_empty(prefix.shape)
++
++
++direct_register_custom_op(
++    op_name="kimi_attn_res",
++    op_func=_kimi_attn_res,
++    # WRITE_BLOCK=block_write_idx >= 0 makes the kernel store this layer's
++    # prefix sum into blocks[:, block_write_idx, :].
++    mutates_args=["blocks"],
++    fake_impl=_kimi_attn_res_fake,
++)
++
++
++def attn_res(
++    prefix: torch.Tensor,
++    delta: torch.Tensor | None,
++    blocks: torch.Tensor,
++    norm_weight: torch.Tensor,
++    qk_weight: torch.Tensor,
++    output_norm_weight: torch.Tensor | None,
++    num_blocks: int,
++    block_write_idx: int,
++    eps: float,
++    output_norm_eps: float,
++) -> torch.Tensor:
++    """Custom-op entry point for the attn-res kernel.
++
++    Two reasons this must not be traced by Dynamo:
++
++    * The launcher picks its tile/warp config from the token count
++      (``num_tokens == 0``, ``num_tokens >= 256``) and uses a ``(num_tokens,)``
++      grid. Traced directly, Dynamo evaluates those against the profile-run
++      batch and emits a dynamic-shape guard (``s >= 256``). vLLM drops such
++      guards, so the artifact specialised for the large-batch branch is then
++      reused for small decode batches.
++    * With ``block_write_idx >= 0`` the kernel writes into ``blocks`` in place.
++      Traced, that functionalises into ``select_scatter`` + ``copy_`` on a
++      graph input, forcing the attn-res block bank -- a buffer created inside
++      the traced region -- to be lifted to a mutated graph input.
++
++    Both showed up as failing ``assert_size_stride`` and CUDA illegal memory
++    accesses once CUDA graphs were enabled.
++    """
++    return torch.ops.vllm.kimi_attn_res(
++        prefix, delta, blocks, norm_weight, qk_weight, output_norm_weight,
++        num_blocks, block_write_idx, eps, output_norm_eps,
++    )
