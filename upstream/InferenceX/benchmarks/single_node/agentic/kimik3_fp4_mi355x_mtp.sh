@@ -229,6 +229,7 @@ export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
 export SAFETENSORS_FAST_GPU=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
+export AITER_FLYDSL_STAGE2_FP8="${AITER_FLYDSL_STAGE2_FP8:-1}"   # ATOM runs this; supported in our aiter (fused_moe.py:2092). Raises loudly if model_dim not divisible.
 export AITER_BF16_FP8_MOE_BOUND=0
 # T278 v1 died at engine init on nightly-1970f3ed:
 #   "piecewise CUDA graphs (cudagraph_mode=FULL_AND_PIECEWISE) unavailable,
@@ -695,7 +696,6 @@ echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 # executor's RPC dequeue timeout, and the sentinel promotes that to fatal.
 # mns 80 completed twice on this exact image (T163, T164). Do not raise it
 # again without first raising that timeout.
-export MAX_NUM_SEQS="${MAX_NUM_SEQS:-140}"   # high-conc retry after Run3b RCCL death
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
         # Flat 80. Tracking conc was tried (T219, mns 20 at C16) and caused total
