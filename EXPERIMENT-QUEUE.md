@@ -1,31 +1,48 @@
-## NEXT DISPATCH (W5-13 completed 2026-09-10 12:07 UTC: 11,756 tok/s/GPU,
-## KV 30,089,572 at mnbt 8192 — see Kimi-DCP-Experiemnts-Summary.md. Dispatch below now.)
+## NEXT DISPATCH (after W5-14 completes)
 
-**W5-14 — EP=8, at our best-known recipe.** Owner (2026-09-10): *"Queue best perf
-number with ep=8."* EP=1 vs EP=8 has genuinely never been measured for our TP8
-axis (`amd-master.yaml` note: "Never passed in 54 trials — every row set ep: 1";
-T67 DP2/TP4/EP8 used a different axis combo). ONE variable vs the best comparison
-run (T286, 12,093):
+**W5-14 status (in flight):** EP=8 test IS CONFOUNDED BY #52190 -- server log
+`[pr] on: 52190 off: 54736 55966 56036` shows the runtime patch layer applied
+`APPLY_PR_52190` on top of `rec-d9105-best`, because that flag's default was
+never reset to 0 after W5-12c measured #52190 at -1.4% and dropped it. Fixed
+in the launcher NOW (default flipped to 0, comment mirrors #56036's), so it
+will not leak into future dispatches -- but W5-14's own KV/throughput number
+must be reported with this caveat: it is EP=8+#52190 combined, not EP=8 alone.
+KV pool measured mid-run at 28,972,610 (vs T286's 28,733,261 EP=1 baseline,
++239,349/+0.83% -- small, could be noise, but is NOT a decrease, contradicting
+my own pre-run speculation that EP capacity-factor overhead would cost KV).
 
-- `upstream/InferenceX/configs/amd-master.yaml` line ~2214: flip `ep: 1` → `ep: 8`
-  on the live search-space row, `conc-list: [70]` → `[72]` (back to the best-known
-  CONC, since this run's job is to isolate EP, not re-test CONC or mnbt).
-- Image: `kimi-k3-vllm:rec-d9105-best` (all 3 patches, the T286 recipe) — NOT
-  `rec-d9105-54736only`, so the comparison is against the actual 12,093 best, not
-  W5-13's single-patch config.
-- `K3_MNBT`: set explicitly to `16384` (T286's value) — do not inherit W5-13's
-  `MBT_DEFAULT="${K3_MNBT:-8192}"` default, which was only for the mnbt sweep.
-- Confirm `EP_SIZE` actually reaches the launcher as 8 (wired via
-  `matrix.config.ep` → env in `.github/workflows/e2e-tests.yml`, consumed at
-  `kimik3_fp4_mi355x_mtp.sh:542-545` → `--enable-expert-parallel`) — grep the
-  dispatched job's `non-default args` log line for `enable_expert_parallel` once
-  it boots, since this flag has never fired in the campaign before and its
-  wiring is unverified in practice (only verified by code-reading).
-- Treat as **ATTRIBUTION**, not optimization — let it finish regardless of
-  tput_in_srv thresholds. Its number is the first-ever EP=8 data point.
-- If it fails to boot or OOMs, that itself is data (answers the "does EP=8 cost
-  or save KV pool" question the owner asked directly beforehand) — record
-  whatever happens, do not just retry blindly.
+**W5-15 — `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0`, at the actual best
+recipe.** Owner (2026-09-10): *"Set this as VLLM_MEMORY_PROFILER_ESTIMATE_
+CUDAGRAPHS=0 & re-run your best perf."* New lever, never tested before --
+surfaced by a W5-14 log line: `CUDA graph memory profiling is enabled
+(default since v0.21.0). The current --gpu-memory-utilization=0.9000 is
+equivalent to --gpu-memory-utilization=0.8855 without CUDA graph memory
+profiling.` I.e. at nominal gmu 0.90, this profiling silently reserves ~1.3-
+1.5% of GPU memory defensively for CUDA graphs; disabling it should free
+that back to the KV pool. This has been running as an unexamined default
+(`=1`, hardcoded) on every single run in the campaign to date. ONE variable
+vs T286 (12,093, the actual best, EP=1):
+
+- `amd-master.yaml` line ~2214: flip `ep: 8` back to `ep: 1` (the currently-
+  staged EP=8 row is from W5-14; "best perf" means the T286 recipe, not the
+  EP=8 experiment) — `conc-list` stays `[72]`.
+- Image stays `kimi-k3-vllm:rec-d9105-best`, `K3_MNBT` stays `16384`.
+- `APPLY_PR_52190` now correctly defaults to `0` (fixed above) — confirm the
+  dispatched job's `[pr]` gate line shows `on: none off: 52190 54736 55966
+  56036` (all off/baked), so this is a genuinely clean one-variable test
+  unlike W5-14.
+- Launcher default flipped from hardcoded `=1` to overridable
+  `"${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}"` — set
+  `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0` explicitly for this dispatch
+  (dispatch.sh doesn't pass extra `-f` env vars, so this needs setting the
+  launcher's own default to `0` for this one run, then reverting after,
+  OR confirm whether the CI job env supports a workflow_dispatch input for
+  arbitrary env vars — check `e2e-tests.yml` inputs before assuming).
+- Watch KV cache size at boot (`kv_cache_utils.py` "GPU KV cache size: N
+  tokens" line) against T286's 28,733,261 baseline — the predicted direction
+  is UP if this lever does what the log line implies.
+- Treat as attribution-adjacent: if KV goes up but throughput doesn't, that
+  is still a real, useful result (more KV headroom without a speed line).
 
 ---
 

@@ -2,7 +2,8 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-10 17:48 IST | W5-13 (mnbt sweep) done, W5-14 (EP=8) staged next
+2026-09-10 18:56 IST | W5-14 cancelled (confounded by leftover #52190 flag,
+  now fixed); redispatching W5-14b, clean EP=8 vs the #54736-only baseline
 
 RESULTS THIS SLOT (all C72 unless noted, 12,123 baseline / 11,990 = #54736-only ref)
   #56036  AITER KDA prefill     11,715.5  (-2.3%)   4 attempts, 3 died

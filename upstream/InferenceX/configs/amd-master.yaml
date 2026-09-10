@@ -1974,9 +1974,12 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # T249: CCD pinning arm on the NEW BEST config. T247 (this image, no a4w4)
   # = 11,006, the best in the ledger. Only variable here is PIN_CCD=1.
   # T272: back to OUR patched image, C72 baseline config, gmu 0.92.
-  # W5-14: rec-d9105-best (all 3 patches, the T286/12,093 recipe) so the
-  # EP=8 test compares against the actual best, not the #54736-only config.
-  image: kimi-k3-vllm:rec-d9105-best
+  # W5-14 CANCELLED: rec-d9105-best carried a confound -- APPLY_PR_52190
+  # still defaulted to 1 (fix applied at the launcher, not reverted here in
+  # time), so that run was EP=8+#52190 stacked, not EP=8 alone. W5-14b
+  # (owner instruction): rec-d9105-54736only (single, well-established PR)
+  # so EP is genuinely the only variable vs the 11,990 (W5-2) baseline.
+  image: kimi-k3-vllm:rec-d9105-54736only
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel

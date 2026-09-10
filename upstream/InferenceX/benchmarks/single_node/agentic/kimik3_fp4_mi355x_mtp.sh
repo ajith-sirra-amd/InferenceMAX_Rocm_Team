@@ -62,7 +62,9 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
 export APPLY_PR_54736="${APPLY_PR_54736:-0}"   # already BAKED into rec-d9105-54736only; leave 0 there
 export APPLY_PR_56036="${APPLY_PR_56036:-0}"   # W5-8d MEASURED -2.3% vs baseline. Dropped, do not re-enable without new evidence.
-export APPLY_PR_52190="${APPLY_PR_52190:-1}"   # W5-12 (owner instruction 2026-09-10): torch.compile fusion passes -- try it.
+export APPLY_PR_52190="${APPLY_PR_52190:-0}"   # W5-12c MEASURED -1.4% vs baseline. Dropped, do not re-enable without new evidence.
+                                                # NOTE: defaulted to 1 from W5-12 through W5-14 -- W5-14's EP=8 result is
+                                                # confounded by #52190 also being applied; not a clean EP-only isolation.
 "$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 # Pre-baked image short-circuit. kimi-k3-vllm:v4 ships the overlay AND the PR
@@ -304,7 +306,10 @@ else
     echo "[gmu] patched image -- using script default (see [gmu] line below)"
 fi
 export VLLM_K3_KDA_SAFE_STAGES=1
-export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
+export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}"   # W5-14 log: at gmu 0.90 this profiling makes the
+                                                                                                    # EFFECTIVE gmu only ~0.885-0.887 (CUDA graph memory reserved
+                                                                                                    # defensively). Disabling it (=0) should free that ~1.3-1.5%
+                                                                                                    # back to KV pool -- untested, queued next vs the T286 baseline.
 
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
 export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
