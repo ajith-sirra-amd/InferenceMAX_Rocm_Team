@@ -592,7 +592,7 @@ export AITER_DISABLE_FMHA_OPUS=1
 SPEC_ENABLE="${SPEC_DECODING:-}"
 case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
 case "$CONC" in
-    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;
+    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-4}" ;;   # W5-7: k=8 gave TPOT p90 9.28ms vs 7ms target. Golden AL saturates (k=7->3.84, k=8->4.00) while draft cost grows linearly, so a smaller k may cut TPOT. k=4 -> AL 3.36: halves draft work for a 16% acceptance loss.
     *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
 esac
 if [ "$SPEC_NUM_TOKENS" -eq 0 ]; then SPEC_ENABLE=""; fi
