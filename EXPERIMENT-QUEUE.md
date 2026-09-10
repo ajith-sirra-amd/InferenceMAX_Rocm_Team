@@ -1,48 +1,40 @@
-## NEXT DISPATCH (after W5-14 completes)
+## NEXT DISPATCH — sequential chain (owner, 2026-09-10), each step ONE variable
+## vs the step before it. Run 1 (W5-14b, EP=8 vs #54736-only) is IN FLIGHT now.
+## Runs 2-4 below are BLOCKED on Run 1's winner (EP=1 or EP=8) -- do not
+## configure Run 2 until W5-14b's result is in.
 
-**W5-14 status (in flight):** EP=8 test IS CONFOUNDED BY #52190 -- server log
-`[pr] on: 52190 off: 54736 55966 56036` shows the runtime patch layer applied
-`APPLY_PR_52190` on top of `rec-d9105-best`, because that flag's default was
-never reset to 0 after W5-12c measured #52190 at -1.4% and dropped it. Fixed
-in the launcher NOW (default flipped to 0, comment mirrors #56036's), so it
-will not leak into future dispatches -- but W5-14's own KV/throughput number
-must be reported with this caveat: it is EP=8+#52190 combined, not EP=8 alone.
-KV pool measured mid-run at 28,972,610 (vs T286's 28,733,261 EP=1 baseline,
-+239,349/+0.83% -- small, could be noise, but is NOT a decrease, contradicting
-my own pre-run speculation that EP capacity-factor overhead would cost KV).
+**W5-14 (first attempt) CANCELLED:** confounded by leftover `APPLY_PR_52190`
+default (fixed in the launcher). See Kimi-DCP-Experiemnts-Summary.md for the
+mid-run KV reading (28,972,610, +0.83% vs EP=1) salvaged from it.
 
-**W5-15 — `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0`, at the actual best
-recipe.** Owner (2026-09-10): *"Set this as VLLM_MEMORY_PROFILER_ESTIMATE_
-CUDAGRAPHS=0 & re-run your best perf."* New lever, never tested before --
-surfaced by a W5-14 log line: `CUDA graph memory profiling is enabled
-(default since v0.21.0). The current --gpu-memory-utilization=0.9000 is
-equivalent to --gpu-memory-utilization=0.8855 without CUDA graph memory
-profiling.` I.e. at nominal gmu 0.90, this profiling silently reserves ~1.3-
-1.5% of GPU memory defensively for CUDA graphs; disabling it should free
-that back to the KV pool. This has been running as an unexamined default
-(`=1`, hardcoded) on every single run in the campaign to date. ONE variable
-vs T286 (12,093, the actual best, EP=1):
+**Run 1 (W5-14b, in flight, run 34482605450):** `rec-d9105-54736only`, C72,
+mnbt 16384, **EP=8**. vs W5-2 (11,990, EP=1, same image). Winner (EP=1 or
+EP=8, whichever is faster/not worse) becomes the EP setting for all of runs
+2-4 below.
 
-- `amd-master.yaml` line ~2214: flip `ep: 8` back to `ep: 1` (the currently-
-  staged EP=8 row is from W5-14; "best perf" means the T286 recipe, not the
-  EP=8 experiment) — `conc-list` stays `[72]`.
-- Image stays `kimi-k3-vllm:rec-d9105-best`, `K3_MNBT` stays `16384`.
-- `APPLY_PR_52190` now correctly defaults to `0` (fixed above) — confirm the
-  dispatched job's `[pr]` gate line shows `on: none off: 52190 54736 55966
-  56036` (all off/baked), so this is a genuinely clean one-variable test
-  unlike W5-14.
-- Launcher default flipped from hardcoded `=1` to overridable
-  `"${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}"` — set
-  `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0` explicitly for this dispatch
-  (dispatch.sh doesn't pass extra `-f` env vars, so this needs setting the
-  launcher's own default to `0` for this one run, then reverting after,
-  OR confirm whether the CI job env supports a workflow_dispatch input for
-  arbitrary env vars — check `e2e-tests.yml` inputs before assuming).
-- Watch KV cache size at boot (`kv_cache_utils.py` "GPU KV cache size: N
-  tokens" line) against T286's 28,733,261 baseline — the predicted direction
-  is UP if this lever does what the log line implies.
-- Treat as attribution-adjacent: if KV goes up but throughput doesn't, that
-  is still a real, useful result (more KV headroom without a speed line).
+**Run 2:** `rec-d9105-54736only`, C72, mnbt 16384, **EP=<Run 1 winner>**,
+**`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0`** (new lever — launcher already
+patched to accept the override, see `kimik3_fp4_mi355x_mtp.sh` line ~307).
+One variable vs Run 1's winning config: does disabling CUDA-graph memory
+profiling recover the ~1.3-1.5% GPU memory it reserves defensively (the W5-14
+log line: gmu 0.90 effectively runs at ~0.885-0.887 with profiling on)? Watch
+KV cache size at boot against Run 1's fingerprint — predicted direction is up.
+
+**Run 3:** same as Run 2 but **mnbt 24576**. One variable (mnbt) vs Run 2.
+Also serves as the n=2 replicate of W5-5 (12,161, C72/mnbt24576/all-3-patches,
++0.31%, inside noise) that was already on the list to confirm — though note
+Run 3 uses `#54736-only`+EP-winner+CUDAGRAPHS=0, not W5-5's all-3-patches/EP=1
+config, so it replicates the *mnbt 24576 effect*, not W5-5's exact number.
+
+**Run 4:** same as Run 3 but **mnbt 32768**. One variable (mnbt) vs Run 3.
+**Flag before dispatching:** mnbt 32768 has FAILED DETERMINISTICALLY twice
+before (T275, T276 — both aborted on the identical trace `006c98de37d8...`,
+0 successful, described as a hard chunk-size/offload-transfer-size wall, not
+a soft KV-exhaustion issue). CUDAGRAPHS=0 recovering ~1.3-1.5% memory is
+unlikely to be the fix for a deterministic, trace-specific abort — this run
+is worth trying since EP and CUDAGRAPHS=0 are both new since T275/T276, but
+go in expecting a probable repeat failure, not treat a third death as a
+surprise.
 
 ---
 
