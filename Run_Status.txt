@@ -2,9 +2,9 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-10 15:53 IST | W5-12c done, both C72-relevant PRs now tested negative
+2026-09-10 17:48 IST | W5-13 (mnbt sweep) done, W5-14 (EP=8) staged next
 
-RESULTS THIS SLOT (all C72, 12,123 baseline / 11,990 = #54736-only ref)
+RESULTS THIS SLOT (all C72 unless noted, 12,123 baseline / 11,990 = #54736-only ref)
   #56036  AITER KDA prefill     11,715.5  (-2.3%)   4 attempts, 3 died
   #52190  torch.compile         11,954.4  (-1.4%)   3 attempts (2 checkout
                                                       failures, REPO_PAT
@@ -12,6 +12,23 @@ RESULTS THIS SLOT (all C72, 12,123 baseline / 11,990 = #54736-only ref)
                                                       after token regen,
                                                       fixed by owner)
   Neither PR helps C72. Both parked -- do not retest without new evidence.
+
+  W5-13   mnbt 8192, C70,       11,756.1           KV 30,089,572 tokens
+          #54736-only                              (vs 28,733,261 at mnbt
+                                                      16384, +1.36M for
+                                                      -8192 mnbt). Closes
+                                                      the mnbt sweep the
+                                                      owner asked for --
+                                                      relationship is
+                                                      roughly linear in
+                                                      this band, 32768
+                                                      still a hard fail.
+
+NEXT: W5-14 -- EP=8 at the best-known recipe (rec-d9105-best, C72, mnbt
+  16384), owner instruction "Queue best perf number with ep=8." Never
+  measured on our TP8 axis before (54 prior trials all ep:1). Attribution
+  run -- record whatever happens, including a boot failure/OOM, since
+  that itself answers whether EP=8 costs or saves KV pool.
 
 BEST REMAINS: C72 12,161 (W5-5, mnbt 24576, inside noise) / reproducible
   baseline 12,123 n=2. Target 12,556, gap -3.2% (-4.8% from W5-2 style

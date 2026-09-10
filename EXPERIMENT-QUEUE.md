@@ -1,4 +1,5 @@
-## NEXT DISPATCH (immediately after W5-13 completes)
+## NEXT DISPATCH (W5-13 completed 2026-09-10 12:07 UTC: 11,756 tok/s/GPU,
+## KV 30,089,572 at mnbt 8192 — see Kimi-DCP-Experiemnts-Summary.md. Dispatch below now.)
 
 **W5-14 — EP=8, at our best-known recipe.** Owner (2026-09-10): *"Queue best perf
 number with ep=8."* EP=1 vs EP=8 has genuinely never been measured for our TP8
