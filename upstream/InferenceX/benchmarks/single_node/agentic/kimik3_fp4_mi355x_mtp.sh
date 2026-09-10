@@ -306,10 +306,13 @@ else
     echo "[gmu] patched image -- using script default (see [gmu] line below)"
 fi
 export VLLM_K3_KDA_SAFE_STAGES=1
-export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-1}"   # W5-14 log: at gmu 0.90 this profiling makes the
-                                                                                                    # EFFECTIVE gmu only ~0.885-0.887 (CUDA graph memory reserved
-                                                                                                    # defensively). Disabling it (=0) should free that ~1.3-1.5%
-                                                                                                    # back to KV pool -- untested, queued next vs the T286 baseline.
+export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS="${VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS:-0}"   # Run 2 of the W5-14b sequential chain (owner 2026-09-10):
+                                                                                                    # testing =0. W5-14 log showed gmu 0.90 effectively runs at
+                                                                                                    # ~0.885-0.887 with profiling on (=1, the vLLM v0.21+ default,
+                                                                                                    # unexamined all campaign) -- disabling should free ~1.3-1.5%
+                                                                                                    # back to KV pool. No CI input passes arbitrary env vars, so
+                                                                                                    # this default itself carries the one-off change; revert to
+                                                                                                    # :-1 after this run unless the result says otherwise.
 
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
 export AIPERF_HTTP_TCP_USER_TIMEOUT=900000

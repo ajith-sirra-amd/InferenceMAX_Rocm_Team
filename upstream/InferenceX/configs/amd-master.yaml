@@ -2216,12 +2216,11 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # extra_forbidden) -- T277 v1 failed get-jobs on it. kv-offloading: none
       # is sufficient; the launcher takes TOTAL_CPU_DRAM_GB from elsewhere.
       # T278: offload RESTORED to dram -- T277 priced it at 2.57x, it is not optional.
-      # W5-14 (owner 2026-09-10, "Queue best perf number with ep=8"): ep 1->8,
-      # conc 70->72 (back to best-known CONC; W5-13 was the mnbt sweep, now
-      # closed). EP=1 vs EP=8 has never been measured on our TP8 axis before
-      # (54 prior trials all shipped ep:1). Attribution run -- record whatever
-      # happens, a boot failure/OOM is itself the answer to the KV-pool question.
-      - { tp: 8, ep: 8, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
+      # W5-14b (owner 2026-09-10) SETTLED: EP=8 clean = 11,378.2 vs EP=1's
+      # 11,990 = -5.1%, a real regression (KV pool was +0.47%, so EP=8 costs
+      # throughput, not KV). EP=1 wins -- back to ep:1 for the sequential
+      # chain's Run 2 (VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0, see launcher).
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
