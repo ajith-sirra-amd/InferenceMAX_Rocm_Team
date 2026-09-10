@@ -9,7 +9,7 @@ wait_for_amd_gpu_clean
 # RUN_EVAL=false on T188/T189/T190. 9,482 tok/s/GPU is currently unvalidated.
 # EVAL_ONLY=true runs GSM8K instead of the benchmark; EVAL_LIMIT=200 keeps it short.
 # T251 gate PASSED (GSM8K 0.995 on rec-no53940) -- back to false.
-export EVAL_ONLY="${EVAL_ONLY:-false}"   # W5-2: perf
+export EVAL_ONLY="${EVAL_ONLY:-true}"   # W5-2: perf
 export EVAL_LIMIT="${EVAL_LIMIT:-200}"
 export AIPERF_EXPERIMENTAL_FAST=0
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -228,7 +228,12 @@ echo "[dcp] size=$DCP_SIZE source=$DCP_SOURCE conc=$CONC"
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_USE_AITER=1
 export SAFETENSORS_FAST_GPU=1
-export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
+# A4W4 GATE (2026-09-11): ATOM ships AITER_SITUV2_A4W4=1 (fp4 MoE activations)
+# where we ship A8W4 (fp8). aiter/fused_moe.py:900 checks A8W4 FIRST, so A8W4
+# must be 0 or A4W4 is dead. NUMERICS change -> GSM8K-200 gate before any perf run.
+export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4="${VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4:-0}"
+export AITER_SITUV2_A8W4="${AITER_SITUV2_A8W4:-0}"
+export AITER_SITUV2_A4W4="${AITER_SITUV2_A4W4:-1}"
 export AITER_FLYDSL_STAGE2_FP8="${AITER_FLYDSL_STAGE2_FP8:-1}"   # ATOM runs this; supported in our aiter (fused_moe.py:2092). Raises loudly if model_dim not divisible.
 export AITER_BF16_FP8_MOE_BOUND=0
 # T278 v1 died at engine init on nightly-1970f3ed:
@@ -248,7 +253,7 @@ export VLLM_ROCM_USE_AITER_MOE=1
 # INT8 if it fails. Precedent for the triple is minimaxm3_fp4_mi355x_mtp.sh:131,
 # same hardware but a DIFFERENT MODEL, so it proves the kernel works here, not
 # that K3 accuracy survives it.
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"   # W5-4: back to NONE. INT4 GSM8K gate PASSED 0.995, but 0/3 INT4 perf runs survived the RCCL stall vs 4/6 on NONE (p~0.19, suggestive not proven). Parked on cost, not on accuracy.
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"   # W5-4: back to NONE. INT4 GSM8K gate PASSED 0.995, but 0/3 INT4 perf runs survived the RCCL stall vs 4/6 on NONE (p~0.19, suggestive not proven). Parked on cost, not on accuracy.
 export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
 # T266: #54494 dcp-q-replicate. Replicated vs gathered query projection is the
@@ -260,12 +265,12 @@ export VLLM_DCP_Q_REPLICATE="${VLLM_DCP_Q_REPLICATE:-0}"   # T268: C1 CONTROL, q
 # Left at NONE deliberately: INT4 quantizes the allreduce, so it is a NUMERICS
 # change and needs its own GSM8K-200 gate before it rides along on a perf anchor.
 # Queued separately. Set AITER_QUICK_REDUCE_QUANTIZATION=INT4 to opt in.
-export AITER_QUICK_REDUCE_QUANTIZATION="${AITER_QUICK_REDUCE_QUANTIZATION:-INT4}"   # 2026-09-10: SemiAnalysis ATOM runs INT4 in production (run 34349642428). Our 0/3 stall record was likely the RCCL class, not this flag. GSM8K already passed 0.995.
+export AITER_QUICK_REDUCE_QUANTIZATION="${AITER_QUICK_REDUCE_QUANTIZATION:-NONE}"   # 2026-09-10: SemiAnalysis ATOM runs INT4 in production (run 34349642428). Our 0/3 stall record was likely the RCCL class, not this flag. GSM8K already passed 0.995.
 # T271: 0 = SA settings (workers 8, chunk 12288, dev89, mnbt 8192).
 # 1 = the pre-SA legacy block (gmu 0.88, mns 80, mnbt 16384, workers 1, rc3).
 # Exported here so every inline ${K3_LEGACY_LMCACHE:-1} downstream sees it.
 export K3_LEGACY_LMCACHE="${K3_LEGACY_LMCACHE:-0}"
-export AITER_SITUV2_A8W4=1
+export AITER_SITUV2_A8W4="${AITER_SITUV2_A8W4:-0}"   # A4W4 gate: was hardcoded 1, now overridable (see A4W4 block above)
 export HSA_NO_SCRATCH_RECLAIM=1
 
 # T234: HSA_STATUS_ERROR_OUT_OF_RESOURCES workaround -- BARE IMAGES ONLY.
@@ -784,7 +789,7 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # 0.90 is the value behind every good number in the ledger; hold it fixed while
 # we establish whether the node still serves traffic at all.
 # Do not raise: 0.92 and 0.95 both hang (T211, T157). 0.88 is the tested ceiling.
-GPU_MEM_UTIL="${K3_GMU:-0.88}"   # T273: back to baseline. 0.92 was neutral at C72 (T272, +0.20%).
+GPU_MEM_UTIL="${K3_GMU:-0.9}"   # T273: back to baseline. 0.92 was neutral at C72 (T272, +0.20%).
 # T253: LMCache-ONLY overrides. Scoped deliberately -- the C72 baseline
 # (11,027 tok/s/GPU, n=2) was measured at gmu 0.90 / mns 96 and must not move.
 # SA run 33631260867 is the only LMCache configuration known to serve:
