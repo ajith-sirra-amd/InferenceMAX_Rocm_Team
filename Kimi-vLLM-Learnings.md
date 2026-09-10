@@ -503,3 +503,38 @@ Latency terms:
 3. **Both in-tree profiling paths are dead** — no `VLLM_TORCH_PROFILER_DIR` on the
    old base (T202), and `rocprofv3` deadlocks the engine (T203). Until one works we
    are optimising without a profile.
+
+
+## RCCL `_ALLGATHER_BASE` desync — a plausible mechanistic explanation (2026-09-10)
+
+Traced from `archive/kimik3_fp4_mi355x_mtp.configurable.sh` comment history, not
+independently confirmed from a live stack trace — a strong hypothesis, not a
+proven diagnosis.
+
+**Q_GATHER and KV_GATHER (the DCP query/KV all-gather kernels) have no ROCm
+port at all.** The CUDA implementation uses `multimem.st.*` PTX, NVIDIA-NVLink
+hardware-multicast only, "No AMD equivalent. NOT ported." Only the **combine**
+step (`a2a_lse_reduce`) has a working ROCm direct-kernel alternative, and only
+when the K3 overlay (a separate, older patch bundle from the current
+`k3_patches/runtime/*.diff` PR system) supplies the compiled op.
+
+**Consequence: Q/KV gather falls through to RCCL's own all-gather on EVERY
+image we have ever run, unconditionally** — regardless of #54736, #52968,
+#54889, #56036, #52190, INT4, or any combination. This is consistent with
+the campaign-long observation that every patch combination has both died and
+survived to the RCCL desync: none of them touch the one collective that
+actually hangs.
+
+**T184's documented incident matches our signature exactly:** forcing the
+direct-DCP flags off on an overlay-enabled image caused "warmup died in a hung
+_ALLGATHER (NCCL collective timeout, rank 1, VllmWorker-3)".
+
+**Our images are not repeating T184's specific mistake** — `/etc/k3-image-manifest`
+is present, so `K3_OVERLAY_APPLIED=1` and the launcher correctly takes the
+"leave DCP-direct vars at engine defaults" branch (kimik3_fp4_mi355x_mtp.sh
+~line 569). That only protects the combine step; Q/KV gather has no
+alternative to fall back to in the first place.
+
+**Not actionable via a launcher flag.** If this hypothesis is right, fixing it
+needs a ROCm-side kernel port for Q_GATHER/KV_GATHER that does not currently
+exist — not a `k3_patches` runtime patch.
