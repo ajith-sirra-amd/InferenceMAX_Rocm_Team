@@ -2,52 +2,45 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-10 11:52 IST | W5-8d running (#56036, C72, attempt 4) | slot extended open-ended
+2026-09-10 15:53 IST | W5-12c done, both C72-relevant PRs now tested negative
 
-RUNNING: W5-8d run 34444347014. #56036 AITER KDA prefill, C72,
-rec-d9105-54736only. First attempt with 279GB free (was ~30GB) after
-cleaning stale kimi images -- tests whether disk pressure was a
-compounding factor in the recent RCCL death cluster.
-compare vs W5-2 = 11,990.
+RESULTS THIS SLOT (all C72, 12,123 baseline / 11,990 = #54736-only ref)
+  #56036  AITER KDA prefill     11,715.5  (-2.3%)   4 attempts, 3 died
+  #52190  torch.compile         11,954.4  (-1.4%)   3 attempts (2 checkout
+                                                      failures, REPO_PAT
+                                                      secret went stale
+                                                      after token regen,
+                                                      fixed by owner)
+  Neither PR helps C72. Both parked -- do not retest without new evidence.
 
-QUEUED, NOT TOP PRIORITY (owner 2026-09-10): W5-9, C1 block-rejection MTP
-  Staged and pushed (commit 7a77ecca), not dispatched.
-  #55966 (open, applies clean 0 failed hunks) adds non-causal draft-block
-  support to ROCM_AITER_MLA -- the reason C1's draft was pinned to
-  TRITON_MLA. Owner-specified config:
-    attention_backend ROCM_AITER_MLA, rejection_sample_method BLOCK, k=7
-  This is not a workaround -- golden_al_distribution/*_block_rejection_
-  sample_method.yaml (already in our repo) has the SAME AL numbers we
-  hardcode (1.85..4.00) and states it was measured WITH
-  rejection_sample_method=block. "synthetic" was the proxy; "block" is
-  the reference method. May reproduce golden AL on our hw, may not --
-  either is a real result.
-  Dispatch AFTER the C72 queue (below) is worked through, not before.
+BEST REMAINS: C72 12,161 (W5-5, mnbt 24576, inside noise) / reproducible
+  baseline 12,123 n=2. Target 12,556, gap -3.2% (-4.8% from W5-2 style
+  single-patch number).
 
-DOCKER CLEANUP (2026-09-10, owner instruction): removed 13 stale
-  kimi-k3-vllm images (v2/v3, local v4 cache, pronly*, rec-a2amask,
-  rec-no53940, rec-qrep, rec-n1970*, dup rec-d9105-54736) + build cache.
-  Root disk 30G -> 279G free. Kept rec-d9105-best/=v5, -54736only, -tc,
-  rec-d9105 (all still referenced). Did NOT touch rocm/kimi-private:* or
-  rocm/pytorch-private:* (6 weeks old, different naming, not this
-  campaign, unclear ownership) -- left alone per owner correction.
+NEW FINDING: error count is patch-independent
+  W5-2 138 | W5-5 138 | W5-8d 137 | W5-12c 138 -- four different code
+  paths (compute fusion, prefill kernel, mnbt, bare stacks), same count.
+  Points at a FIXED SUBSET OF THE TRACE that always fails, not a
+  correctness issue in any tested patch. Worth investigating separately.
 
-RCCL DEATHS: 8 total. Node rebooted 2026-09-10 04:27 IST after the 7th.
-  Post-reboot: 3 runs clean (T297,W5-1,W5-2 pattern) then W5-8/8b/8c all
-  died before this reboot cycle even reached 3 clean runs -- W5-8 died
-  1st post-reboot run (this reboot), then W5-8b was itself post ANOTHER
-  reboot and died 2nd run, W5-8c died 1st run of ITS cycle. The 3-clean
-  pattern from the original reboot is not holding on repeat reboots.
-  #56036 has never produced a number across 3 attempts (W5-8/8b/8c).
+RCCL ROOT-CAUSE HYPOTHESIS (recorded in Kimi-vLLM-Learnings.md)
+  Q_GATHER/KV_GATHER have no ROCm port at all (CUDA-only PTX). Falls
+  through to RCCL unconditionally on every image tested. Explains why no
+  patch combination has ever changed the death rate. Not fixable via any
+  launcher flag -- traced from repo history (T184 incident), not an
+  independently confirmed live diagnosis.
 
-BEST SO FAR
-  C72 12,161 (W5-5, run 34419076768); reproducible baseline 12,123 n=2
-      (T286 34184741785 + T297 34312880044). Target 12,556, gap -3.2%.
-  C1  TPOT p90 9.28 ms (W5-6, run 34427307392). Target 7 ms, +33%.
+REMAINING LEVERS FOR 13,000 (increasingly thin)
+  - quick-reduce INT4: gate passed 0.995, but 0/3 completions (parked on
+    cost). Never got a perf number. Could retry now the runner/secret/disk
+    issues are resolved.
+  - prefix-cache investigation: still the largest single number (68-76%
+    measured vs 90%+ theoretical at C1), but a research task not a knob.
+  - C74 (mns pinned 96): staged, cancelled once on owner instruction, never
+    run to completion.
+  - CONC 55811+aiter#5321 pair (MoE front fusion): confirmed C1-only by
+    shape (M=1-16 decode, tuned for k=7), not applicable to C72's ~85-90
+    token decode batches.
 
-PR STACK
-  needed:  54736 (carries 54735)
-  testing: 56036 (0/3 so far, disk-pressure confound now removed)
-  queued:  55966 (C1 only, deprioritised)
-  parked:  52968 (draft, collides with 56036/55966 nothing, collides with
-           56036 on kda.py specifically), 54889 (+0.74%)
+C1 TPOT p90 = 9.28ms vs 7ms target (+33%), still open, deprioritized by
+owner earlier this slot.
