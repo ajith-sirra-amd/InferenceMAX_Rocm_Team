@@ -109,17 +109,41 @@ C=$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -c '^bmk-server$')
 if [ "${C:-0}" -eq 0 ]; then ok "no stale container" "bmk-server absent"
 else warn "no stale container" "bmk-server exists — docker rm -f it first"; fi
 
-# 7. NOTHING ALREADY IN FLIGHT ----------------------------------------------
+# 7. NOTHING ALREADY IN FLIGHT ON OUR NODE -----------------------------------
 # Scan the recent window, not just the newest run. The owner runs from a
 # separate mirror branch (2026-09-09), so a long run of theirs can still be
 # in flight while a shorter run finishes AFTER it and becomes the newest.
 # --limit 1 would read the completed one and wave us through onto a busy node.
-# No branch filter: we must see THEIR runs as well as ours.
-INFLIGHT=$(gh run list --repo $REPOSLUG --workflow "End-to-End Tests" --limit 15 \
+# No branch filter at the list stage: we must see THEIR runs as well as ours.
+#
+# 2026-09-10: this fleet has MULTIPLE physical nodes behind one Actions repo.
+# A GLM-5.2 run on branch ajith-glm-5.2 blocked us here while running on a
+# DIFFERENT runner (mi355x-amd_p02_g17) from ours (mi355x-amd_b23_07) --
+# a false block, not a shared-node conflict. Filter to OUR node's runner by
+# checking each in-flight run's actual runner_name, not just its existence.
+OUR_RUNNER_SUFFIX="b23_07"
+CANDIDATES=$(gh run list --repo $REPOSLUG --workflow "End-to-End Tests" --limit 15 \
      --json status,headBranch,databaseId \
-     -q '.[]|select(.status!="completed")|"\(.databaseId) \(.status) [\(.headBranch)]"' 2>/dev/null)
-if [ -z "$INFLIGHT" ]; then ok "no run in flight" "nothing active in last 15 runs"
-else bad "no run in flight" "ACTIVE: $(echo "$INFLIGHT" | tr '\n' ' ') — do not double-dispatch"; fi
+     -q '.[]|select(.status!="completed")|"\(.databaseId)|\(.status)|\(.headBranch)"' 2>/dev/null)
+INFLIGHT=""
+if [ -n "$CANDIDATES" ]; then
+    while IFS='|' read -r _rid _rstatus _rbranch; do
+        [ -n "$_rid" ] || continue
+        _runner=$(gh api "repos/$REPOSLUG/actions/runs/$_rid/jobs" \
+            -q '.jobs[]|select(.name|startswith("agentic") or startswith("e2e"))|.runner_name // empty' \
+            2>/dev/null | head -1)
+        # Unknown/unassigned runner (job not yet picked up) -> treat as possibly
+        # ours and block, rather than risk a false negative on our own node.
+        if [ -z "$_runner" ] || [ "$_runner" = "${_runner%$OUR_RUNNER_SUFFIX}$OUR_RUNNER_SUFFIX" ]; then
+            case "$_runner" in
+                *"$OUR_RUNNER_SUFFIX") INFLIGHT="$INFLIGHT $_rid($_rstatus/$_rbranch/$_runner)" ;;
+                "") INFLIGHT="$INFLIGHT $_rid($_rstatus/$_rbranch/runner-unknown)" ;;
+            esac
+        fi
+    done <<< "$CANDIDATES"
+fi
+if [ -z "$INFLIGHT" ]; then ok "no run in flight" "nothing active on our node ($OUR_RUNNER_SUFFIX) in last 15 runs"
+else bad "no run in flight" "ACTIVE on our node:$INFLIGHT — do not double-dispatch"; fi
 
 # 8. WORK IS PUSHED — dispatch resolves the BRANCH, not the worktree.
 #    Unpushed edits silently do not take effect. This has bitten us.
