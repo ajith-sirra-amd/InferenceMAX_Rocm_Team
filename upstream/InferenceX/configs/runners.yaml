@@ -342,3 +342,6 @@ hardware:
   cluster:mi355x-amds:
     available-cpu-dram-mib: 3_095_781
     gpus-per-node: 8
+  cluster:mi355x-amds-2:
+    available-cpu-dram-mib: 3_095_781
+    gpus-per-node: 8
