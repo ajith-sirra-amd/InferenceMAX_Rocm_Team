@@ -644,7 +644,7 @@ fi
 # T264: REVERTED to 16384 everywhere -- the 11,027 baseline value. The SA 8192
 # rule belonged to the parked LMCache/stock arms.
 # T269: SA runs mnbt 8192 at every conc above C1. Override for the SA arms.
-MBT_DEFAULT="${K3_MNBT:-16384}"   # W5-5 tested 24576: 12,161 vs 12,123 = +0.31%, inside noise, and it costs 5.5% of the KV pool (27.16M vs 28.73M). Reverted. 32768 dies deterministically (T275/T276).   # T277: REVERTED from 32768. T275 and T276 both died in warmup at 32768, and both
+MBT_DEFAULT="${K3_MNBT:-8192}"   # W5-13: C70, mnbt 8192 -- untested downward point. 16384 measured 28,733,261 KV, 24576 measured 27,160,397 (-1.57M). 32768 dies deterministically (T275/T276), so nonlinearity exists somewhere; 8192 mirrors 24576's distance from 16384 in the other direction, unmeasured.   # T277: REVERTED from 32768. T275 and T276 both died in warmup at 32768, and both
                                   # aborted on the SAME trace (006c98de37d8...) -- a deterministic failure, not the
                                   # intermittent stall. 2/2 at 32768 vs ~1-in-10 at 16384. Chunk size is not raisable
                                   # on the dram-offload path; do not retry 32768 without changing the offload backend.
