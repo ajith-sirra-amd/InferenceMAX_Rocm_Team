@@ -2,9 +2,23 @@
 
 ## Current best number and CURRENT PR PREFERENCE (2026-09-10)
 
-**Best measured: 12,161 tok/s/GPU** (W5-5, C72, all 3 patches, mnbt 24576).
-Baseline **12,123**, n=2 (T286 12,093 + T297 12,153). Target **12,556** — gap **−3.2%**.
-**C1 TPOT p90 = 9.28 ms** (W5-6, first ever p90) vs the 7 ms target — **+33%**.
+**Best measured: [12,161 tok/s/GPU](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34419076768)**
+— run `34419076768` (W5-5, C72, all 3 patches, mnbt 24576, quick-reduce NONE).
+
+| run | link | tok/s/GPU | note |
+|---|---|---|---|
+| **W5-5** | [34419076768](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34419076768) | **12,161** | best measured. mnbt 24576 — but only +0.31% vs baseline, i.e. inside noise, and it costs 5.5% of the KV pool, so 24576 was reverted |
+| T297 | [34312880044](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34312880044) | 12,153 | replicate of T286 |
+| T286 | [34184741785](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34184741785) | 12,093 | GSM8K-gated 0.995 ([gate run](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34191097158)) |
+| W5-2 | [34388560051](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34388560051) | 11,990 | **#54736 only** — the attribution run |
+
+**Baseline 12,123, n=2** (T286 + T297). Target **12,556** — gap **−3.2%**.
+**C1 TPOT p90 = [9.28 ms](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34427307392)**
+(W5-6, run `34427307392`, first time p90 has ever been measured) vs the 7 ms target — **+33%**.
+
+**The reproducible config is T286/T297 at 12,123, not W5-5 at 12,161** — W5-5's mnbt
+24576 is inside the noise band and was reverted, so 12,161 is the highest number seen
+rather than a setting worth shipping.
 
 ### PR needed NOW to reproduce the best number
 
