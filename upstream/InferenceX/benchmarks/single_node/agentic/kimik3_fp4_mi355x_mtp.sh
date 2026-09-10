@@ -62,11 +62,7 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
 export APPLY_PR_54736="${APPLY_PR_54736:-0}"   # already BAKED into rec-d9105-54736only; leave 0 there
 export APPLY_PR_56036="${APPLY_PR_56036:-0}"   # W5-8d MEASURED -2.3% vs baseline. Dropped, do not re-enable without new evidence.
-export APPLY_PR_52190="${APPLY_PR_52190:-1}"   # W5-10: torch.compile fusion passes (fused_qk_rmsnorm_kernel,
-                                               # allreduce_fusion_kernel_1stage), silently inert all campaign.
-                                               # Applies clean (2 hunks were stale vs upstream drift, corrected
-                                               # via difflib, verified 0 failed + py_compile). Broader mechanism
-                                               # than #56036 -- every layer, prefill AND decode.
+export APPLY_PR_52190="${APPLY_PR_52190:-0}"   # W5-11: parked pending owner call (draft PR, same standard as #52968). Was staged for W5-10.
 "$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 # Pre-baked image short-circuit. kimi-k3-vllm:v4 ships the overlay AND the PR
@@ -696,7 +692,12 @@ if [ -z "${MAX_NUM_SEQS:-}" ]; then
         # at -39.5%. Peak observed at C72 was 88, i.e. CONC+16, leaving only 8
         # of slack against 96. At C76 that likely breaches, so scale with CONC
         # above 72 while keeping flat 96 at/below it (the proven 12,093 config).
-        if [ "$CONC" -le 72 ]; then MAX_NUM_SEQS=96; else MAX_NUM_SEQS=112; fi
+        # W5-11 (owner 2026-09-10): widened 72->74. Peak running at C72 was
+        # CONC+16=88 (6 slots under 96); at C74 that is ~90, still 6 slots of
+        # slack -- the breach concern above was specifically about C76's ~92,
+        # not C74. dispatch.sh cannot pass ad-hoc env vars, so this is the
+        # only way to pin mns=96 for the CONC sweep without touching C76+.
+        if [ "$CONC" -le 74 ]; then MAX_NUM_SEQS=96; else MAX_NUM_SEQS=112; fi
     else
         MAX_NUM_SEQS=$(( CONC + CONC / 4 ))
         if [ "$MAX_NUM_SEQS" -lt 1 ]; then MAX_NUM_SEQS=1; fi
