@@ -1,18 +1,18 @@
 ## NEXT DISPATCH — sequential chain (owner, 2026-09-10), each step ONE variable
-## vs the step before it. Run 1 (W5-14b, EP=8 vs #54736-only) is IN FLIGHT now.
-## Runs 2-4 below are BLOCKED on Run 1's winner (EP=1 or EP=8) -- do not
-## configure Run 2 until W5-14b's result is in.
+## vs the step before it. Run 1 (W5-14b) is DONE: EP=1 wins. Run 2 below is
+## ready to dispatch now.
 
 **W5-14 (first attempt) CANCELLED:** confounded by leftover `APPLY_PR_52190`
 default (fixed in the launcher). See Kimi-DCP-Experiemnts-Summary.md for the
 mid-run KV reading (28,972,610, +0.83% vs EP=1) salvaged from it.
 
-**Run 1 (W5-14b, in flight, run 34482605450):** `rec-d9105-54736only`, C72,
-mnbt 16384, **EP=8**. vs W5-2 (11,990, EP=1, same image). Winner (EP=1 or
-EP=8, whichever is faster/not worse) becomes the EP setting for all of runs
-2-4 below.
+**Run 1 (W5-14b, DONE, run 34482605450): 11,378.2 tok/s/GPU, EP=8 vs W5-2's
+11,990 EP=1 baseline = -5.1%, a real regression.** KV pool 29,018,201 (+0.47%
+vs EP=1 -- still slightly UP, so EP=8 costs throughput, not KV). **EP=1 wins**
+-- runs 2-4 below all use EP=1.
 
-**Run 2:** `rec-d9105-54736only`, C72, mnbt 16384, **EP=<Run 1 winner>**,
+**Run 2 (READY TO DISPATCH):** `rec-d9105-54736only`, C72, mnbt 16384,
+**EP=1**,
 **`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0`** (new lever — launcher already
 patched to accept the override, see `kimik3_fp4_mi355x_mtp.sh` line ~307).
 One variable vs Run 1's winning config: does disabling CUDA-graph memory

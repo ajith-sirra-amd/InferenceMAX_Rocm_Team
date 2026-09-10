@@ -2,10 +2,11 @@ Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
 Now : Run
 
 --- agent status (auto-updated) ---
-2026-09-10 18:56 IST | W5-14 cancelled (confounded by leftover #52190 flag,
-  now fixed); redispatching W5-14b, clean EP=8 vs the #54736-only baseline
+2026-09-10 20:36 IST | W5-14b done: EP=8 clean = 11,378.2, -5.1% vs EP=1.
+  EP=1 wins. Dispatching Run 2 (CUDAGRAPHS=0) next in the sequential chain.
 
 RESULTS THIS SLOT (all C72 unless noted, 12,123 baseline / 11,990 = #54736-only ref)
+  EP=8    (clean, #54736-only)  11,378.2  (-5.1%)   KV +0.47% (up, not down)
   #56036  AITER KDA prefill     11,715.5  (-2.3%)   4 attempts, 3 died
   #52190  torch.compile         11,954.4  (-1.4%)   3 attempts (2 checkout
                                                       failures, REPO_PAT
