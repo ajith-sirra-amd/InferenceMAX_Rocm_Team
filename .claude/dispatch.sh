@@ -23,13 +23,13 @@ cd "$REPO" || exit 1
 # gate 1 — full preflight (slot, time budget, GPUs, zombies, pushed, config)
 ./.claude/preflight.sh "$NEED" || { echo; echo "ABORT: preflight failed — not dispatching '$LABEL'"; exit 1; }
 
-# gate 2 — never double-dispatch
-PRE=$(gh run list --repo $REPOSLUG --workflow "End-to-End Tests" --limit 1 --json databaseId,status \
-      -q '.[]|"\(.databaseId) \(.status)"' 2>/dev/null)
-case "$PRE" in
-  *queued*|*in_progress*|*requested*|*waiting*)
-    echo "ABORT: a run is already active/queued ($PRE)"; exit 1;;
-esac
+# gate 2 (removed 2026-09-10): was a stale duplicate of preflight's gate 7,
+# and buggy on two counts -- --limit 1 only sees the newest run (misses an
+# in-flight run superseded by a shorter one finishing after it), and no
+# runner-name filtering (fired on ajith-glm-5.2, a DIFFERENT physical node,
+# mi355x-amd_p02_g17 vs our mi355x-amd_b23_07). preflight.sh's gate 7 above
+# already scans the last 15 runs AND filters to our own runner; it is the
+# authoritative check. Do not re-add a duplicate here.
 
 echo
 echo "dispatching: $LABEL  (needs ${NEED}m)"
