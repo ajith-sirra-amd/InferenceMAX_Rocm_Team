@@ -9,7 +9,7 @@ elif [[ $RUNNER_NAME == *p02_g17* ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/models"
 fi
 
-HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
+HF_HUB_CACHE_MOUNT="/it-share/models"
 
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then

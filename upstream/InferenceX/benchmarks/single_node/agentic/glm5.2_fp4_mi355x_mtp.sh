@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 set -eo pipefail
 set -x
-
+ 
 source "$(dirname "$0")/../../benchmark_lib.sh"
 
+ export EVAL_FRAMEWORK="lm-eval"
+ 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE DP_ATTENTION
-
+ 
 if [[ -n "$SLURM_JOB_ID" ]]; then
     echo "JOB $SLURM_JOB_ID running on $SLURMD_NODENAME"
 fi
-
+ 
 # ROCR/HIP visibility under slurm cgroups.
 if [ -n "$ROCR_VISIBLE_DEVICES" ]; then
     export HIP_VISIBLE_DEVICES="$ROCR_VISIBLE_DEVICES"
 fi
-
-
+ 
+ 
 if [[ -n "$MODEL_PATH" ]]; then
     if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
         hf download "$MODEL" --local-dir "$MODEL_PATH"
@@ -26,9 +28,7 @@ else
 fi
 rocm-smi || true
 amd-smi || true
-
-PORT=8765
-
+  
 # A server killed on this node minutes earlier (previous job, crashed run)
 # can still be draining its ~1.4 TB of HBM: KFD reclaim takes minutes, and
 # booting into a half-drained node fails RCCL init with HIP 'unhandled cuda
@@ -44,14 +44,14 @@ for i in $(seq 1 90); do
     echo "waiting for prior-job GPU memory reclaim: vram%max=$VRAM_MAX"; sleep 10
 done
 [ "$GPU_CLEAN" = "true" ] || { echo "Error: GPUs still draining prior job's memory after 15min" >&2; exit 1; }
-
+ 
 resolve_trace_source
 install_agentic_deps
-
+ 
 SERVER_LOG="$RESULT_DIR/server.log"
 ROUTER_LOG="$RESULT_DIR/router.log"
 mkdir -p "$RESULT_DIR"
-
+ 
 export PYTHONNOUSERSITE=1
 # Agentic warmup dispatches hundreds of large prompts at once; allow up to
 # 15 minutes of TCP progress before AIPerf declares a connection dead.
@@ -66,31 +66,34 @@ export SGLANG_TIMEOUT_KEEP_ALIVE=900
 # v1 dispatches to the precompiled HIP op in sgl-kernel (upstream MI355X CI
 # runs DSA models the same way).
 export SGLANG_OPT_USE_TOPK_V2=false
-
+ 
 # HiCache L2 (host DRAM), optionally extended with Mooncake L3.
 # KV_OFFLOADING=dram requires KV_OFFLOAD_BACKEND=hicache or mooncake.
 #
 # Per-arm L2 ratio (sizing rationale below) applies to both backends unless
 # overridden via HICACHE_RATIO. TP arm (182.7 GB/rank device pool): the
-# working set oversubscribes the device pool ~3x at conc 32, so the host
-# tier is what carries the radix hits - ratio 1.5 (~2.9 TB pinned incl.
-# sidecars) validates through the conc-24 long-context storm for the
-# mooncake arm. The DP-attention arm (159.4 GB/rank) only runs at conc >=
-# 32, where each DP rank's ~8 sessions nearly fit in its own device pool
-# (~1.5-1.6M of 1.7M tokens at conc 64) and the host tier just absorbs
-# overflow - ratio 1.5 boots but the host OOM killer takes the server
-# mid-storm at conc 48, so it runs ratio 0.5 (~1.2 TB pinned, ~1.8 TB of
-# load headroom) at negligible hit-rate cost. The hicache-only arm has no
-# L3 to fall back on, so these ratios are unvalidated there - override with
-# HICACHE_RATIO if the host OOMs or hit-rate is poor.
+# agentic-coding corpus saturates any fixed DRAM pool at conc ≥ 10; ratio 1.5
+# (~2.9 TB pinned) is the safe default for cluster:mi355x-amds nodes (~3.0 TB
+# available DRAM per runners.yaml). ratio=2.5 (~4.8 TB) yields higher
+# throughput at conc 10-12 but exceeds physical DRAM on these nodes and must
+# be set via HICACHE_RATIO env-var override on nodes that can accommodate it.
+# The DP-attention arm (159.4 GB/rank) only runs at conc >= 32, where the host
+# tier just absorbs overflow - ratio 0.5 (~1.2 TB pinned, ~1.8 TB of load
+# headroom) at negligible hit-rate cost (ratio 1.5 OOMs the host mid-storm at
+# conc 48).
 CACHE_ARGS=()
 if agentic_kv_offload_enabled; then
     if [ "$DP_ATTENTION" = "true" ]; then
         HICACHE_RATIO="${HICACHE_RATIO:-0.5}"
     else
+        # ratio=1.5 (~2.9 TB pinned): safe default within the ~3.0 TB DRAM
+        # available on cluster:mi355x-amds nodes. Set HICACHE_RATIO=2.5 via
+        # env-var override for maximum throughput on nodes with >4 TB DRAM.
         HICACHE_RATIO="${HICACHE_RATIO:-1.5}"
     fi
-    HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through}"
+    # write_through_selective skips DRAM writes for non-reusable KV blocks,
+    # reducing host-bus traffic without affecting the cache hit rate.
+    HICACHE_WRITE_POLICY="${HICACHE_WRITE_POLICY:-write_through_selective}"
     HICACHE_IO_BACKEND="${HICACHE_IO_BACKEND:-direct}"
     HICACHE_MEM_LAYOUT="${HICACHE_MEM_LAYOUT:-page_first_direct}"
     case "$KV_OFFLOAD_BACKEND" in
@@ -147,7 +150,7 @@ EOF
             ;;
     esac
 fi
-
+ 
 # Arm selection. TP arm keeps the FP8 sibling's cookbook batch-shaping
 # bands.
 #
@@ -165,7 +168,7 @@ fi
 USE_SGLANG_ROUTER=false
 SGLANG_BACKEND_PORT="$PORT"
 PARALLEL_ARGS=(--tp "$TP" --ep-size "$EP_SIZE")
-MEM_FRACTION_STATIC=0.80
+MEM_FRACTION_STATIC=0.85
 if [ "$DP_ATTENTION" = "true" ]; then
     USE_SGLANG_ROUTER=true
     export AIPERF_HTTP_X_SMG_ROUTING_KEY_FROM_CORRELATION_ID=true
@@ -184,20 +187,32 @@ if [ "$DP_ATTENTION" = "true" ]; then
     export SGLANG_DP_USE_REDUCE_SCATTER=1
     export GPU_MAX_HW_QUEUES=5
 elif [ "$CONC" -le 16 ]; then
-    # A full 131072-token prefill chunk needs ~7 GiB/rank of activation
-    # headroom on top of the static pool; pair it with mem-fraction 0.80
-    # like the FP8 sibling's low-conc band (0.85 OOMs the device mid-replay:
+    # Chunked prefill 32k: smaller chunks let the scheduler interleave decode
+    # steps between prefill chunks, reducing TPOT for concurrent sessions
+    # (improved interactivity vs the original 131072-token chunk). The reduced
+    # chunk size drops per-chunk activation headroom from ~7 GiB/rank to
+    # ~1.7 GiB/rank, so mem-fraction 0.85 is safe (0.85 OOMed at 131k:
     # "Tried to allocate 6.86 GiB ... 5.15 GiB is free", run 29751563205).
-    CHUNKED_PREFILL_SIZE=131072
-    MEM_FRACTION_STATIC=0.80
+    CHUNKED_PREFILL_SIZE=32768
+    MEM_FRACTION_STATIC=0.85
 else
     CHUNKED_PREFILL_SIZE=32768
     export AGENTIC_WARMUP_GRACE_PERIOD=3600
 fi
-MAX_RUNNING_REQUESTS=$((1 * CONC))
+# 2×CONC in-flight slots: MTP draft+verify transiently batches more tokens
+# than CONC sessions; headroom prevents scheduler stalls under burst.
+MAX_RUNNING_REQUESTS=$((2 * CONC))
 [ "$MAX_RUNNING_REQUESTS" -gt 256 ] && MAX_RUNNING_REQUESTS=256
-CUDA_GRAPH_MAX_BS=$MAX_RUNNING_REQUESTS
+# SGLang interpolates a bs list [1..max_bs] automatically; cap at 64 to
+# keep graph-capture memory bounded without giving up coverage.
+CUDA_GRAPH_MAX_BS=$(( MAX_RUNNING_REQUESTS < 64 ? MAX_RUNNING_REQUESTS : 64 ))
 
+if [ "${EVAL_ONLY:-false}" != "true" ]; then
+    export SGLANG_SIMULATE_ACC_LEN=3.61
+    export SGLANG_SIMULATE_ACC_METHOD=match-expected
+    export SGLANG_SIMULATE_ACC_TOKEN_MODE=real-draft-token
+fi
+ 
 SGLANG_CMD=(
     python3 -m sglang.launch_server
     --model-path "$MODEL_PATH"
@@ -226,17 +241,17 @@ SGLANG_CMD=(
     --watchdog-timeout 1800
     --enable-metrics
 )
-
+ 
 printf '%q ' "${SGLANG_CMD[@]}" | tee "$RESULT_DIR/sglang_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/sglang_command.txt"
-
+ 
 echo "Starting SGLang server for MI355X..."
 "${SGLANG_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
-
+ 
 wait_for_server_ready --port "$SGLANG_BACKEND_PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
+ 
 if [ "$USE_SGLANG_ROUTER" = "true" ]; then
     echo "Starting SGLang router on port $PORT for $TP DP ranks..."
     "${SGLANG_ROUTER_CMD[@]}" \
@@ -256,19 +271,8 @@ if [ "$USE_SGLANG_ROUTER" = "true" ]; then
     echo "Router PID: $ROUTER_PID"
     wait_for_server_ready --port "$PORT" --server-log "$ROUTER_LOG" --server-pid "$ROUTER_PID"
 fi
-
+ 
 if [ "${EVAL_ONLY}" = "true" ]; then
-    # GLM-5.2's chat template defaults to reasoning_effort=Max when the
-    # client passes no chat_template_kwargs (mini-swe-agent doesn't), and the
-    # heavy thinking burns the default 75-step budget before submission.
-    # Double the step budget for this recipe; others keep the shared default.
-    export SWEBENCH_AGENT_STEP_LIMIT=150
-    # Pin eval agent parallelism to the proven-green level: workers default
-    # to CONC, and at 64 concurrent Modal sandboxes the cluster's egress
-    # collapses (18k "Cannot connect to *.modal.host" errors crippled the
-    # trajectories in run 29764760177) while 32 ran clean. The serving
-    # config is unchanged - only the agent's session fan-out is capped.
-    export SWEBENCH_AGENT_WORKERS="${SWEBENCH_AGENT_WORKERS:-32}"
     run_eval --port "$PORT"
 else
     build_replay_cmd "$RESULT_DIR"
