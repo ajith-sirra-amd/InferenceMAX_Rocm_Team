@@ -60,9 +60,12 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 #   52968  DRAFT PR. Never isolated; effect unknown.
 #   54889  Fuse empty-shard LSE mask into A2A pack kernel. +0.74%, inside noise.
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
-export APPLY_PR_54736="${APPLY_PR_54736:-0}"
-export APPLY_PR_52968="${APPLY_PR_52968:-0}"
-export APPLY_PR_54889="${APPLY_PR_54889:-0}"
+export APPLY_PR_54736="${APPLY_PR_54736:-0}"   # already BAKED into rec-d9105-54736only; leave 0 there
+export APPLY_PR_56036="${APPLY_PR_56036:-1}"   # W5-8: AITER KDA prefill. Applies cleanly (0 failed hunks) on
+                                               # rec-d9105-54736only. It COLLIDES with #52968 on kda.py, which
+                                               # is why 52968/54889 are parked under k3_patches/parked/.
+# AITER FlashKDA segment count, from the PR's own AMD eval job.
+export CHUNK_DELTA_ATTN_FLASH_KDA_SEG="${CHUNK_DELTA_ATTN_FLASH_KDA_SEG:-8}"
 "$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 # Pre-baked image short-circuit. kimi-k3-vllm:v4 ships the overlay AND the PR
@@ -592,7 +595,7 @@ export AITER_DISABLE_FMHA_OPUS=1
 SPEC_ENABLE="${SPEC_DECODING:-}"
 case "${RESULT_FILENAME:-}" in *_spec-mtp_*) SPEC_ENABLE=mtp;; esac
 case "$CONC" in
-    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-4}" ;;   # W5-7: k=8 gave TPOT p90 9.28ms vs 7ms target. Golden AL saturates (k=7->3.84, k=8->4.00) while draft cost grows linearly, so a smaller k may cut TPOT. k=4 -> AL 3.36: halves draft work for a 16% acceptance loss.
+    1|2|4)   SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}" ;;   # C1 k=4 probe parked mid-run; back to the golden default.
     *)       SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-0}" ;;
 esac
 if [ "$SPEC_NUM_TOKENS" -eq 0 ]; then SPEC_ENABLE=""; fi
