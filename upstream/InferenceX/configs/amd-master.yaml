@@ -2036,8 +2036,15 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   scenarios:
     agentic-coding:
     # 0.50 -> 0.65 buys CPU-offload headroom for the higher concurrencies below.
-    # 0.80 was tried previously and OOM'd the host; 0.65 is the known-safe ceiling.
-    - dram-utilization: 0.65
+    # 0.80 was tried previously and OOM'd the host; 0.65 was the known-safe ceiling.
+    # Run 3 (owner 2026-09-10, NV-comparison-driven): 0.65 -> 0.72. Staying
+    # UNDER the known-bad 0.80 (host OOM) while still testing more DRAM
+    # headroom, paired with MNS 96/112->140 and CONC 72->80 in the same run --
+    # NV's server command runs max-num-seqs=140 and saturates KV at 100% vs
+    # our 67%, so this tests whether more DRAM+MNS+CONC together let us
+    # actually reach that saturation. NOT a single-variable run -- 3 things
+    # move at once, deliberately, as an exploratory push, not an isolation.
+    - dram-utilization: 0.72
       search-space:
       # - { tp: 8, kv-offloading: none, conc-list: [1, 4, 8] , spec-decoding: mtp}
       # Straddles DCP_AUTO_CONC_THRESHOLD=64 in the launcher, so this one list
@@ -2220,7 +2227,13 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # 11,990 = -5.1%, a real regression (KV pool was +0.47%, so EP=8 costs
       # throughput, not KV). EP=1 wins -- back to ep:1 for the sequential
       # chain's Run 2 (VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0, see launcher).
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
+      # Run 3 (owner 2026-09-10, NV comparison): conc 72->80. Retests the old
+      # C80 hypothesis (T196/T197: C80 with mns==conc==80, zero slack, -7.2%;
+      # "if throughput recovers, mns was the limiter" was never followed up)
+      # but this time with mns=140 (60 slots of slack) instead of 80, plus
+      # dram-utilization 0.72. Paired with MAX_NUM_SEQS=140 override in the
+      # launcher -- see kimik3_fp4_mi355x_mtp.sh.
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [80], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

@@ -20,21 +20,55 @@ profiling recover the ~1.3-1.5% GPU memory it reserves defensively (the W5-14
 log line: gmu 0.90 effectively runs at ~0.885-0.887 with profiling on)? Watch
 KV cache size at boot against Run 1's fingerprint — predicted direction is up.
 
-**Run 3:** same as Run 2 but **mnbt 24576**. One variable (mnbt) vs Run 2.
-Also serves as the n=2 replicate of W5-5 (12,161, C72/mnbt24576/all-3-patches,
-+0.31%, inside noise) that was already on the list to confirm — though note
-Run 3 uses `#54736-only`+EP-winner+CUDAGRAPHS=0, not W5-5's all-3-patches/EP=1
-config, so it replicates the *mnbt 24576 effect*, not W5-5's exact number.
+**mnbt 24576/32768 replicate runs (formerly "Run 3/4" here): DEPROIORITIZED,
+not cancelled.** Superseded in queue order by the NV-comparison push below,
+per owner instruction. Still valid, still worth doing eventually — see the
+"mnbt 32768 flag" note preserved below for when they're picked back up.
+mnbt 32768 has FAILED DETERMINISTICALLY twice before (T275, T276 — both
+aborted on the identical trace `006c98de37d8...`, 0 successful, a hard
+chunk-size/offload-transfer-size wall, not a soft KV-exhaustion issue) —
+go in expecting a probable repeat failure whenever it is finally run.
 
-**Run 4:** same as Run 3 but **mnbt 32768**. One variable (mnbt) vs Run 3.
-**Flag before dispatching:** mnbt 32768 has FAILED DETERMINISTICALLY twice
-before (T275, T276 — both aborted on the identical trace `006c98de37d8...`,
-0 successful, described as a hard chunk-size/offload-transfer-size wall, not
-a soft KV-exhaustion issue). CUDAGRAPHS=0 recovering ~1.3-1.5% memory is
-unlikely to be the fix for a deterministic, trace-specific abort — this run
-is worth trying since EP and CUDAGRAPHS=0 are both new since T275/T276, but
-go in expecting a probable repeat failure, not treat a third death as a
-surprise.
+---
+
+## NV-comparison push (owner 2026-09-10): "Increase DRAM. Increase MNS,
+## Increase CONC and Let's try." Image confirmed staying `#54736`-only
+## ("Only 1 PR"). Prompted by the NV server-command comparison: NV runs
+## `max-num-seqs 140` and saturates GPU KV cache at 100% (21.56M token pool)
+## vs our 67% usage (28.88M token pool, MORE total capacity, LESS utilized).
+
+**Run 3 (STAGED, not yet dispatched — waiting on Run 2 to finish):**
+`rec-d9105-54736only`, EP=1, mnbt 16384, **CONC 72->80**, **MAX_NUM_SEQS
+96/112->140** (hardcoded launcher override, see `kimik3_fp4_mi355x_mtp.sh`
+line ~684), **dram-utilization 0.65->0.72** (amd-master.yaml, staying under
+the known-bad 0.80 that OOM'd the host previously).
+
+**This is deliberately a 3-variable exploratory push, not a single-variable
+isolation** — CONC and MNS are coupled by the campaign's own established
+model (mns must carry generous slack above conc or the C80-starvation
+regime from T196/T197 recurs), so moving them together is consistent with
+that model, not an arbitrary violation of it. DRAM is the third, more
+independent lever.
+
+**What this retests:** the old, never-resolved C80 hypothesis. T196/T197
+found C80 with mns==conc==80 (zero slack) cost -7.2%, and explicitly noted
+"if throughput recovers [at higher mns], mns was the limiter" — that
+follow-up was never run. This time C80 gets 60 slots of slack (mns 140),
+not zero.
+
+**Open dependency before dispatch:** `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS`
+currently defaults to `0` in the launcher (Run 2's setting). Decide whether
+Run 3 keeps `0` or reverts to `1` based on Run 2's result once it lands —
+do not dispatch Run 3 with an unexamined 4th variable riding along by default.
+
+**Watch for:** the historical N5 finding (this file) that mns=96 once killed
+the engine via an executor RPC/dequeue timeout on an older config/image —
+`VLLM_ENGINE_READY_TIMEOUT_S` (7200) and `VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS`
+(3600) were raised since then and mns 96/112 have run clean all campaign, but
+140 is further than anything tested. Same EngineDeadError/timeout signature
+as N5 would mean the timeout needs raising further, not that MNS 140 itself
+is wrong. Also watch GPU KV cache usage% at boot — the whole point of this
+run is to see it climb toward saturation, not stay at ~67%.
 
 ---
 

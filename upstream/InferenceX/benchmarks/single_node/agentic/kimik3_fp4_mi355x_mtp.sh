@@ -681,6 +681,16 @@ echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 # executor's RPC dequeue timeout, and the sentinel promotes that to fatal.
 # mns 80 completed twice on this exact image (T163, T164). Do not raise it
 # again without first raising that timeout.
+export MAX_NUM_SEQS="${MAX_NUM_SEQS:-140}"   # Run 3 (owner 2026-09-10, NV comparison): NV's server command runs
+                                              # max-num-seqs=140 and saturates KV at 100% vs our 67% at mns 96/112.
+                                              # Overriding the CONC-based formula below entirely for this one test --
+                                              # dispatch.sh can't pass ad-hoc env vars, so this default IS the change.
+                                              # WATCH: N5 (historical, this file) found mns=96 killed the engine via an
+                                              # executor RPC/dequeue timeout on an older config -- VLLM_ENGINE_READY_TIMEOUT_S
+                                              # (7200) and VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS (3600) were raised since then
+                                              # and mns 96/112 have run clean for the whole campaign, but 140 is further
+                                              # than anything tested -- watch for the same EngineDeadError/timeout signature.
+                                              # Revert to unset (formula-driven) after this run unless it wins.
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
         # Flat 80. Tracking conc was tried (T219, mns 20 at C16) and caused total
