@@ -1,24 +1,30 @@
-## NEXT DISPATCH (immediately after T295, ~10:46)
+## NEXT DISPATCH (immediately after W5-13 completes)
 
-**T296 — C72 with #54736 ONLY.** Image `kimi-k3-vllm:rec-d9105-54736only`,
-conc-list [72], mns 96 (flat below C72), everything else identical.
+**W5-14 — EP=8, at our best-known recipe.** Owner (2026-09-10): *"Queue best perf
+number with ep=8."* EP=1 vs EP=8 has genuinely never been measured for our TP8
+axis (`amd-master.yaml` note: "Never passed in 54 trials — every row set ep: 1";
+T67 DP2/TP4/EP8 used a different axis combo). ONE variable vs the best comparison
+run (T286, 12,093):
 
-Completes the 2×2 so CONC and patches are isolated independently for the first
-time — every comparison we have today moves two variables at once:
-
-| | C72 | C76 |
-|---|---|---|
-| all 3 patches | T286 **12,093** | T295 *running* |
-| #54736 only | **T296 ← this run** | T294 **11,858** |
-
-Then: T294−T296 = the CONC effect at fixed patches; T295−T294 = the patch effect
-at fixed CONC; T286−T296 = the patch effect at C72.
-
-**Boundary, settled by the owner:** T295 ends ~10:46 and T296 lands ~12:31, about a
-minute past 12:30. Owner: *"Do not cancel if it's past 12:30. 1-2 mins is fine."*
-**Do NOT cancel T296 at the boundary — let it finish.** The preflight window for
-W3+W4 is recorded as 12:35 so the time-budget gate does not refuse the dispatch;
-without that it sees 104 min against 105 and blocks the last run of the slot.
+- `upstream/InferenceX/configs/amd-master.yaml` line ~2214: flip `ep: 1` → `ep: 8`
+  on the live search-space row, `conc-list: [70]` → `[72]` (back to the best-known
+  CONC, since this run's job is to isolate EP, not re-test CONC or mnbt).
+- Image: `kimi-k3-vllm:rec-d9105-best` (all 3 patches, the T286 recipe) — NOT
+  `rec-d9105-54736only`, so the comparison is against the actual 12,093 best, not
+  W5-13's single-patch config.
+- `K3_MNBT`: set explicitly to `16384` (T286's value) — do not inherit W5-13's
+  `MBT_DEFAULT="${K3_MNBT:-8192}"` default, which was only for the mnbt sweep.
+- Confirm `EP_SIZE` actually reaches the launcher as 8 (wired via
+  `matrix.config.ep` → env in `.github/workflows/e2e-tests.yml`, consumed at
+  `kimik3_fp4_mi355x_mtp.sh:542-545` → `--enable-expert-parallel`) — grep the
+  dispatched job's `non-default args` log line for `enable_expert_parallel` once
+  it boots, since this flag has never fired in the campaign before and its
+  wiring is unverified in practice (only verified by code-reading).
+- Treat as **ATTRIBUTION**, not optimization — let it finish regardless of
+  tput_in_srv thresholds. Its number is the first-ever EP=8 data point.
+- If it fails to boot or OOMs, that itself is data (answers the "does EP=8 cost
+  or save KV pool" question the owner asked directly beforehand) — record
+  whatever happens, do not just retry blindly.
 
 ---
 
