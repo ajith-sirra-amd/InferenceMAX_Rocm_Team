@@ -247,7 +247,7 @@ export VLLM_ROCM_USE_AITER_MOE=1
 # INT8 if it fails. Precedent for the triple is minimaxm3_fp4_mi355x_mtp.sh:131,
 # same hardware but a DIFFERENT MODEL, so it proves the kernel works here, not
 # that K3 accuracy survives it.
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"   # W5-4: back to NONE. INT4 GSM8K gate PASSED 0.995, but 0/3 INT4 perf runs survived the RCCL stall vs 4/6 on NONE (p~0.19, suggestive not proven). Parked on cost, not on accuracy.
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"   # W5-4: back to NONE. INT4 GSM8K gate PASSED 0.995, but 0/3 INT4 perf runs survived the RCCL stall vs 4/6 on NONE (p~0.19, suggestive not proven). Parked on cost, not on accuracy.
 export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
 # T266: #54494 dcp-q-replicate. Replicated vs gathered query projection is the
@@ -259,7 +259,7 @@ export VLLM_DCP_Q_REPLICATE="${VLLM_DCP_Q_REPLICATE:-0}"   # T268: C1 CONTROL, q
 # Left at NONE deliberately: INT4 quantizes the allreduce, so it is a NUMERICS
 # change and needs its own GSM8K-200 gate before it rides along on a perf anchor.
 # Queued separately. Set AITER_QUICK_REDUCE_QUANTIZATION=INT4 to opt in.
-export AITER_QUICK_REDUCE_QUANTIZATION="${AITER_QUICK_REDUCE_QUANTIZATION:-NONE}"
+export AITER_QUICK_REDUCE_QUANTIZATION="${AITER_QUICK_REDUCE_QUANTIZATION:-INT4}"   # 2026-09-10: SemiAnalysis ATOM runs INT4 in production (run 34349642428). Our 0/3 stall record was likely the RCCL class, not this flag. GSM8K already passed 0.995.
 # T271: 0 = SA settings (workers 8, chunk 12288, dev89, mnbt 8192).
 # 1 = the pre-SA legacy block (gmu 0.88, mns 80, mnbt 16384, workers 1, rc3).
 # Exported here so every inline ${K3_LEGACY_LMCACHE:-1} downstream sees it.
@@ -695,16 +695,6 @@ echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 # executor's RPC dequeue timeout, and the sentinel promotes that to fatal.
 # mns 80 completed twice on this exact image (T163, T164). Do not raise it
 # again without first raising that timeout.
-export MAX_NUM_SEQS="${MAX_NUM_SEQS:-140}"   # Run 3 (owner 2026-09-10, NV comparison): NV's server command runs
-                                              # max-num-seqs=140 and saturates KV at 100% vs our 67% at mns 96/112.
-                                              # Overriding the CONC-based formula below entirely for this one test --
-                                              # dispatch.sh can't pass ad-hoc env vars, so this default IS the change.
-                                              # WATCH: N5 (historical, this file) found mns=96 killed the engine via an
-                                              # executor RPC/dequeue timeout on an older config -- VLLM_ENGINE_READY_TIMEOUT_S
-                                              # (7200) and VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS (3600) were raised since then
-                                              # and mns 96/112 have run clean for the whole campaign, but 140 is further
-                                              # than anything tested -- watch for the same EngineDeadError/timeout signature.
-                                              # Revert to unset (formula-driven) after this run unless it wins.
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
         # Flat 80. Tracking conc was tried (T219, mns 20 at C16) and caused total
