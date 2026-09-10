@@ -504,6 +504,43 @@ Latency terms:
 3. **Both in-tree profiling paths are dead** — no `VLLM_TORCH_PROFILER_DIR` on the
    old base (T202), and `rocprofv3` deadlocks the engine (T203). Until one works we
    are optimising without a profile.
+4. **THE BIG ONE (reframed 2026-09-10 by the NV comparison): what caps us past
+   C72, given it is demonstrably NOT KV capacity?** Owner supplied NV's numbers
+   and, critically, that **NV cannot run beyond C70 because their KV cache is
+   100% full there**:
+
+   | | NV | us |
+   |---|--:|--:|
+   | concurrency | C70 (hard ceiling) | C72 |
+   | GPU KV pool | 21,564,193 | **28,881,430 (+34%)** |
+   | KV usage | **100% (saturated)** | **67%** |
+   | tok/s/GPU | **12,566** | 11,990 |
+
+   **NV achieves 12,566 while memory-STARVED. We get less from a bigger, emptier
+   pool.** Their ceiling is imposed by capacity; ours is not — at 67% usage, our
+   C72 peak and the fall-off at C76/C80 cannot be a KV limit. That is the
+   unidentified "something else" T197 named and never chased ("mns headroom
+   recovered only ~40% of the C72->C80 drop; something else also degrades past
+   72").
+
+   **This is the highest-value open question in the campaign**, because it is a
+   lever NV structurally does not have: we own 34% more KV than they do and are
+   not using it. Suspects, in order: batch-step cost scaling with batch width;
+   DCP `a2a` collective cost growing with batch (same path implicated in the
+   RCCL stalls); SimpleCPU offload connector per-step overhead; mns/cudagraph
+   scheduling effects.
+
+   **Note that mns is now RULED OUT as a memory explanation:** mns 96->140
+   changed the KV pool by only **-79,783 tokens (-0.28%)**, because CUDA graphs
+   share a memory pool across captures rather than costing per-capture. (I had
+   predicted -4 to -6% by scaling W5-15's +8.4% linearly in the number of ladder
+   steps -- wrong by ~20x, and it also kills the "make the ladder sparse like
+   NV's to reclaim KV" idea, which would buy ~0.28%.) So any mns effect on
+   throughput is pure scheduling, not memory.
+
+   If C80+mns140 still lands below C72, the cap is very likely in the
+   collective/scheduler path and **profiling becomes the priority over further
+   sweeping** — which loops back to open question 3.
 
 
 ## RCCL `_ALLGATHER_BASE` desync — a plausible mechanistic explanation (2026-09-10)
