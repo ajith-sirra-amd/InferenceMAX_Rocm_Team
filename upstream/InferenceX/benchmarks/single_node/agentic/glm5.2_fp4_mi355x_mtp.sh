@@ -194,15 +194,15 @@ elif [ "$CONC" -le 16 ]; then
     # chunk size drops per-chunk activation headroom from ~7 GiB/rank to
     # ~1.7 GiB/rank, so mem-fraction 0.85 is safe (0.85 OOMed at 131k:
     # "Tried to allocate 6.86 GiB ... 5.15 GiB is free", run 29751563205).
-    CHUNKED_PREFILL_SIZE=32768
+    CHUNKED_PREFILL_SIZE=16384
     MEM_FRACTION_STATIC=0.85
 else
-    CHUNKED_PREFILL_SIZE=32768
+    CHUNKED_PREFILL_SIZE=16384
     export AGENTIC_WARMUP_GRACE_PERIOD=3600
 fi
 # 2×CONC in-flight slots: MTP draft+verify transiently batches more tokens
 # than CONC sessions; headroom prevents scheduler stalls under burst.
-MAX_RUNNING_REQUESTS=$((2 * CONC))
+MAX_RUNNING_REQUESTS=$(( CONC + CONC / 4 ))
 [ "$MAX_RUNNING_REQUESTS" -gt 256 ] && MAX_RUNNING_REQUESTS=256
 # SGLang interpolates a bs list [1..max_bs] automatically; cap at 64 to
 # keep graph-capture memory bounded without giving up coverage.
