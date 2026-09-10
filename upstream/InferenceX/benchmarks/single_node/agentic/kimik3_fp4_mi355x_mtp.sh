@@ -61,11 +61,12 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 #   54889  Fuse empty-shard LSE mask into A2A pack kernel. +0.74%, inside noise.
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
 export APPLY_PR_54736="${APPLY_PR_54736:-0}"   # already BAKED into rec-d9105-54736only; leave 0 there
-export APPLY_PR_56036="${APPLY_PR_56036:-1}"   # W5-8: AITER KDA prefill. Applies cleanly (0 failed hunks) on
-                                               # rec-d9105-54736only. It COLLIDES with #52968 on kda.py, which
-                                               # is why 52968/54889 are parked under k3_patches/parked/.
-# AITER FlashKDA segment count, from the PR's own AMD eval job.
-export CHUNK_DELTA_ATTN_FLASH_KDA_SEG="${CHUNK_DELTA_ATTN_FLASH_KDA_SEG:-8}"
+export APPLY_PR_56036="${APPLY_PR_56036:-0}"   # W5-8d MEASURED -2.3% vs baseline. Dropped, do not re-enable without new evidence.
+export APPLY_PR_52190="${APPLY_PR_52190:-1}"   # W5-10: torch.compile fusion passes (fused_qk_rmsnorm_kernel,
+                                               # allreduce_fusion_kernel_1stage), silently inert all campaign.
+                                               # Applies clean (2 hunks were stale vs upstream drift, corrected
+                                               # via difflib, verified 0 failed + py_compile). Broader mechanism
+                                               # than #56036 -- every layer, prefill AND decode.
 "$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 # Pre-baked image short-circuit. kimi-k3-vllm:v4 ships the overlay AND the PR
