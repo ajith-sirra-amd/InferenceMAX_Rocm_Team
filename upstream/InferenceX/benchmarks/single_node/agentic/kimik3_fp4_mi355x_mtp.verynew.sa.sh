@@ -107,12 +107,24 @@ export PYTHONHASHSEED=42
 # reported failed when nothing is wrong.
 #   54736  SimpleCPU fine-grained hybrid prefix hits (carries 54735). The only
 #          one measured as load-bearing: bare could not finish warmup (T289).
-#   52968  DRAFT PR. Never isolated; effect unknown.
+#          MERGED upstream 2026-09-11 01:36.
+#   52968  DRAFT PR, still open. Never isolated; effect unknown. Leave at 0.
 #   54889  Fuse empty-shard LSE mask into A2A pack kernel. +0.74%, inside noise.
+#          MERGED upstream 2026-09-10 15:43.
+#   54038  KDA prefill fused kernels. MERGED 2026-09-10 07:37. NOT patchable at
+#          all -- it ships a HIP .cu plus torch bindings, so the Python half
+#          alone would call torch.ops._C.fused_kda_chunk, which does not exist
+#          without a rebuild. Only a nightly can deliver it.
+#
+# ALL DEFAULT TO 0: this script targets a nightly cut AFTER those merge dates,
+# so the PRs arrive in the image. Re-applying a patch that is already present
+# makes `patch --forward` exit non-zero and the [pr] gate line reports it as
+# failed when nothing is actually wrong. Verify with the [pr] line, and sanity
+# check the image really has them (e.g. torch.ops._C.fused_kda_chunk == True).
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
-export APPLY_PR_54736="${APPLY_PR_54736:-1}"   # MERGED 09-11 01:36. Absent from nightlies cut before that.
+export APPLY_PR_54736="${APPLY_PR_54736:-0}"   # MERGED upstream 09-11 01:36 -- comes WITH the nightly, do not re-apply.
 export APPLY_PR_52968="${APPLY_PR_52968:-0}"
-export APPLY_PR_54889="${APPLY_PR_54889:-1}"   # MERGED 09-10 15:43. 7/7 hunks clean on nightly.
+export APPLY_PR_54889="${APPLY_PR_54889:-0}"   # MERGED upstream 09-10 15:43 -- comes WITH the nightly, do not re-apply.
 "$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 SERVER_LOG="$RESULT_DIR/server.log"
