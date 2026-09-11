@@ -159,9 +159,11 @@ else bad "pushed" "local != origin/$BRANCH — push before dispatching"; fi
 # 9. LAUNCHER INTEGRITY ------------------------------------------------------
 if bash -n "$LAUNCHER" 2>/dev/null; then ok "launcher syntax" "bash -n clean"
 else bad "launcher syntax" "bash -n FAILED"; fi
-W=$(grep -c wait_for_server_ready "$LAUNCHER")
-if [ "$W" -ge 2 ]; then ok "wait_for_server_ready" "present (x$W)"
-else bad "wait_for_server_ready" "MISSING — an edit dropped it"; fi
+# Check for an actual INVOCATION, not a mention count. The old >=2 rule counted
+# a comment plus the call; a comment-stripped launcher has 1 and tripped it.
+W=$(grep -cE '^[[:space:]]*wait_for_server_ready[[:space:]]+--port' "$LAUNCHER")
+if [ "$W" -ge 1 ]; then ok "wait_for_server_ready" "invoked (x$W)"
+else bad "wait_for_server_ready" "MISSING — an edit dropped the call"; fi
 
 # 10. YAML PARSES + REFERENCED IMAGE EXISTS LOCALLY -------------------------
 if python3 -c "import yaml,sys;yaml.safe_load(open('$YAML'))" 2>/dev/null; then ok "yaml parses" "ok"
@@ -175,8 +177,14 @@ else bad "image present" "${IMG:-<none>} not found locally — build it first"; 
 # resolve and every other gate still passes, but the run would silently use SA
 # defaults (FULL_AND_PIECEWISE, mns 80, gmu 0.88) and we would not find out
 # until the KV fingerprint came back at 18.5M instead of 28.7M.
+# These markers exist to catch an ACCIDENTAL overwrite of our launcher by a
+# clean SA copy. When the launcher is byte-identical to verynew.sa.sh that is
+# DELIBERATE (running the SA recipe as-is), so warn instead of failing.
+SA_REPLICA=0
+if [ -f "${LAUNCHER%.sh}.verynew.sa.sh" ] && cmp -s "$LAUNCHER" "${LAUNCHER%.sh}.verynew.sa.sh"; then SA_REPLICA=1; fi
 for pat in 'FULL_DECODE_ONLY' 'VLLM_USE_BREAKABLE_CUDAGRAPH' 'K3_FORCE_STOCK'; do
   if grep -q "$pat" "$LAUNCHER"; then ok "cfg:$pat" "present"
+  elif [ "$SA_REPLICA" = "1" ]; then warn "cfg:$pat" "absent — launcher is the deliberate verynew.sa.sh replica"
   else bad "cfg:$pat" "MISSING — launcher looks like a clean SA copy, not ours"; fi
 done
 

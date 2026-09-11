@@ -93,7 +93,7 @@ case "$CONC" in
         ;;
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
-        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
+        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         if [ "$CONC" -le 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
         ;;
