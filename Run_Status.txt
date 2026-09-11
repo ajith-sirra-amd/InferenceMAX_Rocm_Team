@@ -4,7 +4,7 @@ Now : Run
 --- agent status (auto-updated) ---
 2026-09-11 20:15 IST | QUEUE ARMED. Runner expected live ~21:15 IST. 3 runs.
 
-QUEUE (run in order; each ~70 min incl. boot+warmup)
+QUEUE ORDER (owner 2026-09-11 22:20 IST): Q3 -> Q1 -> Q2. Each ~70 min.
   Q1  C1 AS-IS (our config)          yaml conc-list [1]; launcher unchanged
       k=8/AL 4.00, mns 4, mnbt 8192, DCP 1, gmu 0.90, kda triton, ladder 1..36
       Purpose: first C1 number on the nightly; comparable to W5-6 (TPOT p90 9.28).
@@ -18,7 +18,7 @@ QUEUE (run in order; each ~70 min incl. boot+warmup)
         mns=2*CONC, VLLM_USE_DIRECT_DCP_* (inert at DCP 1).
       REVERT the two edits after Q2 completes.
 
-  Q3  C72 + SA-REF DCP FLAGS         yaml conc-list [72]
+  Q3  C72 + SA-REF DCP FLAGS  *** RUNS FIRST ***   yaml conc-list [72]
       Set K3_DCP_DIRECT_OFF=1 in the launcher (or env) before dispatch.
       -> exports VLLM_USE_DIRECT_DCP_A2A/Q_GATHER/KV_GATHER = 0, DCP>1 only.
       Everything else = our best: mns 96, mnbt 24576, gmu 0.90, warmup default.
