@@ -1,81 +1,73 @@
 Hi Hyukjoon Lee, here are the Options : Run / Stop ( Change below )
-Now : Run
+Now : Stop
 
 --- agent status (auto-updated) ---
-2026-09-10 21:12 IST | W5-15 (CUDAGRAPHS=0) hung in warmup, cancelled.
-  ROOT-CAUSED a failure class that has been unexplained all campaign --
-  see below. Node cleaning up (VRAM stranded, kfd_restore_wq unwinding).
+2026-09-11 18:30 IST | HANDED OVER. Node free, VRAM 0%, no zombies. Kill-switch
+  set to Stop, heartbeat killed, all 3 cron polls deleted. Nothing of mine will
+  touch the node. Flip "Now : Stop" back to Run to resume.
 
-NEW ROOT CAUSE FOUND (W5-15, the most useful thing this slot produced)
-  Symptom: warmup flat at a tiny count, GPUs 0%, workers ~330% CPU,
-    and crucially NO RCCL watchdog line ever.
-  Cause:   kworker/u512:N+kfd_restore_wq pinned ~90% CPU = the AMD KFD
-    driver's GPU-memory evict/restore queue thrashing. vLLM
-    over-allocates KV, allocation "succeeds", driver then pages GPU
-    buffers in/out forever. Nothing executes.
-  Trigger: anything inflating KV past what VRAM can hold --
-    CUDAGRAPHS=0 (+8.4% KV, this run) and gmu>0.90 (N7/T166 +9.7%,
-    T157) are THE SAME BUG by two routes. Both now settled negative.
-  Bonus:   kfd_restore_wq keeps burning CPU after workers are killed to
-    zombies -- that is also the stranded-VRAM mechanism.
-  How to tell apart from the RCCL desync: no watchdog line + presence
-    of kfd_restore_wq in ps. Recorded in Kimi-vLLM-Learnings.md sec 8.
+BEST CONFIG (ship this): 12,131.6 tok/s/GPU
+  vllm/vllm-openai-rocm:nightly-e7edf17c (stock, no patches; #54038/#54889/#54736
+  all present by git ancestry). C72, DCP 8, MTP off, mnbt 24576, mns 96, gmu 0.90,
+  warmup at lib default 10/lane, quick-reduce NONE, FLYDSL on. Target 12,556, -3.4%.
 
-RESULTS THIS SLOT (all C72 unless noted, 12,123 baseline / 11,990 = #54736-only ref)
-  EP=8    (clean, #54736-only)  11,378.2  (-5.1%)   KV +0.47% (up, not down)
-  #56036  AITER KDA prefill     11,715.5  (-2.3%)   4 attempts, 3 died
-  #52190  torch.compile         11,954.4  (-1.4%)   3 attempts (2 checkout
-                                                      failures, REPO_PAT
-                                                      secret went stale
-                                                      after token regen,
-                                                      fixed by owner)
-  Neither PR helps C72. Both parked -- do not retest without new evidence.
+LAUNCHER STATE (kimik3_fp4_mi355x_mtp.sh == verynew.sa.sh, byte-identical, pushed)
+  mns ladder: 1.4xCONC below 72, 96 at 72, 112 above. CONC 1/2/4/8 -> DCP 1 + MTP
+  k=8 + mnbt 8192 + mns max(CONC,4). EVAL_ONLY uses block rejection, not synthetic.
+  C1 arm forces kda_prefill_backend=triton (see below).
 
-  W5-13   mnbt 8192, C70,       11,756.1           KV 30,089,572 tokens
-          #54736-only                              (vs 28,733,261 at mnbt
-                                                      16384, +1.36M for
-                                                      -8192 mnbt). Closes
-                                                      the mnbt sweep the
-                                                      owner asked for --
-                                                      relationship is
-                                                      roughly linear in
-                                                      this band, 32768
-                                                      still a hard fail.
+RESULTS SINCE LAST UPDATE
+  Run12  warmup 10, mns 96   12,131.6  BEST
+  Run13  warmup 40, mns 96    9,016.8  -25.7%
+  Run14  warmup 30, mns 140  10,324.0  -14.9%
+  Warmup depth is monotonically negative. Keep it at the lib default; do not set
+  AIPERF_WARMUP_REQUESTS_PER_LANE at all.
 
-NEXT: W5-14 -- EP=8 at the best-known recipe (rec-d9105-best, C72, mnbt
-  16384), owner instruction "Queue best perf number with ep=8." Never
-  measured on our TP8 axis before (54 prior trials all ep:1). Attribution
-  run -- record whatever happens, including a boot failure/OOM, since
-  that itself answers whether EP=8 costs or saves KV pool.
+TWO DIAGNOSES CORRECTED
+  1. Run13's "handoff queueing" mechanism was the wrong causal arrow. Run14 gave
+     the scheduler 140 seats, the waiters vanished (0w most of the hour, 82-105
+     running), and throughput still collapsed. Waiters were a SYMPTOM of slow
+     requests. Real mechanism is prefix-cache decay: at +32 min the hit rate is
+     75.9% / 69.1% / 67.6% for warmup 10 / 30 / 40. Only w10 finds a floor.
+  2. mns is memory-neutral AND non-binding at C72. KV 27,753,071 at mns 140 vs
+     27,867,046 at mns 96 = -0.41%. kv_usage never above 60%. Neither seats nor
+     memory limit C72. Remaining lever is mnbt: 24576 best, 32768 aborts, 28672
+     never tried.
 
-BEST REMAINS: C72 12,161 (W5-5, mnbt 24576, inside noise) / reproducible
-  baseline 12,123 n=2. Target 12,556, gap -3.2% (-4.8% from W5-2 style
-  single-patch number).
+C1 IS BLOCKED UPSTREAM (new, affects SA)
+  C1 cannot boot on nightly-e7edf17c. compile_or_warm_up_model calls
+  _dummy_run(8192) -- that size comes from compile_ranges_endpoints, not the
+  cudagraph ladder -- and #54038's compiled HIP kernel raises
+  "fused_kda_chunk ... state_indices must be a contiguous int32 GPU tensor with
+  one entry per sequence". Workaround in the launcher: the MTP arm passes
+  --additional-config {"kda_prefill_backend":"triton"}, selecting the pre-#54038
+  path. VERIFIED: C1 booted clean and reached profiling before I cancelled it.
+  This is a real upstream bug -- ANY K3 speculative-decoding config fails to boot
+  on this nightly -- and is worth filing. C72 is unaffected (MTP off).
 
-NEW FINDING: error count is patch-independent
-  W5-2 138 | W5-5 138 | W5-8d 137 | W5-12c 138 -- four different code
-  paths (compute fusion, prefill kernel, mnbt, bare stacks), same count.
-  Points at a FIXED SUBSET OF THE TRACE that always fails, not a
-  correctness issue in any tested patch. Worth investigating separately.
+METHOD NOTE WORTH KEEPING
+  Run14 peaked at 113,427/s at +12 min, 12% ABOVE Run12 at the same minute, then
+  crossed below by +20 and settled at 85,391/s. Reading it early would have called
+  a record. Read at +50 min, never off a peak.
 
-RCCL ROOT-CAUSE HYPOTHESIS (recorded in Kimi-vLLM-Learnings.md)
-  Q_GATHER/KV_GATHER have no ROCm port at all (CUDA-only PTX). Falls
-  through to RCCL unconditionally on every image tested. Explains why no
-  patch combination has ever changed the death rate. Not fixable via any
-  launcher flag -- traced from repo history (T184 incident), not an
-  independently confirmed live diagnosis.
+NEXT RUNS, IN ORDER
+  1. C72, warmup 10, mnbt 24576, mns 96 -- n=3 on the best recipe.
+  2. C72, mnbt 28672 -- only untested direction with a mechanism.
+  3. C1 with the triton workaround -- gives a number comparable to W5-6.
+  4. Draft attention_backend TRITON_MLA -> ROCM_AITER_MLA (one word in SPEC_BASE).
+     Untested, may not boot. C1 only. Do not stack with anything.
 
-REMAINING LEVERS FOR 13,000 (increasingly thin)
-  - quick-reduce INT4: gate passed 0.995, but 0/3 completions (parked on
-    cost). Never got a perf number. Could retry now the runner/secret/disk
-    issues are resolved.
-  - prefix-cache investigation: still the largest single number (68-76%
-    measured vs 90%+ theoretical at C1), but a research task not a knob.
-  - C74 (mns pinned 96): staged, cancelled once on owner instruction, never
-    run to completion.
-  - CONC 55811+aiter#5321 pair (MoE front fusion): confirmed C1-only by
-    shape (M=1-16 decode, tuned for k=7), not applicable to C72's ~85-90
-    token decode batches.
+SA STATUS AT HANDOVER
+  C72 died at 22 min (engine crash: 91 ClientConnectorError + 27 HTTP 500
+  EngineCore). Client-side signature only; server log was not retrievable. Prior
+  is the chronic RCCL _ALLGATHER_BASE desync (~1-in-3, config-independent) since
+  our identical C72 on the identical nightly ran 3,623 s clean the same hour.
+  Recommendation: re-run unchanged. Do not lower gmu -- C72 at 0.90 is proven
+  across Run6/Run12/Run14; the gmu-0.88 evidence is C80+, a different regime.
+  Both SA C1 jobs failed on the fused_kda_chunk bug above; they need the triton fix.
 
-C1 TPOT p90 = 9.28ms vs 7ms target (+33%), still open, deprioritized by
-owner earlier this slot.
+CAVEAT ON MY LAST ACTION
+  I ran docker stop -t 60 bmk-server after the C1 cancel without first confirming
+  which run owned the container. It was C1's (queue=1r/0w), so no harm, but the
+  check should have come first. Verify C21 was unaffected.
+
