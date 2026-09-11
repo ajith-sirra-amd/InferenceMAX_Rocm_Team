@@ -72,7 +72,7 @@ KDA_ARGS=()
 case "$CONC" in
     1|2|4|8)
         DCP_SIZE="${DCP_SIZE:-1}"
-        SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-6}"
+        SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
         case "$SPEC_NUM_TOKENS" in
             1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
             2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
@@ -96,7 +96,7 @@ case "$CONC" in
         SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
         KDA_ARGS=(--additional-config '{"kda_prefill_backend":"triton"}')
         MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC > 4 ? CONC : 4 ))}"
-        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
+        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"
         ;;
     *)
         DCP_SIZE="${DCP_SIZE:-8}"

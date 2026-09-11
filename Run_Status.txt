@@ -4,34 +4,26 @@ Now : Run
 --- agent status (auto-updated) ---
 2026-09-11 20:15 IST | QUEUE ARMED. Runner expected live ~21:15 IST. 3 runs.
 
-QUEUE ORDER (owner 2026-09-11 22:20 IST): Q3 -> Q1 -> Q2. Each ~70 min.
-  Q1  C1 AS-IS (our config)          yaml conc-list [1]; launcher unchanged
-      k=8/AL 4.00, mns 4, mnbt 8192, DCP 1, gmu 0.90, kda triton, ladder 1..36
-      Purpose: first C1 number on the nightly; comparable to W5-6 (TPOT p90 9.28).
+ALL THREE RUNS DISPATCHED 2026-09-11 22:20 IST, SHA-pinned, nothing left to send.
+  Q3  run 34623815409  sha 6ceb816d  C72 + VLLM_USE_DIRECT_DCP_A2A/Q_GATHER/
+      KV_GATHER=0 (K3_DCP_DIRECT_OFF=1), mns 96, mnbt 24576, gmu 0.90.
+      Compare vs 12,131.6. Targets the chronic RCCL _ALLGATHER_BASE desync --
+      highest-value item; the SA ref sets these three and we never have.
+  Q1  run 34624026142  sha 15d1bdba  C1 as-is: k=8/AL 4.00, mns 4, mnbt 8192,
+      DCP 1, kda_prefill_backend=triton. Comparable to W5-6 (TPOT p90 9.28).
+  Q2  run 34624080133  sha edd67f8c  C1 + SA-ref: k=6/AL 3.75, mnbt 16384.
+      Rejected from the ref: FULL_AND_PIECEWISE (-35.5% KV), INT4 (KFD thrash),
+      mns=2*CONC, and the DCP flags (inert at DCP 1).
 
-  Q2  C1 + SA-REF LEARNINGS          yaml conc-list [1]
-      EDIT launcher MTP arm before dispatch:
-        SPEC_NUM_TOKENS default 8 -> 6   (AL auto-resolves to 3.75)
-        MAX_BATCHED_TOKENS default 8192 -> 16384
-      Keep: FULL_DECODE_ONLY, quick-reduce NONE, mns 4, kda triton.
-      Reject from ref: FULL_AND_PIECEWISE (-35.5% KV), INT4 (KFD thrash),
-        mns=2*CONC, VLLM_USE_DIRECT_DCP_* (inert at DCP 1).
-      REVERT the two edits after Q2 completes.
+  Each job checks out ITS OWN SHA (workflow_dispatch pins github.sha at dispatch
+  time), so the branch head has been restored to the shippable config and that
+  does not affect any queued run. DO NOT RE-DISPATCH ANY OF THE THREE.
+  Poll job c1b69f06 is monitor-only: record each result to
+  Kimi-DCP-Experiemnts-Summary.md, do not dispatch.
 
-  Q3  C72 + SA-REF DCP FLAGS  *** RUNS FIRST ***   yaml conc-list [72]
-      Set K3_DCP_DIRECT_OFF=1 in the launcher (or env) before dispatch.
-      -> exports VLLM_USE_DIRECT_DCP_A2A/Q_GATHER/KV_GATHER = 0, DCP>1 only.
-      Everything else = our best: mns 96, mnbt 24576, gmu 0.90, warmup default.
-      Purpose: the SA ref sets these three; we never have. Directly targets the
-      chronic RCCL _ALLGATHER_BASE desync (~10 deaths, config-independent so far,
-      hypothesis was Q_GATHER/KV_GATHER falling through to RCCL on ROCm).
-      This is the highest-value item in the queue -- it may be worth more than
-      any throughput knob left.
-      Compare against 12,131.6 (same config, flags unset).
-
-DO NOT ADOPT FROM THE SA REF
-  FULL_AND_PIECEWISE, INT4 quick-reduce, ladder from 2, mns=2*CONC,
-  mnbt 8192 at C72, dropping FLYDSL / AITER_MLA / AITER_MOE / no-async-scheduling.
+BRANCH HEAD = SHIPPABLE: yaml conc-list [72]; launcher k=8, mnbt 8192 (C1 arm),
+  mnbt 24576 (C72 arm), mns 96 at C72, K3_DCP_DIRECT_OFF default 0, kda triton
+  on the MTP arm. Stock nightly-e7edf17c, no patches.
 
 BEST CONFIG (unchanged): 12,131.6 tok/s/GPU -- nightly-e7edf17c stock, C72,
   DCP 8, MTP off, mnbt 24576, mns 96, gmu 0.90, warmup lib default 10/lane.
