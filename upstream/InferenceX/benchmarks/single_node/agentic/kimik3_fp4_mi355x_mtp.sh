@@ -701,7 +701,6 @@ echo "[load] load_format=$LOAD_FORMAT conc=$CONC"
 # executor's RPC dequeue timeout, and the sentinel promotes that to fatal.
 # mns 80 completed twice on this exact image (T163, T164). Do not raise it
 # again without first raising that timeout.
-export MAX_NUM_SEQS="${MAX_NUM_SEQS:-140}"   # C92: peak running ~CONC+16=108; 112 too tight, 128 gives ~20 slots
 if [ -z "${MAX_NUM_SEQS:-}" ]; then
     if [ "$DCP_SIZE" -gt 1 ]; then
         # Flat 80. Tracking conc was tried (T219, mns 20 at C16) and caused total
@@ -790,7 +789,7 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 # 0.90 is the value behind every good number in the ledger; hold it fixed while
 # we establish whether the node still serves traffic at all.
 # Do not raise: 0.92 and 0.95 both hang (T211, T157). 0.88 is the tested ceiling.
-GPU_MEM_UTIL="${K3_GMU:-0.88}"   # T273: back to baseline. 0.92 was neutral at C72 (T272, +0.20%).
+GPU_MEM_UTIL="${K3_GMU:-0.9}"   # T273: back to baseline. 0.92 was neutral at C72 (T272, +0.20%).
 # T253: LMCache-ONLY overrides. Scoped deliberately -- the C72 baseline
 # (11,027 tok/s/GPU, n=2) was measured at gmu 0.90 / mns 96 and must not move.
 # SA run 33631260867 is the only LMCache configuration known to serve:
