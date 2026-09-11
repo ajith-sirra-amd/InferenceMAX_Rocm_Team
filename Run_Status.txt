@@ -4,7 +4,7 @@ Now : Run
 --- agent status (auto-updated) ---
 2026-09-11 20:15 IST | QUEUE ARMED. Runner expected live ~21:15 IST. 3 runs.
 
-ALL THREE RUNS DISPATCHED 2026-09-11 22:20 IST, SHA-pinned, nothing left to send.
+FOUR RUNS DISPATCHED 2026-09-11 22:20 IST, SHA-pinned, nothing left to send.
   Q3  run 34623815409  sha 6ceb816d  C72 + VLLM_USE_DIRECT_DCP_A2A/Q_GATHER/
       KV_GATHER=0 (K3_DCP_DIRECT_OFF=1), mns 96, mnbt 24576, gmu 0.90.
       Compare vs 12,131.6. Targets the chronic RCCL _ALLGATHER_BASE desync --
@@ -14,6 +14,13 @@ ALL THREE RUNS DISPATCHED 2026-09-11 22:20 IST, SHA-pinned, nothing left to send
   Q2  run 34624080133  sha edd67f8c  C1 + SA-ref: k=6/AL 3.75, mnbt 16384.
       Rejected from the ref: FULL_AND_PIECEWISE (-35.5% KV), INT4 (KFD thrash),
       mns=2*CONC, and the DCP flags (inert at DCP 1).
+
+  Q1E run 34624699472  sha c454bd61  GSM8K GATE at C1, EVAL_ONLY=true +
+      EVAL_LIMIT=200, Q1 launcher config. Anchor 0.995. EVAL_ONLY also selects
+      block rejection (real verification) instead of synthetic acceptance.
+      NOTE: workflow_dispatch generate-cli-command is a type:choice validated
+      against the DEFAULT branch, so --evals-only cannot be appended and the
+      eval had to be triggered via the launcher's own EVAL_ONLY switch.
 
   Each job checks out ITS OWN SHA (workflow_dispatch pins github.sha at dispatch
   time), so the branch head has been restored to the shippable config and that
