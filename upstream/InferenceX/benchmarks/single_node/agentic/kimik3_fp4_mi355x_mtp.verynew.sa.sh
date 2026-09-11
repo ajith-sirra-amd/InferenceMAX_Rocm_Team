@@ -54,8 +54,15 @@ export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
 #   MIN_SIZE_KB=256      skip quick-reduce for small allreduces, where the
 #                        quantize/dequantize costs more than the transfer saves.
 # ===== ACTIVE: quick-reduce ON, INT4 =========================================
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
-export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
+# MEASURED 2026-09-11: INT4 at gmu 0.90 HANGS THE ENGINE. It allocates extra
+# allreduce buffers the memory profiler does not account for, the KFD driver
+# then thrashes evicting/restoring GPU pages (kworker kfd_restore_wq ~90% CPU,
+# GPUs 0%, warmup flat, NO RCCL watchdog line) and never recovers.
+# Run 34503406329. Same failure class as VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0
+# and gmu>0.90. INT4 only survives at gmu<=0.88, where the gmu cost (-11% KV)
+# exceeds anything INT4 returns. DEFAULT IS NONE.
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
+export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-1}"
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
 
 # ===== ALTERNATIVE: quick-reduce OFF (upstream stock) ========================
@@ -74,6 +81,11 @@ export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE
 # so the FIRST assignment wins and the second is silently ignored: the file
 # would read as OFF while the run is actually INT4. Exactly one block active.
 export AITER_SITUV2_A8W4=1
+# MEASURED +0.6% (11,990 -> 12,064 @ C72, run 34511864403). Our only confirmed
+# win on the current stack. Supported in aiter/fused_moe.py:2092; raises loudly
+# if model_dim is not divisible, so a bad build fails fast rather than silently.
+# Do NOT swap A8W4 for A4W4: A4W4 FAILED the GSM8K gate (0.975 vs 0.995 anchor).
+export AITER_FLYDSL_STAGE2_FP8="${AITER_FLYDSL_STAGE2_FP8:-1}"
 export AITER_BF16_FP8_MOE_BOUND=0
 export AITER_DISABLE_FMHA_OPUS=1
 export SAFETENSORS_FAST_GPU=1
@@ -98,9 +110,9 @@ export PYTHONHASHSEED=42
 #   52968  DRAFT PR. Never isolated; effect unknown.
 #   54889  Fuse empty-shard LSE mask into A2A pack kernel. +0.74%, inside noise.
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
-export APPLY_PR_54736="${APPLY_PR_54736:-0}"
+export APPLY_PR_54736="${APPLY_PR_54736:-1}"   # MERGED 09-11 01:36. Absent from nightlies cut before that.
 export APPLY_PR_52968="${APPLY_PR_52968:-0}"
-export APPLY_PR_54889="${APPLY_PR_54889:-0}"
+export APPLY_PR_54889="${APPLY_PR_54889:-1}"   # MERGED 09-10 15:43. 7/7 hunks clean on nightly.
 "$(cd "$(dirname "$0")" && pwd)/k3_patches/apply_prs.sh" || true
 
 SERVER_LOG="$RESULT_DIR/server.log"
@@ -151,10 +163,23 @@ case "$CONC" in
         ;;
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
+        # mnbt: 16384 is the proven operating point (12,064 @ C72, n>=2 basis).
+        # Measured KV pool vs chunk: 8192 -> 30,089,572 | 16384 -> 28,733,261
+        # 24576 -> 27,160,397 | 32768 -> 27,319,963 but DIES in warmup
+        # deterministically on the agentic replay (T275/T276, same trace both
+        # times) -- do not use 32768. 24576 produced the single highest number
+        # ever seen (12,161, n=1, older stack) and is the one upside worth a
+        # try; it costs -5.5% KV, affordable at C72 where usage is only ~66%.
         MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         # mns must stay above the peak running count or batches fall off the
         # cudagraph ladder into eager execution, measured at -39.5%.
         # Peak observed at C72 was 88, i.e. CONC+16.
+        # C72 -> 96 gives 8 slots over the observed peak running count (88).
+        # Above 72 the peak scales too, so 112. mns is MEMORY-NEUTRAL (96->140
+        # moved the KV pool by only -0.28%: cudagraphs share one pool, so a
+        # longer ladder costs almost nothing) -- the only risk of raising it is
+        # capture time, and the only risk of lowering it is falling off the
+        # ladder into eager decode, measured at -39.5%.
         if [ "$CONC" -le 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
         ;;
