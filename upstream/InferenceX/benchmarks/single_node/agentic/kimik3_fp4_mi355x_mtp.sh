@@ -69,7 +69,7 @@ trap 'exit 143' TERM
 SPEC_ARGS=()
 SPEC_ROWS=1
 case "$CONC" in
-    1|2|4)
+    1|2|4|8)
         DCP_SIZE="${DCP_SIZE:-1}"
         SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-8}"
         case "$SPEC_NUM_TOKENS" in
@@ -93,7 +93,7 @@ case "$CONC" in
             echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN draft_kv=$DRAFT_KV_DTYPE"
         fi
         SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
-        MAX_NUM_SEQS="${MAX_NUM_SEQS:-4}"
+        MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC > 4 ? CONC : 4 ))}"
         MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"
         ;;
     *)
