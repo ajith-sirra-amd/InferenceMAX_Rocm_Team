@@ -5,7 +5,6 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 export EVAL_ONLY="${EVAL_ONLY:-false}"
-export AIPERF_WARMUP_REQUESTS_PER_LANE=30
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 
 DP_SIZE=1
@@ -67,7 +66,6 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-export MAX_NUM_SEQS="${MAX_NUM_SEQS:-140}"
 SPEC_ARGS=()
 SPEC_ROWS=1
 case "$CONC" in
@@ -101,7 +99,8 @@ case "$CONC" in
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
         MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
-        if [ "$CONC" -le 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
+        if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
+        elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
         ;;
 esac
