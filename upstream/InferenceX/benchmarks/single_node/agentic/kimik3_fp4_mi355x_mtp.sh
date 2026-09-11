@@ -60,7 +60,7 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 #   52968  DRAFT PR. Never isolated; effect unknown.
 #   54889  Fuse empty-shard LSE mask into A2A pack kernel. +0.74%, inside noise.
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
-export APPLY_PR_54736="${APPLY_PR_54736:-1}"
+export APPLY_PR_54736="${APPLY_PR_54736:-0}"
 export APPLY_PR_54889="${APPLY_PR_54889:-1}"   # MERGED upstream 2026-09-10 15:43 and will land in the
                                                 # next nightly, so we run what the nightly will have.
                                                 # NOT in rec-d9105-54736only; measured +0.74% (n=2,

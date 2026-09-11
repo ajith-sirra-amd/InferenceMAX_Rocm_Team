@@ -1979,7 +1979,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # time), so that run was EP=8+#52190 stacked, not EP=8 alone. W5-14b
   # (owner instruction): rec-d9105-54736only (single, well-established PR)
   # so EP is genuinely the only variable vs the 11,990 (W5-2) baseline.
-  image: vllm/vllm-openai-rocm:nightly-2a02f6efe319c885e3ccbcecde402e0028f9ec1e
+  image: kimi-k3-vllm:rec-d9105-54736only
   # T117: AMD's Quark checkpoint. Same vLLM, same tokenizer/remote-code file set
   # as moonshotai/Kimi-K3, but quant_method=quark (not compressed-tensors) and
   # self_attn q/k/v/o + MLA q_a/q_b/kv_a/kv_b are F8_E4M3 with F32 per-channel
