@@ -6,7 +6,24 @@ wait_for_amd_gpu_clean
 
 export EVAL_ONLY="${EVAL_ONLY:-false}"
 export AIPERF_EXPERIMENTAL_FAST=0
-export AIPERF_WARMUP_REQUESTS_PER_LANE=1
+# WARMUP DEPTH. benchmark_lib.sh defaults this to 10; this launcher has pinned
+# it to 1 since the "reduce the launcher" cleanup, with no recorded reason.
+# SemiAnalysis ATOM runs the default 10 ("10 additional requests on each of 56
+# lanes"), and their GPU prefix-cache hit is 81.7% against our 73.3% -- our
+# ext_cache_hit is still climbing at the END of the measured hour (51.8% ->
+# 81.1%), i.e. we measure a cache that never reaches steady state.
+# Cost: warmup already takes ~1950 s at 1, so 10 is a MUCH longer run (budget
+# ~240 min, not 105). AGENTIC_WARMUP_GRACE_PERIOD (default 1800) is the other
+# half of this knob and is already overridable in benchmark_lib.sh.
+export AIPERF_WARMUP_REQUESTS_PER_LANE="${AIPERF_WARMUP_REQUESTS_PER_LANE:-10}"
+# WARMUP DRAIN CAP. benchmark_lib.sh defaults to 1800 s. It is a MAXIMUM WAIT,
+# not a sleep: drain exits as soon as it is done, and on expiry the remaining
+# in-flight warmup requests are CANCELLED and profiling starts anyway. Raising
+# it therefore costs nothing on runs that drain in time, and only helps runs
+# that would otherwise truncate. We do truncate: C92 entered measurement at
+# 185/189 lanes and C100 at 185/206, i.e. warmup work we paid for and threw
+# away, leaving the prefix cache colder than it should be at t=0.
+export AGENTIC_WARMUP_GRACE_PERIOD="${AGENTIC_WARMUP_GRACE_PERIOD:-3600}"
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 
 DP_SIZE=1
