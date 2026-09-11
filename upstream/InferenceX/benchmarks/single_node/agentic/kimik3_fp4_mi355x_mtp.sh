@@ -60,7 +60,11 @@ K3_PATCH_DIR="$(cd "$(dirname "$0")" && pwd)/k3_patches"
 #   52968  DRAFT PR. Never isolated; effect unknown.
 #   54889  Fuse empty-shard LSE mask into A2A pack kernel. +0.74%, inside noise.
 # export is required: apply_prs.sh is a subprocess and will not see plain vars.
-export APPLY_PR_54736="${APPLY_PR_54736:-0}"   # already BAKED into rec-d9105-54736only; leave 0 there
+export APPLY_PR_54736="${APPLY_PR_54736:-0}"
+export APPLY_PR_54889="${APPLY_PR_54889:-1}"   # MERGED upstream 2026-09-10 15:43 and will land in the
+                                                # next nightly, so we run what the nightly will have.
+                                                # NOT in rec-d9105-54736only; measured +0.74% (n=2,
+                                                # T264/T274, inside noise). 7/7 hunks apply clean.   # already BAKED into rec-d9105-54736only; leave 0 there
 export APPLY_PR_56036="${APPLY_PR_56036:-0}"   # W5-8d MEASURED -2.3% vs baseline. Dropped, do not re-enable without new evidence.
 export APPLY_PR_52190="${APPLY_PR_52190:-0}"   # W5-12c MEASURED -1.4% vs baseline. Dropped, do not re-enable without new evidence.
                                                 # NOTE: defaulted to 1 from W5-12 through W5-14 -- W5-14's EP=8 result is
@@ -672,7 +676,7 @@ fi
 # T264: REVERTED to 16384 everywhere -- the 11,027 baseline value. The SA 8192
 # rule belonged to the parked LMCache/stock arms.
 # T269: SA runs mnbt 8192 at every conc above C1. Override for the SA arms.
-MBT_DEFAULT="${K3_MNBT:-16384}"   # W5-13 CLOSED the mnbt sweep: 8192->30,089,572 KV/11,756 tok/s-GPU, 16384->28,733,261, 24576->27,160,397, 32768 dies deterministically. Reverted to 16384 (T286's value) for W5-14 (EP=8) so EP is the only variable vs the 12,093 best.   # T277: REVERTED from 32768. T275 and T276 both died in warmup at 32768, and both
+MBT_DEFAULT="${K3_MNBT:-24576}"   # W5-13 CLOSED the mnbt sweep: 8192->30,089,572 KV/11,756 tok/s-GPU, 16384->28,733,261, 24576->27,160,397, 32768 dies deterministically. Reverted to 16384 (T286's value) for W5-14 (EP=8) so EP is the only variable vs the 12,093 best.   # T277: REVERTED from 32768. T275 and T276 both died in warmup at 32768, and both
                                   # aborted on the SAME trace (006c98de37d8...) -- a deterministic failure, not the
                                   # intermittent stall. 2/2 at 32768 vs ~1-in-10 at 16384. Chunk size is not raisable
                                   # on the dram-offload path; do not retry 32768 without changing the offload backend.
