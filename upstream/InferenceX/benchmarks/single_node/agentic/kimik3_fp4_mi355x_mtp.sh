@@ -4,8 +4,7 @@ set -x
 source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
-export EVAL_ONLY="${EVAL_ONLY:-true}"
-export EVAL_LIMIT="${EVAL_LIMIT:-200}"
+export EVAL_ONLY="${EVAL_ONLY:-false}"
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 
 DP_SIZE=1
@@ -86,7 +85,7 @@ case "$CONC" in
             *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
         esac
         DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
+        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
         if [ "${EVAL_ONLY:-false}" = "true" ]; then
             SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
             echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) draft_kv=$DRAFT_KV_DTYPE"
@@ -132,68 +131,6 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=${KV_OFFLOADING:-none}"
 
-if [ "${APPLY_PR_55966:-1}" = "1" ]; then
-    SP=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')
-    curl -sSL https://github.com/vllm-project/vllm/pull/55966.diff -o /tmp/pr55966.diff || { echo "[pr] FATAL: 55966 download failed" >&2; exit 1; }
-    python3 - <<'PYF'
-keep=False; out=[]
-for line in open('/tmp/pr55966.diff'):
-    if line.startswith('diff --git '): keep = ' b/vllm/' in line
-    if keep: out.append(line)
-open('/tmp/pr55966.vllm.diff','w').write(''.join(out))
-PYF
-    patch -p1 -d "$SP" --dry-run < /tmp/pr55966.vllm.diff >/dev/null 2>&1 || { echo "[pr] FATAL: 55966 does not apply to this image" >&2; exit 1; }
-    patch -p1 -d "$SP" < /tmp/pr55966.vllm.diff >/dev/null
-    echo "[pr] applied 55966 (AITER MLA non-causal draft block)"
-fi
-
-CCD_ARGS=()
-if [ "${PIN_CCD:-0}" = "1" ]; then
-    if ! command -v numactl >/dev/null 2>&1; then
-        apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq numactl >/dev/null 2>&1 || true
-    fi
-    command -v numactl >/dev/null 2>&1 || { echo "[ccd] FATAL: numactl unavailable, --numa-bind would silently no-op" >&2; exit 1; }
-python3 - <<'CCDPY' > /tmp/ccdmap.txt 2>/dev/null || true
-import subprocess, re, os, glob
-def expand(s):
-    v=[]
-    for part in s.split(','):
-        if '-' in part:
-            a,b=part.split('-'); v+=list(range(int(a),int(b)+1))
-        else: v.append(int(part))
-    return v
-def l3_domains():
-    seen,out=set(),[]
-    for c in sorted(int(re.search(r'cpu(\d+)$',x).group(1)) for x in glob.glob('/sys/devices/system/cpu/cpu[0-9]*')):
-        f=f'/sys/devices/system/cpu/cpu{c}/cache/index3/shared_cpu_list'
-        if not os.path.exists(f): continue
-        d=open(f).read().strip()
-        if d not in seen: seen.add(d); out.append(d)
-    return out
-def node_of(cpus):
-    for n in glob.glob('/sys/devices/system/node/node[0-9]*'):
-        nid=int(re.search(r'node(\d+)$',n).group(1))
-        if cpus[0] in expand(open(f'{n}/cpulist').read().strip()): return nid
-    return -1
-topo=""
-try: topo=subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
-except Exception: pass
-gpu_node={int(m.group(1)):int(m.group(2)) for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)",topo)}
-if not gpu_node: raise SystemExit
-by={}
-for d in l3_domains(): by.setdefault(node_of(expand(d)),[]).append(d)
-for n in by: by[n].sort(key=lambda d: expand(d)[0])
-for n in sorted(by):
-    for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
-        if i < len(by[n]): print(f"{g} {by[n][i]}")
-CCDPY
-    mapfile -t CCD_CPUS < <(sort -n /tmp/ccdmap.txt | awk '{print $2}')
-    [ "${#CCD_CPUS[@]}" -eq "$TP" ] || { echo "[ccd] FATAL: ${#CCD_CPUS[@]} CPU lists for $TP GPUs" >&2; exit 1; }
-    export VLLM_WORKER_MULTIPROC_METHOD=spawn
-    CCD_ARGS=(--numa-bind)
-    echo "[ccd] per-GPU L3 domains: ${CCD_CPUS[*]}"
-fi
-
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
@@ -219,7 +156,6 @@ VLLM_CMD=(
     "${CP_ARGS[@]}"
     "${EP_ARGS[@]}"
     "${SPEC_ARGS[@]}"
-    "${CCD_ARGS[@]}"
     "${KDA_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
