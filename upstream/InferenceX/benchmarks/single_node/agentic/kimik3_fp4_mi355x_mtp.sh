@@ -108,21 +108,6 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
-NUMA_ARGS=()
-if [ "${K3_NUMA_BIND:-0}" = "1" ]; then
-    if ! command -v numactl >/dev/null 2>&1; then
-        apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq numactl >/dev/null 2>&1 || true
-    fi
-    command -v numactl >/dev/null 2>&1 || { echo "[numa] FATAL: numactl unavailable, --numa-bind would silently no-op" >&2; exit 1; }
-    numactl --cpunodebind=0 --membind=0 true 2>/dev/null || {
-        numactl --cpunodebind=0 true 2>/dev/null && echo "[numa] WARN: membind rejected, CPU binding only" >&2 \
-        || { echo "[numa] FATAL: numactl present but binding rejected, --numa-bind would silently no-op" >&2; exit 1; }
-    }
-    export VLLM_WORKER_MULTIPROC_METHOD=spawn
-    NUMA_ARGS=(--numa-bind)
-    echo "[numa] $(numactl --show | tr '\n' ' ')"
-fi
-
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
@@ -146,43 +131,12 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=${KV_OFFLOADING:-none}"
 
-VLLM_CMD=(
-    vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
-    --host 0.0.0.0
-    --port "$PORT"
-    --trust-remote-code
-    --moe-backend auto
-    --tensor-parallel-size "$TP"
-    --load-format fastsafetensors
-    --gpu-memory-utilization "$GPU_MEM_UTIL"
-    --language-model-only
-    --max-num-seqs "$MAX_NUM_SEQS"
-    --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
-    --max-model-len 1048576
-    --kv-cache-dtype fp8
-    --enable-auto-tool-choice
-    --tool-call-parser kimi_k3
-    --reasoning-parser kimi_k3
-    --enable-prefix-caching
-    --enable-prompt-tokens-details
-    --no-async-scheduling
-    --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
-    "${OFFLOAD_ARGS[@]}"
-    "${CP_ARGS[@]}"
-    "${EP_ARGS[@]}"
-    "${SPEC_ARGS[@]}"
-    "${NUMA_ARGS[@]}"
-    "${KDA_ARGS[@]}"
-    "${COMPILATION_CONFIG_ARGS[@]}"
-)
-
-printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
-printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
-
-"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
-SERVER_PID=$!
-echo "Server PID: $SERVER_PID"
-
+CCD_ARGS=()
+if [ "${PIN_CCD:-1}" = "1" ]; then
+    if ! command -v numactl >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq numactl >/dev/null 2>&1 || true
+    fi
+    command -v numactl >/dev/null 2>&1 || { echo "[ccd] FATAL: numactl unavailable, --numa-bind would silently no-op" >&2; exit 1; }
 python3 - <<'CCDPY' > /tmp/ccdmap.txt 2>/dev/null || true
 import subprocess, re, os, glob
 def expand(s):
@@ -217,26 +171,53 @@ for n in sorted(by):
     for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
         if i < len(by[n]): print(f"{g} {by[n][i]}")
 CCDPY
+    mapfile -t CCD_CPUS < <(sort -n /tmp/ccdmap.txt | awk '{print $2}')
+    [ "${#CCD_CPUS[@]}" -eq "$TP" ] || { echo "[ccd] FATAL: ${#CCD_CPUS[@]} CPU lists for $TP GPUs" >&2; exit 1; }
+    export VLLM_WORKER_MULTIPROC_METHOD=spawn
+    CCD_ARGS=(--numa-bind --numa-bind-cpus "${CCD_CPUS[@]}")
+    echo "[ccd] per-GPU L3 domains: ${CCD_CPUS[*]}"
+fi
 
-PIN_CCD="${PIN_CCD:-1}"
-pin_workers_to_ccd() {
-    [ "$PIN_CCD" = "1" ] || return 0
-    [ -s /tmp/ccdmap.txt ] || return 0
-    local pinned=0
-    while read -r _g _cpus; do
-        for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null); do
-            for _t in /proc/$_p/task/*; do
-                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1)) || true
-            done
-        done
-    done < /tmp/ccdmap.txt
-    echo "[pin-ccd] pinned $pinned threads"
-}
+VLLM_CMD=(
+    vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
+    --host 0.0.0.0
+    --port "$PORT"
+    --trust-remote-code
+    --moe-backend auto
+    --tensor-parallel-size "$TP"
+    --load-format fastsafetensors
+    --gpu-memory-utilization "$GPU_MEM_UTIL"
+    --language-model-only
+    --max-num-seqs "$MAX_NUM_SEQS"
+    --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
+    --max-model-len 1048576
+    --kv-cache-dtype fp8
+    --enable-auto-tool-choice
+    --tool-call-parser kimi_k3
+    --reasoning-parser kimi_k3
+    --enable-prefix-caching
+    --enable-prompt-tokens-details
+    --no-async-scheduling
+    --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
+    "${OFFLOAD_ARGS[@]}"
+    "${CP_ARGS[@]}"
+    "${EP_ARGS[@]}"
+    "${SPEC_ARGS[@]}"
+    "${CCD_ARGS[@]}"
+    "${KDA_ARGS[@]}"
+    "${COMPILATION_CONFIG_ARGS[@]}"
+)
+
+printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
+printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
+
+"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+SERVER_PID=$!
+echo "Server PID: $SERVER_PID"
+
 
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
-
-pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
