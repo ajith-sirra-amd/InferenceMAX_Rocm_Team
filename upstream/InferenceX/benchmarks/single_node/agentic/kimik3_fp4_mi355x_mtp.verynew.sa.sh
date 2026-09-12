@@ -114,6 +114,10 @@ if [ "${K3_NUMA_BIND:-0}" = "1" ]; then
         apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq numactl >/dev/null 2>&1 || true
     fi
     command -v numactl >/dev/null 2>&1 || { echo "[numa] FATAL: numactl unavailable, --numa-bind would silently no-op" >&2; exit 1; }
+    numactl --cpunodebind=0 --membind=0 true 2>/dev/null || {
+        numactl --cpunodebind=0 true 2>/dev/null && echo "[numa] WARN: membind rejected, CPU binding only" >&2 \
+        || { echo "[numa] FATAL: numactl present but binding rejected, --numa-bind would silently no-op" >&2; exit 1; }
+    }
     NUMA_ARGS=(--numa-bind)
     echo "[numa] $(numactl --show | tr '\n' ' ')"
 fi
