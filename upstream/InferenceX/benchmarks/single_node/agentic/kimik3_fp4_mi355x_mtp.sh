@@ -85,7 +85,7 @@ case "$CONC" in
             *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
         esac
         DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
+        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
         if [ "${EVAL_ONLY:-false}" = "true" ]; then
             SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
             echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) draft_kv=$DRAFT_KV_DTYPE"
@@ -132,7 +132,7 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=${KV_OFFLOADING:-none}"
 
 CCD_ARGS=()
-if [ "${PIN_CCD:-0}" = "1" ]; then
+if [ "${PIN_CCD:-1}" = "1" ]; then
     if ! command -v numactl >/dev/null 2>&1; then
         apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq numactl >/dev/null 2>&1 || true
     fi
@@ -174,7 +174,7 @@ CCDPY
     mapfile -t CCD_CPUS < <(sort -n /tmp/ccdmap.txt | awk '{print $2}')
     [ "${#CCD_CPUS[@]}" -eq "$TP" ] || { echo "[ccd] FATAL: ${#CCD_CPUS[@]} CPU lists for $TP GPUs" >&2; exit 1; }
     export VLLM_WORKER_MULTIPROC_METHOD=spawn
-    CCD_ARGS=(--numa-bind --numa-bind-cpus "${CCD_CPUS[@]}")
+    CCD_ARGS=(--numa-bind)
     echo "[ccd] per-GPU L3 domains: ${CCD_CPUS[*]}"
 fi
 
