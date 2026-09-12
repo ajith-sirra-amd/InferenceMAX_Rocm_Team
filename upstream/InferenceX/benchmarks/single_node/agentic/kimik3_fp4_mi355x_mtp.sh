@@ -85,7 +85,7 @@ case "$CONC" in
             *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
         esac
         DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
+        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
         if [ "${EVAL_ONLY:-false}" = "true" ]; then
             SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
             echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) draft_kv=$DRAFT_KV_DTYPE"
@@ -131,8 +131,23 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=${KV_OFFLOADING:-none}"
 
+if [ "${APPLY_PR_55966:-1}" = "1" ]; then
+    SP=$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')
+    curl -sSL https://github.com/vllm-project/vllm/pull/55966.diff -o /tmp/pr55966.diff || { echo "[pr] FATAL: 55966 download failed" >&2; exit 1; }
+    python3 - <<'PYF'
+keep=False; out=[]
+for line in open('/tmp/pr55966.diff'):
+    if line.startswith('diff --git '): keep = ' b/vllm/' in line
+    if keep: out.append(line)
+open('/tmp/pr55966.vllm.diff','w').write(''.join(out))
+PYF
+    patch -p1 -d "$SP" --dry-run < /tmp/pr55966.vllm.diff >/dev/null 2>&1 || { echo "[pr] FATAL: 55966 does not apply to this image" >&2; exit 1; }
+    patch -p1 -d "$SP" < /tmp/pr55966.vllm.diff >/dev/null
+    echo "[pr] applied 55966 (AITER MLA non-causal draft block)"
+fi
+
 CCD_ARGS=()
-if [ "${PIN_CCD:-1}" = "1" ]; then
+if [ "${PIN_CCD:-0}" = "1" ]; then
     if ! command -v numactl >/dev/null 2>&1; then
         apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq numactl >/dev/null 2>&1 || true
     fi
