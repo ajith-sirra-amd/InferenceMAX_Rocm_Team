@@ -286,6 +286,8 @@ labels:
     - mi325x-tw_01
     - mi325x-tw_02
     - mi325x-tw_03
+  cluster:mi355x-amds-2:
+    - mi355x-amd_p02_g17
   cluster:mi355x-amds:
     - mi355x-amds_00
     - mi355x-amds_01
@@ -338,6 +340,9 @@ hardware:
     gpus-per-node: 8
   cluster:mi325x-tw:
     available-cpu-dram-mib: 3_095_792
+    gpus-per-node: 8
+  cluster:mi355x-amds-2:
+    available-cpu-dram-mib: 3_095_781
     gpus-per-node: 8
   cluster:mi355x-amds:
     available-cpu-dram-mib: 3_095_781
