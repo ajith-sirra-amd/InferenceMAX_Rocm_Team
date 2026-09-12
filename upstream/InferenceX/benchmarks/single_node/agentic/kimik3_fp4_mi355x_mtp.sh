@@ -118,6 +118,7 @@ if [ "${K3_NUMA_BIND:-0}" = "1" ]; then
         numactl --cpunodebind=0 true 2>/dev/null && echo "[numa] WARN: membind rejected, CPU binding only" >&2 \
         || { echo "[numa] FATAL: numactl present but binding rejected, --numa-bind would silently no-op" >&2; exit 1; }
     }
+    export VLLM_WORKER_MULTIPROC_METHOD=spawn
     NUMA_ARGS=(--numa-bind)
     echo "[numa] $(numactl --show | tr '\n' ' ')"
 fi
