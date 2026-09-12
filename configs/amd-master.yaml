@@ -2,7 +2,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   image: vllm/vllm-openai-rocm:nightly-e7edf17cea217e52701f913cd8491fcacf2d9490
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
-  runner: cluster:mi355x-amds-2
+  runner: cluster:mi355x-amds
   precision: fp4
   framework: vllm
   multinode: false
