@@ -2029,7 +2029,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   # +48 GiB is understood.
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
-  runner: cluster:mi355x-amds
+  runner: cluster:mi355x-amds-2
   precision: fp4
   framework: vllm
   multinode: false
