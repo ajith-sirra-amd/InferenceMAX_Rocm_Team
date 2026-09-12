@@ -108,7 +108,7 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
-if [ "${K3_DCP_DIRECT_OFF:-1}" = "1" ] && [ "$DCP_SIZE" -gt 1 ]; then
+if [ "$DCP_SIZE" -gt 1 ]; then
     export VLLM_USE_DIRECT_DCP_A2A=0
     export VLLM_USE_DIRECT_DCP_Q_GATHER=0
     export VLLM_USE_DIRECT_DCP_KV_GATHER=0
