@@ -95,7 +95,7 @@ case "$CONC" in
         fi
         SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
         KDA_ARGS=(--additional-config '{"kda_prefill_backend":"triton"}')
-        MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC > 2 ? CONC : 2 ))}"
+        MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC > 4 ? CONC : 4 ))}"
         MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         ;;
     *)
@@ -109,7 +109,7 @@ esac
 export DCP_SIZE
 
 NUMA_ARGS=()
-if [ "${K3_NUMA_BIND:-1}" = "1" ]; then
+if [ "${K3_NUMA_BIND:-0}" = "1" ]; then
     if ! command -v numactl >/dev/null 2>&1; then
         apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq numactl >/dev/null 2>&1 || true
     fi
