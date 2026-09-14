@@ -54,26 +54,10 @@ export PYTHONHASHSEED=42
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 SERVER_PID=""
-LMCACHE_PID=""
-
-lmcache_shutdown() {
-    [ -n "${LMCACHE_PID:-}" ] || return 0
-    kill -0 "$LMCACHE_PID" 2>/dev/null || { LMCACHE_PID=""; return 0; }
-    kill -TERM "$LMCACHE_PID" 2>/dev/null || true
-    local waited=0
-    while kill -0 "$LMCACHE_PID" 2>/dev/null; do
-        [ "$waited" -ge 300 ] && break
-        sleep 2; waited=$(( waited + 2 ))
-    done
-    kill -0 "$LMCACHE_PID" 2>/dev/null && { kill -KILL "$LMCACHE_PID" 2>/dev/null || true; sleep 5; }
-    LMCACHE_PID=""
-}
-
 cleanup_agentic_services() {
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
-    lmcache_shutdown
     stop_background_process_tree "$SERVER_PID" "vLLM server" 60
     exit "$exit_code"
 }
@@ -122,9 +106,9 @@ case "$CONC" in
         ;;
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
-        # SA runs LMCache on its high-concurrency arm (measured at c44/c48).
-        # Match it through c48; above that keep our own vllm-simple DRAM path.
-        if [ "$CONC" -le 48 ]; then SA_OFFLOAD=lmcache; else SA_OFFLOAD=keep; fi
+        # SA runs LMCache here (measured at c44/c48); we deliberately do not.
+        # The whole DCP arm keeps our vllm-simple DRAM path, c48 included.
+        SA_OFFLOAD=keep
         if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
@@ -148,54 +132,12 @@ fi
 
 # KV offload. SA_OFFLOAD is set per-arm above and OVERRIDES the harness's
 # KV_OFFLOADING/KV_OFFLOAD_BACKEND so the c1-c48 points match SA exactly:
-#   none    -> SA's speculation band (c1-c14) runs with no offload at all
-#   lmcache -> SA's high-concurrency band (measured at c44/c48)
-#   keep    -> above c48, honour the harness (our vllm-simple DRAM path)
+#   none -> SA's speculation band (c1-c14) runs with no offload at all
+#   keep -> the DCP arm honours the harness (our vllm-simple DRAM path)
 OFFLOAD_ARGS=()
 OFFLOAD_LABEL="$SA_OFFLOAD"
 if [ "$SA_OFFLOAD" = "none" ]; then
     :
-elif [ "$SA_OFFLOAD" = "lmcache" ]; then
-    # Exactly the build SA ran at c44/c48 (run 34332168553), from the nightly-rocm index.
-    LMCACHE_VERSION="${LMCACHE_VERSION:-0.5.5.dev114+rocm7.2}"
-    LMCACHE_INDEX="${LMCACHE_ROCM_INDEX:-https://github.com/LMCache/LMCache/releases/expanded_assets/nightly-rocm}"
-    LMCACHE_PORT="${LMCACHE_PORT:-6555}"
-    LMCACHE_HTTP_PORT="${LMCACHE_HTTP_PORT:-8090}"
-    LMCACHE_LOG="$RESULT_DIR/lmcache_server.log"
-    agentic_pip_install --quiet --no-cache-dir --no-deps \
-        "sortedcontainers==2.4.0" \
-        "opentelemetry-exporter-prometheus==0.61b0" \
-        "cupy-rocm-7-0==14.1.1" \
-        "lmcache==${LMCACHE_VERSION}" \
-        --find-links "$LMCACHE_INDEX"
-    lmcache server \
-        --host 127.0.0.1 --port "$LMCACHE_PORT" \
-        --http-host 127.0.0.1 --http-port "$LMCACHE_HTTP_PORT" \
-        --l1-size-gb "${LMCACHE_L1_SIZE_GB:-$TOTAL_CPU_DRAM_GB}" --l1-init-size-gb 10 \
-        --chunk-size "${LMCACHE_CHUNK_SIZE:-12288}" \
-        --separate-object-groups \
-        --enable-extra-logging --extra-logging-interval 30 \
-        --max-cpu-workers 8 --max-gpu-workers "${LMCACHE_MAX_GPU_WORKERS:-8}" \
-        --eviction-policy LRU \
-        --supported-transfer-mode lmcache_driven \
-        --shm-name "" > "$LMCACHE_LOG" 2>&1 &
-    LMCACHE_PID=$!
-    lm_waited=0
-    until curl -sf "http://127.0.0.1:${LMCACHE_HTTP_PORT}/healthcheck" >/dev/null; do
-        if ! kill -0 "$LMCACHE_PID" 2>/dev/null; then
-            echo "LMCache server died before becoming healthy; log follows:" >&2
-            cat "$LMCACHE_LOG" >&2 || true
-            exit 1
-        fi
-        if [ "$lm_waited" -ge "${LMCACHE_READY_TIMEOUT_S:-900}" ]; then
-            echo "Timed out waiting for LMCache healthcheck; log follows:" >&2
-            cat "$LMCACHE_LOG" >&2 || true
-            exit 1
-        fi
-        sleep 2; lm_waited=$(( lm_waited + 2 ))
-    done
-    echo "[lmcache] ready on port $LMCACHE_PORT (version $LMCACHE_VERSION)"
-    OFFLOAD_ARGS=(--kv-transfer-config "{\"kv_connector\":\"LMCacheMPConnector\",\"kv_connector_module_path\":\"lmcache.integration.vllm.lmcache_mp_connector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"lmcache.mp.port\":$LMCACHE_PORT,\"lmcache.mp.mq_timeout\":6000.0}}")
 elif agentic_kv_offload_enabled; then
     OFFLOAD_LABEL="${KV_OFFLOADING}"
     CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
