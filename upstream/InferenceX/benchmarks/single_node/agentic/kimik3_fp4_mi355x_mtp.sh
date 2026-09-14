@@ -96,9 +96,17 @@ case "$CONC" in
         fi
         SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
         KDA_ARGS=(--additional-config '{"kda_prefill_backend":"triton"}')
-        SPEC_MNS_CAP="${SPEC_MNS_CAP:-16}"
-        SPEC_SEATS=$(( CONC * 2 ))
-        if [ "$SPEC_SEATS" -gt "$SPEC_MNS_CAP" ]; then SPEC_SEATS="$SPEC_MNS_CAP"; fi
+        case "$CONC" in
+            1)  SPEC_SEATS=2  ;;
+            2)  SPEC_SEATS=4  ;;
+            4)  SPEC_SEATS=8  ;;
+            8)  SPEC_SEATS=10 ;;
+            10) SPEC_SEATS=12 ;;
+            12) SPEC_SEATS=14 ;;
+            14) SPEC_SEATS=16 ;;
+            16) SPEC_SEATS=18 ;;
+            *)  SPEC_SEATS=$(( CONC + 2 )) ;;
+        esac
         MAX_NUM_SEQS="${MAX_NUM_SEQS:-$SPEC_SEATS}"
         if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
