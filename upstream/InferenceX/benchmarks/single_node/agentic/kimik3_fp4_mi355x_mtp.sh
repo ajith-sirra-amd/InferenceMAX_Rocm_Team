@@ -54,7 +54,6 @@ export PYTHONHASHSEED=42
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 SERVER_PID=""
-
 cleanup_agentic_services() {
     local exit_code=$?
     trap - EXIT INT TERM
@@ -70,9 +69,11 @@ SPEC_ARGS=()
 SPEC_ROWS=1
 KDA_ARGS=()
 case "$CONC" in
-    1|2|4|8)
-        DCP_SIZE="${DCP_SIZE:-1}"
-        SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-4}"
+    1|2|4|8|10|12|14|16)
+        DCP_SIZE=1
+        OFFLOAD_POLICY=none
+        if [ "$CONC" -eq 1 ]; then SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-6}"
+        else SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}"; fi
         case "$SPEC_NUM_TOKENS" in
             1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
             2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
@@ -96,11 +97,14 @@ case "$CONC" in
         SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
         KDA_ARGS=(--additional-config '{"kda_prefill_backend":"triton"}')
         MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC > 2 ? CONC : 2 ))}"
-        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
+        if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
+        else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         ;;
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
-        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
+        OFFLOAD_POLICY=harness
+        if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
+        else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
         elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
@@ -108,7 +112,7 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.89}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
@@ -121,23 +125,59 @@ if [ "$DCP_SIZE" -gt 1 ]; then
 fi
 
 OFFLOAD_ARGS=()
-if agentic_kv_offload_enabled; then
+OFFLOAD_LABEL="$OFFLOAD_POLICY"
+if [ "$OFFLOAD_POLICY" = "none" ]; then
+    :
+elif agentic_kv_offload_enabled; then
+    OFFLOAD_LABEL="${KV_OFFLOADING}"
     CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
     OFFLOAD_ARGS=(--kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":false}}")
+else
+    OFFLOAD_LABEL=none
 fi
 
 EP_ARGS=()
 if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
-echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=${KV_OFFLOADING:-none}"
+echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
 
-CCD_ARGS=()
-if [ "${PIN_CCD:-1}" = "1" ]; then
-    if ! command -v numactl >/dev/null 2>&1; then
-        apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq numactl >/dev/null 2>&1 || true
-    fi
-    command -v numactl >/dev/null 2>&1 || { echo "[ccd] FATAL: numactl unavailable, --numa-bind would silently no-op" >&2; exit 1; }
-python3 - <<'CCDPY' > /tmp/ccdmap.txt 2>/dev/null || true
+VLLM_CMD=(
+    vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
+    --host 0.0.0.0
+    --port "$PORT"
+    --trust-remote-code
+    --moe-backend auto
+    --tensor-parallel-size "$TP"
+    --load-format fastsafetensors
+    --gpu-memory-utilization "$GPU_MEM_UTIL"
+    --language-model-only
+    --max-num-seqs "$MAX_NUM_SEQS"
+    --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
+    --max-model-len 1048576
+    --kv-cache-dtype fp8
+    --enable-auto-tool-choice
+    --tool-call-parser kimi_k3
+    --reasoning-parser kimi_k3
+    --enable-prefix-caching
+    --enable-prompt-tokens-details
+    --no-async-scheduling
+    --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
+    "${OFFLOAD_ARGS[@]}"
+    "${CP_ARGS[@]}"
+    "${EP_ARGS[@]}"
+    "${SPEC_ARGS[@]}"
+    "${KDA_ARGS[@]}"
+    "${COMPILATION_CONFIG_ARGS[@]}"
+)
+
+printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
+printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
+
+"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+SERVER_PID=$!
+echo "Server PID: $SERVER_PID"
+
+python3 - <<'CCDPY' > "$RESULT_DIR/ccdmap.txt" 2>/dev/null || true
 import subprocess, re, os, glob
 def expand(s):
     v=[]
@@ -171,53 +211,25 @@ for n in sorted(by):
     for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
         if i < len(by[n]): print(f"{g} {by[n][i]}")
 CCDPY
-    mapfile -t CCD_CPUS < <(sort -n /tmp/ccdmap.txt | awk '{print $2}')
-    [ "${#CCD_CPUS[@]}" -eq "$TP" ] || { echo "[ccd] FATAL: ${#CCD_CPUS[@]} CPU lists for $TP GPUs" >&2; exit 1; }
-    export VLLM_WORKER_MULTIPROC_METHOD=spawn
-    CCD_ARGS=(--numa-bind --numa-bind-cpus "${CCD_CPUS[@]}")
-    echo "[ccd] per-GPU L3 domains: ${CCD_CPUS[*]}"
-fi
 
-VLLM_CMD=(
-    vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
-    --host 0.0.0.0
-    --port "$PORT"
-    --trust-remote-code
-    --moe-backend auto
-    --tensor-parallel-size "$TP"
-    --load-format fastsafetensors
-    --gpu-memory-utilization "$GPU_MEM_UTIL"
-    --language-model-only
-    --max-num-seqs "$MAX_NUM_SEQS"
-    --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
-    --max-model-len 1048576
-    --kv-cache-dtype fp8
-    --enable-auto-tool-choice
-    --tool-call-parser kimi_k3
-    --reasoning-parser kimi_k3
-    --enable-prefix-caching
-    --enable-prompt-tokens-details
-    --no-async-scheduling
-    --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
-    "${OFFLOAD_ARGS[@]}"
-    "${CP_ARGS[@]}"
-    "${EP_ARGS[@]}"
-    "${SPEC_ARGS[@]}"
-    "${CCD_ARGS[@]}"
-    "${KDA_ARGS[@]}"
-    "${COMPILATION_CONFIG_ARGS[@]}"
-)
-
-printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
-printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
-
-"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
-SERVER_PID=$!
-echo "Server PID: $SERVER_PID"
-
-
+PIN_CCD="${PIN_CCD:-1}"
+pin_workers_to_ccd() {
+    [ "$PIN_CCD" = "1" ] || return 0
+    [ -s "$RESULT_DIR/ccdmap.txt" ] || return 0
+    local pinned=0
+    while read -r _g _cpus; do
+        for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null); do
+            for _t in /proc/$_p/task/*; do
+                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1)) || true
+            done
+        done
+    done < "$RESULT_DIR/ccdmap.txt"
+    echo "[pin-ccd] pinned $pinned threads"
+}
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
+
+pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
