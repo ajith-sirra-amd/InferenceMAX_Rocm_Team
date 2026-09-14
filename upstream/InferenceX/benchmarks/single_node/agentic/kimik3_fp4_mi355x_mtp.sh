@@ -71,7 +71,7 @@ KDA_ARGS=()
 case "$CONC" in
     1|2|4|8|10|12|14|16)
         DCP_SIZE=1
-        OFFLOAD_POLICY=none
+        OFFLOAD_POLICY=harness
         if [ "$CONC" -eq 1 ]; then SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-6}"
         else SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}"; fi
         case "$SPEC_NUM_TOKENS" in
