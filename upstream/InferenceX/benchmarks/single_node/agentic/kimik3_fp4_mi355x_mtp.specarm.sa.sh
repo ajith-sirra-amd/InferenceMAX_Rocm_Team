@@ -70,17 +70,6 @@ SPEC_ROWS=1
 KDA_ARGS=()
 case "$CONC" in
     1|2|4|8|10|12|14|16)
-        # Speculation arm: MTP on, DCP 1, no KV offload.
-        #
-        # Speculation is the interactivity lever at low concurrency -- each
-        # accepted draft token retires a decode step -- and it outweighs the KV
-        # pooling DCP buys until the pool actually binds. It does not bind here:
-        # c16 needs ~2.08M tokens against a measured ~3.15M-token pool (66%).
-        #
-        # DCP_SIZE is hard-set, NOT defaulted. The harness exports DCP_SIZE=8,
-        # and MTP with DCP>1 cannot start at all -- AiterMLAMetadataBuilder
-        # rejects the non-causal draft MLA path -- which is what killed c12 in
-        # run 34733627049.
         DCP_SIZE=1
         OFFLOAD_POLICY=none
         if [ "$CONC" -eq 1 ]; then SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-6}"
@@ -113,8 +102,6 @@ case "$CONC" in
         ;;
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
-        # Throughput arm: DCP 8, speculation off, KV offload left to the
-        # harness (vllm-simple DRAM).
         OFFLOAD_POLICY=harness
         if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
@@ -137,11 +124,6 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
 fi
 
-# KV offload. OFFLOAD_POLICY is set per-arm above:
-#   none    -> speculation arm runs with no offload at all, whatever the
-#              harness asks for (offloading a KV pool that already fits only
-#              adds transfer cost)
-#   harness -> throughput arm honours KV_OFFLOADING (vllm-simple DRAM)
 OFFLOAD_ARGS=()
 OFFLOAD_LABEL="$OFFLOAD_POLICY"
 if [ "$OFFLOAD_POLICY" = "none" ]; then
@@ -244,7 +226,6 @@ pin_workers_to_ccd() {
     done < "$RESULT_DIR/ccdmap.txt"
     echo "[pin-ccd] pinned $pinned threads"
 }
-
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
