@@ -102,9 +102,9 @@ case "$CONC" in
             4)  SPEC_SEATS=8  ;;
             8)  SPEC_SEATS=10 ;;
             10) SPEC_SEATS=12 ;;
-            12) SPEC_SEATS=14 ;;
+            12) SPEC_SEATS=24 ;;
             14) SPEC_SEATS=16 ;;
-            16) SPEC_SEATS=32 ;;
+            16) SPEC_SEATS=18 ;;
             *)  SPEC_SEATS=$(( CONC + 2 )) ;;
         esac
         MAX_NUM_SEQS="${MAX_NUM_SEQS:-$SPEC_SEATS}"
