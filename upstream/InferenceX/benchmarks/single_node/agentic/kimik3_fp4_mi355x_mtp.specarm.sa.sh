@@ -244,9 +244,25 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 pin_workers_to_ccd || true
 
+ISL="${ISL:-8192}"
+OSL="${OSL:-1024}"
+RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
+RESULT_FILENAME="${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}_$(hostname)}"
+
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
-    build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    run_benchmark_serving \
+        --model "$MODEL" \
+        --port "$PORT" \
+        --backend vllm \
+        --input-len "$ISL" \
+        --output-len "$OSL" \
+        --random-range-ratio "$RANDOM_RANGE_RATIO" \
+        --num-prompts "$(( CONC * 10 ))" \
+        --max-concurrency "$CONC" \
+        --result-filename "$RESULT_FILENAME" \
+        --result-dir /workspace/ \
+        --trust-remote-code \
+        --use-chat-template
 fi

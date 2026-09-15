@@ -2034,13 +2034,13 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   framework: vllm
   multinode: false
   scenarios:
-    fixed-seq-len:
-    - isl: 8192
-      osl: 1024
-      search-space:
-      - { tp: 8, ep: 1, dcp-size: 1, conc-list: [1], spec-decoding: mtp }
-      - { tp: 8, ep: 1, dcp-size: 8, conc-list: [72], spec-decoding: mtp }
-    # agentic-coding:
+    # fixed-seq-len:
+    # - isl: 8192
+    #   osl: 1024
+    #   search-space:
+    #   - { tp: 8, ep: 1, dcp-size: 1, conc-list: [1], spec-decoding: mtp }
+    #   - { tp: 8, ep: 1, dcp-size: 8, conc-list: [72], spec-decoding: mtp }
+    agentic-coding:
     # 0.50 -> 0.65 buys CPU-offload headroom for the higher concurrencies below.
     # 0.80 was tried previously and OOM'd the host; 0.65 was the known-safe ceiling.
     # Run 3 (owner 2026-09-10, NV-comparison-driven): 0.65 -> 0.72. Staying
@@ -2052,8 +2052,8 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
     # move at once, deliberately, as an exploratory push, not an isolation.
     # OWNER BOUND 2026-09-10: keep <= 0.72. 0.80 OOM'd the host historically;
     # 0.85 was considered and rejected as unsafe. Do not raise above 0.72.
-    # - dram-utilization: 0.65
-    # search-space:
+    - dram-utilization: 0.65
+      search-space:
       # - { tp: 8, kv-offloading: none, conc-list: [1, 4, 8] , spec-decoding: mtp}
       # Straddles DCP_AUTO_CONC_THRESHOLD=64 in the launcher, so this one list
       # measures both regimes and gives a clean A/B across the threshold:
@@ -2245,6 +2245,8 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [12], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48, 72], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48], spec-decoding: mtp }
+      - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1], spec-decoding: mtp }
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1
