@@ -68,11 +68,11 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # k-sweep knob: edit this one number per dispatch (C4 fixed-len sweep).
-SPEC_K="${SPEC_K:-5}"
+SPEC_K="${SPEC_K:-4}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
-KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"${KDA_PREFILL_BACKEND:-fused}\"}")
+KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"${KDA_PREFILL_BACKEND:-triton}\"}")
 case "$CONC" in
     1|2|4|8|10|12|14|16)
         DCP_SIZE=1
