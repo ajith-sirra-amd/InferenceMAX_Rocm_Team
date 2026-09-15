@@ -126,8 +126,8 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
-if [ "$CONC" -eq 12 ]; then GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"
-else GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"; fi
+if [ "$CONC" -eq 12 ]; then GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"; LAZY_OFFLOAD="${LAZY_OFFLOAD:-true}"
+else GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"; LAZY_OFFLOAD="${LAZY_OFFLOAD:-false}"; fi
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
@@ -146,7 +146,7 @@ if [ "$OFFLOAD_POLICY" = "none" ]; then
 elif agentic_kv_offload_enabled; then
     OFFLOAD_LABEL="${KV_OFFLOADING}"
     CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
-    OFFLOAD_ARGS=(--kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":${LAZY_OFFLOAD:-true}}}")
+    OFFLOAD_ARGS=(--kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":$LAZY_OFFLOAD}}")
 else
     OFFLOAD_LABEL=none
 fi
