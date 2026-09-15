@@ -3,6 +3,7 @@ set -euo pipefail
 source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
+export EVAL_ONLY="${EVAL_ONLY:-false}"
 check_env_vars MODEL TP CONC ISL OSL MAX_MODEL_LEN RANDOM_RANGE_RATIO RESULT_FILENAME
 
 DP_SIZE=1
@@ -63,6 +64,9 @@ trap cleanup_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+DCP_SIZE="${DCP_SIZE:-1}"
+export DCP_SIZE
+
 DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
 SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}"
 case "$SPEC_NUM_TOKENS" in
@@ -77,17 +81,22 @@ case "$SPEC_NUM_TOKENS" in
     *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
 esac
 SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
-if [ "${EVAL_ONLY:-false}" = "true" ] || [ "${RUN_EVAL:-false}" = "true" ]; then
+if [ "$DCP_SIZE" -gt 1 ]; then
+    # AiterMLAMetadataBuilder rejects non-causal draft MLA attention under
+    # decode-context-parallelism -- MTP cannot run alongside DCP>1 at all.
+    SPEC_ARGS=()
+    SPEC_ROWS=1
+    echo "MTP: off (dcp=$DCP_SIZE)"
+elif [ "${EVAL_ONLY:-false}" = "true" ] || [ "${RUN_EVAL:-false}" = "true" ]; then
     SPEC_ARGS=(--speculative-config "{$SPEC_BASE}")
+    SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
     echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) draft_kv=$DRAFT_KV_DTYPE"
 else
     SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
+    SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
     echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN draft_kv=$DRAFT_KV_DTYPE"
 fi
-SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
 
-DCP_SIZE="${DCP_SIZE:-1}"
-export DCP_SIZE
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 2 > 2 ? CONC * 2 : 2 ))}"
 MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
@@ -149,7 +158,8 @@ else
         --max-concurrency "$CONC" \
         --result-filename "$RESULT_FILENAME" \
         --result-dir /workspace/ \
-        --trust-remote-code
+        --trust-remote-code \
+        --use-chat-template
 
     if [ "${RUN_EVAL:-false}" = "true" ]; then
         run_eval --framework lm-eval --port "$PORT"
