@@ -243,17 +243,16 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 pin_workers_to_ccd || true
 
-# The agentic-coding scenario emits ISL=OSL=0, and ${VAR:-default} does not
-# substitute for "0" -- only for unset/empty. Treat non-positive as unset.
-ISL="${ISL:-8192}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=8192
-OSL="${OSL:-1024}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=1024
-RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
-case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
-RESULT_FILENAME="${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}_$(hostname)}"
-
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-else
+elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
+    # Fixed-length client instead of the trace replay. The agentic-coding
+    # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
+    # "0" -- only for unset/empty -- so guard on >0.
+    ISL="${ISL:-8192}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=8192
+    OSL="${OSL:-1024}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=1024
+    RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
+    case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
     run_benchmark_serving \
         --model "$MODEL" \
         --port "$PORT" \
@@ -263,8 +262,11 @@ else
         --random-range-ratio "$RANDOM_RANGE_RATIO" \
         --num-prompts "$(( CONC * 10 ))" \
         --max-concurrency "$CONC" \
-        --result-filename "$RESULT_FILENAME" \
+        --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
         --result-dir /workspace/ \
         --trust-remote-code \
         --use-chat-template
+else
+    build_replay_cmd "$RESULT_DIR"
+    run_agentic_replay_and_write_outputs "$RESULT_DIR"
 fi
