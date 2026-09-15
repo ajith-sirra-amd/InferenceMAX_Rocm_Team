@@ -33,7 +33,7 @@ export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MLA=1
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2_A8W4=1
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
 export VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16="${VLLM_ROCM_QUICK_REDUCE_CAST_BF16_TO_FP16:-0}"
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB:-256}"
 
@@ -67,6 +67,9 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# k-sweep knob: edit this one number per dispatch (C4 fixed-len sweep).
+SPEC_K="${SPEC_K:-4}"
+
 SPEC_ARGS=()
 SPEC_ROWS=1
 KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"${KDA_PREFILL_BACKEND:-triton}\"}")
@@ -74,8 +77,8 @@ case "$CONC" in
     1|2|4|8|10|12|14|16)
         DCP_SIZE=1
         OFFLOAD_POLICY=harness
-        if [ "$CONC" -eq 1 ]; then SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-6}"
-        else SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-3}"; fi
+        if [ "$CONC" -eq 1 ]; then SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}"
+        else SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}"; fi
         case "$SPEC_NUM_TOKENS" in
             1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
             2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
@@ -245,7 +248,7 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
+elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
     # Fixed-length client instead of the trace replay. The agentic-coding
     # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
     # "0" -- only for unset/empty -- so guard on >0.
