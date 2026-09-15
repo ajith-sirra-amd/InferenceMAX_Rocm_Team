@@ -133,7 +133,16 @@ GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 # tokens (18.47M vs 28.65M) -- that finding stands and DCP>1 keeps decode-only.
 # On the DCP-1 arm at mnbt 8192 the same pool measures ~0.45 GiB (SA c12 KV mem
 # 51.86 GiB vs our 52.31), so the penalty does not apply there.
-CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
+# Piecewise is arm-scoped. T284 (00ae50d9) measured the piecewise compilation
+# pool at 20.30 GiB on the DCP-8 arm at mnbt 16384-24576, costing 35.5% of KV
+# tokens (18.47M vs 28.65M) -- that finding stands, so DCP>1 keeps decode-only.
+# The pool scales with mnbt; the DCP-1 arm runs 8192, where the measured cost is
+# ~0.45 GiB (SA c12 KV mem 51.86 GiB vs our decode-only 52.31).
+if [ "$DCP_SIZE" -gt 1 ]; then
+    CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
+else
+    CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
+fi
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
