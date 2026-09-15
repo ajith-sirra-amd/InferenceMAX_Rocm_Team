@@ -74,11 +74,6 @@ case "$CONC" in
     1|2|4|8|10|12|14|16)
         DCP_SIZE=1
         OFFLOAD_POLICY=harness
-        # Draft depth per concurrency. c1=6 is SA-matched and measured best at SA
-        # (1,412 tok/s/GPU, ITL p90 8.13 = 123.0 tok/s/user). c4=5 and c12=4 come
-        # from the C4 fixed-length sweep, where TPOT fell monotonically
-        # 12.46 -> 11.26 -> 10.85 -> 10.38 ms across k=2..5 with throughput rising
-        # 2,794 -> 3,321. Everything else stays on SA's k=3 for the band.
         case "$CONC" in
             1)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}" ;;
             4)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
@@ -134,11 +129,6 @@ esac
 export DCP_SIZE
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.89}"
-# FULL_DECODE_ONLY on every arm. Measured at C4 k=4 n=400 (runs 34936346363 vs
-# 34940495620): piecewise cost 22.8 GiB of graph memory and 41.9% of the KV pool
-# (3,295,310 -> 1,916,156 tokens) for a 0.6% TPOT change -- i.e. nothing. This is
-# T284's -35.5% finding reproduced on the DCP-1 arm at mnbt 8192, so the penalty is
-# chunk-size-driven, not arm-specific.
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
@@ -259,27 +249,6 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
-    # Fixed-length client instead of the trace replay. The agentic-coding
-    # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
-    # "0" -- only for unset/empty -- so guard on >0.
-    ISL="${ISL:-8192}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=8192
-    OSL="${OSL:-1024}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=1024
-    RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
-    case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
-    run_benchmark_serving \
-        --model "$MODEL" \
-        --port "$PORT" \
-        --backend vllm \
-        --input-len "$ISL" \
-        --output-len "$OSL" \
-        --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "$(( CONC * ${NUM_PROMPTS_MULT:-100} ))" \
-        --max-concurrency "$CONC" \
-        --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
-        --result-dir /workspace/ \
-        --trust-remote-code \
-        --use-chat-template
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
