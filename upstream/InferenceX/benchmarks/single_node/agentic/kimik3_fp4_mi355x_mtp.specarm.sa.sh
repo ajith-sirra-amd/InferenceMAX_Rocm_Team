@@ -68,7 +68,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # k-sweep knob: edit this one number per dispatch (C4 fixed-len sweep).
-SPEC_K="${SPEC_K:-5}"
+SPEC_K="${SPEC_K:-4}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
@@ -253,7 +253,7 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
+elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
     # Fixed-length client instead of the trace replay. The agentic-coding
     # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
     # "0" -- only for unset/empty -- so guard on >0.
