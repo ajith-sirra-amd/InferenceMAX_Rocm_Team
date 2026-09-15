@@ -44,7 +44,7 @@ export AITER_DISABLE_FMHA_OPUS=1
 export SAFETENSORS_FAST_GPU=1
 export GPU_ARCHS=gfx950
 export HSA_NO_SCRATCH_RECLAIM=1
-export VLLM_USE_BREAKABLE_CUDAGRAPH=0
+export VLLM_USE_BREAKABLE_CUDAGRAPH="${VLLM_USE_BREAKABLE_CUDAGRAPH:-0}"
 export VLLM_K3_KDA_SAFE_STAGES=1
 export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
@@ -143,6 +143,12 @@ if [ "$DCP_SIZE" -gt 1 ]; then
 else
     CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
 fi
+# nightly-e7edf17c turned the piecewise guard into a hard failure: FULL_AND_PIECEWISE
+# needs a torch-compiled model or breakable cudagraphs, else EngineCore dies at KV
+# init. SA's older 7c5dc571 captured piecewise fine with the flag at 0.
+case "$CUDAGRAPH_MODE" in
+    *PIECEWISE*) export VLLM_USE_BREAKABLE_CUDAGRAPH=1 ;;
+esac
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
