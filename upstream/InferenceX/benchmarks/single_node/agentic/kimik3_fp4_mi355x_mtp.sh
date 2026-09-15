@@ -243,9 +243,12 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 pin_workers_to_ccd || true
 
-ISL="${ISL:-8192}"
-OSL="${OSL:-1024}"
+# The agentic-coding scenario emits ISL=OSL=0, and ${VAR:-default} does not
+# substitute for "0" -- only for unset/empty. Treat non-positive as unset.
+ISL="${ISL:-8192}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=8192
+OSL="${OSL:-1024}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=1024
 RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
+case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
 RESULT_FILENAME="${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}_$(hostname)}"
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
