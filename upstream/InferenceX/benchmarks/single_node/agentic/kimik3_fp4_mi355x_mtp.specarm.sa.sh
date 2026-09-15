@@ -68,7 +68,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # k-sweep knob: edit this one number per dispatch (C4 fixed-len sweep).
-SPEC_K="${SPEC_K:-4}"
+SPEC_K="${SPEC_K:-5}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
@@ -128,27 +128,12 @@ esac
 export DCP_SIZE
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.89}"
-# Piecewise is arm-scoped. T284 (00ae50d9) measured the piecewise compilation
-# pool at 20.30 GiB on the DCP-8 arm with mnbt 16384-24576, costing 35.5% of KV
-# tokens (18.47M vs 28.65M) -- that finding stands and DCP>1 keeps decode-only.
-# On the DCP-1 arm at mnbt 8192 the same pool measures ~0.45 GiB (SA c12 KV mem
-# 51.86 GiB vs our 52.31), so the penalty does not apply there.
-# Piecewise is arm-scoped. T284 (00ae50d9) measured the piecewise compilation
-# pool at 20.30 GiB on the DCP-8 arm at mnbt 16384-24576, costing 35.5% of KV
-# tokens (18.47M vs 28.65M) -- that finding stands, so DCP>1 keeps decode-only.
-# The pool scales with mnbt; the DCP-1 arm runs 8192, where the measured cost is
-# ~0.45 GiB (SA c12 KV mem 51.86 GiB vs our decode-only 52.31).
-if [ "$DCP_SIZE" -gt 1 ]; then
-    CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
-else
-    CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
-fi
-# nightly-e7edf17c turned the piecewise guard into a hard failure: FULL_AND_PIECEWISE
-# needs a torch-compiled model or breakable cudagraphs, else EngineCore dies at KV
-# init. SA's older 7c5dc571 captured piecewise fine with the flag at 0.
-case "$CUDAGRAPH_MODE" in
-    *PIECEWISE*) export VLLM_USE_BREAKABLE_CUDAGRAPH=1 ;;
-esac
+# FULL_DECODE_ONLY on every arm. Measured at C4 k=4 n=400 (runs 34936346363 vs
+# 34940495620): piecewise cost 22.8 GiB of graph memory and 41.9% of the KV pool
+# (3,295,310 -> 1,916,156 tokens) for a 0.6% TPOT change -- i.e. nothing. This is
+# T284's -35.5% finding reproduced on the DCP-1 arm at mnbt 8192, so the penalty is
+# chunk-size-driven, not arm-specific.
+CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
