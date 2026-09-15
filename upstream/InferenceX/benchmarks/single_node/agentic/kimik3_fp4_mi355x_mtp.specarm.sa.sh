@@ -68,7 +68,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # k-sweep knob: edit this one number per dispatch (C4 fixed-len sweep).
-SPEC_K="${SPEC_K:-3}"
+SPEC_K="${SPEC_K:-2}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
@@ -263,7 +263,7 @@ elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
         --input-len "$ISL" \
         --output-len "$OSL" \
         --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "$(( CONC * 10 ))" \
+        --num-prompts "$(( CONC * ${NUM_PROMPTS_MULT:-100} ))" \
         --max-concurrency "$CONC" \
         --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
         --result-dir /workspace/ \
