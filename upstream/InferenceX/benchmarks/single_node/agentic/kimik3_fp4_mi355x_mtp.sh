@@ -131,8 +131,9 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
-LAZY_OFFLOAD="${LAZY_OFFLOAD:-true}"
+if [ "$DCP_SIZE" -gt 1 ]; then GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+else GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"; fi
+LAZY_OFFLOAD="${LAZY_OFFLOAD:-false}"
 # FULL_DECODE_ONLY on every arm. Measured at C4 k=4 n=400 (runs 34936346363 vs
 # 34940495620): piecewise cost 22.8 GiB of graph memory and 41.9% of the KV pool
 # (3,295,310 -> 1,916,156 tokens) for a 0.6% TPOT change -- i.e. nothing. This is
