@@ -117,7 +117,6 @@ case "$CONC" in
         esac
         MAX_NUM_SEQS="${MAX_NUM_SEQS:-$SPEC_SEATS}"
         if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
-        elif [ "$CONC" -eq 12 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         ;;
     *)
@@ -132,7 +131,7 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"
 LAZY_OFFLOAD="${LAZY_OFFLOAD:-false}"
 # FULL_DECODE_ONLY on every arm. Measured at C4 k=4 n=400 (runs 34936346363 vs
 # 34940495620): piecewise cost 22.8 GiB of graph memory and 41.9% of the KV pool
