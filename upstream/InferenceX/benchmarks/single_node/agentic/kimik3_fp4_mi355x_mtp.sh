@@ -68,7 +68,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # k-sweep knob: edit this one number per dispatch (C4 fixed-len sweep).
-SPEC_K="${SPEC_K:-4}"
+SPEC_K="${SPEC_K:-3}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
