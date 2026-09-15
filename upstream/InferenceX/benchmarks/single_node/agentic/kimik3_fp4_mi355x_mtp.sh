@@ -68,7 +68,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 # k-sweep knob: edit this one number per dispatch (C4 fixed-len sweep).
-SPEC_K="${SPEC_K:-3}"
+SPEC_K="${SPEC_K:-4}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
@@ -133,11 +133,7 @@ GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 # tokens (18.47M vs 28.65M) -- that finding stands and DCP>1 keeps decode-only.
 # On the DCP-1 arm at mnbt 8192 the same pool measures ~0.45 GiB (SA c12 KV mem
 # 51.86 GiB vs our 52.31), so the penalty does not apply there.
-if [ "$DCP_SIZE" -gt 1 ]; then
-    CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
-else
-    CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
-fi
+CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
