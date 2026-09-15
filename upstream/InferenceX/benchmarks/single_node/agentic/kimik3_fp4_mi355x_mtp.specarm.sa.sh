@@ -67,9 +67,6 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# k-sweep knob: edit this one number per dispatch (C4 fixed-len sweep).
-SPEC_K="${SPEC_K:-3}"
-
 SPEC_ARGS=()
 SPEC_ROWS=1
 KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"${KDA_PREFILL_BACKEND:-triton}\"}")
@@ -77,8 +74,17 @@ case "$CONC" in
     1|2|4|8|10|12|14|16)
         DCP_SIZE=1
         OFFLOAD_POLICY=harness
-        if [ "$CONC" -eq 1 ]; then SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}"
-        else SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}"; fi
+        # Draft depth per concurrency. c1=6 is SA-matched and measured best at SA
+        # (1,412 tok/s/GPU, ITL p90 8.13 = 123.0 tok/s/user). c4=5 and c12=4 come
+        # from the C4 fixed-length sweep, where TPOT fell monotonically
+        # 12.46 -> 11.26 -> 10.85 -> 10.38 ms across k=2..5 with throughput rising
+        # 2,794 -> 3,321. Everything else stays on SA's k=3 for the band.
+        case "$CONC" in
+            1)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}" ;;
+            4)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
+            12) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}" ;;
+            *)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
+        esac
         case "$SPEC_NUM_TOKENS" in
             1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
             2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
@@ -253,7 +259,7 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
+elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
     # Fixed-length client instead of the trace replay. The agentic-coding
     # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
     # "0" -- only for unset/empty -- so guard on >0.
