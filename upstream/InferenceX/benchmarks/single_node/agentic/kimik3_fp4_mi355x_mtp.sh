@@ -82,6 +82,7 @@ case "$CONC" in
             4)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
             10) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
             12) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
+            14) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}" ;;
             *)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
         esac
         case "$SPEC_NUM_TOKENS" in
