@@ -66,6 +66,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 DCP_OVERRIDE="${DCP_OVERRIDE:-2}"
+ALLOW_MTP_WITH_DCP="${ALLOW_MTP_WITH_DCP:-1}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
@@ -142,7 +143,7 @@ export DCP_SIZE
 # MTP draft verify under DCP is gated on aiter's segmented MLA decode; when the
 # route is unavailable the run dies mid-serve rather than at startup. Drop
 # speculation whenever DCP is on so the ladder collapses to one row per seat.
-if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
+if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ "${ALLOW_MTP_WITH_DCP:-0}" != "1" ]; then
     SPEC_ARGS=()
     SPEC_ROWS=1
     echo "MTP: off (dcp=$DCP_SIZE)"
