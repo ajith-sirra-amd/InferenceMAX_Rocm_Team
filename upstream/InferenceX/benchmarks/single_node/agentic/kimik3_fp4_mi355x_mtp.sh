@@ -65,6 +65,8 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+DCP_OVERRIDE="${DCP_OVERRIDE:-2}"
+
 SPEC_ARGS=()
 SPEC_ROWS=1
 KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"${KDA_PREFILL_BACKEND:-triton}\"}")
@@ -131,6 +133,10 @@ case "$CONC" in
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
         ;;
 esac
+# e2e-tests.yml forwards dcp-size for some job types but not the agentic one, so
+# a yaml dcp-size never reaches this script and DCP_SIZE silently falls back to
+# the per-branch default (1 below conc 16, 8 above). Pin it here instead.
+DCP_SIZE="${DCP_OVERRIDE:-$DCP_SIZE}"
 export DCP_SIZE
 
 # MTP draft verify under DCP is gated on aiter's segmented MLA decode; when the
