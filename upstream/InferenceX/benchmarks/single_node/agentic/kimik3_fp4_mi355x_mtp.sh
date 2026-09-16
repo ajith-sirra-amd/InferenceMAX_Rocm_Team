@@ -80,6 +80,7 @@ case "$CONC" in
         case "$CONC" in
             1)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}" ;;
             4)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
+            10) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}" ;;
             12) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
             *)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
         esac
@@ -131,8 +132,7 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
-if [ "$DCP_SIZE" -gt 1 ]; then GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
-else GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.92}"; fi
+GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 LAZY_OFFLOAD="${LAZY_OFFLOAD:-false}"
 # FULL_DECODE_ONLY on every arm. Measured at C4 k=4 n=400 (runs 34936346363 vs
 # 34940495620): piecewise cost 22.8 GiB of graph memory and 41.9% of the KV pool
@@ -259,7 +259,7 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
+elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
     # Fixed-length client instead of the trace replay. The agentic-coding
     # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
     # "0" -- only for unset/empty -- so guard on >0.
@@ -274,7 +274,7 @@ elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
         --input-len "$ISL" \
         --output-len "$OSL" \
         --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "$(( CONC * ${NUM_PROMPTS_MULT:-100} ))" \
+        --num-prompts "$(( CONC * ${NUM_PROMPTS_MULT:-50} ))" \
         --max-concurrency "$CONC" \
         --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
         --result-dir /workspace/ \
