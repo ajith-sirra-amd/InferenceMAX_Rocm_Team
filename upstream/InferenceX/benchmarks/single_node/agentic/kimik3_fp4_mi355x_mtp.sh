@@ -291,7 +291,7 @@ elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
         --input-len "$ISL" \
         --output-len "$OSL" \
         --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "${NUM_PROMPTS:-1200}" \
+        --num-prompts "${NUM_PROMPTS:-$(( CONC * 25 ))}" \
         --max-concurrency "$CONC" \
         --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
         --result-dir /workspace/ \
