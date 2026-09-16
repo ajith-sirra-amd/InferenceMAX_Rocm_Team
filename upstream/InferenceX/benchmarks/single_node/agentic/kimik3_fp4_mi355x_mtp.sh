@@ -65,8 +65,8 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-DCP_OVERRIDE="${DCP_OVERRIDE:-2}"
-ALLOW_MTP_WITH_DCP="${ALLOW_MTP_WITH_DCP:-1}"
+DCP_OVERRIDE="${DCP_OVERRIDE:-1}"
+ALLOW_MTP_WITH_DCP="${ALLOW_MTP_WITH_DCP:-0}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
@@ -84,7 +84,7 @@ case "$CONC" in
             1)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}" ;;
             4)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
             10) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
-            12) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
+            12) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}" ;;
             14) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
             *)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
         esac
@@ -100,7 +100,7 @@ case "$CONC" in
             *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
         esac
         DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"TRITON_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
+        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"${DRAFT_ATTN_BACKEND:-ROCM_AITER_MLA}\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
         if [ "${EVAL_ONLY:-false}" = "true" ]; then
             SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
             echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) draft_kv=$DRAFT_KV_DTYPE"
@@ -291,7 +291,7 @@ elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
         --input-len "$ISL" \
         --output-len "$OSL" \
         --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "${NUM_PROMPTS:-200}" \
+        --num-prompts "${NUM_PROMPTS:-1200}" \
         --max-concurrency "$CONC" \
         --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
         --result-dir /workspace/ \
