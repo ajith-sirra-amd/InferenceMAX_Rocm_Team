@@ -70,7 +70,7 @@ ALLOW_MTP_WITH_DCP="${ALLOW_MTP_WITH_DCP:-0}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
-KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"${KDA_PREFILL_BACKEND:-triton}\"}")
+KDA_ARGS=()
 case "$CONC" in
     1|2|4|8|10|12|14|16)
         DCP_SIZE="${DCP_SIZE:-1}"
