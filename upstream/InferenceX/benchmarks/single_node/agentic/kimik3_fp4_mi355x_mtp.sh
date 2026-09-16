@@ -70,7 +70,7 @@ SPEC_ROWS=1
 KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"${KDA_PREFILL_BACKEND:-triton}\"}")
 case "$CONC" in
     1|2|4|8|10|12|14|16)
-        DCP_SIZE=1
+        DCP_SIZE="${DCP_SIZE:-1}"
         OFFLOAD_POLICY=harness
         # Draft depth per concurrency. c1=6 is SA-matched and measured best at SA
         # (1,412 tok/s/GPU, ITL p90 8.13 = 123.0 tok/s/user). c4=5 and c12=4 come
@@ -132,6 +132,15 @@ case "$CONC" in
         ;;
 esac
 export DCP_SIZE
+
+# MTP draft verify under DCP is gated on aiter's segmented MLA decode; when the
+# route is unavailable the run dies mid-serve rather than at startup. Drop
+# speculation whenever DCP is on so the ladder collapses to one row per seat.
+if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
+    SPEC_ARGS=()
+    SPEC_ROWS=1
+    echo "MTP: off (dcp=$DCP_SIZE)"
+fi
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 LAZY_OFFLOAD="${LAZY_OFFLOAD:-false}"
@@ -275,7 +284,7 @@ elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
         --input-len "$ISL" \
         --output-len "$OSL" \
         --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "$(( CONC * ${NUM_PROMPTS_MULT:-50} ))" \
+        --num-prompts "${NUM_PROMPTS:-200}" \
         --max-concurrency "$CONC" \
         --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
         --result-dir /workspace/ \
