@@ -65,8 +65,8 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-DCP_OVERRIDE="${DCP_OVERRIDE:-1}"
-ALLOW_MTP_WITH_DCP="${ALLOW_MTP_WITH_DCP:-0}"
+DCP_OVERRIDE="${DCP_OVERRIDE:-8}"
+ALLOW_MTP_WITH_DCP="${ALLOW_MTP_WITH_DCP:-1}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
@@ -127,6 +127,23 @@ case "$CONC" in
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
         OFFLOAD_POLICY=harness
+        # MTP on the DCP arm, gated because it needs vllm#57085. k=3 matches the
+        # band default and NV's d0, which runs mtp at dcp 8 on one aggregated
+        # 8-GPU worker -- the config this arm has never been able to reach.
+        if [ "${HIGH_CONC_MTP:-1}" = "1" ]; then
+            SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}"
+            case "$SPEC_NUM_TOKENS" in
+                1) SYNTHETIC_ACCEPT_LEN=1.85 ;;  2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
+                3) SYNTHETIC_ACCEPT_LEN=3.00 ;;  4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
+                5) SYNTHETIC_ACCEPT_LEN=3.62 ;;  6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
+                *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
+            esac
+            DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
+            SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"${DRAFT_ATTN_BACKEND:-ROCM_AITER_MLA}\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
+            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
+            SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
+            echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN draft_kv=$DRAFT_KV_DTYPE (dcp arm)"
+        fi
         if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
@@ -183,6 +200,52 @@ EP_ARGS=()
 if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#57085 -- ROCM_AITER_MLA non-causal DSpark draft under DCP
+# -----------------------------------------------------------------------------
+# Unmerged as of nightly 3df4ae15 (2026-09-21); rocm_aiter_mla.py is functionally
+# identical to af1c0149 there, only a docstring reformat apart. Without it the
+# config validator rejects the drafter at startup with
+#   "non-causal MLA attention with DCP not supported"
+# because supports_non_causal_multi_token_dcp is set by flashinfer_mla and
+# tokenspeed_mla only, both of which gate on CUDA capability.major == 10.
+# Applied by exact string match, not line offsets, so the upstream blank-line
+# shift at 712 does not matter. Idempotent; hard-fails rather than running an
+# unpatched engine and attributing the result to the patch.
+apply_pr57085() {
+    [ "${APPLY_PR57085:-1}" = "1" ] || { echo "[pr57085] disabled"; return 0; }
+    python3 - <<'PYPATCH'
+import os, sys, vllm
+p = os.path.join(os.path.dirname(vllm.__file__),
+                 "v1", "attention", "backends", "mla", "rocm_aiter_mla.py")
+s = open(p).read()
+if "supports_non_causal_multi_token_dcp" in s:
+    print("[pr57085] already present, nothing to do"); sys.exit(0)
+subs = [
+ ("    supports_non_causal_multi_token_decode: ClassVar[bool] = True\n",
+  "    supports_non_causal_multi_token_decode: ClassVar[bool] = True\n"
+  "    supports_non_causal_multi_token_dcp: ClassVar[bool] = True\n"),
+ ("            self._supports_segmented_dcp_verify and max_qo_len > 1\n",
+  "            self._supports_segmented_dcp_verify and max_qo_len > 1 and causal\n"),
+ ("        if self.dcp_world_size > 1 and int(decode.max_qo_len) > 1:\n",
+  "        if (\n            attn_metadata.causal\n            and self.dcp_world_size > 1\n"
+  "            and int(decode.max_qo_len) > 1\n        ):\n"),
+ ("                decode.max_qo_len,\n                sm_scale=self.scale,\n                return_lse=True,\n",
+  "                decode.max_qo_len,\n                sm_scale=self.scale,\n                return_lse=True,\n"
+  "                causal=attn_metadata.causal,\n"),
+]
+for old, new in subs:
+    if s.count(old) != 1:
+        print(f"[pr57085] FAILED: anchor count {s.count(old)} != 1 for {old[:60]!r}")
+        sys.exit(1)
+    s = s.replace(old, new)
+open(p, "w").write(s)
+import py_compile; py_compile.compile(p, doraise=True)
+print("[pr57085] applied 4 hunks and byte-compiled OK")
+PYPATCH
+}
+apply_pr57085 || { echo "[pr57085] patch failed, refusing to run" >&2; exit 1; }
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
