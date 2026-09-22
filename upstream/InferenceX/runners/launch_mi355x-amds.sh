@@ -218,7 +218,7 @@ PY
 
 else
 
-    export HF_HUB_CACHE_MOUNT="/var/lib/hf-hub-cache/"
+    export HF_HUB_CACHE_MOUNT="${HF_HUB_CACHE_MOUNT:-/var/lib/hf-hub-cache/}"
     export AIPERF_MMAP_CACHE_HOST_PATH="/it-share/aiperf-cache/"
     export PORT_OFFSET=${RUNNER_NAME: -1}
     export PORT=$(( 8888 + ${PORT_OFFSET} ))
