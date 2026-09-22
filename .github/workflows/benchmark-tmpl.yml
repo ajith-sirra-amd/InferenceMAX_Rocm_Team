@@ -98,10 +98,6 @@ on:
         type: string
         default: '1800'
 env:
-  # benchmark_lib.sh now derefs this unguarded (AGENTIC_DIR/AIPERF_DIR at ~3077);
-  # the older copy defaulted it inline. runners/launch_mi355x-amds.sh only exports
-  # it on the DSv4.1 branch, so every other recipe needs it from here.
-  INFMAX_CONTAINER_WORKSPACE: '/workspace'
   RANDOM_RANGE_RATIO: 0.8
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   HF_HUB_CACHE: '/mnt/hf_hub_cache/'

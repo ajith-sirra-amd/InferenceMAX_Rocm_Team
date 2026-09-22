@@ -12,7 +12,7 @@ fi
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
 
 # benchmark_lib.sh derefs this unguarded since the InferenceX sync.
-export INFMAX_CONTAINER_WORKSPACE="${INFMAX_CONTAINER_WORKSPACE:-/workspace}"
+export INFMAX_CONTAINER_WORKSPACE="/workspace/upstream/InferenceX"
 
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
