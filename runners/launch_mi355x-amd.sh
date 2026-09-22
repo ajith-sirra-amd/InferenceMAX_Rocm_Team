@@ -14,6 +14,23 @@ HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
 # benchmark_lib.sh derefs this unguarded since the InferenceX sync.
 export INFMAX_CONTAINER_WORKSPACE="/workspace/upstream/InferenceX"
 
+# The synced benchmark_lib.sh validates AIPERF_PYTHON_VERSION and ~30 siblings it
+# no longer defaults (check_env_vars at ~3117). Upstream sources these from
+# benchmarks/runtime_settings.sh in its own benchmark-tmpl.yml; this repo runs an
+# older root workflow that does not, so source it here and forward the list the
+# file itself declares via INFERENCEX_RUNTIME_ENV_VARS.
+RUNTIME_SETTINGS="${INFMAX_HOST_REPO:-upstream/InferenceX}/benchmarks/runtime_settings.sh"
+if [[ -f "$RUNTIME_SETTINGS" ]]; then
+    source "$RUNTIME_SETTINGS"
+else
+    echo "WARNING: $RUNTIME_SETTINGS not found; aiperf env will be incomplete" >&2
+fi
+RUNTIME_ENV_ARGS=()
+for _v in ${INFERENCEX_RUNTIME_ENV_VARS:-}; do
+    [[ -n "${!_v+x}" ]] && RUNTIME_ENV_ARGS+=(-e "$_v")
+done
+unset _v
+
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
     FRAMEWORK_SUFFIX="_vllm"
@@ -108,6 +125,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e MODEL_PREFIX \
 -e "AIPERF_DIR=/workspace/upstream/InferenceX/utils/aiperf" \
 -e "AGENTIC_DIR=/workspace/upstream/InferenceX/utils/agentic-benchmark" \
+"${RUNTIME_ENV_ARGS[@]}" \
 --entrypoint=/bin/bash \
 $IMAGE \
 $BENCHMARK_PATH
