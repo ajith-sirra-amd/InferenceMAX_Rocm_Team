@@ -181,7 +181,16 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
 if [ "$DCP_SIZE" -gt 1 ]; then
-    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
+    # a2a was picked for the no-MTP DCP arm and never validated against a
+    # multi-token non-causal draft block. vLLM defaults to ag_rs
+    # (set_dcp_defaults), and _ALLGATHER_BASE is exactly what deadlocks under
+    # MTP+DCP, so the MTP arm takes the default while the shipping arm keeps a2a.
+    if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
+        DCP_COMM_BACKEND="${DCP_COMM_BACKEND:-ag_rs}"
+    else
+        DCP_COMM_BACKEND="${DCP_COMM_BACKEND:-a2a}"
+    fi
+    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend "$DCP_COMM_BACKEND" --cp-kv-cache-interleave-size 1)
 fi
 
 OFFLOAD_ARGS=()
@@ -215,6 +224,7 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # unpatched engine and attributing the result to the patch.
 apply_pr57085() {
     [ "${APPLY_PR57085:-1}" = "1" ] || { echo "[pr57085] disabled"; return 0; }
+    export PR57085_FULL="${PR57085_FULL:-1}"
     python3 - <<'PYPATCH'
 import os, sys, vllm
 p = os.path.join(os.path.dirname(vllm.__file__),
