@@ -11,6 +11,9 @@ fi
 
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
 
+# benchmark_lib.sh derefs this unguarded since the InferenceX sync.
+export INFMAX_CONTAINER_WORKSPACE="${INFMAX_CONTAINER_WORKSPACE:-/workspace}"
+
 MODEL_CODE="${EXP_NAME%%_*}"
 if [[ $FRAMEWORK == "vllm" ]]; then
     FRAMEWORK_SUFFIX="_vllm"
@@ -100,6 +103,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e PORT \
 -e RESULT_DIR \
 -e PYTHONDONTWRITEBYTECODE \
+-e INFMAX_CONTAINER_WORKSPACE \
 -e IMAGE \
 -e MODEL_PREFIX \
 -e "AIPERF_DIR=/workspace/upstream/InferenceX/utils/aiperf" \

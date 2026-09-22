@@ -102,11 +102,6 @@ env:
   # the older copy defaulted it inline. runners/launch_mi355x-amds.sh only exports
   # it on the DSv4.1 branch, so every other recipe needs it from here.
   INFMAX_CONTAINER_WORKSPACE: '/workspace'
-  # Host path for the HF cache mount. The synced launcher hardcodes
-  # /var/lib/hf-hub-cache/, which does not exist on b23; this node keeps the
-  # 3.3T cache at /data. Container path stays /mnt/hf_hub_cache/ (HF_HUB_CACHE),
-  # matching the -v /data/hf_hub_cache:/mnt/hf_hub_cache/ of prior working runs.
-  HF_HUB_CACHE_MOUNT: '/data/hf_hub_cache/'
   RANDOM_RANGE_RATIO: 0.8
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   HF_HUB_CACHE: '/mnt/hf_hub_cache/'
