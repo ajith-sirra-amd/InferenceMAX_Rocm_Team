@@ -222,10 +222,18 @@ p = os.path.join(os.path.dirname(vllm.__file__),
 s = open(p).read()
 if "supports_non_causal_multi_token_dcp" in s:
     print("[pr57085] already present, nothing to do"); sys.exit(0)
+FULL = os.environ.get("PR57085_FULL", "0") == "1"
+# Hunk 1 advertises the capability. Hunks 2-4 additionally REROUTE the non-causal
+# block off aiter's segmented DCP verify onto a per-row LSE cross-rank merge --
+# that is the path whose _ALLGATHER_BASE hung the 601 s watchdog at TP8/DCP8/k=3.
+# Flag-only keeps the block on segmented DCP verify (the fused aiter route).
 subs = [
  ("    supports_non_causal_multi_token_decode: ClassVar[bool] = True\n",
   "    supports_non_causal_multi_token_decode: ClassVar[bool] = True\n"
   "    supports_non_causal_multi_token_dcp: ClassVar[bool] = True\n"),
+]
+if FULL:
+    subs += [
  ("            self._supports_segmented_dcp_verify and max_qo_len > 1\n",
   "            self._supports_segmented_dcp_verify and max_qo_len > 1 and causal\n"),
  ("        if self.dcp_world_size > 1 and int(decode.max_qo_len) > 1:\n",
@@ -234,7 +242,7 @@ subs = [
  ("                decode.max_qo_len,\n                sm_scale=self.scale,\n                return_lse=True,\n",
   "                decode.max_qo_len,\n                sm_scale=self.scale,\n                return_lse=True,\n"
   "                causal=attn_metadata.causal,\n"),
-]
+    ]
 for old, new in subs:
     if s.count(old) != 1:
         print(f"[pr57085] FAILED: anchor count {s.count(old)} != 1 for {old[:60]!r}")
@@ -242,10 +250,48 @@ for old, new in subs:
     s = s.replace(old, new)
 open(p, "w").write(s)
 import py_compile; py_compile.compile(p, doraise=True)
-print("[pr57085] applied 4 hunks and byte-compiled OK")
+print(f"[pr57085] applied {len(subs)} hunk(s) (mode={'full' if FULL else 'flag-only'}) and byte-compiled OK")
 PYPATCH
 }
 apply_pr57085 || { echo "[pr57085] patch failed, refusing to run" >&2; exit 1; }
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#54546 -- Triton MLA non-causal multi-token DCP
+# -----------------------------------------------------------------------------
+# The aiter route (#57085) boots but deadlocks: a _ALLGATHER_BASE hung the full
+# 601 s watchdog at TP8/DCP8/k=3 and killed the engine mid-warmup. Triton takes a
+# different route -- per the PR, "forward_mqa flattens the block to one decode row
+# per query token and every row sees the same committed prefix, so a rank-local
+# seq_len is the whole story" -- so there is no per-row cross-rank LSE merge to
+# hang on. The author scopes the capability to ROCm as the validated platform.
+#
+# Only the flag hunk is applied. Upstream refactored triton_mla.py after the PR
+# was written: the _init_reorder_batch_threshold(1, supports_spec_as_decode=True)
+# call the PR edits no longer exists, replaced by
+# supports_draft_decode_metadata_update = self.dcp_world_size == 1.
+apply_pr54546() {
+    [ "${APPLY_PR54546:-0}" = "1" ] || { echo "[pr54546] disabled"; return 0; }
+    python3 - <<'PYPATCH'
+import os, sys, vllm
+p = os.path.join(os.path.dirname(vllm.__file__),
+                 "v1", "attention", "backends", "mla", "triton_mla.py")
+s = open(p).read()
+if "supports_non_causal_multi_token_dcp" in s:
+    print("[pr54546] already present, nothing to do"); sys.exit(0)
+old = "    supports_non_causal_multi_token_decode: ClassVar[bool] = True\n"
+new = (old +
+       "    supports_non_causal_multi_token_dcp: ClassVar[bool] = "
+       "current_platform.is_rocm()\n")
+if s.count(old) != 1:
+    print(f"[pr54546] FAILED: anchor count {s.count(old)} != 1"); sys.exit(1)
+if "current_platform" not in s:
+    print("[pr54546] FAILED: current_platform not imported"); sys.exit(1)
+open(p, "w").write(s.replace(old, new))
+import py_compile; py_compile.compile(p, doraise=True)
+print("[pr54546] applied and byte-compiled OK")
+PYPATCH
+}
+apply_pr54546 || { echo "[pr54546] patch failed, refusing to run" >&2; exit 1; }
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
@@ -354,7 +400,7 @@ elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
         --input-len "$ISL" \
         --output-len "$OSL" \
         --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "${NUM_PROMPTS:-$(( CONC * 25 ))}" \
+        --num-prompts "${NUM_PROMPTS:-200}" \
         --max-concurrency "$CONC" \
         --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
         --result-dir /workspace/ \
