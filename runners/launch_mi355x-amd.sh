@@ -14,6 +14,14 @@ HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
 # benchmark_lib.sh derefs this unguarded since the InferenceX sync.
 export INFMAX_CONTAINER_WORKSPACE="/workspace/upstream/InferenceX"
 
+# benchmark_lib.sh used to default PORT; the synced copy does not, and upstream
+# now supplies it as a workflow env (PORT: '8888'). Offsetting by the runner
+# slot -- the scheme upstream's own mi355x launcher uses -- keeps concurrent
+# jobs on one host off each other's port.
+PORT_SUFFIX="${RUNNER_NAME: -1}"
+[[ "$PORT_SUFFIX" =~ ^[0-9]$ ]] || PORT_SUFFIX=0
+export PORT=$(( 8888 + PORT_SUFFIX ))
+
 # The synced benchmark_lib.sh validates AIPERF_PYTHON_VERSION and ~30 siblings it
 # no longer defaults (check_env_vars at ~3117). Upstream sources these from
 # benchmarks/runtime_settings.sh in its own benchmark-tmpl.yml; this repo runs an
