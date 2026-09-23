@@ -65,6 +65,12 @@ export IS_MULTINODE="${IS_MULTINODE:-false}"
 export PP_SIZE="${PP_SIZE:-1}"
 export PCP_SIZE="${PCP_SIZE:-1}"
 
+# aiperf defaults to http://localhost:$PORT (benchmark_lib:3264) while every
+# other client in that file uses an IPv4 literal. localhost resolves to ::1
+# first here and vLLM binds --host 0.0.0.0, which is IPv4 only, so the agentic
+# warmup gets ClientConnectorError against a healthy server. Pin the literal.
+export AIPERF_SERVER_URL="${AIPERF_SERVER_URL:-http://127.0.0.1:${PORT}}"
+
 RUNTIME_ENV_ARGS=()
 for _v in ${INFERENCEX_RUNTIME_ENV_VARS:-}; do
     [[ -n "${!_v+x}" ]] && RUNTIME_ENV_ARGS+=(-e "$_v")
@@ -165,6 +171,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e IS_MULTINODE \
 -e PP_SIZE \
 -e PCP_SIZE \
+-e AIPERF_SERVER_URL \
 -e IMAGE \
 -e MODEL_PREFIX \
 "${RUNTIME_ENV_ARGS[@]}" \
