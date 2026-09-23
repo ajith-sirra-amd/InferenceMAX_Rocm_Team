@@ -51,6 +51,15 @@ if [[ -f "$RUNTIME_SETTINGS" ]]; then
 else
     echo "WARNING: $RUNTIME_SETTINGS not found; aiperf env will be incomplete" >&2
 fi
+# runtime_settings.sh names these in INFERENCEX_RUNTIME_ENV_VARS but does not
+# export them -- upstream supplies them from its own benchmark-tmpl.yml, which
+# this repo's older root workflow predates. build_replay_cmd and the power check
+# validate them, so an unset value fails the agentic path only (the fixed-length
+# client never calls either). Defaults match upstream's.
+export AIPERF_EXPERIMENTAL_FAST="${AIPERF_EXPERIMENTAL_FAST:-0}"   # 1 => 1200s profile, warmup 1/lane
+export REQUIRE_POWER="${REQUIRE_POWER:-0}"
+export IS_MULTINODE="${IS_MULTINODE:-false}"
+
 RUNTIME_ENV_ARGS=()
 for _v in ${INFERENCEX_RUNTIME_ENV_VARS:-}; do
     [[ -n "${!_v+x}" ]] && RUNTIME_ENV_ARGS+=(-e "$_v")
@@ -148,6 +157,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e RESULT_DIR \
 -e PYTHONDONTWRITEBYTECODE \
 -e INFMAX_CONTAINER_WORKSPACE \
+-e IS_MULTINODE \
 -e IMAGE \
 -e MODEL_PREFIX \
 "${RUNTIME_ENV_ARGS[@]}" \
