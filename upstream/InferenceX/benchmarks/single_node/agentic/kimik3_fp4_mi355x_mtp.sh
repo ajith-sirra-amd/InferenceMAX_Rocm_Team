@@ -79,7 +79,7 @@ SPEC_ROWS=1
 if [ -n "${KDA_PREFILL_BACKEND:-}" ]; then
     KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"$KDA_PREFILL_BACKEND\"}")
 else
-    KDA_ARGS=(--additional-config '{"kda_prefill_backend":"triton"}')
+    KDA_ARGS=()
 fi
 case "$CONC" in
     1|2|4|8|10|12|14|16)
@@ -154,7 +154,12 @@ case "$CONC" in
             SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
             echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN draft_kv=$DRAFT_KV_DTYPE (dcp arm)"
         fi
-        if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
+        # MTP makes each decode step slower (draft forward + k+1-row verify), so
+        # prefill waits behind more slow steps. A wider chunk halves the number
+        # of prefill steps per prompt. Token budget is not the issue: decode is
+        # 176 of 8192 tokens, 2.1%.
+        if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
+        elif [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         # Seats bound the max decode batch (mns * spec_rows) and so the size of
         # every captured graph. Trimming seats keeps full ladder coverage;
@@ -419,7 +424,7 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
+elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
     # Fixed-length client instead of the trace replay. The agentic-coding
     # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
     # "0" -- only for unset/empty -- so guard on >0.
