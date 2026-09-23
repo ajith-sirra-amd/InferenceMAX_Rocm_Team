@@ -71,6 +71,12 @@ export PCP_SIZE="${PCP_SIZE:-1}"
 # warmup gets ClientConnectorError against a healthy server. Pin the literal.
 export AIPERF_SERVER_URL="${AIPERF_SERVER_URL:-http://127.0.0.1:${PORT}}"
 
+# aiperf warmup replays every lane with zero idle delay, so C64 opens
+# lanes x N connections at once (640 at the default 10). 63 requests were served
+# and then 162 refused with ECONNREFUSED against a healthy server. Dropping to 2
+# cuts the burst 5x; if the failure survives that, it is not connection volume.
+export AIPERF_WARMUP_REQUESTS_PER_LANE="${AIPERF_WARMUP_REQUESTS_PER_LANE:-2}"
+
 RUNTIME_ENV_ARGS=()
 for _v in ${INFERENCEX_RUNTIME_ENV_VARS:-}; do
     [[ -n "${!_v+x}" ]] && RUNTIME_ENV_ARGS+=(-e "$_v")
