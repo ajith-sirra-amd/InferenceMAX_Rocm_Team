@@ -59,6 +59,11 @@ fi
 export AIPERF_EXPERIMENTAL_FAST="${AIPERF_EXPERIMENTAL_FAST:-0}"   # 1 => 1200s profile, warmup 1/lane
 export REQUIRE_POWER="${REQUIRE_POWER:-0}"
 export IS_MULTINODE="${IS_MULTINODE:-false}"
+# validate_required_agentic_server_metrics (reached from
+# run_agentic_replay_and_write_outputs) checks these; single-node has no
+# pipeline or prefill-context parallelism, so 1 is correct, not a placeholder.
+export PP_SIZE="${PP_SIZE:-1}"
+export PCP_SIZE="${PCP_SIZE:-1}"
 
 RUNTIME_ENV_ARGS=()
 for _v in ${INFERENCEX_RUNTIME_ENV_VARS:-}; do
@@ -158,6 +163,8 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e PYTHONDONTWRITEBYTECODE \
 -e INFMAX_CONTAINER_WORKSPACE \
 -e IS_MULTINODE \
+-e PP_SIZE \
+-e PCP_SIZE \
 -e IMAGE \
 -e MODEL_PREFIX \
 "${RUNTIME_ENV_ARGS[@]}" \
