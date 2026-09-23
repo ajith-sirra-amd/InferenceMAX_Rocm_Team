@@ -412,11 +412,7 @@ elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
     OSL="${OSL:-1024}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=1024
     RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
     case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
-    # benchmark_lib now runs the client as `python3 -m infx.bench_serving...`
-    # with PYTHONPATH=workspace_dir, which defaults to $(pwd) = /workspace.
-    # infx lives under the vendored root, so point it there explicitly.
     run_benchmark_serving \
-        --bench-serving-dir "$INFMAX_CONTAINER_WORKSPACE" \
         --model "$MODEL" \
         --port "$PORT" \
         --backend vllm \
@@ -426,7 +422,7 @@ elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
         --num-prompts "${NUM_PROMPTS:-200}" \
         --max-concurrency "$CONC" \
         --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
-        --result-dir /workspace/ \
+        --result-dir /outputs/ \
         --trust-remote-code \
         --use-chat-template
 else

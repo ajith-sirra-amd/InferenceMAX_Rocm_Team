@@ -12,7 +12,7 @@ fi
 HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
 
 # benchmark_lib.sh derefs this unguarded since the InferenceX sync.
-export INFMAX_CONTAINER_WORKSPACE="/workspace/upstream/InferenceX"
+export INFMAX_CONTAINER_WORKSPACE="/workspace"
 
 # benchmark_lib.sh used to default PORT; the synced copy does not, and upstream
 # now supplies it as a workflow env (PORT: '8888'). Offsetting by the runner
@@ -21,6 +21,10 @@ export INFMAX_CONTAINER_WORKSPACE="/workspace/upstream/InferenceX"
 PORT_SUFFIX="${RUNNER_NAME: -1}"
 [[ "$PORT_SUFFIX" =~ ^[0-9]$ ]] || PORT_SUFFIX=0
 export PORT=$(( 8888 + PORT_SUFFIX ))
+
+# /workspace is the InferenceX root; the workflow looks for the result json at
+# the repo root, so outputs go through a second mount.
+export RESULT_DIR=/outputs/results
 
 # The synced benchmark_lib.sh validates AIPERF_PYTHON_VERSION and ~30 siblings it
 # no longer defaults (check_env_vars at ~3117). Upstream sources these from
@@ -88,9 +92,9 @@ else
 fi
 
 if [[ $FRAMEWORK == "atom" ]]; then
-    BENCHMARK_PATH=upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/${SCENARIO_SUBDIR}${MODEL_CODE}_${PRECISION}_mi355x_atom${SPEC_SUFFIX}.sh
+    BENCHMARK_PATH=benchmarks/${BENCHMARK_SUBDIR}/${SCENARIO_SUBDIR}${MODEL_CODE}_${PRECISION}_mi355x_atom${SPEC_SUFFIX}.sh
 else
-    BENCHMARK_PATH=upstream/InferenceX/benchmarks/${BENCHMARK_SUBDIR}/${SCENARIO_SUBDIR}${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
+    BENCHMARK_PATH=benchmarks/${BENCHMARK_SUBDIR}/${SCENARIO_SUBDIR}${MODEL_CODE}_${PRECISION}_mi355x${SPEC_SUFFIX}.sh
 fi
 
 # MODEL_PATH: where the model weights live inside the container
@@ -105,7 +109,8 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 --privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
--v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
+-v $GITHUB_WORKSPACE/upstream/InferenceX:/workspace/ -w /workspace/ \
+-v $GITHUB_WORKSPACE:/outputs \
 -e HF_TOKEN \
 -e HF_HUB_CACHE \
 -e MODEL \
@@ -131,8 +136,6 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e INFMAX_CONTAINER_WORKSPACE \
 -e IMAGE \
 -e MODEL_PREFIX \
--e "AIPERF_DIR=/workspace/upstream/InferenceX/utils/aiperf" \
--e "AGENTIC_DIR=/workspace/upstream/InferenceX/utils/agentic-benchmark" \
 "${RUNTIME_ENV_ARGS[@]}" \
 --entrypoint=/bin/bash \
 $IMAGE \
