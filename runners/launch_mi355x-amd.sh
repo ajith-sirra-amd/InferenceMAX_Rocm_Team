@@ -25,9 +25,16 @@ export INFMAX_CONTAINER_WORKSPACE="/workspace"
 # now supplies it as a workflow env (PORT: '8888'). Offsetting by the runner
 # slot -- the scheme upstream's own mi355x launcher uses -- keeps concurrent
 # jobs on one host off each other's port.
+# Base 8890 so 8888 is never handed out. Runner names ending in a digit key off
+# it; names that do not (mi355x-amd_guest) get a stable offset from a checksum of
+# the name rather than all collapsing onto one port.
 PORT_SUFFIX="${RUNNER_NAME: -1}"
-[[ "$PORT_SUFFIX" =~ ^[0-9]$ ]] || PORT_SUFFIX=0
-export PORT=$(( 8888 + PORT_SUFFIX ))
+if [[ "$PORT_SUFFIX" =~ ^[0-9]$ ]]; then
+    PORT_OFFSET="$PORT_SUFFIX"
+else
+    PORT_OFFSET=$(( $(printf '%s' "$RUNNER_NAME" | cksum | cut -d' ' -f1) % 10 ))
+fi
+export PORT=$(( 8890 + PORT_OFFSET ))
 
 # /workspace is the InferenceX root; the workflow looks for the result json at
 # the repo root, so outputs go through a second mount.
