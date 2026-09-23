@@ -77,6 +77,14 @@ export AIPERF_SERVER_URL="${AIPERF_SERVER_URL:-http://127.0.0.1:${PORT}}"
 # cuts the burst 5x; if the failure survives that, it is not connection volume.
 export AIPERF_WARMUP_REQUESTS_PER_LANE="${AIPERF_WARMUP_REQUESTS_PER_LANE:-2}"
 
+# infx/results/agentic validates KV_OFFLOAD_BACKEND_METADATA, not just
+# KV_OFFLOAD_BACKEND -- the SystemExit text names the wrong variable. It fails on
+# `backend_metadata is None`, and metadata["name"] must equal KV_OFFLOAD_BACKEND.
+# Only the agentic result writer reads it, so fixed-length runs never noticed.
+if [ -n "${KV_OFFLOAD_BACKEND:-}" ] && [ "${KV_OFFLOAD_BACKEND}" != "none" ]; then
+    export KV_OFFLOAD_BACKEND_METADATA="${KV_OFFLOAD_BACKEND_METADATA:-{\"name\": \"${KV_OFFLOAD_BACKEND}\"}}"
+fi
+
 RUNTIME_ENV_ARGS=()
 for _v in ${INFERENCEX_RUNTIME_ENV_VARS:-}; do
     [[ -n "${!_v+x}" ]] && RUNTIME_ENV_ARGS+=(-e "$_v")
@@ -178,6 +186,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e PP_SIZE \
 -e PCP_SIZE \
 -e AIPERF_SERVER_URL \
+-e KV_OFFLOAD_BACKEND_METADATA \
 -e IMAGE \
 -e MODEL_PREFIX \
 "${RUNTIME_ENV_ARGS[@]}" \
