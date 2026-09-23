@@ -70,7 +70,17 @@ ALLOW_MTP_WITH_DCP="${ALLOW_MTP_WITH_DCP:-1}"
 
 SPEC_ARGS=()
 SPEC_ROWS=1
-KDA_ARGS=()
+# KDA is a prefill kernel and lands on TTFT. The C32 no-MTP baseline ran triton
+# (the old hardcoded value); leaving this at auto->fused makes KDA an
+# uncontrolled variable in the MTP comparison. Pin triton to match the
+# baseline -- measured neutral on the MTP arms at C4 and C12, so it costs
+# nothing. Set KDA_PREFILL_BACKEND=fused for the DCP no-MTP arm, where fused
+# was worth 3.1% at C48 and 4.4% at C72.
+if [ -n "${KDA_PREFILL_BACKEND:-}" ]; then
+    KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"$KDA_PREFILL_BACKEND\"}")
+else
+    KDA_ARGS=(--additional-config '{"kda_prefill_backend":"triton"}')
+fi
 case "$CONC" in
     1|2|4|8|10|12|14|16)
         DCP_SIZE="${DCP_SIZE:-1}"
@@ -409,7 +419,7 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
-elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
+elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
     # Fixed-length client instead of the trace replay. The agentic-coding
     # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
     # "0" -- only for unset/empty -- so guard on >0.
