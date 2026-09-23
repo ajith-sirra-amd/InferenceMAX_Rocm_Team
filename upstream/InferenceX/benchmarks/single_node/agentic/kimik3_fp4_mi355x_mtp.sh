@@ -146,7 +146,12 @@ case "$CONC" in
         fi
         if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
-        if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
+        # Seats bound the max decode batch (mns * spec_rows) and so the size of
+        # every captured graph. Trimming seats keeps full ladder coverage;
+        # capping the ladder instead leaves the scheduler free to build batches
+        # that have no graph and fall back to eager.
+        if [ "$CONC" -eq 64 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-72}"
+        elif [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
         elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
         ;;
@@ -181,9 +186,9 @@ LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 # 100% VRAM. Two of the three MTP+DCP attempts then hung inside capture_model.
 # Cap the MTP+DCP arm at the same 96 the no-MTP arm and SA both capture; batches
 # above the cap fall back to eager rather than failing.
-if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ "$LADDER" -gt "${LADDER_CAP:-96}" ]; then
-    echo "[ladder] capping $LADDER -> ${LADDER_CAP:-96} (mns=$MAX_NUM_SEQS spec_rows=$SPEC_ROWS)"
-    LADDER="${LADDER_CAP:-96}"
+if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ -n "${LADDER_CAP:-}" ] && [ "$LADDER" -gt "$LADDER_CAP" ]; then
+    echo "[ladder] capping $LADDER -> $LADDER_CAP (mns=$MAX_NUM_SEQS spec_rows=$SPEC_ROWS)"
+    LADDER="$LADDER_CAP"
 fi
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
