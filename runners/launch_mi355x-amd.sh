@@ -9,7 +9,14 @@ elif [[ $RUNNER_NAME == *p02_g17* ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/models"
 fi
 
-HF_HUB_CACHE_MOUNT="/data/hf_hub_cache"
+# Host path for the weight cache. Both nodes carry the label cluster:mi355x-amds,
+# so the if-chain above (which keys off *mi355x*) cannot tell them apart -- the
+# discriminator has to be the full RUNNER_NAME. Overridable by env for a new host.
+case "$RUNNER_NAME" in
+    mi355x-amd_guest*) HF_HUB_CACHE_MOUNT="${HF_HUB_CACHE_MOUNT_OVERRIDE:-/home/models}" ;;
+    *)                 HF_HUB_CACHE_MOUNT="${HF_HUB_CACHE_MOUNT_OVERRIDE:-/data/hf_hub_cache}" ;;
+esac
+echo "[hf-cache] RUNNER_NAME=$RUNNER_NAME -> HF_HUB_CACHE_MOUNT=$HF_HUB_CACHE_MOUNT"
 
 # benchmark_lib.sh derefs this unguarded since the InferenceX sync.
 export INFMAX_CONTAINER_WORKSPACE="/workspace"
