@@ -141,7 +141,7 @@ case "$CONC" in
         # band default and NV's d0, which runs mtp at dcp 8 on one aggregated
         # 8-GPU worker -- the config this arm has never been able to reach.
         if [ "${HIGH_CONC_MTP:-1}" = "1" ]; then
-            SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}"
+            SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-1}}"
             case "$SPEC_NUM_TOKENS" in
                 1) SYNTHETIC_ACCEPT_LEN=1.85 ;;  2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
                 3) SYNTHETIC_ACCEPT_LEN=3.00 ;;  4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
