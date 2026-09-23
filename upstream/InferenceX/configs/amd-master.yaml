@@ -2052,7 +2052,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
     # move at once, deliberately, as an exploratory push, not an isolation.
     # OWNER BOUND 2026-09-10: keep <= 0.72. 0.80 OOM'd the host historically;
     # 0.85 was considered and rejected as unsafe. Do not raise above 0.72.
-    - dram-utilization: 0.80
+    - dram-utilization: 0.65
       search-space:
       # - { tp: 8, kv-offloading: none, conc-list: [1, 4, 8] , spec-decoding: mtp}
       # Straddles DCP_AUTO_CONC_THRESHOLD=64 in the launcher, so this one list

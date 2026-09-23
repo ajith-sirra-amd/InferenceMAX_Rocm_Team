@@ -141,7 +141,7 @@ case "$CONC" in
         # band default and NV's d0, which runs mtp at dcp 8 on one aggregated
         # 8-GPU worker -- the config this arm has never been able to reach.
         if [ "${HIGH_CONC_MTP:-1}" = "1" ]; then
-            SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-1}}"
+            SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}"
             case "$SPEC_NUM_TOKENS" in
                 1) SYNTHETIC_ACCEPT_LEN=1.85 ;;  2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
                 3) SYNTHETIC_ACCEPT_LEN=3.00 ;;  4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
@@ -158,8 +158,7 @@ case "$CONC" in
         # prefill waits behind more slow steps. A wider chunk halves the number
         # of prefill steps per prompt. Token budget is not the issue: decode is
         # 176 of 8192 tokens, 2.1%.
-        if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
-        elif [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
+        if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         # Seats bound the max decode batch (mns * spec_rows) and so the size of
         # every captured graph. Trimming seats keeps full ladder coverage;
@@ -192,7 +191,7 @@ fi
 # the KV pool, which at these concurrencies has slack (C32 DCP-8 and DCP-2
 # differed 0.4% on TPOT for a 3.6x pool difference).
 if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
-    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.88}"
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 else
     GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 fi
