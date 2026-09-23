@@ -186,7 +186,16 @@ if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ "${ALLOW_MTP_WITH_
     echo "MTP: off (dcp=$DCP_SIZE)"
 fi
 
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+# Graph memory is allocated outside the gpu-memory-utilization budget. The MTP
+# DCP arm captures graphs up to mns*spec_rows rows (384 at C72), which pushed
+# GPUs to 100% VRAM. 0.88 hands ~5.8 GiB/GPU back for capture; it comes out of
+# the KV pool, which at these concurrencies has slack (C32 DCP-8 and DCP-2
+# differed 0.4% on TPOT for a 3.6x pool difference).
+if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.88}"
+else
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+fi
 LAZY_OFFLOAD="${LAZY_OFFLOAD:-false}"
 # FULL_DECODE_ONLY on every arm. Measured at C4 k=4 n=400 (runs 34936346363 vs
 # 34940495620): piecewise cost 22.8 GiB of graph memory and 41.9% of the KV pool
