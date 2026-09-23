@@ -1,3 +1,57 @@
+## NEXT DISPATCH — 2026-09-23 (MTP on the DCP-8 arm)
+
+Repo at b7fadfd5. In flight when we stopped: run 35885079547 (C48 MTP,
+gmu 0.90 / chunk 8192 / dram 0.65, image 3df4ae15).
+
+1. **C48 no-MTP on nightly-3df4ae15** — the missing control. Every no-MTP number
+   we have is on e7edf17c; every MTP number is on af1c0149/3df4ae15. Until this
+   runs, image is a second variable in the MTP comparison. Set HIGH_CONC_MTP=0,
+   gmu 0.90, chunk 8192, dram 0.65, conc-list [48].
+2. **Result of 35885079547** if it was allowed to finish.
+3. **k=1 + dram-utilization 0.80** — staged at 50bedf33, never dispatched.
+   k=1 halves spec_rows (4->2), so graphs shrink and max batch drops 176->88.
+   Caveat: at qlen 2 the fp8 non-causal fold only covers 32/64/96/128 heads, so
+   msk0 may not load — check the kernel list before trusting the number.
+4. **Explicit capture sizes** `seq -s, $SPEC_ROWS $SPEC_ROWS $LADDER` instead of
+   dense `1..N`. vLLM already filters dense to N/spec_rows, so this is a config
+   clarity change, not a perf one. Verify the capture count is unchanged (C48
+   should stay 67).
+
+### State (measured, agentic, 8 GPUs)
+
+| | tok/s/GPU | ITL p90 | KV pool | KV use | GPU hit |
+|---|---|---|---|---|---|
+| OURS C72 no-MTP | 12,484 | 119.67 | 27,867,046 | 63.0% | 76.0% |
+| OURS C48 no-MTP | 11,048 | 77.58 | 30,591,065 | 33.8% | 91.9% |
+| OURS C48 MTP k=3 | 2,390 | 508.11 | 14,420,515 | 100% | 45.8% |
+| NV B300 c70 no-MTP | 12,566 | 126.77 | 21,564,193 | 100% | 72.5% |
+| NV GB300 c48 MTP k=4 | 19,303 | 38.63 | 17,114,258 | 73.2% | 78.9% |
+
+- No-MTP arm is at **parity with B300** and ahead on ITL, pool and cache health.
+- GB300's +54% is MTP served by TOKENSPEED_MLA, which gates on CUDA
+  capability.major == 10 and is not installed in our ROCm image.
+- Our MTP is not a backend error: ROCM_AITER_MLA target + drafter, ROCM_AITER_FA
+  prefill (the only non-CUDA option in MLAPrefillBackendEnum), and
+  `mla_a8w8_qh32_qseqlen4_gqaratio32_msk0_lse_ps` loads on all 8 ranks. It is the
+  pool cost — draft cache takes 39% — biting at ISL ~111k where it did not at the
+  fixed-length harness's 8,192.
+- MTP+DCP hangs above some max decode batch between 176 (C32, works) and 288
+  (C64, wedges). C48 at 268 completed, so the bound is 268–288.
+- Ladder must be mns*spec_rows. Capping sends batches above the cap to eager and
+  cost 40% TPOT at C32; it saves nothing, since vLLM already captures
+  ladder/spec_rows graphs.
+
+### Operating notes
+
+- **Never `gh run cancel` a live job.** SIGKILL leaks GPU memory at the KFD level
+  (needed 8 per-GPU resets). `docker stop -t 120 bmk-server`, confirm VRAM, then
+  cancel.
+- Guest node is the only runner. `/home/models` for HF cache, port 8891.
+- aiperf submodule gitlink is stale: b7b16cf8 vs source 754356e9. Commit is
+  already local. Not the cause of any failure seen so far.
+
+---
+
 ## NEXT DISPATCH — sequential chain (owner, 2026-09-10), each step ONE variable
 ## vs the step before it. Run 1 (W5-14b) is DONE: EP=1 wins. Run 2 below is
 ## ready to dispatch now.
