@@ -176,6 +176,15 @@ LAZY_OFFLOAD="${LAZY_OFFLOAD:-false}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
+# Graph memory is allocated on top of the gpu-memory-utilization budget, not
+# inside it: C72 with ladder 384 measured ~29 GiB over the 0.90 budget and sat at
+# 100% VRAM. Two of the three MTP+DCP attempts then hung inside capture_model.
+# Cap the MTP+DCP arm at the same 96 the no-MTP arm and SA both capture; batches
+# above the cap fall back to eager rather than failing.
+if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ "$LADDER" -gt "${LADDER_CAP:-96}" ]; then
+    echo "[ladder] capping $LADDER -> ${LADDER_CAP:-96} (mns=$MAX_NUM_SEQS spec_rows=$SPEC_ROWS)"
+    LADDER="${LADDER_CAP:-96}"
+fi
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
