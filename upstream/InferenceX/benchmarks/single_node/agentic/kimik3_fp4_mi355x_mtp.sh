@@ -195,7 +195,7 @@ if [ "$DCP_SIZE" -gt 1 ]; then
     # (set_dcp_defaults), and _ALLGATHER_BASE is exactly what deadlocks under
     # MTP+DCP, so the MTP arm takes the default while the shipping arm keeps a2a.
     if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
-        DCP_COMM_BACKEND="${DCP_COMM_BACKEND:-ag_rs}"
+        DCP_COMM_BACKEND="${DCP_COMM_BACKEND:-a2a}"
     else
         DCP_COMM_BACKEND="${DCP_COMM_BACKEND:-a2a}"
     fi
@@ -412,7 +412,11 @@ elif [ "${FIXED_LEN_HARNESS:-1}" = "1" ]; then
     OSL="${OSL:-1024}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=1024
     RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
     case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
+    # benchmark_lib now runs the client as `python3 -m infx.bench_serving...`
+    # with PYTHONPATH=workspace_dir, which defaults to $(pwd) = /workspace.
+    # infx lives under the vendored root, so point it there explicitly.
     run_benchmark_serving \
+        --bench-serving-dir "$INFMAX_CONTAINER_WORKSPACE" \
         --model "$MODEL" \
         --port "$PORT" \
         --backend vllm \
