@@ -2,6 +2,56 @@
 
 Last updated 2026-08-28. Target **12,500 tok/s/GPU**.
 
+## 2026-09-23 — MTP now runs on the DCP arm
+
+`vllm#57085` (open) is applied at launch by the recipe; it sets
+`supports_non_causal_multi_token_dcp` on `rocm_aiter_mla`. With it, **MTP+DCP-8
+works** — no NCCL hang, `msk0` kernels on all 8 ranks.
+
+C32 fixed-length, 200 prompts, dcp 8, mns 44, k=3:
+
+| | P90 TPOT | tok/s | P90 TTFT | KV pool |
+|---|---|---|---|---|
+| no-MTP | 53.99 | 5,396.68 | 6,002.57 | 30.6M |
+| **MTP, ladder 1..176** | **46.71** | **6,158.12** | 7,415.69 | 18.6M |
+| MTP, ladder capped 96 | 77.53 | 3,686.99 | 15,390.12 | 18.3M |
+
+**Ladder must be `mns × spec_rows`.** Capping it sends batches above the cap to
+eager and costs ~40% TPOT. It does not save graph memory: vLLM already filters
+dense `1..N` to uniform query lengths and captures `N/spec_rows` graphs. To shrink
+graphs, lower `mns`, not the ladder.
+
+**k=3 does not load the fused non-causal kernel; k≥4 does.** Six runs, TP8/DCP-1.
+SA ships k=3 at C12/C14/C16, so those get no benefit from the aiter drafter.
+
+**KDA**: `fused` worth 3.1% (C48) / 4.4% (C72) on the **no-MTP** DCP arm; neutral
+on MTP arms (C4, C12). Recipe pins `triton`; `KDA_PREFILL_BACKEND=fused` opts in.
+
+### After the InferenceX sync (f71298fe) — five harness breaks, one shape
+
+The new `benchmark_lib.sh` validates env it used to default, supplied upstream by
+a workflow this repo lacks. All five only hit the **agentic** path, which is why
+fixed-length kept passing: `INFMAX_CONTAINER_WORKSPACE`, `AIPERF_PYTHON_VERSION`,
+`PORT`, `AIPERF_EXPERIMENTAL_FAST`+`REQUIRE_POWER`+`IS_MULTINODE`+`PP_SIZE`/
+`PCP_SIZE`, and `AIPERF_SERVER_URL` (aiperf dials `localhost` → `::1`; vLLM binds
+IPv4-only `0.0.0.0`). Fixed in `runners/launch_mi355x-amd.sh`; all 51
+`check_env_vars` names audited.
+
+`/workspace` now mounts `upstream/InferenceX`, not the repo root — removes four
+path workarounds. Repo root is at `/outputs` for the result JSON.
+
+**Never `gh run cancel` a live job**: it SIGKILLs the container and leaks GPU
+memory at the KFD level (needed 8 per-GPU resets). Use `docker stop -t 120
+bmk-server`, verify VRAM, then cancel.
+
+### Open
+
+- aiperf submodule gitlink stale: `b7b16cf8` vs source `754356e9` (commit is
+  already local; excluded during the sync). Bump after agentic numbers land.
+- C32 DCP-2 + MTP untested. DCP-8 vs DCP-2 no-MTP differ 0.4% on TPOT for 3.6×
+  pool, so the 8-way per-block LSE merge may be pure cost.
+- Agentic MTP+DCP numbers still unmeasured.
+
 ## Best results
 
 | point | metric | run |
