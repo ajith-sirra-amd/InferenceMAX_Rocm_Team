@@ -2,6 +2,19 @@
 
 Last updated 2026-08-28. Target **12,500 tok/s/GPU**.
 
+## 2026-09-24 — profiled: prefill contention sets TPOT
+
+Full breakdown in [Kimi-K3-Where-The-Time-Goes.md](Kimi-K3-Where-The-Time-Goes.md).
+Pure decode step is **46.32 ms**; the same step carrying one 7,680-token prefill
+chunk is **440–754 ms**. **57% of C48 steps carry prefill** (input 87,559 ÷
+active prefill 153,615 tok/s) — that is the p50 57.61 → p90 77.58 ITL spread.
+Biggest untested lever is `max-num-batched-tokens`, then `--async-scheduling`
+(5.1%, the recipe disables it).
+
+GEMM/MoE kernels are **at roofline** (90–99% of compute peak in prefill, 67–86%
+of bandwidth roofline in decode) — no tuning win available. SP/async-TP measured
+*worse*; EP8 is 1.01× by arithmetic (top-16 over 8 ranks reaches 7.06 of them).
+
 ## 2026-09-24 — the MTP tax is the decode step, not the KV pool
 
 **Decode is 86–97% of request wall-clock** (ours no-MTP 95.3%, ours MTP 86.5%,

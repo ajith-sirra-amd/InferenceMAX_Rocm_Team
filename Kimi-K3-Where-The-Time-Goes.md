@@ -1,5 +1,80 @@
 # Kimi-K3 — where the time actually goes
 
+## 2026-09-24 — torch profiler, b23, TP8/DCP8, `nightly-rocm100-e9757321` + #56861
+
+**Prefill sharing the step sets TPOT, not kernel speed.**
+
+| | step |
+|---|---|
+| pure decode, 67 seats, ISL 6k | **46.32 ms** |
+| same step + one 7,680-tok prefill chunk | **440–754 ms** (mean 525) |
+
+From the C48 benchmark's own numbers **57% of steps carry prefill** (input
+87,559 ÷ active prefill 153,615 tok/s); decode duty 99.8%. That is the p50
+57.61 → p90 77.58 ms ITL spread. Lever: `max-num-batched-tokens` (8192 today).
+
+### Pure decode step, 46.32 ms
+
+| bucket | ms | % | launches/step |
+|---|---|---|---|
+| GEMM | 14.01 | 30.2 | 998 |
+| Comms | 11.94 | 25.8 | 376 |
+| MoE | 10.04 | 21.7 | 460 |
+| MLA attn | 2.48 | 5.4 | 73 |
+| KDA | 1.72 | 3.7 | 69 |
+| elementwise | 1.55 | 3.3 | 303 |
+| other/norm/sampling | 2.23 | 4.8 | 325 |
+| GPU idle (CPU gap) | 2.35 | 5.1 | — |
+| **total** | **46.32** | | **2,604** |
+
+0.498 ms and 28 launches per layer. Per-kernel p10 4.6 µs, p50 9.5 µs. Dispatch
+is **12–24%** (2,604 × 2–4 µs) — decode is under CUDA graphs, CPU launch already
+gone. 1,692 launches/step are <13 µs = 11.84 ms; nearly all 92–93/step:
+`_attn_res_kernel` 187, MoE sort chain 276 (3 kernels), `hgemm_bf16_*` 301,
+SITU act 93, split-K `PostGSU16` 92. Kimi-K3 has **no `@support_torch_compile`**,
+so inductor never fuses them — likely deliberate (hand-written AITER kernels).
+
+### Kernels are at roofline — nothing to tune
+
+Prefill M=8192: **90–99% of compute peak** (1,459 TFLOP/s bf16 measured).
+Decode M=67 large shapes: **67–86% of bandwidth roofline** (4.63 TB/s measured).
+AITER logs 245 shapes "not found" → falls back to hipBLASLt, which *is* what
+hits those numbers. Not a bug.
+
+### MTP
+
+Step 92.83 vs 46.32 ms = **2.10×** against AL 3.36 → **1.60× net win at ISL 6k**;
+loses at ISL 123k. Comms issues the same call count, each carrying 5× tokens:
+aiter AR 33.5→55.8 µs, NCCL 45.7→103.2 µs.
+
+### Ruled out — measured, not assumed
+
+| | result |
+|---|---|
+| KDA serial loop at qlen 5 | 2.07× in microbench but +1.61 ms of ~99 → **6.1% of step** |
+| drafter misconfigured | TP8 ✓ DCP8 ✓ AITER ✓ non-causal ✓; 0.44 ms weight traffic |
+| KV pool (fp8_e4m3 split; sparse ladder) | +0.57%; +0.44% |
+| SP / async-TP | step −0.6% at 4.5% fewer seats, **comms +7.2%** |
+| EP8 | all-to-all = **1.01×** the all-reduce bytes at every batch — top-16 over 8 ranks reaches 7.06 |
+| better GEMM/MoE kernels | at roofline, above |
+
+### Untested, sized
+
+`max-num-batched-tokens` ↓ (the 57% prefill contention, **largest**) ·
+`--async-scheduling` 5.1% (recipe disables it) · avoid hipBLASLt split-K ~1.1% ·
+fuse residual/MoE-sort ~6% (upstream).
+
+### Method
+
+`/home/asirra/.tmpwork/prof/`: `serve.sh` (MTP/SP/OFFLOAD flags), `drive.py`,
+`analyze.py`, `spans.py`. Needs `--profiler-config.profiler=torch` +
+`torch_profiler_activities '["CPU","CUDA"]'`; `VLLM_TORCH_PROFILER_DIR` is gone
+in this build. Three analyser traps: `gpu_user_annotation` spans *contain*
+kernels (double-count); regex `kda` matches inside `RanKDaTa`; `Cijk` never
+matches a lowercased name. no-MTP emits 2 nested spans/step, MTP emits 1.
+
+---
+
 Companion to [Kimi-DCP-Experiemnts-Summary.md](Kimi-DCP-Experiemnts-Summary.md).
 
 Measured on 8× MI355X, DCP=8, concurrency 52. Current data is
