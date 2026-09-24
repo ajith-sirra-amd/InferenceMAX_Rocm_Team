@@ -2,6 +2,68 @@
 
 Last updated 2026-08-28. Target **12,500 tok/s/GPU**.
 
+## 2026-09-24 — the MTP tax is the decode step, not the KV pool
+
+**Decode is 86–97% of request wall-clock** (ours no-MTP 95.3%, ours MTP 86.5%,
+NV B300 97.2%). The `tok/s/GPU` metric looks prefill-dominated only because it
+scores input tokens served *from cache*: at 97% theoretical prefix hit, ~3,700
+computed prefill tokens per request against 782 decode tokens — 4.7:1 in tokens,
+1:20 in time. Better prefix caching makes decode matter *more*, not less.
+
+**Our MTP step costs 2.71× a plain step (p50), 3.92× (p90). Break-even is the
+AL, 3.36×.** Implied from ITL × AL: no-MTP 57.61 → 57.6 ms/step; MTP k=4
+46.55 × 3.36 → 156.4 ms/step. A k=4 step should cost ~1.3–1.5× (5 query rows is
+nearly the same weight traffic as 1). **~2× is unexplained and unprofiled.**
+Top suspect: 69 of 93 layers are KDA — if its kernel walks the 5 query rows
+serially through the recurrence, that is the whole gap.
+
+NV GB300 c48 MTP runs pool 17.11M at **73.2%** use, 78.9% hit, ITL p90 38.63.
+Comparable pool, not even full: they win on kernel speed, and faster decode
+releases KV sooner, which is why their hit rate is 2.5× ours.
+
+### Graph memory tracks the MAX capture, not the count
+
+Three C48 runs at gmu 0.90, from vLLM's own "equivalent to
+--gpu-memory-utilization" line:
+
+| | max capture | captures | equiv gmu | graphs, %VRAM | pool |
+|---|---|---|---|---|---|
+| no-MTP | 67 | 67 | 0.8856 | 1.44% | 30.59M |
+| MTP dense | 335 | 67 | 0.8315 | 6.85% | 14.26M |
+| MTP sparse | 335 | **20** | 0.8318 | 6.82% | 14.40M |
+
+Thinning 67 captures to 20 is worth **0.03 points**; the 5.41-point gap is the
+max alone. Captures are recorded largest-first into one shared pool, so only the
+widest allocates. **`SPARSE_LADDER` buys nothing and adds pad-up width — default
+off.** Graphs are 15.6 GiB of the 19.2 GiB the MTP arm loses from its KV budget
+(81%); draft weights are the rest.
+
+`max = mns × spec_rows`, so **`mns` is the only real knob** (confirms the
+2026-09-23 note). aiperf at C48 measured effective concurrency 39.98 avg / 55
+max, and `mns` was `1.4 × CONC` = 67 — 22% over-provisioned. Recipe now uses
+`CONC + 8` on the MTP arm: max 335 → 280, worth ~+10% pool. **Untested** — the
+run was cancelled to free GPUs for profiling.
+
+There are **two** capture passes: the first (~12.4 GiB, 11 s) runs before
+`Available KV cache memory` and is charged to the budget; the second (~10 GiB,
+50 s) runs after the pool is sized and only adds VRAM pressure.
+
+### KDA padding: real, and worth 0.6%
+
+The drafter's 5 MLA layers merge into the target's 24 because
+`MLAAttentionSpec.merge` asserts `len({cache_dtype_str}) == 1`, taking buckets to
+`[69, 24+5]`, `group_size` 29, and KDA padding 3 → 18 layers. Naming the draft
+cache **`fp8_e4m3`** instead of `fp8` splits it at zero cost — same `torch.uint8`,
+same `KVQuantMode.FP8_PER_TENSOR`, and `rocm_aiter_mla.py:556` rewrites the string
+back to `"fp8"` before every kernel gate. Padding went 18 → 1+1 as designed.
+
+**Pool moved 14,256,600 → 14,337,529, +0.57%.** Solving the three runs gives
+0.88 B/token per KDA slot vs 75.1 for an MLA slot vs 133.4 for a draft MLA slot —
+**one MLA slot costs 85 KDA slots**. The padding sat in the cheapest bucket in
+the model. Kept (it is free), but it is not a lever.
+
+`bf16` is not a valid `CacheDType`; the literal is `bfloat16`.
+
 ## 2026-09-23 — MTP now runs on the DCP arm
 
 `vllm#57085` (open) is applied at launch by the recipe; it sets
