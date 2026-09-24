@@ -158,7 +158,12 @@ case "$CONC" in
         # prefill waits behind more slow steps. A wider chunk halves the number
         # of prefill steps per prompt. Token budget is not the issue: decode is
         # 176 of 8192 tokens, 2.1%.
-        if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
+        # 24576 OOMed on rocm100-e9757321 at gmu 0.90. The chunked-prefill
+        # workspace scales with this and is enlarged a further 1/dcp_world_size
+        # under DCP, so C72 allocated ~3x C48 -- and C48 runs 8192 fine on the
+        # same image at 81-83% VRAM. Shrinking the workspace keeps the full KV
+        # pool, which is this arm's advantage (27.9M tokens at 63% use).
+        if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         # Seats bound the max decode batch (mns * spec_rows) and so the size of
         # every captured graph. Trimming seats keeps full ladder coverage;
@@ -195,7 +200,7 @@ fi
 # ROCm 10 runtime reserves differently from the 7.x nightlies this config was
 # tuned on, so the same fraction leaves less headroom.
 if [ "$DCP_SIZE" -gt 1 ]; then
-    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.89}"
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 else
     GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 fi
