@@ -140,7 +140,7 @@ case "$CONC" in
         # MTP on the DCP arm, gated because it needs vllm#57085. k=3 matches the
         # band default and NV's d0, which runs mtp at dcp 8 on one aggregated
         # 8-GPU worker -- the config this arm has never been able to reach.
-        if [ "${HIGH_CONC_MTP:-1}" = "1" ]; then
+        if [ "${HIGH_CONC_MTP:-0}" = "1" ]; then
             SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}"
             case "$SPEC_NUM_TOKENS" in
                 1) SYNTHETIC_ACCEPT_LEN=1.85 ;;  2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
@@ -190,8 +190,12 @@ fi
 # GPUs to 100% VRAM. 0.88 hands ~5.8 GiB/GPU back for capture; it comes out of
 # the KV pool, which at these concurrencies has slack (C32 DCP-8 and DCP-2
 # differed 0.4% on TPOT for a 3.6x pool difference).
-if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
-    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+# rocm100-e9757321 OOMs at 0.90 on the C72 arm. 0.89 is the smallest step back (chunk 24576, and the DCP
+# chunked-prefill workspace is enlarged by a further 1/dcp_world_size). The
+# ROCm 10 runtime reserves differently from the 7.x nightlies this config was
+# tuned on, so the same fraction leaves less headroom.
+if [ "$DCP_SIZE" -gt 1 ]; then
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.89}"
 else
     GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 fi
