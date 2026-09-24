@@ -63,6 +63,13 @@ export IS_MULTINODE="${IS_MULTINODE:-false}"
 # run_agentic_replay_and_write_outputs) checks these; single-node has no
 # pipeline or prefill-context parallelism, so 1 is correct, not a placeholder.
 export PP_SIZE="${PP_SIZE:-1}"
+
+# The SA reference recipe opens with `check_env_vars DCP_SIZE EVAL_ONLY`, and
+# neither reaches the container today: e2e-tests.yml never forwards dcp-size for
+# the agentic job, and EVAL_ONLY is workflow-only. Our own recipe sets DCP_SIZE
+# per-branch so it never noticed.
+export DCP_SIZE="${DCP_SIZE:-8}"
+export EVAL_ONLY="${EVAL_ONLY:-false}"
 export PCP_SIZE="${PCP_SIZE:-1}"
 
 # aiperf defaults to http://localhost:$PORT (benchmark_lib:3264) while every
@@ -185,6 +192,8 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e IS_MULTINODE \
 -e PP_SIZE \
 -e PCP_SIZE \
+-e DCP_SIZE \
+-e EVAL_ONLY \
 -e AIPERF_SERVER_URL \
 -e KV_OFFLOAD_BACKEND_METADATA \
 -e IMAGE \
