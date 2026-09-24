@@ -180,7 +180,19 @@ case "$CONC" in
         # every captured graph. Trimming seats keeps full ladder coverage;
         # capping the ladder instead leaves the scheduler free to build batches
         # that have no graph and fall back to eager.
+        # The graph memory vLLM charges against the KV budget tracks the LARGEST
+        # capture, not how many there are: 67 captures at max 67 cost 1.44% of
+        # VRAM (no-MTP), 67 at max 335 cost 6.85%, and 20 at max 335 cost 6.82%.
+        # Cutting the count is worth 0.03 points; cutting the max is worth 5.41.
+        # Captures are recorded largest-first into one shared pool, so only the
+        # widest one allocates.
+        #
+        # max = mns * spec_rows, and 1.4x CONC over-provisions it. aiperf at C48
+        # measured effective concurrency 39.98 avg / 55 max (decode 37.02 / 51,
+        # prefill 2.88 / 29), so CONC+8 covers the peak with room and takes the
+        # max from 335 to 280.
         if [ "$CONC" -eq 64 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-72}"
+        elif [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC + 8 ))}"
         elif [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
         elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
@@ -247,7 +259,13 @@ fi
 # :71-90). So a sparse ladder trades a little wasted decode width for a lot of KV
 # pool. Step 4 seats from 16 up keeps the pad-up under 12.5% across the hot zone
 # (effective decode concurrency measured 37 avg / 46 p90 / 51 max at C48).
-SPARSE_LADDER="${SPARSE_LADDER:-1}"
+# Default OFF: measured at C48, 20 sizes vs 67 at the same max 335 moved the pool
+# 14,337,529 -> 14,400,443 (+0.44%) and the graph share of VRAM 6.85% -> 6.82%.
+# Captures share one pool allocated by the largest, so thinning the ladder buys
+# nothing on the KV budget and only adds pad-up width. Kept as a knob because it
+# does shrink the second, post-allocation capture pass, which is what pushed C72
+# to 100% VRAM and hung capture_model twice.
+SPARSE_LADDER="${SPARSE_LADDER:-0}"
 if [ "$SPARSE_LADDER" = "1" ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
     seats=(1 2 4 6 8 12)
     step=$(( MAX_NUM_SEQS / 16 )); [ "$step" -lt 1 ] && step=1
