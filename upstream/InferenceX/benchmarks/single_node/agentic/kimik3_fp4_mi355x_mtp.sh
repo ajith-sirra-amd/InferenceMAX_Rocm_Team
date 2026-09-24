@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-set -eo pipefail
+set -euo pipefail
 set -x
 source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 export EVAL_ONLY="${EVAL_ONLY:-false}"
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
-check_env_vars DCP_SIZE EVAL_ONLY
 
 DP_SIZE=1
 export DP_SIZE
@@ -43,7 +42,7 @@ export AITER_DISABLE_FMHA_OPUS=1
 export SAFETENSORS_FAST_GPU=1
 export GPU_ARCHS=gfx950
 export HSA_NO_SCRATCH_RECLAIM=1
-export VLLM_USE_BREAKABLE_CUDAGRAPH=0
+export VLLM_USE_BREAKABLE_CUDAGRAPH="${VLLM_USE_BREAKABLE_CUDAGRAPH:-0}"
 export VLLM_K3_KDA_SAFE_STAGES=1
 export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
@@ -66,17 +65,37 @@ trap cleanup_agentic_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+DCP_OVERRIDE="${DCP_OVERRIDE:-8}"
+ALLOW_MTP_WITH_DCP="${ALLOW_MTP_WITH_DCP:-1}"
+
 SPEC_ARGS=()
 SPEC_ROWS=1
-KDA_ARGS=()
+# KDA is a prefill kernel and lands on TTFT. The C32 no-MTP baseline ran triton
+# (the old hardcoded value); leaving this at auto->fused makes KDA an
+# uncontrolled variable in the MTP comparison. Pin triton to match the
+# baseline -- measured neutral on the MTP arms at C4 and C12, so it costs
+# nothing. Set KDA_PREFILL_BACKEND=fused for the DCP no-MTP arm, where fused
+# was worth 3.1% at C48 and 4.4% at C72.
+if [ -n "${KDA_PREFILL_BACKEND:-}" ]; then
+    KDA_ARGS=(--additional-config "{\"kda_prefill_backend\":\"$KDA_PREFILL_BACKEND\"}")
+else
+    KDA_ARGS=()
+fi
 case "$CONC" in
     1|2|4|8|10|12|14|16)
-        DCP_SIZE=1
+        DCP_SIZE="${DCP_SIZE:-1}"
         OFFLOAD_POLICY=harness
+        # Draft depth per concurrency. c1=6 is SA-matched and measured best at SA
+        # (1,412 tok/s/GPU, ITL p90 8.13 = 123.0 tok/s/user). c4=5 and c12=4 come
+        # from the C4 fixed-length sweep, where TPOT fell monotonically
+        # 12.46 -> 11.26 -> 10.85 -> 10.38 ms across k=2..5 with throughput rising
+        # 2,794 -> 3,321. Everything else stays on SA's k=3 for the band.
         case "$CONC" in
             1)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}" ;;
             4)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
-            10)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
+            10) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
+            12) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}" ;;
+            14) SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
             *)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
         esac
         case "$SPEC_NUM_TOKENS" in
@@ -91,7 +110,7 @@ case "$CONC" in
             *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
         esac
         DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
+        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"${DRAFT_ATTN_BACKEND:-ROCM_AITER_MLA}\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
         if [ "${EVAL_ONLY:-false}" = "true" ]; then
             SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
             echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) draft_kv=$DRAFT_KV_DTYPE"
@@ -118,25 +137,97 @@ case "$CONC" in
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
         OFFLOAD_POLICY=harness
+        # MTP on the DCP arm, gated because it needs vllm#57085. k=3 matches the
+        # band default and NV's d0, which runs mtp at dcp 8 on one aggregated
+        # 8-GPU worker -- the config this arm has never been able to reach.
+        if [ "${HIGH_CONC_MTP:-1}" = "1" ]; then
+            SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}"
+            case "$SPEC_NUM_TOKENS" in
+                1) SYNTHETIC_ACCEPT_LEN=1.85 ;;  2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
+                3) SYNTHETIC_ACCEPT_LEN=3.00 ;;  4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
+                5) SYNTHETIC_ACCEPT_LEN=3.62 ;;  6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
+                *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
+            esac
+            DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
+            SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"${DRAFT_ATTN_BACKEND:-ROCM_AITER_MLA}\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
+            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
+            SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
+            echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN draft_kv=$DRAFT_KV_DTYPE (dcp arm)"
+        fi
+        # MTP makes each decode step slower (draft forward + k+1-row verify), so
+        # prefill waits behind more slow steps. A wider chunk halves the number
+        # of prefill steps per prompt. Token budget is not the issue: decode is
+        # 176 of 8192 tokens, 2.1%.
         if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
-        if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
+        # Seats bound the max decode batch (mns * spec_rows) and so the size of
+        # every captured graph. Trimming seats keeps full ladder coverage;
+        # capping the ladder instead leaves the scheduler free to build batches
+        # that have no graph and fall back to eager.
+        if [ "$CONC" -eq 64 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-72}"
+        elif [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
         elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
         ;;
 esac
+# e2e-tests.yml forwards dcp-size for some job types but not the agentic one, so
+# a yaml dcp-size never reaches this script and DCP_SIZE silently falls back to
+# the per-branch default (1 below conc 16, 8 above). Pin it here instead.
+DCP_SIZE="${DCP_OVERRIDE:-$DCP_SIZE}"
 export DCP_SIZE
 
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+# MTP draft verify under DCP is gated on aiter's segmented MLA decode; when the
+# route is unavailable the run dies mid-serve rather than at startup. Drop
+# speculation whenever DCP is on so the ladder collapses to one row per seat.
+if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ "${ALLOW_MTP_WITH_DCP:-0}" != "1" ]; then
+    SPEC_ARGS=()
+    SPEC_ROWS=1
+    echo "MTP: off (dcp=$DCP_SIZE)"
+fi
+
+# Graph memory is allocated outside the gpu-memory-utilization budget. The MTP
+# DCP arm captures graphs up to mns*spec_rows rows (384 at C72), which pushed
+# GPUs to 100% VRAM. 0.88 hands ~5.8 GiB/GPU back for capture; it comes out of
+# the KV pool, which at these concurrencies has slack (C32 DCP-8 and DCP-2
+# differed 0.4% on TPOT for a 3.6x pool difference).
+if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+else
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+fi
+LAZY_OFFLOAD="${LAZY_OFFLOAD:-false}"
+# FULL_DECODE_ONLY on every arm. Measured at C4 k=4 n=400 (runs 34936346363 vs
+# 34940495620): piecewise cost 22.8 GiB of graph memory and 41.9% of the KV pool
+# (3,295,310 -> 1,916,156 tokens) for a 0.6% TPOT change -- i.e. nothing. This is
+# T284's -35.5% finding reproduced on the DCP-1 arm at mnbt 8192, so the penalty is
+# chunk-size-driven, not arm-specific.
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
+# Graph memory is allocated on top of the gpu-memory-utilization budget, not
+# inside it: C72 with ladder 384 measured ~29 GiB over the 0.90 budget and sat at
+# 100% VRAM. Two of the three MTP+DCP attempts then hung inside capture_model.
+# Cap the MTP+DCP arm at the same 96 the no-MTP arm and SA both capture; batches
+# above the cap fall back to eager rather than failing.
+if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ -n "${LADDER_CAP:-}" ] && [ "$LADDER" -gt "$LADDER_CAP" ]; then
+    echo "[ladder] capping $LADDER -> $LADDER_CAP (mns=$MAX_NUM_SEQS spec_rows=$SPEC_ROWS)"
+    LADDER="$LADDER_CAP"
+fi
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
 if [ "$DCP_SIZE" -gt 1 ]; then
-    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
+    # a2a was picked for the no-MTP DCP arm and never validated against a
+    # multi-token non-causal draft block. vLLM defaults to ag_rs
+    # (set_dcp_defaults), and _ALLGATHER_BASE is exactly what deadlocks under
+    # MTP+DCP, so the MTP arm takes the default while the shipping arm keeps a2a.
+    if [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
+        DCP_COMM_BACKEND="${DCP_COMM_BACKEND:-a2a}"
+    else
+        DCP_COMM_BACKEND="${DCP_COMM_BACKEND:-a2a}"
+    fi
+    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend "$DCP_COMM_BACKEND" --cp-kv-cache-interleave-size 1)
 fi
 
 OFFLOAD_ARGS=()
@@ -146,7 +237,7 @@ if [ "$OFFLOAD_POLICY" = "none" ]; then
 elif agentic_kv_offload_enabled; then
     OFFLOAD_LABEL="${KV_OFFLOADING}"
     CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
-    OFFLOAD_ARGS=(--kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":false}}")
+    OFFLOAD_ARGS=(--kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":$LAZY_OFFLOAD}}")
 else
     OFFLOAD_LABEL=none
 fi
@@ -155,6 +246,73 @@ EP_ARGS=()
 if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#56861 -- AITER ASM round-robin decode for DCP multi-token verify
+# -----------------------------------------------------------------------------
+# +1520/-21, open. Supersedes #57085: it sets
+# supports_non_causal_multi_token_dcp itself and adds the cprr route the flag
+# alone had nowhere to go to. Applied with patch(1) rather than string
+# substitution -- 23 hunks over envs.py and rocm_aiter_mla.py. Verified
+# --dry-run clean against nightly-rocm100-e9757321 (0 rejects).
+#
+# VLLM_ROCM_AITER_MLA_DCP_VERIFY defaults to "asm": the round-robin ASM decode
+# reads the KV shard once and amortises it over the whole verify block, instead
+# of the segmented Triton path that expands the block into one row per token.
+# K3 at TP8/DCP8 gathers to 96 heads, which cprr pads to 128.
+apply_pr56861() {
+    [ "${APPLY_PR56861:-1}" = "1" ] || { echo "[pr56861] disabled"; return 0; }
+    local diff_file
+    diff_file="$(dirname "$0")/patches/pr56861-dcp-cprr.diff"
+    [ -f "$diff_file" ] || { echo "[pr56861] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import vllm.envs as e; import sys; sys.exit(0 if hasattr(e,"VLLM_ROCM_AITER_MLA_DCP_VERIFY") else 1)' 2>/dev/null; then
+        echo "[pr56861] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile;py_compile.compile("'"$site"'/vllm/v1/attention/backends/mla/rocm_aiter_mla.py",doraise=True)' || return 1
+    echo "[pr56861] applied, route=${VLLM_ROCM_AITER_MLA_DCP_VERIFY:-asm}"
+}
+apply_pr56861 || { echo "[pr56861] patch failed, refusing to run" >&2; exit 1; }
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#54546 -- Triton MLA non-causal multi-token DCP
+# -----------------------------------------------------------------------------
+# The aiter route (#57085) boots but deadlocks: a _ALLGATHER_BASE hung the full
+# 601 s watchdog at TP8/DCP8/k=3 and killed the engine mid-warmup. Triton takes a
+# different route -- per the PR, "forward_mqa flattens the block to one decode row
+# per query token and every row sees the same committed prefix, so a rank-local
+# seq_len is the whole story" -- so there is no per-row cross-rank LSE merge to
+# hang on. The author scopes the capability to ROCm as the validated platform.
+#
+# Only the flag hunk is applied. Upstream refactored triton_mla.py after the PR
+# was written: the _init_reorder_batch_threshold(1, supports_spec_as_decode=True)
+# call the PR edits no longer exists, replaced by
+# supports_draft_decode_metadata_update = self.dcp_world_size == 1.
+apply_pr54546() {
+    [ "${APPLY_PR54546:-0}" = "1" ] || { echo "[pr54546] disabled"; return 0; }
+    python3 - <<'PYPATCH'
+import os, sys, vllm
+p = os.path.join(os.path.dirname(vllm.__file__),
+                 "v1", "attention", "backends", "mla", "triton_mla.py")
+s = open(p).read()
+if "supports_non_causal_multi_token_dcp" in s:
+    print("[pr54546] already present, nothing to do"); sys.exit(0)
+old = "    supports_non_causal_multi_token_decode: ClassVar[bool] = True\n"
+new = (old +
+       "    supports_non_causal_multi_token_dcp: ClassVar[bool] = "
+       "current_platform.is_rocm()\n")
+if s.count(old) != 1:
+    print(f"[pr54546] FAILED: anchor count {s.count(old)} != 1"); sys.exit(1)
+if "current_platform" not in s:
+    print("[pr54546] FAILED: current_platform not imported"); sys.exit(1)
+open(p, "w").write(s.replace(old, new))
+import py_compile; py_compile.compile(p, doraise=True)
+print("[pr54546] applied and byte-compiled OK")
+PYPATCH
+}
+apply_pr54546 || { echo "[pr54546] patch failed, refusing to run" >&2; exit 1; }
 
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
@@ -248,6 +406,27 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
+elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
+    # Fixed-length client instead of the trace replay. The agentic-coding
+    # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
+    # "0" -- only for unset/empty -- so guard on >0.
+    ISL="${ISL:-8192}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=8192
+    OSL="${OSL:-1024}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=1024
+    RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
+    case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
+    run_benchmark_serving \
+        --model "$MODEL" \
+        --port "$PORT" \
+        --backend vllm \
+        --input-len "$ISL" \
+        --output-len "$OSL" \
+        --random-range-ratio "$RANDOM_RANGE_RATIO" \
+        --num-prompts "${NUM_PROMPTS:-200}" \
+        --max-concurrency "$CONC" \
+        --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
+        --result-dir /outputs/ \
+        --trust-remote-code \
+        --use-chat-template
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
