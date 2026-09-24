@@ -263,7 +263,9 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 apply_pr56861() {
     [ "${APPLY_PR56861:-1}" = "1" ] || { echo "[pr56861] disabled"; return 0; }
     local diff_file
-    diff_file="$(dirname "$0")/patches/pr56861-dcp-cprr.diff"
+    # absolute: the redirect below is evaluated after `cd "$site"`, so a relative
+    # path would resolve against site-packages instead of the workspace.
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr56861-dcp-cprr.diff"
     [ -f "$diff_file" ] || { echo "[pr56861] missing $diff_file" >&2; return 1; }
     local site
     site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
