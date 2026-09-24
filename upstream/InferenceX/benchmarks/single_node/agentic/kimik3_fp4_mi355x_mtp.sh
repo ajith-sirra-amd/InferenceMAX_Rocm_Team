@@ -148,7 +148,7 @@ case "$CONC" in
                 5) SYNTHETIC_ACCEPT_LEN=3.62 ;;  6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
                 *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
             esac
-            DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
+            DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-bf16}"
             SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"${DRAFT_ATTN_BACKEND:-ROCM_AITER_MLA}\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
             SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
             SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
