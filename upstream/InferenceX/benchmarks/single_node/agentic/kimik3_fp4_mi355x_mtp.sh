@@ -140,7 +140,7 @@ case "$CONC" in
         # MTP on the DCP arm, gated because it needs vllm#57085. k=3 matches the
         # band default and NV's d0, which runs mtp at dcp 8 on one aggregated
         # 8-GPU worker -- the config this arm has never been able to reach.
-        if [ "${HIGH_CONC_MTP:-0}" = "1" ]; then
+        if [ "${HIGH_CONC_MTP:-1}" = "1" ]; then
             SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}"
             case "$SPEC_NUM_TOKENS" in
                 1) SYNTHETIC_ACCEPT_LEN=1.85 ;;  2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
