@@ -148,7 +148,18 @@ case "$CONC" in
                 5) SYNTHETIC_ACCEPT_LEN=3.62 ;;  6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
                 *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
             esac
-            DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-bf16}"
+            # Splitting the MLA bucket without paying for it. The drafter's 5 MLA
+            # layers merge into the target's 24 only because MLAAttentionSpec.merge
+            # asserts len({spec.cache_dtype_str}) == 1. That makes the buckets
+            # [69 KDA, 29 MLA], group_size = min = 29, and 69 mod 29 = 11, so the
+            # KDA side gets 18 padding layers. Naming the draft cache fp8_e4m3
+            # instead of fp8 makes that set size 2, the merge raises, and the
+            # buckets become [69, 24, 5] -> group_size 5 -> 1 padding layer.
+            # The two strings are the same cache: both map to torch.uint8, both
+            # give KVQuantMode.FP8_PER_TENSOR, and rocm_aiter_mla.py:556 rewrites
+            # the string back to "fp8" before every kernel gate reads it. Only the
+            # spec's cache_dtype_str field keeps the distinction.
+            DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8_e4m3}"
             SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"${DRAFT_ATTN_BACKEND:-ROCM_AITER_MLA}\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
             SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
             SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
