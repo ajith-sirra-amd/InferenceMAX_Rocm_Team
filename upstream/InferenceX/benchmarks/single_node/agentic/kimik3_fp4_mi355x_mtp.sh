@@ -233,7 +233,38 @@ if [ "$DCP_SIZE" -gt 1 ] && [ "${#SPEC_ARGS[@]}" -gt 0 ] && [ -n "${LADDER_CAP:-
     echo "[ladder] capping $LADDER -> $LADDER_CAP (mns=$MAX_NUM_SEQS spec_rows=$SPEC_ROWS)"
     LADDER="$LADDER_CAP"
 fi
-CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
+# Graph memory tracks the SUM of the capture sizes, not their count. vLLM rounds
+# every requested size up to a multiple of spec_rows and dedups
+# (compilation.py:1555-1581), so dense 1..LADDER collapses to
+# {spec_rows, 2*spec_rows, ... LADDER} -- same 67 graphs as the no-MTP arm but
+# each one spec_rows times wider. Measured at C48: sum 2,278 tokens -> 5.87 GiB
+# of graph memory with no MTP, sum 11,390 -> 22.42 GiB with k=4. That 16.55 GiB
+# is 85% of the 19.36 GiB the MTP arm loses from its KV budget; the draft weights
+# are the other ~2.8 GiB.
+#
+# Uncaptured sizes below the max do NOT fall back to eager -- the dispatcher pads
+# up to the next captured size (_bs_to_padded_graph_size, cudagraph_dispatcher.py
+# :71-90). So a sparse ladder trades a little wasted decode width for a lot of KV
+# pool. Step 4 seats from 16 up keeps the pad-up under 12.5% across the hot zone
+# (effective decode concurrency measured 37 avg / 46 p90 / 51 max at C48).
+SPARSE_LADDER="${SPARSE_LADDER:-1}"
+if [ "$SPARSE_LADDER" = "1" ] && [ "${#SPEC_ARGS[@]}" -gt 0 ]; then
+    seats=(1 2 4 6 8 12)
+    step=$(( MAX_NUM_SEQS / 16 )); [ "$step" -lt 1 ] && step=1
+    for (( s = 16; s < MAX_NUM_SEQS; s += step )); do seats+=("$s"); done
+    seats+=("$MAX_NUM_SEQS")
+    CUDAGRAPH_CAPTURE_SIZES=""
+    sum=0
+    for s in $(printf '%s\n' "${seats[@]}" | sort -n -u); do
+        [ "$s" -gt "$MAX_NUM_SEQS" ] && continue
+        CUDAGRAPH_CAPTURE_SIZES="${CUDAGRAPH_CAPTURE_SIZES:+$CUDAGRAPH_CAPTURE_SIZES,}$(( s * SPEC_ROWS ))"
+        sum=$(( sum + s * SPEC_ROWS ))
+    done
+    dense=$(( (MAX_NUM_SEQS * (MAX_NUM_SEQS + 1) / 2) * SPEC_ROWS ))
+    echo "[ladder] sparse: $(printf '%s' "$CUDAGRAPH_CAPTURE_SIZES" | tr ',' '\n' | wc -l) sizes, sum=$sum tokens (dense would be $dense)"
+else
+    CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
+fi
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
