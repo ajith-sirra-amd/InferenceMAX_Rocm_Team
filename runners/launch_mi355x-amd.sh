@@ -39,6 +39,12 @@ export PORT=$(( 8890 + PORT_OFFSET ))
 # /workspace is the InferenceX root; the workflow looks for the result json at
 # the repo root, so outputs go through a second mount.
 export RESULT_DIR=/outputs/results
+# Upstream assumes INFMAX_CONTAINER_WORKSPACE is the repo root, so it lets
+# AGENTIC_OUTPUT_DIR default to it (benchmark_lib.sh:3368, :3509). Here the repo
+# root is /outputs and /workspace is upstream/InferenceX underneath it, so the
+# default would drop $RESULT_FILENAME.json one directory too deep and the
+# workflow's result-file check would fail after a completed benchmark.
+export AGENTIC_OUTPUT_DIR=/outputs
 
 # The synced benchmark_lib.sh validates AIPERF_PYTHON_VERSION and ~30 siblings it
 # no longer defaults (check_env_vars at ~3117). Upstream sources these from
@@ -189,6 +195,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e RESULT_DIR \
 -e PYTHONDONTWRITEBYTECODE \
 -e INFMAX_CONTAINER_WORKSPACE \
+-e AGENTIC_OUTPUT_DIR \
 -e IS_MULTINODE \
 -e PP_SIZE \
 -e PCP_SIZE \
