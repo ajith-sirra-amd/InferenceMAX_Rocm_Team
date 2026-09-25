@@ -1,0 +1,117 @@
+diff --git a/vllm/config/scheduler.py b/vllm/config/scheduler.py
+index 86f863ab3a23..b53c87378c72 100644
+--- a/vllm/config/scheduler.py
++++ b/vllm/config/scheduler.py
+@@ -196,9 +196,24 @@ class SchedulerConfig:
+     (the default) disables the watermark."""
+ 
+     prefill_schedule_interval: int = Field(default=1, ge=1)
+-    """For data-parallel deployments, only admit new prefill requests
+-    once every N engine steps, aligned across DP ranks, to better balance
+-    per-step forward-pass times."""
++    """Only admit new prefill requests once every N engine steps, leaving the
++    steps in between to decode alone. 1 (the default) admits prefill on every
++    step.
++
++    For data-parallel deployments the cadence is aligned across DP ranks, to
++    better balance per-step forward-pass times. For a single engine there is no
++    alignment requirement, so the interval is instead measured from the last
++    step that carried prefill. Either way, prefill is only deferred when at
++    least one running request can decode in its place, so the interval never
++    leaves the model idle.
++
++    A deferred step carries no prefill at all, not merely no new admissions: an
++    already-admitted request that is still being prefilled in chunks is held
++    for the remainder of the interval too. That is the point of the cadence --
++    letting a chunk through would give decode the interrupted step the interval
++    exists to prevent -- but it does mean a long prompt takes up to N times as
++    many steps to finish prefilling. Size the interval against the prompt
++    lengths you serve, not just the decode benefit."""
+ 
+     async_scheduling: bool | None = None
+     """If set to False, disable async scheduling. Async scheduling helps to
+diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
+index 18bbc102830b..872e328ea3c2 100644
+--- a/vllm/v1/core/sched/scheduler.py
++++ b/vllm/v1/core/sched/scheduler.py
+@@ -333,6 +333,17 @@ def __init__(
+         # prefill batch fully drained the waiting queue. Prefill throttling
+         # is disabled in this case.
+         self.prefill_capacity_bound = False
++        # `prefill_schedule_interval` is driven by the DP engine core, which
++        # aligns it across ranks from a shared step counter. A single engine has
++        # no such counter and never throttles, so apply the interval here
++        # instead, timed from the last prefill-carrying step.
++        self.local_prefill_interval = (
++            self.scheduler_config.prefill_schedule_interval
++            if self.parallel_config.data_parallel_size == 1
++            else 1
++        )
++        # A full interval back, so the first step is never gated.
++        self.last_prefill_step = -self.local_prefill_interval
+         self.scheduler_reserve_full_isl = (
+             self.scheduler_config.scheduler_reserve_full_isl
+         )
+@@ -585,6 +596,9 @@ def schedule(self, throttle_prefills: bool = False) -> SchedulerOutput:
+         scheduled_spec_decode_tokens: dict[str, list[int]] = {}
+         # Whether the running batch contains any prefill requests.
+         prefill_scheduled = False
++        # Whether a waiting request was admitted with prompt left to compute.
++        # Separate from `prefill_scheduled`, which covers only the running loop.
++        prefill_admitted = False
+         # Whether any scheduled request has a synchronous connector KV load.
+         has_sync_kv_loads = False
+ 
+@@ -608,6 +622,18 @@ def schedule(self, throttle_prefills: bool = False) -> SchedulerOutput:
+             else 0
+         )
+ 
++        # Single-engine prefill cadence: hold prefill until the interval since
++        # the last prefill-carrying step has elapsed, so decode runs in long
++        # uninterrupted stretches. As above, only defer when something else can
++        # decode in prefill's place.
++        if (
++            not defer_prefills
++            and self.local_prefill_interval > 1
++            and self.current_step - self.last_prefill_step < self.local_prefill_interval
++            and any(not r.is_prefill_chunk for r in self.running)
++        ):
++            defer_prefills = True
++
+         # First, schedule the RUNNING requests.
+         req_index = 0
+         while req_index < len(self.running) and token_budget > 0:
+@@ -1249,6 +1275,12 @@ def schedule(self, throttle_prefills: bool = False) -> SchedulerOutput:
+ 
+                 request = request_queue.pop_request()
+                 if load_kv_async:
++                    # This path deliberately does not reach `prefill_admitted`
++                    # below, so it does not restart the prefill cadence:
++                    # `num_new_tokens` was set to 0 above, so the step carries
++                    # no prefill compute for this request. The interval is
++                    # timed from steps that actually prefilled; refreshing it
++                    # here would start the cadence from a step that did none.
+                     # If loading async, allocate memory and put request
+                     # into the WAITING_FOR_REMOTE_KV state.
+                     request.status = RequestStatus.WAITING_FOR_REMOTE_KVS
+@@ -1310,6 +1342,8 @@ def schedule(self, throttle_prefills: bool = False) -> SchedulerOutput:
+                     scheduled_spec_decode_tokens[request_id] = [
+                         -1
+                     ] * self.num_spec_tokens
++                # A resumed request past its prompt is decode work, not prefill.
++                prefill_admitted |= num_computed_tokens < request.num_prompt_tokens
+                 # Only track requests that will still be prefilling after this chunk.
+                 if num_computed_tokens + num_new_tokens < request.num_tokens:
+                     self._inflight_prefills.add(request)
+@@ -1338,6 +1372,11 @@ def schedule(self, throttle_prefills: bool = False) -> SchedulerOutput:
+             if not defer_prefills:
+                 self.prefill_capacity_bound = bool(self.waiting)
+ 
++        # Restart the cadence interval from any step that carried prefill,
++        # whether a new admission or a running chunk.
++        if self.local_prefill_interval > 1 and (prefill_scheduled or prefill_admitted):
++            self.last_prefill_step = self.current_step
++
+         # Check if the scheduling constraints are satisfied.
+         total_num_scheduled_tokens = sum(num_scheduled_tokens.values())
+         assert total_num_scheduled_tokens <= self.max_num_scheduled_tokens

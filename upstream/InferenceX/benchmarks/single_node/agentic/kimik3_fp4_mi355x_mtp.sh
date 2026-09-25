@@ -385,6 +385,76 @@ PYPATCH
 }
 apply_pr54546 || { echo "[pr54546] patch failed, refusing to run" >&2; exit 1; }
 
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#54627 -- prefill_schedule_interval outside data parallelism
+# -----------------------------------------------------------------------------
+# Open, unmerged. `prefill_schedule_interval` (SchedulerConfig, default 1 = off)
+# already exists and is CLI-exposed (--prefill-schedule-interval), but today it
+# is a no-op outside data-parallel deployments -- our config is DCP=8, DP=1, so
+# the flag alone does nothing. This PR makes the scheduler-side interval logic
+# work under DCP too. Targets Kimi-K3-Where-The-Time-Goes.md's finding that 57%
+# of C72 steps carry prefill and balloon 46ms -> 440-754ms per step.
+# 2/4 hunks (test files) dropped -- not shipped in the installed package.
+# Dry-run + real apply + py_compile verified clean against
+# nightly-rocm100-e9757321 on 2026-09-25 (0 rejects, stacks cleanly under #54625).
+apply_pr54627() {
+    [ "${APPLY_PR54627:-0}" = "1" ] || { echo "[pr54627] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54627-prefill-interval-nondp.diff"
+    [ -f "$diff_file" ] || { echo "[pr54627] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.v1.core.sched.scheduler as s
+import sys; sys.exit(0 if "last_prefill_step" in inspect.getsource(s) else 1)' 2>/dev/null; then
+        echo "[pr54627] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile;py_compile.compile("'"$site"'/vllm/v1/core/sched/scheduler.py",doraise=True);py_compile.compile("'"$site"'/vllm/config/scheduler.py",doraise=True)' || return 1
+    echo "[pr54627] applied"
+}
+apply_pr54627 || { echo "[pr54627] patch failed, refusing to run" >&2; exit 1; }
+PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-1}"
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#54625 -- cache-aware admission ordering
+# -----------------------------------------------------------------------------
+# Open, unmerged. Within a bounded look-ahead over the FCFS waiting queue,
+# admits requests whose prefix is already KV-resident ahead of cold requests
+# that would otherwise evict them. Targets the prefix-cache-hit gap
+# (theoretical 95.1% vs captured 88.0% at C72) flagged as the biggest
+# undiagnosed lever in EXPERIMENT-QUEUE.md. New flags default off
+# (--cache-aware-admission-window 0). Dry-run + real apply + py_compile
+# verified clean against nightly-rocm100-e9757321 on 2026-09-25 (0 rejects,
+# stacks cleanly on top of #54627).
+apply_pr54625() {
+    [ "${APPLY_PR54625:-0}" = "1" ] || { echo "[pr54625] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54625-cache-aware-admission.diff"
+    [ -f "$diff_file" ] || { echo "[pr54625] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import vllm.config.scheduler as s; import sys; sys.exit(0 if hasattr(s.SchedulerConfig, "cache_aware_admission_window") else 1)' 2>/dev/null; then
+        echo "[pr54625] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/config/scheduler.py","vllm/engine/arg_utils.py","vllm/v1/core/kv_cache_manager.py","vllm/v1/core/sched/scheduler.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr54625] applied"
+}
+apply_pr54625 || { echo "[pr54625] patch failed, refusing to run" >&2; exit 1; }
+# The two flags below do not exist on vLLM's CLI parser unless #54625 is
+# applied -- unlike --prefill-schedule-interval, which is already a real flag
+# pre-patch. Keep them out of VLLM_CMD entirely when the patch is off, or
+# "unrecognized arguments" kills every non-#54625 dispatch.
+CACHE_AWARE_ARGS=()
+if [ "${APPLY_PR54625:-0}" = "1" ]; then
+    CACHE_AWARE_ARGS=(
+        --cache-aware-admission-window "${CACHE_AWARE_ADMISSION_WINDOW:-0}"
+        --cache-aware-admission-threshold "${CACHE_AWARE_ADMISSION_THRESHOLD:-0.5}"
+    )
+fi
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
@@ -405,6 +475,8 @@ VLLM_CMD=(
     --enable-prefix-caching
     --enable-prompt-tokens-details
     --no-async-scheduling
+    --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
+    "${CACHE_AWARE_ARGS[@]}"
     --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
