@@ -227,7 +227,10 @@ fi
 # ROCm 10 runtime reserves differently from the 7.x nightlies this config was
 # tuned on, so the same fraction leaves less headroom.
 if [ "$DCP_SIZE" -gt 1 ]; then
-    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
+    # 2026-09-25: dropped to 0.89 after run 36101514843 (C72 no-MTP) hit
+    # HSA_STATUS_ERROR_OUT_OF_RESOURCES mid-run at 0.90 -- matches the
+    # comment above's own prediction ("0.89 is the smallest step back").
+    GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.89}"
 else
     GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 fi
