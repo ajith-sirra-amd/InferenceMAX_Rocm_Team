@@ -2253,8 +2253,14 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [12], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48, 72], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48], spec-decoding: mtp }
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48], spec-decoding: mtp }
-      # 2026-09-25: C72 held back deliberately -- adding it here too would make
+      # 2026-09-25: commented out (not dropped) for the duration of the
+      # fixed-seq-len fast-loop campaign below -- dispatching this config-key
+      # with any row active here runs the full ~1h12m agentic replay in the
+      # same matrix as the ~20min fixed-seq-len cell, which the fast loop is
+      # specifically meant to avoid. Restore for Phase 2's agentic confirmation.
+      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48], spec-decoding: mtp }
+      search-space: []
+      # C72 held back deliberately -- adding it here too would make
       # any --conc 72 dispatch run BOTH this hour-long agentic replay AND the
       # fixed-seq-len scenario above in the same matrix. Add conc:72 here only
       # for Phase 2's final agentic confirmation of a fast-loop winner.
