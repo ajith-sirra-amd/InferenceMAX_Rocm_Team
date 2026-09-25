@@ -21,8 +21,8 @@ gmu 0.90 / chunk 8192 / dram 0.65, image 3df4ae15).
 
 | | tok/s/GPU | ITL p90 | KV pool | KV use | GPU hit |
 |---|---|---|---|---|---|
-| OURS C72 no-MTP | 12,484 | 119.67 | 27,867,046 | 63.0% | 76.0% |
-| OURS C48 no-MTP | 11,048 | 77.58 | 30,591,065 | 33.8% | 91.9% |
+| [OURS C72 no-MTP](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/34830611340) | 12,484 | 119.67 | 27,867,046 | 63.0% | 76.0% |
+| [OURS C48 no-MTP](https://github.com/SemiAnalysisAI/InferenceX/actions/runs/34830611340) | 11,048 | 77.58 | 30,591,065 | 33.8% | 91.9% |
 | OURS C48 MTP k=3 | 2,390 | 508.11 | 14,420,515 | 100% | 45.8% |
 | NV B300 c70 no-MTP | 12,566 | 126.77 | 21,564,193 | 100% | 72.5% |
 | NV GB300 c48 MTP k=4 | 19,303 | 38.63 | 17,114,258 | 73.2% | 78.9% |
@@ -169,7 +169,7 @@ the next move is profiling — still blocked: no `VLLM_TORCH_PROFILER_DIR` (T202
 
 # RUN-CONTINUOUSLY RULES — W3+W4 (closes 9/9 12:30 IST)
 
-**TARGET 12,556 tok/s/GPU @ C72. Best 12,093 (T286, gated 0.995). Gap +3.83%.**
+**TARGET 12,556 tok/s/GPU @ C72. Best 12,093 ([T286](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/34184741785), gated 0.995). Gap +3.83%.**
 Predictor: 12,556 needs steady `tput_in` ≥ **104,100/s**.
 
 **12,556 is a floor. 13,000 is the switch point.**
@@ -971,7 +971,7 @@ what runs next. Every wake-up: read **Current state**, act, update this file.
 | | target | best today | gap |
 |---|---|---|---|
 | Throughput | **10,632 (T195, C72, nightly+overlay+5 PR files, err 0.22%)** | **12,500 tok/s/GPU** · SA 8,953 | **−14.9%** |
-| C1 interactivity | as low as possible | **7.57 ms** TPOT (T147, nightly) | — |
+| C1 interactivity | as low as possible | **7.57 ms** TPOT ([T147](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33171360827), nightly) | — |
 
 **T180 (2026-08-31): C1 engine is healthy.** First `TEST=1` fixed-len probe:
 **10/10 requests, TPOT 7.41 ms, ITL 29.59 ms, zero faults** on b23_07. The
