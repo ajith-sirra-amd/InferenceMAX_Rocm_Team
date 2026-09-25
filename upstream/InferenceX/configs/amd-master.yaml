@@ -2034,20 +2034,16 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   framework: vllm
   multinode: false
   scenarios:
-    # Fast-loop A/B harness (2026-09-25): fixed-length client instead of the
-    # agentic replay, ~20 min/cell vs ~1h12m, so kernel/scheduler-lever A/Bs
-    # don't burn a full agentic hour each. isl/osl approximate the real C72
-    # agentic distribution (EXPERIMENT-QUEUE.md: ISL median 90,268 / mean
-    # 137,861, OSL mean 823) -- median rather than mean ISL, since the mean is
-    # pulled up by a long right tail and a fixed-length cell needs one number.
-    # HIGH_CONC_MTP=0 matches the no-MTP arm, the documented C72 throughput
-    # winner (12,484 tok/s/GPU) -- this is the fast-loop baseline/comparison
-    # anchor, not a final result.
-    fixed-seq-len:
-    - isl: 90112
-      osl: 832
-      search-space:
-      - { tp: 8, ep: 1, dcp-size: 8, conc-list: [72], spec-decoding: mtp }
+    # 2026-09-25: fixed-seq-len scenario-type tried and reverted -- T-run
+    # 36100970458 failed: SCENARIO_SUBDIR routes it to
+    # benchmarks/single_node/fixed_seq_len/kimik3_fp4_mi355x_mtp.sh, which does
+    # not exist (only benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+    # is maintained for this model). Fixing this scenario type is out of scope
+    # (would need benchmark_lib.sh / workflow changes, not just this recipe).
+    # Going agentic-coding-only per owner instruction; the launcher's own
+    # FIXED_LEN_HARNESS=1 path exists but is unreachable from CI without that
+    # same out-of-scope plumbing (FIXED_LEN_HARNESS isn't in the docker run
+    # -e forward list either).
     agentic-coding:
     # 0.50 -> 0.65 buys CPU-offload headroom for the higher concurrencies below.
     # 0.80 was tried previously and OOM'd the host; 0.65 was the known-safe ceiling.
@@ -2253,17 +2249,12 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
       # - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [12], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48, 72], spec-decoding: mtp }
       # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48], spec-decoding: mtp }
-      # 2026-09-25: commented out (not dropped) for the duration of the
-      # fixed-seq-len fast-loop campaign below -- dispatching this config-key
-      # with any row active here runs the full ~1h12m agentic replay in the
-      # same matrix as the ~20min fixed-seq-len cell, which the fast loop is
-      # specifically meant to avoid. Restore for Phase 2's agentic confirmation.
-      # - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48], spec-decoding: mtp }
-      search-space: []
-      # C72 held back deliberately -- adding it here too would make
-      # any --conc 72 dispatch run BOTH this hour-long agentic replay AND the
-      # fixed-seq-len scenario above in the same matrix. Add conc:72 here only
-      # for Phase 2's final agentic confirmation of a fast-loop winner.
+      # 2026-09-25: fixed-seq-len scenario reverted (broken, see note above the
+      # scenarios: block) -- back to agentic-coding-only. C72 replaces the
+      # C48 row as the active baseline for the throughput campaign;
+      # HIGH_CONC_MTP now defaults to 0 in the launcher, so this is the no-MTP
+      # arm, matching the documented C72 throughput winner (12,484 tok/s/GPU).
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp-andy:
   image: aigmkt/k3-unified-v2-from-cb810:validation-20260815-opusfix1

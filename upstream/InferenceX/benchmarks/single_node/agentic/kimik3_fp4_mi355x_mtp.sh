@@ -140,7 +140,11 @@ case "$CONC" in
         # MTP on the DCP arm, gated because it needs vllm#57085. k=3 matches the
         # band default and NV's d0, which runs mtp at dcp 8 on one aggregated
         # 8-GPU worker -- the config this arm has never been able to reach.
-        if [ "${HIGH_CONC_MTP:-1}" = "1" ]; then
+        # 2026-09-25: defaulted to 0 (no-MTP) for the C72 throughput campaign --
+        # no-MTP is the documented winner at C72 (12,484 tok/s/GPU vs MTP
+        # k=4's 10,549, Kimi-K3-Concurrency-Sweep.md), and e2e-tests.yml has no
+        # generic env passthrough, so this default is how the arm is selected.
+        if [ "${HIGH_CONC_MTP:-0}" = "1" ]; then
             SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}"
             case "$SPEC_NUM_TOKENS" in
                 1) SYNTHETIC_ACCEPT_LEN=1.85 ;;  2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
@@ -552,9 +556,13 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 elif [ "${FIXED_LEN_HARNESS:-0}" = "1" ]; then
     # Fixed-length client instead of the trace replay. The agentic-coding
     # scenario emits ISL=OSL=0, and ${VAR:-default} does not substitute for
-    # "0" -- only for unset/empty -- so guard on >0.
-    ISL="${ISL:-8192}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=8192
-    OSL="${OSL:-1024}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=1024
+    # "0" -- only for unset/empty -- so guard on >0. Defaults set to
+    # approximate the real C72 agentic distribution (EXPERIMENT-QUEUE.md: ISL
+    # median 90,268 / mean 137,861, OSL mean 823) rather than the model's
+    # generic 8192/1024, so a fast fixed-length A/B (FIXED_LEN_HARNESS=1)
+    # tracks the workload this campaign is actually chasing.
+    ISL="${ISL:-90112}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=90112
+    OSL="${OSL:-832}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=832
     RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
     case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
     run_benchmark_serving \
