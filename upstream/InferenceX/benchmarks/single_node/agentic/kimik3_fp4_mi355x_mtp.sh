@@ -250,7 +250,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
     build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    # run_agentic_replay_and_write_outputs "$RESULT_DIR"
     ISL="${ISL:-90112}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=90112
     OSL="${OSL:-832}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=832
     RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
