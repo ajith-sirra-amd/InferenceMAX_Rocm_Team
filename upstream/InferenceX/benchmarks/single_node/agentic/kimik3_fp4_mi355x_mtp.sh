@@ -301,22 +301,22 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
     build_replay_cmd "$RESULT_DIR"
-    # run_agentic_replay_and_write_outputs "$RESULT_DIR"
-    ISL="${ISL:-90112}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=90112
-    OSL="${OSL:-832}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=832
-    RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
-    case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
-    run_benchmark_serving \
-        --model "$MODEL" \
-        --port "$PORT" \
-        --backend vllm \
-        --input-len "$ISL" \
-        --output-len "$OSL" \
-        --random-range-ratio "$RANDOM_RANGE_RATIO" \
-        --num-prompts "${NUM_PROMPTS:-200}" \
-        --max-concurrency "$CONC" \
-        --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
-        --result-dir /outputs/ \
-        --trust-remote-code \
-        --use-chat-template 
+    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    # ISL="${ISL:-90112}"; [ "$ISL" -gt 0 ] 2>/dev/null || ISL=90112
+    # OSL="${OSL:-832}"; [ "$OSL" -gt 0 ] 2>/dev/null || OSL=832
+    # RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO:-0.8}"
+    # case "$RANDOM_RANGE_RATIO" in ""|0|0.0) RANDOM_RANGE_RATIO=0.8 ;; esac
+    # run_benchmark_serving \
+    #     --model "$MODEL" \
+    #     --port "$PORT" \
+    #     --backend vllm \
+    #     --input-len "$ISL" \
+    #     --output-len "$OSL" \
+    #     --random-range-ratio "$RANDOM_RANGE_RATIO" \
+    #     --num-prompts "${NUM_PROMPTS:-200}" \
+    #     --max-concurrency "$CONC" \
+    #     --result-filename "${RESULT_FILENAME:-kimik3_fixedlen_conc${CONC}}" \
+    #     --result-dir /outputs/ \
+    #     --trust-remote-code \
+    #     --use-chat-template 
 fi
