@@ -336,23 +336,23 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # reads the KV shard once and amortises it over the whole verify block, instead
 # of the segmented Triton path that expands the block into one row per token.
 # K3 at TP8/DCP8 gathers to 96 heads, which cprr pads to 128.
-apply_pr56861() {
-    [ "${APPLY_PR56861:-1}" = "1" ] || { echo "[pr56861] disabled"; return 0; }
-    local diff_file
-    # absolute: the redirect below is evaluated after `cd "$site"`, so a relative
-    # path would resolve against site-packages instead of the workspace.
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr56861-dcp-cprr.diff"
-    [ -f "$diff_file" ] || { echo "[pr56861] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import vllm.envs as e; import sys; sys.exit(0 if hasattr(e,"VLLM_ROCM_AITER_MLA_DCP_VERIFY") else 1)' 2>/dev/null; then
-        echo "[pr56861] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile;py_compile.compile("'"$site"'/vllm/v1/attention/backends/mla/rocm_aiter_mla.py",doraise=True)' || return 1
-    echo "[pr56861] applied, route=${VLLM_ROCM_AITER_MLA_DCP_VERIFY:-asm}"
-}
-apply_pr56861 || { echo "[pr56861] patch failed, refusing to run" >&2; exit 1; }
+# apply_pr56861() {
+#     [ "${APPLY_PR56861:-1}" = "1" ] || { echo "[pr56861] disabled"; return 0; }
+#     local diff_file
+#     # absolute: the redirect below is evaluated after `cd "$site"`, so a relative
+#     # path would resolve against site-packages instead of the workspace.
+#     diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr56861-dcp-cprr.diff"
+#     [ -f "$diff_file" ] || { echo "[pr56861] missing $diff_file" >&2; return 1; }
+#     local site
+#     site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+#     if python3 -c 'import vllm.envs as e; import sys; sys.exit(0 if hasattr(e,"VLLM_ROCM_AITER_MLA_DCP_VERIFY") else 1)' 2>/dev/null; then
+#         echo "[pr56861] already present, nothing to do"; return 0
+#     fi
+#     ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+#     python3 -c 'import py_compile;py_compile.compile("'"$site"'/vllm/v1/attention/backends/mla/rocm_aiter_mla.py",doraise=True)' || return 1
+#     echo "[pr56861] applied, route=${VLLM_ROCM_AITER_MLA_DCP_VERIFY:-asm}"
+# }
+# apply_pr56861 || { echo "[pr56861] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
 # vllm-project/vllm#54546 -- Triton MLA non-causal multi-token DCP
