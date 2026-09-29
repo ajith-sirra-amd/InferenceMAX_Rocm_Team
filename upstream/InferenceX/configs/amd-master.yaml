@@ -1875,7 +1875,7 @@ minimaxm3-fp4-mi355x-vllm-agentic-mtp:
       - { tp: 4, ep: 1, spec-decoding: mtp, kv-offloading: dram, kv-offload-backend: { name: vllm-native }, conc-list: [32] }
 
 kimik3-fp4-mi355x-vllm-agentic-mtp:
-  image: vllm/vllm-openai-rocm:nightly-af1c01499b289be555c475669ba50a88e96d846e
+  image: vllm/vllm-openai-rocm:nightly-29468dde8b515031dc6d4d9d06bf0a2fa0442098
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds
