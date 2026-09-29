@@ -73,7 +73,7 @@ set -x
 docker run --rm --init --network host --shm-size=128g --name=$server_name \
 --ipc=host \
 --ulimit memlock=-1 --ulimit stack=67108864 --pull always \
---privileged --cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
+--cap-add=CAP_SYS_ADMIN --device=/dev/kfd --device=/dev/dri --device=/dev/mem \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
