@@ -274,6 +274,16 @@ labels:
     - mi355x-amds_06
     - mi355x-amds_07
     - mi355x-amds_08
+  cluster:mi355x-amds-2:
+    - mi355x-amds_00
+    - mi355x-amds_01
+    - mi355x-amds_02
+    - mi355x-amds_03
+    - mi355x-amds_04
+    - mi355x-amds_05
+    - mi355x-amds_06
+    - mi355x-amds_07
+    - mi355x-amds_08
 hardware:
   cluster:h100-dgxc:
     available-cpu-dram-mib: 2_063_837
