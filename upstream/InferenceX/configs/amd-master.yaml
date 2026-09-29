@@ -1892,7 +1892,7 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
   image: vllm/vllm-openai-rocm:nightly-rocm100-36768d1bfd39094681cdbc8cb37d4b31c0729c89
   model: moonshotai/Kimi-K3
   model-prefix: kimik3
-  runner: cluster:mi355x-amds-2
+  runner: cluster:mi355x-amds
   precision: fp4
   framework: vllm
   multinode: false
@@ -1900,6 +1900,6 @@ kimik3-fp4-mi355x-vllm-agentic-mtp:
     agentic-coding:
     - dram-utilization: 0.75
       search-space:
-      - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1, 4], spec-decoding: mtp }
-      - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [10], spec-decoding: mtp }
-      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [48, 72], spec-decoding: mtp }
+      # - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: none, conc-list: [1, 4], spec-decoding: mtp }
+      # - { tp: 8, ep: 1, dcp-size: 1, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [10], spec-decoding: mtp }
+      - { tp: 8, ep: 1, dcp-size: 8, kv-offloading: dram, kv-offload-backend: { name: vllm-simple }, conc-list: [72], spec-decoding: mtp }
