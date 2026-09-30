@@ -276,10 +276,10 @@ VLLM_CMD=(
 #     echo "[rocprof] enabled: start_delay=${ROCPROF_START_DELAY}s duration=${ROCPROF_DURATION}s output=$ROCPROF_DIR"
 # fi
 
-printf '%q ' "${LAUNCH_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
+printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 
-"${LAUNCH_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 

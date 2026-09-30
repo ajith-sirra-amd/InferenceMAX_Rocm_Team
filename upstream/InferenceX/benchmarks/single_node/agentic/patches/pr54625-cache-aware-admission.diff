@@ -126,17 +126,17 @@ index 18bbc102830b..6d88da094684 100644
  
          self.has_mamba_layers = kv_cache_config.has_mamba_layers
          self.needs_kv_cache_zeroing = kv_cache_config.needs_kv_cache_zeroing
-@@ -854,6 +865,9 @@ def schedule(self, throttle_prefills: bool = False) -> SchedulerOutput:
+@@ -871,6 +871,9 @@ class Scheduler(SchedulerInterface):
  
          # Next, schedule the WAITING requests.
          if not preempted_reqs and self._pause_state == PauseState.UNPAUSED:
 +            if self.cache_aware_window and not defer_prefills:
 +                self._reorder_waiting_by_cached_prefix()
 +
-             step_skipped_waiting = create_request_queue(self.policy)
+             step_skipped_waiting: deque[Request] = deque()
+             step_skipped_kv_holding: deque[Request] = deque()
  
-             while (self.waiting or self.skipped_waiting) and token_budget > 0:
-@@ -2317,6 +2331,46 @@ def _enqueue_waiting_request(self, request: Request) -> None:
+@@ -2403,6 +2406,46 @@ class Scheduler(SchedulerInterface):
          else:
              self.waiting.add_request(request)
  
@@ -180,6 +180,6 @@ index 18bbc102830b..6d88da094684 100644
 +        for request in reversed(reordered):
 +            self.waiting.prepend_request(request)
 +
-     def _select_waiting_queue_for_scheduling(self) -> RequestQueue | None:
-         if self.policy == SchedulingPolicy.FCFS:
-             return self.skipped_waiting or self.waiting or None
+     def _handle_stopped_request(self, request: Request) -> bool:
+         """Return True if finished (can be False for resumable requests)."""
+         if not request.resumable:
