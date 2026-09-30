@@ -84,14 +84,17 @@ export ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-3300}"
 export ROCPROF_DURATION="${ROCPROF_DURATION:-240}"
 
 # Non-default #54627/#54625 values so both patches actually engage instead of
-# sitting at their no-op defaults (interval=1, window=0). interval=4 spaces
-# prefill chunks out (Kimi-K3-Where-The-Time-Goes.md: prefill sharing a step
-# balloons it 46ms->440-754ms); window=32 covers a meaningful slice of the
-# mns=98 seat count; threshold=0.4 so it engages at this recipe's observed
-# ~45-53% KV usage instead of sitting above it at the 0.5 default.
-export PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-4}"
-export CACHE_AWARE_ADMISSION_WINDOW="${CACHE_AWARE_ADMISSION_WINDOW:-32}"
-export CACHE_AWARE_ADMISSION_THRESHOLD="${CACHE_AWARE_ADMISSION_THRESHOLD:-0.4}"
+# sitting at their no-op defaults (interval=1, window=0). Per the PRs' own
+# authors: interval=33 is what their steady-state agentic-coding workload
+# favored (throughput flat, interactivity improves monotonically with
+# interval; bursty workloads saturate near 2, but that's not this recipe).
+# window=64/threshold=0.5 is their production combo at concurrency 52 (close
+# to our C70); their own 16/64/128 sweep showed window size barely matters
+# (~1% spread), so 64 is just the tested value, not load-bearing. Combined,
+# their measurements: +5.1% throughput, +20.8% p90 interactivity.
+export PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-33}"
+export CACHE_AWARE_ADMISSION_WINDOW="${CACHE_AWARE_ADMISSION_WINDOW:-64}"
+export CACHE_AWARE_ADMISSION_THRESHOLD="${CACHE_AWARE_ADMISSION_THRESHOLD:-0.5}"
 
 # aiperf defaults to http://localhost:$PORT (benchmark_lib:3264) while every
 # other client in that file uses an IPv4 literal. localhost resolves to ::1
