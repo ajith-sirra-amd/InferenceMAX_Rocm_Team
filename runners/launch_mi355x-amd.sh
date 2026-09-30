@@ -80,8 +80,8 @@ export PCP_SIZE="${PCP_SIZE:-1}"
 
 # Opt-in rocprofv3 kernel-trace window, off by default. See kimik3_fp4_mi355x_mtp.sh.
 export ROCPROF_ENABLE="${ROCPROF_ENABLE:-1}"
-export ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-420}"
-export ROCPROF_DURATION="${ROCPROF_DURATION:-90}"
+export ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-3300}"
+export ROCPROF_DURATION="${ROCPROF_DURATION:-240}"
 
 # aiperf defaults to http://localhost:$PORT (benchmark_lib:3264) while every
 # other client in that file uses an IPv4 literal. localhost resolves to ::1
