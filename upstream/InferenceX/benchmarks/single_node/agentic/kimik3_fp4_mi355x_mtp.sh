@@ -130,6 +130,36 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#54627 -- prefill_schedule_interval outside data parallelism
+# -----------------------------------------------------------------------------
+# Open, unmerged. `prefill_schedule_interval` (SchedulerConfig, default 1 = off)
+# already exists and is CLI-exposed (--prefill-schedule-interval), but today it
+# is a no-op outside data-parallel deployments -- our config is DCP=8, DP=1, so
+# the flag alone does nothing. This PR makes the scheduler-side interval logic
+# work under DCP too. Targets Kimi-K3-Where-The-Time-Goes.md's finding that 57%
+# of C72 steps carry prefill and balloon 46ms -> 440-754ms per step.
+# 2/4 hunks (test files) dropped -- not shipped in the installed package.
+# Dry-run + real apply + py_compile verified clean against
+# nightly-rocm100-e9757321 on 2026-09-25 (0 rejects, stacks cleanly under #54625).
+apply_pr54627() {
+    [ "${APPLY_PR54627:-1}" = "1" ] || { echo "[pr54627] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54627-prefill-interval-nondp.diff"
+    [ -f "$diff_file" ] || { echo "[pr54627] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.v1.core.sched.scheduler as s
+import sys; sys.exit(0 if "last_prefill_step" in inspect.getsource(s) else 1)' 2>/dev/null; then
+        echo "[pr54627] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile;py_compile.compile("'"$site"'/vllm/v1/core/sched/scheduler.py",doraise=True);py_compile.compile("'"$site"'/vllm/config/scheduler.py",doraise=True)' || return 1
+    echo "[pr54627] applied"
+}
+apply_pr54627 || { echo "[pr54627] patch failed, refusing to run" >&2; exit 1; }
+PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-1}"
+
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
@@ -180,6 +210,7 @@ VLLM_CMD=(
     --enable-prompt-tokens-details
     --no-async-scheduling
     --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
+    --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${EP_ARGS[@]}"
