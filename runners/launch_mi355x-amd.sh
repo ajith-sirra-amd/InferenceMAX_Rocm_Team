@@ -79,9 +79,19 @@ export EVAL_ONLY="${EVAL_ONLY:-false}"
 export PCP_SIZE="${PCP_SIZE:-1}"
 
 # Opt-in rocprofv3 kernel-trace window, off by default. See kimik3_fp4_mi355x_mtp.sh.
-export ROCPROF_ENABLE="${ROCPROF_ENABLE:-1}"
+export ROCPROF_ENABLE="${ROCPROF_ENABLE:-0}"
 export ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-3300}"
 export ROCPROF_DURATION="${ROCPROF_DURATION:-240}"
+
+# Non-default #54627/#54625 values so both patches actually engage instead of
+# sitting at their no-op defaults (interval=1, window=0). interval=4 spaces
+# prefill chunks out (Kimi-K3-Where-The-Time-Goes.md: prefill sharing a step
+# balloons it 46ms->440-754ms); window=32 covers a meaningful slice of the
+# mns=98 seat count; threshold=0.4 so it engages at this recipe's observed
+# ~45-53% KV usage instead of sitting above it at the 0.5 default.
+export PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-4}"
+export CACHE_AWARE_ADMISSION_WINDOW="${CACHE_AWARE_ADMISSION_WINDOW:-32}"
+export CACHE_AWARE_ADMISSION_THRESHOLD="${CACHE_AWARE_ADMISSION_THRESHOLD:-0.4}"
 
 # aiperf defaults to http://localhost:$PORT (benchmark_lib:3264) while every
 # other client in that file uses an IPv4 literal. localhost resolves to ::1
@@ -209,6 +219,9 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e ROCPROF_ENABLE \
 -e ROCPROF_START_DELAY \
 -e ROCPROF_DURATION \
+-e PREFILL_SCHEDULE_INTERVAL \
+-e CACHE_AWARE_ADMISSION_WINDOW \
+-e CACHE_AWARE_ADMISSION_THRESHOLD \
 -e AIPERF_SERVER_URL \
 -e KV_OFFLOAD_BACKEND_METADATA \
 -e IMAGE \
