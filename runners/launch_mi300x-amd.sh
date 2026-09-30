@@ -73,7 +73,7 @@ set -x
 docker run --rm --init --network host --shm-size=128g --name=$server_name \
 --ipc=host \
 --ulimit memlock=-1 --ulimit stack=67108864 --pull always \
---device=/dev/kfd --device=/dev/dri --group-add video --group-add render \
+--device=/dev/kfd --device=/dev/dri --group-add "$(getent group video | cut -d: -f3)" --group-add "$(getent group render | cut -d: -f3)" \
 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
 -v $HF_HUB_CACHE_MOUNT:$HF_HUB_CACHE \
 -v $GITHUB_WORKSPACE:/workspace/ -w /workspace/ \
