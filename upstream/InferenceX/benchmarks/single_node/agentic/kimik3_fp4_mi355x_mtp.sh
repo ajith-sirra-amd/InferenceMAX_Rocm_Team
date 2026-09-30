@@ -188,10 +188,37 @@ VLLM_CMD=(
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
 
-printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
+# -----------------------------------------------------------------------------
+# Opt-in rocprofv3 wrap. Off by default -- set ROCPROF_ENABLE=1 to capture a
+# kernel-trace + stats window (hotspots, call counts, avg duration) mid-run.
+# rocprofv3 only wraps a process at launch (no attach-to-running-PID), so the
+# window is expressed as a collection-period relative to server start:
+# ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
+# then ROCPROF_DURATION seconds of actual collection.
+# -----------------------------------------------------------------------------
+ROCPROF_ENABLE="${ROCPROF_ENABLE:-0}"
+LAUNCH_CMD=("${VLLM_CMD[@]}")
+if [ "$ROCPROF_ENABLE" = "1" ]; then
+    ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-300}"
+    ROCPROF_DURATION="${ROCPROF_DURATION:-60}"
+    ROCPROF_DIR="$RESULT_DIR/rocprof"
+    mkdir -p "$ROCPROF_DIR"
+    LAUNCH_CMD=(
+        rocprofv3 --kernel-trace --stats
+        -d "$ROCPROF_DIR" -f csv
+        --summary-output-file "$RESULT_DIR/rocprof_summary.txt"
+        -P "${ROCPROF_START_DELAY}:${ROCPROF_DURATION}:1"
+        --collection-period-unit sec
+        --
+        "${VLLM_CMD[@]}"
+    )
+    echo "[rocprof] enabled: start_delay=${ROCPROF_START_DELAY}s duration=${ROCPROF_DURATION}s output=$ROCPROF_DIR"
+fi
+
+printf '%q ' "${LAUNCH_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 
-"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+"${LAUNCH_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 

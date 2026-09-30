@@ -78,6 +78,11 @@ export DCP_SIZE="${DCP_SIZE:-8}"
 export EVAL_ONLY="${EVAL_ONLY:-false}"
 export PCP_SIZE="${PCP_SIZE:-1}"
 
+# Opt-in rocprofv3 kernel-trace window, off by default. See kimik3_fp4_mi355x_mtp.sh.
+export ROCPROF_ENABLE="${ROCPROF_ENABLE:-0}"
+export ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-300}"
+export ROCPROF_DURATION="${ROCPROF_DURATION:-60}"
+
 # aiperf defaults to http://localhost:$PORT (benchmark_lib:3264) while every
 # other client in that file uses an IPv4 literal. localhost resolves to ::1
 # first here and vLLM binds --host 0.0.0.0, which is IPv4 only, so the agentic
@@ -201,6 +206,9 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e PCP_SIZE \
 -e DCP_SIZE \
 -e EVAL_ONLY \
+-e ROCPROF_ENABLE \
+-e ROCPROF_START_DELAY \
+-e ROCPROF_DURATION \
 -e AIPERF_SERVER_URL \
 -e KV_OFFLOAD_BACKEND_METADATA \
 -e IMAGE \
