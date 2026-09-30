@@ -239,6 +239,7 @@ VLLM_CMD=(
     --enable-prompt-tokens-details
     --no-async-scheduling
     --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
+    --quantization-config '{"linear":"fp8_per_channel","ignore":["*kv_b_proj","*vision_tower*","*mm_projector*"]}'
     --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
     "${CACHE_AWARE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
