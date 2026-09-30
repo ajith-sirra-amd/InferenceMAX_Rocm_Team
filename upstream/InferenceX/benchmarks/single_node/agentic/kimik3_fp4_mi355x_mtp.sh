@@ -161,7 +161,7 @@ apply_pr54627 || { echo "[pr54627] patch failed, refusing to run" >&2; exit 1; }
 PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-1}"
 
 apply_pr54625() {
-    [ "${APPLY_PR54625:-0}" = "1" ] || { echo "[pr54625] disabled"; return 0; }
+    [ "${APPLY_PR54625:-1}" = "1" ] || { echo "[pr54625] disabled"; return 0; }
     local diff_file
     diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54625-cache-aware-admission.diff"
     [ -f "$diff_file" ] || { echo "[pr54625] missing $diff_file" >&2; return 1; }
@@ -182,7 +182,7 @@ apply_pr54625 || { echo "[pr54625] patch failed, refusing to run" >&2; exit 1; }
 # pre-patch. Keep them out of VLLM_CMD entirely when the patch is off, or
 # "unrecognized arguments" kills every non-#54625 dispatch.
 CACHE_AWARE_ARGS=()
-if [ "${APPLY_PR54625:-0}" = "1" ]; then
+if [ "${APPLY_PR54625:-1}" = "1" ]; then
     CACHE_AWARE_ARGS=(
         --cache-aware-admission-window "${CACHE_AWARE_ADMISSION_WINDOW:-0}"
         --cache-aware-admission-threshold "${CACHE_AWARE_ADMISSION_THRESHOLD:-0.5}"
