@@ -238,6 +238,14 @@ apply_pr59070 || { echo "[pr59070] patch failed, refusing to run" >&2; exit 1; }
 # with fuzz 1-2, both verified landing in the right place -- see commit).
 # Dry-run + real apply + py_compile + import verified clean against
 # nightly-rocm100-18f8f960 on 2026-10-05.
+#
+# NOT enabling MIN_TOKENS by default: its should_shard() path (sp.py) hits a
+# real conflict with #59591's sharded up_proj -- confirmed via a live run,
+# RuntimeError in latent_moe_runner._sp_tail's out.addmm_, input [*, 7168]
+# (full width) vs output [*, 896] (= 7168/8, the #59591 shard). Both PRs are
+# independent and unmerged; neither author accounted for the other. Left
+# patched (inert) via vLLM's own default (0) until that's actually reconciled
+# -- do not set this >0 while #59591 is also staged.
 # -----------------------------------------------------------------------------
 apply_pr59693() {
     [ "${APPLY_PR59693:-1}" = "1" ] || { echo "[pr59693] disabled"; return 0; }
@@ -257,7 +265,6 @@ for f in ["vllm/envs.py","vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/mo
     echo "[pr59693] applied"
 }
 apply_pr59693 || { echo "[pr59693] patch failed, refusing to run" >&2; exit 1; }
-export VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS="${VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS:-1024}"
 
 # # -----------------------------------------------------------------------------
 # # vllm-project/vllm#54627 -- prefill_schedule_interval outside data parallelism
