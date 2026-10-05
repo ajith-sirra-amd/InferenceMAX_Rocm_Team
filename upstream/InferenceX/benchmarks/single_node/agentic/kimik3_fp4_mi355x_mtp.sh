@@ -45,7 +45,7 @@ export HSA_NO_SCRATCH_RECLAIM=1
 export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
 export VLLM_ENGINE_READY_TIMEOUT_S=7200
-export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200
+export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600
 export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 export PYTHONNOUSERSITE=1
 export PYTHONHASHSEED=42
@@ -120,17 +120,11 @@ case "$CONC" in
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
         OFFLOAD_POLICY=harness
-        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"
+        if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
+        else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
         elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
-        # Reference recipe (SemiAnalysisAI/InferenceX, kimik3/vllm/mi355x-fp4-mtp)
-        # runs the DCP8 throughput band under FULL_AND_PIECEWISE, with the
-        # dense seat ladder extended by large synthetic sizes matching this
-        # branch's chunk size -- piecewise graphs need to cover the
-        # prefill-chunk token-count dimension too, not just decode seq-count.
-        CUDAGRAPH_MODE_DEFAULT=FULL_AND_PIECEWISE
-        EXTRA_CAPTURE_SIZES=",256,512,1024,2048,4096,8192"
         ;;
 esac
 export DCP_SIZE
@@ -226,16 +220,11 @@ apply_pr59591 || { echo "[pr59591] patch failed, refusing to run" >&2; exit 1; }
 # fi
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
-CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-${CUDAGRAPH_MODE_DEFAULT:-FULL_DECODE_ONLY}}"
+CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
-CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$LADDER")${EXTRA_CAPTURE_SIZES:-}"
-# max_cudagraph_capture_size must equal the max of cudagraph_capture_sizes
-# (vLLM validates this), which is no longer always $LADDER once
-# EXTRA_CAPTURE_SIZES appends larger synthetic sizes -- derive it from the
-# list itself instead of hardcoding a second value that can drift out of sync.
-MAX_CUDAGRAPH_CAPTURE_SIZE="${CUDAGRAPH_CAPTURE_SIZES##*,}"
-COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
+CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 1 "$LADDER")
+COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
 if [ "$DCP_SIZE" -gt 1 ]; then
