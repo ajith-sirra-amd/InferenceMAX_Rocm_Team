@@ -1,0 +1,398 @@
+diff --git a/vllm/_aiter_ops.py b/vllm/_aiter_ops.py
+index 906349af9ae1..2a40dc57c422 100644
+--- a/vllm/_aiter_ops.py
++++ b/vllm/_aiter_ops.py
+@@ -635,6 +635,36 @@ def _check_aiter_mla_fp8_support() -> bool:
+     return _AITER_MLA_SUPPORTS_FP8
+ 
+ 
++def _rocm_aiter_gather_kv_b_proj_impl(
++    kv_cache: torch.Tensor,
++    kv_scale: torch.Tensor,
++    kv_indptr: torch.Tensor,
++    kv_indices: torch.Tensor,
++    cu_seq_lens: torch.Tensor,
++    weight: torch.Tensor,
++    k: torch.Tensor,
++    v: torch.Tensor,
++) -> None:
++    from aiter.ops.triton.gather_kv_b_proj import gather_kv_b_proj
++
++    gather_kv_b_proj(
++        kv_cache, kv_scale, kv_indptr, kv_indices, cu_seq_lens, weight, None, k, v
++    )
++
++
++def _rocm_aiter_gather_kv_b_proj_fake(
++    kv_cache: torch.Tensor,
++    kv_scale: torch.Tensor,
++    kv_indptr: torch.Tensor,
++    kv_indices: torch.Tensor,
++    cu_seq_lens: torch.Tensor,
++    weight: torch.Tensor,
++    k: torch.Tensor,
++    v: torch.Tensor,
++) -> None:
++    pass
++
++
+ def _rocm_aiter_mla_decode_fwd_impl(
+     q: torch.Tensor,
+     kv_buffer: torch.Tensor,
+@@ -2602,6 +2632,13 @@ def register_ops_once() -> None:
+                 dispatch_key=current_platform.dispatch_key,
+             )
+ 
++            direct_register_custom_op(
++                op_name="rocm_aiter_gather_kv_b_proj",
++                op_func=_rocm_aiter_gather_kv_b_proj_impl,
++                mutates_args=["k", "v"],
++                fake_impl=_rocm_aiter_gather_kv_b_proj_fake,
++                dispatch_key=current_platform.dispatch_key,
++            )
+             direct_register_custom_op(
+                 op_name="rocm_aiter_mla_decode_fwd",
+                 op_func=_rocm_aiter_mla_decode_fwd_impl,
+@@ -3210,6 +3247,21 @@ def triton_sparse_mla_fwd(
+             extra_indices=extra_kv_indices,
+         )
+ 
++    @staticmethod
++    def gather_kv_b_proj(
++        kv_cache: torch.Tensor,
++        kv_scale: torch.Tensor,
++        kv_indptr: torch.Tensor,
++        kv_indices: torch.Tensor,
++        cu_seq_lens: torch.Tensor,
++        weight: torch.Tensor,
++        k: torch.Tensor,
++        v: torch.Tensor,
++    ) -> None:
++        torch.ops.vllm.rocm_aiter_gather_kv_b_proj(
++            kv_cache, kv_scale, kv_indptr, kv_indices, cu_seq_lens, weight, k, v
++        )
++
+     @staticmethod
+     def mla_decode_fwd(
+         q: torch.Tensor,
+diff --git a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+index f48dedb1d62c..0ce0fd120053 100644
+--- a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
++++ b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+@@ -5,12 +5,12 @@
+ from dataclasses import dataclass
+ from enum import Enum
+ from pathlib import Path
+-from typing import TYPE_CHECKING, ClassVar, Final
++from typing import TYPE_CHECKING, ClassVar, Final, cast
+ 
+ import torch
+ 
+ from vllm import envs
+-from vllm._aiter_ops import rocm_aiter_ops
++from vllm._aiter_ops import is_aiter_found_and_supported, rocm_aiter_ops
+ from vllm.config import VllmConfig
+ from vllm.config.cache import CacheDType
+ from vllm.distributed import get_dcp_group
+@@ -22,6 +22,8 @@
+     MLACommonMetadata,
+     MLACommonMetadataBuilder,
+     QueryLenSupport,
++    accumulate_mla_context_chunk,
++    init_mla_context_partial,
+ )
+ from vllm.triton_utils import tl, triton
+ from vllm.utils.gpu_sync_debug import gpu_sync_allowed
+@@ -38,6 +40,11 @@
+ from vllm.v1.attention.ops.rocm_aiter_mla_merge import (
+     merge_mla_segments_triton,
+ )
++from vllm.v1.attention.ops.rocm_aiter_mla_prefill import (
++    context_row_indices,
++    expand_context,
++    gather_compressed_context,
++)
+ from vllm.v1.kv_cache_interface import AttentionSpec, is_quantized_kv_cache
+ 
+ if TYPE_CHECKING:
+@@ -46,6 +53,26 @@
+ logger = init_logger(__name__)
+ 
+ 
++def _supports_fused_dcp_prefill_config(
++    kv_cache_dtype: str | None,
++    query_dtype: torch.dtype,
++    kv_lora_rank: int,
++    qk_nope_head_dim: int,
++    qk_rope_head_dim: int,
++    v_head_dim: int,
++) -> bool:
++    """Whether the configuration supports fused DCP context expansion."""
++    return (
++        kv_cache_dtype in ("fp8", "fp8_e4m3")
++        and query_dtype == torch.bfloat16
++        and kv_lora_rank == 512
++        and qk_nope_head_dim == 128
++        and qk_rope_head_dim == 64
++        and v_head_dim == 128
++        and is_aiter_found_and_supported()
++    )
++
++
+ def _segmented_mla_page_size(block_size: int) -> int:
+     """Largest supported power-of-two subpage dividing a physical KV block.
+ 
+@@ -507,6 +534,7 @@ class AiterMLADecodeMetadata(MLACommonDecodeMetadata):
+ 
+ @dataclass
+ class AiterMLAMetadata(MLACommonMetadata[AiterMLADecodeMetadata]):
++    dcp_context_row_indices: list[torch.Tensor] | None = None
+     work_meta_data: torch.Tensor | None = None
+     work_indptr: torch.Tensor | None = None
+     work_info_set: torch.Tensor | None = None
+@@ -644,6 +672,19 @@ def __init__(
+                 device
+             ).multi_processor_count
+ 
++        # Use the group's original format: decode normalizes E5M2 to "fp8".
++        kv_cache_dtype = getattr(kv_cache_spec, "cache_dtype_str", None)
++        if kv_cache_dtype is None:
++            kv_cache_dtype = vllm_config.cache_config.cache_dtype
++        self._supports_fused_dcp_prefill = _supports_fused_dcp_prefill_config(
++            kv_cache_dtype,
++            self.q_data_type,
++            self.mla_dims.kv_lora_rank,
++            self.mla_dims.qk_nope_head_dim,
++            self.mla_dims.qk_rope_head_dim,
++            self.mla_dims.v_head_dim,
++        )
++
+         self.compilation_config = vllm_config.compilation_config
+         self.decode_attn_out_dtype = vllm_config.model_config.dtype
+ 
+@@ -1512,6 +1553,17 @@ def build(
+         attn_metadata = super().build(
+             common_prefix_len, common_attn_metadata, fast_build
+         )
++        prefill = attn_metadata.prefill
++        if (
++            prefill is not None
++            and prefill.chunked_context is not None
++            and self.dcp_world_size > 1
++            and self._supports_fused_dcp_prefill
++        ):
++            attn_metadata.dcp_context_row_indices = [
++                context_row_indices(chunk, prefill.block_table.device)
++                for chunk in prefill.chunked_context.chunks
++            ]
+         if (
+             attn_metadata.decode is not None
+             and attn_metadata.decode.has_persistent_metadata
+@@ -1897,6 +1949,96 @@ def __init__(
+             self._mla_prefill_ps_asm_fwd = mla_prefill_ps_asm_fwd
+             self._mla_reduce_v1 = mla_reduce_v1
+ 
++    def _context_parallel_compute_prefill_context(
++        self,
++        q: torch.Tensor,
++        kv_c_and_k_pe_cache: torch.Tensor,
++        attn_metadata: MLACommonMetadata,
++        k_scale: torch.Tensor,
++        dcp_world_size: int,
++    ):
++        attn_metadata = cast(AiterMLAMetadata, attn_metadata)
++        assert attn_metadata.prefill is not None
++        prefill = attn_metadata.prefill
++        weight = getattr(self.kv_b_proj, "weight", None)
++        eligible = (
++            _supports_fused_dcp_prefill_config(
++                self.kv_cache_dtype,
++                prefill.q_data_type,
++                self.kv_lora_rank,
++                self.qk_nope_head_dim,
++                self.qk_rope_head_dim,
++                self.v_head_dim,
++            )
++            and q.dtype == torch.bfloat16
++            and weight is not None
++            and weight.dtype == torch.bfloat16
++            and weight.shape == (self.num_heads * 256, 512)
++            and weight.is_contiguous()
++            and getattr(self.kv_b_proj, "bias", None) is None
++            and getattr(self.kv_b_proj, "weight_scale", None) is None
++            and kv_c_and_k_pe_cache.is_contiguous()
++            and attn_metadata.dcp_context_row_indices is not None
++        )
++        if not eligible:
++            return super()._context_parallel_compute_prefill_context(
++                q,
++                kv_c_and_k_pe_cache,
++                attn_metadata,
++                k_scale,
++                dcp_world_size,
++            )
++        from vllm.platforms import current_platform
++
++        assert weight is not None
++        assert attn_metadata.dcp_context_row_indices is not None
++        chunked = prefill.chunked_context
++        assert chunked is not None and chunked.dcp_manager is not None
++        assert prefill.prefill_backend is not None
++        assert len(chunked.chunks) == len(attn_metadata.dcp_context_row_indices)
++        output = output_lse = None
++        for chunk, row_indices in zip(
++            chunked.chunks, attn_metadata.dcp_context_row_indices
++        ):
++            gathered = gather_compressed_context(
++                kv_c_and_k_pe_cache,
++                chunked.workspace,
++                prefill.block_table[chunk.request_slice],
++                chunk,
++                chunked.dcp_manager.kv_gather,
++                current_platform.fp8_dtype(),
++            )
++            k, v = expand_context(
++                gathered,
++                k_scale,
++                row_indices,
++                chunk.cu_seq_lens,
++                weight,
++                self.num_heads,
++                self.qk_nope_head_dim,
++                self.qk_rope_head_dim,
++                self.v_head_dim,
++            )
++            attn_output, attn_lse = prefill.prefill_backend.run_prefill_context_chunk(
++                chunk=chunk,
++                q=q[chunk.token_slice],
++                k=k,
++                v=v,
++            )
++            if output is None:
++                if len(chunked.chunks) == 1 and not chunked.empty_token_slices:
++                    return attn_output, attn_lse
++                output, output_lse = init_mla_context_partial(
++                    chunked,
++                    attn_output,
++                    attn_lse,
++                    num_tokens=q.shape[0],
++                )
++            accumulate_mla_context_chunk(
++                chunk, attn_output, attn_lse, output, output_lse
++            )
++        return output, output_lse
++
+     def _flash_attn_varlen_diff_headdims(
+         self, q, k, v, return_softmax_lse=False, softmax_scale=None, **kwargs
+     ):
+diff --git a/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py b/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py
+new file mode 100644
+index 000000000000..c6d839f72453
+--- /dev/null
++++ b/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py
+@@ -0,0 +1,105 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""Compressed DCP context preparation for ROCm MLA."""
++
++from collections.abc import Callable
++
++import torch
++
++from vllm import _custom_ops as ops
++from vllm._aiter_ops import rocm_aiter_ops
++from vllm.model_executor.layers.attention.mla_attention import MLACommonPrefillMetadata
++
++
++def context_row_indices(
++    chunk: MLACommonPrefillMetadata.ContextChunk, device: torch.device
++) -> torch.Tensor:
++    """Map compact request-major rows to the padded rank-major AllGather."""
++    assert chunk.padded_local_seq_lens is not None
++    assert chunk.local_context_lens_allranks is not None
++    assert chunk.local_starts is not None
++    segments = []
++    offset = 0
++    for padded, lengths, start in zip(
++        chunk.padded_local_seq_lens,
++        chunk.local_context_lens_allranks,
++        chunk.local_starts,
++    ):
++        for rank, length in enumerate(lengths):
++            count = min(max(0, length - start), padded)
++            if count:
++                first = rank * chunk.num_local_context_tokens + offset
++                segments.append(torch.arange(first, first + count, dtype=torch.int32))
++        offset += padded
++    rows = torch.cat(segments) if segments else torch.empty(0, dtype=torch.int32)
++    assert rows.numel() == chunk.num_context_tokens
++    return rows.to(device=device, non_blocking=True)
++
++
++def gather_compressed_context(
++    cache: torch.Tensor,
++    workspace: torch.Tensor,
++    block_table: torch.Tensor,
++    chunk: MLACommonPrefillMetadata.ContextChunk,
++    gather: Callable[[torch.Tensor, torch.Tensor], object],
++    cache_dtype: torch.dtype,
++) -> torch.Tensor:
++    """Gather FP8 bytes, preserving the existing workspace row capacity."""
++    assert chunk.local_context_lens_allranks is not None
++    assert workspace.is_contiguous()
++    rows, width = workspace.shape
++    fp8_workspace = workspace.view(cache_dtype).view(-1, width)[:rows]
++    local_rows = chunk.num_local_context_tokens
++    world_size = len(chunk.local_context_lens_allranks[0])
++    offset = rows // (world_size + 1)
++    assert offset * (world_size + 1) == rows
++    assert local_rows <= offset
++    local = fp8_workspace[:local_rows]
++    gathered = fp8_workspace[offset : offset + world_size * local_rows]
++    assert chunk.padded_local_cu_seq_lens is not None
++    ops.cp_gather_cache(
++        cache.view(torch.uint8),
++        local.view(torch.uint8),
++        block_table,
++        chunk.padded_local_cu_seq_lens,
++        chunk.num_requests,
++        chunk.starts,
++    )
++    gather(gathered.view(torch.uint8), local.view(torch.uint8))
++    return gathered
++
++
++def expand_context(
++    gathered: torch.Tensor,
++    scale: torch.Tensor,
++    row_indices: torch.Tensor,
++    cu_seq_lens: torch.Tensor,
++    weight: torch.Tensor,
++    num_heads: int,
++    qk_nope_head_dim: int,
++    qk_rope_head_dim: int,
++    v_head_dim: int,
++) -> tuple[torch.Tensor, torch.Tensor]:
++    """Fuse row reorganization, dequantization, projection and K/V packing."""
++    k = torch.empty(
++        (row_indices.numel(), num_heads, qk_nope_head_dim + qk_rope_head_dim),
++        device=gathered.device,
++        dtype=weight.dtype,
++    )
++    v = torch.empty(
++        (row_indices.numel(), num_heads, v_head_dim),
++        device=gathered.device,
++        dtype=weight.dtype,
++    )
++    if row_indices.numel():
++        rocm_aiter_ops.gather_kv_b_proj(
++            gathered.unsqueeze(1),
++            scale,
++            cu_seq_lens,
++            row_indices,
++            cu_seq_lens,
++            weight,
++            k,
++            v,
++        )
++    return k, v

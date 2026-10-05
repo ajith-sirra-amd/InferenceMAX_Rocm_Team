@@ -1,0 +1,384 @@
+diff --git a/vllm/envs.py b/vllm/envs.py
+index f51100fe8b02..39c76ba3e1dd 100755
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -215,6 +215,7 @@
+     VLLM_KIMI_K3_SHARD_SP_SHARED_EXPERT: bool = False
+     VLLM_KIMI_K3_AUX_ATTN_RES_STREAM: bool = False
+     VLLM_KIMI_K3_GEMM_AR: bool = True
++    VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS: int = 0
+     VLLM_ENABLE_GEMM_RS: bool = False
+     VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER: bool = True
+     VLLM_USE_FLASHINFER_MOE_INT4: bool = False
+@@ -1663,6 +1664,16 @@ def _resolve_rust_cli_path() -> str | None:
+     # Use the SM100 BF16 GEMM-AR kernel for eligible Kimi-K3 row-parallel
+     # attention projections. All TP ranks must belong to one NVLink domain.
+     "VLLM_KIMI_K3_GEMM_AR": lambda: bool(int(os.getenv("VLLM_KIMI_K3_GEMM_AR", "1"))),
++    # Kimi-K3 on ROCm only (TP, no PP). Eager steps with at least this many
++    # tokens run the decoder with a token-sharded residual stream (padded to a
++    # multiple of the TP size): each attention / MLP output all-reduce
++    # becomes a reduce-scatter plus an all-gather before the next block, the
++    # attention-residual mixing runs on the local shard, and latent-MoE routing
++    # runs once per shard instead of on every rank. Speeds up long prefills;
++    # CUDA-graph decode is unaffected. 0 disables it; 1024 is a good value.
++    "VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS": lambda: int(
++        os.getenv("VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS", "0")
++    ),
+     # Fuse eligible sequence-parallel row-parallel projections with their TP
+     # reduce-scatter using the SM100 BF16/MXFP8 GEMM-RS kernel (Kimi-K3
+     # attention/shared-expert projections, DeepSeek-V4.1 ``wo_b``). All TP
+diff --git a/vllm/models/kimi_k3/amd/latent_moe_runner.py b/vllm/models/kimi_k3/amd/latent_moe_runner.py
+index dbebfd418203..74660b5d32be 100644
+--- a/vllm/models/kimi_k3/amd/latent_moe_runner.py
++++ b/vllm/models/kimi_k3/amd/latent_moe_runner.py
+@@ -8,9 +8,11 @@
+     get_tensor_model_parallel_rank,
+     get_tensor_model_parallel_world_size,
+     tensor_model_parallel_all_reduce,
++    tensor_model_parallel_reduce_scatter,
+ )
+ from vllm.logger import init_logger
+ from vllm.model_executor.layers.fused_moe.runner.moe_runner import MoERunner
++from vllm.models.kimi_k3.amd import sp
+ 
+ logger = init_logger(__name__)
+ 
+@@ -56,6 +58,18 @@ def __init__(
+             )
+         self._logged_sharded_tail = False
+ 
++    def sp_route_shard(
++        self, hidden_shard: torch.Tensor, router_logits: torch.Tensor
++    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
++        """Latent projection and top-k for this rank's token shard only."""
++        latent, _ = self.apply_routed_input_transform(hidden_shard)
++        topk_weights, topk_ids = self.router.select_experts(
++            hidden_states=latent,
++            router_logits=router_logits,
++            topk_indices_dtype=self._quant_method.topk_indices_dtype,
++        )
++        return latent, topk_weights, topk_ids
++
+     def _shard_up_proj_tail(
+         self,
+         fused_output: torch.Tensor,
+@@ -74,6 +88,9 @@ def _shard_up_proj_tail(
+         transform = self.routed_output_transform
+         assert transform is not None
+ 
++        if sp.ACTIVE:
++            return self._sp_tail(fused_output, shared_output, trunc_size)
++
+         latent = tensor_model_parallel_all_reduce(fused_output)
+         if transform.norm is not None:
+             latent = transform.norm(latent)
+@@ -91,6 +108,23 @@ def _shard_up_proj_tail(
+             shared_output, trunc_size, output_is_reduced=False
+         )
+ 
++    def _sp_tail(
++        self,
++        fused_output: torch.Tensor,
++        shared_output: torch.Tensor,
++        trunc_size: int | None,
++    ) -> torch.Tensor:
++        """Token-sharded tail: reduce-scatter the latent (half the bytes of an
++        all-reduce) and up-project this rank's tokens with the full weight."""
++        transform = self.routed_output_transform
++        assert transform is not None
++        latent = tensor_model_parallel_reduce_scatter(fused_output.contiguous(), dim=0)
++        if transform.norm is not None:
++            latent = transform.norm(latent)
++        out = tensor_model_parallel_reduce_scatter(shared_output, dim=0)
++        out.addmm_(latent.to(out.dtype), transform.up_proj.weight.t())
++        return out[..., :trunc_size] if trunc_size is not None else out
++
+     def forward(
+         self,
+         hidden_states: torch.Tensor,
+@@ -102,9 +136,13 @@ def forward(
+             return self._fused_forward(
+                 hidden_states, router_logits, input_ids, shared_experts_input
+             )
+-        return super().forward(
++        out = super().forward(
+             hidden_states, router_logits, input_ids, shared_experts_input
+         )
++        if sp.ACTIVE:
++            shard = out.size(0) // get_tensor_model_parallel_world_size()
++            out = out.narrow(0, get_tensor_model_parallel_rank() * shard, shard)
++        return out
+ 
+     def _fused_forward(
+         self,
+diff --git a/vllm/models/kimi_k3/amd/linear.py b/vllm/models/kimi_k3/amd/linear.py
+index 65dad661ab12..d4546fdddd6a 100644
+--- a/vllm/models/kimi_k3/amd/linear.py
++++ b/vllm/models/kimi_k3/amd/linear.py
+@@ -1,6 +1,7 @@
+ # SPDX-License-Identifier: Apache-2.0
+ # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+ 
++import contextlib
+ from collections.abc import Iterable
+ from typing import Any
+ 
+@@ -10,7 +11,10 @@
+ from vllm.config import CacheConfig, VllmConfig
+ from vllm.distributed import (
+     get_pp_group,
++    get_tensor_model_parallel_rank,
+     get_tensor_model_parallel_world_size,
++    tensor_model_parallel_all_gather,
++    tensor_model_parallel_reduce_scatter,
+ )
+ from vllm.logger import init_logger
+ from vllm.model_executor.layers.activation import SiluAndMul, SituAndMul
+@@ -61,6 +65,8 @@
+     make_layers,
+     maybe_prefix,
+ )
++from vllm.models.common.ops.sequence_parallel import sp_shard
++from vllm.models.kimi_k3.amd import sp
+ from vllm.models.kimi_k3.amd.kda import KimiK3DeltaAttention
+ from vllm.models.kimi_k3.amd.latent_moe_runner import ROCmLatentMoERunner
+ from vllm.models.kimi_k3.amd.mla import KimiK3MultiHeadLatentAttentionWrapper
+@@ -313,7 +319,7 @@ def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+         final_hidden_states = self.experts(
+             hidden_states=hidden_states, router_logits=router_logits
+         )
+-        return final_hidden_states.view(num_tokens, hidden_size)
++        return final_hidden_states.view(-1, hidden_size)
+ 
+ 
+ class KimiMLAAttention(nn.Module):
+@@ -586,6 +592,66 @@ def _run_self_attn(
+             positions=positions,
+         )
+ 
++    @contextlib.contextmanager
++    def _output_unreduced(self, module: nn.Module):
++        # Row-parallel outputs stay partial so the caller can reduce-scatter.
++        rows = [
++            m
++            for m in module.modules()
++            if isinstance(m, RowParallelLinear) and m.reduce_results
++        ]
++        for m in rows:
++            m.reduce_results = False
++        try:
++            yield
++        finally:
++            for m in rows:
++                m.reduce_results = True
++
++    def _run_self_attn_sp(
++        self, positions: torch.Tensor, hidden_shard: torch.Tensor
++    ) -> torch.Tensor:
++        hidden_states = sp.gather_tokens(hidden_shard, sp.NUM_TOKENS)
++        with self._output_unreduced(self.self_attn):
++            out = self._run_self_attn(positions, hidden_states)
++        return sp.scatter_tokens(out)
++
++    def _run_moe_sp_shard_routed(self, hidden_shard: torch.Tensor) -> torch.Tensor:
++        runner = self.mlp.experts
++        router_logits, _ = self.mlp.gate(hidden_shard)
++        latent, topk_weights, topk_ids = runner.sp_route_shard(
++            hidden_shard, router_logits
++        )
++        hidden_states = tensor_model_parallel_all_gather(hidden_shard, dim=0)
++        latent = tensor_model_parallel_all_gather(latent.contiguous(), dim=0)
++        topk = sp.all_gather_routing(topk_weights, topk_ids)
++        # Only read by select_experts, which returns the gathered top-k instead.
++        logits = router_logits.new_empty((latent.size(0), router_logits.size(1)))
++        with sp.pre_routed(runner.router, topk):
++            return runner(
++                hidden_states=latent,
++                router_logits=logits,
++                shared_experts_input=hidden_states,
++            )
++
++    def _run_mlp_sp(self, hidden_shard: torch.Tensor) -> torch.Tensor:
++        # MLPs are per-token, so they run on the TP-padded token set as is.
++        if isinstance(self.mlp, KimiMoE):
++            if self.mlp.use_latent_moe and self.mlp.experts._tail_shardable:
++                return self._run_moe_sp_shard_routed(hidden_shard)
++            hidden_states = tensor_model_parallel_all_gather(hidden_shard, dim=0)
++            out = self.mlp(hidden_states)
++            if self.mlp.use_latent_moe:
++                # ROCmLatentMoERunner already narrows to this rank's tokens.
++                return out
++            # The MoE output is fully reduced; keep this rank's tokens.
++            shard = hidden_shard.size(0)
++            return out.narrow(0, get_tensor_model_parallel_rank() * shard, shard)
++        hidden_states = tensor_model_parallel_all_gather(hidden_shard, dim=0)
++        with self._output_unreduced(self.mlp):
++            out = self.mlp(hidden_states)
++        return tensor_model_parallel_reduce_scatter(out, dim=0)
++
+     def forward(
+         self,
+         positions: torch.Tensor,
+@@ -640,7 +706,10 @@ def forward_attn_residual(
+         if self.is_block_write_layer:
+             prefix_sum = None
+ 
+-        hidden_states = self._run_self_attn(positions, hidden_states)
++        if sp.ACTIVE:
++            hidden_states = self._run_self_attn_sp(positions, hidden_states)
++        else:
++            hidden_states = self._run_self_attn(positions, hidden_states)
+ 
+         if prefix_sum is None:
+             prefix_sum = hidden_states
+@@ -661,7 +730,10 @@ def forward_attn_residual(
+             output_norm=self.post_attention_layernorm,
+         )
+ 
+-        hidden_states = self.mlp(hidden_states)
++        if sp.ACTIVE:
++            hidden_states = self._run_mlp_sp(hidden_states)
++        else:
++            hidden_states = self.mlp(hidden_states)
+         return prefix_sum, block_residual, hidden_states
+ 
+ 
+@@ -811,6 +883,14 @@ def forward(
+             return hidden_states
+ 
+         attn_res_block_num = cdiv(self.end_layer, self.config.attn_res_block_size)
++        num_tokens = hidden_states.size(0)
++        use_sp = sp.should_shard(
++            num_tokens,
++            has_residual=residual is not None,
++            has_aux_layers=bool(self.aux_hidden_state_layers),
++        )
++        if use_sp:
++            hidden_states = sp_shard(hidden_states)
+         block_residual = hidden_states.new_empty(
+             hidden_states.size(0), attn_res_block_num, hidden_states.size(1)
+         )
+@@ -819,6 +899,7 @@ def forward(
+         residual = block_residual
+         prefix_delta = None
+ 
++        sp.ACTIVE, sp.NUM_TOKENS = use_sp, num_tokens
+         for layer_idx, layer in enumerate(
+             self.layers[self.start_layer : self.end_layer],
+             start=self.start_layer,
+@@ -836,6 +917,7 @@ def forward(
+                     hidden_states + prefix_delta,
+                     residual,
+                 )
++        sp.ACTIVE = False
+ 
+         if not get_pp_group().is_last_rank:
+             hidden_states = hidden_states + prefix_delta
+@@ -851,6 +933,8 @@ def forward(
+             attn_res_block_num,
+             delta=prefix_delta,
+         )
++        if use_sp:
++            hidden_states = sp.gather_tokens(hidden_states, num_tokens)
+         # NOTE: the final norm is applied in compute_logits instead of here, so
+         # the MTP draft model receives the pre-norm hidden states.
+         if aux_hidden_states:
+diff --git a/vllm/models/kimi_k3/amd/sp.py b/vllm/models/kimi_k3/amd/sp.py
+new file mode 100644
+index 000000000000..7be60c689ce5
+--- /dev/null
++++ b/vllm/models/kimi_k3/amd/sp.py
+@@ -0,0 +1,93 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""Token-sharded residual stream for Kimi-K3 prefill on ROCm.
++
++With TP, every attention / MLP output all-reduce is replaced by a
++reduce-scatter over tokens, and the (per-token) attention-residual mixing runs
++on the local token shard only; the shard is all-gathered right before each
++attention / MLP input. Communication volume is unchanged (AR = RS + AG), while
++attn_res traffic and the block-residual bank shrink by the TP size.
++
++In latent-MoE layers the router gate, latent down-projection and top-k also run
++on the token shard (their outputs are all-gathered instead of being recomputed
++on every rank), and the latent is reduce-scattered instead of all-reduced.
++
++Enabled by ``VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS``; see :mod:`vllm.envs`.
++"""
++
++import contextlib
++from collections.abc import Iterator
++from typing import Any
++
++import torch
++import torch.nn.functional as F
++
++import vllm.envs as envs
++from vllm.distributed import (
++    get_pp_group,
++    get_tensor_model_parallel_world_size,
++    tensor_model_parallel_all_gather,
++    tensor_model_parallel_reduce_scatter,
++)
++
++# True while the decoder stack runs token-sharded.
++ACTIVE = False
++# Unpadded token count of the sharded step. The residual stream is padded to a
++# multiple of the TP size, so every step above the threshold shards; otherwise
++# the unsharded path's larger activations would exceed the profiled peak.
++NUM_TOKENS = 0
++
++
++def should_shard(num_tokens: int, has_residual: bool, has_aux_layers: bool) -> bool:
++    """Whether this forward runs with a token-sharded residual stream."""
++    min_tokens = envs.VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS
++    return (
++        min_tokens > 0
++        and get_tensor_model_parallel_world_size() > 1
++        and num_tokens >= min_tokens
++        and not has_residual
++        and not has_aux_layers
++        and get_pp_group().is_last_rank
++        and not torch.cuda.is_current_stream_capturing()
++    )
++
++
++def gather_tokens(shard: torch.Tensor, num_tokens: int) -> torch.Tensor:
++    """All-gather the token shards and drop the TP padding rows."""
++    return tensor_model_parallel_all_gather(shard, dim=0)[:num_tokens]
++
++
++def scatter_tokens(partial: torch.Tensor) -> torch.Tensor:
++    """Pad unpadded per-token partial sums back and reduce-scatter them."""
++    pad = (-partial.size(0)) % get_tensor_model_parallel_world_size()
++    if pad:
++        partial = F.pad(partial, (0, 0, 0, pad))
++    return tensor_model_parallel_reduce_scatter(partial, dim=0)
++
++
++def all_gather_routing(
++    topk_weights: torch.Tensor, topk_ids: torch.Tensor
++) -> tuple[torch.Tensor, torch.Tensor]:
++    """All-gather this rank's top-k over tokens in one collective."""
++    w_bytes = topk_weights.contiguous().view(torch.uint8)
++    packed = torch.cat([w_bytes, topk_ids.contiguous().view(torch.uint8)], dim=1)
++    packed = tensor_model_parallel_all_gather(packed, dim=0)
++    nw = w_bytes.size(1)
++    return (
++        packed[:, :nw].contiguous().view(topk_weights.dtype),
++        packed[:, nw:].contiguous().view(topk_ids.dtype),
++    )
++
++
++@contextlib.contextmanager
++def pre_routed(router: Any, topk: tuple[torch.Tensor, torch.Tensor]) -> Iterator[None]:
++    """Make ``router.select_experts`` return ``topk`` for the duration."""
++    shadowed = router.__dict__.get("select_experts")
++    router.select_experts = lambda *args, **kwargs: topk
++    try:
++        yield
++    finally:
++        if shadowed is None:
++            del router.select_experts
++        else:
++            router.select_experts = shadowed

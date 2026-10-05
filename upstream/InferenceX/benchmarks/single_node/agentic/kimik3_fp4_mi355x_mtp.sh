@@ -160,6 +160,105 @@ for f in ["vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/models/kimi_k3/am
 }
 apply_pr59591 || { echo "[pr59591] patch failed, refusing to run" >&2; exit 1; }
 
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#59069 -- Kimi-K3: fuse AttnRes output with per-token FP8
+# input quantization, eliminating a separate quantization kernel launch when
+# the consuming layer's quant scheme is kFp8DynamicTokenSym. Gracefully falls
+# back to the original path for non-matching consumers -- safe to apply even
+# if it never engages for this model's actual quant scheme. Open, unmerged.
+# No new CLI flag. PR's own measurements (N2112/K7168 MLA op): 3-5.2% faster
+# across 16-16384 token batches; 931 per-token quant kernel calls eliminated.
+# Test/benchmark file hunks dropped -- not shipped in the installed package.
+# Stacks cleanly on top of #59591 (both touch linear.py). Dry-run + real
+# apply + py_compile + import verified clean against nightly-rocm100-18f8f960
+# on 2026-10-05 (0 rejects, 0 fuzz).
+# -----------------------------------------------------------------------------
+apply_pr59069() {
+    [ "${APPLY_PR59069:-1}" = "1" ] || { echo "[pr59069] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59069-attnres-fp8-fusion.diff"
+    [ -f "$diff_file" ] || { echo "[pr59069] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.models.kimi_k3.amd.linear as m
+import sys; sys.exit(0 if "get_input_quant_key" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[pr59069] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/models/kimi_k3/amd/kda.py","vllm/models/kimi_k3/amd/linear.py","vllm/models/kimi_k3/amd/mla.py","vllm/models/kimi_k3/amd/ops/attn_res.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr59069] applied"
+}
+apply_pr59069 || { echo "[pr59069] patch failed, refusing to run" >&2; exit 1; }
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#59070 -- ROCm MLA: keep DCP prefill context in FP8 through
+# the AllGather instead of upcasting to BF16 first, with a fused kernel
+# combining reorganization, dequantization, projection, and packing. Directly
+# targets our DCP=8 MLA configuration. Open, unmerged. No new CLI flag.
+# PR's own measurements (8x MI355X): AllGather 2.1-1.8x faster across
+# 1,446-98,214 token contexts; cold 32K median TTFT 1701ms -> 1674ms.
+# Test/CI-config file hunks dropped -- not shipped in the installed package.
+# Dry-run + real apply + py_compile + import verified clean against
+# nightly-rocm100-18f8f960 on 2026-10-05 (0 rejects, some offset, 0 fuzz).
+# -----------------------------------------------------------------------------
+apply_pr59070() {
+    [ "${APPLY_PR59070:-1}" = "1" ] || { echo "[pr59070] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59070-dcp-fp8-allgather.diff"
+    [ -f "$diff_file" ] || { echo "[pr59070] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm._aiter_ops as m
+import sys; sys.exit(0 if "gather_kv_b_proj" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[pr59070] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/_aiter_ops.py","vllm/v1/attention/backends/mla/rocm_aiter_mla.py","vllm/v1/attention/ops/rocm_aiter_mla_prefill.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr59070] applied"
+}
+apply_pr59070 || { echo "[pr59070] patch failed, refusing to run" >&2; exit 1; }
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#59693 -- Kimi-K3: token-sharded residual stream for long
+# prefills on ROCm. Every TP rank repeats identical per-token work during
+# prefill; this shards the residual stream over tokens instead, same comm
+# volume, less redundant compute. Exclusively ROCm + Kimi-K3, off by default,
+# does not touch CUDA-graph decode. Open, unmerged.
+# Gate: VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS (env var, default 0 = off).
+# PR's own recommended value is 1024; our agentic ISLs (70k-360k+ typical)
+# are squarely in its target range. PR's own measurements (8x MI355X, TP8):
+# 10k tok +5.7% throughput/-14.1% TTFT, 50k tok +11.1%, 200k tok +9.3%,
+# geomean +6.1%. Accuracy validated on GSM8K + passkey retrieval to 190k.
+# Test file hunk dropped -- not shipped in the installed package. Stacks
+# cleanly on top of #59591/#59069 (all three touch linear.py; two hunks land
+# with fuzz 1-2, both verified landing in the right place -- see commit).
+# Dry-run + real apply + py_compile + import verified clean against
+# nightly-rocm100-18f8f960 on 2026-10-05.
+# -----------------------------------------------------------------------------
+apply_pr59693() {
+    [ "${APPLY_PR59693:-1}" = "1" ] || { echo "[pr59693] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59693-prefill-sp.diff"
+    [ -f "$diff_file" ] || { echo "[pr59693] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import vllm.envs as e; import sys
+sys.exit(0 if hasattr(e, "VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS") else 1)' 2>/dev/null; then
+        echo "[pr59693] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/envs.py","vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/models/kimi_k3/amd/linear.py","vllm/models/kimi_k3/amd/sp.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr59693] applied"
+}
+apply_pr59693 || { echo "[pr59693] patch failed, refusing to run" >&2; exit 1; }
+export VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS="${VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS:-1024}"
+
 # # -----------------------------------------------------------------------------
 # # vllm-project/vllm#54627 -- prefill_schedule_interval outside data parallelism
 # # -----------------------------------------------------------------------------
