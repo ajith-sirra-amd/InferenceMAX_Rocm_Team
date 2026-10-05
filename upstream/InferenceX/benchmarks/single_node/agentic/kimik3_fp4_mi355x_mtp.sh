@@ -230,7 +230,12 @@ CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-${CUDAGRAPH_MODE_DEFAULT:-FULL_DECODE_ONLY}}"
 
 LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES="$(seq -s, 1 "$LADDER")${EXTRA_CAPTURE_SIZES:-}"
-COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
+# max_cudagraph_capture_size must equal the max of cudagraph_capture_sizes
+# (vLLM validates this), which is no longer always $LADDER once
+# EXTRA_CAPTURE_SIZES appends larger synthetic sizes -- derive it from the
+# list itself instead of hardcoding a second value that can drift out of sync.
+MAX_CUDAGRAPH_CAPTURE_SIZE="${CUDAGRAPH_CAPTURE_SIZES##*,}"
+COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$MAX_CUDAGRAPH_CAPTURE_SIZE,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
 if [ "$DCP_SIZE" -gt 1 ]; then
