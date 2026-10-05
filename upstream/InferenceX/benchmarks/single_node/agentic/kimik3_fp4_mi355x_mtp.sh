@@ -130,6 +130,37 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#59591 -- Kimi-K3: store only the current rank's shard of
+# the latent-MoE up-proj weight, instead of a full ReplicatedLinear copy on
+# every rank. At TP=8 that is ~3.9GB/rank of unused weight across 92 MoE
+# layers, HBM that would otherwise go to KV cache. Open, unmerged. No new CLI
+# flag -- pure internal behavior change, always active once patched.
+# PR's own measurements (agentic, prefix caching): +0.9% to +31% request
+# throughput, up to +28.91% total token throughput at concurrency 70.
+# Test file hunk dropped -- not shipped in the installed package.
+# Dry-run + real apply + py_compile + import verified clean against
+# nightly-rocm100-18f8f960 on 2026-10-01 (0 rejects, 0 fuzz).
+# -----------------------------------------------------------------------------
+apply_pr59591() {
+    [ "${APPLY_PR59591:-1}" = "1" ] || { echo "[pr59591] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59591-tp-shard-moe-upproj.diff"
+    [ -f "$diff_file" ] || { echo "[pr59591] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.models.kimi_k3.amd.linear as m
+import sys; sys.exit(0 if "row_sharded" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[pr59591] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/models/kimi_k3/amd/linear.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr59591] applied"
+}
+apply_pr59591 || { echo "[pr59591] patch failed, refusing to run" >&2; exit 1; }
+
 # # -----------------------------------------------------------------------------
 # # vllm-project/vllm#54627 -- prefill_schedule_interval outside data parallelism
 # # -----------------------------------------------------------------------------
