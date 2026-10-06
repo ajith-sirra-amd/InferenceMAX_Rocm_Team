@@ -8,6 +8,21 @@ export EVAL_ONLY="${EVAL_ONLY:-false}"
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 check_env_vars DCP_SIZE EVAL_ONLY
 
+# =============================================================================
+# Patch activation flags -- one place to toggle every staged, unmerged
+# vllm-project/vllm PR for this recipe. 1 = apply, 0 = skip (vLLM runs
+# unpatched for that PR). See each PR's own comment block below for what it
+# does, requirements, and known conflicts with other staged PRs.
+# =============================================================================
+export APPLY_PR59591="${APPLY_PR59591:-0}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- CONFLICTS with #59693, leave 0 while that's 1
+export APPLY_PR59069="${APPLY_PR59069:-1}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant
+export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
+export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0
+export APPLY_PR59965="${APPLY_PR59965:-1}"  # ROCm DCP: default MLA DCP verify to round-robin asm
+export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
+export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- dormant, apply call commented out below
+export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- dormant, apply call commented out below
+
 DP_SIZE=1
 export DP_SIZE
 TOTAL_RANKS=$(( TP * DP_SIZE ))
@@ -51,7 +66,9 @@ export PYTHONNOUSERSITE=1
 export PYTHONHASHSEED=42
 
 export VLLM_USE_DIRECT_DCP_A2A=0
-export VLLM_USE_DIRECT_DCP_Q_GATHER=0
+# 1 (not the reference recipe's 0): this is the gate #59966 (staged below)
+# optimizes -- the patch alone is inert at 0.
+export VLLM_USE_DIRECT_DCP_Q_GATHER=1
 export VLLM_USE_DIRECT_DCP_KV_GATHER=0
 
 SERVER_LOG="$RESULT_DIR/server.log"
@@ -140,9 +157,16 @@ export DCP_SIZE
 # Test file hunk dropped -- not shipped in the installed package.
 # Dry-run + real apply + py_compile + import verified clean against
 # nightly-rocm100-18f8f960 on 2026-10-01 (0 rejects, 0 fuzz).
+#
+# OFF by default (APPLY_PR59591=0): conflicts with #59693's token-sharded SP
+# path -- #59693's _sp_tail does `out.addmm_(latent, up_proj.weight.t())`
+# assuming the stock full-width up_proj; this patch shards that same weight,
+# producing a confirmed live-run crash (input [*,7168] vs output [*,896]).
+# Pick one: this patch sharded-always, or #59693 sharded-above-a-token-
+# threshold. Currently favoring #59693 (broader win, same shape of benefit).
 # -----------------------------------------------------------------------------
 apply_pr59591() {
-    [ "${APPLY_PR59591:-1}" = "1" ] || { echo "[pr59591] disabled"; return 0; }
+    [ "${APPLY_PR59591:-0}" = "1" ] || { echo "[pr59591] disabled"; return 0; }
     local diff_file
     diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59591-tp-shard-moe-upproj.diff"
     [ -f "$diff_file" ] || { echo "[pr59591] missing $diff_file" >&2; return 1; }
@@ -239,13 +263,15 @@ apply_pr59070 || { echo "[pr59070] patch failed, refusing to run" >&2; exit 1; }
 # Dry-run + real apply + py_compile + import verified clean against
 # nightly-rocm100-18f8f960 on 2026-10-05.
 #
-# NOT enabling MIN_TOKENS by default: its should_shard() path (sp.py) hits a
-# real conflict with #59591's sharded up_proj -- confirmed via a live run,
-# RuntimeError in latent_moe_runner._sp_tail's out.addmm_, input [*, 7168]
-# (full width) vs output [*, 896] (= 7168/8, the #59591 shard). Both PRs are
-# independent and unmerged; neither author accounted for the other. Left
-# patched (inert) via vLLM's own default (0) until that's actually reconciled
-# -- do not set this >0 while #59591 is also staged.
+# MIN_TOKENS is set below (1024, the PR's own recommendation) -- this is now
+# ACTIVE, not inert. Its should_shard() path (sp.py) conflicts with #59591's
+# sharded up_proj (confirmed via a live run: RuntimeError in
+# latent_moe_runner._sp_tail's out.addmm_, input [*, 7168] full width vs
+# output [*, 896] = 7168/8 the #59591 shard), so #59591 is OFF by default
+# (see its own block above) while this is on. _sp_tail's own docstring says
+# "up-project this rank's tokens with the full weight" -- it was authored
+# and tested against the stock, unsharded up_proj, which is exactly what's
+# present with #59591 off. Do not set APPLY_PR59591=1 while this is 1.
 # -----------------------------------------------------------------------------
 apply_pr59693() {
     [ "${APPLY_PR59693:-1}" = "1" ] || { echo "[pr59693] disabled"; return 0; }
@@ -265,6 +291,76 @@ for f in ["vllm/envs.py","vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/mo
     echo "[pr59693] applied"
 }
 apply_pr59693 || { echo "[pr59693] patch failed, refusing to run" >&2; exit 1; }
+export VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS="${VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS:-1024}"
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#59965 -- ROCm DCP: default VLLM_ROCM_AITER_MLA_DCP_VERIFY
+# to "auto" (was "segmented"), which auto-routes to the round-robin asm decode
+# where it applies and falls back otherwise. Open, unmerged. No new CLI flag
+# -- changes an existing env var's default, falls back gracefully when
+# conditions (DSpark spec-decode, interleave=1) aren't met, so safe even in
+# our no-MTP C70/C72 config. PR's own measurements (8x MI355X, TP8/DCP8, with
+# spec-decoding): +50.8% throughput, -40.8% median TPOT, -46.6% e2e latency.
+# Gains are tied to spec-decode batches we don't currently run at C70/C72, so
+# treat as a safety-net default change here, not a guaranteed win for us.
+# Test file hunk dropped -- not shipped in the installed package. Stacks
+# cleanly with #59070 (both touch rocm_aiter_mla.py). Dry-run + real apply +
+# py_compile + import verified clean against nightly-rocm100-18f8f960 on
+# 2026-10-06 (0 rejects, some offset, 0 fuzz).
+# -----------------------------------------------------------------------------
+apply_pr59965() {
+    [ "${APPLY_PR59965:-1}" = "1" ] || { echo "[pr59965] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59965-dcp-verify-auto-default.diff"
+    [ -f "$diff_file" ] || { echo "[pr59965] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import vllm.envs as e; import sys
+sys.exit(0 if e.VLLM_ROCM_AITER_MLA_DCP_VERIFY == "auto" else 1)' 2>/dev/null; then
+        echo "[pr59965] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/envs.py","vllm/v1/attention/backends/mla/rocm_aiter_mla.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr59965] applied"
+}
+apply_pr59965 || { echo "[pr59965] patch failed, refusing to run" >&2; exit 1; }
+
+# -----------------------------------------------------------------------------
+# vllm-project/vllm#59966 -- ROCm DCP: gather the MLA decode query without
+# byte-wise strided copies -- writes token-major results directly into the
+# backend's padded storage in one pass instead of all_gather + movedim/
+# reshape + repeat + contiguous. Directly targets our TP8/DCP8 Kimi-K3 config.
+# Open, unmerged. Gate: VLLM_USE_DIRECT_DCP_Q_GATHER (our script already
+# exports this as 0 -- see env exports above -- so flip it to 1 below to
+# actually benefit; the patch alone is otherwise inert). PR's own
+# measurements (MI355X, Kimi-K3, 24 MLA layers): byte-wise copies 3.07ms ->
+# 1.67ms/decode step (-46%), overall step time 72.40ms -> 70.45ms (-2.7%),
+# bit-identical outputs. Test file hunks dropped -- not shipped in the
+# installed package. Stacks cleanly with #59070/#59965 (all touch
+# rocm_aiter_mla.py). Dry-run + real apply + py_compile + import verified
+# clean against nightly-rocm100-18f8f960 on 2026-10-06 (0 rejects, some
+# offset, 0 fuzz).
+# -----------------------------------------------------------------------------
+apply_pr59966() {
+    [ "${APPLY_PR59966:-1}" = "1" ] || { echo "[pr59966] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59966-dcp-query-gather.diff"
+    [ -f "$diff_file" ] || { echo "[pr59966] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.v1.attention.ops.dcp as m
+import sys; sys.exit(0 if "copy_rows_" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[pr59966] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/v1/attention/backends/mla/rocm_aiter_mla.py","vllm/v1/attention/ops/dcp.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr59966] applied"
+}
+apply_pr59966 || { echo "[pr59966] patch failed, refusing to run" >&2; exit 1; }
 
 # # -----------------------------------------------------------------------------
 # # vllm-project/vllm#54627 -- prefill_schedule_interval outside data parallelism

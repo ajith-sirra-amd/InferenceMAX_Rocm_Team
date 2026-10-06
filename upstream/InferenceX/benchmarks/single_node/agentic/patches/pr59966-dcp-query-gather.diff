@@ -1,0 +1,115 @@
+diff --git a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+index c833a56a8383..37831d1f1711 100644
+--- a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
++++ b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+@@ -35,6 +35,7 @@
+ from vllm.v1.attention.backends.utils import (
+     get_dcp_local_seq_lens,
+ )
++from vllm.v1.attention.ops.dcp import copy_rows_
+ from vllm.v1.attention.ops.rocm_aiter_mla_merge import (
+     merge_mla_segments_triton,
+ )
+@@ -1754,13 +1755,19 @@ def get_mla_padded_q(
+         if m % num_heads == 0:
+             return q.repeat_interleave(m // num_heads, dim=1)
+         # Non-divisor head counts cannot be padded by repeat_interleave. Tile
+-        # the query heads and slice to exactly m. MLA attention is independent
+-        # per query head over the shared KV, so padding heads cannot affect
+-        # heads [0:num_heads]; they are sliced back off the output.
+-        reps = -(-m // num_heads)  # ceil(m / num_heads)
+-        # Slicing a tiled tensor yields a non-contiguous view. The asm decode
+-        # reads q as packed [tokens, m, head_dim], so materialize it.
+-        return q.repeat(1, reps, 1)[:, :m, :].contiguous()
++        # the query heads up to exactly m. MLA attention is independent per
++        # query head over the shared KV, so padding heads cannot affect heads
++        # [0:num_heads]; they are sliced back off the output. Writing the
++        # packed [tokens, m, head_dim] buffer directly avoids materializing
++        # ceil(m / num_heads) full copies and then a second contiguous copy.
++        padded = q.new_empty((q.shape[0], m, q.shape[2]))
++        copy_rows_(padded[:, :num_heads], q)
++        filled = num_heads
++        while filled < m:
++            n = min(filled, m - filled)
++            copy_rows_(padded[:, filled : filled + n], padded[:, :n])
++            filled += n
++        return padded
+ 
+     @staticmethod
+     def get_mla_unpadded_o(num_heads: int, o: torch.Tensor) -> torch.Tensor:
+diff --git a/vllm/v1/attention/ops/dcp.py b/vllm/v1/attention/ops/dcp.py
+index 71e1fdae07cc..331bea6160f8 100644
+--- a/vllm/v1/attention/ops/dcp.py
++++ b/vllm/v1/attention/ops/dcp.py
+@@ -1025,16 +1025,33 @@ def get_dcp_workspace_max_num_tokens(vllm_config: VllmConfig) -> int:
+     )
+ 
+ 
+-def reserve_query_head_storage(
+-    query: torch.Tensor, padded_num_heads: int
+-) -> torch.Tensor:
+-    """Reserve backing storage for fixed-head decode kernels."""
+-    assert query.ndim == 3
+-    assert query.shape[1] <= padded_num_heads
+-    padded = query.new_empty((query.shape[0], padded_num_heads, query.shape[2]))
+-    padded.resize_(query.shape)
+-    padded.copy_(query)
+-    return padded
++def _wide_view(t: torch.Tensor) -> torch.Tensor | None:
++    """Reinterpret ``t`` as int64 along its last dim, or None if not aligned."""
++    size = t.element_size()
++    if size >= 8 or t.dim() == 0 or t.stride(-1) != 1:
++        return None
++    ratio = 8 // size
++    if t.shape[-1] % ratio or t.storage_offset() % ratio:
++        return None
++    if any(s % ratio for s in t.stride()[:-1]):
++        return None
++    return t.view(torch.int64)
++
++
++def copy_rows_(dst: torch.Tensor, src: torch.Tensor) -> None:
++    """``dst.copy_(src)`` for same-dtype tensors with contiguous rows.
++
++    Copies through an 8-byte view when the rows allow it. A strided copy of a
++    byte-sized dtype (an FP8 query) otherwise takes PyTorch's one-element-per-
++    lane path, which moves a few hundred GB/s on MI355X.
++    """
++    assert dst.dtype == src.dtype
++    wide_dst = _wide_view(dst)
++    wide_src = _wide_view(src)
++    if wide_dst is not None and wide_src is not None:
++        wide_dst.copy_(wide_src)
++    else:
++        dst.copy_(src)
+ 
+ 
+ # Symmetric-memory A2A implementation
+@@ -1590,10 +1607,23 @@ def _init_query_gather(
+         return self._gather_query
+ 
+     def _gather_query(self, query: torch.Tensor) -> torch.Tensor:
+-        query = self.group.all_gather(query, dim=1)
+-        if self.padded_num_heads is not None:
+-            query = reserve_query_head_storage(query, self.padded_num_heads)
+-        return query
++        # Gather rank-major along dim 0 (no relayout), then write the
++        # token-major [B, W * H, D] result once, straight into the padded
++        # storage when the backend asks for it. all_gather(dim=1) would make
++        # a strided byte-wise clone, and padding would then copy it again.
++        world_size = self.group.world_size
++        num_tokens, num_heads, head_dim = query.shape
++        gathered = self.group.all_gather(query, dim=0)
++        out_heads = world_size * num_heads
++        out = query.new_empty(
++            (num_tokens, self.padded_num_heads or out_heads, head_dim)
++        )
++        out.resize_((num_tokens, out_heads, head_dim))
++        copy_rows_(
++            out.view(num_tokens, world_size, num_heads * head_dim),
++            gathered.view(world_size, num_tokens, num_heads * head_dim).transpose(0, 1),
++        )
++        return out
+ 
+     def _direct_workspace_query_gather(
+         self,

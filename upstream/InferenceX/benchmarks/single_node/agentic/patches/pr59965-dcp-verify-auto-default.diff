@@ -1,0 +1,69 @@
+diff --git a/vllm/envs.py b/vllm/envs.py
+index f51100fe8b02..851741d5253b 100755
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -146,7 +146,7 @@
+     VLLM_ROCM_USE_AITER_RMSNORM: bool = True
+     VLLM_ROCM_USE_AITER_MLA: bool = True
+     VLLM_ROCM_AITER_MLA_ASM_PADDING: Literal["auto", "gluon", "asm"] = "auto"
+-    VLLM_ROCM_AITER_MLA_DCP_VERIFY: Literal["asm", "segmented"] = "segmented"
++    VLLM_ROCM_AITER_MLA_DCP_VERIFY: Literal["auto", "asm", "segmented"] = "auto"
+     VLLM_ROCM_USE_AITER_MHA: bool = True
+     VLLM_ROCM_USE_AITER_FP4_ASM_GEMM: bool = False
+     VLLM_ROCM_USE_AITER_TRITON_SPARSE_MLA: bool = False
+@@ -1320,12 +1320,13 @@ def _resolve_rust_cli_path() -> str | None:
+         os.getenv("VLLM_ROCM_USE_AITER_MLA", "True").lower() in ("true", "1")
+     ),
+     # Kernel for causal multi-token (spec-decode) verify steps under decode
+-    # context parallelism on gfx950: "asm" uses AITER's round-robin ASM
+-    # decode, "segmented" the Triton segmented MLA path.
++    # context parallelism: "asm" uses AITER's round-robin ASM decode (gfx950),
++    # "segmented" the Triton segmented MLA path. "auto" (default) takes "asm"
++    # wherever it can serve the shape and "segmented" otherwise.
+     "VLLM_ROCM_AITER_MLA_DCP_VERIFY": env_with_choices(
+         "VLLM_ROCM_AITER_MLA_DCP_VERIFY",
+-        "segmented",
+-        ["asm", "segmented"],
++        "auto",
++        ["auto", "asm", "segmented"],
+         case_sensitive=False,
+     ),
+     # Small-head (<16) AITER MLA decode kernel selection. Small head counts
+diff --git a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+index c833a56a8383..a93b9ac17a8c 100644
+--- a/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
++++ b/vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+@@ -601,13 +601,14 @@ def __init__(
+             parallel_config.decode_context_parallel_size,
+             parallel_config.cp_kv_cache_interleave_size,
+         )
++        verify_route = envs.VLLM_ROCM_AITER_MLA_DCP_VERIFY.lower()
+         asm_dcp_verify_config = (
+             _asm_dcp_verify_configured(
+                 parallel_config.decode_context_parallel_size,
+                 parallel_config.cp_kv_cache_interleave_size,
+                 multi_token_decode=vllm_config.speculative_config is not None,
+             )
+-            and envs.VLLM_ROCM_AITER_MLA_DCP_VERIFY == "asm"
++            and verify_route != "segmented"
+         )
+         super().__init__(
+             kv_cache_spec,
+@@ -627,14 +628,15 @@ def __init__(
+             self._asm_dcp_verify_heads = _asm_dcp_verify_heads(
+                 self.num_heads * self.dcp_world_size
+             )
+-            if not self._asm_dcp_verify_heads:
++            if self._asm_dcp_verify_heads:
++                self._asm_dcp_verify = True
++            elif verify_route == "asm" or not supports_segmented_dcp_verify:
+                 raise ValueError(
+                     "VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm, but the round-robin asm "
+                     f"decode has no kernel for {self.num_heads * self.dcp_world_size} "
+                     f"DCP-gathered heads (native counts: {_NATIVE_CPRR_HEADS}). "
+                     "Set VLLM_ROCM_AITER_MLA_DCP_VERIFY=segmented."
+                 )
+-            self._asm_dcp_verify = True
+         self._supports_segmented_dcp_verify = supports_segmented_dcp_verify
+         self._mla_max_split_per_batch = 0
+         if self._asm_dcp_verify:
