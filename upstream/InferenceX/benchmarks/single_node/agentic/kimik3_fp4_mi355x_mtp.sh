@@ -20,8 +20,11 @@ export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context
 export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0
 export APPLY_PR59965="${APPLY_PR59965:-1}"  # ROCm DCP: default MLA DCP verify to round-robin asm
 export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
-export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- dormant, apply call commented out below
-export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- dormant, apply call commented out below
+export APPLY_PR54627="${APPLY_PR54627:-1}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT (real trade-off, see block below)
+export APPLY_PR54625="${APPLY_PR54625:-1}"  # cache-aware admission ordering -- measured together with #54627 above
+export APPLY_PR58743="${APPLY_PR58743:-1}"  # Kimi-K3: support BF16 KDA recurrent state
+# #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
+# attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
 DP_SIZE=1
 export DP_SIZE
@@ -147,23 +150,8 @@ esac
 export DCP_SIZE
 
 # -----------------------------------------------------------------------------
-# vllm-project/vllm#59591 -- Kimi-K3: store only the current rank's shard of
-# the latent-MoE up-proj weight, instead of a full ReplicatedLinear copy on
-# every rank. At TP=8 that is ~3.9GB/rank of unused weight across 92 MoE
-# layers, HBM that would otherwise go to KV cache. Open, unmerged. No new CLI
-# flag -- pure internal behavior change, always active once patched.
-# PR's own measurements (agentic, prefix caching): +0.9% to +31% request
-# throughput, up to +28.91% total token throughput at concurrency 70.
-# Test file hunk dropped -- not shipped in the installed package.
-# Dry-run + real apply + py_compile + import verified clean against
-# nightly-rocm100-18f8f960 on 2026-10-01 (0 rejects, 0 fuzz).
-#
-# OFF by default (APPLY_PR59591=0): conflicts with #59693's token-sharded SP
-# path -- #59693's _sp_tail does `out.addmm_(latent, up_proj.weight.t())`
-# assuming the stock full-width up_proj; this patch shards that same weight,
-# producing a confirmed live-run crash (input [*,7168] vs output [*,896]).
-# Pick one: this patch sharded-always, or #59693 sharded-above-a-token-
-# threshold. Currently favoring #59693 (broader win, same shape of benefit).
+# #59591 -- shard Kimi-K3 latent-MoE up-proj by rank (~3.9GB/rank freed).
+# OFF by default: conflicts with #59693's SP path (confirmed live crash).
 # -----------------------------------------------------------------------------
 apply_pr59591() {
     [ "${APPLY_PR59591:-0}" = "1" ] || { echo "[pr59591] disabled"; return 0; }
@@ -185,17 +173,8 @@ for f in ["vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/models/kimi_k3/am
 apply_pr59591 || { echo "[pr59591] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
-# vllm-project/vllm#59069 -- Kimi-K3: fuse AttnRes output with per-token FP8
-# input quantization, eliminating a separate quantization kernel launch when
-# the consuming layer's quant scheme is kFp8DynamicTokenSym. Gracefully falls
-# back to the original path for non-matching consumers -- safe to apply even
-# if it never engages for this model's actual quant scheme. Open, unmerged.
-# No new CLI flag. PR's own measurements (N2112/K7168 MLA op): 3-5.2% faster
-# across 16-16384 token batches; 931 per-token quant kernel calls eliminated.
-# Test/benchmark file hunks dropped -- not shipped in the installed package.
-# Stacks cleanly on top of #59591 (both touch linear.py). Dry-run + real
-# apply + py_compile + import verified clean against nightly-rocm100-18f8f960
-# on 2026-10-05 (0 rejects, 0 fuzz).
+# #59069 -- fuse AttnRes output + per-token FP8 quant. 3-5.2% faster, graceful
+# fallback if quant scheme doesn't match. No flag.
 # -----------------------------------------------------------------------------
 apply_pr59069() {
     [ "${APPLY_PR59069:-1}" = "1" ] || { echo "[pr59069] disabled"; return 0; }
@@ -217,15 +196,8 @@ for f in ["vllm/models/kimi_k3/amd/kda.py","vllm/models/kimi_k3/amd/linear.py","
 apply_pr59069 || { echo "[pr59069] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
-# vllm-project/vllm#59070 -- ROCm MLA: keep DCP prefill context in FP8 through
-# the AllGather instead of upcasting to BF16 first, with a fused kernel
-# combining reorganization, dequantization, projection, and packing. Directly
-# targets our DCP=8 MLA configuration. Open, unmerged. No new CLI flag.
-# PR's own measurements (8x MI355X): AllGather 2.1-1.8x faster across
-# 1,446-98,214 token contexts; cold 32K median TTFT 1701ms -> 1674ms.
-# Test/CI-config file hunks dropped -- not shipped in the installed package.
-# Dry-run + real apply + py_compile + import verified clean against
-# nightly-rocm100-18f8f960 on 2026-10-05 (0 rejects, some offset, 0 fuzz).
+# #59070 -- keep DCP prefill context FP8 through AllGather (was BF16 upcast).
+# 1.8-2.1x faster AllGather. No flag.
 # -----------------------------------------------------------------------------
 apply_pr59070() {
     [ "${APPLY_PR59070:-1}" = "1" ] || { echo "[pr59070] disabled"; return 0; }
@@ -247,31 +219,9 @@ for f in ["vllm/_aiter_ops.py","vllm/v1/attention/backends/mla/rocm_aiter_mla.py
 apply_pr59070 || { echo "[pr59070] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
-# vllm-project/vllm#59693 -- Kimi-K3: token-sharded residual stream for long
-# prefills on ROCm. Every TP rank repeats identical per-token work during
-# prefill; this shards the residual stream over tokens instead, same comm
-# volume, less redundant compute. Exclusively ROCm + Kimi-K3, off by default,
-# does not touch CUDA-graph decode. Open, unmerged.
-# Gate: VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS (env var, default 0 = off).
-# PR's own recommended value is 1024; our agentic ISLs (70k-360k+ typical)
-# are squarely in its target range. PR's own measurements (8x MI355X, TP8):
-# 10k tok +5.7% throughput/-14.1% TTFT, 50k tok +11.1%, 200k tok +9.3%,
-# geomean +6.1%. Accuracy validated on GSM8K + passkey retrieval to 190k.
-# Test file hunk dropped -- not shipped in the installed package. Stacks
-# cleanly on top of #59591/#59069 (all three touch linear.py; two hunks land
-# with fuzz 1-2, both verified landing in the right place -- see commit).
-# Dry-run + real apply + py_compile + import verified clean against
-# nightly-rocm100-18f8f960 on 2026-10-05.
-#
-# MIN_TOKENS is set below (1024, the PR's own recommendation) -- this is now
-# ACTIVE, not inert. Its should_shard() path (sp.py) conflicts with #59591's
-# sharded up_proj (confirmed via a live run: RuntimeError in
-# latent_moe_runner._sp_tail's out.addmm_, input [*, 7168] full width vs
-# output [*, 896] = 7168/8 the #59591 shard), so #59591 is OFF by default
-# (see its own block above) while this is on. _sp_tail's own docstring says
-# "up-project this rank's tokens with the full weight" -- it was authored
-# and tested against the stock, unsharded up_proj, which is exactly what's
-# present with #59591 off. Do not set APPLY_PR59591=1 while this is 1.
+# #59693 -- token-sharded residual stream for long prefills. Geomean +6.1%,
+# gate VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS=1024 (set below). Requires
+# APPLY_PR59591=0 (see that block).
 # -----------------------------------------------------------------------------
 apply_pr59693() {
     [ "${APPLY_PR59693:-1}" = "1" ] || { echo "[pr59693] disabled"; return 0; }
@@ -294,19 +244,9 @@ apply_pr59693 || { echo "[pr59693] patch failed, refusing to run" >&2; exit 1; }
 export VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS="${VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS:-1024}"
 
 # -----------------------------------------------------------------------------
-# vllm-project/vllm#59965 -- ROCm DCP: default VLLM_ROCM_AITER_MLA_DCP_VERIFY
-# to "auto" (was "segmented"), which auto-routes to the round-robin asm decode
-# where it applies and falls back otherwise. Open, unmerged. No new CLI flag
-# -- changes an existing env var's default, falls back gracefully when
-# conditions (DSpark spec-decode, interleave=1) aren't met, so safe even in
-# our no-MTP C70/C72 config. PR's own measurements (8x MI355X, TP8/DCP8, with
-# spec-decoding): +50.8% throughput, -40.8% median TPOT, -46.6% e2e latency.
-# Gains are tied to spec-decode batches we don't currently run at C70/C72, so
-# treat as a safety-net default change here, not a guaranteed win for us.
-# Test file hunk dropped -- not shipped in the installed package. Stacks
-# cleanly with #59070 (both touch rocm_aiter_mla.py). Dry-run + real apply +
-# py_compile + import verified clean against nightly-rocm100-18f8f960 on
-# 2026-10-06 (0 rejects, some offset, 0 fuzz).
+# #59965 -- DCP MLA verify default segmented->auto. +50.8% tput but only for
+# spec-decode batches we don't run at C70/C72 -- safety-net default, not an
+# expected win here.
 # -----------------------------------------------------------------------------
 apply_pr59965() {
     [ "${APPLY_PR59965:-1}" = "1" ] || { echo "[pr59965] disabled"; return 0; }
@@ -328,20 +268,9 @@ for f in ["vllm/envs.py","vllm/v1/attention/backends/mla/rocm_aiter_mla.py"]:
 apply_pr59965 || { echo "[pr59965] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
-# vllm-project/vllm#59966 -- ROCm DCP: gather the MLA decode query without
-# byte-wise strided copies -- writes token-major results directly into the
-# backend's padded storage in one pass instead of all_gather + movedim/
-# reshape + repeat + contiguous. Directly targets our TP8/DCP8 Kimi-K3 config.
-# Open, unmerged. Gate: VLLM_USE_DIRECT_DCP_Q_GATHER (our script already
-# exports this as 0 -- see env exports above -- so flip it to 1 below to
-# actually benefit; the patch alone is otherwise inert). PR's own
-# measurements (MI355X, Kimi-K3, 24 MLA layers): byte-wise copies 3.07ms ->
-# 1.67ms/decode step (-46%), overall step time 72.40ms -> 70.45ms (-2.7%),
-# bit-identical outputs. Test file hunks dropped -- not shipped in the
-# installed package. Stacks cleanly with #59070/#59965 (all touch
-# rocm_aiter_mla.py). Dry-run + real apply + py_compile + import verified
-# clean against nightly-rocm100-18f8f960 on 2026-10-06 (0 rejects, some
-# offset, 0 fuzz).
+# #59966 -- direct MLA decode query gather, no byte-wise strided copies.
+# -2.7% step time, bit-identical. Needs VLLM_USE_DIRECT_DCP_Q_GATHER=1
+# (flipped above, was 0).
 # -----------------------------------------------------------------------------
 apply_pr59966() {
     [ "${APPLY_PR59966:-1}" = "1" ] || { echo "[pr59966] disabled"; return 0; }
@@ -362,64 +291,86 @@ for f in ["vllm/v1/attention/backends/mla/rocm_aiter_mla.py","vllm/v1/attention/
 }
 apply_pr59966 || { echo "[pr59966] patch failed, refusing to run" >&2; exit 1; }
 
-# # -----------------------------------------------------------------------------
-# # vllm-project/vllm#54627 -- prefill_schedule_interval outside data parallelism
-# # -----------------------------------------------------------------------------
-# # Open, unmerged. `prefill_schedule_interval` (SchedulerConfig, default 1 = off)
-# # already exists and is CLI-exposed (--prefill-schedule-interval), but today it
-# # is a no-op outside data-parallel deployments -- our config is DCP=8, DP=1, so
-# # the flag alone does nothing. This PR makes the scheduler-side interval logic
-# # work under DCP too. Targets Kimi-K3-Where-The-Time-Goes.md's finding that 57%
-# # of C72 steps carry prefill and balloon 46ms -> 440-754ms per step.
-# # 2/4 hunks (test files) dropped -- not shipped in the installed package.
-# # Dry-run + real apply + py_compile verified clean against
-# # nightly-rocm100-e9757321 on 2026-09-25 (0 rejects, stacks cleanly under #54625).
-# apply_pr54627() {
-#     [ "${APPLY_PR54627:-1}" = "1" ] || { echo "[pr54627] disabled"; return 0; }
-#     local diff_file
-#     diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54627-prefill-interval-nondp.diff"
-#     [ -f "$diff_file" ] || { echo "[pr54627] missing $diff_file" >&2; return 1; }
-#     local site
-#     site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-#     if python3 -c 'import inspect,vllm.v1.core.sched.scheduler as s
-# import sys; sys.exit(0 if "last_prefill_step" in inspect.getsource(s) else 1)' 2>/dev/null; then
-#         echo "[pr54627] already present, nothing to do"; return 0
-#     fi
-#     ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-#     python3 -c 'import py_compile;py_compile.compile("'"$site"'/vllm/v1/core/sched/scheduler.py",doraise=True);py_compile.compile("'"$site"'/vllm/config/scheduler.py",doraise=True)' || return 1
-#     echo "[pr54627] applied"
-# }
-# apply_pr54627 || { echo "[pr54627] patch failed, refusing to run" >&2; exit 1; }
-# PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-1}"
+# -----------------------------------------------------------------------------
+# #58743 -- BF16 KDA recurrent state (was silently ignored). Shrinks cache
+# 1536->896 width -- memory headroom, not raw throughput. Needs
+# --mamba-ssm-cache-dtype bfloat16 (set below).
+# -----------------------------------------------------------------------------
+apply_pr58743() {
+    [ "${APPLY_PR58743:-1}" = "1" ] || { echo "[pr58743] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr58743-kda-bf16-recurrent-state.diff"
+    [ -f "$diff_file" ] || { echo "[pr58743] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.models.kimi_k3.amd.kda as m
+import sys; sys.exit(0 if "mamba_ssm_cache_dtype" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[pr58743] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/models/kimi_k3/amd/kda.py","vllm/models/kimi_k3/amd/linear.py","vllm/models/kimi_k3/amd/ops/kda_prefill.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr58743] applied"
+}
+apply_pr58743 || { echo "[pr58743] patch failed, refusing to run" >&2; exit 1; }
+MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-bfloat16}"
 
-# apply_pr54625() {
-#     [ "${APPLY_PR54625:-1}" = "1" ] || { echo "[pr54625] disabled"; return 0; }
-#     local diff_file
-#     diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54625-cache-aware-admission.diff"
-#     [ -f "$diff_file" ] || { echo "[pr54625] missing $diff_file" >&2; return 1; }
-#     local site
-#     site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-#     if python3 -c 'import vllm.config.scheduler as s; import sys; sys.exit(0 if hasattr(s.SchedulerConfig, "cache_aware_admission_window") else 1)' 2>/dev/null; then
-#         echo "[pr54625] already present, nothing to do"; return 0
-#     fi
-#     ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-#     python3 -c 'import py_compile
-# for f in ["vllm/config/scheduler.py","vllm/engine/arg_utils.py","vllm/v1/core/kv_cache_manager.py","vllm/v1/core/sched/scheduler.py"]:
-#     py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-#     echo "[pr54625] applied"
-# }
-# apply_pr54625 || { echo "[pr54625] patch failed, refusing to run" >&2; exit 1; }
-# # The two flags below do not exist on vLLM's CLI parser unless #54625 is
-# # applied -- unlike --prefill-schedule-interval, which is already a real flag
-# # pre-patch. Keep them out of VLLM_CMD entirely when the patch is off, or
-# # "unrecognized arguments" kills every non-#54625 dispatch.
-# CACHE_AWARE_ARGS=()
-# if [ "${APPLY_PR54625:-1}" = "1" ]; then
-#     CACHE_AWARE_ARGS=(
-#         --cache-aware-admission-window "${CACHE_AWARE_ADMISSION_WINDOW:-0}"
-#         --cache-aware-admission-threshold "${CACHE_AWARE_ADMISSION_THRESHOLD:-0.5}"
-#     )
-# fi
+# -----------------------------------------------------------------------------
+# #54627 -- prefill_schedule_interval under DCP (was a DP-only no-op).
+# interval=33: +2.6% tput, TPOT -7.5/-17.3%, but TTFT +313/+352%. Real
+# trade-off, not noise -- only worth it if TTFT isn't the priority metric.
+# -----------------------------------------------------------------------------
+apply_pr54627() {
+    [ "${APPLY_PR54627:-1}" = "1" ] || { echo "[pr54627] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54627-prefill-interval-nondp.diff"
+    [ -f "$diff_file" ] || { echo "[pr54627] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.v1.core.sched.scheduler as s
+import sys; sys.exit(0 if "last_prefill_step" in inspect.getsource(s) else 1)' 2>/dev/null; then
+        echo "[pr54627] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile;py_compile.compile("'"$site"'/vllm/v1/core/sched/scheduler.py",doraise=True);py_compile.compile("'"$site"'/vllm/config/scheduler.py",doraise=True)' || return 1
+    echo "[pr54627] applied"
+}
+apply_pr54627 || { echo "[pr54627] patch failed, refusing to run" >&2; exit 1; }
+PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-33}"
+
+# -----------------------------------------------------------------------------
+# #54625 -- cache-aware admission ordering. window=64/threshold=0.5. Measured
+# together with #54627 above, not isolated.
+# -----------------------------------------------------------------------------
+apply_pr54625() {
+    [ "${APPLY_PR54625:-1}" = "1" ] || { echo "[pr54625] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54625-cache-aware-admission.diff"
+    [ -f "$diff_file" ] || { echo "[pr54625] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import vllm.config.scheduler as s; import sys; sys.exit(0 if hasattr(s.SchedulerConfig, "cache_aware_admission_window") else 1)' 2>/dev/null; then
+        echo "[pr54625] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/config/scheduler.py","vllm/engine/arg_utils.py","vllm/v1/core/kv_cache_manager.py","vllm/v1/core/sched/scheduler.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr54625] applied"
+}
+apply_pr54625 || { echo "[pr54625] patch failed, refusing to run" >&2; exit 1; }
+# The two flags below do not exist on vLLM's CLI parser unless #54625 is
+# applied -- unlike --prefill-schedule-interval, which is already a real flag
+# pre-patch. Keep them out of VLLM_CMD entirely when the patch is off, or
+# "unrecognized arguments" kills every non-#54625 dispatch.
+CACHE_AWARE_ARGS=()
+if [ "${APPLY_PR54625:-1}" = "1" ]; then
+    CACHE_AWARE_ARGS=(
+        --cache-aware-admission-window "${CACHE_AWARE_ADMISSION_WINDOW:-64}"
+        --cache-aware-admission-threshold "${CACHE_AWARE_ADMISSION_THRESHOLD:-0.5}"
+    )
+fi
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
@@ -464,6 +415,7 @@ VLLM_CMD=(
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
     --max-model-len 1048576
     --kv-cache-dtype fp8
+    --mamba-ssm-cache-dtype "$MAMBA_SSM_CACHE_DTYPE"
     --enable-auto-tool-choice
     --tool-call-parser kimi_k3
     --reasoning-parser kimi_k3
@@ -471,8 +423,8 @@ VLLM_CMD=(
     --enable-prompt-tokens-details
     --no-async-scheduling
     --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
-    # --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
-    # "${CACHE_AWARE_ARGS[@]}"
+    --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
+    "${CACHE_AWARE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${EP_ARGS[@]}"
@@ -515,59 +467,59 @@ printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
-# python3 - <<'CCDPY' > "$RESULT_DIR/ccdmap.txt" 2>/dev/null || true
-# import subprocess, re, os, glob
-# def expand(s):
-#     v=[]
-#     for part in s.split(','):
-#         if '-' in part:
-#             a,b=part.split('-'); v+=list(range(int(a),int(b)+1))
-#         else: v.append(int(part))
-#     return v
-# def l3_domains():
-#     seen,out=set(),[]
-#     for c in sorted(int(re.search(r'cpu(\d+)$',x).group(1)) for x in glob.glob('/sys/devices/system/cpu/cpu[0-9]*')):
-#         f=f'/sys/devices/system/cpu/cpu{c}/cache/index3/shared_cpu_list'
-#         if not os.path.exists(f): continue
-#         d=open(f).read().strip()
-#         if d not in seen: seen.add(d); out.append(d)
-#     return out
-# def node_of(cpus):
-#     for n in glob.glob('/sys/devices/system/node/node[0-9]*'):
-#         nid=int(re.search(r'node(\d+)$',n).group(1))
-#         if cpus[0] in expand(open(f'{n}/cpulist').read().strip()): return nid
-#     return -1
-# topo=""
-# try: topo=subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
-# except Exception: pass
-# gpu_node={int(m.group(1)):int(m.group(2)) for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)",topo)}
-# if not gpu_node: raise SystemExit
-# by={}
-# for d in l3_domains(): by.setdefault(node_of(expand(d)),[]).append(d)
-# for n in by: by[n].sort(key=lambda d: expand(d)[0])
-# for n in sorted(by):
-#     for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
-#         if i < len(by[n]): print(f"{g} {by[n][i]}")
-# CCDPY
+python3 - <<'CCDPY' > "$RESULT_DIR/ccdmap.txt" 2>/dev/null || true
+import subprocess, re, os, glob
+def expand(s):
+    v=[]
+    for part in s.split(','):
+        if '-' in part:
+            a,b=part.split('-'); v+=list(range(int(a),int(b)+1))
+        else: v.append(int(part))
+    return v
+def l3_domains():
+    seen,out=set(),[]
+    for c in sorted(int(re.search(r'cpu(\d+)$',x).group(1)) for x in glob.glob('/sys/devices/system/cpu/cpu[0-9]*')):
+        f=f'/sys/devices/system/cpu/cpu{c}/cache/index3/shared_cpu_list'
+        if not os.path.exists(f): continue
+        d=open(f).read().strip()
+        if d not in seen: seen.add(d); out.append(d)
+    return out
+def node_of(cpus):
+    for n in glob.glob('/sys/devices/system/node/node[0-9]*'):
+        nid=int(re.search(r'node(\d+)$',n).group(1))
+        if cpus[0] in expand(open(f'{n}/cpulist').read().strip()): return nid
+    return -1
+topo=""
+try: topo=subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
+except Exception: pass
+gpu_node={int(m.group(1)):int(m.group(2)) for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)",topo)}
+if not gpu_node: raise SystemExit
+by={}
+for d in l3_domains(): by.setdefault(node_of(expand(d)),[]).append(d)
+for n in by: by[n].sort(key=lambda d: expand(d)[0])
+for n in sorted(by):
+    for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
+        if i < len(by[n]): print(f"{g} {by[n][i]}")
+CCDPY
 
-# PIN_CCD="${PIN_CCD:-1}"
-# pin_workers_to_ccd() {
-#     [ "$PIN_CCD" = "1" ] || return 0
-#     [ -s "$RESULT_DIR/ccdmap.txt" ] || return 0
-#     local pinned=0
-#     while read -r _g _cpus; do
-#         for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null); do
-#             for _t in /proc/$_p/task/*; do
-#                 taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1)) || true
-#             done
-#         done
-#     done < "$RESULT_DIR/ccdmap.txt"
-#     echo "[pin-ccd] pinned $pinned threads"
-# }
+PIN_CCD="${PIN_CCD:-1}"
+pin_workers_to_ccd() {
+    [ "$PIN_CCD" = "1" ] || return 0
+    [ -s "$RESULT_DIR/ccdmap.txt" ] || return 0
+    local pinned=0
+    while read -r _g _cpus; do
+        for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null); do
+            for _t in /proc/$_p/task/*; do
+                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1)) || true
+            done
+        done
+    done < "$RESULT_DIR/ccdmap.txt"
+    echo "[pin-ccd] pinned $pinned threads"
+}
 
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-# pin_workers_to_ccd || true
+pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
