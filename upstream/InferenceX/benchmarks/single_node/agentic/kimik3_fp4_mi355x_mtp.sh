@@ -22,7 +22,7 @@ export APPLY_PR59965="${APPLY_PR59965:-1}"  # ROCm DCP: default MLA DCP verify t
 export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
 export APPLY_PR54627="${APPLY_PR54627:-1}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT (real trade-off, see block below)
 export APPLY_PR54625="${APPLY_PR54625:-1}"  # cache-aware admission ordering -- measured together with #54627 above
-export APPLY_PR58743="${APPLY_PR58743:-1}"  # Kimi-K3: support BF16 KDA recurrent state
+export APPLY_PR58743="${APPLY_PR58743:-0}"  # Kimi-K3: support BF16 KDA recurrent state -- OFF: crashes decode, see block below
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
@@ -292,9 +292,10 @@ for f in ["vllm/v1/attention/backends/mla/rocm_aiter_mla.py","vllm/v1/attention/
 apply_pr59966 || { echo "[pr59966] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
-# #58743 -- BF16 KDA recurrent state (was silently ignored). Shrinks cache
-# 1536->896 width -- memory headroom, not raw throughput. Needs
-# --mamba-ssm-cache-dtype bfloat16 (set below).
+# #58743 -- BF16 KDA recurrent state. OFF by default: only patches the
+# prefill-path fused kernel's FP32 handling, not decode's -- live run crashed
+# with "fused_kda_decode ... state must be a GPU float32 tensor" (run
+# 37421994913). PR doesn't touch decode at all; not safe to enable as-is.
 # -----------------------------------------------------------------------------
 apply_pr58743() {
     [ "${APPLY_PR58743:-1}" = "1" ] || { echo "[pr58743] disabled"; return 0; }
@@ -314,7 +315,7 @@ for f in ["vllm/models/kimi_k3/amd/kda.py","vllm/models/kimi_k3/amd/linear.py","
     echo "[pr58743] applied"
 }
 apply_pr58743 || { echo "[pr58743] patch failed, refusing to run" >&2; exit 1; }
-MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-bfloat16}"
+MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-auto}"
 
 # -----------------------------------------------------------------------------
 # #54627 -- prefill_schedule_interval under DCP (was a DP-only no-op).
