@@ -14,7 +14,7 @@ check_env_vars DCP_SIZE EVAL_ONLY
 # unpatched for that PR). See each PR's own comment block below for what it
 # does, requirements, and known conflicts with other staged PRs.
 # =============================================================================
-export APPLY_PR59591="${APPLY_PR59591:-0}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- CONFLICTS with #59693, leave 0 while that's 1
+export APPLY_PR59591="${APPLY_PR59591:-1}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- CONFLICTS with #59693, leave 0 while that's 1
 export APPLY_PR59069="${APPLY_PR59069:-1}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant
 export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
 export APPLY_PR59693="${APPLY_PR59693:-0}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | Ajith Comments : Engine dies when included. 
