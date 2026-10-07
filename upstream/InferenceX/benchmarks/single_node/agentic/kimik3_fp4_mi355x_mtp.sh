@@ -219,12 +219,15 @@ for f in ["vllm/_aiter_ops.py","vllm/v1/attention/backends/mla/rocm_aiter_mla.py
 apply_pr59070 || { echo "[pr59070] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
-# #59693 -- token-sharded residual stream for long prefills. Geomean +6.1%,
-# gate VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS=1024 (set below). Requires
-# APPLY_PR59591=0 (see that block).
+# #59693 -- token-sharded residual stream for long prefills. OFF by default:
+# confirmed live hang (run 37474503331, isolated -- only this patch active).
+# Rank 0 and Rank 4 stuck at wildly different NCCL collective SeqNums
+# (14,137 vs 47,632) -- ranks diverged on whether to take the SP collective
+# path, a real correctness bug in the patch, not an interaction with another
+# staged PR. Not re-enabling without an upstream fix.
 # -----------------------------------------------------------------------------
 apply_pr59693() {
-    [ "${APPLY_PR59693:-1}" = "1" ] || { echo "[pr59693] disabled"; return 0; }
+    [ "${APPLY_PR59693:-0}" = "1" ] || { echo "[pr59693] disabled"; return 0; }
     local diff_file
     diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59693-prefill-sp.diff"
     [ -f "$diff_file" ] || { echo "[pr59693] missing $diff_file" >&2; return 1; }
@@ -241,7 +244,9 @@ for f in ["vllm/envs.py","vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/mo
     echo "[pr59693] applied"
 }
 apply_pr59693 || { echo "[pr59693] patch failed, refusing to run" >&2; exit 1; }
-export VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS="${VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS:-1024}"
+if [ "${APPLY_PR59693:-0}" = "1" ]; then
+    export VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS="${VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS:-1024}"
+fi
 
 # -----------------------------------------------------------------------------
 # #59965 -- DCP MLA verify default segmented->auto. +50.8% tput but only for
