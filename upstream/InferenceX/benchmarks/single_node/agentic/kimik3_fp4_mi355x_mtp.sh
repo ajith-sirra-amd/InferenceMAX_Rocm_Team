@@ -344,7 +344,10 @@ import sys; sys.exit(0 if "last_prefill_step" in inspect.getsource(s) else 1)' 2
     echo "[pr54627] applied"
 }
 apply_pr54627 || { echo "[pr54627] patch failed, refusing to run" >&2; exit 1; }
-PREFILL_SCHEDULE_INTERVAL="${PREFILL_SCHEDULE_INTERVAL:-33}"
+# Hardset, not "${VAR:-default}": the outer launcher (runners/launch_mi355x-amd.sh)
+# always exports this non-empty before the container starts, so a ":-" fallback
+# here never fires -- it's shadowed by whatever the outer launcher set first.
+PREFILL_SCHEDULE_INTERVAL=33
 
 # -----------------------------------------------------------------------------
 # #54625 -- cache-aware admission ordering. window=64/threshold=0.5. Measured
@@ -373,9 +376,11 @@ apply_pr54625 || { echo "[pr54625] patch failed, refusing to run" >&2; exit 1; }
 # "unrecognized arguments" kills every non-#54625 dispatch.
 CACHE_AWARE_ARGS=()
 if [ "${APPLY_PR54625:-1}" = "1" ]; then
+    # Hardset, not "${VAR:-default}": see PREFILL_SCHEDULE_INTERVAL comment above --
+    # the outer launcher exports these non-empty before the container starts.
     CACHE_AWARE_ARGS=(
-        --cache-aware-admission-window "${CACHE_AWARE_ADMISSION_WINDOW:-64}"
-        --cache-aware-admission-threshold "${CACHE_AWARE_ADMISSION_THRESHOLD:-0.0}"
+        --cache-aware-admission-window 64
+        --cache-aware-admission-threshold 0.0
     )
 fi
 
