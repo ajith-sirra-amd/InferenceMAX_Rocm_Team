@@ -20,8 +20,8 @@ export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context
 export APPLY_PR59693="${APPLY_PR59693:-0}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | Ajith Comments : Engine dies when included. 
 export APPLY_PR59965="${APPLY_PR59965:-1}"  # ROCm DCP: default MLA DCP verify to round-robin asm
 export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
-export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT (real trade-off, see block below)
-export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- measured together with #54627 above
+export APPLY_PR54627="${APPLY_PR54627:-1}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT (real trade-off, see block below)
+export APPLY_PR54625="${APPLY_PR54625:-1}"  # cache-aware admission ordering -- measured together with #54627 above
 export APPLY_PR58743="${APPLY_PR58743:-0}"  # Kimi-K3: support BF16 KDA recurrent state -- OFF: crashes decode, see block below
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
@@ -369,7 +369,7 @@ CACHE_AWARE_ARGS=()
 if [ "${APPLY_PR54625:-1}" = "1" ]; then
     CACHE_AWARE_ARGS=(
         --cache-aware-admission-window "${CACHE_AWARE_ADMISSION_WINDOW:-64}"
-        --cache-aware-admission-threshold "${CACHE_AWARE_ADMISSION_THRESHOLD:-0.5}"
+        --cache-aware-admission-threshold "${CACHE_AWARE_ADMISSION_THRESHOLD:-0.0}"
     )
 fi
 
@@ -424,8 +424,8 @@ VLLM_CMD=(
     --enable-prompt-tokens-details
     --no-async-scheduling
     --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
-    # --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
-    # "${CACHE_AWARE_ARGS[@]}"
+    --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
+    "${CACHE_AWARE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${EP_ARGS[@]}"
