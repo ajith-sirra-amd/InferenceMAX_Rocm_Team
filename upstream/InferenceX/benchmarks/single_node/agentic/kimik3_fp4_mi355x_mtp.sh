@@ -144,7 +144,8 @@ case "$CONC" in
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
         elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
-        else MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"; fi
+        elif [ "$CONC" -eq 80 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"
+        else MAX_NUM_SEQS="${MAX_NUM_SEQS:-128}"; fi
         ;;
 esac
 export DCP_SIZE
