@@ -1,5 +1,64 @@
 # Kimi-K3 — where the time actually goes
 
+## 2026-10-07 — Prefill MLA attention (fmha) attack plan: scope and ceiling
+
+Current numbers only (the 5.6% estimate in the superseded sections below is
+retired — see "Three earlier claims this retires").
+
+**Where prefill time goes:**
+
+| Thing happening | Share of prefill time |
+|---|---:|
+| Attention math (fmha) | **71.3%** |
+| GPU-to-GPU sync (collectives) | 9.0% |
+| Dense matrix math (GEMM) | 8.1% |
+| Decode-overlap attention leftover | 6.0% |
+| Everything else | ~1% |
+
+**Current vs ideal kernel:**
+
+| | Current | Ideal |
+|---|---|---|
+| Entry point | `_forward_prefill_fused` (K3-specific) | `rocm_aiter_mla.forward_mha` |
+| KV read | FP8 cache, dequantised to BF16 first | Stays FP8 throughout |
+| QK/PV | BF16 | FP8 |
+| Softmax | FP32 | FP32 (unverified whether BF16 is even exposed as an option — needs kernel inspection) |
+| FP8 path exists? | No — zero FP8 refs in this backend | Yes, in AITER (`aiter.mla_prefill_ps_asm_fwd`), just not wired to K3 |
+
+**E2e ceiling, done properly (gain = `1/(1-saved) - 1`, not the raw wall-time share):**
+
+| Scenario | Assumption | Wall-time saved | Real throughput gain |
+|---|---|---:|---:|
+| Full kernel, optimistic | FP8 QK/PV hits same ~2x as GEMMs elsewhere | 8.5% | **~9%** |
+| Full kernel, realistic | Dequant + softmax dilute the ratio — 1.3-1.5x | 4-5.5% | **~4-6%** |
+| Softmax-only (BF16 instead of FP32) | Softmax is maybe 1/3-1/2 of fmha's cost, ~2x on that slice | 2.5-4% | **~3-4%** |
+
+**Stacked against the rest of the priority list (by e2e wall):**
+
+| Lever | Share of wall | Ceiling if attacked |
+|---|---:|---|
+| Idle (decode launch-rate) | 28.2% | Biggest, untouched |
+| Collectives (DCP on generic NCCL) | 21.3% | Known fix exists, likely cheaper than a kernel rewrite |
+| **Attention (this plan)** | 16.9% | **~4-9%, per above** |
+| BF16 dense GEMM → FP8 | 11.9% | ~+6.5% (already measured, no new kernel plumbing) |
+
+**Verdict:** real lever, ranked #3, single-digit-percent ceiling — not a
+breakthrough. Proceeding anyway for the kernel-finetuning groundwork, not
+because it's the biggest number on the board.
+
+**Plan, in order:**
+1. Inspect the real kernel signatures from inside the production container
+   (`KERNEL_INSPECT=1` hook, already built into `kimik3_fp4_mi355x_mtp.sh` +
+   `runners/launch_mi355x-amd.sh`, not yet dispatched) — get the exact shape,
+   which patch/overlay it's coming through, and whether a softmax-precision
+   knob even exists before assuming FP8 QK/PV is the only option.
+2. Isolated correctness + speed test on K3's real dims (12 heads/rank, qk=192,
+   v=128) comparing current vs candidate kernel, outside the full model.
+3. Only then: wire into `_forward_prefill_fused`, behind a flag, re-verify DCP
+   + MTP still work, GSM8K-gate, measure end to end.
+
+---
+
 ## 2026-09-24 — torch profiler, b23, TP8/DCP8, `nightly-rocm100-e9757321` + #56861
 
 **Prefill sharing the step sets TPOT, not kernel speed.**
