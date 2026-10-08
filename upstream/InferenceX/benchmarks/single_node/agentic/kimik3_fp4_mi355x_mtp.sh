@@ -17,7 +17,7 @@ check_env_vars DCP_SIZE EVAL_ONLY
 export APPLY_PR59591="${APPLY_PR59591:-1}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- CONFLICTS with #59693, leave 0 while that's 1
 export APPLY_PR59069="${APPLY_PR59069:-1}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant
 export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
-export APPLY_PR59693="${APPLY_PR59693:-0}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | Ajith Comments : Engine dies when included. | 2026-10-08: PR updated (addmm_ hipBLASLt fault fix), re-staged, re-testing -- see block below
+export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | Ajith Comments : Engine dies when included. | 2026-10-08: PR updated (addmm_ hipBLASLt fault fix), re-staged, re-testing -- see block below
 export APPLY_PR59965="${APPLY_PR59965:-1}"  # ROCm DCP: default MLA DCP verify to round-robin asm
 export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
 export APPLY_PR54627="${APPLY_PR54627:-1}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT (real trade-off, see block below)
@@ -92,8 +92,8 @@ SPEC_ARGS=()
 SPEC_ROWS=1
 KDA_ARGS=()
 case "$CONC" in
-    1|2|4|8|10|12|14|16|72)
-        DCP_SIZE=8
+    1|2|4|8|10|12|14|16)
+        DCP_SIZE=1
         OFFLOAD_POLICY=harness
         case "$CONC" in
             1)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}" ;;
