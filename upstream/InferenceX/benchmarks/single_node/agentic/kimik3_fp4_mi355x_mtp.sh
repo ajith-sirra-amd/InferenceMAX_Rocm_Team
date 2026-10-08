@@ -92,8 +92,8 @@ SPEC_ARGS=()
 SPEC_ROWS=1
 KDA_ARGS=()
 case "$CONC" in
-    1|2|4|8|10|12|14|16)
-        DCP_SIZE=1
+    1|2|4|8|10|12|14|16|72)
+        DCP_SIZE=8
         OFFLOAD_POLICY=harness
         case "$CONC" in
             1)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}" ;;
@@ -135,7 +135,7 @@ case "$CONC" in
         esac
         MAX_NUM_SEQS="${MAX_NUM_SEQS:-$SPEC_SEATS}"
         if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
-        else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
+        else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"; fi
         ;;
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
