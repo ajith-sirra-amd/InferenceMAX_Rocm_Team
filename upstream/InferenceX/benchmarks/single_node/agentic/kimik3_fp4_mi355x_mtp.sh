@@ -439,8 +439,8 @@ VLLM_CMD=(
     --enable-prompt-tokens-details
     --no-async-scheduling
     --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
-    --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
-    "${CACHE_AWARE_ARGS[@]}"
+    # --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"
+    # "${CACHE_AWARE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${EP_ARGS[@]}"
