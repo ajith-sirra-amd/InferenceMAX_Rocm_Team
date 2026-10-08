@@ -17,7 +17,7 @@ check_env_vars DCP_SIZE EVAL_ONLY
 export APPLY_PR59591="${APPLY_PR59591:-0}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- CONFLICTS with #59693, leave 0 while that's 1
 export APPLY_PR59069="${APPLY_PR59069:-0}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant
 export APPLY_PR59070="${APPLY_PR59070:-0}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
-export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | Ajith Comments : Engine dies when included. 
+export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | Ajith Comments : Engine dies when included. | 2026-10-08: PR updated (addmm_ hipBLASLt fault fix), re-staged, re-testing -- see block below
 export APPLY_PR59965="${APPLY_PR59965:-0}"  # ROCm DCP: default MLA DCP verify to round-robin asm
 export APPLY_PR59966="${APPLY_PR59966:-0}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
 export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT (real trade-off, see block below)
@@ -220,12 +220,16 @@ for f in ["vllm/_aiter_ops.py","vllm/v1/attention/backends/mla/rocm_aiter_mla.py
 apply_pr59070 || { echo "[pr59070] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
-# #59693 -- token-sharded residual stream for long prefills. OFF by default:
-# confirmed live hang (run 37474503331, isolated -- only this patch active).
-# Rank 0 and Rank 4 stuck at wildly different NCCL collective SeqNums
-# (14,137 vs 47,632) -- ranks diverged on whether to take the SP collective
-# path, a real correctness bug in the patch, not an interaction with another
-# staged PR. Not re-enabling without an upstream fix.
+# #59693 -- token-sharded residual stream for long prefills. Previously
+# disabled after a live hang (run 37474503331, isolated -- only this patch
+# active): Rank 0 and Rank 4 stuck at wildly different NCCL SeqNums.
+# 2026-10-08: PR updated upstream -- replaced two addmm_ calls with a plain
+# GEMM + add. hipBLASLt's C-accumulating bf16 GEMM faults at specific row
+# counts (2914-2925 rows at 7168x3584; 23393-23405 rows at 896x3584), both
+# reachable by our long-prefill agentic workload at TP8. Plausible root cause
+# of the earlier hang. Patch re-staged (diff updated, dry-run + py_compile
+# verified) and re-enabled below for a fresh isolated test -- not yet
+# confirmed fixed by a live run.
 # -----------------------------------------------------------------------------
 apply_pr59693() {
     [ "${APPLY_PR59693:-0}" = "1" ] || { echo "[pr59693] disabled"; return 0; }
