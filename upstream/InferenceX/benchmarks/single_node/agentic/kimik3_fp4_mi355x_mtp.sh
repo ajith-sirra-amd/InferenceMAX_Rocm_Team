@@ -145,7 +145,7 @@ case "$CONC" in
         if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
         elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         elif [ "$CONC" -eq 80 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"
-        else MAX_NUM_SEQS="${MAX_NUM_SEQS:-128}"; fi
+        else MAX_NUM_SEQS="${MAX_NUM_SEQS:-144}"; fi
         ;;
 esac
 export DCP_SIZE
