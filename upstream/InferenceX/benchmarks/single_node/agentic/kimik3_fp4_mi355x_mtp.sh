@@ -491,15 +491,40 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
 # knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
 if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
-    echo "[kernel-inspect] full dump: aiter.flydsl.fmha_kernels (the real prefill kernel on gfx950)"
+    echo "[kernel-inspect] full dump: flydsl fmha_kernels module (the real prefill kernel on gfx950)"
     python3 - > "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
 import inspect
+import importlib
 
 print("=" * 80)
-print("MODULE: aiter.flydsl.fmha_kernels -- full source")
+print("RESOLVING the real module path (the .flydsl.fmha_kernels import is")
+print("relative, inside flash_attn_varlen_func's body -- compute it properly")
+print("instead of guessing an absolute path)")
 print("=" * 80)
+m = None
 try:
-    import aiter.flydsl.fmha_kernels as m
+    import aiter
+    fn = aiter.flash_attn_varlen_func
+    base_module = fn.__module__
+    print("flash_attn_varlen_func.__module__ =", base_module)
+    parent_pkg = base_module.rsplit(".", 1)[0]
+    target = parent_pkg + ".flydsl.fmha_kernels"
+    print("resolved target module:", target)
+    m = importlib.import_module(target)
+    print("import OK:", m.__file__)
+except Exception as e:
+    print("resolution failed:", e)
+    # Fallback: brute-force search for any loaded/importable flydsl fmha module.
+    import sys
+    for name in list(sys.modules):
+        if "flydsl" in name and "fmha" in name:
+            print("sys.modules candidate:", name)
+
+print("\n" + "=" * 80)
+print("MODULE -- full source")
+print("=" * 80)
+src = None
+try:
     print("file:", m.__file__)
     src = inspect.getsource(m)
     print(f"total lines: {len(src.splitlines())}")
