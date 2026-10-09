@@ -15,14 +15,15 @@ check_env_vars DCP_SIZE EVAL_ONLY
 # does, requirements, and known conflicts with other staged PRs.
 # =============================================================================
 export APPLY_PR59591="${APPLY_PR59591:-0}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- measured net loss (-1.3% tput), replaced by #59693 below
-export APPLY_PR59069="${APPLY_PR59069:-1}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant
-export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
-export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | 2026-10-08: PR updated (addmm_ hipBLASLt fault fix), re-staged -- ran crash-free at C70, first real throughput measurement this run
+export APPLY_PR59069="${APPLY_PR59069:-0}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant -- OFF: isolating #54494 this run
+export APPLY_PR59070="${APPLY_PR59070:-0}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather -- OFF: isolating #54494 this run
+export APPLY_PR59693="${APPLY_PR59693:-0}"  # Kimi-K3: token-sharded residual stream for long prefills -- OFF: isolating #54494 this run
 export APPLY_PR59965="${APPLY_PR59965:-0}"  # ROCm DCP: default MLA DCP verify to round-robin asm -- MERGED + already native in current pinned image; no-op for our workload (spec-decode batches only), excluded
-export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
+export APPLY_PR59966="${APPLY_PR59966:-0}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies -- OFF: isolating #54494 this run
 export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT -- not worth it, TTFT cost too large for the TPOT gain
-export APPLY_PR54625="${APPLY_PR54625:-1}"  # cache-aware admission ordering -- was measured bundled with #54627 above, not isolated
+export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- OFF: isolating #54494 this run
 export APPLY_PR58743="${APPLY_PR58743:-0}"  # Kimi-K3: support BF16 KDA recurrent state -- OFF: crashes decode, see block below
+export APPLY_PR54494="${APPLY_PR54494:-1}"  # ROCm DCP: MLA query replication, skip per-layer query all-gather -- isolated test against the zero-patch baseline (14,077 tok/s/GPU, conc=96)
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
@@ -420,6 +421,39 @@ if [ "${APPLY_PR54625:-1}" = "1" ]; then
         --cache-aware-admission-window 64
         --cache-aware-admission-threshold 0.0
     )
+fi
+
+# -----------------------------------------------------------------------------
+# #54494 -- DCP MLA query replication. Each rank materializes the DCP group's
+# full query head set locally instead of all-gathering it every layer --
+# trades a small redundant local projection for one fewer per-layer collective.
+# Unmeasured upstream ("4K/4K serving perf still being rerun, not reported
+# yet"); GSM8K passed clean (0.9629 vs 0.9598 off). Hand-adapted: the PR's
+# fp4-branch hunk targets code since refactored to a replace_parameter-based
+# pattern (CUDA-graph-safe in-place reload); the PR's own already-written
+# fp4-branch logic was moved to the correct post-refactor insertion point, not
+# invented. Needs VLLM_DCP_Q_REPLICATE=1 -- off by default upstream.
+# -----------------------------------------------------------------------------
+apply_pr54494() {
+    [ "${APPLY_PR54494:-0}" = "1" ] || { echo "[pr54494] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54494-dcp-query-replication.diff"
+    [ -f "$diff_file" ] || { echo "[pr54494] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.v1.attention.ops.dcp as m
+import sys; sys.exit(0 if "resolve_dcp_q_replicate" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[pr54494] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/model_executor/layers/attention/mla_attention.py","vllm/models/kimi_k3/amd/linear.py","vllm/v1/attention/ops/dcp.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[pr54494] applied"
+}
+apply_pr54494 || { echo "[pr54494] patch failed, refusing to run" >&2; exit 1; }
+if [ "${APPLY_PR54494:-0}" = "1" ]; then
+    export VLLM_DCP_Q_REPLICATE=1
 fi
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
