@@ -137,13 +137,47 @@ case "$CONC" in
         if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"; fi
         ;;
+    72)
+        # DCP8 + MTP together. The old blocker (no ROCm backend declaring
+        # non-causal-DCP support, NCCL hang) is already fixed natively in the
+        # current pinned image (supports_non_causal_multi_token_dcp = True,
+        # confirmed) -- this script just never wired the two paths together
+        # before. Agentic MTP+DCP numbers are unmeasured prior to this.
+        DCP_SIZE="${DCP_SIZE:-8}"
+        OFFLOAD_POLICY=harness
+        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
+        MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
+        SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}"
+        case "$SPEC_NUM_TOKENS" in
+            1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
+            2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
+            3) SYNTHETIC_ACCEPT_LEN=3.00 ;;
+            4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
+            5) SYNTHETIC_ACCEPT_LEN=3.62 ;;
+            6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
+            7) SYNTHETIC_ACCEPT_LEN=3.84 ;;
+            8) SYNTHETIC_ACCEPT_LEN=4.00 ;;
+            *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
+        esac
+        DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
+        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
+        if [ "${EVAL_ONLY:-false}" = "true" ]; then
+            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
+            echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) under DCP=$DCP_SIZE, draft_kv=$DRAFT_KV_DTYPE"
+        else
+            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
+            echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN under DCP=$DCP_SIZE, draft_kv=$DRAFT_KV_DTYPE"
+        fi
+        # Ladder must be mns x spec_rows (HANDOFF.md 2026-09-23) -- capping
+        # it sends batches above the cap to eager, costs ~40% TPOT.
+        SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
+        ;;
     *)
         DCP_SIZE="${DCP_SIZE:-8}"
         OFFLOAD_POLICY=harness
         if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
         if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
-        elif [ "$CONC" -eq 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
         elif [ "$CONC" -eq 80 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"
         else MAX_NUM_SEQS="${MAX_NUM_SEQS:-144}"; fi
         ;;
