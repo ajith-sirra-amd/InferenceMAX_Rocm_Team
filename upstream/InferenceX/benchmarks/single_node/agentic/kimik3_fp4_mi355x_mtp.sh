@@ -491,82 +491,65 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
 # knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
 if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
-    echo "[kernel-inspect] full dump: flydsl fmha_kernels module (the real prefill kernel on gfx950)"
+    echo "[kernel-inspect] full dump: the real BF16/gfx950 fallback path (Triton or CK)"
     python3 - > "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
 import inspect
-import importlib
 
-print("=" * 80)
-print("RESOLVING the real module path (the .flydsl.fmha_kernels import is")
-print("relative, inside flash_attn_varlen_func's body -- compute it properly")
-print("instead of guessing an absolute path)")
-print("=" * 80)
-m = None
+def dump_module(label, m):
+    print("\n" + "=" * 80)
+    print(f"MODULE: {label} -- full source")
+    print("=" * 80)
+    try:
+        print("file:", m.__file__)
+        src = inspect.getsource(m)
+        print(f"total lines: {len(src.splitlines())}")
+        print(src)
+        print(f"\n--- keyword scan: {label} ---")
+        for kw in ("softmax", "accum", "fp32", "dtype", "precision", "cast"):
+            hits = [i for i, l in enumerate(src.splitlines()) if kw in l]
+            print(f"'{kw}': {len(hits)} hits at lines {hits[:15]}")
+    except Exception as e:
+        print(f"{label} dump failed:", e)
+
+# Already established: FlyDSL (gfx950+bf16) always returns None for us --
+# confirmed in code, not inference (gfx1250-only gate in flydsl_flash_attn_varlen_func).
+# Real question now: which of Triton or CK actually runs for us on gfx950+bf16.
 try:
     import aiter
+    print("ENABLE_CK as seen by the installed aiter package:")
+    try:
+        import aiter.jit.core as jitcore
+        print("  aiter.jit.core.ENABLE_CK =", getattr(jitcore, "ENABLE_CK", "NOT FOUND"))
+    except Exception as e:
+        print("  lookup failed:", e)
     fn = aiter.flash_attn_varlen_func
-    base_module = fn.__module__
-    print("flash_attn_varlen_func.__module__ =", base_module)
-    parent_pkg = base_module.rsplit(".", 1)[0]
-    target = parent_pkg + ".flydsl.fmha_kernels"
-    print("resolved target module:", target)
-    m = importlib.import_module(target)
-    print("import OK:", m.__file__)
+    print("flash_attn_varlen_func.__module__ =", fn.__module__)
 except Exception as e:
-    print("resolution failed:", e)
-    # Fallback: brute-force search for any loaded/importable flydsl fmha module.
-    import sys
-    for name in list(sys.modules):
-        if "flydsl" in name and "fmha" in name:
-            print("sys.modules candidate:", name)
+    print("aiter top-level inspect failed:", e)
 
-print("\n" + "=" * 80)
-print("MODULE -- full source")
-print("=" * 80)
-src = None
 try:
-    print("file:", m.__file__)
-    src = inspect.getsource(m)
-    print(f"total lines: {len(src.splitlines())}")
-    print(src)
+    from aiter.ops.triton.attention.mha import (
+        flash_attn_varlen_func as triton_fn,
+    )
+    dump_module("aiter.ops.triton.attention.mha (Triton path)", inspect.getmodule(triton_fn))
 except Exception as e:
-    print("module dump failed:", e)
+    print("\nTriton path import failed:", e)
 
-print("\n" + "=" * 80)
-print("KEYWORD SCAN across the module (for cross-check / follow-up)")
-print("=" * 80)
 try:
-    for kw in ("bf16_cvt", "softmax", "accum", "fp32", "dtype", "precision", "cast", "tuned", "config"):
-        hits = [i for i, l in enumerate(src.splitlines()) if kw in l]
-        print(f"'{kw}': {len(hits)} hits at lines {hits[:15]}")
+    import aiter.ops.mha as ck_mod
+    print("\n--- CK module: aiter.ops.mha, looking for FlashAttnVarlenFunc ---")
+    cls = getattr(ck_mod, "FlashAttnVarlenFunc", None)
+    if cls is not None:
+        print("FlashAttnVarlenFunc found, forward signature:")
+        print(inspect.signature(cls.forward))
+        try:
+            print(inspect.getsource(cls.forward))
+        except Exception as e:
+            print("(no python source for forward, likely C++-bound):", e)
+    else:
+        print("FlashAttnVarlenFunc not found in aiter.ops.mha")
 except Exception as e:
-    print("keyword scan failed:", e)
-
-print("\n" + "=" * 80)
-print("All top-level functions/classes in the module")
-print("=" * 80)
-try:
-    for name, obj in vars(m).items():
-        if inspect.isfunction(obj) or inspect.isclass(obj):
-            if getattr(obj, "__module__", None) == m.__name__:
-                try:
-                    sig = inspect.signature(obj) if inspect.isfunction(obj) else ""
-                except Exception:
-                    sig = "(signature unavailable)"
-                print(f"{'class' if inspect.isclass(obj) else 'def'} {name}{sig}")
-except Exception as e:
-    print("symbol listing failed:", e)
-
-print("\n" + "=" * 80)
-print("Any imported low-level kernel/op referenced by this module")
-print("=" * 80)
-try:
-    for line in src.splitlines():
-        s = line.strip()
-        if s.startswith("import ") or s.startswith("from "):
-            print(s)
-except Exception as e:
-    print("import scan failed:", e)
+    print("CK module inspect failed:", e)
 PYEOF
     cat "$RESULT_DIR/kernel_inspect.txt"
     echo "[kernel-inspect] done, exiting before server start"
