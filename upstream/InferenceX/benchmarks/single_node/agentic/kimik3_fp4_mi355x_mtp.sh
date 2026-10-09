@@ -485,6 +485,46 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
 
+# KERNEL_INSPECT=1 -- dump the BF16 prefill attention kernel's real signature
+# from inside the production container (needs a live GPU, aiter queries
+# rocminfo at import time), then exit before the server starts. Answers one
+# question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
+# knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
+if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
+    echo "[kernel-inspect] dumping flash_attn_varlen_func signature/source"
+    python3 - > "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
+import inspect
+
+try:
+    import aiter
+    print("aiter file:", aiter.__file__)
+    fn = aiter.flash_attn_varlen_func
+    print("\n--- signature: aiter.flash_attn_varlen_func ---")
+    print(inspect.signature(fn))
+    print("\n--- docstring ---")
+    print(inspect.getdoc(fn))
+    try:
+        print("\n--- source ---")
+        print(inspect.getsource(fn))
+    except Exception as e:
+        print(f"[no python source: {e}]")
+except Exception as e:
+    print("aiter import/inspect failed:", e)
+
+try:
+    import vllm.v1.attention.backends.mla.rocm_aiter_mla as m
+    src = inspect.getsource(m)
+    idx = src.find("def _flash_attn_varlen_diff_headdims")
+    print("\n--- _flash_attn_varlen_diff_headdims wrapper ---")
+    print(src[idx:idx+600])
+except Exception as e:
+    print("rocm_aiter_mla inspect failed:", e)
+PYEOF
+    cat "$RESULT_DIR/kernel_inspect.txt"
+    echo "[kernel-inspect] done, exiting before server start"
+    exit 0
+fi
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
