@@ -138,16 +138,15 @@ case "$CONC" in
         if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"; fi
         ;;
-    72)
-        # DCP8 + MTP together. The old blocker (no ROCm backend declaring
-        # non-causal-DCP support, NCCL hang) is already fixed natively in the
-        # current pinned image (supports_non_causal_multi_token_dcp = True,
-        # confirmed) -- this script just never wired the two paths together
-        # before. Agentic MTP+DCP numbers are unmeasured prior to this.
+    64|72)
         DCP_SIZE="${DCP_SIZE:-8}"
         OFFLOAD_POLICY=harness
         MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
-        MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
+        if [ "$CONC" -eq 64 ]; then
+            MAX_NUM_SEQS="${MAX_NUM_SEQS:-80}"
+        else
+            MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
+        fi
         SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}"
         case "$SPEC_NUM_TOKENS" in
             1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
