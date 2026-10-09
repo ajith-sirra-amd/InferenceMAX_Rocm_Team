@@ -24,6 +24,7 @@ export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside 
 export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- OFF: isolating the fixed #54494 this run
 export APPLY_PR58743="${APPLY_PR58743:-0}"  # Kimi-K3: support BF16 KDA recurrent state -- OFF: crashes decode, see block below
 export APPLY_PR54494="${APPLY_PR54494:-0}"  # ROCm DCP: MLA query replication, skip per-layer query all-gather -- OFF again: the aa652bbb fix (W_K_dcp_qrep) was real but insufficient -- run 37946632603 hit the identical NCCL _ALLGATHER_BASE deadlock (same shapes) despite the fix. Real culprit is likely MLADCPManager's old query_gather collective firing asymmetrically when qrep_decode isn't True for every rank/step -- not yet root-caused. See PR54494-ROOT-CAUSE-AND-FIX.md.
+export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-0}"  # temporary: log qrep_decode per rank per decode step (needs APPLY_PR54494=1 and VLLM_DEBUG_QREP=1 to actually print). Investigation tool, not a real patch.
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
@@ -455,6 +456,30 @@ if [ "${APPLY_PR54494:-0}" = "1" ]; then
     export VLLM_DCP_Q_REPLICATE=1
 fi
 
+# Temporary debug instrumentation for the #54494 investigation: logs
+# qrep_decode per rank per decode call when VLLM_DEBUG_QREP=1 at runtime.
+# See PR54494-ROOT-CAUSE-AND-FIX.md. Uses git apply, not patch -p1 --
+# classic patch mysteriously fails to match this hunk's context even
+# though it's byte-verified correct (git apply applies it cleanly); not
+# worth chasing further, this is throwaway debug code.
+apply_debug_qrep() {
+    [ "${APPLY_DEBUG_QREP:-0}" = "1" ] || { echo "[debug-qrep] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/debug-qrep-logging.diff"
+    [ -f "$diff_file" ] || { echo "[debug-qrep] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.model_executor.layers.attention.mla_attention as m
+import sys; sys.exit(0 if "qrep-debug" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[debug-qrep] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && git apply --unsafe-paths "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+py_compile.compile("'"$site"'/vllm/model_executor/layers/attention/mla_attention.py", doraise=True)' || return 1
+    echo "[debug-qrep] applied"
+}
+apply_debug_qrep || { echo "[debug-qrep] patch failed, refusing to run" >&2; exit 1; }
+
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 
@@ -689,6 +714,56 @@ pin_workers_to_ccd() {
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
 pin_workers_to_ccd || true
+
+# SMOKE_TEST=1 -- fast reproduction for the #54494 NCCL deadlock
+# investigation. Skips the full ~1hr agentic replay (whose warmup alone
+# takes 30-50min before the hang has historically manifested) in favor of
+# firing a bounded, sustained batch of direct curl requests against the
+# live server, with VLLM_DEBUG_QREP=1 set so qrep_decode gets logged per
+# rank per decode step. See PR54494-ROOT-CAUSE-AND-FIX.md.
+if [ "${SMOKE_TEST:-0}" = "1" ]; then
+    SMOKE_DURATION="${SMOKE_DURATION:-480}"
+    SMOKE_CONCURRENCY="${SMOKE_CONCURRENCY:-32}"
+    echo "[smoke-test] duration=${SMOKE_DURATION}s concurrency=${SMOKE_CONCURRENCY}"
+    PROMPT_JSON=$(python3 -c '
+import json
+filler = ("The quick brown fox jumps over the lazy dog. " * 400)
+print(json.dumps(filler))
+')
+    smoke_fire_one() {
+        curl -s -o /dev/null -w "" --max-time 120 \
+            -X POST "http://127.0.0.1:${PORT}/v1/chat/completions" \
+            -H "Content-Type: application/json" \
+            -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":${PROMPT_JSON}}],\"max_tokens\":$(( (RANDOM % 350) + 50 )),\"stream\":false}" \
+            >> "$RESULT_DIR/smoke_test_curl.log" 2>&1
+    }
+    SMOKE_END=$(( $(date +%s) + SMOKE_DURATION ))
+    SMOKE_PIDS=()
+    for _ in $(seq 1 "$SMOKE_CONCURRENCY"); do
+        smoke_fire_one &
+        SMOKE_PIDS+=("$!")
+        sleep 0.3
+    done
+    while [ "$(date +%s)" -lt "$SMOKE_END" ]; do
+        for i in "${!SMOKE_PIDS[@]}"; do
+            if ! kill -0 "${SMOKE_PIDS[$i]}" 2>/dev/null; then
+                smoke_fire_one &
+                SMOKE_PIDS[$i]=$!
+            fi
+        done
+        sleep 5
+    done
+    echo "[smoke-test] duration elapsed, collecting results"
+    for pid in "${SMOKE_PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
+    wait 2>/dev/null || true
+    echo "[smoke-test] qrep-debug lines from server log:"
+    grep -c "qrep-debug" "$SERVER_LOG" 2>/dev/null || echo "0"
+    grep "qrep-debug" "$SERVER_LOG" 2>/dev/null | tail -40
+    echo "[smoke-test] any collective/engine errors:"
+    grep -iE "ALLGATHER|Watchdog|DistBackendError|EngineDeadError|Traceback" "$SERVER_LOG" 2>/dev/null | tail -40
+    echo "[smoke-test] done, exiting before full harness"
+    exit 0
+fi
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"

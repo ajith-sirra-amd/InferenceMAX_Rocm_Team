@@ -1,0 +1,27 @@
+diff --git a/vllm/model_executor/layers/attention/mla_attention.py b/vllm/model_executor/layers/attention/mla_attention.py
+--- a/vllm/model_executor/layers/attention/mla_attention.py
++++ b/vllm/model_executor/layers/attention/mla_attention.py
+@@ -1023,12 +1023,23 @@
+             )
+
+         if num_mqa_tokens > 0:
+             if q_dcp_replicated is not None:
+                 mqa_q = q_dcp_replicated[:num_mqa_tokens]
+                 qrep_decode = True
+             else:
+                 mqa_q = q[:num_mqa_tokens]
+                 qrep_decode = False
++            import os as _os
++            if _os.environ.get("VLLM_DEBUG_QREP"):
++                import torch.distributed as _dist
++                logger.info(
++                    "[qrep-debug] rank=%s qrep_decode=%s num_mqa_tokens=%s "
++                    "q_dcp_replicated_is_none=%s",
++                    _dist.get_rank() if _dist.is_initialized() else -1,
++                    qrep_decode,
++                    num_mqa_tokens,
++                    q_dcp_replicated is None,
++                )
+             mqa_output_slice = output[:num_mqa_tokens]
+
+             mqa_q_nope, mqa_q_pe = mqa_q.split(
