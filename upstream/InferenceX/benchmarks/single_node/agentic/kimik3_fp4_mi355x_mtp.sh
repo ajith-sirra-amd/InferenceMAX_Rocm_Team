@@ -491,65 +491,61 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
 # knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
 if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
-    echo "[kernel-inspect] full dump: the real BF16/gfx950 fallback path (Triton or CK)"
+    echo "[kernel-inspect] checking flydsl_flash_attn_fp8_supported for K3's real MLA shapes"
     python3 - > "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
 import inspect
 
-def dump_module(label, m):
-    print("\n" + "=" * 80)
-    print(f"MODULE: {label} -- full source")
-    print("=" * 80)
-    try:
-        print("file:", m.__file__)
-        src = inspect.getsource(m)
-        print(f"total lines: {len(src.splitlines())}")
-        print(src)
-        print(f"\n--- keyword scan: {label} ---")
-        for kw in ("softmax", "accum", "fp32", "dtype", "precision", "cast"):
-            hits = [i for i, l in enumerate(src.splitlines()) if kw in l]
-            print(f"'{kw}': {len(hits)} hits at lines {hits[:15]}")
-    except Exception as e:
-        print(f"{label} dump failed:", e)
-
-# Already established: FlyDSL (gfx950+bf16) always returns None for us --
-# confirmed in code, not inference (gfx1250-only gate in flydsl_flash_attn_varlen_func).
-# Real question now: which of Triton or CK actually runs for us on gfx950+bf16.
+print("=" * 80)
+print("flash_attn_func_fp8_gfx950 module -- full source")
+print("=" * 80)
 try:
-    import aiter
-    print("ENABLE_CK as seen by the installed aiter package:")
-    try:
-        import aiter.jit.core as jitcore
-        print("  aiter.jit.core.ENABLE_CK =", getattr(jitcore, "ENABLE_CK", "NOT FOUND"))
-    except Exception as e:
-        print("  lookup failed:", e)
-    fn = aiter.flash_attn_varlen_func
-    print("flash_attn_varlen_func.__module__ =", fn.__module__)
+    import aiter.ops.flydsl.kernels.flash_attn_func_fp8_gfx950 as m
+    print("file:", m.__file__)
+    src = inspect.getsource(m)
+    print(f"total lines: {len(src.splitlines())}")
+    print(src)
 except Exception as e:
-    print("aiter top-level inspect failed:", e)
+    print("module dump failed:", e)
 
+print("\n" + "=" * 80)
+print("Actually CALL flydsl_flash_attn_fp8_supported with K3's real MLA shapes")
+print("TP8: 12 heads/rank. qk_head_dim=192 (128 nope + 64 rope), v_head_dim=128.")
+print("=" * 80)
 try:
-    from aiter.ops.triton.attention.mha import (
-        flash_attn_varlen_func as triton_fn,
+    import torch
+    from aiter.ops.flydsl.kernels.flash_attn_func_fp8_gfx950 import (
+        flydsl_flash_attn_fp8_supported,
     )
-    dump_module("aiter.ops.triton.attention.mha (Triton path)", inspect.getmodule(triton_fn))
-except Exception as e:
-    print("\nTriton path import failed:", e)
-
-try:
-    import aiter.ops.mha as ck_mod
-    print("\n--- CK module: aiter.ops.mha, looking for FlashAttnVarlenFunc ---")
-    cls = getattr(ck_mod, "FlashAttnVarlenFunc", None)
-    if cls is not None:
-        print("FlashAttnVarlenFunc found, forward signature:")
-        print(inspect.signature(cls.forward))
+    device = torch.device("cuda:0")
+    # After kv_b_proj decompression MLA has gqa_ratio=1: q, k, v all carry the
+    # same head count. TP8 -> 12 heads/rank, both for new-tokens attention and
+    # context-chunk attention (same shapes, just different K/V source).
+    for nq, nkv in [(12, 12)]:
         try:
-            print(inspect.getsource(cls.forward))
+            result = flydsl_flash_attn_fp8_supported(
+                device, nq, nkv, 192, 128, dtype=torch.float8_e4m3fn
+            )
+            print(f"nq={nq} nkv={nkv} qk_hdim=192 v_hdim=128: SUPPORTED = {result}")
         except Exception as e:
-            print("(no python source for forward, likely C++-bound):", e)
-    else:
-        print("FlashAttnVarlenFunc not found in aiter.ops.mha")
+            print(f"nq={nq} nkv={nkv}: call failed: {e}")
 except Exception as e:
-    print("CK module inspect failed:", e)
+    print("flydsl_flash_attn_fp8_supported import/call failed:", e)
+
+print("\n" + "=" * 80)
+print("Does the base MLACommonImpl.forward_mha's use_fp8_prefill path exist")
+print("and what sets q_data_type -- confirm use_prefill_query_quantization wiring")
+print("=" * 80)
+try:
+    import vllm.model_executor.layers.attention.mla_attention as mla
+    src2 = inspect.getsource(mla)
+    idx = src2.find("use_prefill_query_quantization")
+    while idx != -1:
+        print(f"--- hit at offset {idx} ---")
+        print(src2[max(0,idx-200):idx+300])
+        print()
+        idx = src2.find("use_prefill_query_quantization", idx + 1)
+except Exception as e:
+    print("mla_attention scan failed:", e)
 PYEOF
     cat "$RESULT_DIR/kernel_inspect.txt"
     echo "[kernel-inspect] done, exiting before server start"
