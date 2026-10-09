@@ -14,14 +14,14 @@ check_env_vars DCP_SIZE EVAL_ONLY
 # unpatched for that PR). See each PR's own comment block below for what it
 # does, requirements, and known conflicts with other staged PRs.
 # =============================================================================
-export APPLY_PR59591="${APPLY_PR59591:-0}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- CONFLICTS with #59693, leave 0 while that's 1
-export APPLY_PR59069="${APPLY_PR59069:-0}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant
-export APPLY_PR59070="${APPLY_PR59070:-0}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
-export APPLY_PR59693="${APPLY_PR59693:-0}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | Ajith Comments : Engine dies when included. | 2026-10-08: PR updated (addmm_ hipBLASLt fault fix), re-staged, re-testing -- see block below
-export APPLY_PR59965="${APPLY_PR59965:-0}"  # ROCm DCP: default MLA DCP verify to round-robin asm
-export APPLY_PR59966="${APPLY_PR59966:-0}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
-export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT (real trade-off, see block below)
-export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- measured together with #54627 above
+export APPLY_PR59591="${APPLY_PR59591:-0}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- measured net loss (-1.3% tput), replaced by #59693 below
+export APPLY_PR59069="${APPLY_PR59069:-1}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant
+export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
+export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills -- requires APPLY_PR59591=0 | 2026-10-08: PR updated (addmm_ hipBLASLt fault fix), re-staged -- ran crash-free at C70, first real throughput measurement this run
+export APPLY_PR59965="${APPLY_PR59965:-0}"  # ROCm DCP: default MLA DCP verify to round-robin asm -- MERGED + already native in current pinned image; no-op for our workload (spec-decode batches only), excluded
+export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
+export APPLY_PR54627="${APPLY_PR54627:-1}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT (real trade-off, see block below)
+export APPLY_PR54625="${APPLY_PR54625:-1}"  # cache-aware admission ordering -- measured together with #54627 above
 export APPLY_PR58743="${APPLY_PR58743:-0}"  # Kimi-K3: support BF16 KDA recurrent state -- OFF: crashes decode, see block below
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
