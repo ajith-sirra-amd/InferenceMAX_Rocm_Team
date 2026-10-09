@@ -491,34 +491,57 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
 # knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
 if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
-    echo "[kernel-inspect] dumping flash_attn_varlen_func signature/source"
+    echo "[kernel-inspect] full dump: aiter.flydsl.fmha_kernels (the real prefill kernel on gfx950)"
     python3 - > "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
 import inspect
 
+print("=" * 80)
+print("MODULE: aiter.flydsl.fmha_kernels -- full source")
+print("=" * 80)
 try:
-    import aiter
-    print("aiter file:", aiter.__file__)
-    fn = aiter.flash_attn_varlen_func
-    print("\n--- signature: aiter.flash_attn_varlen_func ---")
-    print(inspect.signature(fn))
-    print("\n--- docstring ---")
-    print(inspect.getdoc(fn))
-    try:
-        print("\n--- source ---")
-        print(inspect.getsource(fn))
-    except Exception as e:
-        print(f"[no python source: {e}]")
-except Exception as e:
-    print("aiter import/inspect failed:", e)
-
-try:
-    import vllm.v1.attention.backends.mla.rocm_aiter_mla as m
+    import aiter.flydsl.fmha_kernels as m
+    print("file:", m.__file__)
     src = inspect.getsource(m)
-    idx = src.find("def _flash_attn_varlen_diff_headdims")
-    print("\n--- _flash_attn_varlen_diff_headdims wrapper ---")
-    print(src[idx:idx+600])
+    print(f"total lines: {len(src.splitlines())}")
+    print(src)
 except Exception as e:
-    print("rocm_aiter_mla inspect failed:", e)
+    print("module dump failed:", e)
+
+print("\n" + "=" * 80)
+print("KEYWORD SCAN across the module (for cross-check / follow-up)")
+print("=" * 80)
+try:
+    for kw in ("bf16_cvt", "softmax", "accum", "fp32", "dtype", "precision", "cast", "tuned", "config"):
+        hits = [i for i, l in enumerate(src.splitlines()) if kw in l]
+        print(f"'{kw}': {len(hits)} hits at lines {hits[:15]}")
+except Exception as e:
+    print("keyword scan failed:", e)
+
+print("\n" + "=" * 80)
+print("All top-level functions/classes in the module")
+print("=" * 80)
+try:
+    for name, obj in vars(m).items():
+        if inspect.isfunction(obj) or inspect.isclass(obj):
+            if getattr(obj, "__module__", None) == m.__name__:
+                try:
+                    sig = inspect.signature(obj) if inspect.isfunction(obj) else ""
+                except Exception:
+                    sig = "(signature unavailable)"
+                print(f"{'class' if inspect.isclass(obj) else 'def'} {name}{sig}")
+except Exception as e:
+    print("symbol listing failed:", e)
+
+print("\n" + "=" * 80)
+print("Any imported low-level kernel/op referenced by this module")
+print("=" * 80)
+try:
+    for line in src.splitlines():
+        s = line.strip()
+        if s.startswith("import ") or s.startswith("from "):
+            print(s)
+except Exception as e:
+    print("import scan failed:", e)
 PYEOF
     cat "$RESULT_DIR/kernel_inspect.txt"
     echo "[kernel-inspect] done, exiting before server start"
