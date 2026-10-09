@@ -1,10 +1,14 @@
 # #54494 (DCP query replication): real root cause, and the real fix
 
-**Written:** 2026-10-09. Status: fix committed (`aa652bbb`), applies cleanly
-and compiles against the exact pinned vLLM commit, dispatched for its first
-real GPU test (`37946632603`, isolated conc=96, all other patches off,
-against the 14,077 tok/s/GPU clean baseline). **Not yet GPU-verified** —
-this doc will be updated once that result lands.
+**Written:** 2026-10-09. **Update (same day):** the fix below (`aa652bbb`)
+was GPU-tested (`37946632603`) and **did not resolve the hang**. The exact
+same `_ALLGATHER_BASE` collective timeout recurred, with the exact same
+tensor shapes, at a similar point in serving. The fix itself was real and
+necessary (confirmed by direct source reading, not guessed), but it was not
+sufficient — there is a second, still-unidentified issue. See "Second
+attempt: same failure, different understanding" at the bottom for the
+current, honest state of this investigation. Treat everything below the
+original fix description as superseded by that section.
 
 ---
 
@@ -221,12 +225,89 @@ flight now (`37946632603`). GSM8K accuracy gate still applies before
 trusting any throughput number from it, same as every other
 numerics-affecting change this campaign.
 
-## Next steps
+## Second attempt: same failure, different understanding
 
-1. Pull the result of `37946632603` — does the server survive serving
-   traffic, or does it hit a new failure? If it survives, what's the real
-   throughput number vs. the 14,077 baseline?
-2. If clean, GSM8K-gate it (0.995 threshold, standing rule).
-3. Only then consider stacking it with the other known-working patches
-   (`#59069`/`#59070`/`#59693`/`#59966`/`#54625`) — not before, so any
-   regression or win is attributable to this change alone.
+Run `37946632603` (the fixed patch, isolated conc=96) ran for ~50 minutes,
+then hit the **exact same symptom** as the original broken patch:
+
+```
+Watchdog caught collective operation timeout: WorkNCCL(SeqNum=83881,
+OpType=_ALLGATHER_BASE, NumelIn=4755456, NumelOut=38043648, Timeout(ms)=600000)
+```
+
+Identical op type, identical tensor sizes (`38043648 / 4755456 = 8.0`
+exactly — an 8-way gather) to the first failure. The `W_K` shape-mismatch
+bug fixed above was real and is still a correct fix for a real problem, but
+it is clearly not the (or not the only) cause of this hang.
+
+### Where this collective actually comes from
+
+`vllm/v1/attention/ops/dcp.py`'s `MLADCPManager` has exactly one all-gather
+matching this shape and purpose:
+
+```python
+def _gather_query(self, query: torch.Tensor) -> torch.Tensor:
+    query = self.group.all_gather(query, dim=1)
+```
+
+This is wired up as `self.query_gather`, and the decode call site in
+`mla_attention.py` only invokes it when **not** using the replicated path:
+
+```python
+if not qrep_decode:
+    mqa_q = self.dcp_manager.query_gather(mqa_q)
+```
+
+This is the exact collective `#54494` exists to *remove*. Its shape (an
+8-way gather, matching our DCP=8 config) lines up precisely with both
+crashes. The implication: **`qrep_decode` is not `True` for every decode
+step** while the feature is enabled — something causes some steps (or some
+ranks' view of a step) to fall back to this old collective path, and when
+that happens asymmetrically across the 8 ranks (some call it, some don't),
+the group hangs until the watchdog fires 600 seconds later.
+
+`qrep_decode` is set from `q_dcp_replicated is not None` — a parameter
+threaded all the way from a custom op (`unified_mla_attention_with_output`)
+whose actual caller lives in the Kimi-K3 model's own per-layer forward
+code (not yet read — this is the next concrete lead, not a conclusion).
+Something in that call path must be deciding, per-step or per-rank,
+whether to pass the replicated query or fall back to `None` — and that
+decision isn't staying consistent across all 8 ranks.
+
+### Why guessing a third fix blind is the wrong move here
+
+Two source-reading-based fixes have now both produced a plausible,
+verified-correct-on-paper patch that still failed identically on real
+hardware. That's a sign the remaining bug lives in a part of the system
+that's hard to reason about from source alone — likely a race or a
+data-dependent branch that diverges by rank. Continuing to patch from
+static reading risks a third confident-but-wrong attempt, each costing a
+real GPU dispatch and ~50 minutes before failing.
+
+### Proposed next step (not yet started)
+
+Build a fast, direct reproduction instead of a full agentic replay:
+
+1. Start the server with the patch applied (same as today), but skip the
+   full aiperf/agentic harness entirely.
+2. Fire a small, fixed batch of direct `curl` requests against the running
+   server — enough to exercise decode under load, but small enough to get
+   a result in minutes, not ~50 minutes of warmup.
+3. Add temporary debug logging around `qrep_decode` (per rank, per step) so
+   the actual divergence — if the hang reproduces — is directly observable
+   in `server.log`, rather than inferred from a cold NCCL timeout after the
+   fact.
+
+This turns "guess a fix from reading source" into "watch the actual
+divergence happen," which is the right tool for a bug that's survived two
+source-level fixes already. Not yet built — proposing this before spending
+another full GPU dispatch on an unverified guess.
+
+## Status
+
+- `#54494`'s `W_K` shape-mismatch bug: **fixed, verified correct, but
+  insufficient on its own**.
+- The real hang: **not yet root-caused** — strong lead (`_gather_query`
+  firing asymmetrically), not yet confirmed.
+- `#54494` remains **disabled by default** (`APPLY_PR54494=0`) until this
+  is resolved. Do not re-enable or re-dispatch without a new finding.

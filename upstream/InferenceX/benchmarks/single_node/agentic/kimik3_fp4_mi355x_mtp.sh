@@ -23,7 +23,7 @@ export APPLY_PR59966="${APPLY_PR59966:-0}"  # ROCm DCP: gather MLA decode query 
 export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT -- not worth it, TTFT cost too large for the TPOT gain
 export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- OFF: isolating the fixed #54494 this run
 export APPLY_PR58743="${APPLY_PR58743:-0}"  # Kimi-K3: support BF16 KDA recurrent state -- OFF: crashes decode, see block below
-export APPLY_PR54494="${APPLY_PR54494:-1}"  # ROCm DCP: MLA query replication, skip per-layer query all-gather -- RE-ENABLED with the real fix (commit aa652bbb): implements DCP query replication for the FP4/FP8 BMM paths properly (separate W_K_dcp_qrep parameters, qrep_decode branch at the decode call site) instead of overwriting self.W_K in place. Isolated test against the 14,077 tok/s/GPU clean baseline, conc=96, no MTP.
+export APPLY_PR54494="${APPLY_PR54494:-0}"  # ROCm DCP: MLA query replication, skip per-layer query all-gather -- OFF again: the aa652bbb fix (W_K_dcp_qrep) was real but insufficient -- run 37946632603 hit the identical NCCL _ALLGATHER_BASE deadlock (same shapes) despite the fix. Real culprit is likely MLADCPManager's old query_gather collective firing asymmetrically when qrep_decode isn't True for every rank/step -- not yet root-caused. See PR54494-ROOT-CAUSE-AND-FIX.md.
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
