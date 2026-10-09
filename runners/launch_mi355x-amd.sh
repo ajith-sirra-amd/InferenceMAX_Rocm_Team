@@ -94,9 +94,9 @@ export ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-0}"
 # #54494 investigation: fast curl-based smoke test (skips the full agentic
 # replay) and temporary qrep_decode debug logging. All off by default. See
 # PR54494-ROOT-CAUSE-AND-FIX.md.
-export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-0}"
-export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-0}"
-export SMOKE_TEST="${SMOKE_TEST:-0}"
+export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-1}"
+export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-1}"
+export SMOKE_TEST="${SMOKE_TEST:-1}"
 export SMOKE_DURATION="${SMOKE_DURATION:-480}"
 export SMOKE_CONCURRENCY="${SMOKE_CONCURRENCY:-32}"
 
