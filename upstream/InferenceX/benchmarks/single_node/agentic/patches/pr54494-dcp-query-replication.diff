@@ -1,7 +1,40 @@
 diff --git a/vllm/model_executor/layers/attention/mla_attention.py b/vllm/model_executor/layers/attention/mla_attention.py
 --- a/vllm/model_executor/layers/attention/mla_attention.py
 +++ b/vllm/model_executor/layers/attention/mla_attention.py
-@@ -1248,14 +1248,6 @@
+@@ -1045,20 +1045,28 @@
+                 mqa_q_pe = mqa_pe_padded
+
+             if self.is_aiter_triton_fp4_bmm_enabled:
++                bmm_W_K = self.W_K_dcp_qrep if qrep_decode else self.W_K
++                bmm_W_K_scale = (
++                    self.W_K_scale_dcp_qrep if qrep_decode else self.W_K_scale
++                )
+                 mqa_ql_nope = rocm_aiter_ops.batched_gemm_a16wfp4(
+                     mqa_q_nope,
+-                    self.W_K,
+-                    self.W_K_scale,
++                    bmm_W_K,
++                    bmm_W_K_scale,
+                     transpose_bm=True,
+                     prequant=True,
+                     y_scale=self._q_scale if fp8_attention else None,
+                 )
+             elif self.is_aiter_triton_fp8_bmm_enabled:
++                bmm_W_K = self.W_K_dcp_qrep if qrep_decode else self.W_K
++                bmm_W_K_scale = (
++                    self.W_K_scale_dcp_qrep if qrep_decode else self.W_K_scale
++                )
+                 # Multiply+Transpose (N, B, P)x(N, P, L)->(N, B, L)->(B, N, L)
+                 mqa_ql_nope = rocm_aiter_ops.triton_fp8_bmm(
+                     mqa_q_nope,
+-                    self.W_K,
+-                    self.W_K_scale,
++                    bmm_W_K,
++                    bmm_W_K_scale,
+                     group_size=128,
+                     transpose_bm=True,
+                 )
+@@ -1245,14 +1253,6 @@
                  "DCP query replication is unsupported on head-padding MLA "
                  "backends (q_pad_num_heads)."
              )
@@ -16,7 +49,7 @@ diff --git a/vllm/model_executor/layers/attention/mla_attention.py b/vllm/model_
 
          W_UK, W_UV = split_kv_b_proj(
              self.kv_b_proj,
-@@ -1283,6 +1275,20 @@
+@@ -1282,6 +1282,20 @@
                  ("W_V_scale", W_V_scale),
              ):
                  replace_parameter(self, name, tensor, prefer_copy=True)
@@ -24,33 +57,33 @@ diff --git a/vllm/model_executor/layers/attention/mla_attention.py b/vllm/model_
 +            if self.dcp_q_replicate:
 +                replace_parameter(
 +                    self,
-+                    "W_K",
++                    "W_K_dcp_qrep",
 +                    get_dcp_group().all_gather(self.W_K.contiguous(), dim=0),
 +                    prefer_copy=True,
 +                )
 +                replace_parameter(
 +                    self,
-+                    "W_K_scale",
++                    "W_K_scale_dcp_qrep",
 +                    get_dcp_group().all_gather(self.W_K_scale.contiguous(), dim=0),
 +                    prefer_copy=True,
 +                )
          elif self.is_aiter_triton_fp8_bmm_enabled:
              W_K = W_UK.transpose(0, 1)  # 16 512 128
              W_V = W_UV.permute(1, 2, 0)  # 16 128 512
-@@ -1301,6 +1304,20 @@
+@@ -1299,6 +1310,20 @@
              ):
                  replace_parameter(self, name, tensor, prefer_copy=True)
 
 +            if self.dcp_q_replicate:
 +                replace_parameter(
 +                    self,
-+                    "W_K",
++                    "W_K_dcp_qrep",
 +                    get_dcp_group().all_gather(self.W_K.contiguous(), dim=0),
 +                    prefer_copy=True,
 +                )
 +                replace_parameter(
 +                    self,
-+                    "W_K_scale",
++                    "W_K_scale_dcp_qrep",
 +                    _dcp_all_gather_scale(self.W_K_scale, dim=0),
 +                    prefer_copy=True,
 +                )
@@ -58,7 +91,7 @@ diff --git a/vllm/model_executor/layers/attention/mla_attention.py b/vllm/model_
              # The kernel operates on non-padded inputs. Hence, pre-compiling
              # triton kernel to avoid runtime compilation for unseen batch sizes
              # Pre-compile for batch sizes 1 to 1024 to cover most use-cases.
-@@ -1558,6 +1572,12 @@
+@@ -1558,6 +1580,12 @@
      return x_scl_sat.to(dtype).contiguous(), scale.float().reciprocal()
 
 
