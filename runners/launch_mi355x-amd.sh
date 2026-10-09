@@ -83,8 +83,9 @@ export ROCPROF_ENABLE="${ROCPROF_ENABLE:-0}"
 export ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-3300}"
 export ROCPROF_DURATION="${ROCPROF_DURATION:-240}"
 
-# Opt-in kernel-signature dump, off by default. See kimik3_fp4_mi355x_mtp.sh.
-export KERNEL_INSPECT="${KERNEL_INSPECT:-0}"
+# Opt-in kernel-signature dump, temporarily defaulted on for the next
+# dispatch; revert to 0 after. See kimik3_fp4_mi355x_mtp.sh.
+export KERNEL_INSPECT="${KERNEL_INSPECT:-1}"
 
 # Opt-in FP8 prefill query quantization test, temporarily defaulted on for
 # the next dispatch; revert to 0 after. See kimik3_fp4_mi355x_mtp.sh.

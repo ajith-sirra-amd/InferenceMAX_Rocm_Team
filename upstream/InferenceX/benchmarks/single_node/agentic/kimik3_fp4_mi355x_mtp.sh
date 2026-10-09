@@ -490,59 +490,65 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
 # knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
 if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
-    echo "[kernel-inspect] does our backend support use_prefill_query_quantization, and what happens to the context-merge path when q becomes FP8"
-    python3 - > "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
+    echo "[kernel-inspect] VRAM canary + backend_supports_prefill_query_quantization investigation"
+    {
+        echo "=== rocm-smi VRAM canary (checking for stranded memory from the cancelled run) ==="
+        rocm-smi --showmeminfo vram 2>&1
+        echo
+    } > "$RESULT_DIR/kernel_inspect.txt" 2>&1
+    python3 - >> "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
 import inspect
 
-print("=" * 80)
-print("backend_supports_prefill_query_quantization -- base def + our backend's value")
-print("=" * 80)
-try:
-    import vllm.v1.attention.backends.mla.prefill.base as base_mod
-    src = inspect.getsource(base_mod)
-    idx = src.find("def supports_prefill_query_quantization")
-    if idx == -1:
-        idx = src.find("supports_prefill_query_quantization")
-    print(src[max(0,idx-100):idx+500])
-except Exception as e:
-    print("base.py scan failed:", e)
+def find_all(src, needle):
+    out = []
+    i = src.find(needle)
+    while i != -1:
+        out.append(i)
+        i = src.find(needle, i + 1)
+    return out
 
-try:
-    import vllm.v1.attention.backends.mla.prefill.aiter_flash_attn as aff
-    print("\nAiterFlashAttnPrefillBackend overrides:")
-    cls = aff.AiterFlashAttnPrefillBackend
-    for name in dir(cls):
-        if "quant" in name.lower():
-            print(" ", name, "=", getattr(cls, name))
-except Exception as e:
-    print("aiter_flash_attn scan failed:", e)
-
-print("\n" + "=" * 80)
-print("_context_parallel_compute_prefill_context -- does the ROCm AMD override's")
-print("eligibility check (q.dtype == bfloat16) break if q becomes FP8?")
 print("=" * 80)
-try:
-    import vllm.v1.attention.backends.mla.rocm_aiter_mla as ram
-    src3 = inspect.getsource(ram)
-    idx = src3.find("def _context_parallel_compute_prefill_context")
-    print(src3[idx:idx+2200])
-except Exception as e:
-    print("rocm_aiter_mla scan failed:", e)
-
-print("\n" + "=" * 80)
-print("base _compute_prefill_context (non-DCP) and base")
-print("_context_parallel_compute_prefill_context -- what runs when AMD's")
-print("fast-path is ineligible (e.g. q is FP8)")
+print("mla_attention.py -- search for backend_supports_prefill_query_quantization")
+print("(the call site found earlier lives here, not necessarily its definition)")
 print("=" * 80)
 try:
     import vllm.model_executor.layers.attention.mla_attention as mla
-    src2 = inspect.getsource(mla)
-    for fname in ("_compute_prefill_context", "_context_parallel_compute_prefill_context"):
-        idx = src2.find(f"def {fname}")
-        print(f"\n--- def {fname} ---")
-        print(src2[idx:idx+1800])
+    src = inspect.getsource(mla)
+    for needle in ("backend_supports_prefill_query_quantization", "supports_prefill_query_quantization"):
+        hits = find_all(src, needle)
+        print(f"'{needle}': {len(hits)} hits")
+        for idx in hits:
+            print(src[max(0, idx - 300):idx + 400])
+            print("---")
 except Exception as e:
     print("mla_attention scan failed:", e)
+
+print("\n" + "=" * 80)
+print("base.py -- MLAPrefillBackend class: ALL methods/ClassVars (not just 'quant' name match)")
+print("=" * 80)
+try:
+    import vllm.v1.attention.backends.mla.prefill.base as base_mod
+    src2 = inspect.getsource(base_mod)
+    print(src2)
+except Exception as e:
+    print("base.py dump failed:", e)
+
+print("\n" + "=" * 80)
+print("AiterFlashAttnPrefillBackend -- full dir(), not just name-filtered")
+print("=" * 80)
+try:
+    import vllm.v1.attention.backends.mla.prefill.aiter_flash_attn as aff
+    cls = aff.AiterFlashAttnPrefillBackend
+    for name in sorted(dir(cls)):
+        if name.startswith("__"):
+            continue
+        try:
+            val = getattr(cls, name)
+        except Exception as e:
+            val = f"<error: {e}>"
+        print(f"  {name} = {val}")
+except Exception as e:
+    print("aiter_flash_attn scan failed:", e)
 PYEOF
     cat "$RESULT_DIR/kernel_inspect.txt"
     echo "[kernel-inspect] done, exiting before server start"
