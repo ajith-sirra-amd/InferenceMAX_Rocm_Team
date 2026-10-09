@@ -1,12 +1,19 @@
 # Handoff — FMHA exploration, #54494 (collectives), and the path to 16,000 tok/s/GPU
 
-**Written:** 2026-10-09. Target: 16,000 tok/s/GPU. Current clean baseline:
-**14,077 tok/s/GPU** (conc=96, zero patches, new image
+**Written:** 2026-10-09. **Updated:** 2026-10-09 (same day, after a full day
+of GPU-verified debugging). Target: 16,000 tok/s/GPU. Current clean baseline:
+**14,077 tok/s/GPU** (conc=96, zero patches, image
 `nightly-rocm100-81198e97ba7eee2a22540caaa756b7fdddcb4d93`, runner
 `cluster:mi355x-amds-2`). Gap: **+13.7%**.
 
-Everything below is measured or directly confirmed in installed source unless
-marked **[inference]** or **[pending]**.
+**Read this first:** this doc's original version (Part 1, items 4-6, and
+Part 4's lever table) turned out to contain real mistakes, caught later the
+same day by actually verifying claims against real source/PR bodies instead
+of trusting earlier framing. Corrected inline below, with the mistake kept
+visible rather than silently fixed. See `NEXT-PERF-LEVERS-POST-54494.md` for
+the full corrected lever analysis, and `PR54494-ROOT-CAUSE-AND-FIX.md` for
+the full `#54494` debugging saga (crash → real fix → still broken → smoke
+test). This doc is the overview; those two are the detailed record.
 
 ---
 
@@ -35,153 +42,157 @@ how much of it was freshly projected. That's why attention dominates despite
    → True (12 heads/rank at TP8 is explicitly handled via replicate-padding).
 
 2. **But it only fires when `attn_metadata.prefill.chunked_context is
-   None`** — i.e. no cached prior context to merge. `ChunkedContextMetadata`
-   is built from `context_lens` (the cached-context length), and it also
-   carries a `dcp_manager` field for cross-rank gathering. Two independent
-   reasons point to the same conclusion: for our config (ISL ~100K + DCP=8),
-   `chunked_context` is essentially *always* populated, so this fast path is
-   **structurally almost never reached by real traffic**.
+   None`** — i.e. no cached prior context to merge. For our config (ISL
+   ~100K + DCP=8), `chunked_context` is essentially *always* populated, so
+   this fast path is **structurally almost never reached by real traffic**.
 
-3. **Went looking for "is BF16 softmax a flag" — traced the actual kernel
-   dispatch, found it's not FlyDSL.** `aiter.flash_attn_varlen_func` tries, in
+3. **FlyDSL never runs for us.** `aiter.flash_attn_varlen_func` tries, in
    order: a gfx1250-only ASM path (skipped, wrong arch) → FlyDSL → Triton/CK.
-   Read FlyDSL's actual gating code directly: its BF16 path requires
-   `get_gfx() == "gfx1250"` literally in the boolean expression — **always
-   False on our gfx950 hardware**, confirmed in code, not inferred. Its FP8
-   path only fires for FP8 inputs. So **FlyDSL never runs for us at all**,
-   BF16 or FP8-blocked-by-context.
+   FlyDSL's BF16 path requires `get_gfx() == "gfx1250"` literally — always
+   False on gfx950. Its FP8 path only fires for FP8 inputs. Confirmed in
+   code, not inferred.
 
-4. **The real executing kernel is CK's `FlashAttnVarlenFunc.forward`**
-   (confirmed `aiter.jit.core.ENABLE_CK = True` in the installed build). Its
-   signature has a real, named precision-control argument:
-   `is_v3_atomic_fp32: bool | None = True`. The public wrapper
-   (`aiter.flash_attn_varlen_func`, what vLLM calls) **hardcodes this to
-   `True`** when invoking `FlashAttnVarlenFunc.apply(...)` — it is never
-   exposed to callers. Saved to memory as a candidate: unlocking it is a tiny,
-   low-risk patch (change the hardcoded `True` to a passthrough parameter,
-   default `True` so behavior is unchanged unless flipped). **[pending]** —
-   not yet tested; ceiling estimated ~3-4%, same reasoning as item 6 below.
+4. **~~CK's `is_v3_atomic_fp32` unlock~~ — CORRECTED, this is a dead end.**
+   The original version of this doc described `is_v3_atomic_fp32` (a
+   parameter on CK's `FlashAttnVarlenFunc.forward`, hardcoded `True` by the
+   public wrapper) as a cheap softmax-precision unlock worth a small patch.
+   **This was wrong.** Verified later the same day against two independent
+   sources (ROCm TransformerEngine's `NVTE_CK_IS_V3_ATOMIC_FP32` docs, and a
+   facebookexperimental/triton PR benchmarking the same AITER flag): this
+   parameter controls **dQ gradient accumulation in the backward pass
+   only**. `FlashAttnVarlenFunc.forward` carries it in its signature purely
+   because that class is a `torch.autograd.Function` staticmethod stashing
+   the value into `ctx` for a paired `backward()`. vLLM inference never
+   calls `.backward()` — the flag is **inert for serving**, not a lever at
+   any size. No patch was built; building one would have been pure wasted
+   GPU time. Full writeup in `NEXT-PERF-LEVERS-POST-54494.md`'s appendix.
 
-5. **The actual unlock turned out to be much bigger and much cheaper than
-   expected.** Our real prefill backend (`AiterFlashAttnPrefillBackend`,
-   `ROCM_AITER_FA`) has **no FP8 special-casing of its own** — both
-   `run_prefill_new_tokens` (new tokens) and `run_prefill_context_chunk`
-   (cached context) just forward whatever dtype arrives to the same
-   `flash_attn_varlen_func` dispatcher from item 3. The *base* (non-ROCm-
-   specific) `MLACommonImpl.forward_mha` and `_compute_prefill_context` /
-   `_context_parallel_compute_prefill_context` already thread
-   `use_fp8_prefill` generically through **both** the new-tokens path and the
-   context-merge path — this is a **native vLLM capability, already fully
-   implemented**, gated by the attention-config flag
-   `use_prefill_query_quantization`. vLLM's own source literally recommends
-   it: *"For long-context workloads (ISL >= 4K), enabling FP8 prefill
-   attention can significantly optimize prefill latency."* Our ISL is ~100K.
+5. **~~Attention FP8 via `use_prefill_query_quantization`~~ — CORRECTED,
+   also a dead end.** The original version of this doc (items 5-6 below,
+   and the "Current test status" section) described this as "the actual
+   unlock" — a native, already-implemented vLLM feature gated by a single
+   flag, with support confirmed live on our hardware. **This was also
+   wrong**, caught later the same day: `backend_supports_prefill_query_
+   quantization()` — the real gate vLLM checks before honoring the flag —
+   hardcodes support to GB200 (device capability 100) only.
+   FlashAttention-family backends (`AiterFlashAttnPrefillBackend`, what we
+   run) are explicitly excluded. This was confirmed two ways: first by
+   reading the gate function's source, then independently re-confirmed by
+   reading the server log's actual fallback-rejection message from a live
+   test. Deliberate hardware gate, not a missing-registration gap — not a
+   cheap unlock. Full writeup in `NEXT-PERF-LEVERS-POST-54494.md`'s
+   appendix.
 
-6. **Verified the one remaining hard gate directly** — called
-   `flydsl_flash_attn_fp8_supported(device, nq=12, nkv=12, qk_hdim=192,
-   v_hdim=128, dtype=torch.float8_e4m3fn)` live on a GPU. Result:
-   **`SUPPORTED = True`** for our exact MLA shapes.
-
-### What this means for the 16,000 target
-If `use_prefill_query_quantization=True` works end-to-end, the expected
-ceiling is **the same ~4-9% I estimated earlier for "full FP8 kernel"** — that
-estimate already assumed attention's entire cost gets the ~1.3-2x FP8/BF16
-ratio measured elsewhere in this campaign. What changed is *reachability*:
-this used to look like a multi-week kernel-merge rewrite; it turned out to be
-one existing, already-coded flag.
-
-### Known trade-off when combined with the patch stack later
-`#59070` ("keep DCP prefill context FP8 through AllGather") has an eligibility
-check that requires `q.dtype == torch.bfloat16`. Turning on
-`use_prefill_query_quantization` makes q FP8, so `#59070`'s specific
-optimization would step aside in favor of the base class's own (also
-FP8-capable) context path — not a correctness problem, just something to
-re-measure once both are combined.
-
-### Current test status — [pending]
-Dispatched as `ENABLE_FP8_PREFILL_QUERY_QUANT=1` (adds
-`"use_prefill_query_quantization":true` to `--attention-config`, merged with
-the existing `mla_prefill_backend` key). **Isolated**: all `APPLY_PR*` flags
-off, including `#54494`, for a clean read against the 14,077 baseline. Run
-`37909323153` was still in progress as of this writing — no crash in the
-first several minutes (mildly positive, not conclusive). **Needs: GSM8K gate
-before trusting any throughput number, same as every other numerics-affecting
-change this campaign.**
+6. **What's left standing from this investigation:** nothing with a real
+   patch path. See Part 4 below and `NEXT-PERF-LEVERS-POST-54494.md` for
+   the current, honest state — only "idle" (28.2% of wall, unquantified, no
+   mechanism identified) remains as a real area to investigate.
 
 ---
 
 ## Part 2 — #54494: DCP MLA query replication (collectives, 21% of wall)
+
+**This section is a summary. Full details, including the real bug, the
+real fix, and the second failure, are in `PR54494-ROOT-CAUSE-AND-FIX.md`
+— read that file for the complete story.**
 
 ### What it does
 Under DCP=8, MLA decode normally all-gathers the query every layer because
 the KV cache is sharded across the group. This PR replicates the query
 projection across the DCP group instead — each rank computes the full head
 set locally (a small amount of redundant compute) and skips the per-layer
-all-gather entirely. Targets collectives, our #2 bottleneck (21.3% of wall),
-with a mechanism (removing a collective, not just speeding it up) that should
-be a clean win on hardware where network sync is the expensive part.
+all-gather entirely. Targets collectives, our #2 bottleneck (21.3% of wall).
 
-Upstream PR reports **no throughput number** — only GSM8K validation
-(0.9629 vs 0.9598 off, both passing).
+### The saga, in order
 
-### The modification I made
-The patch didn't apply cleanly — not because it conflicts with our other
-patches (none of them touch `mla_attention.py`), but because **the code it
-targets was refactored upstream since the PR was authored**. The quantization
-section in `mla_attention.py` used to do direct `self.W_K = ...` attribute
-assignment; it now stages into local variables and applies them via a
-`replace_parameter(self, name, tensor, prefer_copy=True)` loop, specifically
-to keep captured CUDA graphs valid across weight reloads.
+1. **First hand-adaptation (round 1):** patch didn't apply cleanly against
+   our pinned image because the targeted code had been refactored upstream.
+   Hand-adapted to the new `replace_parameter`-based structure. Looked
+   correct, tested positive via `bash -n`/import checks.
 
-Two hunks failed as a result:
-1. `linear.py`, one import line — trivial, patch's context-matcher just
-   couldn't align it after `#59693`-style import-block drift. Not a real
-   conflict.
-2. `mla_attention.py`, the FP4-BMM branch's `dcp_q_replicate` insertion — a
-   real adaptation. I located where `self.W_K`/`self.W_K_scale` actually
-   become real attributes post-refactor (after the `replace_parameter` loop,
-   not immediately after the quantize call), and moved the PR's own
-   already-written FP4-branch logic (`get_dcp_group().all_gather(...)` on
-   both `W_K` and `W_K_scale`) to that correct, post-refactor insertion point.
-   **Nothing was invented** — this is the PR author's own code, relocated to
-   where the current codebase's structure requires it. Cross-checked against
-   the FP8-BMM branch's equivalent hunk, which *did* apply cleanly with fuzz,
-   confirming the landing spot and pattern were correct.
+2. **First real GPU test crashed immediately:** `TypeError: cannot assign
+   'torch.cuda.ByteTensor' as parameter 'W_K'`. Root cause: the hand-adapted
+   patch did plain `self.W_K = <raw tensor>` reassignment on an attribute
+   that's registered as an `nn.Parameter`, which `nn.Module` rejects. Fixed
+   by routing through `replace_parameter(...)` like the surrounding code
+   already does.
 
-Verified via dry-run → real apply → `py_compile` → import checks against the
-**raw, unpatched** pinned image (not just on top of our stack), so the patch
-is portable and testable standalone. Saved as
-`patches/pr54494-dcp-query-replication.diff`.
+3. **Hunk-header bugs (round 2):** the fix above was written with
+   miscounted unified-diff hunk headers (new-side line counts didn't match
+   actual content) — `patch` rejected the file outright with "malformed
+   patch." Fixed by writing a small arithmetic validator script and
+   re-checking every hunk in the file, not just the ones that were edited.
+   This became a standing practice for every patch edited afterward.
 
-### Current test status — [pending, interrupted]
-Was staged for an isolated test (all other `APPLY_PR*` off) against the
-14,077 baseline, runner switched to `cluster:mi355x-amds-2` since
-`cluster:mi355x-amds` was occupied by the C72+MTP run (see Part 3). That
-dispatch got consumed by a kernel-inspect check instead of the real benchmark
-(early-exit hook was still defaulted on from the prior investigation step) —
-**`#54494` itself has not yet produced a real throughput number.** Needs
-re-dispatch with `APPLY_PR54494=1`, everything else off, `KERNEL_INSPECT=0`.
+4. **First successful-apply real GPU test hit a genuine NCCL deadlock:**
+   ran cleanly for ~40 minutes, then the engine's request-processing loop
+   silently stopped (HTTP server stayed up, scheduler stopped). Exactly 600
+   seconds later (the NCCL default collective timeout), all 8 ranks'
+   watchdogs fired on an `_ALLGATHER_BASE` collective, and the engine
+   crashed (`c10::DistBackendError`).
 
-**Note:** `#58861` (AttnRes runtime strides/launch tuning) was also found to
-have one real, non-mechanical conflict with our staged `#59693` in the same
-MTP aux-hidden-state block of `linear.py`'s `forward()` — flagged but not yet
-resolved; held per "don't engineer third-party PRs without asking" discipline.
+5. **Root-caused via direct source reading (not guessing):** fetched the
+   *exact pinned* vLLM commit from GitHub (not main HEAD — main moves
+   ~85 commits/day, a real risk caught mid-investigation) and traced the
+   bug precisely: the hand-adapted patch overwrote `self.W_K`/`W_K_scale`
+   in place with the all-gathered (bigger) tensor, but `self.W_K` is also
+   read unconditionally by every decode call regardless of replication
+   state. Upstream's own working pattern for a different (non-BMM) code
+   path never does this — it creates a *separate* new parameter
+   (`W_UK_T_dcp_qrep`) and branches on a `qrep_decode` flag at the call
+   site. Our case (FP4/FP8 BMM) was the one upstream explicitly marked
+   `NotImplementedError` for — our hand-adaptation had *deleted* that guard
+   instead of implementing the missing feature.
+
+6. **Built the real fix:** mirrored the proven working pattern exactly —
+   new `W_K_dcp_qrep`/`W_K_scale_dcp_qrep` parameters, originals untouched,
+   `qrep_decode` branch at the decode call site. Verified by applying for
+   real (`patch -p1`) against the exact pinned source and `py_compile`-ing
+   the result — not just checking hunk arithmetic.
+
+7. **Second real GPU test hit the IDENTICAL deadlock** — same
+   `_ALLGATHER_BASE` op, same exact tensor shapes (`38043648/4755456 = 8.0`,
+   an 8-way gather), despite the W_K fix being genuinely correct. Traced the
+   shape to `MLADCPManager._gather_query` in `dcp.py` — the *old*,
+   non-replicated query-gather collective that `qrep_decode=True` is
+   supposed to skip entirely. Conclusion: `qrep_decode` isn't staying
+   `True` for every decode step/rank while the feature is enabled, and when
+   that diverges across the 8 ranks, the group hangs.
+
+8. **Built a fast reproduction instead of guessing a third fix:** added
+   temporary debug logging (`qrep_decode` per rank per decode step, gated
+   behind `VLLM_DEBUG_QREP=1`) and a `SMOKE_TEST=1` launcher mode that
+   skips the ~1hr agentic replay in favor of a bounded, direct curl-based
+   load test against the live server.
+
+9. **Smoke test ran clean — no divergence, no crash.** Across 93,312
+   logged decode calls (8 ranks × full 8-minute window, 32 concurrent
+   requests), `qrep_decode` was `True` 100% of the time, zero collective
+   errors. This is useful negative evidence: the trigger isn't "decode
+   under load" generically — both real failures happened **~40-50 minutes**
+   in, specifically as requests backed up on **external KV-cache
+   fetches** (`Deferred: 26 reqs, KV fetch ... in progress`). The smoke
+   test's short, light load never built up that kind of queue/offload
+   pressure. (Also found, unrelated to `#54494`: the smoke test's own
+   cleanup code had a bug — a bare `wait` caught the backgrounded vLLM
+   server process too, hanging the script for 42 minutes after the actual
+   smoke window had already finished cleanly. Not yet fixed.)
+
+### Current status
+`#54494` is **disabled by default** (`APPLY_PR54494=0`). The `W_K` fix is
+real and should stay (commit `aa652bbb`), but it is not sufficient — a
+second, still-unidentified bug causes `qrep_decode` to diverge across
+ranks under sustained load/KV-offload pressure. Do not re-enable without a
+new finding. See `PR54494-ROOT-CAUSE-AND-FIX.md` for the complete,
+up-to-date record and next-step options.
 
 ---
 
-## Part 3 — New data point: DCP8 + MTP(k=3), first real agentic measurement
+## Part 3 — DCP8 + MTP(k=3): status
 
-Built a new case arm in `kimik3_fp4_mi355x_mtp.sh` combining `DCP_SIZE=8` with
-MTP speculative decoding (previously two mutually-exclusive code paths — the
-low-concurrency branch forced `DCP_SIZE=1` to get MTP). The underlying vLLM
-blocker (no backend declaring non-causal-DCP support) is already fixed
-natively in the current image (`supports_non_causal_multi_token_dcp = True`,
-confirmed). HANDOFF.md's 2026-09-23 note flagged "agentic MTP+DCP numbers
-still unmeasured" (only validated on the fixed-length harness at the time) —
-this closes that gap.
-
-**Result** (conc=72, k=3, run `37889759055`, confirmed genuinely active via
-live container logs — not the `spec_decoding: "none"` reporting artifact):
+Built a case arm in `kimik3_fp4_mi355x_mtp.sh` combining `DCP_SIZE=8` with
+MTP speculative decoding. First real measurement (conc=72, k=3, run
+`37889759055`):
 
 | Metric | DCP8+MTP(k=3), conc=72 | Baseline, conc=96, no MTP |
 |---|---:|---:|
@@ -190,50 +201,58 @@ live container logs — not the `spec_decoding: "none"` reporting artifact):
 | TTFT (mean) | 20.2 s | 3.1 s |
 | Success rate | 2526/3394 (74.4%) | — |
 
-**Read:** MTP under DCP8 roughly **halves TPOT** (draft+verify producing
-multiple tokens per step) but comes with a large TTFT cost and lower raw
-per-GPU throughput at this (lower) concurrency. Not a clean win or loss —
-different concurrency levels confound a direct comparison, and this is
-genuinely new ground. Worth a same-concurrency re-run before drawing a firm
-conclusion.
+A follow-up C64+MTP test (`MAX_NUM_SEQS=80`, fixing a KV-capacity-cliff
+issue found in a C72+MTP run — KV usage pinned ~97-99.7%, admission queue
+never draining) failed with `RuntimeError: cancelled` inside EngineCore —
+traced to an external cancellation (the user cancelling the GPU
+reservation mid-run), not a code bug. Deprioritized, not yet re-run.
 
 ---
 
 ## Part 4 — Honest take on reaching 16,000 tok/s/GPU
 
 **Where we actually are:** 14,077 measured baseline. One bundle of small,
-individually-reasonable patches (`#59069` + `#59070` + `#59693` + `#59966` +
-`#54625`) measured **+1.2%** — right at the campaign's noise floor, not a
-real signal. The small-patch-stacking approach is not going to reach target
-on its own.
+individually-reasonable patches (`#59069` + `#59070` + `#59693` + `#59966`
++ `#54625`) measured **+1.2%** — right at the campaign's noise floor, not
+a real signal.
 
-**The levers, ranked, with honest ceilings:**
+**The levers — this table superseded `NEXT-PERF-LEVERS-POST-54494.md`'s
+own first draft, which itself needed two rounds of correction. Read that
+doc for the full story; here is the current, final state:**
 
 | Lever | Share of wall | Status | Honest ceiling |
 |---|---:|---|---|
-| Idle (decode launch-rate) | 28.2% | Untouched | Biggest, no concrete patch identified yet |
-| Collectives (`#54494`) | 21.3% | Patch staged, hand-adapted, **not yet measured** | Mechanism removes a collective outright — plausibly real, magnitude unknown (upstream reports no number) |
-| Attention (`use_prefill_query_quantization`) | 16.9% | **Live test in flight, no patch needed** | ~4-9%, same math as before, now cheap to reach |
-| Dense GEMM (`#55811`/`#56036`) | 11.9% | Identified, not staged | ~+6.5% ceiling from earlier BF16→FP8 dense-GEMM analysis |
+| Idle (decode launch-rate) | 28.2% | Untouched, no mechanism identified | Biggest, unquantified |
+| Collectives (`#54494`) | 21.3% | Real bug fixed, second bug found, not yet root-caused | Unknown until the divergence bug is understood |
+| Attention FP8 | 16.9% | **Dead end** — hardcoded GB200-only gate | N/A |
+| CK atomic-fp32 | (subset of 16.9%) | **Dead end** — backward-pass-only, inert for inference | N/A |
+| Dense GEMM FP8 (`#55811`/`#56036`) | — | **Dead end** — neither PR is what it claimed to be; `#59069` (already shipped) covers the real version of this idea | N/A |
 
-**The math, done honestly:** even optimistic, non-overlapping stacking of the
-top three unmeasured/in-flight levers doesn't cleanly add up past the
-required +13.7% — they share the same GPU-busy budget, so realized gains
-when combined are reliably less than the sum of their individual ceilings.
-**16,000 very likely requires at least two of these actually landing
-together, not one silver bullet.**
+**The honest math:** of the five candidates examined in detail today, three
+turned out to be dead ends on verification, and the fourth (`#54494`) has a
+real, partially-fixed bug that still isn't safe to ship. The only lever
+left standing with no verified blocker is idle/decode-launch-rate — and it
+has no concrete patch attached to it yet, just a measured share of
+wall-clock time.
 
-**What would change this assessment:** a positive, GSM8K-clean result from
-the `use_prefill_query_quantization` test, combined with a real (not
-noise-level) number from `#54494` once properly isolated-tested. Both are
-pending. Until then, 16,000 is a plausible-but-unproven target, not a
-confirmed one.
+**What would change this assessment:** root-causing `#54494`'s remaining
+divergence bug (real GPU-hours needed, likely a longer/heavier smoke test
+or closer inspection of the Kimi-K3 model's own per-layer forward code),
+or a real profiling pass into what's actually idle during decode (step
+granularity, separating host-launch overhead from collective-wait from
+KV/admission-wait).
 
 **Immediate next steps, in order:**
-1. Pull the `use_prefill_query_quantization` result; GSM8K-gate if it ran clean.
-2. Re-dispatch `#54494` alone (patches off, `KERNEL_INSPECT=0`) for its first
-   real throughput number.
-3. If both land positive and are GSM8K-clean, stack them together and
-   re-measure — do not assume additivity.
-4. Revisit idle (28%, still the single biggest untouched lever) — no
-   concrete patch identified for it yet in this campaign.
+1. Decide whether to keep pushing on `#54494`'s divergence bug (needs
+   either a heavier smoke test that reproduces sustained KV-offload
+   pressure, or direct tracing into the Kimi-K3 model's forward code to
+   find where `q_dcp_replicated` gets decided per-step).
+2. Fix the smoke-test harness's own `wait` bug (bare `wait` catches the
+   backgrounded server process) before relying on it again.
+3. Start real profiling on decode idle time (28.2% of wall, the single
+   biggest untouched lever) — no concrete patch identified for it yet in
+   this campaign.
+4. Re-measure `#59591` (now merged unconditionally into today's nightly,
+   `8cbd5d0300...`) in isolation — our script has it disabled for a
+   measured -1.3% regression, but the PR's own body claims +0.9-30% under
+   KV pressure. Worth resolving the discrepancy before any image upgrade.

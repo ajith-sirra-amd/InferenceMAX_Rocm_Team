@@ -303,11 +303,67 @@ divergence happen," which is the right tool for a bug that's survived two
 source-level fixes already. Not yet built — proposing this before spending
 another full GPU dispatch on an unverified guess.
 
+## Third attempt: a smoke test, and a different kind of answer
+
+Built `SMOKE_TEST=1` (launcher mode: skip the ~1hr agentic replay, fire a
+bounded, direct curl-based load test against the live server instead) and
+`VLLM_DEBUG_QREP=1` (temporary logging of `qrep_decode` per rank per decode
+step, via `patches/debug-qrep-logging.diff`). Goal: observe the divergence
+directly instead of guessing a third source-level fix blind.
+
+**Side note on tooling:** the debug-logging patch mysteriously failed to
+apply via classic `patch -p1` despite being byte-verified correct (checked
+context, checked arithmetic, even widened the context block) — `git apply`
+accepted the identical hunk cleanly on the first try. Not worth chasing
+further; switched that one patch's application mechanism to `git apply`.
+
+### Result: clean run, no divergence — useful negative evidence
+
+Dispatched with `APPLY_PR54494=1`, `APPLY_DEBUG_QREP=1`,
+`VLLM_DEBUG_QREP=1`, `SMOKE_TEST=1` (32 concurrent requests, 480s window).
+The job appeared to hang for ~50 minutes past when the smoke window should
+have closed — turned out to be a **separate bug in the smoke-test's own
+cleanup code** (bare `wait` with no arguments waits for *all* background
+jobs in the shell, including the vLLM server process itself, backgrounded
+much earlier in the script — not anything to do with `#54494`). Cancelled
+the run and recovered `server.log` from the uploaded artifact (upload
+happens before the job finalizes, so cancellation didn't lose the data).
+
+The actual data: **93,312 logged decode calls, across all 8 ranks, for the
+full 8-minute window — `qrep_decode=True` every single time. Zero
+divergence. Zero collective errors. Zero crashes.** The server ran
+completely clean through the whole smoke window.
+
+This is useful negative evidence, not a failure: it rules out "decode
+under any load" as the trigger. Both real deadlocks happened **~40-50
+minutes** into serving, specifically right as requests started backing up
+on **external KV-cache fetches** (`Deferred: 26 reqs, KV fetch ... in
+progress`, `Waiting: 120+`). A 32-concurrent, 8-minute smoke test never
+builds that kind of queue or DRAM-offload pressure. The remaining
+hypothesis — `qrep_decode` diverging across ranks — still stands, but the
+trigger condition looks tied to **sustained runtime and/or KV-offload
+queue pressure**, not simple concurrent decode.
+
 ## Status
 
 - `#54494`'s `W_K` shape-mismatch bug: **fixed, verified correct, but
   insufficient on its own**.
-- The real hang: **not yet root-caused** — strong lead (`_gather_query`
-  firing asymmetrically), not yet confirmed.
-- `#54494` remains **disabled by default** (`APPLY_PR54494=0`) until this
-  is resolved. Do not re-enable or re-dispatch without a new finding.
+- The real hang: **not yet root-caused**. Lead (`_gather_query` firing
+  asymmetrically) still stands, but a clean 93K-call smoke test under
+  light/short load found zero divergence — the trigger needs sustained
+  runtime and/or real KV-offload queue pressure to reproduce, which a
+  quick smoke test doesn't build up.
+- Found and not yet fixed: the smoke-test harness's own cleanup code has a
+  `wait`-without-arguments bug that hangs the script after the real smoke
+  window finishes (harmless to results since the artifact still uploads,
+  but wastes ~50 minutes of runner time per run until fixed).
+- `#54494` remains **disabled by default** (`APPLY_PR54494=0`) until the
+  divergence bug is resolved. Do not re-enable or re-dispatch without a
+  new finding.
+- Next options, not yet decided: (a) fix the `wait` bug and run a longer/
+  heavier smoke test that deliberately manufactures KV-offload pressure,
+  or (b) trace directly into the Kimi-K3 model's per-layer forward code
+  (the real caller of `q_dcp_replicated`) to find the divergence condition
+  by reading rather than reproducing, or (c) deprioritize this and focus
+  on the idle/decode-launch-rate lever instead (28.2% of wall, still
+  completely unexplored).
