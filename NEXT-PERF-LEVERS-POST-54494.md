@@ -18,37 +18,53 @@ the prefill/decode split is indicative, not exact.
 
 ## Ranking table
 
-**Two corrections from the first cut of this doc, both caught during this
-same write-up pass, kept visible rather than silently fixed:**
+**Status as of the latest pass: every specific candidate lever proposed in
+this doc has failed verification.** Three corrections, all caught by
+checking the actual mechanism/source instead of trusting the original
+framing:
 
-1. "Attention FP8 via `use_prefill_query_quantization`" was originally
-   ranked #1 as a free flag flip. Wrong — direct code inspection traced
-   `backend_supports_prefill_query_quantization()` and found it hardcodes
-   support to GB200 (device capability 100) only; FlashAttention-family
-   backends (what we run) are explicitly excluded. Deliberate hardware
-   gate, not a cheap unlock. **Demoted, see appendix.**
-2. "CK `is_v3_atomic_fp32` unlock" was then promoted to #1 as the easy
-   patch. Also wrong — verified against two independent sources (ROCm
-   TransformerEngine's `NVTE_CK_IS_V3_ATOMIC_FP32` docs, and a
-   facebookexperimental/triton PR benchmarking the same AITER flag) that
-   this controls **dQ gradient accumulation in the backward pass only**.
-   `FlashAttnVarlenFunc.forward` only carries it in its signature because
-   that class is a `torch.autograd.Function` staticmethod stashing the
-   value into `ctx` for a paired `backward()`. vLLM inference never calls
-   `.backward()` — this flag is **inert for serving**, not a lever at any
-   size. **Also demoted, see appendix.** No patch was built for it.
+1. "Attention FP8 via `use_prefill_query_quantization`" — direct code
+   inspection traced `backend_supports_prefill_query_quantization()` and
+   found it hardcodes support to GB200 (device capability 100) only;
+   FlashAttention-family backends (what we run) are explicitly excluded.
+   Deliberate hardware gate, not a cheap unlock. **Dead end, see appendix.**
+2. "CK `is_v3_atomic_fp32` unlock" — verified against two independent
+   sources (ROCm TransformerEngine's `NVTE_CK_IS_V3_ATOMIC_FP32` docs, and
+   a facebookexperimental/triton PR benchmarking the same AITER flag) that
+   this controls **dQ gradient accumulation in the backward pass only**,
+   inert for inference (vLLM never calls `.backward()`). **Dead end, see
+   appendix.**
+3. "Dense GEMM BF16→FP8 (`#55811`/`#56036`)" — pulled the real PR bodies
+   from `vllm-project/vllm` and neither is what the name claimed. `#55811`
+   is "Add merged MoE front" — fuses three separate GEMMs into one BF16
+   GEMM (kernel-count reduction), not an FP8 dtype change. `#56036` is
+   "Integrate AITER KDA prefill" — an alternative prefill backend for the
+   KDA kernel, and its own benchmark states plainly: *"On gfx950, native
+   fused remains the fastest backend ... this PR does not claim an
+   end-to-end performance improvement over current main on gfx950."*
+   Neither PR is about dense-GEMM FP8 quantization, and the second is an
+   explicit non-win on our exact hardware by its author's own numbers.
+   Separately, `#59069` ("Fuse AttnRes output with per-token FP8 input
+   quantization," already merged, already in our enabled bundle) turns out
+   to already cover part of what "dense GEMM FP8" would have meant — so
+   even the premise of this being untapped work was stale. **Dead end,
+   see appendix.**
 
-Net result: there is no remaining "easy, free" lever on this list. The two
-candidates that looked cheapest both turned out to not actually affect
-inference. What's left is one real-but-costlier patch (dense GEMM) and one
-large-but-unquantified investigation (idle).
+Net result: there is no verified, actionable lever left on this list beyond
+the one candidate that was never a specific mechanism to begin with — idle
+investigation. This is worth stating plainly: today's research process
+repeatedly took old/remembered PR numbers and mechanism descriptions at
+face value instead of re-checking them against the real source, and every
+single one broke on inspection. Any future candidate on this list should be
+verified against real source (`gh pr view`, direct code read) *before*
+being written down as a ranked lever, not after.
 
 | Rank | Lever | Share of wall | Mechanism | Patch effort | Numerics risk | Estimated ceiling |
 |---|---|---:|---|---|---|---:|
-| 1 | Dense GEMM BF16→FP8 (`#55811`/`#56036`) | 11.9% | Quantize dense (non-MoE) GEMMs to FP8 | Medium — apply + wire quant path | High (changes GEMM precision broadly) | **~6.5%** |
-| 2 | Idle / decode launch-rate | 28.2% | Scheduler-level: reduce per-step host-side launch overhead | Unknown — no patch identified | N/A | **Unquantified, likely largest if solved** |
+| 1 | Idle / decode launch-rate | 28.2% | Scheduler-level: reduce per-step host-side launch overhead | Unknown — no patch identified | N/A | **Unquantified, likely largest if solved** |
 | — | ~~Attention FP8 (`use_prefill_query_quantization`)~~ | 16.9% | Hard GB200-only gate in vLLM | High | Unknown | **Dead end; see appendix** |
 | — | ~~CK `is_v3_atomic_fp32` unlock~~ | — | Backward-pass-only parameter | — | — | **Dead end — inert for inference; see appendix** |
+| — | ~~Dense GEMM BF16→FP8 (`#55811`/`#56036`)~~ | — | Neither PR is what it was described as | — | — | **Dead end — mischaracterized; see appendix** |
 
 **Read on stacking:** these don't add linearly — they share the same GPU-busy
 budget (Amdahl's law applies directly: speeding up a share `s` of wall-clock
@@ -59,40 +75,7 @@ upper bounds on each lever in isolation, not a budget to sum.
 
 ---
 
-## Lever 1 — Dense GEMM BF16→FP8 (`#55811` / `#56036`)
-
-### What it is
-The non-MoE ("dense") GEMMs in the model currently run BF16. These two PRs
-quantize them to FP8.
-
-### Gain estimate — how the ~6.5% was derived
-Previously-measured number from earlier in the campaign — a direct
-BF16→FP8 dense-GEMM A/B comparison at the kernel level gave ~+6.5%
-end-to-end. Carried forward unchanged since the underlying GEMM shapes and
-hardware haven't changed since that measurement.
-
-### Why this is now the top real candidate
-Both of the two levers that looked cheaper (attention FP8 via a flag, CK
-atomic-fp32 via a one-line patch) turned out to be dead ends on closer
-inspection — see the appendix. This is the only remaining candidate with
-both a real patch path and a previously-measured, non-guessed number behind
-it. The tradeoff is real too: higher effort (apply + wire the quantization
-path, not a flag or single-parameter change) and higher numerics risk
-(touches GEMMs broadly across the model). Known tension: AMD's
-`Kimi-K3-Quark-MXFP4-AttnFP8` checkpoint was already tried once and dropped
-specifically because it shrank native KV cache capacity (9.38 GiB vs 59.81
-GiB) — this lever is only clearly worth it if KV-capacity headroom from
-other work (offload tuning, etc.) has grown enough to absorb that again, or
-if this quantization path doesn't carry the same KV-shrinking side effect
-(needs re-verification before staging).
-
-### Status
-Identified, not staged. Mandatory GSM8K gate before any numbers are
-trusted — this is the most invasive numerics change on this list.
-
----
-
-## Lever 2 — Idle / decode launch-rate
+## Lever 1 — Idle / decode launch-rate
 
 ### What it is
 28.2% of total wall-clock — the single largest slice in the breakdown — is
@@ -100,23 +83,22 @@ GPU idle time during decode, i.e. host-side step overhead (scheduling,
 kernel-launch rate, Python-loop overhead between CUDA-graph-captured
 regions) rather than GPU compute itself.
 
-### Why it's ranked #2 despite being the biggest slice
-No concrete patch has been identified for this yet. It's flagged here
-deliberately as the honest biggest opportunity, not omitted, but ranked
-below Lever 1 because Lever 1 has a real, previously-measured patch path
-while this one requires actual investigation — likely scheduler-loop
-profiling to find exactly what's stalling the GPU between steps
-(step-to-step Python overhead, collective sync stalls, or admission-queue
-gaps are all plausible candidates based on patterns already seen in this
-campaign's KV-saturation diagnosis work).
+### Why it's #1 by default, not by merit
+Every other candidate considered this round (attention FP8, CK
+atomic-fp32, dense GEMM) turned out to be a dead end on verification — see
+the appendix. This is the only item left standing, and it's here because
+it's an honestly-scoped *area* (a measured share of wall-clock with no
+specific mechanism attached yet), not because a patch path has been found
+for it. Treat it as the next thing to investigate, not the next thing to
+patch.
 
 ### Gain estimate
-Deliberately left unquantified. Unlike Lever 1, there's no existing
-mechanism (flag, PR, or kernel parameter) to anchor a ratio-based estimate
-against — any number here would be a guess dressed up as analysis. What can
-be said: if even a third of this 28.2% converts to useful work, that alone
-would exceed every other lever on this list combined. This is why it's
-worth dedicated investigation time even without a number yet.
+Deliberately left unquantified. There's no existing mechanism (flag, PR, or
+kernel parameter) to anchor a ratio-based estimate against — any number
+here would be a guess dressed up as analysis. What can be said: if even a
+third of this 28.2% converts to useful work, that alone would exceed every
+other lever considered this round combined. This is why it's worth
+dedicated investigation time even without a number yet.
 
 ### Suggested next step
 Profile a decode-only window (no prefill interleaved) with rocprofv3 at
@@ -187,17 +169,54 @@ Sources: [ROCm/TransformerEngine](https://github.com/ROCm/TransformerEngine)
 ("Add FP32 dQ accumulation and optimize varlen attention **backward**",
 benchmarked directly against AITER's `is_v3_atomic_fp32=True` baseline).
 
+### Demoted #3 — Dense GEMM BF16→FP8 (`#55811` / `#56036`)
+
+Described as "quantize the non-MoE dense GEMMs to FP8, ~6.5% ceiling from a
+previously-measured A/B." The ~6.5% number itself was never re-derived in
+this doc — it was carried forward from an earlier reference without
+re-checking what PRs actually implement it, and the two PR numbers attached
+to it turned out to be wrong:
+
+- [`#55811`](https://github.com/vllm-project/vllm/pull/55811) — "Add merged
+  MoE front." Replaces three separate projections (shared gate/up, router
+  logits, routed latent) with one BF16 GEMM into an FP32 accumulator,
+  followed by AITER's SiTU/split epilogue. This is a GEMM-fusion
+  (kernel-count reduction) change, not a BF16→FP8 dtype change. It's
+  specific to the MoE front, not dense/non-MoE GEMMs.
+- [`#56036`](https://github.com/vllm-project/vllm/pull/56036) — "Integrate
+  AITER KDA prefill." Adds AITER's FlashKDA as an alternative prefill
+  backend for the KDA kernel, selectable via `--kda-prefill-backend`. Its
+  own benchmark table shows native fused is faster at both 4K and 16K ISL
+  on gfx950, and the PR body says directly: *"This PR therefore does not
+  claim an end-to-end performance improvement over current main on
+  gfx950."* Not a win for us by the author's own numbers, and still not
+  about FP8 quantization.
+- Separately, [`#59069`](https://github.com/vllm-project/vllm/pull/59069)
+  ("Fuse AttnRes output with per-token FP8 input quantization") — already
+  merged, already enabled in our bundle — fuses per-token FP8 quantization
+  into the AttnRes output for linears that accept `kFp8DynamicTokenSym`.
+  This is actually closer to what "dense GEMM FP8" would mean, and it's
+  already shipped and running, not untapped work.
+
+No real open PR matching "quantize dense GEMMs to FP8 for ~6.5%" was found.
+If this is still worth pursuing, it needs to start from scratch: profile
+which dense (non-MoE) linears in the current deployment still run BF16
+end-to-end (not just the ones `#59069` already covers), and check whether
+a real quantization path exists for them — not from a remembered PR number.
+
 ---
 
 ## Bottom line
 
 No single lever here reaches 16,000 tok/s/GPU on its own from the 14,077
-baseline (+13.7% needed). Of the four candidates considered, two turned out
-to be dead ends on closer inspection (both demoted above) — a reminder that
-"looks like a cheap flag/parameter flip" needs verification against the
-actual mechanism before it's trusted. What's left: Lever 1 (dense GEMM) is
-a known quantity (previously measured ~6.5%) but higher effort and
-numerics risk. Lever 2 (idle) is the biggest number on paper but needs real
-profiling investigation before it has a number at all. Realistic path to
-16,000 likely requires both landing together, not one silver bullet —
-consistent with the honest framing already in `HANDOFF-FMHA-PR54494.md`.
+baseline (+13.7% needed) — and as of this pass, no *verified* lever reaches
+it either. All three specific candidates considered this round (attention
+FP8, CK atomic-fp32, dense GEMM) turned out to be dead ends, mischaracterized,
+or already-shipped on direct verification against source. What's left is
+one honestly-unquantified area (idle, 28.2% of wall-clock, no patch
+identified) that needs real profiling investigation before it becomes an
+actual lever with a number attached. The more important takeaway for next
+steps: verify every candidate against real source (`gh pr view`, direct
+code read, actual benchmark data) *before* ranking or estimating it, not
+after — that would have caught all three dead ends here before they were
+written down.
