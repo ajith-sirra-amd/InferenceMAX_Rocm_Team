@@ -491,59 +491,57 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
 # knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
 if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
-    echo "[kernel-inspect] checking flydsl_flash_attn_fp8_supported for K3's real MLA shapes"
+    echo "[kernel-inspect] does our backend support use_prefill_query_quantization, and what happens to the context-merge path when q becomes FP8"
     python3 - > "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
 import inspect
 
 print("=" * 80)
-print("flash_attn_func_fp8_gfx950 module -- full source")
+print("backend_supports_prefill_query_quantization -- base def + our backend's value")
 print("=" * 80)
 try:
-    import aiter.ops.flydsl.kernels.flash_attn_func_fp8_gfx950 as m
-    print("file:", m.__file__)
-    src = inspect.getsource(m)
-    print(f"total lines: {len(src.splitlines())}")
-    print(src)
+    import vllm.v1.attention.backends.mla.prefill.base as base_mod
+    src = inspect.getsource(base_mod)
+    idx = src.find("def supports_prefill_query_quantization")
+    if idx == -1:
+        idx = src.find("supports_prefill_query_quantization")
+    print(src[max(0,idx-100):idx+500])
 except Exception as e:
-    print("module dump failed:", e)
+    print("base.py scan failed:", e)
+
+try:
+    import vllm.v1.attention.backends.mla.prefill.aiter_flash_attn as aff
+    print("\nAiterFlashAttnPrefillBackend overrides:")
+    cls = aff.AiterFlashAttnPrefillBackend
+    for name in dir(cls):
+        if "quant" in name.lower():
+            print(" ", name, "=", getattr(cls, name))
+except Exception as e:
+    print("aiter_flash_attn scan failed:", e)
 
 print("\n" + "=" * 80)
-print("Actually CALL flydsl_flash_attn_fp8_supported with K3's real MLA shapes")
-print("TP8: 12 heads/rank. qk_head_dim=192 (128 nope + 64 rope), v_head_dim=128.")
+print("_context_parallel_compute_prefill_context -- does the ROCm AMD override's")
+print("eligibility check (q.dtype == bfloat16) break if q becomes FP8?")
 print("=" * 80)
 try:
-    import torch
-    from aiter.ops.flydsl.kernels.flash_attn_func_fp8_gfx950 import (
-        flydsl_flash_attn_fp8_supported,
-    )
-    device = torch.device("cuda:0")
-    # After kv_b_proj decompression MLA has gqa_ratio=1: q, k, v all carry the
-    # same head count. TP8 -> 12 heads/rank, both for new-tokens attention and
-    # context-chunk attention (same shapes, just different K/V source).
-    for nq, nkv in [(12, 12)]:
-        try:
-            result = flydsl_flash_attn_fp8_supported(
-                device, nq, nkv, 192, 128, dtype=torch.float8_e4m3fn
-            )
-            print(f"nq={nq} nkv={nkv} qk_hdim=192 v_hdim=128: SUPPORTED = {result}")
-        except Exception as e:
-            print(f"nq={nq} nkv={nkv}: call failed: {e}")
+    import vllm.v1.attention.backends.mla.rocm_aiter_mla as ram
+    src3 = inspect.getsource(ram)
+    idx = src3.find("def _context_parallel_compute_prefill_context")
+    print(src3[idx:idx+2200])
 except Exception as e:
-    print("flydsl_flash_attn_fp8_supported import/call failed:", e)
+    print("rocm_aiter_mla scan failed:", e)
 
 print("\n" + "=" * 80)
-print("Does the base MLACommonImpl.forward_mha's use_fp8_prefill path exist")
-print("and what sets q_data_type -- confirm use_prefill_query_quantization wiring")
+print("base _compute_prefill_context (non-DCP) and base")
+print("_context_parallel_compute_prefill_context -- what runs when AMD's")
+print("fast-path is ineligible (e.g. q is FP8)")
 print("=" * 80)
 try:
     import vllm.model_executor.layers.attention.mla_attention as mla
     src2 = inspect.getsource(mla)
-    idx = src2.find("use_prefill_query_quantization")
-    while idx != -1:
-        print(f"--- hit at offset {idx} ---")
-        print(src2[max(0,idx-200):idx+300])
-        print()
-        idx = src2.find("use_prefill_query_quantization", idx + 1)
+    for fname in ("_compute_prefill_context", "_context_parallel_compute_prefill_context"):
+        idx = src2.find(f"def {fname}")
+        print(f"\n--- def {fname} ---")
+        print(src2[idx:idx+1800])
 except Exception as e:
     print("mla_attention scan failed:", e)
 PYEOF
