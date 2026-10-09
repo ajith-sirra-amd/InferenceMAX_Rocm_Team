@@ -23,7 +23,7 @@ export APPLY_PR59966="${APPLY_PR59966:-0}"  # ROCm DCP: gather MLA decode query 
 export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT -- not worth it, TTFT cost too large for the TPOT gain
 export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- OFF: isolating #54494 this run
 export APPLY_PR58743="${APPLY_PR58743:-0}"  # Kimi-K3: support BF16 KDA recurrent state -- OFF: crashes decode, see block below
-export APPLY_PR54494="${APPLY_PR54494:-1}"  # ROCm DCP: MLA query replication, skip per-layer query all-gather -- isolated test against the zero-patch baseline (14,077 tok/s/GPU, conc=96)
+export APPLY_PR54494="${APPLY_PR54494:-0}"  # ROCm DCP: MLA query replication, skip per-layer query all-gather -- OFF: isolating ENABLE_FP8_PREFILL_QUERY_QUANT this run, revisit #54494 separately
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
@@ -550,6 +550,21 @@ PYEOF
     exit 0
 fi
 
+# Opt-in: FP8 prefill query quantization. Native vLLM feature, no patch
+# needed -- the backend we use (ROCM_AITER_FA) has no special-cased FP8 path
+# of its own, it just forwards whatever dtype q/k/v arrive in to
+# aiter.flash_attn_varlen_func, which already has a dedicated gfx950 FP8
+# kernel (gated purely on tensor dtype, confirmed SUPPORTED=True for our
+# exact MLA shapes: 12 heads/rank, qk=192, v=128). vLLM's own code recommends
+# this explicitly for ISL>=4K workloads -- ours runs ~100K. Unverified
+# whether our backend is on the allowlist; this run is the test.
+ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-0}"
+if [ "$ENABLE_FP8_PREFILL_QUERY_QUANT" = "1" ]; then
+    ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA","use_prefill_query_quantization":true}'
+else
+    ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
+fi
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
@@ -571,7 +586,7 @@ VLLM_CMD=(
     --enable-prefix-caching
     --enable-prompt-tokens-details
     --no-async-scheduling
-    --attention-config '{"mla_prefill_backend":"ROCM_AITER_FA"}'
+    --attention-config "$ATTENTION_CONFIG_JSON"
     # --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"  # #54627 disabled -- TTFT cost too large for the TPOT gain
     "${CACHE_AWARE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"

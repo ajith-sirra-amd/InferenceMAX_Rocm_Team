@@ -83,9 +83,12 @@ export ROCPROF_ENABLE="${ROCPROF_ENABLE:-0}"
 export ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-3300}"
 export ROCPROF_DURATION="${ROCPROF_DURATION:-240}"
 
-# Opt-in kernel-signature dump, temporarily defaulted on for the next
-# dispatch; revert to 0 after. See kimik3_fp4_mi355x_mtp.sh.
-export KERNEL_INSPECT="${KERNEL_INSPECT:-1}"
+# Opt-in kernel-signature dump, off by default. See kimik3_fp4_mi355x_mtp.sh.
+export KERNEL_INSPECT="${KERNEL_INSPECT:-0}"
+
+# Opt-in FP8 prefill query quantization test, temporarily defaulted on for
+# the next dispatch; revert to 0 after. See kimik3_fp4_mi355x_mtp.sh.
+export ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-1}"
 
 # Non-default #54627/#54625 values so both patches actually engage instead of
 # sitting at their no-op defaults (interval=1, window=0). Per the PRs' own
@@ -227,6 +230,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e ROCPROF_START_DELAY \
 -e ROCPROF_DURATION \
 -e KERNEL_INSPECT \
+-e ENABLE_FP8_PREFILL_QUERY_QUANT \
 -e PREFILL_SCHEDULE_INTERVAL \
 -e CACHE_AWARE_ADMISSION_WINDOW \
 -e CACHE_AWARE_ADMISSION_THRESHOLD \
