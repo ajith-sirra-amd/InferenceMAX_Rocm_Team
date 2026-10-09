@@ -16,35 +16,49 @@ diff --git a/vllm/model_executor/layers/attention/mla_attention.py b/vllm/model_
 
          W_UK, W_UV = split_kv_b_proj(
              self.kv_b_proj,
-@@ -1283,6 +1275,14 @@
+@@ -1283,6 +1275,17 @@
                  ("W_V_scale", W_V_scale),
              ):
                  replace_parameter(self, name, tensor, prefer_copy=True)
 +
 +            if self.dcp_q_replicate:
-+                self.W_K = get_dcp_group().all_gather(
-+                    self.W_K.contiguous(), dim=0
++                replace_parameter(
++                    self,
++                    "W_K",
++                    get_dcp_group().all_gather(self.W_K.contiguous(), dim=0),
++                    prefer_copy=True,
 +                )
-+                self.W_K_scale = get_dcp_group().all_gather(
-+                    self.W_K_scale.contiguous(), dim=0
++                replace_parameter(
++                    self,
++                    "W_K_scale",
++                    get_dcp_group().all_gather(self.W_K_scale.contiguous(), dim=0),
++                    prefer_copy=True,
 +                )
          elif self.is_aiter_triton_fp8_bmm_enabled:
              W_K = W_UK.transpose(0, 1)  # 16 512 128
              W_V = W_UV.permute(1, 2, 0)  # 16 128 512
-@@ -1301,6 +1301,12 @@
+@@ -1301,6 +1304,17 @@
              ):
                  replace_parameter(self, name, tensor, prefer_copy=True)
 
 +            if self.dcp_q_replicate:
-+                self.W_K = get_dcp_group().all_gather(
-+                    self.W_K.contiguous(), dim=0
++                replace_parameter(
++                    self,
++                    "W_K",
++                    get_dcp_group().all_gather(self.W_K.contiguous(), dim=0),
++                    prefer_copy=True,
 +                )
-+                self.W_K_scale = _dcp_all_gather_scale(self.W_K_scale, dim=0)
++                replace_parameter(
++                    self,
++                    "W_K_scale",
++                    _dcp_all_gather_scale(self.W_K_scale, dim=0),
++                    prefer_copy=True,
++                )
 +
              # The kernel operates on non-padded inputs. Hence, pre-compiling
              # triton kernel to avoid runtime compilation for unseen batch sizes
              # Pre-compile for batch sizes 1 to 1024 to cover most use-cases.
-@@ -1558,6 +1564,12 @@
+@@ -1558,6 +1572,12 @@
      return x_scl_sat.to(dtype).contiguous(), scale.float().reciprocal()
 
 
