@@ -20,9 +20,9 @@ check_env_vars DCP_SIZE EVAL_ONLY
 # new image some of these may now be native; each apply_* fails fast if its
 # patch no longer applies, so re-verify after an image bump.
 export APPLY_PR59069="${APPLY_PR59069:-0}"  # OFF: now native/merged in image fe4df3df ("already present")
-export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
-export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills
-export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
+export APPLY_PR59070="${APPLY_PR59070:-0}"  # OFF on fe4df3df: applies text-level but stale vs new model code (engine-init shape error 7168 vs 896); re-adapt to re-enable
+export APPLY_PR59693="${APPLY_PR59693:-0}"  # OFF on fe4df3df: same -- residual sharding mismatches new model dims; re-adapt to re-enable
+export APPLY_PR59966="${APPLY_PR59966:-0}"  # OFF on fe4df3df: DCP query-gather patch stale vs new model code; re-adapt to re-enable
 export APPLY_PR54625="${APPLY_PR54625:-0}"  # OFF: no longer applies on image fe4df3df (scheduler.py hunk rejected); needs re-adaptation to re-enable
 export APPLY_PR59591="${APPLY_PR59591:-0}"  # shard latent-MoE up-proj -- OFF: -1.3% tput regression, superseded by #59693
 export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- OFF: +313-352% TTFT, not worth the +2.6% tput
