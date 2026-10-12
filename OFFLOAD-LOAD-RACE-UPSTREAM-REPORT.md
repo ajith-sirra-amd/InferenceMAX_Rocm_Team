@@ -51,6 +51,34 @@ threshold, together they reliably hit the unsynchronized read.** The bug is in t
 all three cases — baseline and C72 simply never generate the triggering conditions. (This
 also means it is *not* an OOM/capacity problem: GPU KV usage at hang time is only ~21%.)
 
+## What "#54494 + FP4 FMHA" is — why & how we added FP4 support
+
+Upstream [vLLM #54494](https://github.com/vllm-project/vllm/pull/54494) implements DCP MLA
+query replication only for the **bf16 / non-BMM decode path**. For the **aiter FP4 (mxfp4) /
+FP8 MLA BMM path** — the one Kimi-K3 FP4 actually runs (the "FP4 FMHA" attention path) — it
+explicitly bails with
+`NotImplementedError("DCP query replication is not implemented for the aiter FP4/FP8 MLA BMM paths")`.
+To use query replication on our FP4 serving path, we extended the PR:
+
+- **Why it was needed:** under query replication, every DCP rank must materialize the *whole
+  group's* query heads, so the per-rank absorbed-BMM weight `W_K` (and its scale `W_K_scale`)
+  has to cover **all** the group's heads, not just this rank's shard. The FP4/FP8 BMM path had
+  no code path for that — hence the `NotImplementedError`.
+- **How we added it:** at `process_weights_after_loading` we **all-gather `W_K` and
+  `W_K_scale` across the DCP group along the head dim** into new parameters
+  `W_K_dcp_qrep` / `W_K_scale_dcp_qrep` (the originals are left untouched), and at the decode
+  BMM call site we branch on `qrep_decode` (use `W_K_dcp_qrep` when replicating, else `W_K`).
+  This mirrors upstream's own working non-BMM pattern (`W_UK_T_dcp_qrep`); we removed the
+  `NotImplementedError` guard accordingly. The query projection is also widened to the group's
+  heads via `DCPGroupColumnParallelLinear` (`resolve_dcp_q_replicate`).
+- **Full diff:** [`pr54494-dcp-query-replication.diff`](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/patches/pr54494-dcp-query-replication.diff).
+
+This FP4 adaptation is correct for the **decode** BMM weights (GSM8K matched baseline within
+stderr) and is **orthogonal** to the offload load-race reported here: the hang is in the
+**prefill** `kv_gather` / CPU-offload path, not the decode query BMM. #54494 is implicated
+only indirectly — replicating the query shrinks the on-GPU KV pool, which drives the offload
+fetch-back churn that triggers the race (see the conditional-trigger table above).
+
 ## Environment / repro config
 
 - Model: Kimi-K3, FP4 (mxfp4), `--kv-cache-dtype fp8`
