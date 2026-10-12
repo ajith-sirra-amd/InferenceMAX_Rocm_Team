@@ -480,6 +480,30 @@ py_compile.compile("'"$site"'/vllm/model_executor/layers/attention/mla_attention
 }
 apply_debug_qrep || { echo "[debug-qrep] patch failed, refusing to run" >&2; exit 1; }
 
+# Temporary debug instrumentation for the #54494 investigation: logs, per
+# rank, chunk.num_local_context_tokens ("toks") and the gather workspace
+# sizes right before the DCP chunked-prefill kv_gather when
+# VLLM_DEBUG_KVGATHER=1 at runtime. That gather is the collective the 8 ranks
+# actually deadlock on (stack trace, run 37946632603); it hangs when the ranks
+# disagree on toks. Same git-apply mechanism as debug-qrep. Throwaway.
+apply_debug_kvgather() {
+    [ "${APPLY_DEBUG_KVGATHER:-0}" = "1" ] || { echo "[debug-kvgather] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/debug-kvgather-logging.diff"
+    [ -f "$diff_file" ] || { echo "[debug-kvgather] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.model_executor.layers.attention.mla_attention as m
+import sys; sys.exit(0 if "kvgather-debug" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[debug-kvgather] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && git apply --unsafe-paths "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+py_compile.compile("'"$site"'/vllm/model_executor/layers/attention/mla_attention.py", doraise=True)' || return 1
+    echo "[debug-kvgather] applied"
+}
+apply_debug_kvgather || { echo "[debug-kvgather] patch failed, refusing to run" >&2; exit 1; }
+
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 

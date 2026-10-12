@@ -91,12 +91,20 @@ export KERNEL_INSPECT="${KERNEL_INSPECT:-0}"
 # Off by default.
 export ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-0}"
 
-# #54494 investigation: fast curl-based smoke test (skips the full agentic
-# replay) and temporary qrep_decode debug logging. All off by default. See
-# PR54494-ROOT-CAUSE-AND-FIX.md.
-export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-1}"
-export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-1}"
-export SMOKE_TEST="${SMOKE_TEST:-1}"
+# #54494 investigation. The real hang is in the DCP chunked-prefill KV gather
+# (_context_parallel_compute_prefill_context -> kv_gather), NOT the decode
+# query gather -- proven by the rank-stuck stack trace in run 37946632603's
+# server.log. The gather deadlocks when the 8 DCP ranks disagree on
+# chunk.num_local_context_tokens ("toks"), which only happens under sustained
+# KV-offload fetch-back pressure. This run reproduces it with full agentic
+# load (SMOKE_TEST=0) and logs per-rank `toks` right before the gather so the
+# divergence is directly observable. Revert these to the prior defaults after
+# the run. See PR54494-ROOT-CAUSE-AND-FIX.md.
+export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-0}"
+export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-0}"
+export APPLY_DEBUG_KVGATHER="${APPLY_DEBUG_KVGATHER:-1}"
+export VLLM_DEBUG_KVGATHER="${VLLM_DEBUG_KVGATHER:-1}"
+export SMOKE_TEST="${SMOKE_TEST:-0}"
 export SMOKE_DURATION="${SMOKE_DURATION:-480}"
 export SMOKE_CONCURRENCY="${SMOKE_CONCURRENCY:-32}"
 
@@ -243,6 +251,8 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e ENABLE_FP8_PREFILL_QUERY_QUANT \
 -e APPLY_DEBUG_QREP \
 -e VLLM_DEBUG_QREP \
+-e APPLY_DEBUG_KVGATHER \
+-e VLLM_DEBUG_KVGATHER \
 -e SMOKE_TEST \
 -e SMOKE_DURATION \
 -e SMOKE_CONCURRENCY \
