@@ -38,6 +38,11 @@ on:
                 - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic"
                 - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic-mtp"
                 - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic-mtp-dpa"
+            test-name:
+                description: "Custom run name (shown in the Actions list). Empty = use the config command."
+                required: false
+                type: string
+                default: ""
             ref:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
