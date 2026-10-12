@@ -14,6 +14,7 @@ fi
 # discriminator has to be the full RUNNER_NAME. Overridable by env for a new host.
 case "$RUNNER_NAME" in
     mi355x-amd_guest*) HF_HUB_CACHE_MOUNT="${HF_HUB_CACHE_MOUNT_OVERRIDE:-/home/models}" ;;
+    mi355x-amd_pit2*) HF_HUB_CACHE_MOUNT="${HF_HUB_CACHE_MOUNT_OVERRIDE:-/share_nfs/models}" ;;
     *)                 HF_HUB_CACHE_MOUNT="${HF_HUB_CACHE_MOUNT_OVERRIDE:-/data/hf_hub_cache}" ;;
 esac
 echo "[hf-cache] RUNNER_NAME=$RUNNER_NAME -> HF_HUB_CACHE_MOUNT=$HF_HUB_CACHE_MOUNT"
