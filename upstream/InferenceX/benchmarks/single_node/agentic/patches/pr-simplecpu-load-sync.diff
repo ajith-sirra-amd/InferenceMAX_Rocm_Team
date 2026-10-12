@@ -83,7 +83,7 @@ index c120951..f0dd854 100644
 -                event_idx=metadata.load_event,
 -                events_list=self._load_events,
 -            )
-+            if sync and hasattr(backend, "load_sync"):
++            if hasattr(backend, "load_sync"):
 +                backend.load_sync(
 +                    metadata.load_cpu_blocks,
 +                    metadata.load_gpu_blocks,
