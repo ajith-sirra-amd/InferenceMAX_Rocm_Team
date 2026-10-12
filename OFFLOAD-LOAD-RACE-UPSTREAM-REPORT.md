@@ -5,6 +5,13 @@
 **Image tested:** `vllm/vllm-openai-rocm:nightly-rocm100-81198e97ba7eee2a22540caaa756b7fdddcb4d93`
 (vLLM `v0.31.1rc1.dev88+g81198e97b`; source refs below are against commit `81198e97`)
 
+**Patch that triggers it** (this repo, branch `chore/sa-agentx-v1.0`):
+[`pr54494-dcp-query-replication.diff`](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/patches/pr54494-dcp-query-replication.diff)
+— DCP MLA query replication, adapted for the FP4/FP8 aiter MLA BMM ("FP4 FMHA") path.
+**Attempted fix** (compute-stream `wait_event` — *insufficient*, the `kv_gather` collective runs on its own stream):
+[`pr-simplecpu-load-sync.diff`](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/chore/sa-agentx-v1.0/upstream/InferenceX/benchmarks/single_node/agentic/patches/pr-simplecpu-load-sync.diff).
+**Upstream refs:** [vLLM #54494](https://github.com/vllm-project/vllm/pull/54494), [ROCm/ATOM #2290](https://github.com/ROCm/ATOM/pull/2290) (measures the KV-pool shrink from query replication).
+
 ## Summary
 
 Under DCP, an MLA **prefill** gathers each rank's KV shard for the cached context via
@@ -13,6 +20,36 @@ back from CPU by `SimpleCPUOffloadConnector` as an **async** load, there is **no
 between the load copy (on `load_stream`) and the prefill `kv_gather`**. If a request is
 prefilled before its CPU→GPU load has completed, `kv_gather` reads KV that is still being
 copied; the collective never completes and all ranks time out together after 600 s.
+
+## Why it reproduces only on conc=96 **+** #54494 (not baseline, not C72)
+
+The defect is latent in the offload load path; it only *manifests* when a **large async
+CPU→GPU load is still in flight exactly as a prefill `kv_gather` reads overlapping KV**.
+That coincidence needs two independent conditions, and only `conc=96 + #54494` supplies
+both at once:
+
+**(1) #54494 creates large, frequent offload fetch-backs.** DCP query replication
+replicates the query projection on every rank, which **shrinks the on-GPU KV pool (~5%**,
+per [ROCm/ATOM #2290](https://github.com/ROCm/ATOM/pull/2290)'s measurement). Less resident
+KV ⇒ the engine offloads more cached context to CPU and fetches it back more often and in
+*larger* chunks (we traced 499- and 580-block loads right before the freeze).
+
+**(2) conc=96 builds the fetch-back bursts.** The race needs a burst of concurrent fetches
+colliding with a long prefill; conc=96 accumulates that queue (deferred requests + many
+in-flight KV fetches), conc=72 does not.
+
+This explains all three observed cases, on the same image + FP4 FMHA path:
+
+| Config | #54494 | Offload churn | Large load in flight during prefill? | Result |
+|---|---|---|---|---|
+| **C96, no patch** (baseline) | off | low (full KV pool resident) | effectively never | **clean, ~14,077 tok/s/GPU** |
+| **C72 + #54494 + FP4 FMHA** | on | higher | not within a run (too little concurrency to burst) | **stays up** |
+| **C96 + #54494 + FP4 FMHA** | on | high (KV pool ~5% smaller) | yes — reliably, ~40–50 min in | **HANG** |
+
+So #54494 supplies condition (1) and conc=96 supplies condition (2); **either alone is below
+threshold, together they reliably hit the unsynchronized read.** The bug is in the code for
+all three cases — baseline and C72 simply never generate the triggering conditions. (This
+also means it is *not* an OOM/capacity problem: GPU KV usage at hang time is only ~21%.)
 
 ## Environment / repro config
 
