@@ -531,6 +531,31 @@ for f in ["vllm/v1/worker/gpu/kv_connector.py","vllm/distributed/kv_transfer/kv_
 }
 apply_load_sync || { echo "[load-sync] patch failed, refusing to run" >&2; exit 1; }
 
+# Temporary offload-path trace for the #54494 investigation: logs each
+# start_load_kv (sync flag, nblocks, event_idx, pending + completed load
+# high-water marks) when VLLM_DEBUG_OFFLOAD=1. Tells us whether load_sync
+# fires (sync=True -- expected never, since CPU offload loads are async) and
+# whether loads complete (load_hwm advances) or stall. Targets the
+# load-sync-patched worker.py (needs the `sync` param), so apply it AFTER
+# apply_load_sync and only with APPLY_LOAD_SYNC=1.
+apply_debug_offload() {
+    [ "${APPLY_DEBUG_OFFLOAD:-0}" = "1" ] || { echo "[debug-offload] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/debug-offload-trace.diff"
+    [ -f "$diff_file" ] || { echo "[debug-offload] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.v1.simple_kv_offload.worker as m
+import sys; sys.exit(0 if "offload-trace" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[debug-offload] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && git apply --unsafe-paths "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+py_compile.compile("'"$site"'/vllm/v1/simple_kv_offload/worker.py", doraise=True)' || return 1
+    echo "[debug-offload] applied"
+}
+apply_debug_offload || { echo "[debug-offload] patch failed, refusing to run" >&2; exit 1; }
+
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 

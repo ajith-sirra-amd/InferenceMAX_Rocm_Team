@@ -92,20 +92,21 @@ export KERNEL_INSPECT="${KERNEL_INSPECT:-0}"
 # Off by default.
 export ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-0}"
 
-# #54494 investigation. Instrumented run 38206247907 proved the hang is NOT a
-# toks / qrep_decode divergence: the DCP chunked-prefill kv_gather is fully
-# symmetric across all 8 ranks (same toks/size, 80160 calls each, same stuck
-# SeqNum, same enqueue/complete counters). It is a symmetric-collective GPU
-# stall coincident with a KV-offload fetch-back burst (SimpleCPUOffloadConnector
-# "stale pin"). Debug instrumentation is OFF by default now that the data is
-# captured; flip the flags to re-run it. See PR54494-ROOT-CAUSE-AND-FIX.md.
+# #54494 DIAGNOSTIC run. The load-sync fix (run 38220502833) did NOT fire:
+# CPU-offload loads are async (is_async=True), so has_sync_kv_loads is always
+# False and load_sync() never runs -- the same kv_gather hang recurred. This
+# run keeps load-sync applied but adds an offload trace (start_load_kv:
+# sync flag / nblocks / event_idx / pending + completed load high-water marks)
+# plus the kvgather toks log, to see at the hang whether a load stalls
+# (load_hwm stops advancing) and confirm sync=False. See
+# PR54494-ROOT-CAUSE-AND-FIX.md.
 export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-0}"
 export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-0}"
-export APPLY_DEBUG_KVGATHER="${APPLY_DEBUG_KVGATHER:-0}"
-export VLLM_DEBUG_KVGATHER="${VLLM_DEBUG_KVGATHER:-0}"
-# #54494 hang fix: SimpleCPUOffloadConnector sync-load ordering (load_sync).
-# ON by default for the fix-validation dispatch. See PR54494-ROOT-CAUSE-AND-FIX.md.
+export APPLY_DEBUG_KVGATHER="${APPLY_DEBUG_KVGATHER:-1}"
+export VLLM_DEBUG_KVGATHER="${VLLM_DEBUG_KVGATHER:-1}"
 export APPLY_LOAD_SYNC="${APPLY_LOAD_SYNC:-1}"
+export APPLY_DEBUG_OFFLOAD="${APPLY_DEBUG_OFFLOAD:-1}"
+export VLLM_DEBUG_OFFLOAD="${VLLM_DEBUG_OFFLOAD:-1}"
 export SMOKE_TEST="${SMOKE_TEST:-0}"
 export SMOKE_DURATION="${SMOKE_DURATION:-480}"
 export SMOKE_CONCURRENCY="${SMOKE_CONCURRENCY:-32}"
@@ -256,6 +257,8 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e APPLY_DEBUG_KVGATHER \
 -e VLLM_DEBUG_KVGATHER \
 -e APPLY_LOAD_SYNC \
+-e APPLY_DEBUG_OFFLOAD \
+-e VLLM_DEBUG_OFFLOAD \
 -e SMOKE_TEST \
 -e SMOKE_DURATION \
 -e SMOKE_CONCURRENCY \
