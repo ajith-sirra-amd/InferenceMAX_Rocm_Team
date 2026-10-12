@@ -92,29 +92,8 @@ export KERNEL_INSPECT="${KERNEL_INSPECT:-0}"
 # Off by default.
 export ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-0}"
 
-# #54494 DIAGNOSTIC run. The load-sync fix (run 38220502833) did NOT fire:
-# CPU-offload loads are async (is_async=True), so has_sync_kv_loads is always
-# False and load_sync() never runs -- the same kv_gather hang recurred. This
-# run keeps load-sync applied but adds an offload trace (start_load_kv:
-# sync flag / nblocks / event_idx / pending + completed load high-water marks)
-# plus the kvgather toks log, to see at the hang whether a load stalls
-# (load_hwm stops advancing) and confirm sync=False. See
-# PR54494-ROOT-CAUSE-AND-FIX.md.
-# C86 ISOLATION run (mirrors the smooth C72 run): #54494 only, async loads
-# (NO load-sync fix), no-MTP, no debug. Does lowering conc 96->86 alone avoid
-# the offload load-race, separate from the fix? Clean throughput + binary
-# hang/no-hang. Queued behind the C96 one-shot fix (run 38244237545).
-# See PR54494-ROOT-CAUSE-AND-FIX.md.
-export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-0}"
-export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-0}"
-export APPLY_DEBUG_KVGATHER="${APPLY_DEBUG_KVGATHER:-0}"
-export VLLM_DEBUG_KVGATHER="${VLLM_DEBUG_KVGATHER:-0}"
-export APPLY_LOAD_SYNC="${APPLY_LOAD_SYNC:-0}"
-export APPLY_DEBUG_OFFLOAD="${APPLY_DEBUG_OFFLOAD:-0}"
-export VLLM_DEBUG_OFFLOAD="${VLLM_DEBUG_OFFLOAD:-0}"
-export SMOKE_TEST="${SMOKE_TEST:-0}"
-export SMOKE_DURATION="${SMOKE_DURATION:-480}"
-export SMOKE_CONCURRENCY="${SMOKE_CONCURRENCY:-32}"
+# (#54494 investigation debug/offload/smoke env removed with its patches;
+# see OFFLOAD-LOAD-RACE-UPSTREAM-REPORT.md and git history.)
 
 # Non-default #54627/#54625 values so both patches actually engage instead of
 # sitting at their no-op defaults (interval=1, window=0). Per the PRs' own
@@ -257,16 +236,6 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e ROCPROF_DURATION \
 -e KERNEL_INSPECT \
 -e ENABLE_FP8_PREFILL_QUERY_QUANT \
--e APPLY_DEBUG_QREP \
--e VLLM_DEBUG_QREP \
--e APPLY_DEBUG_KVGATHER \
--e VLLM_DEBUG_KVGATHER \
--e APPLY_LOAD_SYNC \
--e APPLY_DEBUG_OFFLOAD \
--e VLLM_DEBUG_OFFLOAD \
--e SMOKE_TEST \
--e SMOKE_DURATION \
--e SMOKE_CONCURRENCY \
 -e PREFILL_SCHEDULE_INTERVAL \
 -e CACHE_AWARE_ADMISSION_WINDOW \
 -e CACHE_AWARE_ADMISSION_THRESHOLD \

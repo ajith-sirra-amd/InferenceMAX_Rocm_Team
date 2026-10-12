@@ -14,17 +14,20 @@ check_env_vars DCP_SIZE EVAL_ONLY
 # unpatched for that PR). See each PR's own comment block below for what it
 # does, requirements, and known conflicts with other staged PRs.
 # =============================================================================
-export APPLY_PR59591="${APPLY_PR59591:-0}"  # Kimi-K3: shard latent-MoE up-proj by TP rank -- measured net loss (-1.3% tput), replaced by #59693 below
-export APPLY_PR59069="${APPLY_PR59069:-0}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant -- OFF: isolating the fixed #54494 this run
-export APPLY_PR59070="${APPLY_PR59070:-0}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather -- OFF: isolating the fixed #54494 this run
-export APPLY_PR59693="${APPLY_PR59693:-0}"  # Kimi-K3: token-sharded residual stream for long prefills -- OFF: isolating the fixed #54494 this run
-export APPLY_PR59965="${APPLY_PR59965:-0}"  # ROCm DCP: default MLA DCP verify to round-robin asm -- MERGED + already native in current pinned image; no-op for our workload (spec-decode batches only), excluded
-export APPLY_PR59966="${APPLY_PR59966:-0}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies -- OFF: isolating the fixed #54494 this run
-export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- +2.6% tput/-7.5-17% TPOT but +313-352% TTFT -- not worth it, TTFT cost too large for the TPOT gain
-export APPLY_PR54625="${APPLY_PR54625:-0}"  # cache-aware admission ordering -- OFF: isolating the fixed #54494 this run
-export APPLY_PR58743="${APPLY_PR58743:-0}"  # Kimi-K3: support BF16 KDA recurrent state -- OFF: crashes decode, see block below
-export APPLY_PR54494="${APPLY_PR54494:-1}"  # ON for the smoke-test debug dispatch only -- needed to exercise the qrep_decode code path at all. Revert to 0 after this investigation run.
-export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-1}"  # ON for the smoke-test debug dispatch -- logs qrep_decode per rank per decode step. Revert to 0 after.
+# Stack for image nightly-rocm100-fe4df3df. Useful PRs ON; regressions and the
+# merged-upstream PR removed. #54494 kept but OFF -- it triggers an unfixed
+# upstream offload load-race (see OFFLOAD-LOAD-RACE-UPSTREAM-REPORT.md). On a
+# new image some of these may now be native; each apply_* fails fast if its
+# patch no longer applies, so re-verify after an image bump.
+export APPLY_PR59069="${APPLY_PR59069:-1}"  # Kimi-K3: fuse AttnRes output + per-token FP8 quant
+export APPLY_PR59070="${APPLY_PR59070:-1}"  # ROCm MLA: keep DCP prefill context FP8 through AllGather
+export APPLY_PR59693="${APPLY_PR59693:-1}"  # Kimi-K3: token-sharded residual stream for long prefills
+export APPLY_PR59966="${APPLY_PR59966:-1}"  # ROCm DCP: gather MLA decode query without byte-wise strided copies
+export APPLY_PR54625="${APPLY_PR54625:-1}"  # cache-aware admission ordering
+export APPLY_PR59591="${APPLY_PR59591:-0}"  # shard latent-MoE up-proj -- OFF: -1.3% tput regression, superseded by #59693
+export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- OFF: +313-352% TTFT, not worth the +2.6% tput
+export APPLY_PR58743="${APPLY_PR58743:-0}"  # BF16 KDA recurrent state -- OFF: crashes decode
+export APPLY_PR54494="${APPLY_PR54494:-0}"  # DCP query replication -- OFF: triggers the offload load-race hang; kept for reference, not deleted
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
@@ -289,28 +292,6 @@ if [ "${APPLY_PR59693:-0}" = "1" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# #59965 -- DCP MLA verify default segmented->auto. +50.8% tput but only for
-# spec-decode batches we don't run at C70/C72 -- safety-net default, not an
-# expected win here.
-# -----------------------------------------------------------------------------
-apply_pr59965() {
-    [ "${APPLY_PR59965:-1}" = "1" ] || { echo "[pr59965] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59965-dcp-verify-auto-default.diff"
-    [ -f "$diff_file" ] || { echo "[pr59965] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import vllm.envs as e; import sys
-sys.exit(0 if e.VLLM_ROCM_AITER_MLA_DCP_VERIFY == "auto" else 1)' 2>/dev/null; then
-        echo "[pr59965] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/envs.py","vllm/v1/attention/backends/mla/rocm_aiter_mla.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr59965] applied"
-}
-apply_pr59965 || { echo "[pr59965] patch failed, refusing to run" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
 # #59966 -- direct MLA decode query gather, no byte-wise strided copies.
@@ -456,105 +437,6 @@ if [ "${APPLY_PR54494:-0}" = "1" ]; then
     export VLLM_DCP_Q_REPLICATE=1
 fi
 
-# Temporary debug instrumentation for the #54494 investigation: logs
-# qrep_decode per rank per decode call when VLLM_DEBUG_QREP=1 at runtime.
-# See PR54494-ROOT-CAUSE-AND-FIX.md. Uses git apply, not patch -p1 --
-# classic patch mysteriously fails to match this hunk's context even
-# though it's byte-verified correct (git apply applies it cleanly); not
-# worth chasing further, this is throwaway debug code.
-apply_debug_qrep() {
-    [ "${APPLY_DEBUG_QREP:-0}" = "1" ] || { echo "[debug-qrep] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/debug-qrep-logging.diff"
-    [ -f "$diff_file" ] || { echo "[debug-qrep] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.model_executor.layers.attention.mla_attention as m
-import sys; sys.exit(0 if "qrep-debug" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[debug-qrep] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && git apply --unsafe-paths "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-py_compile.compile("'"$site"'/vllm/model_executor/layers/attention/mla_attention.py", doraise=True)' || return 1
-    echo "[debug-qrep] applied"
-}
-apply_debug_qrep || { echo "[debug-qrep] patch failed, refusing to run" >&2; exit 1; }
-
-# Temporary debug instrumentation for the #54494 investigation: logs, per
-# rank, chunk.num_local_context_tokens ("toks") and the gather workspace
-# sizes right before the DCP chunked-prefill kv_gather when
-# VLLM_DEBUG_KVGATHER=1 at runtime. That gather is the collective the 8 ranks
-# actually deadlock on (stack trace, run 37946632603); it hangs when the ranks
-# disagree on toks. Same git-apply mechanism as debug-qrep. Throwaway.
-apply_debug_kvgather() {
-    [ "${APPLY_DEBUG_KVGATHER:-0}" = "1" ] || { echo "[debug-kvgather] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/debug-kvgather-logging.diff"
-    [ -f "$diff_file" ] || { echo "[debug-kvgather] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.model_executor.layers.attention.mla_attention as m
-import sys; sys.exit(0 if "kvgather-debug" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[debug-kvgather] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && git apply --unsafe-paths "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-py_compile.compile("'"$site"'/vllm/model_executor/layers/attention/mla_attention.py", doraise=True)' || return 1
-    echo "[debug-kvgather] applied"
-}
-apply_debug_kvgather || { echo "[debug-kvgather] patch failed, refusing to run" >&2; exit 1; }
-
-# #54494 hang FIX: SimpleCPUOffloadConnector sync-load ordering. On
-# has_sync_kv_loads steps the loaded KV is read by the same step's forward,
-# but the connector issued the CPU->GPU copy async with no compute-stream
-# wait (wait_for_layer_load was a no-op) -- so under offload fetch-back
-# bursts the prefill kv_gather read KV still being copied, wedging the
-# collective. This patch adds load_sync() (inline copy on load_stream +
-# current_stream().wait_event) for sync loads only; async loads unchanged.
-# See PR54494-ROOT-CAUSE-AND-FIX.md.
-apply_load_sync() {
-    [ "${APPLY_LOAD_SYNC:-0}" = "1" ] || { echo "[load-sync] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr-simplecpu-load-sync.diff"
-    [ -f "$diff_file" ] || { echo "[load-sync] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.v1.simple_kv_offload.copy_backend as m
-import sys; sys.exit(0 if "def load_sync" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[load-sync] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && git apply --unsafe-paths "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/v1/worker/gpu/kv_connector.py","vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py","vllm/v1/simple_kv_offload/worker.py","vllm/v1/simple_kv_offload/copy_backend.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[load-sync] applied"
-}
-apply_load_sync || { echo "[load-sync] patch failed, refusing to run" >&2; exit 1; }
-
-# Temporary offload-path trace for the #54494 investigation: logs each
-# start_load_kv (sync flag, nblocks, event_idx, pending + completed load
-# high-water marks) when VLLM_DEBUG_OFFLOAD=1. Tells us whether load_sync
-# fires (sync=True -- expected never, since CPU offload loads are async) and
-# whether loads complete (load_hwm advances) or stall. Targets the
-# load-sync-patched worker.py (needs the `sync` param), so apply it AFTER
-# apply_load_sync and only with APPLY_LOAD_SYNC=1.
-apply_debug_offload() {
-    [ "${APPLY_DEBUG_OFFLOAD:-0}" = "1" ] || { echo "[debug-offload] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/debug-offload-trace.diff"
-    [ -f "$diff_file" ] || { echo "[debug-offload] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.v1.simple_kv_offload.worker as m
-import sys; sys.exit(0 if "offload-trace" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[debug-offload] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && git apply --unsafe-paths "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-py_compile.compile("'"$site"'/vllm/v1/simple_kv_offload/worker.py", doraise=True)' || return 1
-    echo "[debug-offload] applied"
-}
-apply_debug_offload || { echo "[debug-offload] patch failed, refusing to run" >&2; exit 1; }
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
