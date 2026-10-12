@@ -103,6 +103,9 @@ export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-0}"
 export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-0}"
 export APPLY_DEBUG_KVGATHER="${APPLY_DEBUG_KVGATHER:-0}"
 export VLLM_DEBUG_KVGATHER="${VLLM_DEBUG_KVGATHER:-0}"
+# #54494 hang fix: SimpleCPUOffloadConnector sync-load ordering (load_sync).
+# ON by default for the fix-validation dispatch. See PR54494-ROOT-CAUSE-AND-FIX.md.
+export APPLY_LOAD_SYNC="${APPLY_LOAD_SYNC:-1}"
 export SMOKE_TEST="${SMOKE_TEST:-0}"
 export SMOKE_DURATION="${SMOKE_DURATION:-480}"
 export SMOKE_CONCURRENCY="${SMOKE_CONCURRENCY:-32}"
@@ -252,6 +255,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e VLLM_DEBUG_QREP \
 -e APPLY_DEBUG_KVGATHER \
 -e VLLM_DEBUG_KVGATHER \
+-e APPLY_LOAD_SYNC \
 -e SMOKE_TEST \
 -e SMOKE_DURATION \
 -e SMOKE_CONCURRENCY \

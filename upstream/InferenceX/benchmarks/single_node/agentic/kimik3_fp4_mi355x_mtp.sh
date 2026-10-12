@@ -504,6 +504,33 @@ py_compile.compile("'"$site"'/vllm/model_executor/layers/attention/mla_attention
 }
 apply_debug_kvgather || { echo "[debug-kvgather] patch failed, refusing to run" >&2; exit 1; }
 
+# #54494 hang FIX: SimpleCPUOffloadConnector sync-load ordering. On
+# has_sync_kv_loads steps the loaded KV is read by the same step's forward,
+# but the connector issued the CPU->GPU copy async with no compute-stream
+# wait (wait_for_layer_load was a no-op) -- so under offload fetch-back
+# bursts the prefill kv_gather read KV still being copied, wedging the
+# collective. This patch adds load_sync() (inline copy on load_stream +
+# current_stream().wait_event) for sync loads only; async loads unchanged.
+# See PR54494-ROOT-CAUSE-AND-FIX.md.
+apply_load_sync() {
+    [ "${APPLY_LOAD_SYNC:-0}" = "1" ] || { echo "[load-sync] disabled"; return 0; }
+    local diff_file
+    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr-simplecpu-load-sync.diff"
+    [ -f "$diff_file" ] || { echo "[load-sync] missing $diff_file" >&2; return 1; }
+    local site
+    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
+    if python3 -c 'import inspect,vllm.v1.simple_kv_offload.copy_backend as m
+import sys; sys.exit(0 if "def load_sync" in inspect.getsource(m) else 1)' 2>/dev/null; then
+        echo "[load-sync] already present, nothing to do"; return 0
+    fi
+    ( cd "$site" && git apply --unsafe-paths "$diff_file" ) || return 1
+    python3 -c 'import py_compile
+for f in ["vllm/v1/worker/gpu/kv_connector.py","vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py","vllm/v1/simple_kv_offload/worker.py","vllm/v1/simple_kv_offload/copy_backend.py"]:
+    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
+    echo "[load-sync] applied"
+}
+apply_load_sync || { echo "[load-sync] patch failed, refusing to run" >&2; exit 1; }
+
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
 

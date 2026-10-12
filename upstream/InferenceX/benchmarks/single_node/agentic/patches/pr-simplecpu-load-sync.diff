@@ -1,0 +1,140 @@
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py
+index 0bd8ebe..85a6ff8 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/simple_cpu_offload_connector.py
+@@ -217,10 +217,14 @@ class SimpleCPUOffloadConnector(KVConnectorBase_V1, SupportsHMA):
+ 
+     def start_load_kv(self, forward_context: "ForwardContext", **kwargs: Any) -> None:
+         if self.worker_handler is not None:
+-            self.worker_handler.start_load_kv()
++            # sync_loads=True (set by the runner on has_sync_kv_loads steps)
++            # forces the load to complete before this step's forward reads it.
++            self.worker_handler.start_load_kv(sync=bool(kwargs.get("sync_loads", False)))
+ 
+     def wait_for_layer_load(self, layer_name: str) -> None:
+-        pass  # Always load asynchronously, issued in start_load_kv()
++        # Sync loads are ordered against compute in start_load_kv() via
++        # load_sync(); async loads complete before their next-step read.
++        pass
+ 
+     def save_kv_layer(
+         self,
+diff --git a/vllm/v1/simple_kv_offload/copy_backend.py b/vllm/v1/simple_kv_offload/copy_backend.py
+index 58de7a7..b3af70c 100644
+--- a/vllm/v1/simple_kv_offload/copy_backend.py
++++ b/vllm/v1/simple_kv_offload/copy_backend.py
+@@ -91,6 +91,28 @@ class DmaCopyBackend:
+             )
+         )
+ 
++    def load_sync(
++        self,
++        src_blocks: list[int],
++        dst_blocks: list[int],
++        event_idx: int,
++        events_list: list[tuple[int, torch.Event]],
++    ) -> None:
++        """Synchronous load: copy on load_stream inline (bypassing the
++        background queue) and make the compute stream wait on it, so this
++        step's forward sees the loaded KV. Used for sync KV loads
++        (SchedulerOutput.has_sync_kv_loads) whose blocks are consumed in the
++        same step -- the async launch_copy() path leaves no ordering between
++        the load_stream copy and the compute-stream read, which races under
++        offload fetch-back bursts. copy_blocks() issues on params.stream_handle
++        (load_stream), matching _copy_loop()."""
++        assert self._load_params is not None and self._load_stream is not None
++        copy_blocks(src_blocks, dst_blocks, self._load_params)
++        event = torch.Event()
++        event.record(self._load_stream)
++        torch.cuda.current_stream().wait_event(event)
++        events_list.append((event_idx, event))
++
+     def shutdown(self) -> None:
+         if self._shutdown:
+             return
+diff --git a/vllm/v1/simple_kv_offload/worker.py b/vllm/v1/simple_kv_offload/worker.py
+index c120951..f0dd854 100644
+--- a/vllm/v1/simple_kv_offload/worker.py
++++ b/vllm/v1/simple_kv_offload/worker.py
+@@ -253,22 +253,33 @@ class SimpleCPUOffloadWorker:
+     def clear_connector_metadata(self) -> None:
+         self._connector_metadata = None
+ 
+-    def start_load_kv(self) -> None:
+-        # Invoked after the forward launch on steps without sync loads
+-        # (SchedulerOutput.has_sync_kv_loads), so the CPU-side block copy
+-        # op overhead (~5ms) stays hidden behind GPU compute. Stores are
++    def start_load_kv(self, sync: bool = False) -> None:
++        # Async case (sync=False): invoked after the forward launch, so the
++        # CPU-side block copy op overhead (~5ms) stays hidden behind GPU
++        # compute. Sync case (sync=True, SchedulerOutput.has_sync_kv_loads):
++        # the loaded blocks are read by THIS step's forward, so the copy must
++        # complete before compute reads them -- load_sync() issues the copy on
++        # load_stream and makes the compute stream wait on it. Stores are
+         # issued in wait_for_save().
+         metadata = self._connector_metadata
+         if metadata is not None and metadata.load_cpu_blocks:
+             backend = self._backend
+             assert backend is not None
+-            backend.launch_copy(
+-                metadata.load_cpu_blocks,
+-                metadata.load_gpu_blocks,
+-                is_store=False,
+-                event_idx=metadata.load_event,
+-                events_list=self._load_events,
+-            )
++            if sync and hasattr(backend, "load_sync"):
++                backend.load_sync(
++                    metadata.load_cpu_blocks,
++                    metadata.load_gpu_blocks,
++                    event_idx=metadata.load_event,
++                    events_list=self._load_events,
++                )
++            else:
++                backend.launch_copy(
++                    metadata.load_cpu_blocks,
++                    metadata.load_gpu_blocks,
++                    is_store=False,
++                    event_idx=metadata.load_event,
++                    events_list=self._load_events,
++                )
+ 
+     def wait_for_save(self) -> None:
+         """Submit async stores.
+diff --git a/vllm/v1/worker/gpu/kv_connector.py b/vllm/v1/worker/gpu/kv_connector.py
+index 1ba75be..c04cfab 100644
+--- a/vllm/v1/worker/gpu/kv_connector.py
++++ b/vllm/v1/worker/gpu/kv_connector.py
+@@ -72,21 +72,27 @@ class ActiveKVConnector(KVConnector):
+         self._pending_load_kwargs = kwargs
+ 
+         if scheduler_output.has_sync_kv_loads:
+-            # Sync loads need to run before this step's forward.
+-            self._start_load_kv()
++            # Sync loads need to run before this step's forward -- and must
++            # complete before it reads them. sync=True lets the connector
++            # order the load against compute (see SimpleCPUOffload.load_sync).
++            self._start_load_kv(sync=True)
+         # Otherwise start the async load after forward to keep submission
+         # off the critical path.
+ 
+-    def _start_load_kv(self) -> None:
++    def _start_load_kv(self, sync: bool = False) -> None:
+         load_kwargs = self._pending_load_kwargs
+         assert load_kwargs is not None
+         self._pending_load_kwargs = None
+         # TODO: sort out KV Connectors' use of forward_context
+         if is_forward_context_available():
+-            self.kv_connector.start_load_kv(get_forward_context(), **load_kwargs)
++            self.kv_connector.start_load_kv(
++                get_forward_context(), sync_loads=sync, **load_kwargs
++            )
+         else:
+             with set_forward_context(None, self.vllm_config):
+-                self.kv_connector.start_load_kv(get_forward_context(), **load_kwargs)
++                self.kv_connector.start_load_kv(
++                    get_forward_context(), sync_loads=sync, **load_kwargs
++                )
+ 
+     def finish_forward(self) -> None:
+         if not self._disabled:
