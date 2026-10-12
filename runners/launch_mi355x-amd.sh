@@ -100,21 +100,18 @@ export ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-0}"
 # plus the kvgather toks log, to see at the hang whether a load stalls
 # (load_hwm stops advancing) and confirm sync=False. See
 # PR54494-ROOT-CAUSE-AND-FIX.md.
-# ONE-SHOT C96 fix validation: #54494 + the always-sync load fix
-# (pr-simplecpu-load-sync.diff, now UNCONDITIONAL -- CPU offload loads are
-# async, so the old has_sync_kv_loads gate never fired; diagnostic run
-# 38236970229 proved the prefill kv_gather read a 499-block load mid-copy).
-# load_sync now runs for every load: async copy on load_stream + compute
-# wait_event, so the gather can't read a load in flight. Offload-trace ON to
-# confirm it engages and load_hwm advances past the big load (no deadlock).
+# C86 ISOLATION run (mirrors the smooth C72 run): #54494 only, async loads
+# (NO load-sync fix), no-MTP, no debug. Does lowering conc 96->86 alone avoid
+# the offload load-race, separate from the fix? Clean throughput + binary
+# hang/no-hang. Queued behind the C96 one-shot fix (run 38244237545).
 # See PR54494-ROOT-CAUSE-AND-FIX.md.
 export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-0}"
 export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-0}"
 export APPLY_DEBUG_KVGATHER="${APPLY_DEBUG_KVGATHER:-0}"
 export VLLM_DEBUG_KVGATHER="${VLLM_DEBUG_KVGATHER:-0}"
-export APPLY_LOAD_SYNC="${APPLY_LOAD_SYNC:-1}"
-export APPLY_DEBUG_OFFLOAD="${APPLY_DEBUG_OFFLOAD:-1}"
-export VLLM_DEBUG_OFFLOAD="${VLLM_DEBUG_OFFLOAD:-1}"
+export APPLY_LOAD_SYNC="${APPLY_LOAD_SYNC:-0}"
+export APPLY_DEBUG_OFFLOAD="${APPLY_DEBUG_OFFLOAD:-0}"
+export VLLM_DEBUG_OFFLOAD="${VLLM_DEBUG_OFFLOAD:-0}"
 export SMOKE_TEST="${SMOKE_TEST:-0}"
 export SMOKE_DURATION="${SMOKE_DURATION:-480}"
 export SMOKE_CONCURRENCY="${SMOKE_CONCURRENCY:-32}"
