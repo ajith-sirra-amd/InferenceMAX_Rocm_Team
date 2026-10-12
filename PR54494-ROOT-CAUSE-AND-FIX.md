@@ -12,6 +12,40 @@ original fix description as superseded by that section.
 
 ---
 
+## CORRECTION (2026-10-12): not a divergence bug — a symmetric-collective stall under KV-offload fetch-back
+
+Instrumented run **38206247907** (per-rank `toks` logged right before the DCP
+chunked-prefill `kv_gather`; `patches/debug-kvgather-logging.diff`, now off by
+default) **disproves every theory below**, including the `qrep_decode`
+divergence lead. From that run's `server.log`:
+
+- Hang reproduced: watchdog on `_ALLGATHER_BASE SeqNum=87049, NumelIn=4755456`
+  (`= toks 8256 × 576`) at 06:10:10 — the prefill `kv_gather`.
+- That gather is **fully symmetric across all 8 ranks**: identical size,
+  identical call count (**80,160 each**), identical stuck SeqNum, identical NCCL
+  counters (`last enqueued=87288, last completed=87048`). So it is **not** a
+  `toks` size mismatch, **not** a collective-count desync, **not** `qrep_decode`
+  divergence.
+- All 8 ranks post the *same* collective in the *same* order yet it never
+  completes → the stall is **GPU-side** (a kernel wedges before the collective
+  can run), not a scheduling/metadata bug.
+- The freeze is exactly coincident with a **KV-offload fetch-back burst**:
+  `SimpleCPUOffloadScheduler ... releasing the stale pin` warnings at
+  06:00:08–10, then `Deferred: 31, KV fetch: 31 in progress` frozen at 06:00:16.
+
+**Working root cause:** a race between `SimpleCPUOffloadConnector`'s async KV
+fetch-back (CPU→GPU) and the prefill `kv_gather` that consumes that KV — the
+gather launches before the fetched KV is resident on ≥1 rank. **#54494 triggers
+it** because QREP shrinks the on-GPU KV pool ~5% (ATOM #2290's own measurement),
+forcing more offload churn; baseline keeps that KV resident and rarely races.
+
+**Fix direction:** the offload connector — the "stale pin" accounting and/or a
+missing fetch→gather stream-sync — **not** the query path. The `W_K` fixes and
+divergence hunts below targeted the wrong subsystem; everything that follows is
+kept for history only.
+
+---
+
 ## The simple version
 
 `#54494` is an upstream vLLM PR that lets each GPU skip an expensive

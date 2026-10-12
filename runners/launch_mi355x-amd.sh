@@ -92,19 +92,17 @@ export KERNEL_INSPECT="${KERNEL_INSPECT:-0}"
 # Off by default.
 export ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-0}"
 
-# #54494 investigation. The real hang is in the DCP chunked-prefill KV gather
-# (_context_parallel_compute_prefill_context -> kv_gather), NOT the decode
-# query gather -- proven by the rank-stuck stack trace in run 37946632603's
-# server.log. The gather deadlocks when the 8 DCP ranks disagree on
-# chunk.num_local_context_tokens ("toks"), which only happens under sustained
-# KV-offload fetch-back pressure. This run reproduces it with full agentic
-# load (SMOKE_TEST=0) and logs per-rank `toks` right before the gather so the
-# divergence is directly observable. Revert these to the prior defaults after
-# the run. See PR54494-ROOT-CAUSE-AND-FIX.md.
+# #54494 investigation. Instrumented run 38206247907 proved the hang is NOT a
+# toks / qrep_decode divergence: the DCP chunked-prefill kv_gather is fully
+# symmetric across all 8 ranks (same toks/size, 80160 calls each, same stuck
+# SeqNum, same enqueue/complete counters). It is a symmetric-collective GPU
+# stall coincident with a KV-offload fetch-back burst (SimpleCPUOffloadConnector
+# "stale pin"). Debug instrumentation is OFF by default now that the data is
+# captured; flip the flags to re-run it. See PR54494-ROOT-CAUSE-AND-FIX.md.
 export APPLY_DEBUG_QREP="${APPLY_DEBUG_QREP:-0}"
 export VLLM_DEBUG_QREP="${VLLM_DEBUG_QREP:-0}"
-export APPLY_DEBUG_KVGATHER="${APPLY_DEBUG_KVGATHER:-1}"
-export VLLM_DEBUG_KVGATHER="${VLLM_DEBUG_KVGATHER:-1}"
+export APPLY_DEBUG_KVGATHER="${APPLY_DEBUG_KVGATHER:-0}"
+export VLLM_DEBUG_KVGATHER="${VLLM_DEBUG_KVGATHER:-0}"
 export SMOKE_TEST="${SMOKE_TEST:-0}"
 export SMOKE_DURATION="${SMOKE_DURATION:-480}"
 export SMOKE_CONCURRENCY="${SMOKE_CONCURRENCY:-32}"

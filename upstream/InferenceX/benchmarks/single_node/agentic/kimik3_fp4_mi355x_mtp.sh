@@ -139,7 +139,7 @@ case "$CONC" in
         if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"; fi
         ;;
-    64|72)
+    64)
         DCP_SIZE="${DCP_SIZE:-8}"
         OFFLOAD_POLICY=harness
         MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
