@@ -107,10 +107,11 @@ diff --git a/vllm/model_executor/layers/attention/mla_attention.py b/vllm/model_
 diff --git a/vllm/models/kimi_k3/amd/linear.py b/vllm/models/kimi_k3/amd/linear.py
 --- a/vllm/models/kimi_k3/amd/linear.py
 +++ b/vllm/models/kimi_k3/amd/linear.py
-@@ -7,7 +7,7 @@
+@@ -7,8 +7,8 @@
  import torch
  from torch import nn
 
+ from vllm import envs
 -from vllm.config import CacheConfig, VllmConfig
 +from vllm.config import CacheConfig, VllmConfig, get_current_vllm_config
  from vllm.distributed import (
