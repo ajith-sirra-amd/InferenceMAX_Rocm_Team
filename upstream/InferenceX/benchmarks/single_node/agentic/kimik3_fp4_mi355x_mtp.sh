@@ -27,7 +27,7 @@ export APPLY_PR54625="${APPLY_PR54625:-0}"  # OFF: no longer applies on image fe
 export APPLY_PR59591="${APPLY_PR59591:-0}"  # shard latent-MoE up-proj -- OFF: -1.3% tput regression, superseded by #59693
 export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- OFF: +313-352% TTFT, not worth the +2.6% tput
 export APPLY_PR58743="${APPLY_PR58743:-0}"  # BF16 KDA recurrent state -- OFF: crashes decode
-export APPLY_PR54494="${APPLY_PR54494:-1}"  # ON for the KV-pool experiment on fe4df3df (re-adapted to apply); measures KV-pool shrink vs baseline. Triggers the offload load-race on a full run -- keep short.
+export APPLY_PR54494="${APPLY_PR54494:-1}"  # ON, re-adapted to fe4df3df. Full-run test: does it stay up (native #59591 headroom offsets the -2.3% KV shrink) and what's the throughput vs the 14,445 baseline.
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
