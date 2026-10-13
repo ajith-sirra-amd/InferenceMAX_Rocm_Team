@@ -59,7 +59,12 @@ export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MLA=1
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2=a8w4
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
+# QUICK_REDUCE=NONE EXPERIMENT 2026-10-13: INT4 quick-reduce *preempts* the fast
+# AITER_CUSTOM cross_device_reduce_2stage AR (HANDOFF: FP variant measured -8.39%
+# for this reason); INT4-vs-NONE never cleanly A/B'd on this image. NONE removes
+# lossy quantization -> numerics-safe (precision only improves). Tests whether the
+# fast AR recovers throughput on the 9.5% TP-AR + 117MB prefill-AR buckets.
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
 export AITER_SITUV2_A8W4=1
 export AITER_FLYDSL_STAGE2_FP8="${AITER_FLYDSL_STAGE2_FP8:-1}"
 export AITER_BF16_FP8_MOE_BOUND=0
@@ -80,7 +85,7 @@ export PYTHONHASHSEED=42
 # already working (-2.7% step time, bit-identical). Testing whether A2A-direct
 # cuts the ~27% generic-PYNCCL DCP collective. KV_GATHER left 0 deliberately --
 # it is the hang-path collective; test it separately only if A2A-direct wins.
-export VLLM_USE_DIRECT_DCP_A2A=1
+export VLLM_USE_DIRECT_DCP_A2A=0  # A2A-direct under test on run 38359405528; baseline here to isolate the QUICK_REDUCE variable
 export VLLM_USE_DIRECT_DCP_Q_GATHER=1
 export VLLM_USE_DIRECT_DCP_KV_GATHER=0
 
