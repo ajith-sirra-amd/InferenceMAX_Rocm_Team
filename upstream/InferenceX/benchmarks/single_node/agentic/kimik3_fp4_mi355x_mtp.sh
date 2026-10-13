@@ -59,12 +59,9 @@ export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MLA=1
 export VLLM_ROCM_USE_AITER_MOE=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2=a8w4
-# QUICK_REDUCE=NONE EXPERIMENT 2026-10-13: INT4 quick-reduce *preempts* the fast
-# AITER_CUSTOM cross_device_reduce_2stage AR (HANDOFF: FP variant measured -8.39%
-# for this reason); INT4-vs-NONE never cleanly A/B'd on this image. NONE removes
-# lossy quantization -> numerics-safe (precision only improves). Tests whether the
-# fast AR recovers throughput on the 9.5% TP-AR + 117MB prefill-AR buckets.
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-NONE}"
+# QUICK_REDUCE=NONE under test on run 38359850695 (INT4 preempts the fast AR,
+# HANDOFF: FP variant -8.39%). INT4 here (baseline) to isolate the ag_rs variable.
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
 export AITER_SITUV2_A8W4=1
 export AITER_FLYDSL_STAGE2_FP8="${AITER_FLYDSL_STAGE2_FP8:-1}"
 export AITER_BF16_FP8_MOE_BOUND=0
@@ -427,7 +424,7 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
 if [ "$DCP_SIZE" -gt 1 ]; then
-    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
+    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend ag_rs --cp-kv-cache-interleave-size 1)  # ag_rs experiment 2026-10-13 (a2a-direct closed: missing compiled op direct_dcp_a2a_lse_reduce)
 fi
 
 OFFLOAD_ARGS=()
