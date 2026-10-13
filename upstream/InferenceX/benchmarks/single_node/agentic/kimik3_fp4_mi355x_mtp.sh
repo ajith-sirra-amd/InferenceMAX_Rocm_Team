@@ -472,66 +472,157 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # rocminfo at import time), then exit before the server starts. Answers one
 # question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
 # knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
+export KERNEL_INSPECT=1  # TEMP: FP8 chunked-context + DCP diagnostic probe; REVERT after run
 if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
-    echo "[kernel-inspect] VRAM canary + backend_supports_prefill_query_quantization investigation"
+    echo "[kernel-inspect] FP8 chunked-context feasibility + DCP facts probe (new image)"
     {
-        echo "=== rocm-smi VRAM canary (checking for stranded memory from the cancelled run) ==="
+        echo "=== rocm-smi VRAM canary ==="
         rocm-smi --showmeminfo vram 2>&1
         echo
     } > "$RESULT_DIR/kernel_inspect.txt" 2>&1
     python3 - >> "$RESULT_DIR/kernel_inspect.txt" 2>&1 <<'PYEOF' || true
-import inspect
+import os, re, json, glob, inspect
 
-def find_all(src, needle):
-    out = []
-    i = src.find(needle)
-    while i != -1:
-        out.append(i)
-        i = src.find(needle, i + 1)
+R = {}
+def sect(name, fn):
+    try:
+        R[name] = fn()
+    except Exception as e:
+        R[name] = f"ERR: {type(e).__name__}: {e}"
+
+def _plat():
+    from vllm.platforms import current_platform
+    d = {"is_rocm": current_platform.is_rocm(), "is_cuda": current_platform.is_cuda()}
+    try: d["device_capability"] = str(current_platform.get_device_capability())
+    except Exception as e: d["device_capability"] = f"ERR {e}"
+    try:
+        from vllm.platforms.rocm import on_gfx950, on_mi3xx
+        d["on_gfx950"] = on_gfx950(); d["on_mi3xx"] = on_mi3xx()
+    except Exception as e: d["gfx"] = f"ERR {e}"
+    return d
+sect("platform", _plat)
+
+def _aiter_meta():
+    import aiter
+    return {"version": getattr(aiter, "__version__", "?"), "file": aiter.__file__,
+            "mla_symbols": sorted(s for s in dir(aiter)
+                                  if any(k in s.lower() for k in ("mla", "prefill", "reduce")))}
+sect("aiter_meta", _aiter_meta)
+
+def _fp8_support():
+    from vllm.v1.attention.backends.mla.rocm_aiter_mla import (
+        _fp8_mla_prefill_supported, _aiter_mla_non_causal_asm_kernels)
+    d = {"_fp8_mla_prefill_supported": _fp8_mla_prefill_supported(),
+         "_aiter_mla_non_causal_asm_kernels(decode)": _aiter_mla_non_causal_asm_kernels()}
+    try:
+        from aiter import mla_prefill_ps_asm_fwd, mla_reduce_v1
+        d["import_prefill_pair"] = "OK"
+        d["prefill.__module__"] = getattr(mla_prefill_ps_asm_fwd, "__module__", "?")
+        try: d["prefill.sig"] = str(inspect.signature(mla_prefill_ps_asm_fwd))
+        except Exception as e: d["prefill.sig"] = f"no-sig ({e})"
+        d["prefill.doc"] = (getattr(mla_prefill_ps_asm_fwd, "__doc__", None) or "")[:1500]
+    except Exception as e:
+        d["import_prefill_pair"] = f"ERR {e}"
+    return d
+sect("fp8_prefill_support", _fp8_support)
+
+# DECISIVE: does aiter ship a NON-CAUSAL mla_prefill_ps_asm_fwd kernel for gfx950?
+def _noncausal_evidence():
+    import aiter
+    adir = os.path.dirname(aiter.__file__)
+    out = {"aiter_dir": adir}
+    arts = []
+    for pat in ("**/*prefill*", "**/*mla*asm*", "**/*.co", "**/*.hsaco", "**/*mla_prefill*"):
+        arts += glob.glob(os.path.join(adir, pat), recursive=True)
+    arts = sorted(set(os.path.relpath(a, adir) for a in arts))
+    out["kernel_artifacts"] = arts[:150]
+    out["artifacts_mentioning_causal"] = [a for a in arts if "causal" in a.lower()][:80]
+    hits = []
+    for root, _, files in os.walk(adir):
+        for fn in files:
+            if not fn.endswith(".py"):
+                continue
+            p = os.path.join(root, fn)
+            try: txt = open(p, errors="ignore").read()
+            except Exception: continue
+            if "mla_prefill_ps_asm_fwd" in txt or (
+                "prefill" in txt.lower() and "causal" in txt.lower() and "mla" in txt.lower()):
+                rel = os.path.relpath(p, adir)
+                for m in re.finditer(r".{0,70}(non.?causal|is_causal|causal).{0,70}", txt, re.I):
+                    hits.append(f"{rel}: ...{m.group(0).strip()}...")
+    out["source_causal_lines"] = hits[:100]
     return out
+sect("noncausal_prefill_evidence", _noncausal_evidence)
 
-print("=" * 80)
-print("mla_attention.py -- search for backend_supports_prefill_query_quantization")
-print("(the call site found earlier lives here, not necessarily its definition)")
-print("=" * 80)
-try:
-    import vllm.model_executor.layers.attention.mla_attention as mla
-    src = inspect.getsource(mla)
-    for needle in ("backend_supports_prefill_query_quantization", "supports_prefill_query_quantization"):
-        hits = find_all(src, needle)
-        print(f"'{needle}': {len(hits)} hits")
-        for idx in hits:
-            print(src[max(0, idx - 300):idx + 400])
-            print("---")
-except Exception as e:
-    print("mla_attention scan failed:", e)
-
-print("\n" + "=" * 80)
-print("base.py -- MLAPrefillBackend class: ALL methods/ClassVars (not just 'quant' name match)")
-print("=" * 80)
-try:
-    import vllm.v1.attention.backends.mla.prefill.base as base_mod
-    src2 = inspect.getsource(base_mod)
-    print(src2)
-except Exception as e:
-    print("base.py dump failed:", e)
-
-print("\n" + "=" * 80)
-print("AiterFlashAttnPrefillBackend -- full dir(), not just name-filtered")
-print("=" * 80)
-try:
-    import vllm.v1.attention.backends.mla.prefill.aiter_flash_attn as aff
-    cls = aff.AiterFlashAttnPrefillBackend
-    for name in sorted(dir(cls)):
-        if name.startswith("__"):
-            continue
+def _heads():
+    from vllm.v1.attention.backends.mla.rocm_aiter_mla import AiterMLAHelper
+    d = {}
+    for h in (8, 12, 16, 24, 32, 64):
         try:
-            val = getattr(cls, name)
+            d[str(h)] = {"is_valid": AiterMLAHelper.is_valid_num_heads(h),
+                         "fp8_prefill_heads": AiterMLAHelper.get_fp8_prefill_num_heads(h)}
         except Exception as e:
-            val = f"<error: {e}>"
-        print(f"  {name} = {val}")
-except Exception as e:
-    print("aiter_flash_attn scan failed:", e)
+            d[str(h)] = f"ERR {e}"
+    return d
+sect("head_count_gate", _heads)
+
+def _impl():
+    from vllm.v1.attention.backends.mla import rocm_aiter_mla as RM
+    cand = [n for n in dir(RM) if "Impl" in n or "Aiter" in n]
+    d = {"module_classes": cand}
+    for cn in cand:
+        cls = getattr(RM, cn)
+        if isinstance(cls, type):
+            d[cn] = {"has_forward_mha_override": "forward_mha" in cls.__dict__,
+                     "has__mla_fp8_prefill_attn": hasattr(cls, "_mla_fp8_prefill_attn")}
+    return d
+sect("backend_impl", _impl)
+
+def _k3():
+    import vllm
+    vdir = os.path.dirname(vllm.__file__)
+    files = []
+    for root, _, fs in os.walk(vdir):
+        for fn in fs:
+            if fn.endswith(".py") and "kimi" in fn.lower():
+                files.append(os.path.relpath(os.path.join(root, fn), vdir))
+    grep = {}
+    for rel in files:
+        try: txt = open(os.path.join(vdir, rel), errors="ignore").read()
+        except Exception: continue
+        for sym in ("forward_mha", "_forward_prefill_fused", "forward_mqa",
+                    "_mla_fp8_prefill", "mla_prefill_ps_asm_fwd", "chunked_context"):
+            c = txt.count(sym)
+            if c: grep.setdefault(rel, {})[sym] = c
+    return {"kimi_files": files, "prefill_symbol_counts": grep}
+sect("k3_model_routing", _k3)
+
+def _dcp():
+    d = {}
+    try:
+        import torch.distributed._symmetric_memory as _sm  # noqa
+        d["torch_symm_mem_import"] = "OK"
+    except Exception as e: d["torch_symm_mem_import"] = f"ERR {e}"
+    try:
+        from vllm.v1.attention.ops.cp_common import symm_mem_available
+        d["cp_common.symm_mem_available"] = bool(symm_mem_available)
+    except Exception as e: d["cp_common.symm_mem_available"] = f"ERR {e}"
+    try:
+        import vllm.envs as E
+        d["VLLM_USE_DIRECT_DCP_*"] = {k: getattr(E, k, "ABSENT") for k in
+            ("VLLM_USE_DIRECT_DCP_A2A", "VLLM_USE_DIRECT_DCP_Q_GATHER", "VLLM_USE_DIRECT_DCP_KV_GATHER")}
+    except Exception as e: d["envs"] = f"ERR {e}"
+    try:
+        import typing
+        from vllm.config.parallel import DCPCommBackend
+        d["DCPCommBackend_options"] = list(typing.get_args(DCPCommBackend))
+    except Exception as e: d["DCPCommBackend"] = f"ERR {e}"
+    return d
+sect("dcp_facts", _dcp)
+
+print("KERNEL_INSPECT_JSON_BEGIN")
+print(json.dumps(R, indent=2, default=str))
+print("KERNEL_INSPECT_JSON_END")
 PYEOF
     cat "$RESULT_DIR/kernel_inspect.txt"
     echo "[kernel-inspect] done, exiting before server start"
