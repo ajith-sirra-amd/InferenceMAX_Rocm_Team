@@ -27,7 +27,9 @@ export APPLY_PR54625="${APPLY_PR54625:-0}"  # OFF: no longer applies on image fe
 export APPLY_PR59591="${APPLY_PR59591:-0}"  # shard latent-MoE up-proj -- OFF: -1.3% tput regression, superseded by #59693
 export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- OFF: +313-352% TTFT, not worth the +2.6% tput
 export APPLY_PR58743="${APPLY_PR58743:-0}"  # BF16 KDA recurrent state -- OFF: crashes decode
-export APPLY_PR54494="${APPLY_PR54494:-1}"  # ON, re-adapted to fe4df3df. Full-run test: does it stay up (native #59591 headroom offsets the -2.3% KV shrink) and what's the throughput vs the 14,445 baseline.
+# #54494 removed 2026-10-13: C96 full run measured -0.95% (14,307 vs 14,445), no
+# hang. Query replication shrinks KV pool 2.3% -> higher KV pressure, worse TTFT
+# (+9% mean), flat TPOT. Not worth shipping. Patch .diff kept under patches/.
 # #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
 # attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
 
@@ -73,9 +75,12 @@ export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 export PYTHONNOUSERSITE=1
 export PYTHONHASHSEED=42
 
-export VLLM_USE_DIRECT_DCP_A2A=0
-# 1 (not the reference recipe's 0): this is the gate #59966 (staged below)
-# optimizes -- the patch alone is inert at 0.
+# A2A direct symm-mem DCP collective -- EXPERIMENT 2026-10-13 (vs baseline 14,445).
+# Probe confirmed symm_mem_available=True on this image and Q_GATHER direct is
+# already working (-2.7% step time, bit-identical). Testing whether A2A-direct
+# cuts the ~27% generic-PYNCCL DCP collective. KV_GATHER left 0 deliberately --
+# it is the hang-path collective; test it separately only if A2A-direct wins.
+export VLLM_USE_DIRECT_DCP_A2A=1
 export VLLM_USE_DIRECT_DCP_Q_GATHER=1
 export VLLM_USE_DIRECT_DCP_KV_GATHER=0
 
@@ -404,38 +409,8 @@ if [ "${APPLY_PR54625:-1}" = "1" ]; then
     )
 fi
 
-# -----------------------------------------------------------------------------
-# #54494 -- DCP MLA query replication. Each rank materializes the DCP group's
-# full query head set locally instead of all-gathering it every layer --
-# trades a small redundant local projection for one fewer per-layer collective.
-# Unmeasured upstream ("4K/4K serving perf still being rerun, not reported
-# yet"); GSM8K passed clean (0.9629 vs 0.9598 off). Hand-adapted: the PR's
-# fp4-branch hunk targets code since refactored to a replace_parameter-based
-# pattern (CUDA-graph-safe in-place reload); the PR's own already-written
-# fp4-branch logic was moved to the correct post-refactor insertion point, not
-# invented. Needs VLLM_DCP_Q_REPLICATE=1 -- off by default upstream.
-# -----------------------------------------------------------------------------
-apply_pr54494() {
-    [ "${APPLY_PR54494:-0}" = "1" ] || { echo "[pr54494] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54494-dcp-query-replication.diff"
-    [ -f "$diff_file" ] || { echo "[pr54494] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.v1.attention.ops.dcp as m
-import sys; sys.exit(0 if "resolve_dcp_q_replicate" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[pr54494] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/model_executor/layers/attention/mla_attention.py","vllm/models/kimi_k3/amd/linear.py","vllm/v1/attention/ops/dcp.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr54494] applied"
-}
-apply_pr54494 || { echo "[pr54494] patch failed, refusing to run" >&2; exit 1; }
-if [ "${APPLY_PR54494:-0}" = "1" ]; then
-    export VLLM_DCP_Q_REPLICATE=1
-fi
+# #54494 (DCP MLA query replication) removed 2026-10-13 after the C96 full-run
+# result (-0.95%, no hang). The .diff is retained under patches/ for reference.
 
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
