@@ -472,7 +472,6 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 # rocminfo at import time), then exit before the server starts. Answers one
 # question: does flash_attn_varlen_func expose a softmax/accumulator-dtype
 # knob. See Kimi-K3-Where-The-Time-Goes.md FMHA plan.
-export KERNEL_INSPECT=1  # TEMP: FP8 chunked-context + DCP diagnostic probe; REVERT after run
 if [ "${KERNEL_INSPECT:-0}" = "1" ]; then
     echo "[kernel-inspect] FP8 chunked-context feasibility + DCP facts probe (new image)"
     {
