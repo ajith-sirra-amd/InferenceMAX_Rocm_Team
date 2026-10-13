@@ -424,7 +424,7 @@ COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"
 
 CP_ARGS=(--attention-backend ROCM_AITER_MLA)
 if [ "$DCP_SIZE" -gt 1 ]; then
-    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend ag_rs --cp-kv-cache-interleave-size 1)  # ag_rs experiment 2026-10-13 (a2a-direct closed: missing compiled op direct_dcp_a2a_lse_reduce)
+    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a --cp-kv-cache-interleave-size 1)
 fi
 
 OFFLOAD_ARGS=()
@@ -660,29 +660,29 @@ VLLM_CMD=(
 # ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
 # then ROCPROF_DURATION seconds of actual collection.
 # -----------------------------------------------------------------------------
-# ROCPROF_ENABLE="${ROCPROF_ENABLE:-0}"
-# LAUNCH_CMD=("${VLLM_CMD[@]}")
-# if [ "$ROCPROF_ENABLE" = "1" ]; then
-#     ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-300}"
-#     ROCPROF_DURATION="${ROCPROF_DURATION:-60}"
-#     ROCPROF_DIR="$RESULT_DIR/rocprof"
-#     mkdir -p "$ROCPROF_DIR"
-#     LAUNCH_CMD=(
-#         rocprofv3 --kernel-trace --stats
-#         -d "$ROCPROF_DIR" -f csv
-#         --summary-output-file "$RESULT_DIR/rocprof_summary.txt"
-#         -P "${ROCPROF_START_DELAY}:${ROCPROF_DURATION}:1"
-#         --collection-period-unit sec
-#         --
-#         "${VLLM_CMD[@]}"
-#     )
-#     echo "[rocprof] enabled: start_delay=${ROCPROF_START_DELAY}s duration=${ROCPROF_DURATION}s output=$ROCPROF_DIR"
-# fi
+ROCPROF_ENABLE=1  # TEMP 2026-10-13: fresh new-image kernel-distribution profile; REVERT after
+LAUNCH_CMD=("${VLLM_CMD[@]}")
+if [ "$ROCPROF_ENABLE" = "1" ]; then
+    ROCPROF_START_DELAY=3300  # 55 min: clear model load + warmup + cudagraph + KV ramp to steady state
+    ROCPROF_DURATION=240
+    ROCPROF_DIR="$RESULT_DIR/rocprof"
+    mkdir -p "$ROCPROF_DIR"
+    LAUNCH_CMD=(
+        rocprofv3 --kernel-trace --stats
+        -d "$ROCPROF_DIR" -f csv
+        --summary-output-file "$RESULT_DIR/rocprof_summary.txt"
+        -P "${ROCPROF_START_DELAY}:${ROCPROF_DURATION}:1"
+        --collection-period-unit sec
+        --
+        "${VLLM_CMD[@]}"
+    )
+    echo "[rocprof] enabled: start_delay=${ROCPROF_START_DELAY}s duration=${ROCPROF_DURATION}s output=$ROCPROF_DIR"
+fi
 
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 
-"${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
+"${LAUNCH_CMD[@]}" > "$SERVER_LOG" 2>&1 &  # LAUNCH_CMD = VLLM_CMD, or rocprofv3-wrapped when ROCPROF_ENABLE=1
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
