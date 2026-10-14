@@ -16,7 +16,12 @@ import torch
 
 from vllm.logger import init_logger
 
-logger = init_logger("fp8ctx")
+# Must be a "vllm.*" child logger: vLLM's dictConfig only attaches a handler to
+# the top-level "vllm" logger (propagate=False). A bare "fp8ctx" logger is
+# unrelated to that hierarchy, so its records silently vanish into the root
+# logger (no handler there) -- this is why no [FP8-CTX] lines ever appeared in
+# server.log even while the hooks were actually running.
+logger = init_logger("vllm.fp8ctx")
 
 _TILE_Q = 256
 _selftest_done = False
@@ -135,7 +140,13 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
 
     if nhead != real_nhead:
         out3d = out3d[:, :real_nhead, :].contiguous()
-        final_lse = final_lse[:, :real_nhead].contiguous()
+        final_lse = final_lse[:, :real_nhead]
+    # mla_reduce_v1 writes lse as [total_q, nhead] (matching out3d's token-major
+    # layout), but every caller (accumulate_mla_context_chunk, merge_attn_states)
+    # indexes lse as [nhead, total_q] -- the same convention aiter.flash_attn_varlen_func
+    # returns natively. Transpose here or chunk-merge crashes with a shape
+    # mismatch between the token count and head count on dim 1.
+    final_lse = final_lse.transpose(0, 1).contiguous()
     return out3d, final_lse
 
 
