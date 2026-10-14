@@ -444,18 +444,6 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
 
-# TEMP: LANES_OVERRIDE lets a smoke test keep CONC's DCP_SIZE/MAX_NUM_SEQS/MTP
-# shaping (computed above from CONC) while cutting the actual AIPerf replay
-# down to a handful of concurrent lanes -- cheap/fast correctness check before
-# spending a full-concurrency run. Only rebinds CONC here, after every
-# CONC-dependent arg above (VLLM_CMD/SPEC_ARGS/etc.) is already built; nothing
-# downstream of this point re-derives config from CONC, it only feeds
-# build_replay_cmd's `--concurrency $CONC`. Revert (unset) after dispatch.
-if [ -n "${LANES_OVERRIDE:-}" ]; then
-    echo "[cfg] LANES_OVERRIDE set: replay concurrency $CONC -> $LANES_OVERRIDE (config above still shaped for conc=$CONC)"
-    CONC="$LANES_OVERRIDE"
-fi
-
 # KERNEL_INSPECT=1 -- dump the BF16 prefill attention kernel's real signature
 # from inside the production container (needs a live GPU, aiter queries
 # rocminfo at import time), then exit before the server starts. Answers one
@@ -646,7 +634,7 @@ fi
 # ([FP8-CTX] tag); any error -> returns None -> bf16 fallback.
 export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"
 export FP8CTX_MODE="${FP8CTX_MODE:-asm}"  # TEMP: explicit for ASM-path rocprof profiling run, revert (unset) after dispatch
-export LANES_OVERRIDE="${LANES_OVERRIDE:-1}"  # TEMP: smoke test -- 1 AIPerf lane, keep conc=20's DCP/MTP config shaping. Revert (unset) after dispatch
+export AIPERF_WARMUP_REQUESTS_PER_LANE="${AIPERF_WARMUP_REQUESTS_PER_LANE:-1}"  # TEMP: smoke test -- 1 warmup request/lane instead of the default 10 (runtime_settings.sh), keeps full conc=20 concurrency shape but cuts warmup cost. Revert (unset) after dispatch
 if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_pdir="$(cd "$(dirname "$0")" && pwd)/patches"
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
