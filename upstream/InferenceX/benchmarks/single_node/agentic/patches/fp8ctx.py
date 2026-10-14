@@ -56,43 +56,17 @@ def _pad_heads(real_nhead, nhead, *tensors):
     return tuple(AiterMLAHelper.get_mla_padded_q(real_nhead, t, nhead) for t in tensors)
 
 
-def _ensure_ps_buffers(backend, nhead, device):
-    """Lazily allocate persistent worst-case PS-metadata + scratch buffers once
-    per backend instance, sized exactly like rocm_aiter_mla.py's own
-    _init_fp8_prefill_ps_buffers (same vllm_config fields, same tile/CU
-    formula) -- a correct upper bound for any batch this engine can schedule,
-    not a hardcoded guess tied to one recipe's --max-num-batched-tokens value.
-
-    Scratch tensors (logits/attn_lse/final_lse/out3d) are sliced per call
-    instead of re-allocated. Safe to reuse across calls without an extra copy:
-    prefill isn't CUDA-graph-captured and this recipe runs with
-    --no-async-scheduling, so every kernel that reads or writes these buffers
-    is enqueued on one stream in program order -- a later chunk's write is
-    always ordered after the previous chunk's consumer (the merge/copy in
-    accumulate_mla_context_chunk) by stream-ordering semantics alone.
-    """
-    cache = getattr(backend, "_fp8ctx_ps", None)
-    if cache is not None and cache["nhead"] == nhead:
-        return cache
+def _build_ps_buffers(nhead, v_head_dim, max_num_reqs, max_prefill_qlen,
+                       max_num_batched_tokens, device):
+    """Shared buffer-construction logic, parameterized by explicit sizing
+    inputs instead of reading vllm_config directly -- lets both the real
+    per-backend worst-case cache (_ensure_ps_buffers, sourced from
+    backend.vllm_config) and the tiny one-off startup self-test (sourced from
+    its own synthetic shapes) share one code path without either needing a
+    vllm_config instance that may not exist/be reachable at that call site."""
     from aiter import get_ps_metadata_info_v1
-    from vllm.config import get_current_vllm_config
     from vllm.platforms import current_platform
     from vllm.utils.math_utils import cdiv
-
-    # Not `backend.vllm_config`: this is called from two different classes --
-    # AiterFlashAttnPrefillBackend (real context-chunk calls, which does store
-    # self.vllm_config) AND AiterMLAImpl (the native-path self-test hook, which
-    # only holds vllm_config as a local __init__ variable, never an attribute --
-    # confirmed in rocm_aiter_mla.py's own _init_fp8_prefill_ps_buffers call
-    # site). The global accessor works for both and is what vLLM's own MLA
-    # backend code uses in this exact situation (mla_attention.py).
-    vllm_config = get_current_vllm_config()
-    max_num_reqs = vllm_config.scheduler_config.max_num_seqs
-    max_num_batched_tokens = vllm_config.scheduler_config.max_num_batched_tokens
-    max_prefill_qlen = min(
-        vllm_config.model_config.max_model_len, max_num_batched_tokens
-    )
-    v_head_dim = backend.v_head_dim
 
     info = get_ps_metadata_info_v1(
         batch_size=max_num_reqs, num_head_k=nhead, max_qlen=max_prefill_qlen,
@@ -135,7 +109,7 @@ def _ensure_ps_buffers(backend, nhead, device):
     # fresh arange kernel on every chunk call.
     kv_indices_full = torch.arange(max_num_batched_tokens, device=device, dtype=torch.int32)
 
-    cache = {
+    return {
         "nhead": nhead,
         "work_metadata": work_metadata,
         "dev": dev_outs,
@@ -146,17 +120,61 @@ def _ensure_ps_buffers(backend, nhead, device):
         "out3d": out3d,
         "one": one,
         "kv_indices": kv_indices_full,
+        "max_num_partial_tiles": max_num_partial_tiles,
     }
+
+
+def _ensure_ps_buffers(backend, nhead, device):
+    """Lazily allocate persistent worst-case PS-metadata + scratch buffers once
+    per backend instance, sized exactly like rocm_aiter_mla.py's own
+    _init_fp8_prefill_ps_buffers (same vllm_config fields, same tile/CU
+    formula) -- a correct upper bound for any batch this engine can schedule,
+    not a hardcoded guess tied to one recipe's --max-num-batched-tokens value.
+
+    Scratch tensors (logits/attn_lse/final_lse/out3d) are sliced per call
+    instead of re-allocated. Safe to reuse across calls without an extra copy:
+    prefill isn't CUDA-graph-captured and this recipe runs with
+    --no-async-scheduling, so every kernel that reads or writes these buffers
+    is enqueued on one stream in program order -- a later chunk's write is
+    always ordered after the previous chunk's consumer (the merge/copy in
+    accumulate_mla_context_chunk) by stream-ordering semantics alone.
+
+    Only ever called with an AiterFlashAttnPrefillBackend instance (the real
+    context-chunk call path), which always stores self.vllm_config -- the
+    startup self-test builds its own tiny one-off buffers instead
+    (_build_ps_buffers directly, see selftest_noncausal) because its caller,
+    AiterMLAImpl, never stores vllm_config as an attribute, and the global
+    get_current_vllm_config() accessor isn't reachable either: that context
+    manager is only active during model construction, not during the live
+    serving forward pass where this self-test actually fires (confirmed by
+    both approaches crashing in back-to-back smoke tests).
+    """
+    cache = getattr(backend, "_fp8ctx_ps", None)
+    if cache is not None and cache["nhead"] == nhead:
+        return cache
+    vllm_config = backend.vllm_config
+    max_num_reqs = vllm_config.scheduler_config.max_num_seqs
+    max_num_batched_tokens = vllm_config.scheduler_config.max_num_batched_tokens
+    max_prefill_qlen = min(
+        vllm_config.model_config.max_model_len, max_num_batched_tokens
+    )
+    v_head_dim = backend.v_head_dim
+
+    cache = _build_ps_buffers(
+        nhead, v_head_dim, max_num_reqs, max_prefill_qlen,
+        max_num_batched_tokens, device,
+    )
     backend._fp8ctx_ps = cache
     logger.info(
         "[FP8-CTX] PS buffers allocated (nhead=%d max_qlen=%d max_batch=%d "
         "max_partial_tiles=%d)",
-        nhead, max_prefill_qlen, max_num_reqs, max_num_partial_tiles,
+        nhead, max_prefill_qlen, max_num_reqs, cache["max_num_partial_tiles"],
     )
     return cache
 
 
-def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is_causal):
+def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is_causal,
+                  ps_override=None):
     """Core: q/k/v already decompressed (nhead heads, gqa=1). Returns (out[bf16], lse[f32])."""
     from aiter import get_ps_metadata_v1, mla_prefill_ps_asm_fwd, mla_reduce_v1
 
@@ -176,9 +194,11 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
     total_q = q.shape[0]
     total_kv = k.shape[0]
 
-    # Persistent worst-case buffers, sized once from vllm_config (see
-    # _ensure_ps_buffers) and sliced per call -- no per-chunk allocator traffic.
-    ps = _ensure_ps_buffers(backend, nhead, device)
+    # Persistent worst-case buffers, sized once from backend.vllm_config (see
+    # _ensure_ps_buffers) and sliced per call -- no per-chunk allocator
+    # traffic. The startup self-test passes its own tiny one-off buffers via
+    # ps_override instead, since it has no backend.vllm_config to size from.
+    ps = ps_override if ps_override is not None else _ensure_ps_buffers(backend, nhead, device)
     wm = ps["work_metadata"]
     dev_o = ps["dev"]      # [work_indptr, work_info, reduce_indptr, reduce_final_map, reduce_partial_map]
     host_o = ps["host"]
@@ -303,14 +323,22 @@ def selftest_noncausal(backend):
         import torch
         dev = torch.device("cuda", torch.cuda.current_device())
         fp8 = _fp8_dtype()
-        nhead, qk, vd, qlen, kvlen = 16, 192, 128, 8, 64
-        q = torch.randn(qlen, nhead, qk, device=dev).to(fp8)
-        k = torch.randn(kvlen, nhead, qk, device=dev).to(fp8)
-        v = torch.randn(kvlen, nhead, vd, device=dev).to(fp8)
+        real_nhead, qk, vd, qlen, kvlen = 16, 192, 128, 8, 64
+        nhead = _num_head_k(real_nhead)
+        q = torch.randn(qlen, real_nhead, qk, device=dev).to(fp8)
+        k = torch.randn(kvlen, real_nhead, qk, device=dev).to(fp8)
+        v = torch.randn(kvlen, real_nhead, vd, device=dev).to(fp8)
         qo = torch.tensor([0, qlen], dtype=torch.int32, device=dev)
         kv = torch.tensor([0, kvlen], dtype=torch.int32, device=dev)
         seq = torch.tensor([kvlen], dtype=torch.int32, device=dev)
-        out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, qlen, False)
+        # Tiny one-off buffers sized directly from these synthetic shapes --
+        # not _ensure_ps_buffers, which reads backend.vllm_config (unavailable
+        # here: see _ensure_ps_buffers' docstring for why).
+        ps = _build_ps_buffers(
+            nhead, vd, max_num_reqs=1, max_prefill_qlen=qlen,
+            max_num_batched_tokens=max(qlen, kvlen), device=dev,
+        )
+        out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, qlen, False, ps_override=ps)
         torch.cuda.synchronize()
         finite = bool(torch.isfinite(out.float()).all().item())
         _kernel_ok = True
