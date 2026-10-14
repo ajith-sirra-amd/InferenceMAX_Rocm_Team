@@ -75,10 +75,18 @@ def _ensure_ps_buffers(backend, nhead, device):
     if cache is not None and cache["nhead"] == nhead:
         return cache
     from aiter import get_ps_metadata_info_v1
+    from vllm.config import get_current_vllm_config
     from vllm.platforms import current_platform
     from vllm.utils.math_utils import cdiv
 
-    vllm_config = backend.vllm_config
+    # Not `backend.vllm_config`: this is called from two different classes --
+    # AiterFlashAttnPrefillBackend (real context-chunk calls, which does store
+    # self.vllm_config) AND AiterMLAImpl (the native-path self-test hook, which
+    # only holds vllm_config as a local __init__ variable, never an attribute --
+    # confirmed in rocm_aiter_mla.py's own _init_fp8_prefill_ps_buffers call
+    # site). The global accessor works for both and is what vLLM's own MLA
+    # backend code uses in this exact situation (mla_attention.py).
+    vllm_config = get_current_vllm_config()
     max_num_reqs = vllm_config.scheduler_config.max_num_seqs
     max_num_batched_tokens = vllm_config.scheduler_config.max_num_batched_tokens
     max_prefill_qlen = min(
@@ -122,6 +130,10 @@ def _ensure_ps_buffers(backend, nhead, device):
         dtype=torch.bfloat16, device=device,
     )
     one = torch.ones((), dtype=torch.float32, device=device)
+    # kv_indices is always just 0..total_kv-1 (no gather/permutation here) --
+    # precompute the worst-case arange once and slice it, instead of launching a
+    # fresh arange kernel on every chunk call.
+    kv_indices_full = torch.arange(max_num_batched_tokens, device=device, dtype=torch.int32)
 
     cache = {
         "nhead": nhead,
@@ -133,6 +145,7 @@ def _ensure_ps_buffers(backend, nhead, device):
         "final_lse": final_lse,
         "out3d": out3d,
         "one": one,
+        "kv_indices": kv_indices_full,
     }
     backend._fp8ctx_ps = cache
     logger.info(
@@ -183,11 +196,25 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
     )
     for d, h in zip(dev_o, host_o):
         d.copy_(h, non_blocking=True)
-    num_partial = int(host_o[2][-1].item())  # reduce_indptr[-1]
-
-    kv_indices = torch.arange(total_kv, device=device, dtype=torch.int32)
-    logits = ps["logits"][: num_partial * _TILE_Q]
-    attn_lse = ps["attn_lse"][: num_partial * _TILE_Q]
+    # No `.item()` read-back here on purpose: neither mla_prefill_ps_asm_fwd nor
+    # mla_reduce_v1 takes a num_partial scalar -- they derive actual work extent
+    # from the GPU-resident dev_o tensors (work_info/reduce_indptr/...) internally.
+    # The only consumer of num_partial was slicing logits/attn_lse down from the
+    # worst-case allocation; since those buffers are already sized at the static
+    # worst case (_ensure_ps_buffers), passing them unsliced is correct (the
+    # kernel simply never touches rows beyond what its own metadata indicates)
+    # and avoids a synchronous GPU->CPU stall on every single chunk call -- this
+    # was firing ~85x/sec over a 1hr run and was the dominant cause of a measured
+    # +35% TPOT / -18% per-GPU throughput regression vs the bf16 baseline.
+    kv_full = ps["kv_indices"]
+    if total_kv <= kv_full.shape[0]:
+        kv_indices = kv_full[:total_kv]
+    else:
+        # Defensive fallback only -- should not happen since total_kv is bounded
+        # by the same max_num_batched_tokens the buffer was sized from.
+        kv_indices = torch.arange(total_kv, device=device, dtype=torch.int32)
+    logits = ps["logits"]
+    attn_lse = ps["attn_lse"]
     final_lse = ps["final_lse"][:total_q]
     out3d = ps["out3d"][:total_q]
 
