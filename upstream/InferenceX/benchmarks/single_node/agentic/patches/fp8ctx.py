@@ -1,12 +1,22 @@
-# [FP8-CTX smoke test] 2026-10-13
-# Hook the AITER MLA prefill backend's run_prefill_{context_chunk,new_tokens} to
-# run attention on the aiter FP8 ASM kernel (mla_prefill_ps_asm_fwd + mla_reduce_v1)
-# instead of bf16 flash_attn_varlen_func. Purely a FUNCTIONALITY probe:
+# [FP8-CTX] 2026-10-14
+# Hook the AITER MLA prefill backend's run_prefill_context_chunk (cached/chunked
+# context, is_causal=False) to run attention on the aiter FP8 ASM kernel
+# (mla_prefill_ps_asm_fwd + mla_reduce_v1) instead of bf16 flash_attn_varlen_func.
+# New-token (no-context) prefill needs no patch: vLLM's own AiterMLAImpl.forward_mha
+# already dispatches that case straight to the native _mla_fp8_prefill_attn kernel
+# whenever kv_cache_dtype=fp8 (confirmed via the "FP8 MLA prefill PS buffers
+# allocated" log line in rocm_aiter_mla.py), so run_prefill_new_tokens's hook here
+# only self-tests and never overrides it.
 #   - q/k/v arrive bf16 (gate NOT bypassed); we quantize to fp8 in-hook.
-#   - context chunks use is_causal=False; new-tokens use is_causal=True.
 #   - ANY problem -> return None -> caller falls back to the original bf16 path.
-# Every decision is logged with the [FP8-CTX] tag so the server log tells us
-# exactly whether the fp8 kernel was invoked and whether it ran.
+# Every decision is logged with the [FP8-CTX] tag.
+#
+# PS-metadata and scratch-buffer sizing mirrors rocm_aiter_mla.py's own
+# _init_fp8_prefill_ps_buffers exactly (same vllm_config fields, same
+# tile/compute-unit formula) so the reservation is a correct upper bound for any
+# batch this engine can schedule, not a hardcoded guess tied to one recipe's
+# --max-num-batched-tokens value. Buffers are allocated once per backend
+# instance and sliced per call instead of re-allocated every chunk.
 #
 # The aiter call shapes/args are replicated verbatim from
 # rocm_aiter_mla.py::_mla_fp8_prefill_attn / _build_fp8_prefill_ps_metadata /
@@ -46,18 +56,39 @@ def _pad_heads(real_nhead, nhead, *tensors):
     return tuple(AiterMLAHelper.get_mla_padded_q(real_nhead, t, nhead) for t in tensors)
 
 
-def _ensure_ps_buffers(backend, nhead, max_qlen, device):
-    """Lazily allocate the PS-metadata buffers once per backend instance.
+def _ensure_ps_buffers(backend, nhead, device):
+    """Lazily allocate persistent worst-case PS-metadata + scratch buffers once
+    per backend instance, sized exactly like rocm_aiter_mla.py's own
+    _init_fp8_prefill_ps_buffers (same vllm_config fields, same tile/CU
+    formula) -- a correct upper bound for any batch this engine can schedule,
+    not a hardcoded guess tied to one recipe's --max-num-batched-tokens value.
 
-    Mirrors _init_fp8_prefill_ps_buffers: work_metadata stays on device; the five
-    map tensors are filled by get_ps_metadata_v1 on the host then copied to device.
+    Scratch tensors (logits/attn_lse/final_lse/out3d) are sliced per call
+    instead of re-allocated. Safe to reuse across calls without an extra copy:
+    prefill isn't CUDA-graph-captured and this recipe runs with
+    --no-async-scheduling, so every kernel that reads or writes these buffers
+    is enqueued on one stream in program order -- a later chunk's write is
+    always ordered after the previous chunk's consumer (the merge/copy in
+    accumulate_mla_context_chunk) by stream-ordering semantics alone.
     """
     cache = getattr(backend, "_fp8ctx_ps", None)
     if cache is not None and cache["nhead"] == nhead:
         return cache
     from aiter import get_ps_metadata_info_v1
+    from vllm.platforms import current_platform
+    from vllm.utils.math_utils import cdiv
+
+    vllm_config = backend.vllm_config
+    max_num_reqs = vllm_config.scheduler_config.max_num_seqs
+    max_num_batched_tokens = vllm_config.scheduler_config.max_num_batched_tokens
+    max_prefill_qlen = min(
+        vllm_config.model_config.max_model_len, max_num_batched_tokens
+    )
+    v_head_dim = backend.v_head_dim
+
     info = get_ps_metadata_info_v1(
-        batch_size=512, num_head_k=nhead, max_qlen=max_qlen, qlen_granularity=_TILE_Q
+        batch_size=max_num_reqs, num_head_k=nhead, max_qlen=max_prefill_qlen,
+        qlen_granularity=_TILE_Q,
     )
 
     def _mk(spec, dev):
@@ -69,14 +100,46 @@ def _ensure_ps_buffers(backend, nhead, max_qlen, device):
     work_metadata = _mk(info[0], device)          # device, not host-written
     dev_outs = [_mk(s, device) for s in info[1:]]  # work_indptr, work_info, reduce_{indptr,final,partial}
     host_outs = [_mk(s, "cpu") for s in info[1:]]
+
+    # Same worst-case partial-tile count rocm_aiter_mla.py reserves for its own
+    # logits/attn_lse scratch (qo tiles + one extra per request for splits at
+    # request boundaries + one extra per compute unit for in-flight work).
+    qo_tile_cnt = cdiv(max_num_batched_tokens, _TILE_Q) + max_num_reqs - 1
+    max_num_partial_tiles = qo_tile_cnt + current_platform.num_compute_units()
+
+    logits = torch.empty(
+        max_num_partial_tiles * _TILE_Q, nhead, v_head_dim,
+        dtype=torch.float32, device=device,
+    )
+    attn_lse = torch.empty(
+        max_num_partial_tiles * _TILE_Q, nhead, dtype=torch.float32, device=device
+    )
+    final_lse = torch.empty(
+        max_num_batched_tokens, nhead, dtype=torch.float32, device=device
+    )
+    out3d = torch.empty(
+        max_num_batched_tokens, nhead, v_head_dim,
+        dtype=torch.bfloat16, device=device,
+    )
+    one = torch.ones((), dtype=torch.float32, device=device)
+
     cache = {
         "nhead": nhead,
         "work_metadata": work_metadata,
         "dev": dev_outs,
         "host": host_outs,
+        "logits": logits,
+        "attn_lse": attn_lse,
+        "final_lse": final_lse,
+        "out3d": out3d,
+        "one": one,
     }
     backend._fp8ctx_ps = cache
-    logger.info("[FP8-CTX] PS buffers allocated (nhead=%d max_qlen=%d)", nhead, max_qlen)
+    logger.info(
+        "[FP8-CTX] PS buffers allocated (nhead=%d max_qlen=%d max_batch=%d "
+        "max_partial_tiles=%d)",
+        nhead, max_prefill_qlen, max_num_reqs, max_num_partial_tiles,
+    )
     return cache
 
 
@@ -100,12 +163,13 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
     total_q = q.shape[0]
     total_kv = k.shape[0]
 
-    # Always size for the worst-case Q length (max_num_batched_tokens) so buffers
-    # allocated by the tiny self-test are also valid for real 24576-token chunks.
-    ps = _ensure_ps_buffers(backend, nhead, 24576, device)
+    # Persistent worst-case buffers, sized once from vllm_config (see
+    # _ensure_ps_buffers) and sliced per call -- no per-chunk allocator traffic.
+    ps = _ensure_ps_buffers(backend, nhead, device)
     wm = ps["work_metadata"]
     dev_o = ps["dev"]      # [work_indptr, work_info, reduce_indptr, reduce_final_map, reduce_partial_map]
     host_o = ps["host"]
+    one = ps["one"]
 
     qo_cpu = qo_indptr.detach().to("cpu", torch.int32)
     kv_cpu = kv_indptr.detach().to("cpu", torch.int32)
@@ -122,11 +186,10 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
     num_partial = int(host_o[2][-1].item())  # reduce_indptr[-1]
 
     kv_indices = torch.arange(total_kv, device=device, dtype=torch.int32)
-    logits = torch.empty(num_partial * _TILE_Q, nhead, v_head_dim, dtype=torch.float32, device=device)
-    attn_lse = torch.empty(num_partial * _TILE_Q, nhead, dtype=torch.float32, device=device)
-    final_lse = torch.empty(total_q, nhead, dtype=torch.float32, device=device)
-    out3d = torch.empty(total_q, nhead, v_head_dim, dtype=torch.bfloat16, device=device)
-    one = torch.ones((), dtype=torch.float32, device=device)
+    logits = ps["logits"][: num_partial * _TILE_Q]
+    attn_lse = ps["attn_lse"][: num_partial * _TILE_Q]
+    final_lse = ps["final_lse"][:total_q]
+    out3d = ps["out3d"][:total_q]
 
     mla_prefill_ps_asm_fwd(
         q, k, v,
