@@ -24,6 +24,9 @@
 
 import os
 import torch
+import torch.cuda.nvtx as nvtx  # on ROCm builds, torch.cuda.nvtx maps to roctx -- picked up by
+                                 # rocprofv3's --marker-trace, giving kernel-trace timestamps a
+                                 # named Python call-site instead of just a bare kernel name.
 
 from vllm.logger import init_logger
 
@@ -185,6 +188,16 @@ def _ensure_ps_buffers(backend, nhead, device):
 def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is_causal,
                   ps_override=None):
     """Core: q/k/v already decompressed (nhead heads, gqa=1). Returns (out[bf16], lse[f32])."""
+    nvtx.range_push("FP8CTX_run_fp8_asm")
+    try:
+        return _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len,
+                                   is_causal, ps_override)
+    finally:
+        nvtx.range_pop()
+
+
+def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is_causal,
+                        ps_override):
     from aiter import get_ps_metadata_v1, mla_prefill_ps_asm_fwd, mla_reduce_v1
 
     device = q.device
@@ -247,15 +260,23 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
     final_lse = ps["final_lse"][:total_q]
     out3d = ps["out3d"][:total_q]
 
-    mla_prefill_ps_asm_fwd(
-        q, k, v,
-        qo_indptr.to(torch.int32), kv_indptr.to(torch.int32), kv_indices,
-        dev_o[0], dev_o[1], int(max_q_len), float(backend.scale), bool(is_causal),
-        logits, attn_lse, out3d, one, one, one,
-    )
-    mla_reduce_v1(
-        logits, attn_lse, dev_o[2], dev_o[3], dev_o[4], _TILE_Q, 0, out3d, final_lse,
-    )
+    nvtx.range_push("FP8CTX_asm_prefill_kernel")
+    try:
+        mla_prefill_ps_asm_fwd(
+            q, k, v,
+            qo_indptr.to(torch.int32), kv_indptr.to(torch.int32), kv_indices,
+            dev_o[0], dev_o[1], int(max_q_len), float(backend.scale), bool(is_causal),
+            logits, attn_lse, out3d, one, one, one,
+        )
+    finally:
+        nvtx.range_pop()
+    nvtx.range_push("FP8CTX_asm_reduce_kernel")
+    try:
+        mla_reduce_v1(
+            logits, attn_lse, dev_o[2], dev_o[3], dev_o[4], _TILE_Q, 0, out3d, final_lse,
+        )
+    finally:
+        nvtx.range_pop()
 
     if nhead != real_nhead:
         out3d = out3d[:, :real_nhead, :].contiguous()
@@ -303,18 +324,22 @@ def _run_fp8_fused(backend, q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, m
     q_quant, q_descale = per_tensor_quant(q, quant_dtype=fp8)
     k_quant, k_descale = per_tensor_quant(k, quant_dtype=fp8)
     v_quant, v_descale = per_tensor_quant(v, quant_dtype=fp8)
-    out, lse, _, _ = _flash_attn_varlen_forward(
-        q_quant, k_quant, v_quant,
-        cu_seqlens_q, cu_seqlens_k,
-        None, None,
-        max_seqlen_q, max_seqlen_k,
-        0,
-        0.0,
-        backend.scale,
-        causal=is_causal,
-        q_descale=q_descale, k_descale=k_descale, v_descale=v_descale,
-        return_lse=True,
-    )
+    nvtx.range_push("FP8CTX_fused_attn_kernel")
+    try:
+        out, lse, _, _ = _flash_attn_varlen_forward(
+            q_quant, k_quant, v_quant,
+            cu_seqlens_q, cu_seqlens_k,
+            None, None,
+            max_seqlen_q, max_seqlen_k,
+            0,
+            0.0,
+            backend.scale,
+            causal=is_causal,
+            q_descale=q_descale, k_descale=k_descale, v_descale=v_descale,
+            return_lse=True,
+        )
+    finally:
+        nvtx.range_pop()
     return out, lse
 
 

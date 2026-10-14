@@ -633,7 +633,7 @@ fi
 # MLA prefill backend (run_prefill_context_chunk). Heavily instrumented
 # ([FP8-CTX] tag); any error -> returns None -> bf16 fallback.
 export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"
-export FP8CTX_MODE="${FP8CTX_MODE:-fused}"  # TEMP: fused-fp8 smoke test (direct _flash_attn_varlen_forward call), revert after dispatch
+export FP8CTX_MODE="${FP8CTX_MODE:-asm}"  # TEMP: explicit for ASM-path rocprof profiling run, revert (unset) after dispatch
 if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_pdir="$(cd "$(dirname "$0")" && pwd)/patches"
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
@@ -749,15 +749,20 @@ VLLM_CMD=(
 # ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
 # then ROCPROF_DURATION seconds of actual collection.
 # -----------------------------------------------------------------------------
-ROCPROF_ENABLE=0  # profiling off (FP8-CTX smoke test is a serving run); LAUNCH_CMD falls back to VLLM_CMD
+ROCPROF_ENABLE=1  # TEMP: ASM FP8-CTX profiling run, revert to 0 after dispatch
 LAUNCH_CMD=("${VLLM_CMD[@]}")
 if [ "$ROCPROF_ENABLE" = "1" ]; then
-    ROCPROF_START_DELAY=3300  # 55 min: clear model load + warmup + cudagraph + KV ramp to steady state
-    ROCPROF_DURATION=240
+    # TEMP: shortened window for a short ASM-path profiling smoke test, not the
+    # 1hr production run the 3300/240 defaults were calibrated for. 540s clears
+    # model load + warmup (measured ~487s to first real FP8-CTX call in a prior
+    # conc=20 run's server.log); 180s collection is enough to catch many FP8-CTX
+    # ASM kernel invocations at conc=20 steady state.
+    ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-540}"
+    ROCPROF_DURATION="${ROCPROF_DURATION:-180}"
     ROCPROF_DIR="$RESULT_DIR/rocprof"
     mkdir -p "$ROCPROF_DIR"
     LAUNCH_CMD=(
-        rocprofv3 --kernel-trace --stats
+        rocprofv3 --kernel-trace --hip-trace --marker-trace --stats
         -d "$ROCPROF_DIR" -f csv
         --summary-output-file "$RESULT_DIR/rocprof_summary.txt"
         -P "${ROCPROF_START_DELAY}:${ROCPROF_DURATION}:1"
@@ -774,6 +779,34 @@ printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 "${LAUNCH_CMD[@]}" > "$SERVER_LOG" 2>&1 &  # LAUNCH_CMD = VLLM_CMD, or rocprofv3-wrapped when ROCPROF_ENABLE=1
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
+
+# TEMP: rocprof outputs (rocprof_summary.txt, kernel/hip/marker stats CSVs under
+# $ROCPROF_DIR) are NOT in any workflow upload-artifact list -- only server.log
+# is reliably retrieved. Wait for the collection window to close, then append
+# the summary plus compact *stats*/*marker* CSVs (not the large raw per-event
+# kernel/hip trace CSVs) into $SERVER_LOG so the data survives the run.
+if [ "$ROCPROF_ENABLE" = "1" ]; then
+    (
+        sleep $((ROCPROF_START_DELAY + ROCPROF_DURATION + 30))
+        for _i in $(seq 1 20); do
+            [ -n "$(ls -A "$ROCPROF_DIR" 2>/dev/null)" ] && break
+            sleep 15
+        done
+        {
+            echo "=== [ROCPROF] summary ($RESULT_DIR/rocprof_summary.txt) ==="
+            cat "$RESULT_DIR/rocprof_summary.txt" 2>/dev/null || echo "[ROCPROF] summary file not found"
+            echo "=== [ROCPROF] stats/marker CSVs in $ROCPROF_DIR ==="
+            for _f in "$ROCPROF_DIR"/*.csv; do
+                case "$_f" in *stats*|*marker*) : ;; *) continue ;; esac
+                [ -f "$_f" ] || continue
+                echo "--- $_f ($(wc -l < "$_f") lines) ---"
+                head -500 "$_f"
+            done
+        } >> "$SERVER_LOG" 2>&1
+        echo "[rocprof] watcher: appended rocprof outputs to server.log" >> "$SERVER_LOG"
+    ) &
+    echo "[rocprof] watcher scheduled: will append summary/stats to server.log ~$((ROCPROF_START_DELAY + ROCPROF_DURATION + 30))s after launch"
+fi
 
 python3 - <<'CCDPY' > "$RESULT_DIR/ccdmap.txt" 2>/dev/null || true
 import subprocess, re, os, glob
