@@ -20,6 +20,7 @@ logger = init_logger("fp8ctx")
 
 _TILE_Q = 256
 _selftest_done = False
+_kernel_ok = None  # set by selftest_noncausal: True=kernel works, False=broken -> disable real fp8 path
 _count = {"ctx_ok": 0, "ctx_fail": 0, "new_ok": 0, "new_fail": 0}
 
 
@@ -141,6 +142,8 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
 def fp8_context_chunk(backend, chunk, q, k, v):
     """Hook for run_prefill_context_chunk (non-causal). Returns (out, lse) or None."""
     global _selftest_done
+    if _kernel_ok is False:
+        return None  # self-test showed the non-causal kernel is broken -> stay on bf16
     try:
         qo = chunk.query_start_loc
         kv = chunk.cu_seq_lens
@@ -191,7 +194,7 @@ def selftest_noncausal(backend):
     """Run ONCE per worker: a tiny synthetic NON-causal fp8 ASM prefill to prove the
     kernel exists/runs on gfx950, independent of whether real context chunks occur.
     Triggered from the run_prefill_new_tokens hook (fires on the first prefill)."""
-    global _selftest_nc_done
+    global _selftest_nc_done, _kernel_ok
     if _selftest_nc_done:
         return
     _selftest_nc_done = True
@@ -209,11 +212,13 @@ def selftest_noncausal(backend):
         out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, qlen, False)
         torch.cuda.synchronize()
         finite = bool(torch.isfinite(out.float()).all().item())
+        _kernel_ok = True
         logger.info("[FP8-CTX] STARTUP SELF-TEST: non-causal fp8 ASM kernel OK "
                     "(out=%s lse=%s finite=%s sample=%s)",
                     tuple(out.shape), tuple(lse.shape), finite,
                     out.flatten()[:3].float().tolist())
     except Exception as e:
+        _kernel_ok = False
         import traceback
         logger.info("[FP8-CTX] STARTUP SELF-TEST: non-causal fp8 ASM kernel FAILED: %s\n%s",
                     e, traceback.format_exc())

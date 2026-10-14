@@ -665,8 +665,26 @@ src = src.replace(ctx_anchor, ctx_hook + ctx_anchor, 1)
 src = src.replace(new_anchor, new_hook + new_anchor, 1)
 open(f, "w").write(src)
 py_compile.compile(f, doraise=True)
+# 3rd hook: native no-context fp8 path (_mla_fp8_prefill_attn) -- fires the self-test
+# on cold-cache prefills, which bypass the prefill backend entirely.
+f2 = site + "/v1/attention/backends/mla/rocm_aiter_mla.py"
+src2 = open(f2).read()
+if "_fp8_st3" not in src2:
+    nat_anchor = ("        from vllm.platforms import current_platform\n"
+                  "        from vllm.v1.worker.workspace import current_workspace_manager\n"
+                  "\n"
+                  "        fp8_dtype = current_platform.fp8_dtype()\n")
+    nat_hook = ("        try:\n"
+                "            from vllm.v1.attention.backends.mla.prefill import _fp8ctx as _fp8_st3\n"
+                "            _fp8_st3.selftest_noncausal(self)\n"
+                "        except Exception:\n"
+                "            pass\n")
+    if nat_anchor not in src2:
+        print("[FP8-CTX-PATCH] NATIVE ANCHOR NOT FOUND -- aborting"); raise SystemExit(4)
+    open(f2, "w").write(src2.replace(nat_anchor, nat_hook + nat_anchor, 1))
+    py_compile.compile(f2, doraise=True)
 py_compile.compile(site + "/v1/attention/backends/mla/prefill/_fp8ctx.py", doraise=True)
-print("[FP8-CTX-PATCH] hooks injected (ctx + selftest) + compiled OK")
+print("[FP8-CTX-PATCH] hooks injected (ctx + newtok + native self-test) + compiled OK")
 PYEOF
     _fp8_rc=$?
     [ "$_fp8_rc" = "0" ] || { echo "[FP8-CTX-PATCH] FAILED rc=$_fp8_rc -- refusing to run"; exit 1; }
