@@ -620,6 +620,47 @@ else
     ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
 fi
 
+# [FP8-CTX smoke test 2026-10-13] Install the fp8 context-chunk prefill hook into
+# the installed aiter MLA prefill backend (run_prefill_context_chunk). Heavily
+# instrumented ([FP8-CTX] tag); any error -> returns None -> bf16 fallback, so it
+# cannot crash the server. Short run only -- check the server log for which kernel
+# invoked. TEMP: revert after.
+export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"
+export AIPERF_WARMUP_REQUESTS_PER_LANE=1   # short warmup for the smoke test
+if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
+    _fp8_pdir="$(cd "$(dirname "$0")" && pwd)/patches"
+    _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
+    cp "$_fp8_pdir/fp8ctx.py" "$_fp8_site/v1/attention/backends/mla/prefill/_fp8ctx.py" \
+        && echo "[FP8-CTX-PATCH] helper copied"
+    python3 - "$_fp8_site" <<'PYEOF'
+import sys, py_compile
+site = sys.argv[1]
+f = site + "/v1/attention/backends/mla/prefill/aiter_flash_attn.py"
+src = open(f).read()
+anchor = ("        out, lse = self.flash_attn_varlen_func(\n"
+          "            q=q,\n            k=k,\n            v=v,\n"
+          "            cu_seqlens_q=chunk.query_start_loc,\n")
+hook = ("        _fp8_r = None\n"
+        "        try:\n"
+        "            from vllm.v1.attention.backends.mla.prefill import _fp8ctx as _fp8_fx\n"
+        "            _fp8_r = _fp8_fx.fp8_context_chunk(self, chunk, q, k, v)\n"
+        "        except Exception:\n"
+        "            _fp8_r = None\n"
+        "        if _fp8_r is not None:\n"
+        "            return _fp8_r\n")
+if "_fp8ctx" in src:
+    print("[FP8-CTX-PATCH] already present"); raise SystemExit(0)
+if anchor not in src:
+    print("[FP8-CTX-PATCH] ANCHOR NOT FOUND -- image differs, aborting"); raise SystemExit(3)
+open(f, "w").write(src.replace(anchor, hook + anchor, 1))
+py_compile.compile(f, doraise=True)
+py_compile.compile(site + "/v1/attention/backends/mla/prefill/_fp8ctx.py", doraise=True)
+print("[FP8-CTX-PATCH] hook injected + compiled OK")
+PYEOF
+    _fp8_rc=$?
+    [ "$_fp8_rc" = "0" ] || { echo "[FP8-CTX-PATCH] FAILED rc=$_fp8_rc -- refusing to run"; exit 1; }
+fi
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
@@ -660,7 +701,7 @@ VLLM_CMD=(
 # ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
 # then ROCPROF_DURATION seconds of actual collection.
 # -----------------------------------------------------------------------------
-ROCPROF_ENABLE=1  # TEMP 2026-10-13: fresh new-image kernel-distribution profile; REVERT after
+ROCPROF_ENABLE=0  # profiling off (FP8-CTX smoke test is a serving run); LAUNCH_CMD falls back to VLLM_CMD
 LAUNCH_CMD=("${VLLM_CMD[@]}")
 if [ "$ROCPROF_ENABLE" = "1" ]; then
     ROCPROF_START_DELAY=3300  # 55 min: clear model load + warmup + cudagraph + KV ramp to steady state
