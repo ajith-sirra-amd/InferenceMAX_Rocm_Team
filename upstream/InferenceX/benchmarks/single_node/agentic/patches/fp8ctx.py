@@ -94,7 +94,9 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
     total_q = q.shape[0]
     total_kv = k.shape[0]
 
-    ps = _ensure_ps_buffers(backend, nhead, max(int(max_q_len), _TILE_Q), device)
+    # Always size for the worst-case Q length (max_num_batched_tokens) so buffers
+    # allocated by the tiny self-test are also valid for real 24576-token chunks.
+    ps = _ensure_ps_buffers(backend, nhead, 24576, device)
     wm = ps["work_metadata"]
     dev_o = ps["dev"]      # [work_indptr, work_info, reduce_indptr, reduce_final_map, reduce_partial_map]
     host_o = ps["host"]
@@ -180,3 +182,38 @@ def fp8_new_tokens(backend, q, k, v):
             logger.info("[FP8-CTX] new-tokens fp8 FAILED (n=%d): %s\n%s",
                         _count["new_fail"], e, traceback.format_exc())
         return None
+
+
+_selftest_nc_done = False
+
+
+def selftest_noncausal(backend):
+    """Run ONCE per worker: a tiny synthetic NON-causal fp8 ASM prefill to prove the
+    kernel exists/runs on gfx950, independent of whether real context chunks occur.
+    Triggered from the run_prefill_new_tokens hook (fires on the first prefill)."""
+    global _selftest_nc_done
+    if _selftest_nc_done:
+        return
+    _selftest_nc_done = True
+    try:
+        import torch
+        dev = torch.device("cuda", torch.cuda.current_device())
+        fp8 = _fp8_dtype()
+        nhead, qk, vd, qlen, kvlen = 16, 192, 128, 8, 64
+        q = torch.randn(qlen, nhead, qk, device=dev).to(fp8)
+        k = torch.randn(kvlen, nhead, qk, device=dev).to(fp8)
+        v = torch.randn(kvlen, nhead, vd, device=dev).to(fp8)
+        qo = torch.tensor([0, qlen], dtype=torch.int32, device=dev)
+        kv = torch.tensor([0, kvlen], dtype=torch.int32, device=dev)
+        seq = torch.tensor([kvlen], dtype=torch.int32, device=dev)
+        out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, qlen, False)
+        torch.cuda.synchronize()
+        finite = bool(torch.isfinite(out.float()).all().item())
+        logger.info("[FP8-CTX] STARTUP SELF-TEST: non-causal fp8 ASM kernel OK "
+                    "(out=%s lse=%s finite=%s sample=%s)",
+                    tuple(out.shape), tuple(lse.shape), finite,
+                    out.flatten()[:3].float().tolist())
+    except Exception as e:
+        import traceback
+        logger.info("[FP8-CTX] STARTUP SELF-TEST: non-causal fp8 ASM kernel FAILED: %s\n%s",
+                    e, traceback.format_exc())

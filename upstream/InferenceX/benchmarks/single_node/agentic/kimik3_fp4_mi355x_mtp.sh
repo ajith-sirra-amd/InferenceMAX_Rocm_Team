@@ -637,25 +637,36 @@ import sys, py_compile
 site = sys.argv[1]
 f = site + "/v1/attention/backends/mla/prefill/aiter_flash_attn.py"
 src = open(f).read()
-anchor = ("        out, lse = self.flash_attn_varlen_func(\n"
-          "            q=q,\n            k=k,\n            v=v,\n"
-          "            cu_seqlens_q=chunk.query_start_loc,\n")
-hook = ("        _fp8_r = None\n"
-        "        try:\n"
-        "            from vllm.v1.attention.backends.mla.prefill import _fp8ctx as _fp8_fx\n"
-        "            _fp8_r = _fp8_fx.fp8_context_chunk(self, chunk, q, k, v)\n"
-        "        except Exception:\n"
-        "            _fp8_r = None\n"
-        "        if _fp8_r is not None:\n"
-        "            return _fp8_r\n")
 if "_fp8ctx" in src:
     print("[FP8-CTX-PATCH] already present"); raise SystemExit(0)
-if anchor not in src:
-    print("[FP8-CTX-PATCH] ANCHOR NOT FOUND -- image differs, aborting"); raise SystemExit(3)
-open(f, "w").write(src.replace(anchor, hook + anchor, 1))
+ctx_anchor = ("        out, lse = self.flash_attn_varlen_func(\n"
+              "            q=q,\n            k=k,\n            v=v,\n"
+              "            cu_seqlens_q=chunk.query_start_loc,\n")
+ctx_hook = ("        _fp8_r = None\n"
+            "        try:\n"
+            "            from vllm.v1.attention.backends.mla.prefill import _fp8ctx as _fp8_fx\n"
+            "            _fp8_r = _fp8_fx.fp8_context_chunk(self, chunk, q, k, v)\n"
+            "        except Exception:\n"
+            "            _fp8_r = None\n"
+            "        if _fp8_r is not None:\n"
+            "            return _fp8_r\n")
+new_anchor = ("        result = self.flash_attn_varlen_func(\n"
+              "            q=q,\n            k=k,\n            v=v,\n"
+              "            cu_seqlens_q=self._prefill_metadata.query_start_loc,\n")
+new_hook = ("        try:\n"
+            "            from vllm.v1.attention.backends.mla.prefill import _fp8ctx as _fp8_st\n"
+            "            _fp8_st.selftest_noncausal(self)\n"
+            "        except Exception:\n"
+            "            pass\n")
+missing = [n for n, a in (("ctx", ctx_anchor), ("new", new_anchor)) if a not in src]
+if missing:
+    print("[FP8-CTX-PATCH] ANCHOR NOT FOUND:", missing, "-- aborting"); raise SystemExit(3)
+src = src.replace(ctx_anchor, ctx_hook + ctx_anchor, 1)
+src = src.replace(new_anchor, new_hook + new_anchor, 1)
+open(f, "w").write(src)
 py_compile.compile(f, doraise=True)
 py_compile.compile(site + "/v1/attention/backends/mla/prefill/_fp8ctx.py", doraise=True)
-print("[FP8-CTX-PATCH] hook injected + compiled OK")
+print("[FP8-CTX-PATCH] hooks injected (ctx + selftest) + compiled OK")
 PYEOF
     _fp8_rc=$?
     [ "$_fp8_rc" = "0" ] || { echo "[FP8-CTX-PATCH] FAILED rc=$_fp8_rc -- refusing to run"; exit 1; }
