@@ -270,30 +270,50 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
 
 
 def _run_fp8_fused(backend, q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, is_causal):
-    """Single-kernel fp8 path: per-tensor-quantize q/k/v and call the SAME
-    aiter.flash_attn_varlen_func the bf16 baseline already uses
-    (backend.flash_attn_varlen_func, stored by AiterFlashAttnPrefillBackend.
-    __init__), passing q_descale/k_descale/v_descale. aiter's own dtype
-    dispatch (aiter/ops/mha.py: `has_all_descales` branch) routes fp8-dtype
-    q/k/v + all three descales through the identical single CK kernel call
-    used for bf16 -- same cu_seqlens/max_seqlen/causal args as the baseline,
-    zero host-side PS-metadata planning, zero second reduce kernel. No head
-    padding needed: unlike the ASM kernel, flash_attn_varlen_func has no
-    head-count-multiple constraint (the bf16 baseline already calls it with
-    raw, unpadded head counts). Output dtype is bf16 regardless of q/k/v
-    dtype (confirmed in aiter's own fp8 test suite)."""
+    """Single-kernel fp8 path. Calls aiter's internal dispatcher
+    (aiter.ops.mha._flash_attn_varlen_forward) DIRECTLY instead of the public
+    aiter.flash_attn_varlen_func wrapper the bf16 baseline uses: in the pinned
+    aiter version (v0.1.24.post1) that public wrapper does not expose
+    q_descale/k_descale/v_descale on its signature at all (confirmed via a
+    live smoke-test TypeError), even though the internal dispatcher it calls
+    does accept them with no head-dim restriction of its own. aiter's own
+    flash_attn_varlen_fp8_pertensor_func (mha.py) proves this exact call
+    pattern -- it calls _flash_attn_varlen_forward the same way, but hardcodes
+    return_lse=False, so we can't reuse that wrapper and call it ourselves
+    with return_lse=True instead.
+
+    For our shape (hdim_q=192, hdim_v=128, fp8), _flash_attn_varlen_forward's
+    own fast-path gates (can_impl_fmha_v3_fwd's is_fmha_v3_fp8 wants 128/128 or
+    256/256; can_impl_fmha_fwd_hd192_v128_bf16_opus_varlen wants bf16 with no
+    descales) both miss, so it falls through to the generic CK-tile
+    mha_varlen_fwd kernel -- ONE kernel launch, unlike the ASM path's
+    mla_prefill_ps_asm_fwd + mla_reduce_v1 split, which writes partial
+    logits/attn_lse/out3d to HBM and reads them back in a second launch. This
+    trades that round-trip away for aiter's unspecialized/untuned fallback
+    kernel -- which could still lose to the ASM path on raw kernel efficiency;
+    unverified without a real run.
+
+    head_size_q_og/head_size_v_og are both already multiples of 8 for MLA's
+    192/128 shape, so (unlike aiter's own fp8_pertensor wrappers) no padding
+    of q/k/v is needed before the call or slicing of the output after it."""
     from aiter import per_tensor_quant
+    from aiter.ops.mha import _flash_attn_varlen_forward
 
     fp8 = _fp8_dtype()
     q_quant, q_descale = per_tensor_quant(q, quant_dtype=fp8)
     k_quant, k_descale = per_tensor_quant(k, quant_dtype=fp8)
     v_quant, v_descale = per_tensor_quant(v, quant_dtype=fp8)
-    out, lse = backend.flash_attn_varlen_func(
-        q=q_quant, k=k_quant, v=v_quant,
-        cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k,
-        max_seqlen_q=max_seqlen_q, max_seqlen_k=max_seqlen_k,
-        softmax_scale=backend.scale, causal=is_causal, return_lse=True,
+    out, lse, _, _ = _flash_attn_varlen_forward(
+        q_quant, k_quant, v_quant,
+        cu_seqlens_q, cu_seqlens_k,
+        None, None,
+        max_seqlen_q, max_seqlen_k,
+        0,
+        0.0,
+        backend.scale,
+        causal=is_causal,
         q_descale=q_descale, k_descale=k_descale, v_descale=v_descale,
+        return_lse=True,
     )
     return out, lse
 
