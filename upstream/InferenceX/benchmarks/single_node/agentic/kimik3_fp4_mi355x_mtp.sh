@@ -605,14 +605,23 @@ PYEOF
     exit 0
 fi
 
-# Opt-in: FP8 prefill query quantization. Native vLLM feature, no patch
-# needed -- the backend we use (ROCM_AITER_FA) has no special-cased FP8 path
-# of its own, it just forwards whatever dtype q/k/v arrive in to
-# aiter.flash_attn_varlen_func, which already has a dedicated gfx950 FP8
-# kernel (gated purely on tensor dtype, confirmed SUPPORTED=True for our
-# exact MLA shapes: 12 heads/rank, qk=192, v=128). vLLM's own code recommends
-# this explicitly for ISL>=4K workloads -- ours runs ~100K. Unverified
-# whether our backend is on the allowlist; this run is the test.
+# Opt-in: FP8 prefill query quantization (use_prefill_query_quantization).
+# CONFIRMED NO-OP on this hardware -- do not re-enable expecting an effect.
+# backend_supports_prefill_query_quantization() (vLLM mla_attention.py) gates
+# on current_platform.is_device_capability_family(100) FIRST, which is
+# NVIDIA GB200-only; it also requires an allowlisted backend name
+# (FLASHINFER/TRTLLM_RAGGED/TOKENSPEED_MLA) that doesn't include ROCM_AITER_FA
+# either. On AMD/ROCm this returns False unconditionally, so query dtype
+# always stays model dtype (bf16) regardless of this flag -- any perf delta
+# observed with it set is run-to-run noise, not real quantization.
+#
+# The real single-kernel FP8 path for this backend is a different mechanism,
+# unrelated to this flag: aiter.flash_attn_varlen_func (which
+# AiterFlashAttnPrefillBackend already calls for bf16) accepts q_descale/
+# k_descale/v_descale kwargs and, when given fp8-dtype q/k/v + all three
+# descales, routes through the same single CK kernel call with no extra host
+# planning (aiter/ops/mha.py). That's the fp8ctx.py patch's next experiment
+# track, not this flag.
 ENABLE_FP8_PREFILL_QUERY_QUANT="${ENABLE_FP8_PREFILL_QUERY_QUANT:-0}"
 if [ "$ENABLE_FP8_PREFILL_QUERY_QUANT" = "1" ]; then
     ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA","use_prefill_query_quantization":true}'
@@ -624,6 +633,7 @@ fi
 # MLA prefill backend (run_prefill_context_chunk). Heavily instrumented
 # ([FP8-CTX] tag); any error -> returns None -> bf16 fallback.
 export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"
+export AIPERF_WARMUP_REQUESTS_PER_LANE=1   # TEMP: smoke test for self-test buffer fix, revert after dispatch
 if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_pdir="$(cd "$(dirname "$0")" && pwd)/patches"
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
