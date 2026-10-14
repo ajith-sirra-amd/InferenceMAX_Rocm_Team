@@ -5,6 +5,71 @@ Everything below is measured unless explicitly marked as inference.
 
 ---
 
+# LATEST SESSION UPDATE — 2026-10-14 (new image `fe4df3df`)
+
+Image: `vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945`.
+Baseline this session: **C96 clean = 14,445 tok/s/GPU** (TP8/DCP8, a2a, INT4 quick-reduce,
+kv fp8, SimpleCPUOffload DRAM, Q_GATHER-direct ON by default, no #54494, no MTP at C96).
+
+## Experiment ledger (vs 14,445)
+| Lever | Result | Verdict |
+|---|---|---|
+| **new image alone** | 14,445 (vs old 14,077) | **+2.6%**, kept |
+| **#54494** DCP query replication @C96 | 14,307 (−0.95%), **no hang** | **removed from recipe** (.diff kept in patches/). Shrinks KV pool 2.3% → worse TTFT (+9% mean), flat TPOT. |
+| **A2A-direct** (`VLLM_USE_DIRECT_DCP_A2A=1`) | **crash at init**: `_C' has no attribute 'direct_dcp_a2a_lse_reduce'` | **closed on this image** — the direct-A2A combine op is NOT compiled in. Only Q_GATHER-direct's op exists (already on). Reopen via **PR #60619** (supplies the ROCm combine kernels) + image rebuild. |
+| **QUICK_REDUCE=NONE** | 13,797 (−4.5%) | **keep INT4** — INT4 is a confirmed +4.5% win (bandwidth on the ~17% / 117MB prefill AR beats the AITER_CUSTOM preemption). |
+| **ag_rs** comm-backend | ≈/worse than a2a | **keep a2a** (cancelled; matches prior ~neutral finding) |
+
+**Conclusion: every ready zero-code collective knob is tapped on this image** — `a2a + INT4 + Q_GATHER-direct` is the local optimum. Further DCP wins need an image rebuild (#60619) or kernel work.
+
+## Fresh profile (fe4df3df, C96 baseline) — RAN, CSV NOT retrieved
+rocprof run 38373321599 succeeded (`-P 3300:240`, armed cleanly). BUT the stats CSV is
+**host-only**: `vllm/.../results/rocprof/*kernel_stats*.csv` on runner **mi355x-amd_pit2_p03_g07**
+at `/home/ajith.sirra@amd.com/TheOther_InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/results/rocprof/`.
+The workflow artifact upload does NOT include the `rocprof/` dir (same as the committed T116/T124,
+which were copied by hand). **To get it: copy from that host path (grab it before the next run
+cleans the workspace), OR re-run with a `cat`-the-stats-CSV-to-stdout fix.** The server.log WAS
+retrieved and gave the facts below.
+
+## Key facts learned from the profile run's server.log (no CSV needed)
+- **FP8 new-tokens prefill is ARMED** (`FP8 MLA prefill PS buffers allocated … num_head_k=16` on all 8 ranks → `_fp8_prefill_enabled=True`).
+- **But the FMHA runs bf16 in practice** — steady-state cache: GPU prefix hit **52.8%**, ext(CPU) hit **87.8%**, theoretical **95%** → combined realized **~94%**. Nearly every request carries context → bf16 prefill path; fp8 fires only on fully-cold requests (rare).
+- → **#57325 (joint GPU/CPU prefix lookup) is dead for us**: ext-hit already 88%, recoverable gap ~1%. Plus it has an MTP cold/warm correctness flag and touches our `SimpleCPUOffloadConnector`. Skip.
+
+## FP8 FMHA context-chunk port — IN PROGRESS, hook point NOT yet located
+Goal: swap K3 bf16 prefill attention → fp8 (aiter `mla_prefill_ps_asm_fwd`, `is_causal=False`). Ceiling **~2.5–3% e2e** (measured), **no KV-pool bonus** (KV already fp8; fp8 PS scratch offsets activation savings).
+- Built `patches/fp8ctx.py` + a guarded apply block (APPLY_FP8CTX). Injected hooks into
+  `AiterFlashAttnPrefillBackend.run_prefill_context_chunk` / `run_prefill_new_tokens`,
+  `AiterMLAImpl._mla_fp8_prefill_attn`, plus a `wrap_flash` tracer on `AiterMLAImpl.flash_attn_varlen_func`.
+- **ALL hooks injected OK but NONE fired** on real cold-cache prefills (PS buffers allocated,
+  but `_mla_fp8_prefill_attn` never logged). **K3's prefill bypasses `forward_mha` /
+  `_mla_fp8_prefill_attn` / `run_prefill_*`.** K3 routes: `models/kimi_k3/amd/mla.py::forward`
+  → decode→`_fused_decode`→`forward_mqa` (decode-only), else (prefill)→`self.mla_attn(...)`.
+- **A general-purpose subagent is tracing the REAL prefill attention call-site** in fe4df3df
+  (chain: `self.mla_attn` → `unified_mla_attention_with_output` → actual impl method → kernel call,
+  new-tokens AND context-chunk). **Its result was pending at session end.** Next session: read its
+  finding (or re-run the trace), patch THAT call-site, don't re-probe the 4 dead methods.
+- **LESSON (user feedback):** do NOT guess-and-dispatch. Get the kernel-call location from source
+  FIRST, then make one targeted change. Several runs were wasted probing methods K3 doesn't use.
+
+## Open-PR survey for the stack (no single PR gives clean 10% on 95%-cache-hit/C96)
+- **#60619** [ROCm direct A2A combine kernels] +1.05–3.6% e2e, MI355X — **supplies the missing `direct_dcp_a2a_lse_reduce` op** (reopens A2A-direct). Needs image rebuild.
+- **#59693** [K3 token-sharded residual, long prefill] +6–11% measured BUT discounted by 95% cache-hit (little prefill computed); touches the divergent AMD `linear.py` → needs #54494-style adaptation.
+- **#60606** [AITER all-gather for DCP query] +1.2–4% — overlaps existing Q_GATHER-direct (A/B, likely not additive).
+- **#60248** [overlap MoE routing + MLA gate, decode] +5.5% p90 — verify it engages under DCP (may fall back).
+- **#57343 / #59322** — WRONG connector (OffloadingConnector, not SimpleCPUOffload) → inapplicable; #57343 also ROCm-gated no-op.
+- Realistic ~10% = **stacking** #60619 + #59693 + #60606 + #60248 (independent stages). All ROCm/aiter-aware.
+
+## ⚠️ RECIPE IS IN FP8-CTX SMOKE-TEST STATE — REVERT TO BASELINE before any throughput run
+In `kimik3_fp4_mi355x_mtp.sh`:
+- `export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"` (~line 628) → set to **0** (or delete the apply block) to stop injecting fp8ctx.py hooks.
+- `export AIPERF_WARMUP_REQUESTS_PER_LANE=1` (~line 629, short-warmup for smoke) → **delete** (default is 2).
+- rocprof block is uncommented with `ROCPROF_ENABLE=0` and the launch line uses `LAUNCH_CMD` — **inert** (LAUNCH_CMD=VLLM_CMD when off), cosmetic re-revert optional.
+- `patches/fp8ctx.py` — FP8-CTX helper; keep for the port or delete.
+Baseline-known-good otherwise: a2a, INT4, kv fp8, no #54494, no ag_rs = 14,445.
+
+---
+
 ## 1. THE MISSION
 
 Make `moonshotai/Kimi-K3` (MXFP4, TP=8) on 8x AMD MI355X (gfx950) beat the
