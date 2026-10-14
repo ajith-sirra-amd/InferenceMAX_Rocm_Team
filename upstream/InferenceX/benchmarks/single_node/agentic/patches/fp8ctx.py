@@ -222,3 +222,37 @@ def selftest_noncausal(backend):
         import traceback
         logger.info("[FP8-CTX] STARTUP SELF-TEST: non-causal fp8 ASM kernel FAILED: %s\n%s",
                     e, traceback.format_exc())
+
+
+_flash_log_count = 0
+
+
+def wrap_flash(fn):
+    """Trace wrapper for aiter.flash_attn_varlen_func: logs the first calls with the
+    causal flag, q/k/v shapes+dtypes, and the caller stack -> reveals K3's actual
+    prefill attention path and the right hook point."""
+    def _wrapped(*args, **kwargs):
+        global _flash_log_count
+        if _flash_log_count < 12:
+            _flash_log_count += 1
+            try:
+                import traceback
+                causal = kwargs.get("causal", None)
+                q = kwargs.get("q", args[0] if len(args) > 0 else None)
+                k = kwargs.get("k", args[1] if len(args) > 1 else None)
+                v = kwargs.get("v", args[2] if len(args) > 2 else None)
+
+                def _sh(t):
+                    try:
+                        return (tuple(t.shape), str(t.dtype))
+                    except Exception:
+                        return None
+
+                caller = "".join(traceback.format_stack(limit=7)[:-1])[-700:]
+                logger.info("[FP8-CTX] flash_attn_varlen_func CALL #%d causal=%s q=%s k=%s v=%s\n  CALLER:\n%s",
+                            _flash_log_count, causal, _sh(q), _sh(k), _sh(v), caller)
+            except Exception:
+                pass
+        return fn(*args, **kwargs)
+
+    return _wrapped

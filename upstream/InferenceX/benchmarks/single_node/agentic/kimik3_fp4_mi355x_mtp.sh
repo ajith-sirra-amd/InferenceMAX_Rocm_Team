@@ -679,9 +679,21 @@ if "_fp8_st3" not in src2:
                 "            _fp8_st3.selftest_noncausal(self)\n"
                 "        except Exception:\n"
                 "            pass\n")
-    if nat_anchor not in src2:
-        print("[FP8-CTX-PATCH] NATIVE ANCHOR NOT FOUND -- aborting"); raise SystemExit(4)
-    open(f2, "w").write(src2.replace(nat_anchor, nat_hook + nat_anchor, 1))
+    # tracer: wrap flash_attn_varlen_func to reveal K3's actual prefill path
+    flash_anchor = ("        from aiter import flash_attn_varlen_func\n"
+                    "\n"
+                    "        self.flash_attn_varlen_func = flash_attn_varlen_func\n")
+    flash_add = ("        try:\n"
+                 "            from vllm.v1.attention.backends.mla.prefill import _fp8ctx as _fp8_tr\n"
+                 "            self.flash_attn_varlen_func = _fp8_tr.wrap_flash(self.flash_attn_varlen_func)\n"
+                 "        except Exception:\n"
+                 "            pass\n")
+    miss2 = [n for n, a in (("native", nat_anchor), ("flash", flash_anchor)) if a not in src2]
+    if miss2:
+        print("[FP8-CTX-PATCH] ROCM_AITER_MLA ANCHOR NOT FOUND:", miss2, "-- aborting"); raise SystemExit(4)
+    src2 = src2.replace(nat_anchor, nat_hook + nat_anchor, 1)
+    src2 = src2.replace(flash_anchor, flash_anchor + flash_add, 1)
+    open(f2, "w").write(src2)
     py_compile.compile(f2, doraise=True)
 py_compile.compile(site + "/v1/attention/backends/mla/prefill/_fp8ctx.py", doraise=True)
 print("[FP8-CTX-PATCH] hooks injected (ctx + newtok + native self-test) + compiled OK")
