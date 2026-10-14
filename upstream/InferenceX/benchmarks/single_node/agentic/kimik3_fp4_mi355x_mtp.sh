@@ -624,6 +624,7 @@ fi
 # MLA prefill backend (run_prefill_context_chunk). Heavily instrumented
 # ([FP8-CTX] tag); any error -> returns None -> bf16 fallback.
 export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"
+export AIPERF_WARMUP_REQUESTS_PER_LANE=1   # TEMP: hardened-buffer smoke test, revert after
 if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_pdir="$(cd "$(dirname "$0")" && pwd)/patches"
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
