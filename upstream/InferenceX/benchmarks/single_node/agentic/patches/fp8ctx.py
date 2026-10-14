@@ -22,6 +22,7 @@
 # rocm_aiter_mla.py::_mla_fp8_prefill_attn / _build_fp8_prefill_ps_metadata /
 # _init_fp8_prefill_ps_buffers (fe4df3df).
 
+import os
 import torch
 
 from vllm.logger import init_logger
@@ -33,10 +34,18 @@ from vllm.logger import init_logger
 # server.log even while the hooks were actually running.
 logger = init_logger("vllm.fp8ctx")
 
+# "asm" (default): mla_prefill_ps_asm_fwd + mla_reduce_v1, 2 kernel launches +
+# CPU-side PS-metadata planning per call.
+# "fused": single aiter.flash_attn_varlen_func call (the SAME function the
+# bf16 baseline already uses) with fp8-quantized q/k/v + q/k/v_descale --
+# aiter's own dtype dispatch (aiter/ops/mha.py) routes this through the
+# identical single CK kernel call used for bf16, zero host-side planning.
+_FP8CTX_MODE = os.environ.get("FP8CTX_MODE", "asm")
+
 _TILE_Q = 256
 _selftest_done = False
-_kernel_ok = None  # set by selftest_noncausal: True=kernel works, False=broken -> disable real fp8 path
-_count = {"ctx_ok": 0, "ctx_fail": 0, "new_ok": 0, "new_fail": 0}
+_kernel_ok = None  # set by selftest_noncausal: True=kernel works, False=broken -> disable real fp8 path (asm mode only)
+_count = {"ctx_ok": 0, "ctx_fail": 0, "new_ok": 0, "new_fail": 0, "fused_ok": 0, "fused_fail": 0}
 
 
 def _fp8_dtype():
@@ -260,11 +269,62 @@ def _run_fp8_asm(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_len, is
     return out3d, final_lse
 
 
+def _run_fp8_fused(backend, q, k, v, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, is_causal):
+    """Single-kernel fp8 path: per-tensor-quantize q/k/v and call the SAME
+    aiter.flash_attn_varlen_func the bf16 baseline already uses
+    (backend.flash_attn_varlen_func, stored by AiterFlashAttnPrefillBackend.
+    __init__), passing q_descale/k_descale/v_descale. aiter's own dtype
+    dispatch (aiter/ops/mha.py: `has_all_descales` branch) routes fp8-dtype
+    q/k/v + all three descales through the identical single CK kernel call
+    used for bf16 -- same cu_seqlens/max_seqlen/causal args as the baseline,
+    zero host-side PS-metadata planning, zero second reduce kernel. No head
+    padding needed: unlike the ASM kernel, flash_attn_varlen_func has no
+    head-count-multiple constraint (the bf16 baseline already calls it with
+    raw, unpadded head counts). Output dtype is bf16 regardless of q/k/v
+    dtype (confirmed in aiter's own fp8 test suite)."""
+    from aiter import per_tensor_quant
+
+    fp8 = _fp8_dtype()
+    q_quant, q_descale = per_tensor_quant(q, quant_dtype=fp8)
+    k_quant, k_descale = per_tensor_quant(k, quant_dtype=fp8)
+    v_quant, v_descale = per_tensor_quant(v, quant_dtype=fp8)
+    out, lse = backend.flash_attn_varlen_func(
+        q=q_quant, k=k_quant, v=v_quant,
+        cu_seqlens_q=cu_seqlens_q, cu_seqlens_k=cu_seqlens_k,
+        max_seqlen_q=max_seqlen_q, max_seqlen_k=max_seqlen_k,
+        softmax_scale=backend.scale, causal=is_causal, return_lse=True,
+        q_descale=q_descale, k_descale=k_descale, v_descale=v_descale,
+    )
+    return out, lse
+
+
 def fp8_context_chunk(backend, chunk, q, k, v):
     """Hook for run_prefill_context_chunk (non-causal). Returns (out, lse) or None."""
     global _selftest_done
+    if _FP8CTX_MODE == "fused":
+        try:
+            qo = chunk.query_start_loc
+            kv = chunk.cu_seq_lens
+            if not _selftest_done:
+                _selftest_done = True
+                logger.info("[FP8-CTX] FIRST context-chunk invocation (fused): q=%s k=%s v=%s max_q=%s",
+                            tuple(q.shape), tuple(k.shape), tuple(v.shape), int(chunk.max_query_len))
+            out, lse = _run_fp8_fused(backend, q, k, v, qo, kv,
+                                       int(chunk.max_query_len), int(chunk.max_seq_len), False)
+            _count["fused_ok"] += 1
+            if _count["fused_ok"] <= 3 or _count["fused_ok"] % 200 == 0:
+                logger.info("[FP8-CTX] context-chunk fp8 fused OK (n=%d) out=%s lse=%s",
+                            _count["fused_ok"], tuple(out.shape), tuple(lse.shape))
+            return out, lse
+        except Exception as e:
+            _count["fused_fail"] += 1
+            if _count["fused_fail"] <= 3:
+                import traceback
+                logger.info("[FP8-CTX] context-chunk fp8 fused FAILED (n=%d): %s\n%s",
+                            _count["fused_fail"], e, traceback.format_exc())
+            return None
     if _kernel_ok is False:
-        return None  # self-test showed the non-causal kernel is broken -> stay on bf16
+        return None  # self-test showed the non-causal ASM kernel is broken -> stay on bf16
     try:
         qo = chunk.query_start_loc
         kv = chunk.cu_seq_lens
