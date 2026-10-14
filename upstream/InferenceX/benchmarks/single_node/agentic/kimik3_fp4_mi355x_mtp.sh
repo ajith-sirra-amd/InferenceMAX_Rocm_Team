@@ -620,13 +620,10 @@ else
     ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
 fi
 
-# [FP8-CTX smoke test 2026-10-13] Install the fp8 context-chunk prefill hook into
-# the installed aiter MLA prefill backend (run_prefill_context_chunk). Heavily
-# instrumented ([FP8-CTX] tag); any error -> returns None -> bf16 fallback, so it
-# cannot crash the server. Short run only -- check the server log for which kernel
-# invoked. TEMP: revert after.
+# [FP8-CTX] Install the fp8 context-chunk prefill hook into the installed aiter
+# MLA prefill backend (run_prefill_context_chunk). Heavily instrumented
+# ([FP8-CTX] tag); any error -> returns None -> bf16 fallback.
 export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"
-export AIPERF_WARMUP_REQUESTS_PER_LANE=1   # short warmup for the smoke test
 if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_pdir="$(cd "$(dirname "$0")" && pwd)/patches"
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
