@@ -204,13 +204,23 @@ def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_l
     fp8 = _fp8_dtype()
     real_nhead = q.shape[1]
     nhead = _num_head_k(real_nhead)
-    q, k, v = _pad_heads(real_nhead, nhead, q, k, v)
-    if q.dtype != fp8:
-        q = q.to(fp8)
-    if k.dtype != fp8:
-        k = k.to(fp8)
-    if v.dtype != fp8:
-        v = v.to(fp8)
+    chunk = getattr(backend, "_fp8ctx_current_chunk", None)
+    optimized = chunk is not None
+    prep = getattr(backend, "_fp8ctx_prep_buffers", None)
+    if optimized:
+        from vllm.v1.attention.backends.mla.prefill import _fp8ctx_prep
+        if prep is None:
+            prep = {}
+            backend._fp8ctx_prep_buffers = prep
+        q, k, v = _fp8ctx_prep.prepare_qkv(q, k, v, nhead, fp8, prep)
+    else:
+        q, k, v = _pad_heads(real_nhead, nhead, q, k, v)
+        if q.dtype != fp8:
+            q = q.to(fp8)
+        if k.dtype != fp8:
+            k = k.to(fp8)
+        if v.dtype != fp8:
+            v = v.to(fp8)
 
     v_head_dim = v.shape[-1]
     total_q = q.shape[0]
@@ -226,18 +236,20 @@ def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_l
     host_o = ps["host"]
     one = ps["one"]
 
-    qo_cpu = qo_indptr.detach().to("cpu", torch.int32)
-    kv_cpu = kv_indptr.detach().to("cpu", torch.int32)
-    seq_cpu = seq_lens.detach().to("cpu", torch.int32)
-
-    get_ps_metadata_v1(
-        qo_cpu, kv_cpu, seq_cpu, 1, nhead,
-        wm, host_o[0], host_o[1], host_o[2], host_o[3], host_o[4],
-        qhead_granularity=1, qlen_granularity=_TILE_Q,
-        kvlen_granularity=128, block_size=1, is_causal=is_causal,
-    )
-    for d, h in zip(dev_o, host_o):
-        d.copy_(h, non_blocking=True)
+    if optimized:
+        _fp8ctx_prep.prepare_plan(chunk, ps, nhead, total_q, total_kv, max_q_len, is_causal)
+    else:
+        qo_cpu = qo_indptr.detach().to("cpu", torch.int32)
+        kv_cpu = kv_indptr.detach().to("cpu", torch.int32)
+        seq_cpu = seq_lens.detach().to("cpu", torch.int32)
+        get_ps_metadata_v1(
+            qo_cpu, kv_cpu, seq_cpu, 1, nhead,
+            wm, host_o[0], host_o[1], host_o[2], host_o[3], host_o[4],
+            qhead_granularity=1, qlen_granularity=_TILE_Q,
+            kvlen_granularity=128, block_size=1, is_causal=is_causal,
+        )
+        for d, h in zip(dev_o, host_o):
+            d.copy_(h, non_blocking=True)
     # No `.item()` read-back here on purpose: neither mla_prefill_ps_asm_fwd nor
     # mla_reduce_v1 takes a num_partial scalar -- they derive actual work extent
     # from the GPU-resident dev_o tensors (work_info/reduce_indptr/...) internally.
@@ -378,7 +390,49 @@ def fp8_context_chunk(backend, chunk, q, k, v):
             _selftest_done = True
             logger.info("[FP8-CTX] FIRST context-chunk invocation: q=%s k=%s v=%s max_q=%s",
                         tuple(q.shape), tuple(k.shape), tuple(v.shape), int(chunk.max_query_len))
-        out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, int(chunk.max_query_len), False)
+        backend._fp8ctx_current_chunk = chunk
+        try:
+            out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, int(chunk.max_query_len), False)
+        finally:
+            backend._fp8ctx_current_chunk = None
+        if not getattr(backend, "_fp8ctx_validated", False):
+            # Compare identical real context tensors. Synchronization and clones
+            # are restricted to this one-time validation, outside steady state.
+            import time
+            def timed(fn):
+                torch.cuda.synchronize()
+                start = time.perf_counter()
+                value = fn()
+                torch.cuda.synchronize()
+                return (time.perf_counter() - start) * 1000, value
+            def bf16():
+                return backend.flash_attn_varlen_func(
+                    q=q, k=k, v=v, cu_seqlens_q=qo, cu_seqlens_k=kv,
+                    max_seqlen_q=chunk.max_query_len, max_seqlen_k=chunk.max_seq_len,
+                    softmax_scale=backend.scale, causal=False, return_lse=True)
+            bf_ms, (ref, ref_lse) = timed(bf16)
+            old_ms, (old_out, old_lse) = timed(lambda: _run_fp8_asm(
+                backend, q, k, v, qo, kv, seq, int(chunk.max_query_len), False))
+            old_out = old_out.clone()
+            old_lse = old_lse.clone()
+            backend._fp8ctx_current_chunk = chunk
+            try:
+                opt_ms, (out, lse) = timed(lambda: _run_fp8_asm(
+                    backend, q, k, v, qo, kv, seq, int(chunk.max_query_len), False))
+            finally:
+                backend._fp8ctx_current_chunk = None
+            # Optimization preserves the old direct-FP8-cast numerics.
+            torch.testing.assert_close(out, old_out, rtol=0, atol=0)
+            torch.testing.assert_close(lse, old_lse, rtol=0, atol=0)
+            finite = bool(torch.isfinite(out).all().item() and torch.isfinite(lse).all().item())
+            rel_rms = float((out.float()-ref.float()).square().mean().sqrt() /
+                            ref.float().square().mean().sqrt().clamp_min(1e-12))
+            lse_max_error = float((lse.float()-ref_lse.float()).abs().max())
+            logger.info("[FP8-VALIDATION] q=%s k=%s BF16_ms=%.4f current_ASM_ms=%.4f optimized_ASM_ms=%.4f finite=%s rel_rms=%.6f lse_max_error=%.6f optimized_matches_current=True",
+                        tuple(q.shape), tuple(k.shape), bf_ms, old_ms, opt_ms, finite, rel_rms, lse_max_error)
+            if not finite or rel_rms > 0.1 or lse_max_error > 0.5:
+                raise RuntimeError("Live ASM numerical smoke gate failed (rel_rms<=0.1, LSE max error<=0.5 required)")
+            backend._fp8ctx_validated = True
         _count["ctx_ok"] += 1
         if _count["ctx_ok"] <= 3 or _count["ctx_ok"] % 200 == 0:
             logger.info("[FP8-CTX] context-chunk fp8 OK (n=%d) out=%s lse=%s",
@@ -428,7 +482,7 @@ def selftest_noncausal(backend):
         import torch
         dev = torch.device("cuda", torch.cuda.current_device())
         fp8 = _fp8_dtype()
-        real_nhead, qk, vd, qlen, kvlen = 16, 192, 128, 8, 64
+        real_nhead, qk, vd, qlen, kvlen = 12, 192, 128, 8, 64
         nhead = _num_head_k(real_nhead)
         q = torch.randn(qlen, real_nhead, qk, device=dev).to(fp8)
         k = torch.randn(kvlen, real_nhead, qk, device=dev).to(fp8)
@@ -446,6 +500,8 @@ def selftest_noncausal(backend):
         out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, qlen, False, ps_override=ps)
         torch.cuda.synchronize()
         finite = bool(torch.isfinite(out.float()).all().item())
+        if not finite or not bool(torch.isfinite(lse).all().item()):
+            raise RuntimeError("Nonfinite ASM output or LSE")
         _kernel_ok = True
         logger.info("[FP8-CTX] STARTUP SELF-TEST: non-causal fp8 ASM kernel OK "
                     "(out=%s lse=%s finite=%s sample=%s)",

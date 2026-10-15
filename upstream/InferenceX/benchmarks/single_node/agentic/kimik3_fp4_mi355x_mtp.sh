@@ -412,8 +412,8 @@ fi
 # APPLY_FP8CTX=0 is the pure baseline (stock vLLM/aiter chunked-context BF16
 # prefill, patch not installed at all); FP8CTX_MODE selects which kernel path
 # the patch itself takes when APPLY_FP8CTX=1 (asm vs fused).
-export APPLY_FP8CTX=0  # Baseline profile: original BF16 context attention.
-export FP8CTX_MODE="${FP8CTX_MODE:-asm}"
+export APPLY_FP8CTX=1  # Optimized ASM smoke: compare real inputs before steady state.
+export FP8CTX_MODE=asm
 # Forced (not ${VAR:-default}): upstream/InferenceX/benchmarks/runtime_settings.sh
 # does an unconditional `export AIPERF_WARMUP_REQUESTS_PER_LANE='10'` on the
 # HOST runner before the container (and this script) ever starts, so a :-
@@ -431,6 +431,7 @@ if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
     cp "$_fp8_pdir/fp8ctx.py" "$_fp8_site/v1/attention/backends/mla/prefill/_fp8ctx.py" \
         && echo "[FP8-CTX-PATCH] helper copied"
+    cp "$_fp8_pdir/fp8ctx_prep.py" "$_fp8_site/v1/attention/backends/mla/prefill/_fp8ctx_prep.py" || exit 1
     python3 - "$_fp8_site" <<'PYEOF'
 import sys, py_compile
 site = sys.argv[1]
@@ -565,7 +566,7 @@ VLLM_CMD=(
 # ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
 # then ROCPROF_DURATION seconds of actual collection.
 # -----------------------------------------------------------------------------
-ROCPROF_ENABLE=1  # C96 baseline profile; kernel trace and statistics only.
+ROCPROF_ENABLE=0  # 600-second smoke: exclude profiler overhead from throughput.
 LAUNCH_CMD=("${VLLM_CMD[@]}")
 if [ "$ROCPROF_ENABLE" = "1" ]; then
     # Run A began measured replay ~2423s after server launch. Collect at
@@ -711,3 +712,14 @@ else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
 fi
+
+# A successful benchmark must not mask a failed experimental attention path.
+if ! grep -q '\[FP8-VALIDATION\].*optimized_matches_current=True' "$SERVER_LOG"; then
+    echo "[FP8-SMOKE] no successful live numerical comparison; refusing promotion"
+    exit 1
+fi
+if grep -q 'context-chunk fp8 FAILED' "$SERVER_LOG"; then
+    echo "[FP8-SMOKE] ASM fallback observed; refusing promotion"
+    exit 1
+fi
+echo "[FP8-SMOKE] live comparison and ASM dispatch succeeded; full run requires timing review"

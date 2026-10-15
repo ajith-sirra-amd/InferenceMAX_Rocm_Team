@@ -8593,3 +8593,9 @@
   description:
     - 'Profile the C96 BF16 context-attention baseline with a 60-second kernel trace, record actual Q/K/V dtypes, and signal profiler descendants before waiting for finalization. FP8 context overlay disabled; FP8 KV storage retained.'
     - '分析 C96 BF16 上下文注意力基线，采集 60 秒内核跟踪并记录 Q/K/V 数据类型；等待输出前终止分析器子进程。禁用 FP8 上下文补丁，保留 FP8 KV 缓存。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Smoke optimized context FP8 ASM with fused head padding/conversion and batch-local CPU plan reuse. Retain installed AITER; C96, warmup=1, 600-second replay, profiler disabled. Require live output/LSE comparison before promotion.'
+    - '?????? FP8 ??????? CPU ????? AITER?C96?? lane ?????600 ??????????????? LSE ?????????'
