@@ -278,6 +278,8 @@ jobs:
             results/aiperf_artifacts/gpu_telemetry_export.jsonl
             results/aiperf_artifacts/logs/aiperf.log
             results/aiperf_artifacts/logs/*.log
+            results/rocprof_summary.txt
+            results/rocprof/**/*.csv
           # Excluded by design (multi-GB debug artifacts, not consumed by
           # post-processing): results/aiperf_artifacts/inputs.json (pre-formatted
           # request bodies — the mmap'd binary equivalent is rebuilt from

@@ -8,31 +8,6 @@ export EVAL_ONLY="${EVAL_ONLY:-false}"
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 check_env_vars DCP_SIZE EVAL_ONLY
 
-# =============================================================================
-# Patch activation flags -- one place to toggle every staged, unmerged
-# vllm-project/vllm PR for this recipe. 1 = apply, 0 = skip (vLLM runs
-# unpatched for that PR). See each PR's own comment block below for what it
-# does, requirements, and known conflicts with other staged PRs.
-# =============================================================================
-# Stack for image nightly-rocm100-fe4df3df. Useful PRs ON; regressions and the
-# merged-upstream PR removed. #54494 kept but OFF -- it triggers an unfixed
-# upstream offload load-race (see OFFLOAD-LOAD-RACE-UPSTREAM-REPORT.md). On a
-# new image some of these may now be native; each apply_* fails fast if its
-# patch no longer applies, so re-verify after an image bump.
-export APPLY_PR59069="${APPLY_PR59069:-0}"  # OFF: now native/merged in image fe4df3df ("already present")
-export APPLY_PR59070="${APPLY_PR59070:-0}"  # OFF on fe4df3df: applies text-level but stale vs new model code (engine-init shape error 7168 vs 896); re-adapt to re-enable
-export APPLY_PR59693="${APPLY_PR59693:-0}"  # OFF on fe4df3df: same -- residual sharding mismatches new model dims; re-adapt to re-enable
-export APPLY_PR59966="${APPLY_PR59966:-0}"  # OFF on fe4df3df: DCP query-gather patch stale vs new model code; re-adapt to re-enable
-export APPLY_PR54625="${APPLY_PR54625:-0}"  # OFF: no longer applies on image fe4df3df (scheduler.py hunk rejected); needs re-adaptation to re-enable
-export APPLY_PR59591="${APPLY_PR59591:-0}"  # shard latent-MoE up-proj -- OFF: -1.3% tput regression, superseded by #59693
-export APPLY_PR54627="${APPLY_PR54627:-0}"  # prefill_schedule_interval outside DP -- OFF: +313-352% TTFT, not worth the +2.6% tput
-export APPLY_PR58743="${APPLY_PR58743:-0}"  # BF16 KDA recurrent state -- OFF: crashes decode
-# #54494 removed 2026-10-13: C96 full run measured -0.95% (14,307 vs 14,445), no
-# hang. Query replication shrinks KV pool 2.3% -> higher KV pressure, worse TTFT
-# (+9% mean), flat TPOT. Not worth shipping. Patch .diff kept under patches/.
-# #58861/#58723 NOT staged: both conflict (text-level) with #59069/#59693 in
-# attn_res.py/linear.py -- needs rebuild + live-verify, left for follow-up.
-
 DP_SIZE=1
 export DP_SIZE
 TOTAL_RANKS=$(( TP * DP_SIZE ))
@@ -102,7 +77,6 @@ trap 'exit 143' TERM
 
 SPEC_ARGS=()
 SPEC_ROWS=1
-KDA_ARGS=()
 case "$CONC" in
     1|2|4|8|10|12|14|16)
         DCP_SIZE=1
@@ -194,226 +168,6 @@ case "$CONC" in
         ;;
 esac
 export DCP_SIZE
-
-# -----------------------------------------------------------------------------
-# #59591 -- shard Kimi-K3 latent-MoE up-proj by rank (~3.9GB/rank freed).
-# OFF by default: conflicts with #59693's SP path (confirmed live crash).
-# -----------------------------------------------------------------------------
-apply_pr59591() {
-    [ "${APPLY_PR59591:-0}" = "1" ] || { echo "[pr59591] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59591-tp-shard-moe-upproj.diff"
-    [ -f "$diff_file" ] || { echo "[pr59591] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.models.kimi_k3.amd.linear as m
-import sys; sys.exit(0 if "row_sharded" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[pr59591] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/models/kimi_k3/amd/linear.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr59591] applied"
-}
-apply_pr59591 || { echo "[pr59591] patch failed, refusing to run" >&2; exit 1; }
-
-# -----------------------------------------------------------------------------
-# #59069 -- fuse AttnRes output + per-token FP8 quant. 3-5.2% faster, graceful
-# fallback if quant scheme doesn't match. No flag.
-# -----------------------------------------------------------------------------
-apply_pr59069() {
-    [ "${APPLY_PR59069:-1}" = "1" ] || { echo "[pr59069] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59069-attnres-fp8-fusion.diff"
-    [ -f "$diff_file" ] || { echo "[pr59069] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.models.kimi_k3.amd.linear as m
-import sys; sys.exit(0 if "get_input_quant_key" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[pr59069] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/models/kimi_k3/amd/kda.py","vllm/models/kimi_k3/amd/linear.py","vllm/models/kimi_k3/amd/mla.py","vllm/models/kimi_k3/amd/ops/attn_res.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr59069] applied"
-}
-apply_pr59069 || { echo "[pr59069] patch failed, refusing to run" >&2; exit 1; }
-
-# -----------------------------------------------------------------------------
-# #59070 -- keep DCP prefill context FP8 through AllGather (was BF16 upcast).
-# 1.8-2.1x faster AllGather. No flag.
-# -----------------------------------------------------------------------------
-apply_pr59070() {
-    [ "${APPLY_PR59070:-1}" = "1" ] || { echo "[pr59070] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59070-dcp-fp8-allgather.diff"
-    [ -f "$diff_file" ] || { echo "[pr59070] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm._aiter_ops as m
-import sys; sys.exit(0 if "gather_kv_b_proj" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[pr59070] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/_aiter_ops.py","vllm/v1/attention/backends/mla/rocm_aiter_mla.py","vllm/v1/attention/ops/rocm_aiter_mla_prefill.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr59070] applied"
-}
-apply_pr59070 || { echo "[pr59070] patch failed, refusing to run" >&2; exit 1; }
-
-# -----------------------------------------------------------------------------
-# #59693 -- token-sharded residual stream for long prefills. Previously
-# disabled after a live hang (run 37474503331, isolated -- only this patch
-# active): Rank 0 and Rank 4 stuck at wildly different NCCL SeqNums.
-# 2026-10-08: PR updated upstream -- replaced two addmm_ calls with a plain
-# GEMM + add. hipBLASLt's C-accumulating bf16 GEMM faults at specific row
-# counts (2914-2925 rows at 7168x3584; 23393-23405 rows at 896x3584), both
-# reachable by our long-prefill agentic workload at TP8. Plausible root cause
-# of the earlier hang. Patch re-staged (diff updated, dry-run + py_compile
-# verified) and re-enabled below for a fresh isolated test -- not yet
-# confirmed fixed by a live run.
-# -----------------------------------------------------------------------------
-apply_pr59693() {
-    [ "${APPLY_PR59693:-0}" = "1" ] || { echo "[pr59693] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59693-prefill-sp.diff"
-    [ -f "$diff_file" ] || { echo "[pr59693] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import vllm.envs as e; import sys
-sys.exit(0 if hasattr(e, "VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS") else 1)' 2>/dev/null; then
-        echo "[pr59693] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/envs.py","vllm/models/kimi_k3/amd/latent_moe_runner.py","vllm/models/kimi_k3/amd/linear.py","vllm/models/kimi_k3/amd/sp.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr59693] applied"
-}
-apply_pr59693 || { echo "[pr59693] patch failed, refusing to run" >&2; exit 1; }
-if [ "${APPLY_PR59693:-0}" = "1" ]; then
-    export VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS="${VLLM_KIMI_K3_AMD_PREFILL_SP_MIN_TOKENS:-1024}"
-fi
-
-# -----------------------------------------------------------------------------
-
-# -----------------------------------------------------------------------------
-# #59966 -- direct MLA decode query gather, no byte-wise strided copies.
-# -2.7% step time, bit-identical. Needs VLLM_USE_DIRECT_DCP_Q_GATHER=1
-# (flipped above, was 0).
-# -----------------------------------------------------------------------------
-apply_pr59966() {
-    [ "${APPLY_PR59966:-1}" = "1" ] || { echo "[pr59966] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr59966-dcp-query-gather.diff"
-    [ -f "$diff_file" ] || { echo "[pr59966] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.v1.attention.ops.dcp as m
-import sys; sys.exit(0 if "copy_rows_" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[pr59966] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/v1/attention/backends/mla/rocm_aiter_mla.py","vllm/v1/attention/ops/dcp.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr59966] applied"
-}
-apply_pr59966 || { echo "[pr59966] patch failed, refusing to run" >&2; exit 1; }
-
-# -----------------------------------------------------------------------------
-# #58743 -- BF16 KDA recurrent state. OFF by default: only patches the
-# prefill-path fused kernel's FP32 handling, not decode's -- live run crashed
-# with "fused_kda_decode ... state must be a GPU float32 tensor" (run
-# 37421994913). PR doesn't touch decode at all; not safe to enable as-is.
-# -----------------------------------------------------------------------------
-apply_pr58743() {
-    [ "${APPLY_PR58743:-1}" = "1" ] || { echo "[pr58743] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr58743-kda-bf16-recurrent-state.diff"
-    [ -f "$diff_file" ] || { echo "[pr58743] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.models.kimi_k3.amd.kda as m
-import sys; sys.exit(0 if "mamba_ssm_cache_dtype" in inspect.getsource(m) else 1)' 2>/dev/null; then
-        echo "[pr58743] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/models/kimi_k3/amd/kda.py","vllm/models/kimi_k3/amd/linear.py","vllm/models/kimi_k3/amd/ops/kda_prefill.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr58743] applied"
-}
-apply_pr58743 || { echo "[pr58743] patch failed, refusing to run" >&2; exit 1; }
-MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-auto}"
-
-# -----------------------------------------------------------------------------
-# #54627 -- prefill_schedule_interval under DCP (was a DP-only no-op).
-# interval=33: +2.6% tput, TPOT -7.5/-17.3%, but TTFT +313/+352%. Real
-# trade-off, not noise -- only worth it if TTFT isn't the priority metric.
-# -----------------------------------------------------------------------------
-apply_pr54627() {
-    [ "${APPLY_PR54627:-1}" = "1" ] || { echo "[pr54627] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54627-prefill-interval-nondp.diff"
-    [ -f "$diff_file" ] || { echo "[pr54627] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import inspect,vllm.v1.core.sched.scheduler as s
-import sys; sys.exit(0 if "last_prefill_step" in inspect.getsource(s) else 1)' 2>/dev/null; then
-        echo "[pr54627] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile;py_compile.compile("'"$site"'/vllm/v1/core/sched/scheduler.py",doraise=True);py_compile.compile("'"$site"'/vllm/config/scheduler.py",doraise=True)' || return 1
-    echo "[pr54627] applied"
-}
-apply_pr54627 || { echo "[pr54627] patch failed, refusing to run" >&2; exit 1; }
-# Hardset, not "${VAR:-default}": the outer launcher (runners/launch_mi355x-amd.sh)
-# always exports this non-empty before the container starts, so a ":-" fallback
-# here never fires -- it's shadowed by whatever the outer launcher set first.
-PREFILL_SCHEDULE_INTERVAL=33
-
-# -----------------------------------------------------------------------------
-# #54625 -- cache-aware admission ordering. window=64/threshold=0.5. Measured
-# together with #54627 above, not isolated.
-# -----------------------------------------------------------------------------
-apply_pr54625() {
-    [ "${APPLY_PR54625:-1}" = "1" ] || { echo "[pr54625] disabled"; return 0; }
-    local diff_file
-    diff_file="$(cd "$(dirname "$0")" && pwd)/patches/pr54625-cache-aware-admission.diff"
-    [ -f "$diff_file" ] || { echo "[pr54625] missing $diff_file" >&2; return 1; }
-    local site
-    site="$(python3 -c 'import vllm,os;print(os.path.dirname(os.path.dirname(vllm.__file__)))')"
-    if python3 -c 'import vllm.config.scheduler as s; import sys; sys.exit(0 if hasattr(s.SchedulerConfig, "cache_aware_admission_window") else 1)' 2>/dev/null; then
-        echo "[pr54625] already present, nothing to do"; return 0
-    fi
-    ( cd "$site" && patch -p1 --forward --silent < "$diff_file" ) || return 1
-    python3 -c 'import py_compile
-for f in ["vllm/config/scheduler.py","vllm/engine/arg_utils.py","vllm/v1/core/kv_cache_manager.py","vllm/v1/core/sched/scheduler.py"]:
-    py_compile.compile("'"$site"'/"+f,doraise=True)' || return 1
-    echo "[pr54625] applied"
-}
-apply_pr54625 || { echo "[pr54625] patch failed, refusing to run" >&2; exit 1; }
-# The two flags below do not exist on vLLM's CLI parser unless #54625 is
-# applied -- unlike --prefill-schedule-interval, which is already a real flag
-# pre-patch. Keep them out of VLLM_CMD entirely when the patch is off, or
-# "unrecognized arguments" kills every non-#54625 dispatch.
-CACHE_AWARE_ARGS=()
-if [ "${APPLY_PR54625:-1}" = "1" ]; then
-    # Hardset, not "${VAR:-default}": see PREFILL_SCHEDULE_INTERVAL comment above --
-    # the outer launcher exports these non-empty before the container starts.
-    CACHE_AWARE_ARGS=(
-        --cache-aware-admission-window 64
-        --cache-aware-admission-threshold 0.0
-    )
-fi
-
-# #54494 (DCP MLA query replication) removed 2026-10-13 after the C96 full-run
-# result (-0.95%, no hang). The .diff is retained under patches/ for reference.
-
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_DECODE_ONLY}"
@@ -632,9 +386,23 @@ fi
 # [FP8-CTX] Install the fp8 context-chunk prefill hook into the installed aiter
 # MLA prefill backend (run_prefill_context_chunk). Heavily instrumented
 # ([FP8-CTX] tag); any error -> returns None -> bf16 fallback.
+# APPLY_FP8CTX=0 is the pure baseline (stock vLLM/aiter chunked-context FP8
+# prefill, patch not installed at all); FP8CTX_MODE selects which kernel path
+# the patch itself takes when APPLY_FP8CTX=1 (asm vs fused).
 export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"
 export FP8CTX_MODE="${FP8CTX_MODE:-asm}"  # TEMP: explicit for ASM-path rocprof profiling run, revert (unset) after dispatch
-export AIPERF_WARMUP_REQUESTS_PER_LANE="${AIPERF_WARMUP_REQUESTS_PER_LANE:-1}"  # TEMP: smoke test -- 1 warmup request/lane instead of the default 10 (runtime_settings.sh), keeps full conc=20 concurrency shape but cuts warmup cost. Revert (unset) after dispatch
+# Forced (not ${VAR:-default}): upstream/InferenceX/benchmarks/runtime_settings.sh
+# does an unconditional `export AIPERF_WARMUP_REQUESTS_PER_LANE='10'` on the
+# HOST runner before the container (and this script) ever starts, so a :-
+# fallback here can never fire -- confirmed in run 38589134239's actual
+# AIPerf command (`--warmup-requests-per-lane 10`, not the 1 a prior :-1
+# override here was supposed to produce). Forcing it unconditionally here,
+# after that host-side export has already landed, wins the same way
+# ROCPROF_START_DELAY/DURATION's fix below does. Duration is controlled
+# separately via the workflow's duration-override input (not bundled into
+# AIPERF_EXPERIMENTAL_FAST's hardcoded 1200s) so it can be sized for conc=96's
+# larger cudagraph capture ladder.
+export AIPERF_WARMUP_REQUESTS_PER_LANE=1  # TEMP: profiling run, revert (unset) after dispatch
 if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_pdir="$(cd "$(dirname "$0")" && pwd)/patches"
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
@@ -724,7 +492,6 @@ VLLM_CMD=(
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
     --max-model-len 1048576
     --kv-cache-dtype fp8
-    # --mamba-ssm-cache-dtype "$MAMBA_SSM_CACHE_DTYPE"
     --enable-auto-tool-choice
     --tool-call-parser kimi_k3
     --reasoning-parser kimi_k3
@@ -732,13 +499,10 @@ VLLM_CMD=(
     --enable-prompt-tokens-details
     --no-async-scheduling
     --attention-config "$ATTENTION_CONFIG_JSON"
-    # --prefill-schedule-interval "$PREFILL_SCHEDULE_INTERVAL"  # #54627 disabled -- TTFT cost too large for the TPOT gain
-    "${CACHE_AWARE_ARGS[@]}"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
     "${EP_ARGS[@]}"
     "${SPEC_ARGS[@]}"
-    "${KDA_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
 
@@ -750,16 +514,23 @@ VLLM_CMD=(
 # ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
 # then ROCPROF_DURATION seconds of actual collection.
 # -----------------------------------------------------------------------------
-ROCPROF_ENABLE=1  # TEMP: ASM FP8-CTX profiling run, revert to 0 after dispatch
+ROCPROF_ENABLE=1  # TEMP: ASM FP8-CTX / baseline profiling run, revert to 0 after dispatch
 LAUNCH_CMD=("${VLLM_CMD[@]}")
 if [ "$ROCPROF_ENABLE" = "1" ]; then
-    # TEMP: shortened window for a short ASM-path profiling smoke test, not the
-    # 1hr production run the 3300/240 defaults were calibrated for. 540s clears
-    # model load + warmup (measured ~487s to first real FP8-CTX call in a prior
-    # conc=20 run's server.log); 180s collection is enough to catch many FP8-CTX
-    # ASM kernel invocations at conc=20 steady state.
-    ROCPROF_START_DELAY="${ROCPROF_START_DELAY:-540}"
-    ROCPROF_DURATION="${ROCPROF_DURATION:-180}"
+    # TEMP: shortened window for a short profiling run, not the 1hr production
+    # run the 3300/240 defaults were calibrated for. 487s was measured to first
+    # real FP8-CTX call in a conc=20 run (MAX_NUM_SEQS=28, cudagraph ladder
+    # ~112); conc=96 here uses MAX_NUM_SEQS=144 (ladder ~576, ~5x more capture
+    # sizes), so start_delay is widened to 900s to stay clear of model load +
+    # cudagraph capture without hard data on the exact C96 timing -- pair with
+    # a duration-override comfortably above start_delay+duration at dispatch.
+    # Forced (not ${VAR:-default}) because runners/launch_mi355x-amd.sh already
+    # exports ROCPROF_START_DELAY=3300/ROCPROF_DURATION=240 non-empty before this
+    # script runs, which silently defeats a :- fallback -- confirmed in run
+    # 38589134239's job log (start_delay=3300s won, window never overlapped the
+    # 900s benchmark, rocprof watcher found nothing to append).
+    ROCPROF_START_DELAY=900
+    ROCPROF_DURATION=240
     ROCPROF_DIR="$RESULT_DIR/rocprof"
     mkdir -p "$ROCPROF_DIR"
     LAUNCH_CMD=(
@@ -781,33 +552,12 @@ printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
-# TEMP: rocprof outputs (rocprof_summary.txt, kernel/hip/marker stats CSVs under
-# $ROCPROF_DIR) are NOT in any workflow upload-artifact list -- only server.log
-# is reliably retrieved. Wait for the collection window to close, then append
-# the summary plus compact *stats*/*marker* CSVs (not the large raw per-event
-# kernel/hip trace CSVs) into $SERVER_LOG so the data survives the run.
-if [ "$ROCPROF_ENABLE" = "1" ]; then
-    (
-        sleep $((ROCPROF_START_DELAY + ROCPROF_DURATION + 30))
-        for _i in $(seq 1 20); do
-            [ -n "$(ls -A "$ROCPROF_DIR" 2>/dev/null)" ] && break
-            sleep 15
-        done
-        {
-            echo "=== [ROCPROF] summary ($RESULT_DIR/rocprof_summary.txt) ==="
-            cat "$RESULT_DIR/rocprof_summary.txt" 2>/dev/null || echo "[ROCPROF] summary file not found"
-            echo "=== [ROCPROF] stats/marker CSVs in $ROCPROF_DIR ==="
-            for _f in "$ROCPROF_DIR"/*.csv; do
-                case "$_f" in *stats*|*marker*) : ;; *) continue ;; esac
-                [ -f "$_f" ] || continue
-                echo "--- $_f ($(wc -l < "$_f") lines) ---"
-                head -500 "$_f"
-            done
-        } >> "$SERVER_LOG" 2>&1
-        echo "[rocprof] watcher: appended rocprof outputs to server.log" >> "$SERVER_LOG"
-    ) &
-    echo "[rocprof] watcher scheduled: will append summary/stats to server.log ~$((ROCPROF_START_DELAY + ROCPROF_DURATION + 30))s after launch"
-fi
+# rocprof_summary.txt and $ROCPROF_DIR/**/*.csv are picked up directly by the
+# "Upload agentic raw results" artifact step (benchmark-tmpl.yml), so no
+# watcher/copy step is needed here -- they just need to exist under
+# $RESULT_DIR when the job finishes, which rocprofv3 guarantees once its
+# collection window closes and the wrapped server process is torn down by
+# cleanup_agentic_services on exit.
 
 python3 - <<'CCDPY' > "$RESULT_DIR/ccdmap.txt" 2>/dev/null || true
 import subprocess, re, os, glob
