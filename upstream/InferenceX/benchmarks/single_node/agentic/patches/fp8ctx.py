@@ -8,7 +8,7 @@
 # allocated" log line in rocm_aiter_mla.py), so run_prefill_new_tokens's hook here
 # only self-tests and never overrides it.
 #   - q/k/v arrive bf16 (gate NOT bypassed); we quantize to fp8 in-hook.
-#   - ANY problem -> return None -> caller falls back to the original bf16 path.
+#   - Accuracy mismatch is logged for a performance-only experiment; runtime errors are fatal.
 # Every decision is logged with the [FP8-CTX] tag.
 #
 # PS-metadata and scratch-buffer sizing mirrors rocm_aiter_mla.py's own
@@ -434,10 +434,9 @@ def fp8_context_chunk(backend, chunk, q, k, v):
             logger.info("[FP8-VALIDATION] q=%s k=%s BF16_ms=%.4f current_ASM_ms=%.4f optimized_ASM_ms=%.4f finite=%s rel_rms=%.6f lse_max_error=%.6f optimized_matches_current=True",
                         tuple(q.shape), tuple(k.shape), bf_ms, old_ms, opt_ms, finite, rel_rms, lse_max_error)
             if not finite or rel_rms > 0.1 or lse_max_error > 0.5:
-                logger.error("[FP8-VALIDATION-FAILED] Numerical gate failed; terminating worker, no retry or BF16 fallback")
-                raise SystemExit(2)
+                logger.warning("[FP8-ACCURACY-FAILED] Numerical gate failed; user-authorized performance-only run continues")
             backend._fp8ctx_validated = True
-            logger.info("[FP8-VALIDATION-PASSED] output and LSE gates passed")
+            logger.warning("[FP8-PERFORMANCE-ONLY] numerical comparison recorded; not an accuracy-qualified result")
         _count["ctx_ok"] += 1
         if _count["ctx_ok"] <= 3 or _count["ctx_ok"] % 200 == 0:
             logger.info("[FP8-CTX] context-chunk fp8 OK (n=%d) out=%s lse=%s",

@@ -448,7 +448,7 @@ export FP8CTX_MODE=asm
 # separately via the workflow's duration-override input (not bundled into
 # AIPERF_EXPERIMENTAL_FAST's hardcoded 1200s) so it can be sized for conc=96's
 # larger cudagraph capture ladder.
-export AIPERF_WARMUP_REQUESTS_PER_LANE=1  # TEMP: profiling run, revert (unset) after dispatch
+export AIPERF_WARMUP_REQUESTS_PER_LANE=10  # User-requested full performance-only benchmark.
 if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_pdir="$(cd "$(dirname "$0")" && pwd)/patches"
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
@@ -589,7 +589,7 @@ VLLM_CMD=(
 # ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
 # then ROCPROF_DURATION seconds of actual collection.
 # -----------------------------------------------------------------------------
-ROCPROF_ENABLE=0  # 600-second smoke: exclude profiler overhead from throughput.
+ROCPROF_ENABLE=0  # Full performance-only benchmark; exclude profiler overhead.
 LAUNCH_CMD=("${VLLM_CMD[@]}")
 if [ "$ROCPROF_ENABLE" = "1" ]; then
     # Run A began measured replay ~2423s after server launch. Collect at
@@ -733,8 +733,8 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
     build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
-    if ! grep -q '\[FP8-VALIDATION-PASSED\]' "$SERVER_LOG" || grep -q '\[FP8-VALIDATION-FAILED\]' "$SERVER_LOG"; then
+    run_agentic_replay_and_write_outputs "$RESULT_DIR" || exit $?
+    if ! grep -q '\[FP8-PERFORMANCE-ONLY\]' "$SERVER_LOG" || grep -q '\[FP8-VALIDATION-FAILED\]' "$SERVER_LOG"; then
         echo "[FP8-SMOKE] validation failed or missing"
         exit 1
     fi
@@ -749,4 +749,4 @@ if grep -q 'context-chunk fp8 FAILED' "$SERVER_LOG"; then
     echo "[FP8-SMOKE] ASM fallback observed; refusing promotion"
     exit 1
 fi
-echo "[FP8-SMOKE] live comparison and ASM dispatch succeeded; full run requires timing review"
+echo "[FP8-PERFORMANCE-ONLY] ASM timing run complete; accuracy unresolved"

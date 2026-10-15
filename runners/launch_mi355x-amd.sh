@@ -247,6 +247,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 --entrypoint=/bin/bash \
 $IMAGE \
 $BENCHMARK_PATH
+benchmark_rc=$?
 
 if ls gpucore.* 1> /dev/null 2>&1; then
   echo "gpucore files exist. not good"
@@ -256,3 +257,5 @@ fi
 # Cleanup: stop server container
 docker stop $server_name 2>/dev/null || true
 docker rm $server_name 2>/dev/null || true
+# Preserve the recipe/container failure after host cleanup.
+exit "$benchmark_rc"
