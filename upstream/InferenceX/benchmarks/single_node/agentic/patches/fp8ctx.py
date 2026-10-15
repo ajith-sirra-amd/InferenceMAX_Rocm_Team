@@ -229,7 +229,7 @@ def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_l
         q, k, v = _fp8ctx_prep.prepare_qkv(*quantized, nhead, fp8, prep)
     else:
         q, k, v = _pad_heads(real_nhead, nhead, *quantized)
-    if not getattr(backend, "_fp8ctx_validated", False):
+    if getattr(backend, "_fp8ctx_capture_quant_reference", False):
         # Independent reference uses the actual quantized operands, restored
         # to BF16, to separate quantization from attention-kernel error.
         backend._fp8ctx_quant_reference = tuple(
@@ -406,11 +406,13 @@ def fp8_context_chunk(backend, chunk, q, k, v):
             _selftest_done = True
             logger.info("[FP8-CTX] FIRST context-chunk invocation: q=%s k=%s v=%s max_q=%s",
                         tuple(q.shape), tuple(k.shape), tuple(v.shape), int(chunk.max_query_len))
+        backend._fp8ctx_capture_quant_reference = not getattr(backend, "_fp8ctx_validated", False)
         backend._fp8ctx_current_chunk = chunk
         try:
             out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, int(chunk.max_query_len), False)
         finally:
             backend._fp8ctx_current_chunk = None
+        backend._fp8ctx_capture_quant_reference = False
         if not getattr(backend, "_fp8ctx_validated", False):
             # Compare identical real context tensors. Synchronization and clones
             # are restricted to this one-time validation, outside steady state.
@@ -451,6 +453,40 @@ def fp8_context_chunk(backend, chunk, q, k, v):
             kernel_lse_error = float((lse.float()-quant_lse.float()).abs().max())
             logger.info("[FP8-QUANT-DIAGNOSTIC] kernel_rel_rms=%.6f kernel_lse_max=%.6f q_absmax=%.6f k_absmax=%.6f v_absmax=%.6f",
                         kernel_rms, kernel_lse_error, q.abs().max().item(), k.abs().max().item(), v.abs().max().item())
+            # Bounded FP32 reference: sample up to eight queries per sequence,
+            # retaining every key and all original heads. No causal mask here.
+            qo_host = qo.cpu().tolist()
+            kv_host = kv.cpu().tolist()
+            samples = []
+            qdq, kdq, vdq = backend._fp8ctx_quant_reference
+            fp32_outputs, fp32_lses, quant_outputs, quant_lses = [], [], [], []
+            for qa, qb, ka, kb in zip(qo_host[:-1], qo_host[1:], kv_host[:-1], kv_host[1:]):
+                if qb == qa or kb == ka:
+                    continue
+                ids = torch.linspace(qa, qb-1, min(8, qb-qa), device=q.device).long()
+                samples.append(ids)
+                for operands, outputs, lses in (((q,k,v),fp32_outputs,fp32_lses),
+                                                ((qdq,kdq,vdq),quant_outputs,quant_lses)):
+                    sq, sk, sv = operands
+                    scores = torch.bmm(sq[ids].float().transpose(0,1),
+                                       sk[ka:kb].float().permute(1,2,0)) * backend.scale
+                    lses.append(scores.logsumexp(-1))
+                    outputs.append(torch.bmm(scores.softmax(-1),
+                                              sv[ka:kb].float().transpose(0,1)).transpose(0,1))
+            if samples:
+                ids = torch.cat(samples)
+                exact = torch.cat(fp32_outputs)
+                qexact = torch.cat(quant_outputs)
+                exact_lse = torch.cat(fp32_lses,dim=1)
+                qexact_lse = torch.cat(quant_lses,dim=1)
+                def rms(actual, expected):
+                    return float((actual.float()-expected).square().mean().sqrt() /
+                                 expected.square().mean().sqrt().clamp_min(1e-12))
+                logger.info("[FP8-FP32-REFERENCE] samples=%d BF16_rms=%.6f ASM_rms=%.6f ASM_quant_input_rms=%.6f BF16_lse_max=%.6f ASM_lse_max=%.6f ASM_quant_lse_max=%.6f",
+                            ids.numel(), rms(ref[ids],exact), rms(out[ids],exact), rms(out[ids],qexact),
+                            float((ref_lse[:,ids]-exact_lse).abs().max()),
+                            float((lse[:,ids]-exact_lse).abs().max()),
+                            float((lse[:,ids]-qexact_lse).abs().max()))
             backend._fp8ctx_validation_attempted = True
             logger.info("[FP8-VALIDATION] q=%s k=%s BF16_ms=%.4f current_ASM_ms=%.4f optimized_ASM_ms=%.4f finite=%s rel_rms=%.6f lse_max_error=%.6f optimized_matches_current=True",
                         tuple(q.shape), tuple(k.shape), bf_ms, old_ms, opt_ms, finite, rel_rms, lse_max_error)

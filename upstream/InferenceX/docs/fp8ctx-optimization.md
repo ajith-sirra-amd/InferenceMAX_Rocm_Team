@@ -31,3 +31,9 @@ Raw cache/projection and DCP changes remain on hold. Baseline FMHA accounts for
 Already-quantized FP8 operands are replicated as uint8 bytes to avoid unsupported
 Triton FP8 masked-load sentinel casts. Startup compares optimized packing and
 metadata against ordinary ASM preparation with identical synthetic operands.
+
+Live diagnostics sample up to eight queries per sequence against all keys using
+FP32 matmul/softmax, for both original and dequantized FP8 inputs. The numerical
+gates remain unchanged. Validation-only dequant reconstruction is excluded from
+timed ASM preparation. Previous scaled timings included that reconstruction
+and must not be treated as steady-state overhead measurements.
