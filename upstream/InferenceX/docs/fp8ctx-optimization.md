@@ -27,3 +27,7 @@ one warmup request per lane and 600-second replay with profiling disabled.
 Review all eight workers and sustained benchmark completion before a full run.
 Raw cache/projection and DCP changes remain on hold. Baseline FMHA accounts for
 9.1293% of summed GPU kernel duration, which does not predict throughput lift.
+
+Already-quantized FP8 operands are replicated as uint8 bytes to avoid unsupported
+Triton FP8 masked-load sentinel casts. Startup compares optimized packing and
+metadata against ordinary ASM preparation with identical synthetic operands.

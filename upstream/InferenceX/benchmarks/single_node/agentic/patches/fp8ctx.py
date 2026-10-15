@@ -526,6 +526,17 @@ def selftest_noncausal(backend):
             max_num_batched_tokens=max(qlen, kvlen), device=dev,
         )
         out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, qlen, False, ps_override=ps)
+        reference_out, reference_lse = out.clone(), lse.clone()
+        from types import SimpleNamespace
+        backend._fp8ctx_current_chunk = SimpleNamespace(query_start_loc=qo, cu_seq_lens=kv)
+        try:
+            out, lse = _run_fp8_asm(backend, q, k, v, qo, kv, seq, qlen, False, ps_override=ps)
+        finally:
+            backend._fp8ctx_current_chunk = None
+        torch.testing.assert_close(out, reference_out, rtol=0, atol=0)
+        torch.testing.assert_close(lse, reference_lse, rtol=0, atol=0)
+        if hasattr(backend, "_fp8ctx_quant_reference"):
+            del backend._fp8ctx_quant_reference
         torch.cuda.synchronize()
         finite = bool(torch.isfinite(out.float()).all().item())
         if not finite or not bool(torch.isfinite(lse).all().item()):

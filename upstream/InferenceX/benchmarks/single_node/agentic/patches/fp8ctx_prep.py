@@ -33,9 +33,16 @@ def prepare_qkv(q,k,v,hp,dtype,cache):
             buf=torch.empty(shape,device=t.device,dtype=dtype);cache[name]=buf
         result.append(buf[:shape[0]])
     qo,ko,vo=result
+    # Quantized inputs need only byte replication. This also avoids Triton's
+    # unsupported integer masked-load sentinel conversion to fp8e4nv.
+    packed_inputs=(q,k,v)
+    packed_outputs=(qo,ko,vo)
+    if q.dtype==dtype and k.dtype==dtype and v.dtype==dtype:
+        packed_inputs=tuple(t.view(torch.uint8) for t in packed_inputs)
+        packed_outputs=tuple(t.view(torch.uint8) for t in packed_outputs)
     extent=max(qo.numel(),ko.numel(),vo.numel())
     if extent:
-        _pack_qkv[(triton.cdiv(extent,1024),3)](q,k,v,qo,ko,vo,q.shape[0],k.shape[0],h,hp,q.shape[-1],v.shape[-1],
+        _pack_qkv[(triton.cdiv(extent,1024),3)](*packed_inputs,*packed_outputs,q.shape[0],k.shape[0],h,hp,q.shape[-1],v.shape[-1],
                     *q.stride(),*k.stride(),*v.stride(),1024,num_warps=4)
     return qo,ko,vo
 
