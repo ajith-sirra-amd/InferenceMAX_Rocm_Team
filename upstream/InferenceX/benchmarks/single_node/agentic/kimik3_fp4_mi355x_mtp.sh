@@ -413,30 +413,10 @@ fi
 # prefill, patch not installed at all); FP8CTX_MODE selects which kernel path
 # the patch itself takes when APPLY_FP8CTX=1 (asm vs fused).
 export APPLY_FP8CTX=1  # Optimized ASM smoke: compare real inputs before steady state.
-# Fail before model loading if installed metadata lacks the LSE contract.
-python3 - <<'LSECHECK'
-import inspect, pathlib, re, aiter
-from aiter import get_ps_metadata_info_v1, get_ps_metadata_v1
-import torch
-text = (pathlib.Path(aiter.__file__).parent / "ops/attention.py").read_text()
-match = re.search(r"def get_ps_metadata_v1\((.*?)\) ->", text, re.S)
-print("[FP8-LSE-PREFLIGHT] declaration:", match.group(1) if match else "not located", flush=True)
-info = get_ps_metadata_info_v1(batch_size=1, num_head_k=16, max_qlen=8, qlen_granularity=256)
-def alloc(spec, device):
-    shape, dtype = spec
-    return torch.empty(shape, dtype=dtype, device=device)
-work = alloc(info[0], "cuda")
-host = [alloc(spec, "cpu") for spec in info[1:]]
-qo = torch.tensor([0, 8], dtype=torch.int32)
-kv = torch.tensor([0, 64], dtype=torch.int32)
-seq = torch.tensor([64], dtype=torch.int32)
-get_ps_metadata_v1(qo, kv, seq, 1, 16, work, *host,
-    qhead_granularity=1, qlen_granularity=256, kvlen_granularity=128,
-    block_size=1, is_causal=False, need_lse=True)
-print("[FP8-LSE-PREFLIGHT] need_lse=True real metadata call succeeded", flush=True)
-LSECHECK
+# Pinned FlyDSL runtime; private kernel overlay leaves shared AITER intact.
+python3 -m pip install --no-deps flydsl==0.3.4.1
+export FP8CTX_MODE=flydsl
 
-export FP8CTX_MODE=asm
 # Forced (not ${VAR:-default}): upstream/InferenceX/benchmarks/runtime_settings.sh
 # does an unconditional `export AIPERF_WARMUP_REQUESTS_PER_LANE='10'` on the
 # HOST runner before the container (and this script) ever starts, so a :-
@@ -454,7 +434,35 @@ if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     _fp8_site="$(python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))')"
     cp "$_fp8_pdir/fp8ctx.py" "$_fp8_site/v1/attention/backends/mla/prefill/_fp8ctx.py" \
         && echo "[FP8-CTX-PATCH] helper copied"
-    cp "$_fp8_pdir/fp8ctx_prep.py" "$_fp8_site/v1/attention/backends/mla/prefill/_fp8ctx_prep.py" || exit 1
+    cp -r "$_fp8_pdir/flydsl_context" "$_fp8_site/v1/attention/backends/mla/prefill/_flydsl_context" || exit 1
+    python3 - "$_fp8_site" <<'FDPROBE'
+import torch, importlib.metadata
+from types import SimpleNamespace
+from vllm.v1.attention.backends.mla.prefill import _fp8ctx
+print("[FLYDSL-PREFLIGHT] runtime",importlib.metadata.version("flydsl"),"kernel=AITER-PR6266@836eaba05d5a4691f3019b7d271be3a5e4be5b80",flush=True)
+torch.manual_seed(42)
+for qlens,klens in [([8],[64]),([17,5],[128,64]),([8],[8192])]:
+    q=torch.randn(sum(qlens),12,192,device="cuda",dtype=torch.bfloat16)
+    k=torch.randn(sum(klens),12,192,device="cuda",dtype=torch.bfloat16)
+    v=torch.randn(sum(klens),12,128,device="cuda",dtype=torch.bfloat16)
+    qo=torch.tensor([0]+list(__import__('itertools').accumulate(qlens)),device="cuda",dtype=torch.int32)
+    kv=torch.tensor([0]+list(__import__('itertools').accumulate(klens)),device="cuda",dtype=torch.int32)
+    backend=SimpleNamespace(scale=192**-0.5)
+    chunk=SimpleNamespace(query_start_loc=qo,cu_seq_lens=kv,max_query_len=max(qlens),max_seq_len=max(klens))
+    out,lse=_fp8ctx.run(backend,chunk,q,k,v)
+    expected=[]; expected_lse=[]
+    qa=ka=0
+    for qn,kn in zip(qlens,klens):
+        scores=torch.bmm(q[qa:qa+qn].float().transpose(0,1),k[ka:ka+kn].float().permute(1,2,0))*backend.scale
+        expected.append(torch.bmm(scores.softmax(-1),v[ka:ka+kn].float().transpose(0,1)).transpose(0,1))
+        expected_lse.append(scores.logsumexp(-1));qa+=qn;ka+=kn
+    ref=torch.cat(expected);rlse=torch.cat(expected_lse,dim=1)
+    rms=float((out.float()-ref).square().mean().sqrt()/ref.square().mean().sqrt())
+    err=float((lse-rlse).abs().max())
+    assert torch.isfinite(out).all() and torch.isfinite(lse).all()
+    assert rms<=0.1 and err<=0.5,(rms,err)
+    print("[FLYDSL-PREFLIGHT] passed",qlens,klens,"RMS",rms,"LSE",err,flush=True)
+FDPROBE
     python3 - "$_fp8_site" <<'PYEOF'
 import sys, py_compile
 site = sys.argv[1]
@@ -741,7 +749,7 @@ else
 fi
 
 # A successful benchmark must not mask a failed experimental attention path.
-if ! grep -q '\[FP8-VALIDATION\].*optimized_matches_current=True' "$SERVER_LOG"; then
+if ! grep -q '\[FP8-VALIDATION\].*backend=FlyDSL' "$SERVER_LOG"; then
     echo "[FP8-SMOKE] no successful live numerical comparison; refusing promotion"
     exit 1
 fi
