@@ -68,18 +68,18 @@ cleanup_agentic_services() {
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
-    # Runs 38676797828 (C96/240s window) and 38685024360 (C20/90s window) both
-    # confirmed rocprofv3 gets SIGKILLed mid-flush regardless of a widened fixed
-    # grace period (300s): server.log ends right after "caught signal 15... will
-    # wait for 2 children to exit" with no subsequent "output generation"/"tool
-    # finalization" line, and the CI step timing showed the full 300s elapsed
-    # before teardown -- so flush time isn't proportional to collection-window
-    # size and a fixed guess keeps being wrong either way. Instead of guessing
-    # another number, send SIGTERM once and POLL for rocprof_summary.txt to
-    # actually land (that's the file rocprofv3 writes last, after all CSVs),
-    # with a generous bounded cap as a backstop against a true hang.
+    # Prior profiles stopped at "will wait for 2 children to exit". Request
+    # shutdown of descendants as well as the root, then allow finalization.
+    # The summary is diagnostic; the kernel CSVs are the measurement evidence.
     if [ "${ROCPROF_ENABLE:-0}" = "1" ] && [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
         echo "[rocprof] sending SIGTERM to PID=$SERVER_PID, polling for $RESULT_DIR/rocprof_summary.txt..."
+        # rocprof waits for its instrumented descendants. Signal the captured
+        # tree from leaves to root before waiting for output generation.
+        local profiler_children profiler_child
+        profiler_children=$(_background_process_descendants "$SERVER_PID")
+        while read -r profiler_child; do
+            [[ -n "$profiler_child" ]] && kill -TERM "$profiler_child" 2>/dev/null || true
+        done < <(printf '%s\n' "$profiler_children" | tac)
         kill -TERM "$SERVER_PID" 2>/dev/null || true
         local rocprof_deadline=$((SECONDS + 1200))
         while [ ! -s "$RESULT_DIR/rocprof_summary.txt" ] && [ $SECONDS -lt $rocprof_deadline ] && kill -0 "$SERVER_PID" 2>/dev/null; do
@@ -409,10 +409,10 @@ fi
 # [FP8-CTX] Install the fp8 context-chunk prefill hook into the installed aiter
 # MLA prefill backend (run_prefill_context_chunk). Heavily instrumented
 # ([FP8-CTX] tag); any error -> returns None -> bf16 fallback.
-# APPLY_FP8CTX=0 is the pure baseline (stock vLLM/aiter chunked-context FP8
+# APPLY_FP8CTX=0 is the pure baseline (stock vLLM/aiter chunked-context BF16
 # prefill, patch not installed at all); FP8CTX_MODE selects which kernel path
 # the patch itself takes when APPLY_FP8CTX=1 (asm vs fused).
-export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"  # TEMP: cheap C20/120s smoke test of ASM path + rocprof-flush fix, revert to 0 after dispatch
+export APPLY_FP8CTX=0  # Baseline profile: original BF16 context attention.
 export FP8CTX_MODE="${FP8CTX_MODE:-asm}"
 # Forced (not ${VAR:-default}): upstream/InferenceX/benchmarks/runtime_settings.sh
 # does an unconditional `export AIPERF_WARMUP_REQUESTS_PER_LANE='10'` on the
@@ -501,6 +501,34 @@ PYEOF
     [ "$_fp8_rc" = "0" ] || { echo "[FP8-CTX-PATCH] FAILED rc=$_fp8_rc -- refusing to run"; exit 1; }
 fi
 
+# Record the actual context-attention inputs without changing dispatch.
+if [ "$APPLY_FP8CTX" = "0" ]; then
+    python3 - <<'PRECISIONPY'
+import pathlib
+import py_compile
+import vllm
+
+path = pathlib.Path(vllm.__file__).parent / "v1/attention/backends/mla/prefill/aiter_flash_attn.py"
+src = path.read_text()
+anchor = ("        out, lse = self.flash_attn_varlen_func(\n"
+          "            q=q,\n            k=k,\n            v=v,\n"
+          "            cu_seqlens_q=chunk.query_start_loc,\n")
+if anchor not in src:
+    raise RuntimeError("Baseline precision probe: context anchor missing")
+probe = (
+    "        if not getattr(self, '_baseline_precision_logged', False):\n"
+    "            self._baseline_precision_logged = True\n"
+    "            import os\n"
+    "            print('[BASELINE-PRECISION]', 'pid=', os.getpid(), "
+    "'q=', tuple(q.shape), str(q.dtype), 'k=', tuple(k.shape), str(k.dtype), "
+    "'v=', tuple(v.shape), str(v.dtype), 'causal=False', 'scale=', self.scale, flush=True)\n"
+)
+path.write_text(src.replace(anchor, probe + anchor, 1))
+py_compile.compile(str(path), doraise=True)
+print("[BASELINE-PRECISION] context input probe installed")
+PRECISIONPY
+fi
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
@@ -537,28 +565,18 @@ VLLM_CMD=(
 # ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
 # then ROCPROF_DURATION seconds of actual collection.
 # -----------------------------------------------------------------------------
-ROCPROF_ENABLE=1  # TEMP: cheap C20/120s smoke test to validate rocprof-flush fix, revert to 0 after dispatch
+ROCPROF_ENABLE=1  # C96 baseline profile; kernel trace and statistics only.
 LAUNCH_CMD=("${VLLM_CMD[@]}")
 if [ "$ROCPROF_ENABLE" = "1" ]; then
-    # TEMP: cheap C20 smoke test. Run 38685024360's server.log gave hard timing:
-    # process launch 05:08:32.85, real high-n (n=53200) FP8-CTX calls only
-    # appear right before shutdown at 05:28:02 (~1170s elapsed), SIGTERM at
-    # 05:29:23 (~1251s elapsed) -- ~81s of real-traffic burst before teardown.
-    # Keep the collection window itself short (60-120s) to minimize profiling
-    # overhead; aim it at that end-of-benchmark burst with margin before the
-    # observed ~1251s SIGTERM: start_delay=1080, duration=100 (window
-    # 1080-1180s), ~70s clear of teardown.
-    # Forced (not ${VAR:-default}) because runners/launch_mi355x-amd.sh already
-    # exports ROCPROF_START_DELAY=3300/ROCPROF_DURATION=240 non-empty before this
-    # script runs, which silently defeats a :- fallback -- confirmed in run
-    # 38589134239's job log (start_delay=3300s won, window never overlapped the
-    # 900s benchmark, rocprof watcher found nothing to append).
-    ROCPROF_START_DELAY=1080
-    ROCPROF_DURATION=100
+    # Run A began measured replay ~2423s after server launch. Collect at
+    # 3300s for 60s, within the 1500s replay; verify actual timing in logs.
+    # Explicit recipe values override the launcher's older profiling values.
+    ROCPROF_START_DELAY=3300
+    ROCPROF_DURATION=60
     ROCPROF_DIR="$RESULT_DIR/rocprof"
     mkdir -p "$ROCPROF_DIR"
     LAUNCH_CMD=(
-        rocprofv3 --kernel-trace --hip-trace --marker-trace --stats
+        rocprofv3 --kernel-trace --stats
         -d "$ROCPROF_DIR" -f csv
         --summary-output-file "$RESULT_DIR/rocprof_summary.txt"
         -P "${ROCPROF_START_DELAY}:${ROCPROF_DURATION}:1"
