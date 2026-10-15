@@ -68,16 +68,30 @@ cleanup_agentic_services() {
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
-    # Run A (38676797828) confirmed rocprofv3 was SIGKILLed mid-flush: server.log
-    # ends right after "caught signal 15... will wait for 2 children to exit" with
-    # no subsequent "output generation"/"tool finalization" line, and zero CSVs or
-    # rocprof_summary.txt landed in the artifact -- 60s wasn't enough for rocprofv3
-    # to serialize the kernel-trace+hip-trace+marker-trace+stats data it collected
-    # over the 240s window at conc=96. Widen the grace period only when profiling
-    # is on so normal (non-profiling) runs keep the 60s default.
-    local server_grace=60
-    [ "${ROCPROF_ENABLE:-0}" = "1" ] && server_grace=300
-    stop_background_process_tree "$SERVER_PID" "vLLM server" "$server_grace"
+    # Runs 38676797828 (C96/240s window) and 38685024360 (C20/90s window) both
+    # confirmed rocprofv3 gets SIGKILLed mid-flush regardless of a widened fixed
+    # grace period (300s): server.log ends right after "caught signal 15... will
+    # wait for 2 children to exit" with no subsequent "output generation"/"tool
+    # finalization" line, and the CI step timing showed the full 300s elapsed
+    # before teardown -- so flush time isn't proportional to collection-window
+    # size and a fixed guess keeps being wrong either way. Instead of guessing
+    # another number, send SIGTERM once and POLL for rocprof_summary.txt to
+    # actually land (that's the file rocprofv3 writes last, after all CSVs),
+    # with a generous bounded cap as a backstop against a true hang.
+    if [ "${ROCPROF_ENABLE:-0}" = "1" ] && [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "[rocprof] sending SIGTERM to PID=$SERVER_PID, polling for $RESULT_DIR/rocprof_summary.txt..."
+        kill -TERM "$SERVER_PID" 2>/dev/null || true
+        local rocprof_deadline=$((SECONDS + 1200))
+        while [ ! -s "$RESULT_DIR/rocprof_summary.txt" ] && [ $SECONDS -lt $rocprof_deadline ] && kill -0 "$SERVER_PID" 2>/dev/null; do
+            sleep 5
+        done
+        if [ -s "$RESULT_DIR/rocprof_summary.txt" ]; then
+            echo "[rocprof] rocprof_summary.txt detected after $SECONDS s -- flush complete."
+        else
+            echo "[rocprof] WARNING: rocprof_summary.txt never appeared within the 1200s cap; forcing teardown."
+        fi
+    fi
+    stop_background_process_tree "$SERVER_PID" "vLLM server" 60
     exit "$exit_code"
 }
 trap cleanup_agentic_services EXIT
@@ -526,21 +540,21 @@ VLLM_CMD=(
 ROCPROF_ENABLE=1  # TEMP: cheap C20/120s smoke test to validate rocprof-flush fix, revert to 0 after dispatch
 LAUNCH_CMD=("${VLLM_CMD[@]}")
 if [ "$ROCPROF_ENABLE" = "1" ]; then
-    # TEMP: cheap C20 smoke test (not the C96 profiling run the 900/240 values
-    # above were sized for). 487s was measured to first real FP8-CTX call in a
-    # conc=20 run (MAX_NUM_SEQS=28, cudagraph ladder ~112) under the OLD
-    # (pre-fix) AIPerf warmup-requests-per-lane default; with that now forced
-    # to 1, model-load+cudagraph-capture dominates and should clear sooner --
-    # 450s start_delay / 90s duration (window closes at 540s) to land inside
-    # the 120s AIPerf benchmark window while this run's sole purpose is
-    # validating the rocprof-flush grace-period fix end-to-end, cheaply.
+    # TEMP: cheap C20 smoke test. Run 38685024360's server.log gave hard timing:
+    # process launch 05:08:32.85, real high-n (n=53200) FP8-CTX calls only
+    # appear right before shutdown at 05:28:02 (~1170s elapsed), SIGTERM at
+    # 05:29:23 (~1251s elapsed) -- ~81s of real-traffic burst before teardown.
+    # Keep the collection window itself short (60-120s) to minimize profiling
+    # overhead; aim it at that end-of-benchmark burst with margin before the
+    # observed ~1251s SIGTERM: start_delay=1080, duration=100 (window
+    # 1080-1180s), ~70s clear of teardown.
     # Forced (not ${VAR:-default}) because runners/launch_mi355x-amd.sh already
     # exports ROCPROF_START_DELAY=3300/ROCPROF_DURATION=240 non-empty before this
     # script runs, which silently defeats a :- fallback -- confirmed in run
     # 38589134239's job log (start_delay=3300s won, window never overlapped the
     # 900s benchmark, rocprof watcher found nothing to append).
-    ROCPROF_START_DELAY=450
-    ROCPROF_DURATION=90
+    ROCPROF_START_DELAY=1080
+    ROCPROF_DURATION=100
     ROCPROF_DIR="$RESULT_DIR/rocprof"
     mkdir -p "$ROCPROF_DIR"
     LAUNCH_CMD=(
