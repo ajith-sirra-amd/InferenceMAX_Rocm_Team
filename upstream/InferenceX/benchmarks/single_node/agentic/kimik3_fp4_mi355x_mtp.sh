@@ -415,13 +415,25 @@ fi
 export APPLY_FP8CTX=1  # Optimized ASM smoke: compare real inputs before steady state.
 # Fail before model loading if installed metadata lacks the LSE contract.
 python3 - <<'LSECHECK'
-import inspect
-import aiter
-fn = aiter.get_ps_metadata_v1
-signature = inspect.signature(fn)
-print("[FP8-LSE-PREFLIGHT]", signature, flush=True)
-if "need_lse" not in signature.parameters:
-    raise RuntimeError("Installed AITER lacks need_lse; requires a targeted metadata/reducer fix before context ASM is safe")
+import inspect, pathlib, re, aiter
+from aiter import get_ps_metadata_info_v1, get_ps_metadata_v1
+import torch
+text = (pathlib.Path(aiter.__file__).parent / "ops/attention.py").read_text()
+match = re.search(r"def get_ps_metadata_v1\((.*?)\) ->", text, re.S)
+print("[FP8-LSE-PREFLIGHT] declaration:", match.group(1) if match else "not located", flush=True)
+info = get_ps_metadata_info_v1(batch_size=1, num_head_k=16, max_qlen=8, qlen_granularity=256)
+def alloc(spec, device):
+    shape, dtype = spec
+    return torch.empty(shape, dtype=dtype, device=device)
+work = alloc(info[0], "cuda")
+host = [alloc(spec, "cpu") for spec in info[1:]]
+qo = torch.tensor([0, 8], dtype=torch.int32)
+kv = torch.tensor([0, 64], dtype=torch.int32)
+seq = torch.tensor([64], dtype=torch.int32)
+get_ps_metadata_v1(qo, kv, seq, 1, 16, work, *host,
+    qhead_granularity=1, qlen_granularity=256, kvlen_granularity=128,
+    block_size=1, is_causal=False, need_lse=True)
+print("[FP8-LSE-PREFLIGHT] need_lse=True real metadata call succeeded", flush=True)
 LSECHECK
 
 export FP8CTX_MODE=asm
