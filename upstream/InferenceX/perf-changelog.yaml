@@ -8611,3 +8611,9 @@
   description:
     - 'User-authorized accuracy-unqualified ASM performance run: direct FP8 cast, need_lse=True, cached preparation, C96 TP8/DCP8, 10 warmups per lane and 3600-second replay. Accuracy failures logged without retry; runtime failures remain fatal.'
     - '??????????? ASM ??????? FP8 ???need_lse=True??????C96 TP8/DCP8???? 10 ???? 3600 ???????????????????????????'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Verify actual optimized noncausal FP8 ASM dispatch and successful context calls on all eight workers; retain compact evidence and JSON verification artifacts. Wrong dtypes and failed startup self-tests are fatal. Keep C96, warmup 10, 3600 seconds, profiler disabled and accuracy-unqualified status.'
+    - '验证八个 worker 的真实优化非因果 FP8 ASM 调度和成功上下文调用，保存精简日志和 JSON 工件。数据类型错误与启动测试失败时终止。保持 C96、每 lane 预热 10 次、3600 秒、禁用分析器，精度仍未通过。'

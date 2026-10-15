@@ -274,6 +274,16 @@ def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_l
         final_lse.fill_(float("nan"))
     out3d = ps["out3d"][:total_q]
 
+    if q.dtype != fp8 or k.dtype != fp8 or v.dtype != fp8:
+        raise RuntimeError("ASM requires actual FP8 Q/K/V")
+    dispatch_key = (optimized, is_causal)
+    dispatch_logged = getattr(backend, "_fp8ctx_dispatch_logged", set())
+    if dispatch_key not in dispatch_logged:
+        logger.warning("[FP8-ASM-DISPATCH] pid=%d device=%s mode=%s optimized=%s q=%s/%s k=%s/%s v=%s/%s heads=%d/%d causal=%s scale=%s kernel=mla_prefill_ps_asm_fwd reducer=mla_reduce_v1 need_lse=True",
+                       os.getpid(),device,_FP8CTX_MODE,optimized,tuple(q.shape),q.dtype,
+                       tuple(k.shape),k.dtype,tuple(v.shape),v.dtype,real_nhead,nhead,is_causal,backend.scale)
+        dispatch_logged.add(dispatch_key)
+        backend._fp8ctx_dispatch_logged = dispatch_logged
     nvtx.range_push("FP8CTX_asm_prefill_kernel")
     try:
         mla_prefill_ps_asm_fwd(
@@ -383,7 +393,8 @@ def fp8_context_chunk(backend, chunk, q, k, v):
                             _count["fused_fail"], e, traceback.format_exc())
             return None
     if _kernel_ok is False:
-        return None  # self-test showed the non-causal ASM kernel is broken -> stay on bf16
+        logger.error("[FP8-VALIDATION-FAILED] Startup ASM self-test failed; terminating worker")
+        raise SystemExit(2)
     try:
         qo = chunk.query_start_loc
         kv = chunk.cu_seq_lens

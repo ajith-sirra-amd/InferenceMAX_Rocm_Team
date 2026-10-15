@@ -1,6 +1,6 @@
 # ASM FP8 performance-only benchmark
 
-[??](fp8ctx-asm-performance-only_zh.md)
+[中文](fp8ctx-asm-performance-only_zh.md)
 
 User explicitly authorized measuring the current ASM path before repairing
 accuracy. This is a performance-only experiment, not an accuracy-qualified run.
@@ -18,3 +18,23 @@ profiling disabled. This differs from the supplied baseline's one warmup request
 per lane and 1500-second measured run, so compare cautiously or run a matched
 BF16 control. A later accuracy repair can change performance. Record actual
 ASM dispatch on all eight workers, command warmup/duration, and replay completion.
+
+## Runtime dispatch evidence
+
+Before each first optimized noncausal ASM dispatch per backend, log actual
+Q/K/V shapes and FP8 dtypes, device/PID, head padding, scale, ASM entry point,
+reducer and need_lse=True. The startup probe uses a separate dispatch key so it
+cannot suppress the real-context evidence. Wrong operand dtypes and a failed
+startup ASM self-test are fatal; context runtime failures cannot fall back.
+
+After replay, verify FP8 optimized noncausal dispatch, successful context calls,
+and exact optimized/ordinary ASM agreement on every TP worker. Numerical BF16
+accuracy failures remain recorded and explicitly unqualified. Preserve
+asm_dispatch_evidence.log on cleanup (including failed runs),
+asm_dispatch_verification.json after replay, server.log, benchmark command,
+raw results and GPU metrics in Actions artifacts. No rocprof overhead is added.
+
+The runtime-log verifier was exercised with all-eight-worker success, missing
+worker, BF16 operand, runtime failure, optimized mismatch and nonoptimized
+cases; its CLI success/failure outputs and exit codes were checked locally.
+GPU dispatch still requires the actual runner logs; configuration is not proof.

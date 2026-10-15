@@ -253,6 +253,8 @@ jobs:
           name: agentic_${{ env.RESULT_FILENAME }}
           path: |
             results/server.log
+            results/asm_dispatch_evidence.log
+            results/asm_dispatch_verification.json
             results/lmcache_server.log
             results/benchmark.log
             results/config.yaml

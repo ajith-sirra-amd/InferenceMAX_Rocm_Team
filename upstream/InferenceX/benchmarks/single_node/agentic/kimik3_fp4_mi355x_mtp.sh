@@ -92,6 +92,9 @@ cleanup_agentic_services() {
         fi
     fi
     stop_background_process_tree "$SERVER_PID" "vLLM server" 60
+    if [ -f "$SERVER_LOG" ]; then
+        grep -E '\[FP8-(ASM-DISPATCH|ACCURACY-FAILED|PERFORMANCE-ONLY|VALIDATION|VALIDATION-FAILED)\]|context-chunk fp8 (OK|FAILED)' "$SERVER_LOG" > "$RESULT_DIR/asm_dispatch_evidence.log" || true
+    fi
     exit "$exit_code"
 }
 trap cleanup_agentic_services EXIT
@@ -735,11 +738,14 @@ else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR" || exit $?
     if ! grep -q '\[FP8-PERFORMANCE-ONLY\]' "$SERVER_LOG" || grep -q '\[FP8-VALIDATION-FAILED\]' "$SERVER_LOG"; then
-        echo "[FP8-SMOKE] validation failed or missing"
+        echo "[FP8-PERFORMANCE-ONLY] numerical comparison missing or runtime failure observed"
         exit 1
     fi
 fi
 
+# Verify observed dispatch/completion events, and retain a machine-readable summary.
+python3 "$(dirname "$0")/patches/verify_asm_dispatch.py" "$SERVER_LOG" "$TP" > "$RESULT_DIR/asm_dispatch_verification.json"
+cat "$RESULT_DIR/asm_dispatch_verification.json"
 # A successful benchmark must not mask a failed experimental attention path.
 if ! grep -q '\[FP8-VALIDATION\].*optimized_matches_current=True' "$SERVER_LOG"; then
     echo "[FP8-SMOKE] no successful live numerical comparison; refusing promotion"
