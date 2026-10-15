@@ -413,6 +413,17 @@ fi
 # prefill, patch not installed at all); FP8CTX_MODE selects which kernel path
 # the patch itself takes when APPLY_FP8CTX=1 (asm vs fused).
 export APPLY_FP8CTX=1  # Optimized ASM smoke: compare real inputs before steady state.
+# Fail before model loading if installed metadata lacks the LSE contract.
+python3 - <<'LSECHECK'
+import inspect
+import aiter
+fn = aiter.get_ps_metadata_v1
+signature = inspect.signature(fn)
+print("[FP8-LSE-PREFLIGHT]", signature, flush=True)
+if "need_lse" not in signature.parameters:
+    raise RuntimeError("Installed AITER lacks need_lse; requires a targeted metadata/reducer fix before context ASM is safe")
+LSECHECK
+
 export FP8CTX_MODE=asm
 # Forced (not ${VAR:-default}): upstream/InferenceX/benchmarks/runtime_settings.sh
 # does an unconditional `export AIPERF_WARMUP_REQUESTS_PER_LANE='10'` on the
@@ -711,6 +722,10 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    if ! grep -q '\[FP8-VALIDATION-PASSED\]' "$SERVER_LOG" || grep -q '\[FP8-VALIDATION-FAILED\]' "$SERVER_LOG"; then
+        echo "[FP8-SMOKE] validation failed or missing"
+        exit 1
+    fi
 fi
 
 # A successful benchmark must not mask a failed experimental attention path.

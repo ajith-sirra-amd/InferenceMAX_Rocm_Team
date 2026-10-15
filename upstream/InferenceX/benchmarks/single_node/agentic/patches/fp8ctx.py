@@ -246,7 +246,7 @@ def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_l
             qo_cpu, kv_cpu, seq_cpu, 1, nhead,
             wm, host_o[0], host_o[1], host_o[2], host_o[3], host_o[4],
             qhead_granularity=1, qlen_granularity=_TILE_Q,
-            kvlen_granularity=128, block_size=1, is_causal=is_causal,
+            kvlen_granularity=128, block_size=1, is_causal=is_causal, need_lse=True,
         )
         for d, h in zip(dev_o, host_o):
             d.copy_(h, non_blocking=True)
@@ -270,6 +270,8 @@ def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_l
     logits = ps["logits"]
     attn_lse = ps["attn_lse"]
     final_lse = ps["final_lse"][:total_q]
+    if not getattr(backend, "_fp8ctx_validated", False):
+        final_lse.fill_(float("nan"))
     out3d = ps["out3d"][:total_q]
 
     nvtx.range_push("FP8CTX_asm_prefill_kernel")
@@ -428,11 +430,14 @@ def fp8_context_chunk(backend, chunk, q, k, v):
             rel_rms = float((out.float()-ref.float()).square().mean().sqrt() /
                             ref.float().square().mean().sqrt().clamp_min(1e-12))
             lse_max_error = float((lse.float()-ref_lse.float()).abs().max())
+            backend._fp8ctx_validation_attempted = True
             logger.info("[FP8-VALIDATION] q=%s k=%s BF16_ms=%.4f current_ASM_ms=%.4f optimized_ASM_ms=%.4f finite=%s rel_rms=%.6f lse_max_error=%.6f optimized_matches_current=True",
                         tuple(q.shape), tuple(k.shape), bf_ms, old_ms, opt_ms, finite, rel_rms, lse_max_error)
             if not finite or rel_rms > 0.1 or lse_max_error > 0.5:
-                raise RuntimeError("Live ASM numerical smoke gate failed (rel_rms<=0.1, LSE max error<=0.5 required)")
+                logger.error("[FP8-VALIDATION-FAILED] Numerical gate failed; terminating worker, no retry or BF16 fallback")
+                raise SystemExit(2)
             backend._fp8ctx_validated = True
+            logger.info("[FP8-VALIDATION-PASSED] output and LSE gates passed")
         _count["ctx_ok"] += 1
         if _count["ctx_ok"] <= 3 or _count["ctx_ok"] % 200 == 0:
             logger.info("[FP8-CTX] context-chunk fp8 OK (n=%d) out=%s lse=%s",
@@ -444,7 +449,8 @@ def fp8_context_chunk(backend, chunk, q, k, v):
             import traceback
             logger.info("[FP8-CTX] context-chunk fp8 FAILED (n=%d): %s\n%s",
                         _count["ctx_fail"], e, traceback.format_exc())
-        return None
+        logger.error("[FP8-VALIDATION-FAILED] Context exception; terminating worker")
+        raise SystemExit(2)
 
 
 def fp8_new_tokens(backend, q, k, v):

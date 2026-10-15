@@ -55,7 +55,7 @@ def prepare_plan(chunk,ps,nhead,total_q,total_kv,max_q_len,is_causal):
             raise ValueError('Context metadata does not match Q/KV lengths')
         host=[torch.empty_like(t,device='cpu',pin_memory=True) for t in ps['host']]
         get_ps_metadata_v1(qo,kv,kv[1:]-kv[:-1],1,nhead,ps['work_metadata'],*host,
-                           qhead_granularity=1,qlen_granularity=256,kvlen_granularity=128,block_size=1,is_causal=is_causal)
+                           qhead_granularity=1,qlen_granularity=256,kvlen_granularity=128,block_size=1,is_causal=is_causal,need_lse=True)
         plan=(host,qo,kv);plans[key]=plan
     # Host tensors remain alive and immutable until the batch completes.
     # Device destinations belong to this backend and are ordered on its stream.
