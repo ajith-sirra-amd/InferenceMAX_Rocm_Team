@@ -68,7 +68,16 @@ cleanup_agentic_services() {
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
-    stop_background_process_tree "$SERVER_PID" "vLLM server" 60
+    # Run A (38676797828) confirmed rocprofv3 was SIGKILLed mid-flush: server.log
+    # ends right after "caught signal 15... will wait for 2 children to exit" with
+    # no subsequent "output generation"/"tool finalization" line, and zero CSVs or
+    # rocprof_summary.txt landed in the artifact -- 60s wasn't enough for rocprofv3
+    # to serialize the kernel-trace+hip-trace+marker-trace+stats data it collected
+    # over the 240s window at conc=96. Widen the grace period only when profiling
+    # is on so normal (non-profiling) runs keep the 60s default.
+    local server_grace=60
+    [ "${ROCPROF_ENABLE:-0}" = "1" ] && server_grace=300
+    stop_background_process_tree "$SERVER_PID" "vLLM server" "$server_grace"
     exit "$exit_code"
 }
 trap cleanup_agentic_services EXIT
@@ -389,8 +398,8 @@ fi
 # APPLY_FP8CTX=0 is the pure baseline (stock vLLM/aiter chunked-context FP8
 # prefill, patch not installed at all); FP8CTX_MODE selects which kernel path
 # the patch itself takes when APPLY_FP8CTX=1 (asm vs fused).
-export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"
-export FP8CTX_MODE="${FP8CTX_MODE:-asm}"  # TEMP: explicit for ASM-path rocprof profiling run, revert (unset) after dispatch
+export APPLY_FP8CTX="${APPLY_FP8CTX:-0}"  # TEMP: pure-baseline rocprof profiling run (Run B), revert to 1 after dispatch
+export FP8CTX_MODE="${FP8CTX_MODE:-asm}"
 # Forced (not ${VAR:-default}): upstream/InferenceX/benchmarks/runtime_settings.sh
 # does an unconditional `export AIPERF_WARMUP_REQUESTS_PER_LANE='10'` on the
 # HOST runner before the container (and this script) ever starts, so a :-
