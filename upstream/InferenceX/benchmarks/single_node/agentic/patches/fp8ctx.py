@@ -4,8 +4,11 @@ from vllm.v1.attention.backends.mla.prefill._flydsl_context.entry import flydsl_
 logger=init_logger("vllm.fp8ctx")
 
 def run(backend,chunk,q,k,v):
-    from aiter import per_tensor_quant_hip
-    (fq,sq),(fk,sk),(fv,sv)=[per_tensor_quant_hip(t.contiguous(),quant_dtype=torch.float8_e4m3fn) for t in (q,k,v)]
+    from vllm.v1.attention.backends.mla.prefill._flydsl_context.quant import quant
+    cache=getattr(backend,"_flydsl_quant",None)
+    if cache is None:
+        cache={};backend._flydsl_quant=cache
+    (fq,sq),(fk,sk),(fv,sv)=[quant(t,cache,name) for name,t in zip(("q","k","v"),(q,k,v))]
     shape=(q.shape[0],q.shape[1],v.shape[-1])
     cache=getattr(backend,"_flydsl_outputs",None)
     if cache is None or cache[0].shape!=shape:
@@ -36,6 +39,18 @@ def fp8_context_chunk(backend,chunk,q,k,v):
                 start,end=torch.cuda.Event(enable_timing=True),torch.cuda.Event(enable_timing=True)
                 start.record();value=fn();end.record();end.synchronize()
                 return start.elapsed_time(end),value
+            from vllm.v1.attention.backends.mla.prefill._flydsl_context.quant import quant
+            quant_ms,_=timed(lambda:[quant(t,backend._flydsl_quant,name) for name,t in zip(("q","k","v"),(q,k,v))])
+            fq=backend._flydsl_quant["q"][0];sq=backend._flydsl_quant["q"][2]
+            fk=backend._flydsl_quant["k"][0];sk=backend._flydsl_quant["k"][2]
+            fv=backend._flydsl_quant["v"][0];sv=backend._flydsl_quant["v"][2]
+            def attention():
+                return flydsl_flash_attn_fp8_func(fq,fk,fv,softmax_scale=backend.scale,causal=False,
+                    cu_seqlens_q=chunk.query_start_loc,cu_seqlens_kv=chunk.cu_seq_lens,
+                    max_seqlen_q=int(chunk.max_query_len),max_seqlen_kv=int(chunk.max_seq_len),cross_seqlen=True,
+                    q_descale=sq,k_descale=sk,v_descale=sv,out=backend._flydsl_outputs[0],lse=backend._flydsl_outputs[1],return_lse=True)
+            attn_ms,_=timed(attention)
+            logger.info("[FP8-TIMING] quant_ms=%.4f attention_ms=%.4f scales=%s",quant_ms,attn_ms,[sq.item(),sk.item(),sv.item()])
             bf_ms,_=timed(bf16)
             fd_ms,(out,lse)=timed(lambda:run(backend,chunk,q,k,v))
             logger.info("[FP8-VALIDATION] backend=FlyDSL q=%s k=%s finite=%s rel_rms=%.6f lse_max_error=%.6f BF16_ms=%.4f FlyDSL_ms=%.4f",tuple(q.shape),tuple(k.shape),finite,rms,lse_err,bf_ms,fd_ms)

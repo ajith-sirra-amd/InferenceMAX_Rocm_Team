@@ -23,3 +23,11 @@ C96 TP8/DCP8 smoke: one warmup request per lane, 600 seconds measured replay,
 profiler disabled. Full benchmark is authorized only after smoke validation:
 10 warmup requests per lane, 3600 seconds, profiler disabled. Raw-cache/projection
 and DCP experiments remain held. Performance versus BF16 is not yet established.
+
+Run 38734488385 passed three FP32 startup probes. Live output RMS improved to
+2.8?4.0%, but max LSE error 0.71?0.97 failed the unchanged 0.5 gate. Whole-call
+latency was about 11.6ms versus warmed BF16 3.0?3.3ms. Next smoke replaces
+HIP dynamic quantization with reusable three-pass Triton amax/scale/quantize
+buffers and power-of-two scales. Record quantization and attention separately.
+Power-of-two scaling avoids additional normalization-rounding noise, but does
+not eliminate FP8 rounding. No promotion until unchanged numerical gates pass.
