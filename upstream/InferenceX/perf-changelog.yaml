@@ -8617,3 +8617,9 @@
   description:
     - 'Verify actual optimized noncausal FP8 ASM dispatch and successful context calls on all eight workers; retain compact evidence and JSON verification artifacts. Wrong dtypes and failed startup self-tests are fatal. Keep C96, warmup 10, 3600 seconds, profiler disabled and accuracy-unqualified status.'
     - '验证八个 worker 的真实优化非因果 FP8 ASM 调度和成功上下文调用，保存精简日志和 JSON 工件。数据类型错误与启动测试失败时终止。保持 C96、每 lane 预热 10 次、3600 秒、禁用分析器，精度仍未通过。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Recover cancelled MI355X benchmark runs before checkout by removing stale bmk-server only when its inspected mount matches the current repository workspace; avoid NFS open-file locks. FP8 algorithm and benchmark settings unchanged.'
+    - '在 checkout 前恢复取消的 MI355X 运行：仅当 bmk-server 挂载匹配当前仓库工作区时移除残留容器，解除 NFS 文件锁。FP8 算法和基准设置不变。'

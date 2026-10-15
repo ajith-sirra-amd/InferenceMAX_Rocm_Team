@@ -162,6 +162,15 @@ jobs:
           #  done
           #fi
 
+          # A cancelled MI355X benchmark can leave its container holding NFS
+          # files open. Remove only the container mounted to this checkout;
+          # unrelated containers and other repository workspaces are untouched.
+          if [[ "${{ runner.name }}" == mi355x-amd_* ]]; then
+            if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' bmk-server 2>/dev/null | grep -Fxq "$GITHUB_WORKSPACE"; then
+              docker rm -f bmk-server
+            fi
+          fi
+
           # Cleanup workspace from a prior job on this runner. Agentic jobs
           # write to fixed subpaths (aiperf_artifacts/, metrics_*, etc.), so stale
           # data from a previous job would otherwise be picked up as this

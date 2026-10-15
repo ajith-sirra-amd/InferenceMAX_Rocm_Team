@@ -38,3 +38,7 @@ The runtime-log verifier was exercised with all-eight-worker success, missing
 worker, BF16 operand, runtime failure, optimized mismatch and nonoptimized
 cases; its CLI success/failure outputs and exit codes were checked locally.
 GPU dispatch still requires the actual runner logs; configuration is not proof.
+
+Runner recovery: cancel/replacement exposed locked NFS files before checkout.
+Before workspace cleanup, remove stale bmk-server only on MI355X runners and
+only if its inspected mounts contain this exact GITHUB_WORKSPACE.

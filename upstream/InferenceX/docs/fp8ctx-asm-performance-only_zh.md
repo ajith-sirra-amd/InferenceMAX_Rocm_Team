@@ -21,3 +21,5 @@ C96 TP8/DCP8???? 10 ????3600 ?????????????????
 回放后检查全部八个 TP worker 的优化非因果 FP8 ASM 调度、成功上下文调用和优化/原始 ASM 输出一致性。与 BF16 的精度失败仍记录为未通过精度验证。清理时保存 asm_dispatch_evidence.log（包括失败运行）；回放后保存 asm_dispatch_verification.json。工件同时保留 server.log、benchmark 命令、原始结果和 GPU 指标。不增加 rocprof 开销。
 
 本地行为测试覆盖八个 worker 成功、缺失 worker、BF16 操作数、运行错误、输出不一致和非优化调度，并检查 CLI 输出与退出码。GPU 执行仍需真实 runner 日志证明。
+
+Runner 恢复：取消后的 NFS 文件锁阻止 checkout。仅在 MI355X runner 上，且挂载源与当前 GITHUB_WORKSPACE 完全匹配时，在清理前移除残留 bmk-server 容器。
