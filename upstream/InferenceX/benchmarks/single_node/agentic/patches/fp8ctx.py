@@ -407,7 +407,7 @@ def fp8_context_chunk(backend, chunk, q, k, v):
                 return (time.perf_counter() - start) * 1000, value
             def bf16():
                 return backend.flash_attn_varlen_func(
-                    q=q, k=k, v=v, cu_seqlens_q=qo, cu_seqlens_k=kv,
+                    q=q.to(torch.bfloat16), k=k.to(torch.bfloat16), v=v.to(torch.bfloat16), cu_seqlens_q=qo, cu_seqlens_k=kv,
                     max_seqlen_q=chunk.max_query_len, max_seqlen_k=chunk.max_seq_len,
                     softmax_scale=backend.scale, causal=False, return_lse=True)
             bf_ms, (ref, ref_lse) = timed(bf16)

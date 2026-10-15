@@ -432,6 +432,8 @@ if [ "${APPLY_FP8CTX:-0}" = "1" ]; then
     cp "$_fp8_pdir/fp8ctx.py" "$_fp8_site/v1/attention/backends/mla/prefill/_fp8ctx.py" \
         && echo "[FP8-CTX-PATCH] helper copied"
     cp "$_fp8_pdir/fp8ctx_prep.py" "$_fp8_site/v1/attention/backends/mla/prefill/_fp8ctx_prep.py" || exit 1
+    cp "$_fp8_pdir/fp8ctx_raw.py" "$_fp8_site/v1/attention/backends/mla/prefill/_fp8ctx_raw.py" || exit 1
+    python3 "$_fp8_pdir/apply_fp8ctx_raw.py" || exit 1
     python3 - "$_fp8_site" <<'PYEOF'
 import sys, py_compile
 site = sys.argv[1]
@@ -723,3 +725,8 @@ if grep -q 'context-chunk fp8 FAILED' "$SERVER_LOG"; then
     exit 1
 fi
 echo "[FP8-SMOKE] live comparison and ASM dispatch succeeded; full run requires timing review"
+
+if ! grep -q '\[FP8-RAW-VALIDATION\]' "$SERVER_LOG"; then
+    echo "[FP8-SMOKE] no raw FP8 projection validation; refusing promotion"
+    exit 1
+fi
