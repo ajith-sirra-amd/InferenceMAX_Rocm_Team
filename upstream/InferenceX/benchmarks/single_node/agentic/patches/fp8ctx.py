@@ -8,7 +8,7 @@
 # allocated" log line in rocm_aiter_mla.py), so run_prefill_new_tokens's hook here
 # only self-tests and never overrides it.
 #   - q/k/v arrive bf16 (gate NOT bypassed); we quantize to fp8 in-hook.
-#   - ANY problem -> return None -> caller falls back to the original bf16 path.
+#   - ASM validation/runtime errors terminate the worker; no BF16 fallback.
 # Every decision is logged with the [FP8-CTX] tag.
 #
 # PS-metadata and scratch-buffer sizing mirrors rocm_aiter_mla.py's own
@@ -207,20 +207,34 @@ def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_l
     chunk = getattr(backend, "_fp8ctx_current_chunk", None)
     optimized = chunk is not None
     prep = getattr(backend, "_fp8ctx_prep_buffers", None)
+    # AITER's dynamic HIP quantizer computes dequant scales on device.
+    # Quantize original heads before replication; scales are independent for Q/K/V.
+    from aiter import per_tensor_quant_hip
+    quantized = []
+    scales = []
+    for tensor in (q, k, v):
+        if tensor.dtype == fp8:
+            quantized.append(tensor)
+            scales.append(torch.ones(1, device=device, dtype=torch.float32))
+        else:
+            quant, descale = per_tensor_quant_hip(tensor.contiguous(), quant_dtype=fp8)
+            quantized.append(quant)
+            scales.append(descale)
+    q_scale, k_scale, v_scale = scales
     if optimized:
         from vllm.v1.attention.backends.mla.prefill import _fp8ctx_prep
         if prep is None:
             prep = {}
             backend._fp8ctx_prep_buffers = prep
-        q, k, v = _fp8ctx_prep.prepare_qkv(q, k, v, nhead, fp8, prep)
+        q, k, v = _fp8ctx_prep.prepare_qkv(*quantized, nhead, fp8, prep)
     else:
-        q, k, v = _pad_heads(real_nhead, nhead, q, k, v)
-        if q.dtype != fp8:
-            q = q.to(fp8)
-        if k.dtype != fp8:
-            k = k.to(fp8)
-        if v.dtype != fp8:
-            v = v.to(fp8)
+        q, k, v = _pad_heads(real_nhead, nhead, *quantized)
+    if not getattr(backend, "_fp8ctx_validated", False):
+        # Independent reference uses the actual quantized operands, restored
+        # to BF16, to separate quantization from attention-kernel error.
+        backend._fp8ctx_quant_reference = tuple(
+            (tensor.float() * scale).to(torch.bfloat16)
+            for tensor, scale in zip(quantized, scales))
 
     v_head_dim = v.shape[-1]
     total_q = q.shape[0]
@@ -280,7 +294,7 @@ def _run_fp8_asm_inner(backend, q, k, v, qo_indptr, kv_indptr, seq_lens, max_q_l
             q, k, v,
             qo_indptr.to(torch.int32), kv_indptr.to(torch.int32), kv_indices,
             dev_o[0], dev_o[1], int(max_q_len), float(backend.scale), bool(is_causal),
-            logits, attn_lse, out3d, one, one, one,
+            logits, attn_lse, out3d, q_scale, k_scale, v_scale,
         )
     finally:
         nvtx.range_pop()
@@ -407,12 +421,14 @@ def fp8_context_chunk(backend, chunk, q, k, v):
                 value = fn()
                 torch.cuda.synchronize()
                 return (time.perf_counter() - start) * 1000, value
-            def bf16():
+            def bf16(operands=None):
+                rq, rk, rv = (q, k, v) if operands is None else operands
                 return backend.flash_attn_varlen_func(
-                    q=q, k=k, v=v, cu_seqlens_q=qo, cu_seqlens_k=kv,
+                    q=rq, k=rk, v=rv, cu_seqlens_q=qo, cu_seqlens_k=kv,
                     max_seqlen_q=chunk.max_query_len, max_seqlen_k=chunk.max_seq_len,
                     softmax_scale=backend.scale, causal=False, return_lse=True)
             bf_ms, (ref, ref_lse) = timed(bf16)
+            _, (quant_ref, quant_lse) = timed(lambda: bf16(backend._fp8ctx_quant_reference))
             old_ms, (old_out, old_lse) = timed(lambda: _run_fp8_asm(
                 backend, q, k, v, qo, kv, seq, int(chunk.max_query_len), False))
             old_out = old_out.clone()
@@ -430,12 +446,18 @@ def fp8_context_chunk(backend, chunk, q, k, v):
             rel_rms = float((out.float()-ref.float()).square().mean().sqrt() /
                             ref.float().square().mean().sqrt().clamp_min(1e-12))
             lse_max_error = float((lse.float()-ref_lse.float()).abs().max())
+            kernel_rms = float((out.float()-quant_ref.float()).square().mean().sqrt() /
+                               quant_ref.float().square().mean().sqrt().clamp_min(1e-12))
+            kernel_lse_error = float((lse.float()-quant_lse.float()).abs().max())
+            logger.info("[FP8-QUANT-DIAGNOSTIC] kernel_rel_rms=%.6f kernel_lse_max=%.6f q_absmax=%.6f k_absmax=%.6f v_absmax=%.6f",
+                        kernel_rms, kernel_lse_error, q.abs().max().item(), k.abs().max().item(), v.abs().max().item())
             backend._fp8ctx_validation_attempted = True
             logger.info("[FP8-VALIDATION] q=%s k=%s BF16_ms=%.4f current_ASM_ms=%.4f optimized_ASM_ms=%.4f finite=%s rel_rms=%.6f lse_max_error=%.6f optimized_matches_current=True",
                         tuple(q.shape), tuple(k.shape), bf_ms, old_ms, opt_ms, finite, rel_rms, lse_max_error)
-            if not finite or rel_rms > 0.1 or lse_max_error > 0.5:
+            if not finite or rel_rms > 0.1 or lse_max_error > 0.5 or kernel_rms > 0.05 or kernel_lse_error > 0.03:
                 logger.error("[FP8-VALIDATION-FAILED] Numerical gate failed; terminating worker, no retry or BF16 fallback")
                 raise SystemExit(2)
+            del backend._fp8ctx_quant_reference
             backend._fp8ctx_validated = True
             logger.info("[FP8-VALIDATION-PASSED] output and LSE gates passed")
         _count["ctx_ok"] += 1
@@ -518,6 +540,7 @@ def selftest_noncausal(backend):
         import traceback
         logger.info("[FP8-CTX] STARTUP SELF-TEST: non-causal fp8 ASM kernel FAILED: %s\n%s",
                     e, traceback.format_exc())
+        raise SystemExit(2)
 
 
 _flash_log_count = 0

@@ -733,7 +733,7 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
 else
     build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    run_agentic_replay_and_write_outputs "$RESULT_DIR" || exit $?
     if ! grep -q '\[FP8-VALIDATION-PASSED\]' "$SERVER_LOG" || grep -q '\[FP8-VALIDATION-FAILED\]' "$SERVER_LOG"; then
         echo "[FP8-SMOKE] validation failed or missing"
         exit 1
