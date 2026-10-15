@@ -1,0 +1,488 @@
+﻿2026-10-15T13:03:26.0350360Z Current runner version: '2.337.0'
+2026-10-15T13:03:26.0438775Z Runner name: 'mi355x-amd_pit2_p03_g07'
+2026-10-15T13:03:26.0439240Z Runner group name: 'Default'
+2026-10-15T13:03:26.0439717Z Machine name: 'pit2-p03-g03'
+2026-10-15T13:03:26.0441225Z ##[group]GITHUB_TOKEN Permissions
+2026-10-15T13:03:26.0442411Z Contents: read
+2026-10-15T13:03:26.0442681Z Metadata: read
+2026-10-15T13:03:26.0442950Z ##[endgroup]
+2026-10-15T13:03:26.0444086Z Secret source: Actions
+2026-10-15T13:03:26.0444532Z Cache mode: write
+2026-10-15T13:03:26.0444902Z Prepare workflow directory
+2026-10-15T13:03:26.2459469Z Prepare all required actions
+2026-10-15T13:03:26.2488090Z Getting action download info
+2026-10-15T13:03:26.4595984Z Download action repository 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' (SHA:de0fac2e4500dabe0009e67214ff5f5447ce83dd)
+2026-10-15T13:03:30.4492868Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-10-15T13:03:33.1729688Z Uses: ajith-sirra-amd/InferenceMAX_Rocm_Team/.github/workflows/benchmark-tmpl.yml@refs/heads/perf/fp8ctx-asm-performance-only-20261015 (4677b90a5846a40e4bee619c35eac4fba6001d57)
+2026-10-15T13:03:33.1731847Z ##[group] Inputs
+2026-10-15T13:03:33.1732043Z   runner: cluster:mi355x-amds-2
+2026-10-15T13:03:33.1732290Z   image: vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945
+2026-10-15T13:03:33.1732539Z   model: moonshotai/Kimi-K3
+2026-10-15T13:03:33.1732759Z   model-prefix: kimik3
+2026-10-15T13:03:33.1732908Z   precision: fp4
+2026-10-15T13:03:33.1733055Z   framework: vllm
+2026-10-15T13:03:33.1733309Z   exp-name: kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp
+2026-10-15T13:03:33.1733516Z   isl: 0
+2026-10-15T13:03:33.1733642Z   osl: 0
+2026-10-15T13:03:33.1733844Z   tp: 8
+2026-10-15T13:03:33.1733968Z   ep: 1
+2026-10-15T13:03:33.1734541Z   dp-attn: false
+2026-10-15T13:03:33.1734689Z   max-model-len: 0
+2026-10-15T13:03:33.1734823Z   conc: 96
+2026-10-15T13:03:33.1734976Z   spec-decoding: mtp
+2026-10-15T13:03:33.1735130Z   disagg: false
+2026-10-15T13:03:33.1735337Z   run-eval: false
+2026-10-15T13:03:33.1735492Z   eval-only: false
+2026-10-15T13:03:33.1735635Z   random-range-ratio: 0.8
+2026-10-15T13:03:33.1735865Z   ref: 4677b90a5846a40e4bee619c35eac4fba6001d57
+2026-10-15T13:03:33.1736052Z   scenario-type: agentic-coding
+2026-10-15T13:03:33.1736209Z   offloading: 
+2026-10-15T13:03:33.1736388Z   kv-offloading: dram
+2026-10-15T13:03:33.1736547Z   kv-offload-backend: vllm-simple
+2026-10-15T13:03:33.1736741Z   total-cpu-dram-gb: 2249
+2026-10-15T13:03:33.1736991Z   duration: 3600
+2026-10-15T13:03:33.1737314Z   generate-cli-command: test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp
+2026-10-15T13:03:33.1737731Z   test-name: Kimi C96 FP8 ASM verified performance-only warmup10 3600s
+2026-10-15T13:03:33.1737944Z   duration-override: 3600
+2026-10-15T13:03:33.1738105Z ##[endgroup]
+2026-10-15T13:03:33.1738679Z Complete job name: agentic / (vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945, moonsh... / kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp fp4 cluster:mi355x-amds-2 vllm | tp=8 ep=1 dpa=false | disagg-false spec-mtp conc-96
+2026-10-15T13:03:33.4581119Z ##[group]Run ## Cleanup Docker resources
+2026-10-15T13:03:33.4581498Z [36;1m## Cleanup Docker resources[0m
+2026-10-15T13:03:33.4581745Z [36;1m#if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then[0m
+2026-10-15T13:03:33.4581997Z [36;1m#  echo "[Docker] Cleaning up resources ..."[0m
+2026-10-15T13:03:33.4582196Z [36;1m#  docker ps -aq | xargs -r docker rm -f[0m
+2026-10-15T13:03:33.4582373Z [36;1m#  docker network prune -f[0m
+2026-10-15T13:03:33.4582541Z [36;1m#  while [ -n "$(docker ps -aq)" ]; do[0m
+2026-10-15T13:03:33.4582715Z [36;1m#    docker ps -a[0m
+2026-10-15T13:03:33.4582861Z [36;1m#    sleep 5[0m
+2026-10-15T13:03:33.4582990Z [36;1m#  done[0m
+2026-10-15T13:03:33.4583112Z [36;1m#fi[0m
+2026-10-15T13:03:33.4583461Z [36;1m#[0m
+2026-10-15T13:03:33.4583596Z [36;1m## Cleanup SLURM resources[0m
+2026-10-15T13:03:33.4583767Z [36;1m#if command -v squeue >/dev/null 2>&1; then[0m
+2026-10-15T13:03:33.4584041Z [36;1m#  echo "[Slurm] Cleaning up jobs with name: mi355x-amd_pit2_p03_g07 ..."[0m
+2026-10-15T13:03:33.4584283Z [36;1m#  scancel --name="mi355x-amd_pit2_p03_g07" || true[0m
+2026-10-15T13:03:33.4584550Z [36;1m#  while [ -n "$(squeue --name='mi355x-amd_pit2_p03_g07' --noheader --format='%i')" ]; do[0m
+2026-10-15T13:03:33.4584807Z [36;1m#    squeue --name="mi355x-amd_pit2_p03_g07"[0m
+2026-10-15T13:03:33.4584979Z [36;1m#    sleep 5[0m
+2026-10-15T13:03:33.4585111Z [36;1m#  done[0m
+2026-10-15T13:03:33.4585238Z [36;1m#fi[0m
+2026-10-15T13:03:33.4585357Z [36;1m[0m
+2026-10-15T13:03:33.4585531Z [36;1m# Cleanup workspace from a prior job on this runner. Agentic jobs[0m
+2026-10-15T13:03:33.4585789Z [36;1m# write to fixed subpaths (aiperf_artifacts/, metrics_*, etc.), so stale[0m
+2026-10-15T13:03:33.4586047Z [36;1m# data from a previous job would otherwise be picked up as this[0m
+2026-10-15T13:03:33.4586259Z [36;1m# job's output when replay fails early.[0m
+2026-10-15T13:03:33.4586496Z [36;1m# Use Docker to handle permission issues from prior container-created files.[0m
+2026-10-15T13:03:33.4586944Z [36;1mdocker run --rm -v "/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team":/ws --entrypoint sh $IMAGE -c "rm -rf /ws/* /ws/.[!.]*" || true[0m
+2026-10-15T13:03:33.4587429Z [36;1mls -la "/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team" [0m
+2026-10-15T13:03:33.4607641Z shell: /usr/bin/bash -e {0}
+2026-10-15T13:03:33.4607891Z env:
+2026-10-15T13:03:33.4608018Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-15T13:03:33.4608422Z   HF_TOKEN: ***
+2026-10-15T13:03:33.4608608Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-15T13:03:33.4608797Z   EXP_NAME: kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp
+2026-10-15T13:03:33.4608993Z   MODEL: moonshotai/Kimi-K3
+2026-10-15T13:03:33.4609138Z   MODEL_PREFIX: kimik3
+2026-10-15T13:03:33.4609267Z   ISL: 0
+2026-10-15T13:03:33.4609380Z   OSL: 0
+2026-10-15T13:03:33.4609502Z   MAX_MODEL_LEN: 0
+2026-10-15T13:03:33.4609720Z   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945
+2026-10-15T13:03:33.4609957Z   FRAMEWORK: vllm
+2026-10-15T13:03:33.4610084Z   PRECISION: fp4
+2026-10-15T13:03:33.4610210Z   TP: 8
+2026-10-15T13:03:33.4610328Z   EP_SIZE: 1
+2026-10-15T13:03:33.4610450Z   DP_ATTENTION: false
+2026-10-15T13:03:33.4610580Z   CONC: 96
+2026-10-15T13:03:33.4610698Z   SPEC_DECODING: mtp
+2026-10-15T13:03:33.4610835Z   DISAGG: false
+2026-10-15T13:03:33.4610957Z   RUN_EVAL: false
+2026-10-15T13:03:33.4611079Z   EVAL_ONLY: false
+2026-10-15T13:03:33.4611212Z   SCENARIO_TYPE: agentic-coding
+2026-10-15T13:03:33.4611365Z   SCENARIO_SUBDIR: agentic/
+2026-10-15T13:03:33.4611504Z   IS_AGENTIC: 1
+2026-10-15T13:03:33.4611630Z   OFFLOADING: 
+2026-10-15T13:03:33.4611758Z   KV_OFFLOADING: dram
+2026-10-15T13:03:33.4611904Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-15T13:03:33.4612058Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-15T13:03:33.4612196Z   DURATION: 3600
+2026-10-15T13:03:33.4612333Z   RESULT_DIR: /workspace/results
+2026-10-15T13:03:33.4612622Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-15T13:03:33.4612790Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-15T13:03:33.4612963Z ##[endgroup]
+2026-10-15T13:03:33.6403254Z rm: cannot remove '/ws/results/.nfse9d65ad0e41bb1440000031e': Device or resource busy
+2026-10-15T13:03:33.6506700Z rm: cannot remove '/ws/upstream/InferenceX/benchmarks/single_node/agentic/.nfsc7b86f721d690e5100000320': Device or resource busy
+2026-10-15T13:03:33.8477797Z total 0
+2026-10-15T13:03:33.8478142Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Oct 15 13:03 .
+2026-10-15T13:03:33.8478407Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Sep 29 06:33 ..
+2026-10-15T13:03:33.8478704Z drwxr-xr-x 2 root                root                4096 Oct 15 13:02 results
+2026-10-15T13:03:33.8479257Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Oct 15 13:03 upstream
+2026-10-15T13:03:34.0125849Z ##[group]Run actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+2026-10-15T13:03:34.0126120Z with:
+2026-10-15T13:03:34.0126561Z   token: ***
+2026-10-15T13:03:34.0126661Z   fetch-depth: 0
+2026-10-15T13:03:34.0126786Z   ref: 4677b90a5846a40e4bee619c35eac4fba6001d57
+2026-10-15T13:03:34.0126929Z   clean: true
+2026-10-15T13:03:34.0127030Z   submodules: true
+2026-10-15T13:03:34.0127160Z   repository: ajith-sirra-amd/InferenceMAX_Rocm_Team
+2026-10-15T13:03:34.0127313Z   ssh-strict: true
+2026-10-15T13:03:34.0127414Z   ssh-user: git
+2026-10-15T13:03:34.0127531Z   persist-credentials: true
+2026-10-15T13:03:34.0127659Z   sparse-checkout-cone-mode: true
+2026-10-15T13:03:34.0127784Z   fetch-tags: false
+2026-10-15T13:03:34.0127888Z   show-progress: true
+2026-10-15T13:03:34.0127992Z   lfs: false
+2026-10-15T13:03:34.0128117Z   set-safe-directory: true
+2026-10-15T13:03:34.0128251Z env:
+2026-10-15T13:03:34.0128356Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-15T13:03:34.0128560Z   HF_TOKEN: ***
+2026-10-15T13:03:34.0128719Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-15T13:03:34.0128879Z   EXP_NAME: kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp
+2026-10-15T13:03:34.0129039Z   MODEL: moonshotai/Kimi-K3
+2026-10-15T13:03:34.0129159Z   MODEL_PREFIX: kimik3
+2026-10-15T13:03:34.0129272Z   ISL: 0
+2026-10-15T13:03:34.0129365Z   OSL: 0
+2026-10-15T13:03:34.0129457Z   MAX_MODEL_LEN: 0
+2026-10-15T13:03:34.0129643Z   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945
+2026-10-15T13:03:34.0129857Z   FRAMEWORK: vllm
+2026-10-15T13:03:34.0129968Z   PRECISION: fp4
+2026-10-15T13:03:34.0130077Z   TP: 8
+2026-10-15T13:03:34.0130172Z   EP_SIZE: 1
+2026-10-15T13:03:34.0130274Z   DP_ATTENTION: false
+2026-10-15T13:03:34.0130380Z   CONC: 96
+2026-10-15T13:03:34.0130482Z   SPEC_DECODING: mtp
+2026-10-15T13:03:34.0130590Z   DISAGG: false
+2026-10-15T13:03:34.0130692Z   RUN_EVAL: false
+2026-10-15T13:03:34.0130797Z   EVAL_ONLY: false
+2026-10-15T13:03:34.0130914Z   SCENARIO_TYPE: agentic-coding
+2026-10-15T13:03:34.0131045Z   SCENARIO_SUBDIR: agentic/
+2026-10-15T13:03:34.0131162Z   IS_AGENTIC: 1
+2026-10-15T13:03:34.0131266Z   OFFLOADING: 
+2026-10-15T13:03:34.0131372Z   KV_OFFLOADING: dram
+2026-10-15T13:03:34.0131494Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-15T13:03:34.0131623Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-15T13:03:34.0131736Z   DURATION: 3600
+2026-10-15T13:03:34.0131846Z   RESULT_DIR: /workspace/results
+2026-10-15T13:03:34.0131975Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-15T13:03:34.0132124Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-15T13:03:34.0132281Z ##[endgroup]
+2026-10-15T13:03:34.1055109Z Syncing repository: ajith-sirra-amd/InferenceMAX_Rocm_Team
+2026-10-15T13:03:34.1055776Z ##[group]Getting Git version info
+2026-10-15T13:03:34.1056085Z Working directory is '/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team'
+2026-10-15T13:03:34.1056454Z [command]/usr/bin/git version
+2026-10-15T13:03:34.1056591Z git version 2.34.1
+2026-10-15T13:03:34.1057033Z ##[endgroup]
+2026-10-15T13:03:34.1059387Z Temporarily overriding HOME='/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/_temp/f92cca35-ad62-4349-9a5b-f0120752ff23' before making global git config changes
+2026-10-15T13:03:34.1059811Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-15T13:03:34.1060235Z [command]/usr/bin/git config --global --add safe.directory /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team
+2026-10-15T13:03:34.1343458Z Deleting the contents of '/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team'
+2026-10-15T13:03:43.1800091Z ##[error]File was unable to be removed Error: EBUSY: resource busy or locked, unlink '/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/results/.nfse9d65ad0e41bb1440000031e'
+2026-10-15T13:03:43.3787602Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-15T13:03:43.3787840Z with:
+2026-10-15T13:03:43.3787957Z   name: bmk_agentic_
+2026-10-15T13:03:43.3788073Z   path: .json
+2026-10-15T13:03:43.3788189Z   if-no-files-found: warn
+2026-10-15T13:03:43.3788323Z   compression-level: 6
+2026-10-15T13:03:43.3788446Z   overwrite: false
+2026-10-15T13:03:43.3788610Z   include-hidden-files: false
+2026-10-15T13:03:43.3788734Z   archive: true
+2026-10-15T13:03:43.3788846Z env:
+2026-10-15T13:03:43.3788949Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-15T13:03:43.3789208Z   HF_TOKEN: ***
+2026-10-15T13:03:43.3789326Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-15T13:03:43.3789506Z   EXP_NAME: kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp
+2026-10-15T13:03:43.3789686Z   MODEL: moonshotai/Kimi-K3
+2026-10-15T13:03:43.3789808Z   MODEL_PREFIX: kimik3
+2026-10-15T13:03:43.3789932Z   ISL: 0
+2026-10-15T13:03:43.3790029Z   OSL: 0
+2026-10-15T13:03:43.3790132Z   MAX_MODEL_LEN: 0
+2026-10-15T13:03:43.3790387Z   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945
+2026-10-15T13:03:43.3790604Z   FRAMEWORK: vllm
+2026-10-15T13:03:43.3790711Z   PRECISION: fp4
+2026-10-15T13:03:43.3790831Z   TP: 8
+2026-10-15T13:03:43.3790928Z   EP_SIZE: 1
+2026-10-15T13:03:43.3791030Z   DP_ATTENTION: false
+2026-10-15T13:03:43.3791145Z   CONC: 96
+2026-10-15T13:03:43.3791252Z   SPEC_DECODING: mtp
+2026-10-15T13:03:43.3791381Z   DISAGG: false
+2026-10-15T13:03:43.3791508Z   RUN_EVAL: false
+2026-10-15T13:03:43.3791656Z   EVAL_ONLY: false
+2026-10-15T13:03:43.3791773Z   SCENARIO_TYPE: agentic-coding
+2026-10-15T13:03:43.3791902Z   SCENARIO_SUBDIR: agentic/
+2026-10-15T13:03:43.3792019Z   IS_AGENTIC: 1
+2026-10-15T13:03:43.3792127Z   OFFLOADING: 
+2026-10-15T13:03:43.3792236Z   KV_OFFLOADING: dram
+2026-10-15T13:03:43.3792355Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-15T13:03:43.3792492Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-15T13:03:43.3792606Z   DURATION: 3600
+2026-10-15T13:03:43.3792728Z   RESULT_DIR: /workspace/results
+2026-10-15T13:03:43.3792862Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-15T13:03:43.3793015Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-15T13:03:43.3793169Z ##[endgroup]
+2026-10-15T13:03:43.4797753Z ##[warning]No files were found with the provided path: .json. No artifacts will be uploaded.
+2026-10-15T13:03:43.6550383Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-15T13:03:43.6550617Z with:
+2026-10-15T13:03:43.6550731Z   name: agentic_
+2026-10-15T13:03:43.6552801Z   path: results/server.log
+results/asm_dispatch_evidence.log
+results/asm_dispatch_verification.json
+results/lmcache_server.log
+results/benchmark.log
+results/config.yaml
+results/lmcache_command.txt
+results/sglang_command.txt
+results/vllm_command.txt
+results/benchmark_command.txt
+results/workload_distribution_summary.txt
+results/workload_distribution_plots.png
+results/metrics_plots.png
+results/aiperf_artifacts/profile_export.jsonl
+results/aiperf_artifacts/profile_export_aiperf.json
+results/aiperf_artifacts/profile_export_aiperf.csv
+results/aiperf_artifacts/profile_export_aiperf_timeslices.json
+results/aiperf_artifacts/profile_export_aiperf_timeslices.csv
+results/aiperf_artifacts/profile_export_aiperf_aggregate.json
+results/aiperf_artifacts/profile_export_aiperf_aggregate.csv
+results/aiperf_artifacts/profile_export_aiperf_collated.json
+results/aiperf_artifacts/server_metrics_export.json
+results/aiperf_artifacts/server_metrics_export.jsonl
+results/aiperf_artifacts/server_metrics_export.csv
+results/aiperf_artifacts/server_metrics_export.parquet
+results/aiperf_artifacts/gpu_telemetry_export.jsonl
+results/aiperf_artifacts/logs/aiperf.log
+results/aiperf_artifacts/logs/*.log
+results/rocprof_summary.txt
+results/rocprof/**/*.csv
+
+2026-10-15T13:03:43.6554912Z   if-no-files-found: ignore
+2026-10-15T13:03:43.6555040Z   compression-level: 6
+2026-10-15T13:03:43.6555161Z   overwrite: false
+2026-10-15T13:03:43.6555281Z   include-hidden-files: false
+2026-10-15T13:03:43.6555408Z   archive: true
+2026-10-15T13:03:43.6555663Z env:
+2026-10-15T13:03:43.6555771Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-15T13:03:43.6556051Z   HF_TOKEN: ***
+2026-10-15T13:03:43.6556166Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-15T13:03:43.6556333Z   EXP_NAME: kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp
+2026-10-15T13:03:43.6556500Z   MODEL: moonshotai/Kimi-K3
+2026-10-15T13:03:43.6556627Z   MODEL_PREFIX: kimik3
+2026-10-15T13:03:43.6556744Z   ISL: 0
+2026-10-15T13:03:43.6556843Z   OSL: 0
+2026-10-15T13:03:43.6556943Z   MAX_MODEL_LEN: 0
+2026-10-15T13:03:43.6557136Z   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945
+2026-10-15T13:03:43.6557355Z   FRAMEWORK: vllm
+2026-10-15T13:03:43.6557463Z   PRECISION: fp4
+2026-10-15T13:03:43.6557569Z   TP: 8
+2026-10-15T13:03:43.6557671Z   EP_SIZE: 1
+2026-10-15T13:03:43.6557779Z   DP_ATTENTION: false
+2026-10-15T13:03:43.6557890Z   CONC: 96
+2026-10-15T13:03:43.6557991Z   SPEC_DECODING: mtp
+2026-10-15T13:03:43.6558107Z   DISAGG: false
+2026-10-15T13:03:43.6558253Z   RUN_EVAL: false
+2026-10-15T13:03:43.6558363Z   EVAL_ONLY: false
+2026-10-15T13:03:43.6558480Z   SCENARIO_TYPE: agentic-coding
+2026-10-15T13:03:43.6558653Z   SCENARIO_SUBDIR: agentic/
+2026-10-15T13:03:43.6558776Z   IS_AGENTIC: 1
+2026-10-15T13:03:43.6558884Z   OFFLOADING: 
+2026-10-15T13:03:43.6558996Z   KV_OFFLOADING: dram
+2026-10-15T13:03:43.6559127Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-15T13:03:43.6559266Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-15T13:03:43.6559387Z   DURATION: 3600
+2026-10-15T13:03:43.6559510Z   RESULT_DIR: /workspace/results
+2026-10-15T13:03:43.6559649Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-15T13:03:43.6559801Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-15T13:03:43.6559958Z ##[endgroup]
+2026-10-15T13:03:43.7596742Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-15T13:03:43.7599722Z The least common ancestor is /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/results. This will be the root directory of the artifact
+2026-10-15T13:03:43.7600221Z No files were found with the provided path: results/server.log
+2026-10-15T13:03:43.7600413Z results/asm_dispatch_evidence.log
+2026-10-15T13:03:43.7600562Z results/asm_dispatch_verification.json
+2026-10-15T13:03:43.7600722Z results/lmcache_server.log
+2026-10-15T13:03:43.7601295Z results/benchmark.log
+2026-10-15T13:03:43.7601417Z results/config.yaml
+2026-10-15T13:03:43.7601537Z results/lmcache_command.txt
+2026-10-15T13:03:43.7601679Z results/sglang_command.txt
+2026-10-15T13:03:43.7601804Z results/vllm_command.txt
+2026-10-15T13:03:43.7601931Z results/benchmark_command.txt
+2026-10-15T13:03:43.7602076Z results/workload_distribution_summary.txt
+2026-10-15T13:03:43.7602278Z results/workload_distribution_plots.png
+2026-10-15T13:03:43.7602423Z results/metrics_plots.png
+2026-10-15T13:03:43.7602562Z results/aiperf_artifacts/profile_export.jsonl
+2026-10-15T13:03:43.7602746Z results/aiperf_artifacts/profile_export_aiperf.json
+2026-10-15T13:03:43.7602926Z results/aiperf_artifacts/profile_export_aiperf.csv
+2026-10-15T13:03:43.7603125Z results/aiperf_artifacts/profile_export_aiperf_timeslices.json
+2026-10-15T13:03:43.7603336Z results/aiperf_artifacts/profile_export_aiperf_timeslices.csv
+2026-10-15T13:03:43.7603546Z results/aiperf_artifacts/profile_export_aiperf_aggregate.json
+2026-10-15T13:03:43.7603759Z results/aiperf_artifacts/profile_export_aiperf_aggregate.csv
+2026-10-15T13:03:43.7603961Z results/aiperf_artifacts/profile_export_aiperf_collated.json
+2026-10-15T13:03:43.7604181Z results/aiperf_artifacts/server_metrics_export.json
+2026-10-15T13:03:43.7604390Z results/aiperf_artifacts/server_metrics_export.jsonl
+2026-10-15T13:03:43.7604565Z results/aiperf_artifacts/server_metrics_export.csv
+2026-10-15T13:03:43.7604749Z results/aiperf_artifacts/server_metrics_export.parquet
+2026-10-15T13:03:43.7604928Z results/aiperf_artifacts/gpu_telemetry_export.jsonl
+2026-10-15T13:03:43.7605096Z results/aiperf_artifacts/logs/aiperf.log
+2026-10-15T13:03:43.7605251Z results/aiperf_artifacts/logs/*.log
+2026-10-15T13:03:43.7605541Z results/rocprof_summary.txt
+2026-10-15T13:03:43.7605699Z results/rocprof/**/*.csv. No artifacts will be uploaded.
+2026-10-15T13:03:43.9266348Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-15T13:03:43.9266597Z with:
+2026-10-15T13:03:43.9266715Z   name: server_logs_
+2026-10-15T13:03:43.9266865Z   path: results/server.log
+results/lmcache_server.log
+
+2026-10-15T13:03:43.9267037Z   if-no-files-found: ignore
+2026-10-15T13:03:43.9267168Z   compression-level: 6
+2026-10-15T13:03:43.9267290Z   overwrite: false
+2026-10-15T13:03:43.9267409Z   include-hidden-files: false
+2026-10-15T13:03:43.9267535Z   archive: true
+2026-10-15T13:03:43.9267645Z env:
+2026-10-15T13:03:43.9267745Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-15T13:03:43.9268035Z   HF_TOKEN: ***
+2026-10-15T13:03:43.9268152Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-15T13:03:43.9268316Z   EXP_NAME: kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp
+2026-10-15T13:03:43.9268483Z   MODEL: moonshotai/Kimi-K3
+2026-10-15T13:03:43.9268667Z   MODEL_PREFIX: kimik3
+2026-10-15T13:03:43.9268782Z   ISL: 0
+2026-10-15T13:03:43.9268879Z   OSL: 0
+2026-10-15T13:03:43.9269026Z   MAX_MODEL_LEN: 0
+2026-10-15T13:03:43.9269223Z   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945
+2026-10-15T13:03:43.9269446Z   FRAMEWORK: vllm
+2026-10-15T13:03:43.9269566Z   PRECISION: fp4
+2026-10-15T13:03:43.9269675Z   TP: 8
+2026-10-15T13:03:43.9269773Z   EP_SIZE: 1
+2026-10-15T13:03:43.9269880Z   DP_ATTENTION: false
+2026-10-15T13:03:43.9270002Z   CONC: 96
+2026-10-15T13:03:43.9270104Z   SPEC_DECODING: mtp
+2026-10-15T13:03:43.9270211Z   DISAGG: false
+2026-10-15T13:03:43.9270319Z   RUN_EVAL: false
+2026-10-15T13:03:43.9270424Z   EVAL_ONLY: false
+2026-10-15T13:03:43.9270536Z   SCENARIO_TYPE: agentic-coding
+2026-10-15T13:03:43.9270671Z   SCENARIO_SUBDIR: agentic/
+2026-10-15T13:03:43.9270799Z   IS_AGENTIC: 1
+2026-10-15T13:03:43.9270903Z   OFFLOADING: 
+2026-10-15T13:03:43.9271015Z   KV_OFFLOADING: dram
+2026-10-15T13:03:43.9271145Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-15T13:03:43.9271292Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-15T13:03:43.9271411Z   DURATION: 3600
+2026-10-15T13:03:43.9271530Z   RESULT_DIR: /workspace/results
+2026-10-15T13:03:43.9271675Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-15T13:03:43.9271825Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-15T13:03:43.9271984Z ##[endgroup]
+2026-10-15T13:03:44.0246923Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-15T13:03:44.0247937Z The least common ancestor is /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/results. This will be the root directory of the artifact
+2026-10-15T13:03:44.0248382Z No files were found with the provided path: results/server.log
+2026-10-15T13:03:44.0248643Z results/lmcache_server.log. No artifacts will be uploaded.
+2026-10-15T13:03:44.1808345Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-15T13:03:44.1808621Z with:
+2026-10-15T13:03:44.1808726Z   name: gpu_metrics_
+2026-10-15T13:03:44.1808848Z   path: gpu_metrics.csv
+2026-10-15T13:03:44.1808968Z   if-no-files-found: ignore
+2026-10-15T13:03:44.1809093Z   compression-level: 6
+2026-10-15T13:03:44.1809214Z   overwrite: false
+2026-10-15T13:03:44.1809331Z   include-hidden-files: false
+2026-10-15T13:03:44.1809450Z   archive: true
+2026-10-15T13:03:44.1809547Z env:
+2026-10-15T13:03:44.1809654Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-15T13:03:44.1809935Z   HF_TOKEN: ***
+2026-10-15T13:03:44.1810050Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-15T13:03:44.1810208Z   EXP_NAME: kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp
+2026-10-15T13:03:44.1810387Z   MODEL: moonshotai/Kimi-K3
+2026-10-15T13:03:44.1810510Z   MODEL_PREFIX: kimik3
+2026-10-15T13:03:44.1810621Z   ISL: 0
+2026-10-15T13:03:44.1810720Z   OSL: 0
+2026-10-15T13:03:44.1810820Z   MAX_MODEL_LEN: 0
+2026-10-15T13:03:44.1811045Z   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945
+2026-10-15T13:03:44.1811405Z   FRAMEWORK: vllm
+2026-10-15T13:03:44.1811512Z   PRECISION: fp4
+2026-10-15T13:03:44.1811626Z   TP: 8
+2026-10-15T13:03:44.1811724Z   EP_SIZE: 1
+2026-10-15T13:03:44.1811846Z   DP_ATTENTION: false
+2026-10-15T13:03:44.1811972Z   CONC: 96
+2026-10-15T13:03:44.1812078Z   SPEC_DECODING: mtp
+2026-10-15T13:03:44.1812187Z   DISAGG: false
+2026-10-15T13:03:44.1812289Z   RUN_EVAL: false
+2026-10-15T13:03:44.1812398Z   EVAL_ONLY: false
+2026-10-15T13:03:44.1812514Z   SCENARIO_TYPE: agentic-coding
+2026-10-15T13:03:44.1812643Z   SCENARIO_SUBDIR: agentic/
+2026-10-15T13:03:44.1812776Z   IS_AGENTIC: 1
+2026-10-15T13:03:44.1812897Z   OFFLOADING: 
+2026-10-15T13:03:44.1813035Z   KV_OFFLOADING: dram
+2026-10-15T13:03:44.1813153Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-15T13:03:44.1813302Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-15T13:03:44.1813421Z   DURATION: 3600
+2026-10-15T13:03:44.1813541Z   RESULT_DIR: /workspace/results
+2026-10-15T13:03:44.1813675Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-15T13:03:44.1813821Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-15T13:03:44.1813991Z ##[endgroup]
+2026-10-15T13:03:44.2720007Z No files were found with the provided path: gpu_metrics.csv. No artifacts will be uploaded.
+2026-10-15T13:03:44.4241767Z ##[group]Run ## Cleanup Docker resources
+2026-10-15T13:03:44.4242023Z [36;1m## Cleanup Docker resources[0m
+2026-10-15T13:03:44.4242223Z [36;1m#if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then[0m
+2026-10-15T13:03:44.4242446Z [36;1m#  echo "[Docker] Cleaning up resources ..."[0m
+2026-10-15T13:03:44.4242620Z [36;1m#  docker ps -aq | xargs -r docker rm -f[0m
+2026-10-15T13:03:44.4242782Z [36;1m#  docker network prune -f[0m
+2026-10-15T13:03:44.4242933Z [36;1m#  while [ -n "$(docker ps -aq)" ]; do[0m
+2026-10-15T13:03:44.4243084Z [36;1m#    docker ps -a[0m
+2026-10-15T13:03:44.4243209Z [36;1m#    sleep 5[0m
+2026-10-15T13:03:44.4243331Z [36;1m#  done[0m
+2026-10-15T13:03:44.4243436Z [36;1m#fi[0m
+2026-10-15T13:03:44.4243538Z [36;1m#[0m
+2026-10-15T13:03:44.4243667Z [36;1m## Cleanup SLURM resources[0m
+2026-10-15T13:03:44.4243827Z [36;1m#if command -v squeue >/dev/null 2>&1; then[0m
+2026-10-15T13:03:44.4244068Z [36;1m#  echo "[Slurm] Cleaning up jobs with name: mi355x-amd_pit2_p03_g07 ..."[0m
+2026-10-15T13:03:44.4244288Z [36;1m#  scancel --name="mi355x-amd_pit2_p03_g07" || true[0m
+2026-10-15T13:03:44.4244525Z [36;1m#  while [ -n "$(squeue --name='mi355x-amd_pit2_p03_g07' --noheader --format='%i')" ]; do[0m
+2026-10-15T13:03:44.4244761Z [36;1m#    squeue --name="mi355x-amd_pit2_p03_g07"[0m
+2026-10-15T13:03:44.4244913Z [36;1m#    sleep 5[0m
+2026-10-15T13:03:44.4245025Z [36;1m#  done[0m
+2026-10-15T13:03:44.4245137Z [36;1m#fi[0m
+2026-10-15T13:03:44.4245241Z [36;1m[0m
+2026-10-15T13:03:44.4245395Z [36;1m# Cleanup workspace from a prior job on this runner. Agentic jobs[0m
+2026-10-15T13:03:44.4245637Z [36;1m# write to fixed subpaths (aiperf_artifacts/, metrics_*, etc.), so stale[0m
+2026-10-15T13:03:44.4245875Z [36;1m# data from a previous job would otherwise be picked up as this[0m
+2026-10-15T13:03:44.4246078Z [36;1m# job's output when replay fails early.[0m
+2026-10-15T13:03:44.4246292Z [36;1m# Use Docker to handle permission issues from prior container-created files.[0m
+2026-10-15T13:03:44.4246724Z [36;1mdocker run --rm -v "/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team":/ws --entrypoint sh $IMAGE -c "rm -rf /ws/* /ws/.[!.]*" || true[0m
+2026-10-15T13:03:44.4247192Z [36;1mls -la "/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team" [0m
+2026-10-15T13:03:44.4264143Z shell: /usr/bin/bash -e {0}
+2026-10-15T13:03:44.4264275Z env:
+2026-10-15T13:03:44.4264386Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-15T13:03:44.4264670Z   HF_TOKEN: ***
+2026-10-15T13:03:44.4264791Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-15T13:03:44.4264963Z   EXP_NAME: kimik3_tp8_conc96_kvdram-vllm-simple_spec-mtp
+2026-10-15T13:03:44.4265133Z   MODEL: moonshotai/Kimi-K3
+2026-10-15T13:03:44.4265415Z   MODEL_PREFIX: kimik3
+2026-10-15T13:03:44.4265538Z   ISL: 0
+2026-10-15T13:03:44.4265637Z   OSL: 0
+2026-10-15T13:03:44.4265740Z   MAX_MODEL_LEN: 0
+2026-10-15T13:03:44.4265939Z   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945
+2026-10-15T13:03:44.4266166Z   FRAMEWORK: vllm
+2026-10-15T13:03:44.4266278Z   PRECISION: fp4
+2026-10-15T13:03:44.4266385Z   TP: 8
+2026-10-15T13:03:44.4266492Z   EP_SIZE: 1
+2026-10-15T13:03:44.4266608Z   DP_ATTENTION: false
+2026-10-15T13:03:44.4266720Z   CONC: 96
+2026-10-15T13:03:44.4266824Z   SPEC_DECODING: mtp
+2026-10-15T13:03:44.4266943Z   DISAGG: false
+2026-10-15T13:03:44.4267054Z   RUN_EVAL: false
+2026-10-15T13:03:44.4267162Z   EVAL_ONLY: false
+2026-10-15T13:03:44.4267281Z   SCENARIO_TYPE: agentic-coding
+2026-10-15T13:03:44.4267420Z   SCENARIO_SUBDIR: agentic/
+2026-10-15T13:03:44.4267543Z   IS_AGENTIC: 1
+2026-10-15T13:03:44.4267651Z   OFFLOADING: 
+2026-10-15T13:03:44.4267768Z   KV_OFFLOADING: dram
+2026-10-15T13:03:44.4267894Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-15T13:03:44.4268030Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-15T13:03:44.4268147Z   DURATION: 3600
+2026-10-15T13:03:44.4268269Z   RESULT_DIR: /workspace/results
+2026-10-15T13:03:44.4268480Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-15T13:03:44.4268675Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-15T13:03:44.4268836Z ##[endgroup]
+2026-10-15T13:03:44.5678745Z rm: cannot remove '/ws/results/.nfse9d65ad0e41bb1440000031e': Device or resource busy
+2026-10-15T13:03:44.5709192Z rm: cannot remove '/ws/upstream/InferenceX/benchmarks/single_node/agentic/.nfsc7b86f721d690e5100000320': Device or resource busy
+2026-10-15T13:03:44.7489803Z total 0
+2026-10-15T13:03:44.7490097Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Oct 15 13:03 .
+2026-10-15T13:03:44.7490363Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Sep 29 06:33 ..
+2026-10-15T13:03:44.7490610Z drwxr-xr-x 2 root                root                4096 Oct 15 13:02 results
+2026-10-15T13:03:44.7490906Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Oct 15 13:03 upstream
+2026-10-15T13:03:44.8993884Z Post job cleanup.
+2026-10-15T13:03:45.0163733Z Cleaning up orphan processes
