@@ -398,7 +398,7 @@ fi
 # APPLY_FP8CTX=0 is the pure baseline (stock vLLM/aiter chunked-context FP8
 # prefill, patch not installed at all); FP8CTX_MODE selects which kernel path
 # the patch itself takes when APPLY_FP8CTX=1 (asm vs fused).
-export APPLY_FP8CTX="${APPLY_FP8CTX:-0}"  # TEMP: pure-baseline rocprof profiling run (Run B), revert to 1 after dispatch
+export APPLY_FP8CTX="${APPLY_FP8CTX:-1}"  # TEMP: cheap C20/120s smoke test of ASM path + rocprof-flush fix, revert to 0 after dispatch
 export FP8CTX_MODE="${FP8CTX_MODE:-asm}"
 # Forced (not ${VAR:-default}): upstream/InferenceX/benchmarks/runtime_settings.sh
 # does an unconditional `export AIPERF_WARMUP_REQUESTS_PER_LANE='10'` on the
@@ -523,23 +523,24 @@ VLLM_CMD=(
 # ROCPROF_START_DELAY seconds to clear model load/warmup/cudagraph capture,
 # then ROCPROF_DURATION seconds of actual collection.
 # -----------------------------------------------------------------------------
-ROCPROF_ENABLE=1  # TEMP: ASM FP8-CTX / baseline profiling run, revert to 0 after dispatch
+ROCPROF_ENABLE=1  # TEMP: cheap C20/120s smoke test to validate rocprof-flush fix, revert to 0 after dispatch
 LAUNCH_CMD=("${VLLM_CMD[@]}")
 if [ "$ROCPROF_ENABLE" = "1" ]; then
-    # TEMP: shortened window for a short profiling run, not the 1hr production
-    # run the 3300/240 defaults were calibrated for. 487s was measured to first
-    # real FP8-CTX call in a conc=20 run (MAX_NUM_SEQS=28, cudagraph ladder
-    # ~112); conc=96 here uses MAX_NUM_SEQS=144 (ladder ~576, ~5x more capture
-    # sizes), so start_delay is widened to 900s to stay clear of model load +
-    # cudagraph capture without hard data on the exact C96 timing -- pair with
-    # a duration-override comfortably above start_delay+duration at dispatch.
+    # TEMP: cheap C20 smoke test (not the C96 profiling run the 900/240 values
+    # above were sized for). 487s was measured to first real FP8-CTX call in a
+    # conc=20 run (MAX_NUM_SEQS=28, cudagraph ladder ~112) under the OLD
+    # (pre-fix) AIPerf warmup-requests-per-lane default; with that now forced
+    # to 1, model-load+cudagraph-capture dominates and should clear sooner --
+    # 450s start_delay / 90s duration (window closes at 540s) to land inside
+    # the 120s AIPerf benchmark window while this run's sole purpose is
+    # validating the rocprof-flush grace-period fix end-to-end, cheaply.
     # Forced (not ${VAR:-default}) because runners/launch_mi355x-amd.sh already
     # exports ROCPROF_START_DELAY=3300/ROCPROF_DURATION=240 non-empty before this
     # script runs, which silently defeats a :- fallback -- confirmed in run
     # 38589134239's job log (start_delay=3300s won, window never overlapped the
     # 900s benchmark, rocprof watcher found nothing to append).
-    ROCPROF_START_DELAY=900
-    ROCPROF_DURATION=240
+    ROCPROF_START_DELAY=450
+    ROCPROF_DURATION=90
     ROCPROF_DIR="$RESULT_DIR/rocprof"
     mkdir -p "$ROCPROF_DIR"
     LAUNCH_CMD=(
