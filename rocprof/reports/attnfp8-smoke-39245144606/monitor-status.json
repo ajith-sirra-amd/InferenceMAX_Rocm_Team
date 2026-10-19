@@ -1,0 +1,58 @@
+[
+  {
+    "time_utc": "2026-10-19T11:33:50.663183+00:00",
+    "run": 39245144606,
+    "status": "queued",
+    "conclusion": null,
+    "jobs": [
+      {
+        "id": 118035144302,
+        "status": "completed",
+        "conclusion": "success",
+        "runner": "GitHub Actions 1000004319"
+      },
+      {
+        "id": 118035233517,
+        "status": "queued",
+        "conclusion": null,
+        "runner": ""
+      },
+      {
+        "id": 118035234121,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035234187,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035234282,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035234589,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035235383,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035235471,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      }
+    ]
+  }
+]
