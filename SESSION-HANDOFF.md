@@ -5,6 +5,78 @@ Everything below is measured unless explicitly marked as inference.
 
 ---
 
+# LATEST SESSION UPDATE — 2026-10-15 (rocprof flush-on-exit investigation, PAUSED)
+
+**Status: hands-off per user instruction ("You are of no use. Leave it." / "Write hands off here.").
+Do not dispatch further runs on this track without the user explicitly re-engaging.**
+
+Goal (still undelivered): kernel-level comparison table (name, dtype, avg duration, call count)
+between ASM FP8-CTX (`APPLY_FP8CTX=1`) and pure baseline (`APPLY_FP8CTX=0`), via rocprofv3, on
+`kimik3_fp4_mi355x_mtp.sh`. Three attempts this session, zero usable rocprof output from any of them.
+
+## Root cause found: rocprofv3 only flushes on process exit, not on window close
+rocprofv3 buffers all trace/stats data in memory; `rocprof_summary.txt`/CSVs are written only on
+process finalization (SIGTERM/exit), **never** when the `-P start:duration:1` collection window
+simply closes. Confirmed twice: zero "collection started/stopped" lines ever appear in server.log,
+and kernel activity keeps firing long after the window closes with no output until final SIGTERM.
+Flush time is also **not proportional to window size** — a 90s window failed to flush within a
+300s grace period, same as a 240s window failing within 60s. Fixed grace periods (60s, 300s) both
+got SIGKILLed mid-flush.
+
+## Fix implemented (NOT yet validated end-to-end)
+Replaced the fixed-grace-period shutdown in `cleanup_agentic_services()` (in
+`kimik3_fp4_mi355x_mtp.sh`) with: send SIGTERM once, then poll every 5s for
+`$RESULT_DIR/rocprof_summary.txt` to appear and be non-empty, capped at 1200s, before falling back
+to the existing `stop_background_process_tree` with a short grace. This is the user's own
+suggestion ("why can't you wait for cat result csv?") and is architecturally correct — just never
+confirmed to actually work.
+
+Also retuned the collection window to target the real end-of-benchmark traffic burst (not
+server-ready time): for a C20/120s-duration smoke config, real high-n FP8-CTX calls only appear
+right before shutdown. Window set to `ROCPROF_START_DELAY=1080` / `ROCPROF_DURATION=100` (100s
+window, ~70s clear of the observed ~1251s SIGTERM), per user's "profile only 60-120 sec" instruction.
+
+**Gotcha already paid for:** `runners/launch_mi355x-amd.sh` exports `ROCPROF_START_DELAY=3300` /
+`ROCPROF_DURATION=240` non-empty *before* the kimi script runs — a `${VAR:-default}` fallback in
+the kimi script silently loses to this. Must set these as forced assignments, not `:-` defaults
+(confirmed burned in run `38589134239`: window never overlapped the benchmark at all).
+
+## Three attempts, all pushed to `chore/sa-agentx-v1.0`, none produced output
+- **Run A** (first try, 60s fixed grace): SIGKILLed mid-flush.
+- **Run C** `38685024360` (300s fixed grace, window 450-540s): ran the full 300s grace (confirmed
+  via job-step timing) but still SIGKILLed mid-flush, zero rocprof output in the artifact
+  (`agentic_kimik3_tp8_conc20_..._pit2_p03_g07`, artifact ID `11950418332`). Window also missed
+  real traffic — closed 60s before the first real FP8-CTX call; real high-n calls only showed up
+  ~81s before the final SIGTERM.
+- **Run D** `38689267797` ("RunD-C20-120s-rocprof-poll-flush", poll-based fix + retuned window):
+  dispatched but **never confirmed** — still "in progress" at 35+ min, live signals ambiguous
+  (result folder empty, container appeared gone, PID 795 not found via `ps`/`grep` — but that PID
+  was self-reported from inside the container and may not resolve on a host-namespace `ps`, so
+  "not found" is not proof the process died). User called off the investigation before resolution.
+
+## Current repo state (TEMP, smoke-test config — revert before any real throughput run)
+In `kimik3_fp4_mi355x_mtp.sh`:
+- `APPLY_FP8CTX="${APPLY_FP8CTX:-1}"` → revert to `0` after this track is done.
+- `ROCPROF_ENABLE=1`, `ROCPROF_START_DELAY=1080`, `ROCPROF_DURATION=100` (forced, not `:-` defaults).
+- `cleanup_agentic_services()` now polls for `rocprof_summary.txt` (cap 1200s) instead of a fixed
+  grace period — this part is a general improvement, probably worth keeping regardless of FP8CTX work.
+In `amd-master.yaml`: kimi agentic conc-list reverted to `[20]` (cheap smoke test) — revert to
+whatever the real benchmark concurrency should be before a non-smoke run.
+
+## Next steps when resumed
+1. Check run `38689267797`'s actual final status/artifact (never done) — did `rocprof_summary.txt`
+   ever get written, or did the poll hit its 1200s cap?
+2. If the poll fix worked: re-run once for baseline (`APPLY_FP8CTX=0`) and once for ASM FP8-CTX
+   (`APPLY_FP8CTX=1`), pull both `rocprof_summary.txt`, diff kernel names/durations/call counts.
+3. If the poll fix did NOT work: the next theory to test is PID-namespace mismatch between the
+   poll loop (host side, via GH Actions runner) and the process it's watching (container side) —
+   verify the poll loop's `kill -0 $PID` / file-path check actually runs in the same namespace as
+   the wrapped rocprofv3 process before trusting the poll result either way.
+4. Only then build the final deliverable: kernel-level comparison table (name, precision/dtype,
+   avg duration, call count) ASM FP8-CTX vs baseline.
+
+---
+
 # LATEST SESSION UPDATE — 2026-10-14 (new image `fe4df3df`)
 
 Image: `vllm/vllm-openai-rocm:nightly-rocm100-fe4df3df0eb703862c686b256e9fe44fa94c8945`.

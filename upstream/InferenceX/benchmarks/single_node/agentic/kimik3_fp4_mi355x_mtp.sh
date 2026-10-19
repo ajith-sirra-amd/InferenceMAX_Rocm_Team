@@ -117,11 +117,11 @@ case "$CONC" in
         if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
         else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"; fi
         ;;
-    48)
+    48|56)
         DCP_SIZE="${DCP_SIZE:-8}"
         OFFLOAD_POLICY=harness
         MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"
-        MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
+        MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 2 ))}"
         SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}"
         case "$SPEC_NUM_TOKENS" in
             1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
