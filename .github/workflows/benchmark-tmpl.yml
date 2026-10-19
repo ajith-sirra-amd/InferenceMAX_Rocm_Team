@@ -135,7 +135,7 @@ permissions:
 
 jobs:
   benchmark:
-    runs-on: ${{ inputs.runner }}
+    runs-on: ["${{ inputs.runner }}", "nodes:1"]
     timeout-minutes: 500
     name: "${{ inputs.exp-name }} ${{ inputs.precision }} ${{ inputs.runner }} ${{ inputs.framework }} | tp=${{ inputs.tp }} ep=${{ inputs.ep }} dpa=${{ inputs.dp-attn }} | disagg-${{ inputs.disagg }} spec-${{ inputs.spec-decoding }} conc-${{ inputs.conc }}${{ inputs.eval-only && ' | eval-only' || (inputs.run-eval && ' | eval' || '') }}"
     steps:
@@ -161,6 +161,13 @@ jobs:
           #    sleep 5
           #  done
           #fi
+
+          # Remove only a stale benchmark mounted to this repository workspace.
+          if [[ "${{ runner.name }}" == mi355x-amd_* ]]; then
+            if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' bmk-server 2>/dev/null | grep -Fxq "$GITHUB_WORKSPACE"; then
+              docker rm -f bmk-server
+            fi
+          fi
 
           # Cleanup workspace from a prior job on this runner. Agentic jobs
           # write to fixed subpaths (aiperf_artifacts/, metrics_*, etc.), so stale
@@ -253,6 +260,7 @@ jobs:
           name: agentic_${{ env.RESULT_FILENAME }}
           path: |
             results/server.log
+            results/attnfp8_checkpoint_config.json
             results/lmcache_server.log
             results/benchmark.log
             results/config.yaml

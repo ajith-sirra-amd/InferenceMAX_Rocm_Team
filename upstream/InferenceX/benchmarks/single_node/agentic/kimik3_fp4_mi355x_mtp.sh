@@ -29,6 +29,9 @@ rocm-smi || true
 resolve_trace_source
 install_agentic_deps
 
+python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
+export AIPERF_WARMUP_REQUESTS_PER_LANE=1
+
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm
 export VLLM_ROCM_USE_AITER=1
@@ -210,11 +213,6 @@ fi
 EP_ARGS=()
 if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
-QUANT_CONFIG_JSON='{"targets":{"*in_proj_qkvgfab":"fp8_per_channel"}}'
-if [ "$CONC" -eq 1 ]; then
-    QUANT_CONFIG_JSON='{"linear":"fp8_per_channel","ignore":["*kv_b_proj","*vision_tower*","*mm_projector*","*f_b_proj","*fused_qkv_a_proj","*self_attn.g_proj","*.layers.0.mlp.down_proj"]}'
-fi
-
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
 
 ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
@@ -237,7 +235,6 @@ VLLM_CMD=(
     --reasoning-parser kimi_k3
     --enable-prefix-caching
     --stream-interval 10
-    --quantization-config "$QUANT_CONFIG_JSON"
     --attention-config "$ATTENTION_CONFIG_JSON"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
@@ -312,4 +309,8 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    if ! grep -q '\[ATTNFP8-CONTEXT-INPUT\]' "$SERVER_LOG"; then
+        echo "[ATTNFP8-SMOKE] no actual context input evidence" >&2
+        exit 1
+    fi
 fi
