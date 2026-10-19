@@ -110,5 +110,73 @@
         "runner": null
       }
     ]
+  },
+  {
+    "time_utc": "2026-10-19T12:14:01.466938+00:00",
+    "run": 39245144606,
+    "status": "completed",
+    "conclusion": "failure",
+    "jobs": [
+      {
+        "id": 118035144302,
+        "status": "completed",
+        "conclusion": "success",
+        "runner": "GitHub Actions 1000004319"
+      },
+      {
+        "id": 118035233517,
+        "status": "completed",
+        "conclusion": "failure",
+        "runner": "mi355x-amd_pit2_p03_g07"
+      },
+      {
+        "id": 118035234121,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035234187,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035234282,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035234589,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035235383,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118035235471,
+        "status": "completed",
+        "conclusion": "skipped",
+        "runner": null
+      },
+      {
+        "id": 118049995310,
+        "status": "completed",
+        "conclusion": "success",
+        "runner": "GitHub Actions 1000004323"
+      },
+      {
+        "id": 118049995328,
+        "status": "completed",
+        "conclusion": "failure",
+        "runner": "GitHub Actions 1000004322"
+      }
+    ]
   }
 ]
