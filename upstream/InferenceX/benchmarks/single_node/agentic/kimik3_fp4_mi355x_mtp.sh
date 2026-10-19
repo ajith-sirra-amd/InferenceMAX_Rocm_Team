@@ -33,8 +33,10 @@ export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2=1
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
 export AITER_BF16_FP8_MOE_BOUND=0
+export AITER_FLYDSL_STAGE2_FP8=1
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
+export VLLM_ROCM_QUICK_REDUCE_MIN_SIZE_BYTES_MB=16
 export SAFETENSORS_FAST_GPU=1
 export HSA_NO_SCRATCH_RECLAIM=1
 export VLLM_USE_BREAKABLE_CUDAGRAPH=0
@@ -208,6 +210,11 @@ fi
 EP_ARGS=()
 if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
+QUANT_CONFIG_JSON='{"targets":{"*in_proj_qkvgfab":"fp8_per_channel"}}'
+if [ "$CONC" -eq 1 ]; then
+    QUANT_CONFIG_JSON='{"linear":"fp8_per_channel","ignore":["*kv_b_proj","*vision_tower*","*mm_projector*","*f_b_proj","*fused_qkv_a_proj","*self_attn.g_proj","*.layers.0.mlp.down_proj"]}'
+fi
+
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
 
 ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
@@ -219,7 +226,6 @@ VLLM_CMD=(
     --trust-remote-code
     --moe-backend auto
     --tensor-parallel-size "$TP"
-    --load-format fastsafetensors
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
@@ -231,6 +237,7 @@ VLLM_CMD=(
     --reasoning-parser kimi_k3
     --enable-prefix-caching
     --stream-interval 10
+    --quantization-config "$QUANT_CONFIG_JSON"
     --attention-config "$ATTENTION_CONFIG_JSON"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
