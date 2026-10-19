@@ -8599,3 +8599,9 @@
   description:
     - 'Smoke amd/Kimi-K3-Quark-MXFP4-AttnFP8 at C48 TP8/DCP8 MTP using checkpoint quantization, with no extra FP8 context cast. Record config and actual context dtypes; warmup1, 600 seconds, no profiler. Preserve container exit status and request nodes:1.'
     - '测试 amd/Kimi-K3-Quark-MXFP4-AttnFP8：C48 TP8/DCP8 MTP，使用 checkpoint 量化，不添加 FP8 上下文转换。记录配置与真实数据类型；预热 1 次、600 秒、禁用分析器。保留容器退出码并申请 nodes:1。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Create result directory before checkpoint metadata probe. First smoke failed before server launch; no FP8 compatibility or performance result. Keep C48 TP8/DCP8 MTP, warmup1 and 600-second replay.'
+    - '写入 checkpoint 配置前创建结果目录。首次测试在服务器启动前失败，尚无 FP8 兼容性或性能结果。保持 C48 TP8/DCP8 MTP、预热 1 次和 600 秒回放。'

@@ -31,6 +31,7 @@ def install(model_path, result_dir):
               'dtype': config.get('dtype', config.get('torch_dtype')),
               'quantization_config': config.get('quantization_config'),
               'context_extra_quantization': False}
+    pathlib.Path(result_dir).mkdir(parents=True, exist_ok=True)
     pathlib.Path(result_dir, 'attnfp8_checkpoint_config.json').write_text(
         json.dumps(record, indent=2, ensure_ascii=False), encoding='utf-8')
     backend = pathlib.Path(vllm.__file__).parent / 'v1/attention/backends/mla/prefill/aiter_flash_attn.py'

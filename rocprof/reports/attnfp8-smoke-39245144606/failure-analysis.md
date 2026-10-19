@@ -1,0 +1,1 @@
+Probe failed before server launch: results directory absent. Create it before metadata write. Installer regression passed with modeled filesystem; injected attention preserves inputs/output. No model support, accuracy or performance verdict. Replacement dispatched; other jobs untouched.

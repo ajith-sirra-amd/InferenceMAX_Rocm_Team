@@ -29,6 +29,7 @@ rocm-smi || true
 resolve_trace_source
 install_agentic_deps
 
+mkdir -p "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 

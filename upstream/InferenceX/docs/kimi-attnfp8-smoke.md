@@ -24,3 +24,5 @@ Use the source recipe image for the smoke; runtime support requires launch proof
 Do not apply the model card's MXFP4 emulation patch for a different checkpoint.
 Keep existing queued/running workflows untouched; submit one additional run.
 Check run status every 20 minutes while the monitoring session is active.
+
+First smoke39245144606 failed before server launch: results directory absent at metadata write. Create it explicitly in recipe and installer. Installer regression used a modeled filesystem rejecting writes to absent directories, verified metadata and executed real injected backend preserving operands/output. Local disk regression unavailable due filesystem permissions.
