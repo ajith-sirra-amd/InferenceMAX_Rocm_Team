@@ -8641,3 +8641,9 @@
   description:
     - 'Adapt native gather_compressed_context for AMD quantized reconstruction: FP8-byte KV collective followed by source-rank-scale BF16 decoding. Retain probes, exact original BF16 all-gather parity, GPU decode preflight, auto loader and C48 warmup1/600second smoke. No additional cache quantization; measure persistent scratch capacity impact.'
     - '适配原生 gather_compressed_context 以支持 AMD 量化重建：FP8 字节 KV 通信后按源 rank scale 解码到 BF16。保留日志、原 BF16 all-gather 精确一致性检查、GPU 解码预检、auto loader、C48、预热1次及600秒 smoke。不增加缓存量化，测量持久缓冲的容量影响。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Select the active GPU before each Triton FP8 decode preflight launch. Smoke39588733292 passed GPU0 decoding and failed on GPU1 before server launch. Retain all8-device checks, cache parity, native byte gathering and C48 warmup1/600second smoke.'
+    - '在每次 Triton FP8 解码预检启动前选择活动 GPU。Smoke39588733292 通过 GPU0 解码但在服务器启动前的 GPU1 检查失败。保留全8设备检查、缓存一致性、原生字节 gather 和 C48 预热1次/600秒 smoke。'

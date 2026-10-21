@@ -46,3 +46,7 @@ Workflow成功。全8个 GPU 记录 eligibility=False：重建权重为 FP8 (307
 启动前验证 GPU 解码的字节编码、rank scale 和末尾掩码。每个 backend 首次调用与独立的原 BF16 缓存 gather 精确比较，不一致即失败。
 参考通信属于预热开销。初始化后 scale 假定不变，只收集一次。支持普通 fp8 缓存，保留 packed 缓存及 BF16 分支。
 仅 C48、预热1次、600秒 smoke；全部8个 GPU 的字节通信与一致性通过前不运行完整测试。
+
+## 多 GPU 解码预检设备修复
+
+Smoke39588733292 在 GPU0 通过 FP8 精确解码，随后在服务器启动前的 GPU1 检查失败。原因是分配 GPU1 张量时没有切换 Triton 活动设备。修复在每次解码启动前显式选择 GPU。保留全8个 GPU 预检和真实缓存一致性门禁。失败运行未产生 FP8 collective 或性能证据。

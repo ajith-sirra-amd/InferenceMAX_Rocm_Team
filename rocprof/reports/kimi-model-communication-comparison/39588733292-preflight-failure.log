@@ -1,0 +1,1364 @@
+ï»¿2026-10-21T11:00:46.0838005Z Current runner version: '2.337.0'
+2026-10-21T11:00:46.0940236Z Runner name: 'mi355x-amd_pit2_p03_g07'
+2026-10-21T11:00:46.0940679Z Runner group name: 'Default'
+2026-10-21T11:00:46.0941270Z Machine name: 'pit2-p03-g24'
+2026-10-21T11:00:46.0942813Z ##[group]GITHUB_TOKEN Permissions
+2026-10-21T11:00:46.0944181Z Contents: read
+2026-10-21T11:00:46.0944506Z Metadata: read
+2026-10-21T11:00:46.0944801Z ##[endgroup]
+2026-10-21T11:00:46.0946233Z Secret source: Actions
+2026-10-21T11:00:46.0946708Z Cache mode: write
+2026-10-21T11:00:46.0947090Z Prepare workflow directory
+2026-10-21T11:00:46.2934973Z Prepare all required actions
+2026-10-21T11:00:46.2961946Z Getting action download info
+2026-10-21T11:00:46.5085660Z Download action repository 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd' (SHA:de0fac2e4500dabe0009e67214ff5f5447ce83dd)
+2026-10-21T11:00:50.2132302Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-10-21T11:00:52.9948982Z Uses: ajith-sirra-amd/InferenceMAX_Rocm_Team/.github/workflows/benchmark-tmpl.yml@refs/heads/perf/kimi-attnfp8-kv-allgather-20261021 (4ab6fad17603881b8ee64143d50fb26dff0be8ac)
+2026-10-21T11:00:52.9951189Z ##[group] Inputs
+2026-10-21T11:00:52.9951387Z   runner: cluster:mi355x-amds-2
+2026-10-21T11:00:52.9951620Z   image: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:00:52.9951864Z   model: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:00:52.9952043Z   model-prefix: kimik3
+2026-10-21T11:00:52.9952197Z   precision: fp4
+2026-10-21T11:00:52.9952338Z   framework: vllm
+2026-10-21T11:00:52.9952515Z   exp-name: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:00:52.9952706Z   isl: 0
+2026-10-21T11:00:52.9952837Z   osl: 0
+2026-10-21T11:00:52.9952967Z   tp: 8
+2026-10-21T11:00:52.9953093Z   ep: 1
+2026-10-21T11:00:52.9953387Z   dp-attn: false
+2026-10-21T11:00:52.9953539Z   max-model-len: 0
+2026-10-21T11:00:52.9953700Z   conc: 48
+2026-10-21T11:00:52.9953846Z   spec-decoding: mtp
+2026-10-21T11:00:52.9953990Z   disagg: false
+2026-10-21T11:00:52.9954126Z   run-eval: false
+2026-10-21T11:00:52.9954270Z   eval-only: false
+2026-10-21T11:00:52.9954413Z   random-range-ratio: 0.8
+2026-10-21T11:00:52.9954590Z   ref: 4ab6fad17603881b8ee64143d50fb26dff0be8ac
+2026-10-21T11:00:52.9954777Z   scenario-type: agentic-coding
+2026-10-21T11:00:52.9954931Z   offloading: 
+2026-10-21T11:00:52.9955067Z   kv-offloading: dram
+2026-10-21T11:00:52.9955223Z   kv-offload-backend: vllm-simple
+2026-10-21T11:00:52.9955390Z   total-cpu-dram-gb: 2249
+2026-10-21T11:00:52.9955607Z   duration: 600
+2026-10-21T11:00:52.9955937Z   generate-cli-command: test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp
+2026-10-21T11:00:52.9956367Z   test-name: Kimi AMD native FP8 KV gather quantized reconstruction C48 parity smoke
+2026-10-21T11:00:52.9956601Z   duration-override: 600
+2026-10-21T11:00:52.9956767Z ##[endgroup]
+2026-10-21T11:00:52.9957245Z Complete job name: agentic / (vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce, amd/Kimi-K3-Qu... / kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp fp4 cluster:mi355x-amds-2 vllm | tp=8 ep=1 dpa=false | disagg-false spec-mtp conc-48
+2026-10-21T11:00:53.2332372Z ##[group]Run ## Cleanup Docker resources
+2026-10-21T11:00:53.2332730Z [36;1m## Cleanup Docker resources[0m
+2026-10-21T11:00:53.2332984Z [36;1m#if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then[0m
+2026-10-21T11:00:53.2333227Z [36;1m#  echo "[Docker] Cleaning up resources ..."[0m
+2026-10-21T11:00:53.2333419Z [36;1m#  docker ps -aq | xargs -r docker rm -f[0m
+2026-10-21T11:00:53.2333598Z [36;1m#  docker network prune -f[0m
+2026-10-21T11:00:53.2333765Z [36;1m#  while [ -n "$(docker ps -aq)" ]; do[0m
+2026-10-21T11:00:53.2333932Z [36;1m#    docker ps -a[0m
+2026-10-21T11:00:53.2334073Z [36;1m#    sleep 5[0m
+2026-10-21T11:00:53.2334204Z [36;1m#  done[0m
+2026-10-21T11:00:53.2334326Z [36;1m#fi[0m
+2026-10-21T11:00:53.2334671Z [36;1m#[0m
+2026-10-21T11:00:53.2334797Z [36;1m## Cleanup SLURM resources[0m
+2026-10-21T11:00:53.2334969Z [36;1m#if command -v squeue >/dev/null 2>&1; then[0m
+2026-10-21T11:00:53.2335225Z [36;1m#  echo "[Slurm] Cleaning up jobs with name: mi355x-amd_pit2_p03_g07 ..."[0m
+2026-10-21T11:00:53.2335502Z [36;1m#  scancel --name="mi355x-amd_pit2_p03_g07" || true[0m
+2026-10-21T11:00:53.2335756Z [36;1m#  while [ -n "$(squeue --name='mi355x-amd_pit2_p03_g07' --noheader --format='%i')" ]; do[0m
+2026-10-21T11:00:53.2336009Z [36;1m#    squeue --name="mi355x-amd_pit2_p03_g07"[0m
+2026-10-21T11:00:53.2336178Z [36;1m#    sleep 5[0m
+2026-10-21T11:00:53.2336308Z [36;1m#  done[0m
+2026-10-21T11:00:53.2336431Z [36;1m#fi[0m
+2026-10-21T11:00:53.2336551Z [36;1m[0m
+2026-10-21T11:00:53.2336729Z [36;1m# Remove only a stale benchmark mounted to this repository workspace.[0m
+2026-10-21T11:00:53.2336969Z [36;1mif [[ "mi355x-amd_pit2_p03_g07" == mi355x-amd_* ]]; then[0m
+2026-10-21T11:00:53.2337293Z [36;1m  if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' bmk-server 2>/dev/null | grep -Fxq "$GITHUB_WORKSPACE"; then[0m
+2026-10-21T11:00:53.2337595Z [36;1m    docker rm -f bmk-server[0m
+2026-10-21T11:00:53.2337745Z [36;1m  fi[0m
+2026-10-21T11:00:53.2337866Z [36;1mfi[0m
+2026-10-21T11:00:53.2337983Z [36;1m[0m
+2026-10-21T11:00:53.2338154Z [36;1m# Cleanup workspace from a prior job on this runner. Agentic jobs[0m
+2026-10-21T11:00:53.2338410Z [36;1m# write to fixed subpaths (aiperf_artifacts/, metrics_*, etc.), so stale[0m
+2026-10-21T11:00:53.2338661Z [36;1m# data from a previous job would otherwise be picked up as this[0m
+2026-10-21T11:00:53.2338872Z [36;1m# job's output when replay fails early.[0m
+2026-10-21T11:00:53.2339104Z [36;1m# Use Docker to handle permission issues from prior container-created files.[0m
+2026-10-21T11:00:53.2339548Z [36;1mdocker run --rm -v "/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team":/ws --entrypoint sh $IMAGE -c "rm -rf /ws/* /ws/.[!.]*" || true[0m
+2026-10-21T11:00:53.2340038Z [36;1mls -la "/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team" [0m
+2026-10-21T11:00:53.2356664Z shell: /usr/bin/bash -e {0}
+2026-10-21T11:00:53.2356916Z env:
+2026-10-21T11:00:53.2357043Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:00:53.2357420Z   HF_TOKEN: ***
+2026-10-21T11:00:53.2357552Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:00:53.2357736Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:00:53.2357935Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:00:53.2358096Z   MODEL_PREFIX: kimik3
+2026-10-21T11:00:53.2358226Z   ISL: 0
+2026-10-21T11:00:53.2358341Z   OSL: 0
+2026-10-21T11:00:53.2358460Z   MAX_MODEL_LEN: 0
+2026-10-21T11:00:53.2358658Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:00:53.2358876Z   FRAMEWORK: vllm
+2026-10-21T11:00:53.2359005Z   PRECISION: fp4
+2026-10-21T11:00:53.2359134Z   TP: 8
+2026-10-21T11:00:53.2359252Z   EP_SIZE: 1
+2026-10-21T11:00:53.2359376Z   DP_ATTENTION: false
+2026-10-21T11:00:53.2359511Z   CONC: 48
+2026-10-21T11:00:53.2359631Z   SPEC_DECODING: mtp
+2026-10-21T11:00:53.2359931Z   DISAGG: false
+2026-10-21T11:00:53.2360057Z   RUN_EVAL: false
+2026-10-21T11:00:53.2360181Z   EVAL_ONLY: false
+2026-10-21T11:00:53.2360316Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:00:53.2360468Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:00:53.2360610Z   IS_AGENTIC: 1
+2026-10-21T11:00:53.2360734Z   OFFLOADING: 
+2026-10-21T11:00:53.2360860Z   KV_OFFLOADING: dram
+2026-10-21T11:00:53.2361001Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:00:53.2361153Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:00:53.2361309Z   DURATION: 600
+2026-10-21T11:00:53.2361440Z   RESULT_DIR: /workspace/results
+2026-10-21T11:00:53.2361593Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:00:53.2410078Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:00:53.2410272Z ##[endgroup]
+2026-10-21T11:00:53.5637330Z total 0
+2026-10-21T11:00:53.5637637Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Oct 21 10:16 .
+2026-10-21T11:00:53.5637946Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Sep 29 06:33 ..
+2026-10-21T11:00:53.7220665Z ##[group]Run actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+2026-10-21T11:00:53.7220885Z with:
+2026-10-21T11:00:53.7221279Z   token: ***
+2026-10-21T11:00:53.7221388Z   fetch-depth: 0
+2026-10-21T11:00:53.7221510Z   ref: 4ab6fad17603881b8ee64143d50fb26dff0be8ac
+2026-10-21T11:00:53.7221652Z   clean: true
+2026-10-21T11:00:53.7221753Z   submodules: true
+2026-10-21T11:00:53.7221894Z   repository: ajith-sirra-amd/InferenceMAX_Rocm_Team
+2026-10-21T11:00:53.7222049Z   ssh-strict: true
+2026-10-21T11:00:53.7222148Z   ssh-user: git
+2026-10-21T11:00:53.7222265Z   persist-credentials: true
+2026-10-21T11:00:53.7222399Z   sparse-checkout-cone-mode: true
+2026-10-21T11:00:53.7222542Z   fetch-tags: false
+2026-10-21T11:00:53.7222651Z   show-progress: true
+2026-10-21T11:00:53.7222773Z   lfs: false
+2026-10-21T11:00:53.7222877Z   set-safe-directory: true
+2026-10-21T11:00:53.7222993Z env:
+2026-10-21T11:00:53.7223094Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:00:53.7223242Z   HF_TOKEN: ***
+2026-10-21T11:00:53.7223390Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:00:53.7223545Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:00:53.7223715Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:00:53.7223854Z   MODEL_PREFIX: kimik3
+2026-10-21T11:00:53.7223961Z   ISL: 0
+2026-10-21T11:00:53.7224051Z   OSL: 0
+2026-10-21T11:00:53.7224141Z   MAX_MODEL_LEN: 0
+2026-10-21T11:00:53.7224324Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:00:53.7224550Z   FRAMEWORK: vllm
+2026-10-21T11:00:53.7224651Z   PRECISION: fp4
+2026-10-21T11:00:53.7224753Z   TP: 8
+2026-10-21T11:00:53.7224845Z   EP_SIZE: 1
+2026-10-21T11:00:53.7224944Z   DP_ATTENTION: false
+2026-10-21T11:00:53.7225048Z   CONC: 48
+2026-10-21T11:00:53.7225167Z   SPEC_DECODING: mtp
+2026-10-21T11:00:53.7225279Z   DISAGG: false
+2026-10-21T11:00:53.7225378Z   RUN_EVAL: false
+2026-10-21T11:00:53.7225591Z   EVAL_ONLY: false
+2026-10-21T11:00:53.7225702Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:00:53.7225836Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:00:53.7225948Z   IS_AGENTIC: 1
+2026-10-21T11:00:53.7226050Z   OFFLOADING: 
+2026-10-21T11:00:53.7226152Z   KV_OFFLOADING: dram
+2026-10-21T11:00:53.7226268Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:00:53.7226398Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:00:53.7226510Z   DURATION: 600
+2026-10-21T11:00:53.7226618Z   RESULT_DIR: /workspace/results
+2026-10-21T11:00:53.7226748Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:00:53.7226896Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:00:53.7227060Z ##[endgroup]
+2026-10-21T11:00:53.8093638Z Syncing repository: ajith-sirra-amd/InferenceMAX_Rocm_Team
+2026-10-21T11:00:53.8094311Z ##[group]Getting Git version info
+2026-10-21T11:00:53.8094615Z Working directory is '/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team'
+2026-10-21T11:00:53.8095003Z [command]/usr/bin/git version
+2026-10-21T11:00:53.8095134Z git version 2.34.1
+2026-10-21T11:00:53.8095637Z ##[endgroup]
+2026-10-21T11:00:53.8097932Z Temporarily overriding HOME='/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/_temp/75ff7da4-ffdb-46af-a6aa-f7cf2a630cd6' before making global git config changes
+2026-10-21T11:00:53.8098352Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-21T11:00:53.8098784Z [command]/usr/bin/git config --global --add safe.directory /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team
+2026-10-21T11:00:53.8347803Z Deleting the contents of '/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team'
+2026-10-21T11:00:53.8387134Z ##[group]Initializing the repository
+2026-10-21T11:00:53.8388949Z [command]/usr/bin/git init /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team
+2026-10-21T11:00:53.9583756Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-21T11:00:53.9584247Z hint: is subject to change. To configure the initial branch name to use in all
+2026-10-21T11:00:53.9584548Z hint: of your new repositories, which will suppress this warning, call:
+2026-10-21T11:00:53.9584736Z hint: 
+2026-10-21T11:00:53.9584938Z hint: 	git config --global init.defaultBranch <name>
+2026-10-21T11:00:53.9585108Z hint: 
+2026-10-21T11:00:53.9585276Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-21T11:00:53.9585650Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-21T11:00:53.9585857Z hint: 
+2026-10-21T11:00:53.9585977Z hint: 	git branch -m <name>
+2026-10-21T11:00:54.0271698Z Initialized empty Git repository in /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/.git/
+2026-10-21T11:00:54.0282641Z [command]/usr/bin/git remote add origin https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team
+2026-10-21T11:00:54.0794215Z ##[endgroup]
+2026-10-21T11:00:54.0794460Z ##[group]Disabling automatic garbage collection
+2026-10-21T11:00:54.0796324Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-21T11:00:54.1061754Z ##[endgroup]
+2026-10-21T11:00:54.1061943Z ##[group]Setting up auth
+2026-10-21T11:00:54.1062665Z Removing SSH command configuration
+2026-10-21T11:00:54.1065981Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-21T11:00:54.1251859Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-21T11:00:54.2316260Z Removing HTTP extra header
+2026-10-21T11:00:54.2318395Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-21T11:00:54.2447455Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-21T11:00:54.3425659Z Removing includeIf entries pointing to credentials config files
+2026-10-21T11:00:54.3429222Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-21T11:00:54.3575182Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T11:00:54.4465395Z [command]/usr/bin/git config --file /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-21T11:00:54.4767422Z [command]/usr/bin/git config --local includeIf.gitdir:/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/.git.path /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config
+2026-10-21T11:00:54.5082891Z [command]/usr/bin/git config --local includeIf.gitdir:/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/.git/worktrees/*.path /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config
+2026-10-21T11:00:54.5361753Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config
+2026-10-21T11:00:54.5660867Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config
+2026-10-21T11:00:54.5978172Z ##[endgroup]
+2026-10-21T11:00:54.5978364Z ##[group]Fetching the repository
+2026-10-21T11:00:54.5986517Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-10-21T11:01:13.3027767Z From https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team
+2026-10-21T11:01:13.3028268Z  * [new branch]        ajith-glm-5.2          -> origin/ajith-glm-5.2
+2026-10-21T11:01:13.3294699Z  * [new branch]        chore/sa-agentx-c1-c20 -> origin/chore/sa-agentx-c1-c20
+2026-10-21T11:01:13.3573442Z  * [new branch]        chore/sa-agentx-v1.0   -> origin/chore/sa-agentx-v1.0
+2026-10-21T11:01:13.3858147Z  * [new branch]        dependabot/github_actions/github-actions-da94f8b9d8 -> origin/dependabot/github_actions/github-actions-da94f8b9d8
+2026-10-21T11:01:13.4080352Z  * [new branch]        exp/c12-mnbt16k        -> origin/exp/c12-mnbt16k
+2026-10-21T11:01:13.4240816Z  * [new branch]        exp/glm52-hicache-chunk-32k -> origin/exp/glm52-hicache-chunk-32k
+2026-10-21T11:01:13.4426804Z  * [new branch]        exp/glm52-hicache-io-threads-4 -> origin/exp/glm52-hicache-io-threads-4
+2026-10-21T11:01:13.4606020Z  * [new branch]        exp/glm52-hicache-memfrac-088 -> origin/exp/glm52-hicache-memfrac-088
+2026-10-21T11:01:13.4794506Z  * [new branch]        exp/glm52-hicache-prefetch-wait -> origin/exp/glm52-hicache-prefetch-wait
+2026-10-21T11:01:13.4936624Z  * [new branch]        kimik3-agentic-smoke   -> origin/kimik3-agentic-smoke
+2026-10-21T11:01:13.5195615Z  * [new branch]        perf/fp8ctx-asm-lse-fix-20261015 -> origin/perf/fp8ctx-asm-lse-fix-20261015
+2026-10-21T11:01:13.5375441Z  * [new branch]        perf/fp8ctx-asm-performance-only-20261015 -> origin/perf/fp8ctx-asm-performance-only-20261015
+2026-10-21T11:01:13.5587988Z  * [new branch]        perf/fp8ctx-asm-smoke-20261015 -> origin/perf/fp8ctx-asm-smoke-20261015
+2026-10-21T11:01:13.5785376Z  * [new branch]        perf/fp8ctx-flydsl-smoke-20261015 -> origin/perf/fp8ctx-flydsl-smoke-20261015
+2026-10-21T11:01:13.5951516Z  * [new branch]        perf/fp8ctx-raw-projection-20261015 -> origin/perf/fp8ctx-raw-projection-20261015
+2026-10-21T11:01:13.6098158Z  * [new branch]        perf/kimi-attnfp8-kv-allgather-20261021 -> origin/perf/kimi-attnfp8-kv-allgather-20261021
+2026-10-21T11:01:13.6259514Z  * [new branch]        perf/kimi-attnfp8-smoke-20261019 -> origin/perf/kimi-attnfp8-smoke-20261019
+2026-10-21T11:01:13.6487504Z  * [new branch]        reports/kimi-c96-rocprof-20261015 -> origin/reports/kimi-c96-rocprof-20261015
+2026-10-21T11:01:13.6876235Z [command]/usr/bin/git rev-parse --verify --quiet 4ab6fad17603881b8ee64143d50fb26dff0be8ac^{object}
+2026-10-21T11:01:13.7154231Z 4ab6fad17603881b8ee64143d50fb26dff0be8ac
+2026-10-21T11:01:13.7181694Z ##[endgroup]
+2026-10-21T11:01:13.7182076Z ##[group]Determining the checkout info
+2026-10-21T11:01:13.7182802Z ##[endgroup]
+2026-10-21T11:01:13.7187014Z [command]/usr/bin/git sparse-checkout disable
+2026-10-21T11:01:13.7947184Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-21T11:01:13.8257486Z ##[group]Checking out the ref
+2026-10-21T11:01:13.8259397Z [command]/usr/bin/git checkout --progress --force 4ab6fad17603881b8ee64143d50fb26dff0be8ac
+2026-10-21T11:01:15.1023562Z Updating files:   3% (142/4488)
+2026-10-21T11:01:15.4075173Z Updating files:   4% (180/4488)
+2026-10-21T11:01:15.7096306Z Updating files:   5% (225/4488)
+2026-10-21T11:01:15.8624382Z Updating files:   6% (270/4488)
+2026-10-21T11:01:15.9835903Z Updating files:   6% (296/4488)
+2026-10-21T11:01:16.2701346Z Updating files:   7% (315/4488)
+2026-10-21T11:01:16.5294083Z Updating files:   8% (360/4488)
+2026-10-21T11:01:16.8040324Z Updating files:   9% (404/4488)
+2026-10-21T11:01:16.8667245Z Updating files:  10% (449/4488)
+2026-10-21T11:01:17.0968112Z Updating files:  10% (457/4488)
+2026-10-21T11:01:17.3905413Z Updating files:  11% (494/4488)
+2026-10-21T11:01:17.6988016Z Updating files:  12% (539/4488)
+2026-10-21T11:01:17.8748863Z Updating files:  13% (584/4488)
+2026-10-21T11:01:18.0071763Z Updating files:  13% (608/4488)
+2026-10-21T11:01:18.3072136Z Updating files:  14% (629/4488)
+2026-10-21T11:01:18.6178999Z Updating files:  15% (674/4488)
+2026-10-21T11:01:18.8628603Z Updating files:  16% (719/4488)
+2026-10-21T11:01:18.9022768Z Updating files:  16% (757/4488)
+2026-10-21T11:01:19.1860507Z Updating files:  17% (763/4488)
+2026-10-21T11:01:19.4791990Z Updating files:  18% (808/4488)
+2026-10-21T11:01:19.7607904Z Updating files:  19% (853/4488)
+2026-10-21T11:01:19.8622976Z Updating files:  20% (898/4488)
+2026-10-21T11:01:20.0455821Z Updating files:  20% (912/4488)
+2026-10-21T11:01:20.3016790Z Updating files:  21% (943/4488)
+2026-10-21T11:01:20.5681006Z Updating files:  22% (988/4488)
+2026-10-21T11:01:20.8235638Z Updating files:  23% (1033/4488)
+2026-10-21T11:01:20.8683124Z Updating files:  24% (1078/4488)
+2026-10-21T11:01:21.0601499Z Updating files:  24% (1086/4488)
+2026-10-21T11:01:21.3120056Z Updating files:  25% (1122/4488)
+2026-10-21T11:01:21.5839872Z Updating files:  26% (1167/4488)
+2026-10-21T11:01:21.8645825Z Updating files:  27% (1212/4488)
+2026-10-21T11:01:21.8739276Z Updating files:  27% (1256/4488)
+2026-10-21T11:01:22.1345229Z Updating files:  28% (1257/4488)
+2026-10-21T11:01:22.4413748Z Updating files:  29% (1302/4488)
+2026-10-21T11:01:22.7204451Z Updating files:  30% (1347/4488)
+2026-10-21T11:01:22.8639061Z Updating files:  31% (1392/4488)
+2026-10-21T11:01:22.9955022Z Updating files:  31% (1415/4488)
+2026-10-21T11:01:23.2513237Z Updating files:  32% (1437/4488)
+2026-10-21T11:01:23.5181792Z Updating files:  33% (1482/4488)
+2026-10-21T11:01:23.8096904Z Updating files:  34% (1526/4488)
+2026-10-21T11:01:23.8620934Z Updating files:  35% (1571/4488)
+2026-10-21T11:01:24.0888225Z Updating files:  35% (1580/4488)
+2026-10-21T11:01:24.3761049Z Updating files:  36% (1616/4488)
+2026-10-21T11:01:24.6623840Z Updating files:  37% (1661/4488)
+2026-10-21T11:01:24.8661229Z Updating files:  38% (1706/4488)
+2026-10-21T11:01:24.9254407Z Updating files:  38% (1741/4488)
+2026-10-21T11:01:25.1934988Z Updating files:  39% (1751/4488)
+2026-10-21T11:01:25.5013220Z Updating files:  40% (1796/4488)
+2026-10-21T11:01:25.7926889Z Updating files:  41% (1841/4488)
+2026-10-21T11:01:25.8667593Z Updating files:  42% (1885/4488)
+2026-10-21T11:01:26.0898331Z Updating files:  42% (1897/4488)
+2026-10-21T11:01:26.4376744Z Updating files:  43% (1930/4488)
+2026-10-21T11:01:26.7857888Z Updating files:  44% (1975/4488)
+2026-10-21T11:01:26.8677990Z Updating files:  45% (2020/4488)
+2026-10-21T11:01:27.1288958Z Updating files:  45% (2030/4488)
+2026-10-21T11:01:27.4359430Z Updating files:  46% (2065/4488)
+2026-10-21T11:01:27.7220079Z Updating files:  47% (2110/4488)
+2026-10-21T11:01:27.8646756Z Updating files:  48% (2155/4488)
+2026-10-21T11:01:28.0334554Z Updating files:  48% (2175/4488)
+2026-10-21T11:01:28.3154669Z Updating files:  49% (2200/4488)
+2026-10-21T11:01:28.5940218Z Updating files:  50% (2244/4488)
+2026-10-21T11:01:28.8477661Z Updating files:  51% (2289/4488)
+2026-10-21T11:01:28.8657527Z Updating files:  52% (2334/4488)
+2026-10-21T11:01:29.1127338Z Updating files:  52% (2337/4488)
+2026-10-21T11:01:29.3946709Z Updating files:  53% (2379/4488)
+2026-10-21T11:01:29.6897705Z Updating files:  54% (2424/4488)
+2026-10-21T11:01:29.8635081Z Updating files:  55% (2469/4488)
+2026-10-21T11:01:29.9894397Z Updating files:  55% (2495/4488)
+2026-10-21T11:01:30.2579273Z Updating files:  56% (2514/4488)
+2026-10-21T11:01:30.5248670Z Updating files:  57% (2559/4488)
+2026-10-21T11:01:30.7642832Z Updating files:  58% (2604/4488)
+2026-10-21T11:01:30.8668637Z Updating files:  59% (2648/4488)
+2026-10-21T11:01:31.0337819Z Updating files:  59% (2663/4488)
+2026-10-21T11:01:31.3264488Z Updating files:  60% (2693/4488)
+2026-10-21T11:01:31.6074972Z Updating files:  61% (2738/4488)
+2026-10-21T11:01:31.8619126Z Updating files:  62% (2783/4488)
+2026-10-21T11:01:31.8926160Z Updating files:  62% (2823/4488)
+2026-10-21T11:01:32.2295797Z Updating files:  63% (2828/4488)
+2026-10-21T11:01:32.5649543Z Updating files:  64% (2873/4488)
+2026-10-21T11:01:32.8654140Z Updating files:  65% (2918/4488)
+2026-10-21T11:01:32.8777728Z Updating files:  65% (2961/4488)
+2026-10-21T11:01:33.1237548Z Updating files:  66% (2963/4488)
+2026-10-21T11:01:33.4105224Z Updating files:  67% (3007/4488)
+2026-10-21T11:01:33.6870867Z Updating files:  68% (3052/4488)
+2026-10-21T11:01:33.8623728Z Updating files:  69% (3097/4488)
+2026-10-21T11:01:33.9463743Z Updating files:  69% (3127/4488)
+2026-10-21T11:01:34.2023389Z Updating files:  70% (3142/4488)
+2026-10-21T11:01:34.4926110Z Updating files:  71% (3187/4488)
+2026-10-21T11:01:34.8185842Z Updating files:  72% (3232/4488)
+2026-10-21T11:01:34.8623891Z Updating files:  73% (3277/4488)
+2026-10-21T11:01:35.0779939Z Updating files:  73% (3284/4488)
+2026-10-21T11:01:35.3412842Z Updating files:  74% (3322/4488)
+2026-10-21T11:01:35.6290798Z Updating files:  75% (3366/4488)
+2026-10-21T11:01:35.8649579Z Updating files:  76% (3411/4488)
+2026-10-21T11:01:35.9155100Z Updating files:  76% (3449/4488)
+2026-10-21T11:01:36.2132111Z Updating files:  77% (3456/4488)
+2026-10-21T11:01:36.4900468Z Updating files:  78% (3501/4488)
+2026-10-21T11:01:36.7732040Z Updating files:  79% (3546/4488)
+2026-10-21T11:01:36.8649031Z Updating files:  80% (3591/4488)
+2026-10-21T11:01:37.0557155Z Updating files:  80% (3607/4488)
+2026-10-21T11:01:37.3432028Z Updating files:  81% (3636/4488)
+2026-10-21T11:01:37.6306592Z Updating files:  82% (3681/4488)
+2026-10-21T11:01:37.8637494Z Updating files:  83% (3726/4488)
+2026-10-21T11:01:37.9053232Z Updating files:  83% (3762/4488)
+2026-10-21T11:01:38.1691618Z Updating files:  84% (3770/4488)
+2026-10-21T11:01:38.4499136Z Updating files:  85% (3815/4488)
+2026-10-21T11:01:38.7226813Z Updating files:  86% (3860/4488)
+2026-10-21T11:01:38.8665936Z Updating files:  87% (3905/4488)
+2026-10-21T11:01:39.0050936Z Updating files:  87% (3928/4488)
+2026-10-21T11:01:39.2933418Z Updating files:  88% (3950/4488)
+2026-10-21T11:01:39.5492962Z Updating files:  89% (3995/4488)
+2026-10-21T11:01:39.8066065Z Updating files:  90% (4040/4488)
+2026-10-21T11:01:39.8648471Z Updating files:  91% (4085/4488)
+2026-10-21T11:01:40.0513285Z Updating files:  91% (4096/4488)
+2026-10-21T11:01:40.3103440Z Updating files:  92% (4129/4488)
+2026-10-21T11:01:40.6057954Z Updating files:  93% (4174/4488)
+2026-10-21T11:01:40.8657682Z Updating files:  94% (4219/4488)
+2026-10-21T11:01:41.1152558Z Updating files:  95% (4264/4488)
+2026-10-21T11:01:41.3628520Z Updating files:  96% (4309/4488)
+2026-10-21T11:01:41.6179102Z Updating files:  97% (4354/4488)
+2026-10-21T11:01:41.8647542Z Updating files:  98% (4399/4488)
+2026-10-21T11:01:41.8856473Z Updating files:  98% (4441/4488)
+2026-10-21T11:01:42.1564171Z Updating files:  99% (4444/4488)
+2026-10-21T11:01:42.1568464Z Updating files: 100% (4488/4488)
+2026-10-21T11:01:42.1569002Z Updating files: 100% (4488/4488), done.
+2026-10-21T11:01:42.2134333Z Note: switching to '4ab6fad17603881b8ee64143d50fb26dff0be8ac'.
+2026-10-21T11:01:42.2134603Z 
+2026-10-21T11:01:42.2134787Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-21T11:01:42.2135186Z changes and commit them, and you can discard any commits you make in this
+2026-10-21T11:01:42.2135650Z state without impacting any branches by switching back to a branch.
+2026-10-21T11:01:42.2135882Z 
+2026-10-21T11:01:42.2136041Z If you want to create a new branch to retain commits you create, you may
+2026-10-21T11:01:42.2136440Z do so (now or later) by using -c with the switch command. Example:
+2026-10-21T11:01:42.2136653Z 
+2026-10-21T11:01:42.2136754Z   git switch -c <new-branch-name>
+2026-10-21T11:01:42.2136901Z 
+2026-10-21T11:01:42.2136988Z Or undo this operation with:
+2026-10-21T11:01:42.2137122Z 
+2026-10-21T11:01:42.2137198Z   git switch -
+2026-10-21T11:01:42.2137299Z 
+2026-10-21T11:01:42.2137476Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-21T11:01:42.2137736Z 
+2026-10-21T11:01:42.2137943Z HEAD is now at 4ab6fad1 perf(kimi): reuse native FP8 KV gather with quantized reconstruction
+2026-10-21T11:01:42.2217317Z ##[endgroup]
+2026-10-21T11:01:42.2217589Z ##[group]Setting up auth for fetching submodules
+2026-10-21T11:01:42.2222922Z [command]/usr/bin/git config --file /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-21T11:01:42.2663217Z [command]/usr/bin/git config --global include.path /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config
+2026-10-21T11:01:42.2962912Z [command]/usr/bin/git config --global --unset-all url.https://github.com/.insteadOf
+2026-10-21T11:01:42.3289159Z [command]/usr/bin/git config --global --add url.https://github.com/.insteadOf git@github.com:
+2026-10-21T11:01:42.3651191Z [command]/usr/bin/git config --global --add url.https://github.com/.insteadOf org-122240613@github.com:
+2026-10-21T11:01:42.4012381Z ##[endgroup]
+2026-10-21T11:01:42.4012578Z ##[group]Fetching submodules
+2026-10-21T11:01:42.4015006Z [command]/usr/bin/git submodule sync
+2026-10-21T11:01:42.5765761Z [command]/usr/bin/git -c protocol.version=2 submodule update --init --force
+2026-10-21T11:01:42.7893437Z Submodule 'upstream/InferenceX/utils/aiperf' (https://github.com/SemiAnalysisAI/aiperf.git) registered for path 'upstream/InferenceX/utils/aiperf'
+2026-10-21T11:01:42.8995886Z Cloning into '/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/upstream/InferenceX/utils/aiperf'...
+2026-10-21T11:02:00.4740542Z Submodule path 'upstream/InferenceX/utils/aiperf': checked out 'b7b16cf851885567988a643282266bce74e34437'
+2026-10-21T11:02:00.4750939Z [command]/usr/bin/git submodule foreach git config --local gc.auto 0
+2026-10-21T11:02:00.6881659Z Entering 'upstream/InferenceX/utils/aiperf'
+2026-10-21T11:02:00.7290428Z ##[endgroup]
+2026-10-21T11:02:00.7305275Z ##[group]Persisting credentials for submodules
+2026-10-21T11:02:00.7305846Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'url\.https\:\/\/github\.com\/\.insteadOf' && git config --local --unset-all 'url.https://github.com/.insteadOf' || :"
+2026-10-21T11:02:00.9208421Z Entering 'upstream/InferenceX/utils/aiperf'
+2026-10-21T11:02:00.9795435Z [command]/usr/bin/git submodule foreach git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-21T11:02:01.1706970Z Entering 'upstream/InferenceX/utils/aiperf'
+2026-10-21T11:02:01.1975192Z file:/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/.git/modules/upstream/InferenceX/utils/aiperf/config	remote.origin.url
+2026-10-21T11:02:01.1989864Z [command]/usr/bin/git config --file /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/.git/modules/upstream/InferenceX/utils/aiperf/config includeIf.gitdir:/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/.git/modules/upstream/InferenceX/utils/aiperf.path /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config
+2026-10-21T11:02:01.2378936Z [command]/usr/bin/git config --file /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/.git/modules/upstream/InferenceX/utils/aiperf/config includeIf.gitdir:/github/workspace/.git/modules/upstream/InferenceX/utils/aiperf.path /github/runner_temp/git-credentials-3dece790-6c6c-4f32-862d-778599d71a5d.config
+2026-10-21T11:02:01.2743501Z [command]/usr/bin/git submodule foreach git config --local --add 'url.https://github.com/.insteadOf' 'git@github.com:'
+2026-10-21T11:02:01.4781196Z Entering 'upstream/InferenceX/utils/aiperf'
+2026-10-21T11:02:01.5232289Z [command]/usr/bin/git submodule foreach git config --local --add 'url.https://github.com/.insteadOf' 'org-122240613@github.com:'
+2026-10-21T11:02:01.7308581Z Entering 'upstream/InferenceX/utils/aiperf'
+2026-10-21T11:02:01.7746490Z ##[endgroup]
+2026-10-21T11:02:01.8251752Z [command]/usr/bin/git log -1 --format=%H
+2026-10-21T11:02:01.8670886Z 4ab6fad17603881b8ee64143d50fb26dff0be8ac
+2026-10-21T11:02:02.0353446Z ##[group]Run rm -f meta_env.json || true
+2026-10-21T11:02:02.0353652Z [36;1mrm -f meta_env.json || true[0m
+2026-10-21T11:02:02.0353791Z [36;1mrm -f results*.json || true[0m
+2026-10-21T11:02:02.0353929Z [36;1mrm -f sample*.jsonl || true[0m
+2026-10-21T11:02:02.0354068Z [36;1mrm -f server.log || true[0m
+2026-10-21T11:02:02.0354204Z [36;1mrm -f gpu_metrics.csv || true[0m
+2026-10-21T11:02:02.0392227Z shell: /usr/bin/bash -e {0}
+2026-10-21T11:02:02.0392362Z env:
+2026-10-21T11:02:02.0392471Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:02:02.0392712Z   HF_TOKEN: ***
+2026-10-21T11:02:02.0392829Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:02:02.0392996Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:02:02.0393180Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:02.0393326Z   MODEL_PREFIX: kimik3
+2026-10-21T11:02:02.0393441Z   ISL: 0
+2026-10-21T11:02:02.0393542Z   OSL: 0
+2026-10-21T11:02:02.0393641Z   MAX_MODEL_LEN: 0
+2026-10-21T11:02:02.0393857Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:02.0394073Z   FRAMEWORK: vllm
+2026-10-21T11:02:02.0394185Z   PRECISION: fp4
+2026-10-21T11:02:02.0394294Z   TP: 8
+2026-10-21T11:02:02.0394395Z   EP_SIZE: 1
+2026-10-21T11:02:02.0394500Z   DP_ATTENTION: false
+2026-10-21T11:02:02.0394614Z   CONC: 48
+2026-10-21T11:02:02.0394723Z   SPEC_DECODING: mtp
+2026-10-21T11:02:02.0394834Z   DISAGG: false
+2026-10-21T11:02:02.0394938Z   RUN_EVAL: false
+2026-10-21T11:02:02.0395046Z   EVAL_ONLY: false
+2026-10-21T11:02:02.0395163Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:02:02.0395297Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:02:02.0395419Z   IS_AGENTIC: 1
+2026-10-21T11:02:02.0395554Z   OFFLOADING: 
+2026-10-21T11:02:02.0395662Z   KV_OFFLOADING: dram
+2026-10-21T11:02:02.0395784Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:02:02.0395920Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:02:02.0396043Z   DURATION: 600
+2026-10-21T11:02:02.0396155Z   RESULT_DIR: /workspace/results
+2026-10-21T11:02:02.0396302Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:02:02.0396458Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:02:02.0396617Z ##[endgroup]
+2026-10-21T11:02:02.2013735Z ##[group]Run # Export RESULT_FILENAME early so it's available for artifact uploads even if cancelled
+2026-10-21T11:02:02.2014100Z [36;1m# Export RESULT_FILENAME early so it's available for artifact uploads even if cancelled[0m
+2026-10-21T11:02:02.2014341Z [36;1mecho "RESULT_FILENAME=${RESULT_FILENAME}" >> $GITHUB_ENV[0m
+2026-10-21T11:02:02.2014504Z [36;1m[0m
+2026-10-21T11:02:02.2014619Z [36;1mbash ./runners/launch_${RUNNER_NAME%%_*}.sh[0m
+2026-10-21T11:02:02.2014766Z [36;1m[0m
+2026-10-21T11:02:02.2014866Z [36;1mif [ "false" = "true" ]; then[0m
+2026-10-21T11:02:02.2015044Z [36;1m  echo "Eval-only mode: skipping benchmark result file check"[0m
+2026-10-21T11:02:02.2015226Z [36;1m  # Verify eval produced results[0m
+2026-10-21T11:02:02.2015385Z [36;1m  if ! ls results*.json 1>/dev/null 2>&1; then[0m
+2026-10-21T11:02:02.2015729Z [36;1m    echo "Eval-only run failed: no results*.json files found." >&2[0m
+2026-10-21T11:02:02.2015907Z [36;1m    exit 1[0m
+2026-10-21T11:02:02.2016050Z [36;1m  fi[0m
+2026-10-21T11:02:02.2016150Z [36;1melse[0m
+2026-10-21T11:02:02.2016256Z [36;1m  FOUND_RESULT_FILE=[0m
+2026-10-21T11:02:02.2016392Z [36;1m  for i in {1..10}; do[0m
+2026-10-21T11:02:02.2016538Z [36;1m    if [ -f "$RESULT_FILENAME.json" ]; then[0m
+2026-10-21T11:02:02.2016695Z [36;1m      FOUND_RESULT_FILE=true[0m
+2026-10-21T11:02:02.2016828Z [36;1m      break[0m
+2026-10-21T11:02:02.2016942Z [36;1m    fi[0m
+2026-10-21T11:02:02.2017078Z [36;1m    echo "Waiting for result file... (attempt $i)"[0m
+2026-10-21T11:02:02.2017238Z [36;1m    sleep 1[0m
+2026-10-21T11:02:02.2017351Z [36;1m  done[0m
+2026-10-21T11:02:02.2017449Z [36;1m[0m
+2026-10-21T11:02:02.2017564Z [36;1m  if [ -z "$FOUND_RESULT_FILE" ]; then[0m
+2026-10-21T11:02:02.2017770Z [36;1m    echo "Run failed: Benchmark result $RESULT_FILENAME.json not found." >&2[0m
+2026-10-21T11:02:02.2018123Z [36;1m    exit 1[0m
+2026-10-21T11:02:02.2018231Z [36;1m  fi[0m
+2026-10-21T11:02:02.2018328Z [36;1mfi[0m
+2026-10-21T11:02:02.2034057Z shell: /usr/bin/bash -e {0}
+2026-10-21T11:02:02.2034194Z env:
+2026-10-21T11:02:02.2034300Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:02:02.2034531Z   HF_TOKEN: ***
+2026-10-21T11:02:02.2034642Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:02:02.2034798Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:02:02.2034969Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:02.2035102Z   MODEL_PREFIX: kimik3
+2026-10-21T11:02:02.2035207Z   ISL: 0
+2026-10-21T11:02:02.2035297Z   OSL: 0
+2026-10-21T11:02:02.2035389Z   MAX_MODEL_LEN: 0
+2026-10-21T11:02:02.2035597Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:02.2035785Z   FRAMEWORK: vllm
+2026-10-21T11:02:02.2035884Z   PRECISION: fp4
+2026-10-21T11:02:02.2035983Z   TP: 8
+2026-10-21T11:02:02.2036078Z   EP_SIZE: 1
+2026-10-21T11:02:02.2036184Z   DP_ATTENTION: false
+2026-10-21T11:02:02.2036288Z   CONC: 48
+2026-10-21T11:02:02.2036383Z   SPEC_DECODING: mtp
+2026-10-21T11:02:02.2036494Z   DISAGG: false
+2026-10-21T11:02:02.2036593Z   RUN_EVAL: false
+2026-10-21T11:02:02.2036690Z   EVAL_ONLY: false
+2026-10-21T11:02:02.2036801Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:02:02.2036927Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:02:02.2037038Z   IS_AGENTIC: 1
+2026-10-21T11:02:02.2037135Z   OFFLOADING: 
+2026-10-21T11:02:02.2037237Z   KV_OFFLOADING: dram
+2026-10-21T11:02:02.2037352Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:02:02.2037476Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:02:02.2037586Z   DURATION: 600
+2026-10-21T11:02:02.2037695Z   RESULT_DIR: /workspace/results
+2026-10-21T11:02:02.2037825Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:02:02.2037970Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:02:02.2038126Z   RUNNER_NAME: mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:02.2038260Z   RUNNER_TYPE: cluster:mi355x-amds-2
+2026-10-21T11:02:02.2038634Z   RESULT_FILENAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:02.2038934Z   GITHUB_STEP_SUMMARY: 
+2026-10-21T11:02:02.2039049Z ##[endgroup]
+2026-10-21T11:02:02.2264483Z [hf-cache] RUNNER_NAME=mi355x-amd_pit2_p03_g07 -> HF_HUB_CACHE_MOUNT=/share_nfs/models
+2026-10-21T11:02:02.2571705Z + PULL_POLICY=always
+2026-10-21T11:02:02.2571915Z + docker pull vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:02.5696476Z nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce: Pulling from vllm/vllm-openai-rocm
+2026-10-21T11:02:02.6146640Z Digest: sha256:49d8c1a5f14898b2cf93dccfb07410118ef30311cbf688c34344765f14c404b2
+2026-10-21T11:02:02.6147055Z Status: Image is up to date for vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:02.6152192Z docker.io/vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:02.6175561Z ++ docker inspect '--format={{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:02.6177001Z ++ cut -d@ -f2
+2026-10-21T11:02:02.6550662Z + DIGEST=sha256:49d8c1a5f14898b2cf93dccfb07410118ef30311cbf688c34344765f14c404b2
+2026-10-21T11:02:02.6551566Z + '[' -z sha256:49d8c1a5f14898b2cf93dccfb07410118ef30311cbf688c34344765f14c404b2 ']'
+2026-10-21T11:02:02.6551849Z The image digest is: sha256:49d8c1a5f14898b2cf93dccfb07410118ef30311cbf688c34344765f14c404b2
+2026-10-21T11:02:02.6552165Z + echo 'The image digest is: sha256:49d8c1a5f14898b2cf93dccfb07410118ef30311cbf688c34344765f14c404b2'
+2026-10-21T11:02:02.6552396Z + [[ vllm == \s\g\l\a\n\g\-\d\i\s\a\g\g ]]
+2026-10-21T11:02:02.6552533Z + BENCHMARK_SUBDIR=single_node
+2026-10-21T11:02:02.6552653Z + [[ vllm == \a\t\o\m ]]
+2026-10-21T11:02:02.6552818Z + BENCHMARK_PATH=benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+2026-10-21T11:02:02.6553017Z + export MODEL_NAME=Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:02.6553406Z + MODEL_NAME=Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:02.6553586Z + export MODEL_PATH=/mnt/hf_hub_cache/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:02.6553783Z + MODEL_PATH=/mnt/hf_hub_cache/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:02.6553969Z + export PYTHONDONTWRITEBYTECODE=1
+2026-10-21T11:02:02.6554107Z + PYTHONDONTWRITEBYTECODE=1
+2026-10-21T11:02:02.6559018Z ++ getent group video
+2026-10-21T11:02:02.6559552Z ++ cut -d: -f3
+2026-10-21T11:02:02.6578017Z ++ getent group render
+2026-10-21T11:02:02.6578265Z ++ cut -d: -f3
+2026-10-21T11:02:02.6594627Z + docker run --rm --init --network host --shm-size=512g --name=bmk-server --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 --pull always --device=/dev/kfd --device=/dev/dri --group-add 44 --group-add 110 --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v /share_nfs/models:/mnt/hf_hub_cache/ -v /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/upstream/InferenceX:/workspace/ -w /workspace/ -v /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team:/outputs -e HF_TOKEN -e HF_HUB_CACHE -e MODEL -e MODEL_PATH -e TP -e CONC -e ISL -e OSL -e MAX_MODEL_LEN -e RANDOM_RANGE_RATIO -e RESULT_FILENAME -e EP_SIZE -e DP_ATTENTION -e RUN_EVAL -e OFFLOADING -e KV_OFFLOADING -e KV_OFFLOAD_BACKEND -e TOTAL_CPU_DRAM_GB -e DURATION -e PORT -e RESULT_DIR -e PYTHONDONTWRITEBYTECODE -e INFMAX_CONTAINER_WORKSPACE -e AGENTIC_OUTPUT_DIR -e IS_MULTINODE -e PP_SIZE -e PCP_SIZE -e DCP_SIZE -e EVAL_ONLY -e ROCPROF_ENABLE -e ROCPROF_START_DELAY -e ROCPROF_DURATION -e KERNEL_INSPECT -e ENABLE_FP8_PREFILL_QUERY_QUANT -e PREFILL_SCHEDULE_INTERVAL -e CACHE_AWARE_ADMISSION_WINDOW -e CACHE_AWARE_ADMISSION_THRESHOLD -e AIPERF_SERVER_URL -e KV_OFFLOAD_BACKEND_METADATA -e IMAGE -e MODEL_PREFIX -e OPENAI_API_KEY -e SWEBENCH_EXPECTED_INSTANCES -e SWEBENCH_AGENT_STEP_LIMIT -e SWEBENCH_AGENT_TIMEOUT -e SWEBENCH_AGENT_EXIT_GRACE -e SWEBENCH_WATCHDOG_POLL -e SWEBENCH_SANDBOX_SWEEP -e SWEBENCH_SKIP_SCORE -e SWEBENCH_EVAL_TIMEOUT -e SWEBENCH_SCORE_TIMEOUT -e SWEBENCH_MAX_WORKERS -e EVAL_ENDPOINT_READY_TIMEOUT_SECONDS -e EVAL_MODEL_STABILIZATION_SECONDS -e AIPERF_FAILED_REQUEST_THRESHOLD -e AIPERF_LIVE_FAILED_REQUEST_THRESHOLD -e AIPERF_TRACE_IDLE_GAP_CAP_SECONDS -e AIPERF_PYTHON_VERSION -e AIPERF_WARMUP_REQUESTS_PER_LANE -e AIPERF_DATASET_WEKA_LIVE_ASSISTANT_RESPONSES -e AGENTIC_WARMUP_GRACE_PERIOD -e AIPERF_USE_DYNAMO_CONV_AWARE_ROUTING -e AIPERF_HTTP_X_DYNAMO_SESSION_ID_FROM_CORRELATION_ID -e AIPERF_DYNAMO_SESSION_TIMEOUT_SECONDS -e AIPERF_EXPERIMENTAL_FAST -e AIPERF_UNSAFE_OVERRIDE -e ENABLE_AGENTX_POWER -e REQUIRE_POWER -e VLLM_ENGINE_READY_TIMEOUT_S -e SGLANG_TORCH_PROFILER_DIR -e VLLM_TORCH_PROFILER_DIR --entrypoint=/bin/bash vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+2026-10-21T11:02:02.8872733Z nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce: Pulling from vllm/vllm-openai-rocm
+2026-10-21T11:02:02.9277642Z Digest: sha256:49d8c1a5f14898b2cf93dccfb07410118ef30311cbf688c34344765f14c404b2
+2026-10-21T11:02:02.9277967Z Status: Image is up to date for vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:03.0118394Z ++ dirname benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+2026-10-21T11:02:03.0127358Z + source benchmarks/single_node/agentic/../../benchmark_lib.sh
+2026-10-21T11:02:03.0179026Z ++ [[ '' == \-\-\v\a\l\i\d\a\t\i\o\n\-\o\n\l\y ]]
+2026-10-21T11:02:03.0179188Z ++ export PYTHONDONTWRITEBYTECODE=1
+2026-10-21T11:02:03.0179329Z ++ PYTHONDONTWRITEBYTECODE=1
+2026-10-21T11:02:03.0179483Z ++ export PYTHONPYCACHEPREFIX=/tmp/inferencex-pycache
+2026-10-21T11:02:03.0179653Z ++ PYTHONPYCACHEPREFIX=/tmp/inferencex-pycache
+2026-10-21T11:02:03.0179822Z ++ mkdir -p /tmp/inferencex-pycache
+2026-10-21T11:02:03.0205939Z ++++ dirname benchmarks/single_node/agentic/../../benchmark_lib.sh
+2026-10-21T11:02:03.0213658Z +++ cd benchmarks/single_node/agentic/../..
+2026-10-21T11:02:03.0220524Z +++ pwd
+2026-10-21T11:02:03.0222072Z ++ INFERENCEX_BENCHMARK_LIB_DIR=/workspace/benchmarks
+2026-10-21T11:02:03.0225271Z +++ cd /workspace/benchmarks/..
+2026-10-21T11:02:03.0225395Z +++ pwd
+2026-10-21T11:02:03.0226738Z ++ INFERENCEX_REPO_ROOT=/workspace
+2026-10-21T11:02:03.0229304Z ++ _benchmark_caller=benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+2026-10-21T11:02:03.0229555Z ++ [[ benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh == */agentic/* ]]
+2026-10-21T11:02:03.0229741Z ++ unset MAX_MODEL_LEN
+2026-10-21T11:02:03.0229849Z ++ [[ -z x ]]
+2026-10-21T11:02:03.0229947Z ++ [[ -z dram ]]
+2026-10-21T11:02:03.0230052Z ++ case "$KV_OFFLOADING" in
+2026-10-21T11:02:03.0230170Z ++ [[ -z vllm-simple ]]
+2026-10-21T11:02:03.0230287Z ++ [[ vllm-simple == \n\o\n\e ]]
+2026-10-21T11:02:03.0230407Z ++ [[ ! 2249 =~ ^[1-9][0-9]*$ ]]
+2026-10-21T11:02:03.0230526Z ++ unset _benchmark_caller
+2026-10-21T11:02:03.0230642Z ++ GPU_MONITOR_PID=
+2026-10-21T11:02:03.0230751Z ++ GPU_MONITOR_VENDOR=
+2026-10-21T11:02:03.0230860Z ++ GPU_MONITOR_INTERVAL=1
+2026-10-21T11:02:03.0230979Z ++ GPU_METRICS_CSV=gpu_metrics.csv
+2026-10-21T11:02:03.0231345Z ++ NVIDIA_GPU_MONITOR_QUERY=timestamp,index,power.draw,temperature.gpu,clocks.current.sm,clocks.current.memory,utilization.gpu,utilization.memory
+2026-10-21T11:02:03.0231709Z ++ export GPU_METRICS_CSV
+2026-10-21T11:02:03.0251615Z ++ AGENTIC_DIR=/workspace/utils/agentic-benchmark
+2026-10-21T11:02:03.0251890Z ++ AIPERF_DIR=/workspace/utils/aiperf
+2026-10-21T11:02:03.0252049Z ++ AIPERF_RUNTIME_DIR=/tmp/inferencex-agentic-7
+2026-10-21T11:02:03.0252220Z ++ AIPERF_VENV=/tmp/inferencex-agentic-7/venv
+2026-10-21T11:02:03.0252402Z ++ AIPERF_UV_INSTALL_DIR=/tmp/inferencex-agentic-7/uv/bin
+2026-10-21T11:02:03.0252593Z ++ AIPERF_UV_CACHE_DIR=/tmp/inferencex-agentic-7/uv-cache
+2026-10-21T11:02:03.0252788Z ++ AIPERF_PYTHON=/tmp/inferencex-agentic-7/venv/bin/python
+2026-10-21T11:02:03.0252973Z ++ AIPERF_CLI=/tmp/inferencex-agentic-7/venv/bin/aiperf
+2026-10-21T11:02:03.0253211Z ++ AIPERF_HF_CLI=/tmp/inferencex-agentic-7/venv/bin/hf
+2026-10-21T11:02:03.0253366Z ++ AIPERF_DEPS_READY=0
+2026-10-21T11:02:03.0254118Z + wait_for_amd_gpu_clean
+2026-10-21T11:02:03.0254250Z + local threshold=10
+2026-10-21T11:02:03.0254373Z + local gpu_clean=false vram_max i
+2026-10-21T11:02:03.0258321Z ++ seq 1 90
+2026-10-21T11:02:03.0269162Z + for i in $(seq 1 90)
+2026-10-21T11:02:03.0276145Z ++ rocm-smi --showmemuse
+2026-10-21T11:02:03.0277861Z ++ grep -oE 'GPU Memory Allocated \(VRAM%\): [0-9]+'
+2026-10-21T11:02:03.0279125Z ++ awk '{if ($NF > m) m = $NF} END {print m+0}'
+2026-10-21T11:02:03.2186858Z + vram_max=0
+2026-10-21T11:02:03.2187008Z GPUs clean (vram%max=0 <= 10 after 10s)
+2026-10-21T11:02:03.2187167Z + '[' 0 -le 10 ']'
+2026-10-21T11:02:03.2187300Z + echo 'GPUs clean (vram%max=0 <= 10 after 10s)'
+2026-10-21T11:02:03.2187447Z + gpu_clean=true
+2026-10-21T11:02:03.2187594Z + break
+2026-10-21T11:02:03.2187701Z + '[' true '!=' true ']'
+2026-10-21T11:02:03.2187853Z + export EVAL_ONLY=false
+2026-10-21T11:02:03.2187982Z + EVAL_ONLY=false
+2026-10-21T11:02:03.2188176Z + check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
+2026-10-21T11:02:03.2188391Z + missing_vars=()
+2026-10-21T11:02:03.2188499Z + local missing_vars
+2026-10-21T11:02:03.2188609Z + for var_name in "$@"
+2026-10-21T11:02:03.2188738Z + [[ -z amd/Kimi-K3-Quark-MXFP4-AttnFP8 ]]
+2026-10-21T11:02:03.2188883Z + for var_name in "$@"
+2026-10-21T11:02:03.2188995Z + [[ -z 8 ]]
+2026-10-21T11:02:03.2189096Z + for var_name in "$@"
+2026-10-21T11:02:03.2189206Z + [[ -z 48 ]]
+2026-10-21T11:02:03.2189305Z + for var_name in "$@"
+2026-10-21T11:02:03.2189415Z + [[ -z dram ]]
+2026-10-21T11:02:03.2189520Z + for var_name in "$@"
+2026-10-21T11:02:03.2189633Z + [[ -z 2249 ]]
+2026-10-21T11:02:03.2189735Z + for var_name in "$@"
+2026-10-21T11:02:03.2189853Z + [[ -z /outputs/results ]]
+2026-10-21T11:02:03.2189974Z + for var_name in "$@"
+2026-10-21T11:02:03.2190086Z + [[ -z 600 ]]
+2026-10-21T11:02:03.2190191Z + for var_name in "$@"
+2026-10-21T11:02:03.2190483Z + [[ -z 1 ]]
+2026-10-21T11:02:03.2190590Z + [[ 0 -gt 0 ]]
+2026-10-21T11:02:03.2190705Z + check_env_vars DCP_SIZE EVAL_ONLY
+2026-10-21T11:02:03.2190848Z + missing_vars=()
+2026-10-21T11:02:03.2190954Z + local missing_vars
+2026-10-21T11:02:03.2191071Z + for var_name in "$@"
+2026-10-21T11:02:03.2191180Z + [[ -z 8 ]]
+2026-10-21T11:02:03.2191282Z + for var_name in "$@"
+2026-10-21T11:02:03.2191394Z + [[ -z false ]]
+2026-10-21T11:02:03.2191499Z + [[ 0 -gt 0 ]]
+2026-10-21T11:02:03.2191599Z + DP_SIZE=1
+2026-10-21T11:02:03.2191700Z + export DP_SIZE
+2026-10-21T11:02:03.2191808Z + TOTAL_RANKS=8
+2026-10-21T11:02:03.2191910Z + '[' -n '' ']'
+2026-10-21T11:02:03.2192041Z + [[ -n /mnt/hf_hub_cache/Kimi-K3-Quark-MXFP4-AttnFP8 ]]
+2026-10-21T11:02:03.2192227Z + [[ ! -d /mnt/hf_hub_cache/Kimi-K3-Quark-MXFP4-AttnFP8 ]]
+2026-10-21T11:02:03.2204763Z ++ ls -A /mnt/hf_hub_cache/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:03.2231242Z + [[ -z .cache
+2026-10-21T11:02:03.2231394Z .gitattributes
+2026-10-21T11:02:03.2231515Z LICENSE
+2026-10-21T11:02:03.2231618Z README.md
+2026-10-21T11:02:03.2231714Z assets
+2026-10-21T11:02:03.2231819Z config.json
+2026-10-21T11:02:03.2231930Z configuration_kimi_k3.py
+2026-10-21T11:02:03.2232053Z encoding_k3.py
+2026-10-21T11:02:03.2232161Z generation_config.json
+2026-10-21T11:02:03.2232280Z kimi_k3_processor.py
+2026-10-21T11:02:03.2232396Z kimi_k3_vision_processing.py
+2026-10-21T11:02:03.2232517Z media_utils.py
+2026-10-21T11:02:03.2232631Z model-00001-of-000096.safetensors
+2026-10-21T11:02:03.2232769Z model-00002-of-000096.safetensors
+2026-10-21T11:02:03.2232897Z model-00003-of-000096.safetensors
+2026-10-21T11:02:03.2233025Z model-00004-of-000096.safetensors
+2026-10-21T11:02:03.2233162Z model-00005-of-000096.safetensors
+2026-10-21T11:02:03.2233294Z model-00006-of-000096.safetensors
+2026-10-21T11:02:03.2233427Z model-00007-of-000096.safetensors
+2026-10-21T11:02:03.2233553Z model-00008-of-000096.safetensors
+2026-10-21T11:02:03.2233682Z model-00009-of-000096.safetensors
+2026-10-21T11:02:03.2233866Z model-00010-of-000096.safetensors
+2026-10-21T11:02:03.2233999Z model-00011-of-000096.safetensors
+2026-10-21T11:02:03.2234207Z model-00012-of-000096.safetensors
+2026-10-21T11:02:03.2234333Z model-00013-of-000096.safetensors
+2026-10-21T11:02:03.2234489Z model-00014-of-000096.safetensors
+2026-10-21T11:02:03.2234621Z model-00015-of-000096.safetensors
+2026-10-21T11:02:03.2234749Z model-00016-of-000096.safetensors
+2026-10-21T11:02:03.2234876Z model-00017-of-000096.safetensors
+2026-10-21T11:02:03.2235006Z model-00018-of-000096.safetensors
+2026-10-21T11:02:03.2235134Z model-00019-of-000096.safetensors
+2026-10-21T11:02:03.2235266Z model-00020-of-000096.safetensors
+2026-10-21T11:02:03.2235391Z model-00021-of-000096.safetensors
+2026-10-21T11:02:03.2235772Z model-00022-of-000096.safetensors
+2026-10-21T11:02:03.2235894Z model-00023-of-000096.safetensors
+2026-10-21T11:02:03.2236017Z model-00024-of-000096.safetensors
+2026-10-21T11:02:03.2236140Z model-00025-of-000096.safetensors
+2026-10-21T11:02:03.2236263Z model-00026-of-000096.safetensors
+2026-10-21T11:02:03.2236382Z model-00027-of-000096.safetensors
+2026-10-21T11:02:03.2236509Z model-00028-of-000096.safetensors
+2026-10-21T11:02:03.2236633Z model-00029-of-000096.safetensors
+2026-10-21T11:02:03.2236757Z model-00030-of-000096.safetensors
+2026-10-21T11:02:03.2236881Z model-00031-of-000096.safetensors
+2026-10-21T11:02:03.2237004Z model-00032-of-000096.safetensors
+2026-10-21T11:02:03.2237126Z model-00033-of-000096.safetensors
+2026-10-21T11:02:03.2237244Z model-00034-of-000096.safetensors
+2026-10-21T11:02:03.2237366Z model-00035-of-000096.safetensors
+2026-10-21T11:02:03.2237489Z model-00036-of-000096.safetensors
+2026-10-21T11:02:03.2237608Z model-00037-of-000096.safetensors
+2026-10-21T11:02:03.2237727Z model-00038-of-000096.safetensors
+2026-10-21T11:02:03.2237849Z model-00039-of-000096.safetensors
+2026-10-21T11:02:03.2237969Z model-00040-of-000096.safetensors
+2026-10-21T11:02:03.2238089Z model-00041-of-000096.safetensors
+2026-10-21T11:02:03.2238277Z model-00042-of-000096.safetensors
+2026-10-21T11:02:03.2238401Z model-00043-of-000096.safetensors
+2026-10-21T11:02:03.2238522Z model-00044-of-000096.safetensors
+2026-10-21T11:02:03.2238641Z model-00045-of-000096.safetensors
+2026-10-21T11:02:03.2238759Z model-00046-of-000096.safetensors
+2026-10-21T11:02:03.2238881Z model-00047-of-000096.safetensors
+2026-10-21T11:02:03.2239001Z model-00048-of-000096.safetensors
+2026-10-21T11:02:03.2239120Z model-00049-of-000096.safetensors
+2026-10-21T11:02:03.2239244Z model-00050-of-000096.safetensors
+2026-10-21T11:02:03.2239364Z model-00051-of-000096.safetensors
+2026-10-21T11:02:03.2239490Z model-00052-of-000096.safetensors
+2026-10-21T11:02:03.2239614Z model-00053-of-000096.safetensors
+2026-10-21T11:02:03.2239739Z model-00054-of-000096.safetensors
+2026-10-21T11:02:03.2239858Z model-00055-of-000096.safetensors
+2026-10-21T11:02:03.2239975Z model-00056-of-000096.safetensors
+2026-10-21T11:02:03.2240098Z model-00057-of-000096.safetensors
+2026-10-21T11:02:03.2240218Z model-00058-of-000096.safetensors
+2026-10-21T11:02:03.2240342Z model-00059-of-000096.safetensors
+2026-10-21T11:02:03.2240463Z model-00060-of-000096.safetensors
+2026-10-21T11:02:03.2240589Z model-00061-of-000096.safetensors
+2026-10-21T11:02:03.2240709Z model-00062-of-000096.safetensors
+2026-10-21T11:02:03.2240830Z model-00063-of-000096.safetensors
+2026-10-21T11:02:03.2240953Z model-00064-of-000096.safetensors
+2026-10-21T11:02:03.2241073Z model-00065-of-000096.safetensors
+2026-10-21T11:02:03.2241192Z model-00066-of-000096.safetensors
+2026-10-21T11:02:03.2241310Z model-00067-of-000096.safetensors
+2026-10-21T11:02:03.2241434Z model-00068-of-000096.safetensors
+2026-10-21T11:02:03.2241554Z model-00069-of-000096.safetensors
+2026-10-21T11:02:03.2241673Z model-00070-of-000096.safetensors
+2026-10-21T11:02:03.2241794Z model-00071-of-000096.safetensors
+2026-10-21T11:02:03.2241915Z model-00072-of-000096.safetensors
+2026-10-21T11:02:03.2242035Z model-00073-of-000096.safetensors
+2026-10-21T11:02:03.2242364Z model-00074-of-000096.safetensors
+2026-10-21T11:02:03.2242530Z model-00075-of-000096.safetensors
+2026-10-21T11:02:03.2242654Z model-00076-of-000096.safetensors
+2026-10-21T11:02:03.2242836Z model-00077-of-000096.safetensors
+2026-10-21T11:02:03.2242959Z model-00078-of-000096.safetensors
+2026-10-21T11:02:03.2243079Z model-00079-of-000096.safetensors
+2026-10-21T11:02:03.2243200Z model-00080-of-000096.safetensors
+2026-10-21T11:02:03.2243319Z model-00081-of-000096.safetensors
+2026-10-21T11:02:03.2243438Z model-00082-of-000096.safetensors
+2026-10-21T11:02:03.2243558Z model-00083-of-000096.safetensors
+2026-10-21T11:02:03.2243679Z model-00084-of-000096.safetensors
+2026-10-21T11:02:03.2243797Z model-00085-of-000096.safetensors
+2026-10-21T11:02:03.2243916Z model-00086-of-000096.safetensors
+2026-10-21T11:02:03.2244038Z model-00087-of-000096.safetensors
+2026-10-21T11:02:03.2244157Z model-00088-of-000096.safetensors
+2026-10-21T11:02:03.2244357Z model-00089-of-000096.safetensors
+2026-10-21T11:02:03.2244478Z model-00090-of-000096.safetensors
+2026-10-21T11:02:03.2244608Z model-00091-of-000096.safetensors
+2026-10-21T11:02:03.2244727Z model-00092-of-000096.safetensors
+2026-10-21T11:02:03.2244852Z model-00093-of-000096.safetensors
+2026-10-21T11:02:03.2244975Z model-00094-of-000096.safetensors
+2026-10-21T11:02:03.2245094Z model-00095-of-000096.safetensors
+2026-10-21T11:02:03.2245214Z model-00096-of-000096.safetensors
+2026-10-21T11:02:03.2245339Z model.safetensors.index.json
+2026-10-21T11:02:03.2245518Z modeling_kimi_k3.py
+2026-10-21T11:02:03.2245634Z modeling_kimi_linear.py
+2026-10-21T11:02:03.2245751Z preprocessor_config.json
+2026-10-21T11:02:03.2245863Z tiktoken.model
+2026-10-21T11:02:03.2245967Z tokenization_kimi.py
+2026-10-21T11:02:03.2246078Z tokenizer_config.json ]]
+2026-10-21T11:02:03.2246187Z + rocm-smi
+2026-10-21T11:02:03.4140020Z 
+2026-10-21T11:02:03.4140124Z 
+2026-10-21T11:02:03.4140958Z ============================================= ROCm System Management Interface =============================================
+2026-10-21T11:02:03.4141295Z ======================================================= Concise Info =======================================================
+2026-10-21T11:02:03.4142086Z Device  Node  IDs              Temp        Power     Partitions          SCLK    MCLK     Fan  Perf  PwrCap   VRAM%  GPU%  
+2026-10-21T11:02:03.4142649Z [3m              (DID,     GUID)  (Junction)  (Socket)  (Mem, Compute, ID)                                                    [0m
+2026-10-21T11:02:03.4142922Z ============================================================================================================================
+2026-10-21T11:02:03.4143440Z 0       3     0x75a3,   42583  54.0Â°C      249.0W    NPS1, SPX, 0        106Mhz  2000Mhz  0%   auto  1400.0W  0%     0%    
+2026-10-21T11:02:03.4143794Z 1       5     0x75a3,   27226  52.0Â°C      254.0W    NPS1, SPX, 0        103Mhz  2000Mhz  0%   auto  1400.0W  0%     0%    
+2026-10-21T11:02:03.4144129Z 2       4     0x75a3,   36479  49.0Â°C      251.0W    NPS1, SPX, 0        95Mhz   2000Mhz  0%   auto  1400.0W  0%     0%    
+2026-10-21T11:02:03.4144488Z 3       2     0x75a3,   17010  51.0Â°C      250.0W    NPS1, SPX, 0        115Mhz  2000Mhz  0%   auto  1400.0W  0%     0%    
+2026-10-21T11:02:03.4144821Z 4       7     0x75a3,   1590   48.0Â°C      247.0W    NPS1, SPX, 0        94Mhz   2000Mhz  0%   auto  1400.0W  0%     0%    
+2026-10-21T11:02:03.4145149Z 5       9     0x75a3,   51771  52.0Â°C      250.0W    NPS1, SPX, 0        95Mhz   2000Mhz  0%   auto  1400.0W  0%     0%    
+2026-10-21T11:02:03.4145540Z 6       8     0x75a3,   11806  46.0Â°C      252.0W    NPS1, SPX, 0        95Mhz   2000Mhz  0%   auto  1400.0W  0%     0%    
+2026-10-21T11:02:03.4145884Z 7       6     0x75a3,   57875  51.0Â°C      250.0W    NPS1, SPX, 0        94Mhz   2000Mhz  0%   auto  1400.0W  0%     0%    
+2026-10-21T11:02:03.4146146Z ============================================================================================================================
+2026-10-21T11:02:03.4146382Z =================================================== End of ROCm SMI Log ====================================================
+2026-10-21T11:02:03.4208506Z + resolve_trace_source
+2026-10-21T11:02:03.4208896Z + local default_loader
+2026-10-21T11:02:03.4209062Z + case "${MODEL_PREFIX:-}" in
+2026-10-21T11:02:03.4209241Z + default_loader=semianalysis_cc_traces_weka_062126
+2026-10-21T11:02:03.4209440Z + local loader=semianalysis_cc_traces_weka_062126
+2026-10-21T11:02:03.4209606Z + local dataset
+2026-10-21T11:02:03.4209732Z + case "$loader" in
+2026-10-21T11:02:03.4209882Z + dataset=semianalysisai/cc-traces-weka-062126
+2026-10-21T11:02:03.4210111Z + TRACE_SOURCE_FLAG='--public-dataset semianalysis_cc_traces_weka_062126'
+2026-10-21T11:02:03.4210519Z + echo 'Loading traces via aiperf public-dataset: semianalysis_cc_traces_weka_062126 (semianalysisai/cc-traces-weka-062126) [MODEL_PREFIX=kimik3]'
+2026-10-21T11:02:03.4210860Z + ensure_hf_cli
+2026-10-21T11:02:03.4210986Z + install_agentic_deps
+2026-10-21T11:02:03.4211166Z + check_env_vars AIPERF_PYTHON_VERSION INFMAX_CONTAINER_WORKSPACE
+2026-10-21T11:02:03.4211556Z Loading traces via aiperf public-dataset: semianalysis_cc_traces_weka_062126 (semianalysisai/cc-traces-weka-062126) [MODEL_PREFIX=kimik3]
+2026-10-21T11:02:03.4211886Z + missing_vars=()
+2026-10-21T11:02:03.4212008Z + local missing_vars
+2026-10-21T11:02:03.4212137Z + for var_name in "$@"
+2026-10-21T11:02:03.4212267Z + [[ -z 3.11 ]]
+2026-10-21T11:02:03.4212384Z + for var_name in "$@"
+2026-10-21T11:02:03.4212511Z + [[ -z /workspace ]]
+2026-10-21T11:02:03.4212638Z + [[ 0 -gt 0 ]]
+2026-10-21T11:02:03.4212749Z + '[' 0 = 1 ']'
+2026-10-21T11:02:03.4212863Z + ensure_agentic_uv
+2026-10-21T11:02:03.4212981Z + command -v uv
+2026-10-21T11:02:03.4215107Z ++ command -v uv
+2026-10-21T11:02:03.4217376Z + AIPERF_UV_BIN=/usr/local/bin/uv
+2026-10-21T11:02:03.4217536Z + return
+2026-10-21T11:02:03.4217672Z + rm -rf /tmp/inferencex-agentic-7/venv
+2026-10-21T11:02:03.4227943Z + mkdir -p /tmp/inferencex-agentic-7/uv-cache
+2026-10-21T11:02:03.4239140Z + UV_CACHE_DIR=/tmp/inferencex-agentic-7/uv-cache
+2026-10-21T11:02:03.4240061Z + /usr/local/bin/uv venv --python 3.11 /tmp/inferencex-agentic-7/venv
+2026-10-21T11:02:03.6569268Z Downloading cpython-3.11.17-linux-x86_64-gnu (download) (29.4MiB)
+2026-10-21T11:02:04.1097767Z  Downloaded cpython-3.11.17-linux-x86_64-gnu (download)
+2026-10-21T11:02:04.1778911Z Using CPython 3.11.17
+2026-10-21T11:02:04.1779848Z warning: The requested interpreter resolved to Python 3.11.17, which is incompatible with the project's Python requirement: `>=3.12` (from `project.requires-python`)
+2026-10-21T11:02:04.1780267Z Creating virtual environment at: /tmp/inferencex-agentic-7/venv
+2026-10-21T11:02:04.1783853Z Activate with: source /tmp/inferencex-agentic-7/venv/bin/activate
+2026-10-21T11:02:04.1812340Z + UV_CACHE_DIR=/tmp/inferencex-agentic-7/uv-cache
+2026-10-21T11:02:04.1812513Z + UV_HTTP_TIMEOUT=120
+2026-10-21T11:02:04.1812645Z + UV_HTTP_RETRIES=3
+2026-10-21T11:02:04.1813087Z + /usr/local/bin/uv pip install --python /tmp/inferencex-agentic-7/venv/bin/python -r /workspace/utils/agentic-benchmark/requirements.txt -e /workspace/utils/aiperf 'datasets>=4.7.0' 'huggingface_hub[cli]>=0.25.0' urllib3 requests
+2026-10-21T11:02:04.2613462Z Using Python 3.11.17 environment at: /tmp/inferencex-agentic-7/venv
+2026-10-21T11:02:04.8793880Z Resolved 131 packages in 617ms
+2026-10-21T11:02:04.8940338Z    Building aiperf @ file:///workspace/utils/aiperf
+2026-10-21T11:02:04.9170670Z Downloading sqlalchemy (4.4MiB)
+2026-10-21T11:02:04.9344360Z Downloading numpy (16.1MiB)
+2026-10-21T11:02:04.9345813Z Downloading transformers (12.2MiB)
+2026-10-21T11:02:04.9346481Z Downloading zstandard (5.3MiB)
+2026-10-21T11:02:04.9346669Z Downloading tokenizers (3.2MiB)
+2026-10-21T11:02:04.9347527Z Downloading uvloop (3.8MiB)
+2026-10-21T11:02:04.9348921Z Downloading pygments (1.2MiB)
+2026-10-21T11:02:04.9349640Z Downloading matplotlib (9.4MiB)
+2026-10-21T11:02:04.9350448Z Downloading pydantic-core (2.1MiB)
+2026-10-21T11:02:04.9351120Z Downloading brotli (1.4MiB)
+2026-10-21T11:02:04.9352674Z Downloading pandas (12.2MiB)
+2026-10-21T11:02:04.9353914Z Downloading hf-xet (4.0MiB)
+2026-10-21T11:02:04.9354970Z Downloading sentencepiece (1.3MiB)
+2026-10-21T11:02:04.9356333Z Downloading dash (7.5MiB)
+2026-10-21T11:02:04.9357132Z Downloading plotly (9.4MiB)
+2026-10-21T11:02:04.9358184Z Downloading fonttools (5.2MiB)
+2026-10-21T11:02:04.9359518Z Downloading scipy (33.7MiB)
+2026-10-21T11:02:04.9360488Z Downloading crick (1.7MiB)
+2026-10-21T11:02:04.9380105Z Downloading aiohttp (1.7MiB)
+2026-10-21T11:02:04.9380420Z Downloading tiktoken (1.2MiB)
+2026-10-21T11:02:04.9380599Z Downloading pillow (6.8MiB)
+2026-10-21T11:02:04.9380747Z Downloading soundfile (1.3MiB)
+2026-10-21T11:02:04.9380906Z Downloading kiwisolver (1.4MiB)
+2026-10-21T11:02:04.9418505Z Downloading pyarrow (51.4MiB)
+2026-10-21T11:02:05.1406887Z  Downloaded pygments
+2026-10-21T11:02:05.1424024Z  Downloaded tiktoken
+2026-10-21T11:02:05.1514630Z  Downloaded soundfile
+2026-10-21T11:02:05.1578061Z  Downloaded sentencepiece
+2026-10-21T11:02:05.1581949Z  Downloaded kiwisolver
+2026-10-21T11:02:05.1661774Z  Downloaded brotli
+2026-10-21T11:02:05.1814681Z  Downloaded aiohttp
+2026-10-21T11:02:05.1821238Z  Downloaded crick
+2026-10-21T11:02:05.2113212Z  Downloaded pydantic-core
+2026-10-21T11:02:05.2832473Z  Downloaded tokenizers
+2026-10-21T11:02:05.3128547Z  Downloaded uvloop
+2026-10-21T11:02:05.3256335Z  Downloaded hf-xet
+2026-10-21T11:02:05.3464385Z  Downloaded sqlalchemy
+2026-10-21T11:02:05.3893397Z  Downloaded fonttools
+2026-10-21T11:02:05.4054019Z  Downloaded zstandard
+2026-10-21T11:02:05.4482054Z  Downloaded pillow
+2026-10-21T11:02:05.4884146Z  Downloaded dash
+2026-10-21T11:02:05.5313217Z  Downloaded matplotlib
+2026-10-21T11:02:05.5345930Z  Downloaded plotly
+2026-10-21T11:02:05.5909818Z  Downloaded transformers
+2026-10-21T11:02:05.5919711Z  Downloaded pandas
+2026-10-21T11:02:05.6255653Z  Downloaded numpy
+2026-10-21T11:02:05.8206076Z  Downloaded scipy
+2026-10-21T11:02:05.8231461Z       Built aiperf @ file:///workspace/utils/aiperf
+2026-10-21T11:02:06.0328949Z  Downloaded pyarrow
+2026-10-21T11:02:06.0331382Z Prepared 131 packages in 1.15s
+2026-10-21T11:02:06.4636455Z Installed 131 packages in 430ms
+2026-10-21T11:02:07.0822401Z Bytecode compiled 12645 files in 618ms
+2026-10-21T11:02:07.0822675Z  + aiofiles==24.1.0
+2026-10-21T11:02:07.0822806Z  + aiohappyeyeballs==2.7.1
+2026-10-21T11:02:07.0822942Z  + aiohttp==3.13.5
+2026-10-21T11:02:07.0823067Z  + aiosignal==1.4.0
+2026-10-21T11:02:07.0823215Z  + aiperf==0.12.0 (from file:///workspace/utils/aiperf)
+2026-10-21T11:02:07.0823390Z  + alembic==1.20.0
+2026-10-21T11:02:07.0823517Z  + annotated-doc==0.0.5
+2026-10-21T11:02:07.0823651Z  + annotated-types==0.8.0
+2026-10-21T11:02:07.0823778Z  + anyio==4.15.1
+2026-10-21T11:02:07.0823900Z  + attrs==26.1.0
+2026-10-21T11:02:07.0824994Z  + blinker==1.9.0
+2026-10-21T11:02:07.0825205Z  + brotli==1.2.0
+2026-10-21T11:02:07.0825337Z  + certifi==2026.10.19
+2026-10-21T11:02:07.0825551Z  + cffi==2.1.1
+2026-10-21T11:02:07.0825681Z  + charset-normalizer==3.5.2
+2026-10-21T11:02:07.0825848Z  + choreographer==1.4.0
+2026-10-21T11:02:07.0826018Z  + click==8.5.0
+2026-10-21T11:02:07.0826133Z  + colorlog==6.12.0
+2026-10-21T11:02:07.0826250Z  + contourpy==1.3.3
+2026-10-21T11:02:07.0826379Z  + crick==0.0.8
+2026-10-21T11:02:07.0826485Z  + cycler==0.12.1
+2026-10-21T11:02:07.0826592Z  + cyclopts==4.25.3
+2026-10-21T11:02:07.0826700Z  + dash==3.1.1
+2026-10-21T11:02:07.0826823Z  + dash-bootstrap-components==2.0.4
+2026-10-21T11:02:07.0826966Z  + datasets==5.1.0
+2026-10-21T11:02:07.0827074Z  + dill==0.4.1
+2026-10-21T11:02:07.0827192Z  + docstring-parser==0.18.0
+2026-10-21T11:02:07.0827316Z  + fastapi==0.156.4
+2026-10-21T11:02:07.0827427Z  + ffmpeg-python==0.2.0
+2026-10-21T11:02:07.0827550Z  + filelock==4.2.4
+2026-10-21T11:02:07.0827665Z  + flask==3.1.3
+2026-10-21T11:02:07.0827782Z  + fonttools==4.67.0
+2026-10-21T11:02:07.0827896Z  + frozenlist==1.8.0
+2026-10-21T11:02:07.0828016Z  + fsspec==2026.7.0
+2026-10-21T11:02:07.0828122Z  + future==1.0.0
+2026-10-21T11:02:07.0828225Z  + h11==0.16.0
+2026-10-21T11:02:07.0828329Z  + hf-xet==1.7.0
+2026-10-21T11:02:07.0828444Z  + httpcore==1.0.9
+2026-10-21T11:02:07.0828550Z  + httptools==0.9.0
+2026-10-21T11:02:07.0828649Z  + httpx==0.28.1
+2026-10-21T11:02:07.0829173Z  + huggingface-hub==1.33.0
+2026-10-21T11:02:07.0829295Z  + idna==3.20
+2026-10-21T11:02:07.0829401Z  + importlib-metadata==9.0.1
+2026-10-21T11:02:07.0829521Z  + iniconfig==2.3.1
+2026-10-21T11:02:07.0829643Z  + itsdangerous==2.2.0
+2026-10-21T11:02:07.0829750Z  + jinja2==3.1.6
+2026-10-21T11:02:07.0829849Z  + jmespath==1.0.1
+2026-10-21T11:02:07.0829951Z  + kaleido==1.2.0
+2026-10-21T11:02:07.0830056Z  + kiwisolver==1.5.1
+2026-10-21T11:02:07.0830167Z  + linkify-it-py==2.2.0
+2026-10-21T11:02:07.0830276Z  + logistro==2.0.1
+2026-10-21T11:02:07.0830373Z  + mako==1.4.3
+2026-10-21T11:02:07.0830479Z  + markdown-it-py==4.2.0
+2026-10-21T11:02:07.0830594Z  + markupsafe==3.0.4
+2026-10-21T11:02:07.0830701Z  + matplotlib==3.11.2
+2026-10-21T11:02:07.0830818Z  + mdit-py-plugins==0.6.1
+2026-10-21T11:02:07.0830931Z  + mdurl==0.1.2
+2026-10-21T11:02:07.0831028Z  + msgspec==0.22.0
+2026-10-21T11:02:07.0831143Z  + multidict==6.9.1
+2026-10-21T11:02:07.0831254Z  + multiprocess==0.70.19
+2026-10-21T11:02:07.0831365Z  + narwhals==2.27.1
+2026-10-21T11:02:07.0831471Z  + nest-asyncio==1.6.0
+2026-10-21T11:02:07.0831579Z  + numpy==2.4.6
+2026-10-21T11:02:07.0831684Z  + nvidia-ml-py==13.615.71
+2026-10-21T11:02:07.0831809Z  + opentelemetry-api==1.45.1
+2026-10-21T11:02:07.0831938Z  + optuna==5.0.0
+2026-10-21T11:02:07.0832068Z  + orjson==3.11.9
+2026-10-21T11:02:07.0832172Z  + packaging==26.3
+2026-10-21T11:02:07.0832272Z  + pandas==2.3.3
+2026-10-21T11:02:07.0832371Z  + pillow==12.2.0
+2026-10-21T11:02:07.0832481Z  + platformdirs==4.13.5
+2026-10-21T11:02:07.0832588Z  + plotly==6.4.0
+2026-10-21T11:02:07.0832686Z  + pluggy==1.7.0
+2026-10-21T11:02:07.0832796Z  + prometheus-client==0.23.1
+2026-10-21T11:02:07.0832917Z  + propcache==0.5.4
+2026-10-21T11:02:07.0833021Z  + protobuf==7.36.2
+2026-10-21T11:02:07.0833123Z  + psutil==7.0.0
+2026-10-21T11:02:07.0833230Z  + pyarrow==26.0.0
+2026-10-21T11:02:07.0833513Z  + pycparser==3.11
+2026-10-21T11:02:07.0833615Z  + pydantic==2.14.1
+2026-10-21T11:02:07.0833723Z  + pydantic-core==2.50.1
+2026-10-21T11:02:07.0833850Z  + pydantic-settings==2.16.1
+2026-10-21T11:02:07.0833968Z  + pygments==2.21.0
+2026-10-21T11:02:07.0834072Z  + pyparsing==3.3.3
+2026-10-21T11:02:07.0834177Z  + pytest==9.1.1
+2026-10-21T11:02:07.0834280Z  + pytest-timeout==2.4.0
+2026-10-21T11:02:07.0834399Z  + python-dateutil==2.9.0.post0
+2026-10-21T11:02:07.0834536Z  + python-dotenv==1.2.4
+2026-10-21T11:02:07.0834644Z  + pytz==2026.5
+2026-10-21T11:02:07.0834747Z  + pyyaml==6.0.3
+2026-10-21T11:02:07.0834843Z  + pyzmq==26.4.0
+2026-10-21T11:02:07.0834940Z  + regex==2026.9.29
+2026-10-21T11:02:07.0835037Z  + requests==2.34.2
+2026-10-21T11:02:07.0835135Z  + retrying==1.4.2
+2026-10-21T11:02:07.0835230Z  + rich==14.1.0
+2026-10-21T11:02:07.0835327Z  + rich-rst==2.2.0
+2026-10-21T11:02:07.0835427Z  + ruamel-yaml==0.18.17
+2026-10-21T11:02:07.0835633Z  + ruamel-yaml-clib==0.2.15
+2026-10-21T11:02:07.0835760Z  + safetensors==0.8.0
+2026-10-21T11:02:07.0835864Z  + scipy==1.17.1
+2026-10-21T11:02:07.0835962Z  + seaborn==0.13.2
+2026-10-21T11:02:07.0836064Z  + sentencepiece==0.2.2
+2026-10-21T11:02:07.0836174Z  + setproctitle==1.3.8
+2026-10-21T11:02:07.0836281Z  + setuptools==84.2.1
+2026-10-21T11:02:07.0836386Z  + shellingham==1.5.4
+2026-10-21T11:02:07.0836494Z  + simplejson==4.2.0
+2026-10-21T11:02:07.0836603Z  + six==1.17.0
+2026-10-21T11:02:07.0836701Z  + soundfile==0.13.1
+2026-10-21T11:02:07.0836805Z  + sqlalchemy==2.1.5
+2026-10-21T11:02:07.0836910Z  + starlette==1.9.0
+2026-10-21T11:02:07.0837020Z  + starlette-compress==1.8.0
+2026-10-21T11:02:07.0837136Z  + textual==5.3.0
+2026-10-21T11:02:07.0837235Z  + tiktoken==0.14.0
+2026-10-21T11:02:07.0837337Z  + tokenizers==0.23.3
+2026-10-21T11:02:07.0837440Z  + tqdm==4.70.1
+2026-10-21T11:02:07.0837538Z  + transformers==5.20.2
+2026-10-21T11:02:07.0837648Z  + typer==0.27.3
+2026-10-21T11:02:07.0837753Z  + typing-extensions==4.16.0
+2026-10-21T11:02:07.0837873Z  + typing-inspection==0.4.4
+2026-10-21T11:02:07.0837987Z  + tzdata==2026.5
+2026-10-21T11:02:07.0838089Z  + urllib3==2.8.0
+2026-10-21T11:02:07.0838188Z  + uvicorn==0.54.0
+2026-10-21T11:02:07.0838374Z  + uvloop==0.23.0
+2026-10-21T11:02:07.0838475Z  + watchfiles==1.3.0
+2026-10-21T11:02:07.0838579Z  + websockets==17.3
+2026-10-21T11:02:07.0838682Z  + werkzeug==3.1.9
+2026-10-21T11:02:07.0838782Z  + xlsxwriter==3.2.9
+2026-10-21T11:02:07.0838887Z  + xxhash==4.0.2
+2026-10-21T11:02:07.0838981Z  + yarl==1.25.1
+2026-10-21T11:02:07.0839078Z  + zipp==4.1.1
+2026-10-21T11:02:07.0839174Z  + zstandard==0.25.0
+2026-10-21T11:02:07.0839371Z warning: The package `huggingface-hub==1.33.0` does not have an extra named `cli`
+2026-10-21T11:02:07.1192777Z + '[' '!' -x /tmp/inferencex-agentic-7/venv/bin/aiperf ']'
+2026-10-21T11:02:07.1192963Z + '[' '!' -x /tmp/inferencex-agentic-7/venv/bin/hf ']'
+2026-10-21T11:02:07.1193113Z + AIPERF_DEPS_READY=1
+2026-10-21T11:02:07.1193338Z + /tmp/inferencex-agentic-7/venv/bin/hf download --repo-type dataset semianalysisai/cc-traces-weka-062126
+2026-10-21T11:02:07.5816452Z [90mHint: A new version of huggingface_hub (2.2.0) is available! You are using version 1.33.0.[0m
+2026-10-21T11:02:07.5911291Z [90mHint: The `hf-cli` skill is not installed. Run `hf skills add -g` to teach your AI agents how to use the `hf` CLI.[0m
+2026-10-21T11:02:07.6625567Z 
+2026-10-21T11:02:07.6705591Z Fetching 8 files:   0%|          | 0/8 [00:00<?, ?it/s]
+2026-10-21T11:02:07.6705850Z Fetching 8 files: 100%|ââââââââââ| 8/8 [00:00<00:00, 1005.62it/s]
+2026-10-21T11:02:07.6706628Z [32mâ Downloaded[0m
+2026-10-21T11:02:07.6706911Z   path: /mnt/hf_hub_cache/datasets--semianalysisai--cc-traces-weka-062126/snapshots/23f152f6f0f9399a85901b89a6458def0ef16729
+2026-10-21T11:02:07.6984481Z + install_agentic_deps
+2026-10-21T11:02:07.6984663Z + check_env_vars AIPERF_PYTHON_VERSION INFMAX_CONTAINER_WORKSPACE
+2026-10-21T11:02:07.6984850Z + missing_vars=()
+2026-10-21T11:02:07.6984955Z + local missing_vars
+2026-10-21T11:02:07.6985064Z + for var_name in "$@"
+2026-10-21T11:02:07.6985376Z + [[ -z 3.11 ]]
+2026-10-21T11:02:07.6985622Z + for var_name in "$@"
+2026-10-21T11:02:07.6985735Z + [[ -z /workspace ]]
+2026-10-21T11:02:07.6985845Z + [[ 0 -gt 0 ]]
+2026-10-21T11:02:07.6985939Z + '[' 1 = 1 ']'
+2026-10-21T11:02:07.6986033Z + return
+2026-10-21T11:02:07.6986137Z + mkdir -p /outputs/results
+2026-10-21T11:02:07.7029636Z ++ dirname benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+2026-10-21T11:02:07.7037033Z + python3 benchmarks/single_node/agentic/patches/attnfp8_probe.py /mnt/hf_hub_cache/Kimi-K3-Quark-MXFP4-AttnFP8 /outputs/results
+2026-10-21T11:02:12.8113582Z [ATTNFP8-PROBE] checkpoint configuration retained; dtype probe installed
+2026-10-21T11:02:13.4770373Z ++ dirname benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+2026-10-21T11:02:13.4780671Z + python3 benchmarks/single_node/agentic/patches/native_dcp_probe.py
+2026-10-21T11:02:18.5561111Z [NATIVE-DCP-PROBE] installed; native dispatch and transport unchanged
+2026-10-21T11:02:19.4762809Z ++ dirname benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+2026-10-21T11:02:19.4771322Z + python3 - benchmarks/single_node/agentic/patches/fp8_kv_allgather.py
+2026-10-21T11:02:25.1749307Z W1021 11:02:25.174538     959 queue_controller.cpp:170] [queue-intercept] device-memory ring-buffer requested but profiling requires system-memory InterceptQueue; falling back to system-memory ring for agent 1280443296 (priority and CU-mask from the descriptor are not preserved)
+2026-10-21T11:02:26.3132219Z [FP8-KV-DECODE-PREFLIGHT-PASSED] device= cuda:0 encoding= torch.float8_e4m3fn elements= 2062 masked_tail=True rank_scales_checked=True
+2026-10-21T11:02:26.3896031Z W1021 11:02:26.389274     959 queue_controller.cpp:170] [queue-intercept] device-memory ring-buffer requested but profiling requires system-memory InterceptQueue; falling back to system-memory ring for agent 1257789408 (priority and CU-mask from the descriptor are not preserved)
+2026-10-21T11:02:26.4801505Z Traceback (most recent call last):
+2026-10-21T11:02:26.4802173Z   File "<stdin>", line 12, in <module>
+2026-10-21T11:02:26.4802805Z   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/mla/prefill/_fp8_kv_gather.py", line 27, in validate_decode
+2026-10-21T11:02:26.4803109Z     _decode[(triton.cdiv(raw.numel(), 1024),)](
+2026-10-21T11:02:26.4803337Z   File "/usr/local/lib/python3.12/dist-packages/triton/runtime/jit.py", line 374, in <lambda>
+2026-10-21T11:02:26.4803601Z     return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+2026-10-21T11:02:26.4803811Z                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-10-21T11:02:26.4804026Z   File "/usr/local/lib/python3.12/dist-packages/triton/runtime/jit.py", line 779, in run
+2026-10-21T11:02:26.4804310Z     kernel.run(grid_0, grid_1, grid_2, stream, kernel.function, kernel.packed_metadata, launch_metadata,
+2026-10-21T11:02:26.4804614Z   File "/usr/local/lib/python3.12/dist-packages/triton/backends/amd/driver.py", line 369, in __call__
+2026-10-21T11:02:26.4804918Z     self.launch(self.launch_cooperative_grid, gridX, gridY, gridZ, stream, function, global_scratch,
+2026-10-21T11:02:26.4805201Z ValueError: Pointer argument (at 0) cannot be accessed from Triton (cpu tensor?)
+2026-10-21T11:02:29.1744848Z + benchmark_rc=1
+2026-10-21T11:02:29.1772115Z + ls 'gpucore.*'
+2026-10-21T11:02:29.1791957Z + docker stop bmk-server
+2026-10-21T11:02:29.1934729Z + true
+2026-10-21T11:02:29.1934848Z + docker rm bmk-server
+2026-10-21T11:02:29.2078897Z + true
+2026-10-21T11:02:29.2079004Z + exit 1
+2026-10-21T11:02:29.2146056Z ##[error]Process completed with exit code 1.
+2026-10-21T11:02:29.3782091Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-21T11:02:29.3782301Z with:
+2026-10-21T11:02:29.3782569Z   name: bmk_agentic_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:29.3783013Z   path: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07.json
+2026-10-21T11:02:29.3783451Z   if-no-files-found: warn
+2026-10-21T11:02:29.3783573Z   compression-level: 6
+2026-10-21T11:02:29.3783685Z   overwrite: false
+2026-10-21T11:02:29.3783792Z   include-hidden-files: false
+2026-10-21T11:02:29.3783913Z   archive: true
+2026-10-21T11:02:29.3784018Z env:
+2026-10-21T11:02:29.3784113Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:02:29.3784409Z   HF_TOKEN: ***
+2026-10-21T11:02:29.3784519Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:02:29.3784696Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:02:29.3784860Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:29.3784998Z   MODEL_PREFIX: kimik3
+2026-10-21T11:02:29.3785102Z   ISL: 0
+2026-10-21T11:02:29.3785196Z   OSL: 0
+2026-10-21T11:02:29.3785286Z   MAX_MODEL_LEN: 0
+2026-10-21T11:02:29.3785481Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:29.3785676Z   FRAMEWORK: vllm
+2026-10-21T11:02:29.3785782Z   PRECISION: fp4
+2026-10-21T11:02:29.3785879Z   TP: 8
+2026-10-21T11:02:29.3785973Z   EP_SIZE: 1
+2026-10-21T11:02:29.3786073Z   DP_ATTENTION: false
+2026-10-21T11:02:29.3786175Z   CONC: 48
+2026-10-21T11:02:29.3786274Z   SPEC_DECODING: mtp
+2026-10-21T11:02:29.3786379Z   DISAGG: false
+2026-10-21T11:02:29.3786477Z   RUN_EVAL: false
+2026-10-21T11:02:29.3786577Z   EVAL_ONLY: false
+2026-10-21T11:02:29.3786684Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:02:29.3786813Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:02:29.3786928Z   IS_AGENTIC: 1
+2026-10-21T11:02:29.3787024Z   OFFLOADING: 
+2026-10-21T11:02:29.3787127Z   KV_OFFLOADING: dram
+2026-10-21T11:02:29.3787243Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:02:29.3787367Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:02:29.3787474Z   DURATION: 600
+2026-10-21T11:02:29.3787582Z   RESULT_DIR: /workspace/results
+2026-10-21T11:02:29.3787709Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:02:29.3787850Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:02:29.3788160Z   RESULT_FILENAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:29.3788452Z ##[endgroup]
+2026-10-21T11:02:29.4800836Z ##[warning]No files were found with the provided path: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07.json. No artifacts will be uploaded.
+2026-10-21T11:02:29.6408842Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-21T11:02:29.6409071Z with:
+2026-10-21T11:02:29.6409342Z   name: agentic_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:29.6411438Z   path: results/server.log
+results/attnfp8_checkpoint_config.json
+results/lmcache_server.log
+results/benchmark.log
+results/config.yaml
+results/lmcache_command.txt
+results/sglang_command.txt
+results/vllm_command.txt
+results/benchmark_command.txt
+results/workload_distribution_summary.txt
+results/workload_distribution_plots.png
+results/metrics_plots.png
+results/aiperf_artifacts/profile_export.jsonl
+results/aiperf_artifacts/profile_export_aiperf.json
+results/aiperf_artifacts/profile_export_aiperf.csv
+results/aiperf_artifacts/profile_export_aiperf_timeslices.json
+results/aiperf_artifacts/profile_export_aiperf_timeslices.csv
+results/aiperf_artifacts/profile_export_aiperf_aggregate.json
+results/aiperf_artifacts/profile_export_aiperf_aggregate.csv
+results/aiperf_artifacts/profile_export_aiperf_collated.json
+results/aiperf_artifacts/server_metrics_export.json
+results/aiperf_artifacts/server_metrics_export.jsonl
+results/aiperf_artifacts/server_metrics_export.csv
+results/aiperf_artifacts/server_metrics_export.parquet
+results/aiperf_artifacts/gpu_telemetry_export.jsonl
+results/aiperf_artifacts/logs/aiperf.log
+results/aiperf_artifacts/logs/*.log
+results/rocprof_summary.txt
+results/rocprof/**/*.csv
+
+2026-10-21T11:02:29.6413471Z   if-no-files-found: ignore
+2026-10-21T11:02:29.6413748Z   compression-level: 6
+2026-10-21T11:02:29.6413868Z   overwrite: false
+2026-10-21T11:02:29.6413985Z   include-hidden-files: false
+2026-10-21T11:02:29.6414117Z   archive: true
+2026-10-21T11:02:29.6414229Z env:
+2026-10-21T11:02:29.6414334Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:02:29.6414619Z   HF_TOKEN: ***
+2026-10-21T11:02:29.6414734Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:02:29.6414905Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:02:29.6415080Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:29.6415220Z   MODEL_PREFIX: kimik3
+2026-10-21T11:02:29.6415339Z   ISL: 0
+2026-10-21T11:02:29.6415431Z   OSL: 0
+2026-10-21T11:02:29.6415564Z   MAX_MODEL_LEN: 0
+2026-10-21T11:02:29.6415740Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:29.6415946Z   FRAMEWORK: vllm
+2026-10-21T11:02:29.6416055Z   PRECISION: fp4
+2026-10-21T11:02:29.6416160Z   TP: 8
+2026-10-21T11:02:29.6416263Z   EP_SIZE: 1
+2026-10-21T11:02:29.6416382Z   DP_ATTENTION: false
+2026-10-21T11:02:29.6416492Z   CONC: 48
+2026-10-21T11:02:29.6416597Z   SPEC_DECODING: mtp
+2026-10-21T11:02:29.6416711Z   DISAGG: false
+2026-10-21T11:02:29.6416816Z   RUN_EVAL: false
+2026-10-21T11:02:29.6416922Z   EVAL_ONLY: false
+2026-10-21T11:02:29.6417038Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:02:29.6417176Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:02:29.6417297Z   IS_AGENTIC: 1
+2026-10-21T11:02:29.6417404Z   OFFLOADING: 
+2026-10-21T11:02:29.6417515Z   KV_OFFLOADING: dram
+2026-10-21T11:02:29.6417633Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:02:29.6417769Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:02:29.6417885Z   DURATION: 600
+2026-10-21T11:02:29.6418003Z   RESULT_DIR: /workspace/results
+2026-10-21T11:02:29.6418137Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:02:29.6418289Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:02:29.6418611Z   RESULT_FILENAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:29.6418915Z ##[endgroup]
+2026-10-21T11:02:29.7487474Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-21T11:02:29.7489818Z The least common ancestor is /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/results. This will be the root directory of the artifact
+2026-10-21T11:02:29.7490632Z With the provided path, there will be 1 file uploaded
+2026-10-21T11:02:29.7491503Z Artifact name is valid!
+2026-10-21T11:02:29.7491763Z Root directory input is valid!
+2026-10-21T11:02:30.0007219Z Uploading artifact: agentic_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07.zip
+2026-10-21T11:02:30.0052512Z Beginning upload of artifact content to blob storage
+2026-10-21T11:02:30.1753101Z Uploaded bytes 3716
+2026-10-21T11:02:30.2071730Z Finished uploading artifact content to blob storage!
+2026-10-21T11:02:30.2072367Z SHA256 digest of uploaded artifact is da06c9da8482ab8750368d9aa1062ea1e4c9a5078693a746e8b4ea922bad0248
+2026-10-21T11:02:30.2072905Z Finalizing artifact upload
+2026-10-21T11:02:30.4951947Z Artifact agentic_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07 successfully finalized. Artifact ID 12340393762
+2026-10-21T11:02:30.4952694Z Artifact agentic_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07 has been successfully uploaded! Final size is 3716 bytes. Artifact ID is 12340393762
+2026-10-21T11:02:30.5045151Z Artifact download URL: https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39588733292/artifacts/12340393762
+2026-10-21T11:02:30.6693905Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-21T11:02:30.6694157Z with:
+2026-10-21T11:02:30.6694448Z   name: server_logs_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:30.6694956Z   path: results/server.log
+results/lmcache_server.log
+
+2026-10-21T11:02:30.6695139Z   if-no-files-found: ignore
+2026-10-21T11:02:30.6695278Z   compression-level: 6
+2026-10-21T11:02:30.6695405Z   overwrite: false
+2026-10-21T11:02:30.6695581Z   include-hidden-files: false
+2026-10-21T11:02:30.6695716Z   archive: true
+2026-10-21T11:02:30.6695848Z env:
+2026-10-21T11:02:30.6695962Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:02:30.6696436Z   HF_TOKEN: ***
+2026-10-21T11:02:30.6696558Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:02:30.6696737Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:02:30.6696923Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:30.6697118Z   MODEL_PREFIX: kimik3
+2026-10-21T11:02:30.6697237Z   ISL: 0
+2026-10-21T11:02:30.6697351Z   OSL: 0
+2026-10-21T11:02:30.6697459Z   MAX_MODEL_LEN: 0
+2026-10-21T11:02:30.6697643Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:30.6697860Z   FRAMEWORK: vllm
+2026-10-21T11:02:30.6697976Z   PRECISION: fp4
+2026-10-21T11:02:30.6698097Z   TP: 8
+2026-10-21T11:02:30.6698202Z   EP_SIZE: 1
+2026-10-21T11:02:30.6698320Z   DP_ATTENTION: false
+2026-10-21T11:02:30.6698435Z   CONC: 48
+2026-10-21T11:02:30.6698543Z   SPEC_DECODING: mtp
+2026-10-21T11:02:30.6698664Z   DISAGG: false
+2026-10-21T11:02:30.6698776Z   RUN_EVAL: false
+2026-10-21T11:02:30.6698894Z   EVAL_ONLY: false
+2026-10-21T11:02:30.6699015Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:02:30.6699155Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:02:30.6699286Z   IS_AGENTIC: 1
+2026-10-21T11:02:30.6699391Z   OFFLOADING: 
+2026-10-21T11:02:30.6699505Z   KV_OFFLOADING: dram
+2026-10-21T11:02:30.6699629Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:02:30.6699767Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:02:30.6699884Z   DURATION: 600
+2026-10-21T11:02:30.6700000Z   RESULT_DIR: /workspace/results
+2026-10-21T11:02:30.6700138Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:02:30.6700291Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:02:30.6700609Z   RESULT_FILENAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:30.6700908Z ##[endgroup]
+2026-10-21T11:02:30.7617969Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-21T11:02:30.7618967Z The least common ancestor is /home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team/results. This will be the root directory of the artifact
+2026-10-21T11:02:30.7619379Z No files were found with the provided path: results/server.log
+2026-10-21T11:02:30.7619598Z results/lmcache_server.log. No artifacts will be uploaded.
+2026-10-21T11:02:30.9263653Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-21T11:02:30.9263898Z with:
+2026-10-21T11:02:30.9264180Z   name: gpu_metrics_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:30.9264520Z   path: gpu_metrics.csv
+2026-10-21T11:02:30.9264647Z   if-no-files-found: ignore
+2026-10-21T11:02:30.9264783Z   compression-level: 6
+2026-10-21T11:02:30.9264902Z   overwrite: false
+2026-10-21T11:02:30.9265026Z   include-hidden-files: false
+2026-10-21T11:02:30.9265162Z   archive: true
+2026-10-21T11:02:30.9265272Z env:
+2026-10-21T11:02:30.9265385Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:02:30.9265702Z   HF_TOKEN: ***
+2026-10-21T11:02:30.9265825Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:02:30.9265994Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:02:30.9266175Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:30.9266369Z   MODEL_PREFIX: kimik3
+2026-10-21T11:02:30.9266497Z   ISL: 0
+2026-10-21T11:02:30.9266607Z   OSL: 0
+2026-10-21T11:02:30.9266713Z   MAX_MODEL_LEN: 0
+2026-10-21T11:02:30.9266904Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:30.9267262Z   FRAMEWORK: vllm
+2026-10-21T11:02:30.9267384Z   PRECISION: fp4
+2026-10-21T11:02:30.9267498Z   TP: 8
+2026-10-21T11:02:30.9267605Z   EP_SIZE: 1
+2026-10-21T11:02:30.9267724Z   DP_ATTENTION: false
+2026-10-21T11:02:30.9267844Z   CONC: 48
+2026-10-21T11:02:30.9267961Z   SPEC_DECODING: mtp
+2026-10-21T11:02:30.9268082Z   DISAGG: false
+2026-10-21T11:02:30.9268193Z   RUN_EVAL: false
+2026-10-21T11:02:30.9268311Z   EVAL_ONLY: false
+2026-10-21T11:02:30.9268434Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:02:30.9268580Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:02:30.9268706Z   IS_AGENTIC: 1
+2026-10-21T11:02:30.9268823Z   OFFLOADING: 
+2026-10-21T11:02:30.9268938Z   KV_OFFLOADING: dram
+2026-10-21T11:02:30.9269073Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:02:30.9269221Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:02:30.9269346Z   DURATION: 600
+2026-10-21T11:02:30.9269471Z   RESULT_DIR: /workspace/results
+2026-10-21T11:02:30.9269614Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:02:30.9269776Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:02:30.9270105Z   RESULT_FILENAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:30.9270407Z ##[endgroup]
+2026-10-21T11:02:31.0197737Z No files were found with the provided path: gpu_metrics.csv. No artifacts will be uploaded.
+2026-10-21T11:02:31.1799123Z ##[group]Run ## Cleanup Docker resources
+2026-10-21T11:02:31.1799382Z [36;1m## Cleanup Docker resources[0m
+2026-10-21T11:02:31.1799595Z [36;1m#if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then[0m
+2026-10-21T11:02:31.1799817Z [36;1m#  echo "[Docker] Cleaning up resources ..."[0m
+2026-10-21T11:02:31.1799995Z [36;1m#  docker ps -aq | xargs -r docker rm -f[0m
+2026-10-21T11:02:31.1800161Z [36;1m#  docker network prune -f[0m
+2026-10-21T11:02:31.1800313Z [36;1m#  while [ -n "$(docker ps -aq)" ]; do[0m
+2026-10-21T11:02:31.1800476Z [36;1m#    docker ps -a[0m
+2026-10-21T11:02:31.1800621Z [36;1m#    sleep 5[0m
+2026-10-21T11:02:31.1800743Z [36;1m#  done[0m
+2026-10-21T11:02:31.1800853Z [36;1m#fi[0m
+2026-10-21T11:02:31.1800958Z [36;1m#[0m
+2026-10-21T11:02:31.1801078Z [36;1m## Cleanup SLURM resources[0m
+2026-10-21T11:02:31.1801234Z [36;1m#if command -v squeue >/dev/null 2>&1; then[0m
+2026-10-21T11:02:31.1801491Z [36;1m#  echo "[Slurm] Cleaning up jobs with name: mi355x-amd_pit2_p03_g07 ..."[0m
+2026-10-21T11:02:31.1801719Z [36;1m#  scancel --name="mi355x-amd_pit2_p03_g07" || true[0m
+2026-10-21T11:02:31.1801964Z [36;1m#  while [ -n "$(squeue --name='mi355x-amd_pit2_p03_g07' --noheader --format='%i')" ]; do[0m
+2026-10-21T11:02:31.1802206Z [36;1m#    squeue --name="mi355x-amd_pit2_p03_g07"[0m
+2026-10-21T11:02:31.1802361Z [36;1m#    sleep 5[0m
+2026-10-21T11:02:31.1802483Z [36;1m#  done[0m
+2026-10-21T11:02:31.1802591Z [36;1m#fi[0m
+2026-10-21T11:02:31.1802701Z [36;1m[0m
+2026-10-21T11:02:31.1802859Z [36;1m# Remove only a stale benchmark mounted to this repository workspace.[0m
+2026-10-21T11:02:31.1803096Z [36;1mif [[ "mi355x-amd_pit2_p03_g07" == mi355x-amd_* ]]; then[0m
+2026-10-21T11:02:31.1803411Z [36;1m  if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' bmk-server 2>/dev/null | grep -Fxq "$GITHUB_WORKSPACE"; then[0m
+2026-10-21T11:02:31.1803707Z [36;1m    docker rm -f bmk-server[0m
+2026-10-21T11:02:31.1803847Z [36;1m  fi[0m
+2026-10-21T11:02:31.1803954Z [36;1mfi[0m
+2026-10-21T11:02:31.1804066Z [36;1m[0m
+2026-10-21T11:02:31.1804224Z [36;1m# Cleanup workspace from a prior job on this runner. Agentic jobs[0m
+2026-10-21T11:02:31.1804502Z [36;1m# write to fixed subpaths (aiperf_artifacts/, metrics_*, etc.), so stale[0m
+2026-10-21T11:02:31.1804739Z [36;1m# data from a previous job would otherwise be picked up as this[0m
+2026-10-21T11:02:31.1804943Z [36;1m# job's output when replay fails early.[0m
+2026-10-21T11:02:31.1805159Z [36;1m# Use Docker to handle permission issues from prior container-created files.[0m
+2026-10-21T11:02:31.1805816Z [36;1mdocker run --rm -v "/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team":/ws --entrypoint sh $IMAGE -c "rm -rf /ws/* /ws/.[!.]*" || true[0m
+2026-10-21T11:02:31.1806297Z [36;1mls -la "/home/ajith.sirra@amd.com/InferenceMAX_Rocm_Team/_work/InferenceMAX_Rocm_Team/InferenceMAX_Rocm_Team" [0m
+2026-10-21T11:02:31.1823122Z shell: /usr/bin/bash -e {0}
+2026-10-21T11:02:31.1823258Z env:
+2026-10-21T11:02:31.1823372Z   RANDOM_RANGE_RATIO: 0.8
+2026-10-21T11:02:31.1823659Z   HF_TOKEN: ***
+2026-10-21T11:02:31.1823774Z   HF_HUB_CACHE: /mnt/hf_hub_cache/
+2026-10-21T11:02:31.1823944Z   EXP_NAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp
+2026-10-21T11:02:31.1824123Z   MODEL: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+2026-10-21T11:02:31.1824272Z   MODEL_PREFIX: kimik3
+2026-10-21T11:02:31.1824383Z   ISL: 0
+2026-10-21T11:02:31.1824476Z   OSL: 0
+2026-10-21T11:02:31.1824572Z   MAX_MODEL_LEN: 0
+2026-10-21T11:02:31.1824748Z   IMAGE: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
+2026-10-21T11:02:31.1824957Z   FRAMEWORK: vllm
+2026-10-21T11:02:31.1825063Z   PRECISION: fp4
+2026-10-21T11:02:31.1825171Z   TP: 8
+2026-10-21T11:02:31.1825267Z   EP_SIZE: 1
+2026-10-21T11:02:31.1825372Z   DP_ATTENTION: false
+2026-10-21T11:02:31.1825527Z   CONC: 48
+2026-10-21T11:02:31.1825626Z   SPEC_DECODING: mtp
+2026-10-21T11:02:31.1825819Z   DISAGG: false
+2026-10-21T11:02:31.1825924Z   RUN_EVAL: false
+2026-10-21T11:02:31.1826032Z   EVAL_ONLY: false
+2026-10-21T11:02:31.1826155Z   SCENARIO_TYPE: agentic-coding
+2026-10-21T11:02:31.1826292Z   SCENARIO_SUBDIR: agentic/
+2026-10-21T11:02:31.1826416Z   IS_AGENTIC: 1
+2026-10-21T11:02:31.1826521Z   OFFLOADING: 
+2026-10-21T11:02:31.1826635Z   KV_OFFLOADING: dram
+2026-10-21T11:02:31.1826759Z   KV_OFFLOAD_BACKEND: vllm-simple
+2026-10-21T11:02:31.1826896Z   TOTAL_CPU_DRAM_GB: 2249
+2026-10-21T11:02:31.1827021Z   DURATION: 600
+2026-10-21T11:02:31.1827136Z   RESULT_DIR: /workspace/results
+2026-10-21T11:02:31.1827286Z   PYTHONDONTWRITEBYTECODE: 1
+2026-10-21T11:02:31.1827438Z   PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+2026-10-21T11:02:31.1827767Z   RESULT_FILENAME: kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07
+2026-10-21T11:02:31.1828068Z ##[endgroup]
+2026-10-21T11:02:46.4478247Z total 0
+2026-10-21T11:02:46.4478594Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Oct 21  2026 .
+2026-10-21T11:02:46.4478870Z drwxrwxr-x 2 ajith.sirra@amd.com ajith.sirra@amd.com 4096 Sep 29 06:33 ..
+2026-10-21T11:02:46.6228220Z Post job cleanup.
+2026-10-21T11:02:46.7400498Z Cleaning up orphan processes

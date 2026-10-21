@@ -19,6 +19,7 @@ def validate_decode():
     dtype = current_platform.fp8_dtype()
     for device_index in range(torch.cuda.device_count()):
         device = torch.device('cuda', device_index)
+        torch.cuda.set_device(device)
         per_rank = 1031
         raw = (torch.arange(2 * per_rank, device=device, dtype=torch.int32) % 256).to(torch.uint8)
         encoded = raw.view(dtype)

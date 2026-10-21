@@ -90,3 +90,11 @@ gather exactly; fail on mismatch. Reference traffic is warmup overhead. Cache sc
 are collected once and assumed immutable after initialization. Support ordinary
 fp8 cache; retain original packed-cache and BF16 branches. C48 warmup1/600second
 smoke only; no full run until actual byte transport and parity pass on all8 GPUs.
+
+## Multi-GPU decode preflight device fix
+
+Smoke39588733292 passed exact FP8 decoding on GPU0, then failed on GPU1
+before server launch because the preflight allocated tensors on GPU1 without
+switching the active Triton device. Explicitly select each GPU before launching
+its decoder. All8-device GPU checks and live cache parity remain required; this
+failed run produced no FP8 collective or benchmark evidence.
