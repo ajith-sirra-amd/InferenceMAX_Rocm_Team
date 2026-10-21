@@ -12,3 +12,13 @@ Smoke [39561981905](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/ac
 行为检查覆盖 FP8、packed FP8、BF16 和相邻方法；固定版本的运行时源码也通过编译。
 GPU 执行、缓存精确一致性、KV 容量和吞吐量仍需替代 smoke 验证。
 本修复不会启用 FP8 ASM FMHA。
+
+## FP8 解码器编译修复
+
+Smoke39570966330 启动时恢复了 **23,098,919 tokens** 的 GPU KV pool，随后在内核预热阶段失败。
+Triton 拒绝将 masked load 的整数填充值转换为 FP8。修复移除未使用的填充值；被掩码的元素不会写入输出。
+FP32 scale 的填充值改为浮点数。
+
+服务器启动前，在每个可见 GPU 上运行真实解码器，覆盖全部256种 FP8 字节编码、两种源 rank scale 和末尾不足一个 block 的输入。
+与 PyTorch 解码进行精确比较，并处理 NaN 一致性。编译或数值错误将在模型权重加载前失败。
+保留实际缓存的精确一致性检查。失败运行未产生正式吞吐量或模型准确性结果；KV pool 是内核预热完成前的启动观测值。

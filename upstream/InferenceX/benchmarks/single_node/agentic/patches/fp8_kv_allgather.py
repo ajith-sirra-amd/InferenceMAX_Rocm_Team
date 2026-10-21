@@ -9,9 +9,31 @@ from vllm.platforms import current_platform
 @triton.jit
 def _decode(src, scales, dst, N: tl.constexpr, PER_RANK: tl.constexpr, BLOCK: tl.constexpr):
     idx = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-    value = tl.load(src + idx, idx < N, other=0).to(tl.float32)
-    scale = tl.load(scales + idx // PER_RANK, idx < N, other=1)
+    value = tl.load(src + idx, idx < N).to(tl.float32)
+    scale = tl.load(scales + idx // PER_RANK, idx < N, other=1.0)
     tl.store(dst + idx, value * scale, idx < N)
+
+
+def validate_decode():
+    """Exercise the real GPU decoder, including a masked tail and rank scales."""
+    dtype = current_platform.fp8_dtype()
+    for device_index in range(torch.cuda.device_count()):
+        device = torch.device('cuda', device_index)
+        per_rank = 1031
+        raw = (torch.arange(2 * per_rank, device=device, dtype=torch.int32) % 256).to(torch.uint8)
+        encoded = raw.view(dtype)
+        scales = torch.tensor([0.5, 2.0], device=device, dtype=torch.float32)
+        output = torch.empty(raw.numel(), device=device, dtype=torch.bfloat16)
+        _decode[(triton.cdiv(raw.numel(), 1024),)](
+            encoded, scales, output, raw.numel(), per_rank, 1024)
+        expected = torch.cat([
+            (encoded[:per_rank].float() * 0.5).bfloat16(),
+            (encoded[per_rank:].float() * 2.0).bfloat16()])
+        torch.testing.assert_close(output, expected, rtol=0, atol=0, equal_nan=True)
+        torch.cuda.synchronize(device)
+        print('[FP8-KV-DECODE-PREFLIGHT-PASSED]', 'device=', str(device),
+              'encoding=', str(dtype), 'elements=', raw.numel(),
+              'masked_tail=True', 'rank_scales_checked=True', flush=True)
 
 
 def gather(backend, cache, workspace, block_table, chunk, scale, manager):

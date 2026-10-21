@@ -42,6 +42,8 @@ path = site / 'model_executor/layers/attention/mla_attention.py'
 path.write_text(namespace['patch'](path.read_text()))
 shutil.copyfile(sys.argv[1], site / 'v1/attention/backends/mla/prefill/_fp8_kv_gather.py')
 py_compile.compile(str(path), doraise=True)
+from vllm.v1.attention.backends.mla.prefill import _fp8_kv_gather
+_fp8_kv_gather.validate_decode()
 print('[FP8-KV-ALLGATHER] installed raw cache-byte transport; BF16 FMHA retained')
 RAWGATHER
 

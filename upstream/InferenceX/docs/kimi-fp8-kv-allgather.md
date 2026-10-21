@@ -36,3 +36,18 @@ unexpected method/branch layouts. Behavioral checks exercise FP8, packed FP8,
 BF16 and adjacent methods; the pinned runtime source also compiles.
 GPU execution, exact cache parity, KV capacity and throughput still require the
 replacement smoke. This repair does not enable FP8 ASM FMHA.
+
+## FP8 decoder compile repair
+
+Smoke39570966330 recovered the startup GPU KV pool to **23,098,919 tokens**,
+then failed during kernel warmup. Triton rejected the integer masked-load fill
+value in the FP8 decoder. Omit the unused fill value; masked elements are never
+stored. Use a floating-point fill for FP32 scales.
+
+Before server launch, run the real decoder on every visible GPU using all256
+FP8 byte encodings, two different source-rank scales and a partial final block.
+Compare against PyTorch decoding exactly, including NaN handling. This check
+fails before loading model weights if decoding cannot compile or differs.
+The existing live-cache parity gates remain required. No measured throughput
+or model accuracy result was produced by the failed run; the advertised KV pool
+was observed before successful completion of kernel warmup.

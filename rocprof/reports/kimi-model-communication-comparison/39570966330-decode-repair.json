@@ -1,0 +1,12 @@
+{
+  "run_id": 39570966330,
+  "job_id": 119124825967,
+  "source_sha": "ea54599ed1cccb03528e09395cc17d35b8934182",
+  "startup_kv_pool_tokens": 23098919,
+  "failure": "Triton cannot cast integer masked FP8 load fill to fp8e4nv",
+  "fix": "Omit unused FP8 fill and add per-GPU decode preflight",
+  "local_behavior_regression": "passed",
+  "gpu_decode_validation": "pending new smoke preflight",
+  "measured_throughput": null,
+  "fp8_asm_fmha": false
+}
