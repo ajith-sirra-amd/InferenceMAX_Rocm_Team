@@ -63,3 +63,15 @@ AMD checkpoint, auto loader, no CLI quantization override, C48 TP8/DCP8,
 warmup1 per lane and600second replay. Require both diagnostic markers and the
 existing context-input marker before accepting the smoke. No full benchmark
 until the diagnostic and any subsequent communication adaptation pass.
+
+## Native diagnostic result39576708017
+
+Workflow succeeded. All8 GPUs logged native eligibility=False because the
+reconstruction weights are FP8 (3072,512), with weight_scale present; the
+actual KV collective used BF16. KV pool23098919 tokens. Total throughput
+10985.22783 tok/s/GPU; output56.97678 tok/s/GPU. Logging-only change: do not
+attribute the difference from earlier AMD smoke to an optimization.
+Measured phase456 valid requests and1 empty-content InvalidInferenceResultError
+(0.22%). Aggregate error accounting includes warmup. No ServerDisconnectedError
+in server/benchmark logs. Results do not establish model accuracy.
+Evidence: rocprof/reports/kimi-model-communication-comparison/39576708017-native-diagnostic/.

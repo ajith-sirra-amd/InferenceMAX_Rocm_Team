@@ -1,0 +1,93 @@
+{
+  "run_id": 39576708017,
+  "source_sha": "22a63ad1ae15d43beaa764745077e6ba85003a91",
+  "workflow_conclusion": "success",
+  "native_fp8_context_gather_eligible": false,
+  "actual_kv_collective_dtype": "torch.bfloat16",
+  "kv_b_proj_weight_dtype": "torch.float8_e4m3fn",
+  "kv_b_proj_weight_shape": [
+    3072,
+    512
+  ],
+  "weight_scale_present": true,
+  "markers": {
+    "NATIVE-DCP-ELIGIBILITY": {
+      "devices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "lines": [
+        "[NATIVE-DCP-ELIGIBILITY] device= cuda:7 eligible= False cache_dtype= fp8 q_dtype= torch.bfloat16 prefill_q_dtype= torch.bfloat16 weight_dtype= torch.float8_e4m3fn weight_shape= (3072, 512) weight_contiguous= True weight_scale_present= True bias_present= False cache_contiguous= True context_rows_present= True",
+        "[NATIVE-DCP-ELIGIBILITY] device= cuda:3 eligible= False cache_dtype= fp8 q_dtype= torch.bfloat16 prefill_q_dtype= torch.bfloat16 weight_dtype= torch.float8_e4m3fn weight_shape= (3072, 512) weight_contiguous= True weight_scale_present= True bias_present= False cache_contiguous= True context_rows_present= True",
+        "[NATIVE-DCP-ELIGIBILITY] device= cuda:6 eligible= False cache_dtype= fp8 q_dtype= torch.bfloat16 prefill_q_dtype= torch.bfloat16 weight_dtype= torch.float8_e4m3fn weight_shape= (3072, 512) weight_contiguous= True weight_scale_present= True bias_present= False cache_contiguous= True context_rows_present= True",
+        "[NATIVE-DCP-ELIGIBILITY] device= cuda:5 eligible= False cache_dtype= fp8 q_dtype= torch.bfloat16 prefill_q_dtype= torch.bfloat16 weight_dtype= torch.float8_e4m3fn weight_shape= (3072, 512) weight_contiguous= True weight_scale_present= True bias_present= False cache_contiguous= True context_rows_present= True",
+        "[NATIVE-DCP-ELIGIBILITY] device= cuda:4 eligible= False cache_dtype= fp8 q_dtype= torch.bfloat16 prefill_q_dtype= torch.bfloat16 weight_dtype= torch.float8_e4m3fn weight_shape= (3072, 512) weight_contiguous= True weight_scale_present= True bias_present= False cache_contiguous= True context_rows_present= True",
+        "[NATIVE-DCP-ELIGIBILITY] device= cuda:2 eligible= False cache_dtype= fp8 q_dtype= torch.bfloat16 prefill_q_dtype= torch.bfloat16 weight_dtype= torch.float8_e4m3fn weight_shape= (3072, 512) weight_contiguous= True weight_scale_present= True bias_present= False cache_contiguous= True context_rows_present= True",
+        "[NATIVE-DCP-ELIGIBILITY] device= cuda:0 eligible= False cache_dtype= fp8 q_dtype= torch.bfloat16 prefill_q_dtype= torch.bfloat16 weight_dtype= torch.float8_e4m3fn weight_shape= (3072, 512) weight_contiguous= True weight_scale_present= True bias_present= False cache_contiguous= True context_rows_present= True",
+        "[NATIVE-DCP-ELIGIBILITY] device= cuda:1 eligible= False cache_dtype= fp8 q_dtype= torch.bfloat16 prefill_q_dtype= torch.bfloat16 weight_dtype= torch.float8_e4m3fn weight_shape= (3072, 512) weight_contiguous= True weight_scale_present= True bias_present= False cache_contiguous= True context_rows_present= True"
+      ]
+    },
+    "NATIVE-KV-COLLECTIVE": {
+      "devices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "lines": [
+        "[NATIVE-KV-COLLECTIVE] device= cuda:7 dtype= torch.bfloat16 shape= (2, 576) local_bytes= 2304 gathered_dtype= torch.bfloat16 gathered_bytes= 18432 transport_unmodified=True",
+        "[NATIVE-KV-COLLECTIVE] device= cuda:3 dtype= torch.bfloat16 shape= (2, 576) local_bytes= 2304 gathered_dtype= torch.bfloat16 gathered_bytes= 18432 transport_unmodified=True",
+        "[NATIVE-KV-COLLECTIVE] device= cuda:6 dtype= torch.bfloat16 shape= (2, 576) local_bytes= 2304 gathered_dtype= torch.bfloat16 gathered_bytes= 18432 transport_unmodified=True",
+        "[NATIVE-KV-COLLECTIVE] device= cuda:5 dtype= torch.bfloat16 shape= (2, 576) local_bytes= 2304 gathered_dtype= torch.bfloat16 gathered_bytes= 18432 transport_unmodified=True",
+        "[NATIVE-KV-COLLECTIVE] device= cuda:4 dtype= torch.bfloat16 shape= (2, 576) local_bytes= 2304 gathered_dtype= torch.bfloat16 gathered_bytes= 18432 transport_unmodified=True",
+        "[NATIVE-KV-COLLECTIVE] device= cuda:2 dtype= torch.bfloat16 shape= (2, 576) local_bytes= 2304 gathered_dtype= torch.bfloat16 gathered_bytes= 18432 transport_unmodified=True",
+        "[NATIVE-KV-COLLECTIVE] device= cuda:0 dtype= torch.bfloat16 shape= (2, 576) local_bytes= 2304 gathered_dtype= torch.bfloat16 gathered_bytes= 18432 transport_unmodified=True",
+        "[NATIVE-KV-COLLECTIVE] device= cuda:1 dtype= torch.bfloat16 shape= (2, 576) local_bytes= 2304 gathered_dtype= torch.bfloat16 gathered_bytes= 18432 transport_unmodified=True"
+      ]
+    },
+    "ATTNFP8-CONTEXT-INPUT": {
+      "devices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "lines": [
+        "[ATTNFP8-CONTEXT-INPUT] pid= 2754 device= cuda:7 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False",
+        "[ATTNFP8-CONTEXT-INPUT] pid= 2677 device= cuda:6 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False",
+        "[ATTNFP8-CONTEXT-INPUT] pid= 2446 device= cuda:3 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False",
+        "[ATTNFP8-CONTEXT-INPUT] pid= 2600 device= cuda:5 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False",
+        "[ATTNFP8-CONTEXT-INPUT] pid= 2523 device= cuda:4 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False",
+        "[ATTNFP8-CONTEXT-INPUT] pid= 2369 device= cuda:2 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False",
+        "[ATTNFP8-CONTEXT-INPUT] pid= 2242 device= cuda:0 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False",
+        "[ATTNFP8-CONTEXT-INPUT] pid= 2296 device= cuda:1 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False"
+      ]
+    }
+  },
+  "kv_pool_tokens": 23098919,
+  "throughput_per_gpu": {
+    "total_tput_tps": 10985.22783,
+    "output_tput_tps": 56.97678,
+    "input_tput_tps": 10928.25105
+  },
+  "baseline_39260167917_delta_pct": {
+    "total": 4.983242241019603,
+    "output": 14.623765154860457
+  },
+  "benchmark_error_note": "Measured phase:456 valid requests,1 InvalidInferenceResultError (0.22%);aggregate90 error records includes warmup and must not be treated as90 measured failures. No ServerDisconnectedError in server/benchmark logs.",
+  "interpretation": "Observation-only smoke confirms BF16 transport; throughput delta is not a patch gain or model correctness result"
+}

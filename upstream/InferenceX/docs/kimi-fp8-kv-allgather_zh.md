@@ -31,3 +31,9 @@ FP32 scale 的填充值改为浮点数。
 使用 AMD checkpoint、auto loader，不传 CLI 量化覆盖；C48 TP8/DCP8，每 lane 预热1次，回放600秒。
 要求两种诊断日志和现有上下文输入日志都存在才能接受 smoke。
 诊断及后续通信适配验证通过前不运行完整 benchmark。
+
+## 原生诊断结果39576708017
+
+Workflow成功。全8个 GPU 记录 eligibility=False：重建权重为 FP8 (3072,512)，存在 weight_scale。实际 KV collective 使用 BF16。KV pool23098919 tokens。总吞吐10985.22783 tok/s/GPU，输出56.97678 tok/s/GPU。本次只增加日志，吞吐差异不代表优化收益。
+正式阶段有456个有效请求和1个空内容 InvalidInferenceResultError (0.22%)。汇总错误计数包含预热。server/benchmark日志没有 ServerDisconnectedError。结果不证明模型准确性。
+证据：rocprof/reports/kimi-model-communication-comparison/39576708017-native-diagnostic/.
