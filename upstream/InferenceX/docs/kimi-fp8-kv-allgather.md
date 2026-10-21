@@ -51,3 +51,15 @@ fails before loading model weights if decoding cannot compile or differs.
 The existing live-cache parity gates remain required. No measured throughput
 or model accuracy result was produced by the failed run; the advertised KV pool
 was observed before successful completion of kernel warmup.
+
+## Native dispatch diagnostic smoke
+
+Disable the experimental raw-byte transport installer and retain the pinned
+runtime's native communication and reconstruction behavior. Install one-time
+observation probes for the native DCP context eligibility decision and actual
+KV collective dtype, shape and byte counts. Report reconstruction weight dtype,
+layout and scale presence so the FP8-path exclusion can be verified directly.
+AMD checkpoint, auto loader, no CLI quantization override, C48 TP8/DCP8,
+warmup1 per lane and600second replay. Require both diagnostic markers and the
+existing context-input marker before accepting the smoke. No full benchmark
+until the diagnostic and any subsequent communication adaptation pass.
