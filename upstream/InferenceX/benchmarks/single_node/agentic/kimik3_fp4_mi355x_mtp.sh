@@ -310,9 +310,11 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 pin_workers_to_ccd || true
 
-if [ "${EVAL_ONLY:-false}" = "true" ]; then
-    run_eval --port "$PORT"
-else
-    build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
-fi
+run_eval --port "$PORT"
+
+# if [ "${EVAL_ONLY:-false}" = "true" ]; then
+#     run_eval --port "$PORT"
+# else
+#     build_replay_cmd "$RESULT_DIR"
+#     run_agentic_replay_and_write_outputs "$RESULT_DIR"
+# fi
