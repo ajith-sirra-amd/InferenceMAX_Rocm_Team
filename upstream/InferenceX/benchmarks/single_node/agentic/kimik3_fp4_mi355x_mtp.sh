@@ -241,7 +241,6 @@ VLLM_CMD=(
     --reasoning-parser kimi_k3
     --enable-prefix-caching
     --stream-interval 10
-    --quantization-config "$QUANT_CONFIG_JSON"
     --attention-config "$ATTENTION_CONFIG_JSON"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
