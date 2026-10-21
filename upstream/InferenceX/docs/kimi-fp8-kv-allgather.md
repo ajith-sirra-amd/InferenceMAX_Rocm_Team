@@ -98,3 +98,15 @@ before server launch because the preflight allocated tensors on GPU1 without
 switching the active Triton device. Explicitly select each GPU before launching
 its decoder. All8-device GPU checks and live cache parity remain required; this
 failed run produced no FP8 collective or benchmark evidence.
+
+## Verified FP8 gather smoke39592131756 and full run
+
+All8 GPUs passed exact decoded-cache parity and logged uint8 FP8-byte KV transport.
+For shape(2,576), local payload1152bytes versus2304bytes BF16; gathered9216bytes
+versus18432bytes. The BF16 collective print is the one-time parity reference.
+KV pool23098919 tokens; total11179.76008 and output58.63536 tok/s/GPU, versus
+10985.22783/56.97678 in diagnostic39576708017 (+1.77%/+2.91%). Single-smoke
+deltas do not establish repeatable uplift. Measured466 valid requests,0 errors.
+Retain BF16 context FMHA and AMD quantized reconstruction. Cache parity is not
+model-level accuracy validation. Full benchmark uses10 warmups per lane and
+caller-supplied DURATION=3600; retain probes and parity.

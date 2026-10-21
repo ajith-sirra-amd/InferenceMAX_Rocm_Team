@@ -49,7 +49,7 @@ print('[FP8-KV-ALLGATHER] installed native byte gather adaptation; quantized rec
 RAWGATHER
 
 
-export AIPERF_WARMUP_REQUESTS_PER_LANE=1
+export AIPERF_WARMUP_REQUESTS_PER_LANE=10
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm

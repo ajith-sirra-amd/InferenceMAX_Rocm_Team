@@ -50,3 +50,8 @@ Workflow成功。全8个 GPU 记录 eligibility=False：重建权重为 FP8 (307
 ## 多 GPU 解码预检设备修复
 
 Smoke39588733292 在 GPU0 通过 FP8 精确解码，随后在服务器启动前的 GPU1 检查失败。原因是分配 GPU1 张量时没有切换 Triton 活动设备。修复在每次解码启动前显式选择 GPU。保留全8个 GPU 预检和真实缓存一致性门禁。失败运行未产生 FP8 collective 或性能证据。
+
+## FP8 gather smoke39592131756 验证及完整运行
+
+全8个 GPU 通过解码缓存精确一致性检查，并记录 uint8 FP8 字节 KV 通信。shape(2,576)本地传输1152bytes，BF16为2304bytes；收集9216bytes，BF16为18432bytes。BF16 collective日志是一次性一致性参考。
+KV pool23098919 tokens；总吞吐11179.76008，输出58.63536 tok/s/GPU，相比诊断39576708017为+1.77%/+2.91%。单次 smoke 不证明可重复收益。正式466个有效请求，0错误。保留 BF16 FMHA 和 AMD 量化重建。缓存一致性不等于模型准确性验证。完整测试每 lane 预热10次，调用者传入 DURATION=3600，保留日志及一致性检查。
