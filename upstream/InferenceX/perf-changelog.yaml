@@ -8635,3 +8635,9 @@
   description:
     - 'Disable experimental FP8 KV transport for an observation-only AMD native-path smoke. Log DCP eligibility, reconstruction weight dtype/scales/layout, and actual KV collective dtype/bytes; retain native behavior, auto loader, C48 TP8/DCP8, warmup1 and600seconds.'
     - '禁用实验性 FP8 KV 传输，运行仅观测的 AMD 原生路径 smoke。记录 DCP eligibility、重建权重 dtype/scale/布局和实际 KV collective dtype/字节数；保留原生行为、auto loader、C48 TP8/DCP8、预热1次及600秒回放。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Adapt native gather_compressed_context for AMD quantized reconstruction: FP8-byte KV collective followed by source-rank-scale BF16 decoding. Retain probes, exact original BF16 all-gather parity, GPU decode preflight, auto loader and C48 warmup1/600second smoke. No additional cache quantization; measure persistent scratch capacity impact.'
+    - '适配原生 gather_compressed_context 以支持 AMD 量化重建：FP8 字节 KV 通信后按源 rank scale 解码到 BF16。保留日志、原 BF16 all-gather 精确一致性检查、GPU 解码预检、auto loader、C48、预热1次及600秒 smoke。不增加缓存量化，测量持久缓冲的容量影响。'

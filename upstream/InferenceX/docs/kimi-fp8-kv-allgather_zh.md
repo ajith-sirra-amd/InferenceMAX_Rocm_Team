@@ -37,3 +37,12 @@ FP32 scale 的填充值改为浮点数。
 Workflow成功。全8个 GPU 记录 eligibility=False：重建权重为 FP8 (3072,512)，存在 weight_scale。实际 KV collective 使用 BF16。KV pool23098919 tokens。总吞吐10985.22783 tok/s/GPU，输出56.97678 tok/s/GPU。本次只增加日志，吞吐差异不代表优化收益。
 正式阶段有456个有效请求和1个空内容 InvalidInferenceResultError (0.22%)。汇总错误计数包含预热。server/benchmark日志没有 ServerDisconnectedError。结果不证明模型准确性。
 证据：rocprof/reports/kimi-model-communication-comparison/39576708017-native-diagnostic/.
+
+## 原生字节 gather 适配 smoke
+
+通过 manager.kv_gather 调用固定版本的 gather_compressed_context，将收集到的 FP8 字节按源 rank scale 解码到原有 BF16 workspace。
+保留 AMD 量化 kv_b_proj 和 BF16 上下文 FMHA；不添加 CLI 重量化覆盖或缓存量化。
+使用独立持久字节缓冲避免覆盖 BF16 解码输出，实际容量影响需测量；保留原生调度及 collective 日志。
+启动前验证 GPU 解码的字节编码、rank scale 和末尾掩码。每个 backend 首次调用与独立的原 BF16 缓存 gather 精确比较，不一致即失败。
+参考通信属于预热开销。初始化后 scale 假定不变，只收集一次。支持普通 fp8 缓存，保留 packed 缓存及 BF16 分支。
+仅 C48、预热1次、600秒 smoke；全部8个 GPU 的字节通信与一致性通过前不运行完整测试。

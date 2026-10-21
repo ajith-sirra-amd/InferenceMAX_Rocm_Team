@@ -75,3 +75,18 @@ Measured phase456 valid requests and1 empty-content InvalidInferenceResultError
 (0.22%). Aggregate error accounting includes warmup. No ServerDisconnectedError
 in server/benchmark logs. Results do not establish model accuracy.
 Evidence: rocprof/reports/kimi-model-communication-comparison/39576708017-native-diagnostic/.
+
+## Native byte-gather adaptation smoke
+
+Use the pinned runtime's gather_compressed_context through manager.kv_gather,
+then decode gathered FP8 bytes with each source rank's scale into the original
+BF16 workspace. Keep AMD's quantized kv_b_proj and BF16 context FMHA. No CLI
+requantization override and no additional cache quantization. Separate persistent
+byte storage prevents overlap with BF16 decode output; its capacity impact must
+be measured. Preserve the native dispatch/collective probes. Before server launch,
+exercise GPU decode across byte encodings, rank scales and a masked tail. Once per
+backend, compare decoded all-rank cache against an independent original BF16 cache
+gather exactly; fail on mismatch. Reference traffic is warmup overhead. Cache scales
+are collected once and assumed immutable after initialization. Support ordinary
+fp8 cache; retain original packed-cache and BF16 branches. C48 warmup1/600second
+smoke only; no full run until actual byte transport and parity pass on all8 GPUs.
