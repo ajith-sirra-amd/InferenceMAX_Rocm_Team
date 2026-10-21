@@ -179,7 +179,7 @@ jobs:
             done
           fi
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ secrets.REPO_PAT }}
           fetch-depth: 0
@@ -261,14 +261,14 @@ jobs:
 
       - name: Upload result
         if: ${{ !inputs.eval-only && inputs.scenario-type != 'agentic-coding' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bmk_${{ env.RESULT_FILENAME }}
           path: agg_${{ env.RESULT_FILENAME }}_*.json
 
       - name: Upload server logs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: multinode_server_logs_${{ env.RESULT_FILENAME }}
           path: multinode_server_logs.tar.gz
@@ -276,14 +276,14 @@ jobs:
 
       - name: Upload agentic aggregated result
         if: ${{ !inputs.eval-only && inputs.scenario-type == 'agentic-coding' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bmk_agentic_${{ env.RESULT_FILENAME }}
           path: ${{ env.RESULT_FILENAME }}.json
 
       - name: Upload agentic raw results
         if: ${{ always() && inputs.scenario-type == 'agentic-coding' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agentic_${{ env.RESULT_FILENAME }}
           path: |
@@ -297,7 +297,7 @@ jobs:
 
       - name: Upload eval results (if any)
         if: ${{ always() && (env.RUN_EVAL == 'true' || inputs.eval-only) }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eval_${{ env.EXP_NAME }}_${{ env.RESULT_FILENAME }}
           path: |
