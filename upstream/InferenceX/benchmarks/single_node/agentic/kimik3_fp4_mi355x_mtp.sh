@@ -227,6 +227,7 @@ VLLM_CMD=(
     --host 0.0.0.0
     --port "$PORT"
     --trust-remote-code
+    --load-format fastsafetensors
     --moe-backend auto
     --tensor-parallel-size "$TP"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
