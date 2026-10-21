@@ -1,0 +1,8 @@
+[ATTNFP8-CONTEXT-INPUT] pid= 2081 device= cuda:0 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False
+[ATTNFP8-CONTEXT-INPUT] pid= 2135 device= cuda:1 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False
+[ATTNFP8-CONTEXT-INPUT] pid= 2208 device= cuda:2 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False
+[ATTNFP8-CONTEXT-INPUT] pid= 2285 device= cuda:3 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False
+[ATTNFP8-CONTEXT-INPUT] pid= 2362 device= cuda:4 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False
+[ATTNFP8-CONTEXT-INPUT] pid= 2516 device= cuda:6 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False
+[ATTNFP8-CONTEXT-INPUT] pid= 2439 device= cuda:5 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False
+[ATTNFP8-CONTEXT-INPUT] pid= 2593 device= cuda:7 q= (1, 12, 192) torch.bfloat16 k= (11, 12, 192) torch.bfloat16 v= (11, 12, 128) torch.bfloat16 causal=False extra_quantization=False
