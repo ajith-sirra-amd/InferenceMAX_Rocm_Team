@@ -1,0 +1,21 @@
+{
+  "39239112271": {
+    "model": "moonshotai/Kimi-K3",
+    "total_tps_gpu": 15476.46881,
+    "output_tps_gpu": 103.05251,
+    "kv_pool": 20951355
+  },
+  "39260167917": {
+    "model": "amd/Kimi-K3-Quark-MXFP4-AttnFP8",
+    "total_tps_gpu": 10463.79174,
+    "output_tps_gpu": 49.70765,
+    "kv_pool": 23098919,
+    "ASM_overlay_installed": false
+  },
+  "39549276978": {
+    "model": "amd/Kimi-K3-Quark-MXFP4-AttnFP8",
+    "total_tps_gpu": 11022.80887,
+    "output_tps_gpu": 57.50512,
+    "kv_pool": 22100755
+  }
+}

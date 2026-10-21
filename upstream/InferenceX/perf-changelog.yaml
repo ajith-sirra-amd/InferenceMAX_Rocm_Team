@@ -8605,3 +8605,9 @@
   description:
     - 'Create result directory before checkpoint metadata probe. First smoke failed before server launch; no FP8 compatibility or performance result. Keep C48 TP8/DCP8 MTP, warmup1 and 600-second replay.'
     - '写入 checkpoint 配置前创建结果目录。首次测试在服务器启动前失败，尚无 FP8 兼容性或性能结果。保持 C48 TP8/DCP8 MTP、预热 1 次和 600 秒回放。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Smoke raw FP8 context-KV byte all-gather with source-rank scale decode after communication and exact BF16 parity gates. AMD checkpoint, auto loader, C48 TP8/DCP8 MTP, warmup1 and600seconds; BF16 FMHA retained. Measure KV pool recovery without forcing memory budget.'
+    - '???? FP8 KV ?? all-gather??????? rank scale ???????? BF16 ???AMD checkpoint?auto loader?C48 TP8/DCP8 MTP???1??600???? BF16 FMHA??? KV pool ???????????'

@@ -31,6 +31,20 @@ install_agentic_deps
 
 mkdir -p "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
+python3 - "$(dirname "$0")/patches/fp8_kv_allgather.py" <<'RAWGATHER'
+import pathlib, shutil, sys, py_compile
+import vllm
+site = pathlib.Path(vllm.__file__).parent
+helper = pathlib.Path(sys.argv[1]).read_text()
+namespace = {}
+exec(helper[helper.index('def patch(source):'):], namespace)
+path = site / 'model_executor/layers/attention/mla_attention.py'
+path.write_text(namespace['patch'](path.read_text()))
+shutil.copyfile(sys.argv[1], site / 'v1/attention/backends/mla/prefill/_fp8_kv_gather.py')
+py_compile.compile(str(path), doraise=True)
+print('[FP8-KV-ALLGATHER] installed raw cache-byte transport; BF16 FMHA retained')
+RAWGATHER
+
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
@@ -310,6 +324,10 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    if ! grep -q '\[FP8-KV-ALLGATHER-VERIFIED\]' "$SERVER_LOG"; then
+        echo '[FP8-KV-ALLGATHER] missing runtime parity evidence' >&2
+        exit 1
+    fi
     if ! grep -q '\[ATTNFP8-CONTEXT-INPUT\]' "$SERVER_LOG"; then
         echo "[ATTNFP8-SMOKE] no actual context input evidence" >&2
         exit 1
