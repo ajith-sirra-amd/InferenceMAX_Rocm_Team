@@ -29,6 +29,9 @@ rocm-smi || true
 resolve_trace_source
 install_agentic_deps
 
+export AIPERF_WARMUP_REQUESTS_PER_LANE=1
+export DURATION=600
+
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm
 export VLLM_ROCM_USE_AITER=1
