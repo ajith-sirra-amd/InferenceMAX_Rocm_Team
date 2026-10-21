@@ -1,0 +1,18 @@
+{
+  "run_id": 39561981905,
+  "job_id": 119095266446,
+  "failed_sha": "14794b1a3ce8cc018cd2246d9a41db215d7eb93c",
+  "root_cause": "Source transformer crossed non-DCP/DCP method boundary; DCP method became nested in else",
+  "fix": "Bound source replacement to _context_parallel_compute_prefill_context and reject unexpected anchors",
+  "behavior_checks": [
+    "fp8 raw communication branch",
+    "fp8_ds_mla original branch",
+    "bf16 original branch",
+    "non-DCP method output",
+    "following method output",
+    "missing method rejected"
+  ],
+  "pinned_vllm_source_compile": "passed",
+  "gpu_validation": "pending replacement smoke",
+  "fp8_asm_fmha": false
+}

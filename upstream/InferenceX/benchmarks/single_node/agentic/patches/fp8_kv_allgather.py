@@ -66,15 +66,25 @@ def gather(backend, cache, workspace, block_table, chunk, scale, manager):
 
 
 def patch(source):
-    start = source.index('            if self.kv_cache_dtype == "fp8_ds_mla":', source.index('        use_fp8_prefill =', source.index('    def _compute_prefill_context')) if '    def _compute_prefill_context' in source else source.index('            toks = chunk.num_local_context_tokens'))
+    method_anchor = '    def _context_parallel_compute_prefill_context('
+    if source.count(method_anchor) != 1:
+        raise ValueError('Expected exactly one DCP context method')
+    method_start = source.index(method_anchor)
+    next_method = source.find('\n    def ', method_start + len(method_anchor))
+    method_end = next_method if next_method >= 0 else len(source)
+    method = source[method_start:method_end]
+    start_anchor = '            if self.kv_cache_dtype == "fp8_ds_mla":'
     end_anchor = '            dcp_manager.kv_gather(cur_allgather_kvcache, local_gathered_kvcache)'
-    end = source.index(end_anchor, start) + len(end_anchor)
-    old = source[start:end]
+    if method.count(start_anchor) != 1 or method.count(end_anchor) != 1:
+        raise ValueError('Unexpected DCP cache gather layout')
+    start = method.index(start_anchor)
+    end = method.index(end_anchor, start) + len(end_anchor)
+    old = method[start:end]
     new = ('            if self.kv_cache_dtype == "fp8":\n'
            '                from vllm.v1.attention.backends.mla.prefill import _fp8_kv_gather\n'
            '                cur_allgather_kvcache = _fp8_kv_gather.gather(\n'
            '                    self, kv_c_and_k_pe_cache, workspace, block_table, chunk, k_scale, chunked_context.dcp_manager)\n'
            '            else:\n') + '\n'.join('    ' + line for line in old.splitlines())
-    result = source[:start] + new + source[end:]
+    result = source[:method_start] + method[:start] + new + method[end:] + source[method_end:]
     compile(result, '<fp8-kv-allgather>', 'exec')
     return result
