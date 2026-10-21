@@ -8617,3 +8617,9 @@
   description:
     - 'Restrict raw FP8 KV all-gather source replacement to the DCP context method; reject unexpected layouts. Fix startup AttributeError in smoke39561981905. Behavior-check FP8, packed FP8, BF16 and adjacent methods; retain AMD auto-loader C48 warmup1/600second smoke and BF16 FMHA.'
     - '??? FP8 KV all-gather ??????? DCP ???????????????? smoke39561981905 ??? AttributeError??? FP8?packed FP8?BF16 ?????????? AMD auto loader?C48???1??600? smoke ? BF16 FMHA?'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Restrict raw FP8 KV all-gather source replacement to the DCP context method; reject unexpected layouts. Fix startup AttributeError in smoke39561981905. Behavior-check FP8, packed FP8, BF16 and adjacent methods; retain AMD auto-loader C48 warmup1/600second smoke and BF16 FMHA.'
+    - '将原始 FP8 KV all-gather 源码替换限定在 DCP 上下文方法内，拒绝意外布局；修复 smoke39561981905 的启动 AttributeError。验证 FP8、packed FP8、BF16 及相邻方法行为；保留 AMD auto loader、C48、预热1次、600秒 smoke 和 BF16 FMHA。'

@@ -1,6 +1,6 @@
 # FP8 context-KV all-gather smoke
 
-[??](kimi-fp8-kv-allgather_zh.md)
+[中文](kimi-fp8-kv-allgather_zh.md)
 
 Use AMD checkpoint, C48 TP8/DCP8 MTP k4, source image1b2a66639, auto loader,
 warmup1 per lane,600-second replay. No context FP8 ASM overlay. Earlier
