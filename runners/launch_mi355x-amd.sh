@@ -231,6 +231,7 @@ docker run --rm --init --network host --shm-size=512g --name=$server_name \
 -e PCP_SIZE \
 -e DCP_SIZE \
 -e EVAL_ONLY \
+-e IS_AGENTIC \
 -e ROCPROF_ENABLE \
 -e ROCPROF_START_DELAY \
 -e ROCPROF_DURATION \

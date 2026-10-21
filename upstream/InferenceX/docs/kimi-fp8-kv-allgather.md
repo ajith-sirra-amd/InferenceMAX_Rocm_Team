@@ -110,3 +110,14 @@ deltas do not establish repeatable uplift. Measured466 valid requests,0 errors.
 Retain BF16 context FMHA and AMD quantized reconstruction. Cache parity is not
 model-level accuracy validation. Full benchmark uses10 warmups per lane and
 caller-supplied DURATION=3600; retain probes and parity.
+
+## GSM8K eval-only configuration
+
+Workflow agentic-eval-only=true forwards RUN_EVAL=true/EVAL_ONLY=true before launch.
+AMD Quark checkpoint, verified FP8 KV gather, C48 TP8/DCP8, real DSpark k4 block
+rejection; no synthetic acceptance. lm-eval GSM8K full test split,5-shot, temperature0,
+top_p1,32K server/eval context, up to16K generated tokens. No EVAL_LIMIT or vendor
+suite. Forward IS_AGENTIC; full served model name; scores/samples/meta staged to
+/outputs; eval log retained in results. Existing score gate runs after upload.
+Queue behind the full benchmark on the existing runner. Short GSM8K prompts may
+not reach cached chunked context; score alone does not prove that path accuracy.

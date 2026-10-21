@@ -8653,3 +8653,9 @@
   description:
     - 'After smoke39592131756 verified native FP8-byte KV transport and exact decoded-cache parity on all8 GPUs with23M KV pool and0 measured errors, increase warmup to10 requests per lane for a3600second full benchmark. Retain AMD quantized reconstruction and BF16 context FMHA.'
     - '在 smoke39592131756 验证全8个 GPU 的 FP8 字节 KV 通信和解码缓存精确一致性、保持23M KV pool 和0正式错误后，将每 lane 预热调整为10次，运行3600秒完整 benchmark。保留 AMD 量化重建和 BF16 上下文 FMHA。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Route explicit GSM8K eval-only with real DSpark k4 verification,32K context, deterministic full5-shot test split. Forward IS_AGENTIC and stage eval artifacts to workflow root; retain verified FP8 KV gather and throughput mode.'
+    - '配置 GSM8K eval-only，真实 DSpark k4验证、32K context和确定性完整 5-shot test split。转发 IS_AGENTIC，保存评估证据，保留 FP8 KV gather 及吞吐模式。'

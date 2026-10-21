@@ -47,6 +47,11 @@ on:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
                 type: string
+            agentic-eval-only:
+                description: "Run agentic recipe GSM8K accuracy evaluation only"
+                required: false
+                type: boolean
+                default: false
             duration-override:
                 description: "Override matrix.config.duration (seconds). Empty = use matrix value."
                 required: false
@@ -66,6 +71,11 @@ on:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
                 type: string
+            agentic-eval-only:
+                description: "Run agentic recipe GSM8K accuracy evaluation only"
+                required: false
+                type: boolean
+                default: false
             duration-override:
                 description: "Override matrix.config.duration (seconds). Empty = use matrix value."
                 required: false
@@ -225,7 +235,8 @@ jobs:
             max-model-len: '0'
             spec-decoding: ${{ matrix.config['spec-decoding'] }}
             disagg: 'false'
-            run-eval: false
+            run-eval: ${{ inputs.agentic-eval-only }}
+            eval-only: ${{ inputs.agentic-eval-only }}
             scenario-type: agentic-coding
             ref: ${{ inputs.ref }}
 

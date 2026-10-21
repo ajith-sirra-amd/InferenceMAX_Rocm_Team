@@ -4,7 +4,6 @@ set -x
 source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
-export EVAL_ONLY="${EVAL_ONLY:-false}"
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 check_env_vars DCP_SIZE EVAL_ONLY
 
@@ -236,6 +235,11 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 
 ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
 
+SERVER_MAX_MODEL_LEN=1048576
+if [ "$EVAL_ONLY" = "true" ]; then
+    SERVER_MAX_MODEL_LEN=32768
+fi
+
 VLLM_CMD=(
     vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
     --host 0.0.0.0
@@ -247,7 +251,7 @@ VLLM_CMD=(
     --language-model-only
     --max-num-seqs "$MAX_NUM_SEQS"
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
-    --max-model-len 1048576
+    --max-model-len "$SERVER_MAX_MODEL_LEN"
     --kv-cache-dtype fp8
     --enable-auto-tool-choice
     --tool-call-parser kimi_k3
@@ -324,7 +328,21 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
-    run_eval --port "$PORT"
+    check_env_vars RUN_EVAL IS_AGENTIC
+    export EVAL_FRAMEWORK=lm-eval
+    export EVAL_TASKS_DIR="$INFERENCEX_REPO_ROOT/infx/evals/gsm8k.yaml"
+    export EVAL_MAX_MODEL_LEN="$SERVER_MAX_MODEL_LEN"
+    export EVAL_CONCURRENT_REQUESTS="$CONC"
+    export EVAL_RESULT_DIR="$RESULT_DIR/gsm8k"
+    export MODEL_NAME="$MODEL"
+    export OPENAI_API_KEY=EMPTY
+    unset EVAL_SUITE EVAL_LIMIT
+    mkdir -p "$EVAL_RESULT_DIR"
+    echo "[GSM8K-EVAL] eval_only=$EVAL_ONLY task=$EVAL_TASKS_DIR concurrency=$EVAL_CONCURRENT_REQUESTS context=$EVAL_MAX_MODEL_LEN temperature=0 full_test_split=True real_verification=True"
+    (
+        cd "$AGENTIC_OUTPUT_DIR"
+        run_eval --port "$PORT"
+    ) 2>&1 | tee "$RESULT_DIR/gsm8k_eval.log"
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
