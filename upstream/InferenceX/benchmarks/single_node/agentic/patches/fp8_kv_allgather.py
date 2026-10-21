@@ -14,8 +14,7 @@ def _decode(src, scales, dst, N: tl.constexpr, PER_RANK: tl.constexpr, BLOCK: tl
     tl.store(dst + idx, value * scale, idx < N)
 
 
-def gather(backend, cache, workspace, block_table, chunk, scale):
-    manager = chunk.dcp_manager
+def gather(backend, cache, workspace, block_table, chunk, scale, manager):
     group = manager.group.device_group
     world = manager.group.world_size
     tokens = chunk.num_local_context_tokens
@@ -74,7 +73,7 @@ def patch(source):
     new = ('            if self.kv_cache_dtype == "fp8":\n'
            '                from vllm.v1.attention.backends.mla.prefill import _fp8_kv_gather\n'
            '                cur_allgather_kvcache = _fp8_kv_gather.gather(\n'
-           '                    self, kv_c_and_k_pe_cache, workspace, block_table, chunk, k_scale)\n'
+           '                    self, kv_c_and_k_pe_cache, workspace, block_table, chunk, k_scale, chunked_context.dcp_manager)\n'
            '            else:\n') + '\n'.join('    ' + line for line in old.splitlines())
     result = source[:start] + new + source[end:]
     compile(result, '<fp8-kv-allgather>', 'exec')
