@@ -241,6 +241,7 @@ VLLM_CMD=(
     --reasoning-parser kimi_k3
     --enable-prefix-caching
     --stream-interval 10
+    --quantization-config "$QUANT_CONFIG_JSON"
     --attention-config "$ATTENTION_CONFIG_JSON"
     "${OFFLOAD_ARGS[@]}"
     "${CP_ARGS[@]}"
@@ -310,11 +311,11 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 pin_workers_to_ccd || true
 
-run_eval --port "$PORT"
+# run_eval --port "$PORT"
 
-# if [ "${EVAL_ONLY:-false}" = "true" ]; then
-#     run_eval --port "$PORT"
-# else
-#     build_replay_cmd "$RESULT_DIR"
-#     run_agentic_replay_and_write_outputs "$RESULT_DIR"
-# fi
+if [ "${EVAL_ONLY:-false}" = "true" ]; then
+    run_eval --port "$PORT"
+else
+    build_replay_cmd "$RESULT_DIR"
+    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+fi
