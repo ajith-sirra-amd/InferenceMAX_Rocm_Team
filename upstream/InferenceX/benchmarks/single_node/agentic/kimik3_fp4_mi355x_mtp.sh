@@ -36,7 +36,7 @@ python3 "$(dirname "$0")/patches/moonshot_fused_quant_probe.py"
 python3 "$(dirname "$0")/patches/fp8_fused_reconstruction_probe.py" --output "$RESULT_DIR/fp8_fused_reconstruction_preflight.json"
 
 
-export AIPERF_WARMUP_REQUESTS_PER_LANE=0
+export AIPERF_WARMUP_REQUESTS_PER_LANE=10
 export AIPERF_EXPERIMENTAL_FAST=0
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm

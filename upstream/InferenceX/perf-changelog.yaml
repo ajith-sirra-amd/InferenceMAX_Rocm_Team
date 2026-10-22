@@ -8719,3 +8719,9 @@
   description:
     - 'Use passing AMD Quark broad attention FP8 accuracy as reference to add Moonshot fused_qkv_a_proj and g_proj online per-channel FP8. Estimated extra raw weight savings598.5MiB/GPU at TP8; actual pool/accuracy unproven. Keep in_proj_qkvgfab, kv_b_proj, o_proj; all8 target inventory and fusion gates, numerical/cached-context checks and GSM8K. Preserve current o_proj-only increment run for comparison.'
     - '参考 AMD Quark 广泛 attention FP8 精度通过结果，新增 Moonshot fused_qkv_a_proj 和 g_proj online per-channel FP8。TP8 预计额外原始权重节省598.5MiB/GPU，实际 pool/accuracy 待验证。保留其他三 target、全8 GPU 日志、数值和 cached-context 检查及 GSM8K，保留当前 o_proj 增量 run 供比较。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Restore replay warmup to10 requests per lane for the full3600second Moonshot five-target run. Run39735747328 reached serving with21576467 KV tokens but AIPerf rejected warmup0 before replay. User requested warmup10; keep accuracy-tested weights, fused KV reconstruction, FP8 transport and BF16 FMHA unchanged.'
+    - '??3600? Moonshot ?????????? lane 10? warmup?run39735747328 ???????KV pool ?21576467 tokens?? AIPerf ? replay ??? warmup0???????? warmup10??????????????fused KV reconstruction?FP8 ??? BF16 FMHA?'
