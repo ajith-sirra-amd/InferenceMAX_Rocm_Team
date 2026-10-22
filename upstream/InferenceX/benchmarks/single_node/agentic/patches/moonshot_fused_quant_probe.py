@@ -7,7 +7,7 @@ import torch
 def verify_model(model):
     from vllm.model_executor.layers.linear import LinearBase
     from vllm.v1.attention.ops._infx_fp8_fused_kv import projection_weight
-    kv_count = inproj_count = 0
+    kv_count = inproj_count = oproj_count = 0
     device = None
     for name, layer in model.named_modules():
         if ".self_attn." not in name or not isinstance(layer, LinearBase):
@@ -32,13 +32,23 @@ def verify_model(model):
                     or getattr(layer, "weight_scale", None) is None):
                 raise RuntimeError(f"Baseline online FP8 target missing: {name}")
             inproj_count += 1
+        elif name.endswith(".o_proj"):
+            if (weight.dtype not in (torch.float8_e4m3fn, torch.float8_e4m3fnuz)
+                    or getattr(layer, "weight_scale", None) is None):
+                raise RuntimeError(f"Output projection FP8 target missing: {name}")
+            oproj_count += 1
+            print("[MOONSHOT-O-PROJ-FP8]", "device=", str(device),
+                  "name=", name, "weight_dtype=", str(weight.dtype),
+                  "weight_shape=", tuple(weight.shape),
+                  "scale_shape=", tuple(layer.weight_scale.shape),
+                  "method=", type(layer.quant_method).__name__, flush=True)
         elif weight.dtype != torch.bfloat16:
             raise RuntimeError(f"Untargeted Moonshot attention weight changed dtype: {name} {weight.dtype}")
-    if kv_count != 24 or not inproj_count:
-        raise RuntimeError(f"Unexpected Moonshot inventory: kv_b={kv_count}, inproj={inproj_count}")
+    if kv_count != 24 or not inproj_count or not oproj_count:
+        raise RuntimeError(f"Unexpected Moonshot inventory: kv_b={kv_count}, inproj={inproj_count}, o_proj={oproj_count}")
     print("[MOONSHOT-FUSED-QUANT-VERIFIED]", "device=", str(device),
           "fp8_kv_b_linears=", kv_count, "fp8_inproj_linears=", inproj_count,
-          "other_attention=BF16", "checkpoint_experts_unchanged=True", flush=True)
+          "fp8_o_proj_linears=", oproj_count, "remaining_attention=BF16", "checkpoint_experts_unchanged=True", flush=True)
 
 
 def install():

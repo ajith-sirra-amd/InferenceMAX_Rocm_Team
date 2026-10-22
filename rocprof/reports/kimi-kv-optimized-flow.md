@@ -184,3 +184,10 @@ FP8 cache → FP8-byte gather
 - FP8 cache ? byte all-gather ? fused FP8-weight reconstruction ? BF16 K/V ? BF16 FMHA.
 - Accuracy-first validation; replay warmup per lane0. Pool and throughput improvement remain unproven.
 - Already dispatched AMD run39726650098 is allowed to finish; it is not the model selected for subsequent experiments.
+
+## Incremental o_proj accuracy experiment
+
+- Add only `*.self_attn.o_proj: fp8_per_channel` to the two-target Moonshot experiment.
+- Target set: `*in_proj_qkvgfab`, `*.self_attn.kv_b_proj`, `*.self_attn.o_proj`.
+- Require postload FP8 o_proj weights/channel scales on all8 GPUs. BF16 FMHA retained.
+- Run numerical/cached-context checks and GSM8K before throughput. Compare with run39729399329; accuracy and memory gains are unproven.

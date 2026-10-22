@@ -179,3 +179,10 @@ FP8 cache → FP8-byte gather
 - FP8 cache ? byte all-gather ? fused FP8-weight reconstruction ? BF16 K/V ? BF16 FMHA?
 - ???? accuracy?? lane replay warmup0?KV pool ??????????
 - ???? AMD run39726650098 ???????????????
+
+## o_proj 增量精度实验
+
+- 在 Moonshot 两 target 实验上仅新增 `*.self_attn.o_proj: fp8_per_channel`。
+- Target：`*in_proj_qkvgfab`、`*.self_attn.kv_b_proj`、`*.self_attn.o_proj`。
+- 加载后要求全8 GPU FP8 o_proj 权重和 channel scales，保留 BF16 FMHA。
+- 先运行数值、cached-context 和 GSM8K 检查，再测吞吐。与 run39729399329 比较；精度和内存收益尚未证实。

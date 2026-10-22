@@ -8701,3 +8701,9 @@
   description:
     - 'Use Moonshot Kimi-K3 only for subsequent experiments. Match the15476-token baseline online in_proj_qkvgfab target and add only per-channel FP8 kv_b_proj for the new fused reconstruction. Accept pinned Fp8PtpcOnlineLinearMethod layout/scales, verify postload inventory, retain BF16 other attention/FMHA, source-rank FP8 gather and accuracy-first checks. Keep replay warmup0 and let the already-running AMD run complete.'
     - '后续实验仅使用 Moonshot Kimi-K3，保留 baseline 的 in_proj_qkvgfab online FP8 target，仅新增 per-channel FP8 kv_b_proj 以验证 fused reconstruction。支持 Fp8PtpcOnlineLinearMethod 布局和 scales，检查 postload inventory，保留其他 BF16 attention/FMHA、FP8 gather 和 accuracy-first checks。replay warmup0，让已运行 AMD run 完成。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Add only Moonshot self_attn.o_proj per-channel online FP8 to the baseline in_proj_qkvgfab plus fused FP8 kv_b experiment. Verify o_proj weights/scales on all8 GPUs after loading; retain BF16 FMHA, accuracy-first GSM8K and cached-context numerical checks, replay warmup0. Keep preceding two-target run unchanged for comparison.'
+    - '仅新增 Moonshot self_attn.o_proj per-channel online FP8，保留 baseline in_proj_qkvgfab 和 fused FP8 kv_b。加载后验证全8 GPU o_proj 权重和 scales，保留 BF16 FMHA、GSM8K 和 cached-context 数值检查、replay warmup0。前一个两 target run 继续完成供比较。'
