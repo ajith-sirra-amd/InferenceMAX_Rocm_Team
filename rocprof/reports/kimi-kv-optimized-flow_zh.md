@@ -1,129 +1,147 @@
-# Kimi-K3：问题与拟议 KV 流程
+# Kimi-K3：权重量化、KV容量与融合attention
 
 [English](./kimi-kv-optimized-flow.md) | **中文**
 
-## 问题
+## 1. 模型与问题
 
-| 完整benchmark | Total tokens/s/GPU | KV-pool tokens |
+| Checkpoint | 量化内容 | kv_b_proj重建权重 |
+|---|---|---|
+| **Moonshot Kimi-K3**：moonshotai/Kimi-K3 | Expert weights MXFP4；online overrides前attention projections及shared experts BF16 | BF16 |
+| **AMD Quark量化Kimi-K3**：amd/Kimi-K3-Quark-MXFP4-AttnFP8 | Experts MXFP4；attention weights/input arithmetic FP8；shared experts BF16 | FP8 + per-channel scales |
+
+- 相同Kimi-K3架构；attention weight与KV cache quantization是不同配置。
+- 两种benchmark都显式使用FP8 KV cache。
+- FP8投影权重不代表FP8 Q/K/V输出；当前context FMHA输入BF16。
+
+| 完整run | Total tokens/s/GPU | KV-pool tokens |
 |---|---:|---:|
 | [Moonshot参考39239112271](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39239112271) | 15,476.47 | 20,951,355 |
-| [AMD + 单独FP8 gather适配39601846940](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39601846940) | 15,258.78 | 23,098,919 |
+| [AMD Quark + 我们的FP8-byte通信适配39601846940](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39601846940) | 15,258.78 | 23,098,919 |
+| 差值 | **−1.41% throughput** | **+2,147,564 tokens / +10.25%容量** |
 
-- AMD容量增加**10.25%**，total throughput降低**1.41%**。
-- 目标：KV pool接近**23M**，恢复原生融合context处理。
-- 假设：单独cache decode/reorder及重建准备产生额外开销。
-- 比较结果不能证明具体操作造成性能差距。
+- Moonshot参考仅online量化in_proj_qkvgfab，多数其他attention projections为BF16。
+- 通信适配是我们修改runtime，先gather已有FP8 cache字节，再decode；不是AMD checkpoint的一部分。
+- 问题：AMD容量增加但throughput略低。
+- 目标：保留compact weights/cache并恢复融合context处理。
+- 此比较不单独证明容量收益或throughput差距的原因。
 
-## 当前缺点
+## 2. 为什么量化权重重要
 
-| 步骤 | AMD + 我们的单独gather适配 | 缺点 |
+| 权重 | FP8收益 | 代价 |
 |---|---|---|
-| Cache | FP8压缩KV | 保留 |
-| All-gather | FP8字节，uint8 collective | BF16一半payload，保留 |
-| Decode/reorder | 单独生成BF16 latent rows | 中间HBM流量和launch |
-| 重建 | 单独FP8-weight kv_b GEMM及准备 | 无法使用完整原生融合 |
-| Packing/FΜHA | BF16 K/V、BF16 FMHA | FP8 weights/cache不代表FP8 FMHA |
+| 大attention projections | 约BF16一半weight bytes加scales；可能加速GEMM | Dynamic activation quantization及accuracy验证 |
+| kv_b_proj | 更少重建权重存储及流量 | 当前原生融合重建不支持FP8 weights/scales |
+| Expert weights | 两checkpoint已有MXFP4 | Export/runtime allocations可能不同 |
 
-- **FP8 all-gather不要求BF16 kv_b**，通信不读取该权重。
-- **固定版本融合重建内核要求连续BF16 kv_b且无独立weight scales**。
-- AMD FP8 kv_b无法通过该eligibility检查。
+- 权重占用减少可为KV cache释放内存。
+- **+2.15M KV tokens是整个AMD配置的测量结果，不能归因于kv_b alone。**
+- TP8 kv_b：每GPU24个[3072,512]矩阵。
+- FP8替代BF16约节省**36MiB/GPU**，未扣scales/layout开销。
+- 其他attention weights另有收益；workspaces、graphs、memory profiling决定最终pool。
+- 恢复BF16 kv_b牺牲这部分小收益，以使用当前已有融合。
 
-## 要求的方向
+## 3. 当前处理及缺点
+
+| 步骤 | Moonshot参考原生融合 | AMD Quark + 我们的适配 |
+|---|---|---|
+| Cache | FP8 | FP8 |
+| Communication | 原生FP8-byte gather | 适配FP8-byte gather |
+| Decode/reorder | 融合内核内完成 | 单独生成BF16 latent |
+| kv_b | BF16 | FP8 + scales |
+| Reconstruction/packing | 一个融合操作 | 单独FP8 GEMM及preparation/packing |
+| FMHA | BF16 | BF16 |
+| 主要代价 | 更大attention weights | 更多中间处理/dispatch |
+
+- 单独处理可能增加HBM和launch，是候选瓶颈，尚未证明整个1.41%差距的原因。
+- 原AMD fallback：FP8 cache → BF16 decode → BF16 gather → reconstruction。
+
+## 4. FP8 gather与BF16 kv_b关系
 
 | 问题 | 答案 |
 |---|---|
-| FP8 all-gather本身要求BF16 kv_b吗？ | **不要求**，collective只传输字节，不读取投影权重 |
-| 固定版本原生融合context路径要求BF16 kv_b吗？ | **要求**，同时还有dtype/layout/metadata检查 |
-| 本实验方向？ | **保留BF16 kv_b → 满足原生融合eligibility → 该路径执行FP8-byte gather及融合重建** |
-| 选择FP8 gather会把kv_b转换为BF16吗？ | **不会** |
-| FP8 gather可配合FP8 kv_b吗？ | **可以**，AMD适配已证明，但重建需单独处理 |
+| FP8 gather本身需要BF16 kv_b？ | **不需要**，只传cache字节 |
+| 固定版本原生融合路径需要BF16 kv_b？ | **需要**，连续BF16、无weight scales及其他eligibility条件 |
+| 本实验方向 | **BF16 kv_b → 原生融合eligibility → 该路径执行FP8 gather及融合重建** |
+| Gather会转换kv_b吗？ | **不会** |
+| FP8 gather可配合FP8 kv_b？ | **可以**，AMD适配已证明，重建单独处理 |
 
-- BF16 kv_b是该原生融合实现的必要条件，单独满足并不充分。
-- 需实际uint8 collective及fused-execution日志证明执行。
+## 5. 当前方案：Moonshot选择性FP8
 
-## 拟议解决方案
-
-| 组件 | Moonshot实验 | 目的 |
+| 组件 | 设置 | 目的 |
 |---|---|---|
-| Model | moonshotai/Kimi-K3 | BF16 attention起点 |
-| Expert weights | 保留checkpoint MXFP4 | 保留压缩 |
-| 其他attention projections | Online fp8_per_channel | 节省权重内存，FP8 GEMM |
-| kv_b_proj | **保留BF16，不加入targets** | 启用原生融合重建 |
-| Convolutions/shared experts/residual projections | 保留checkpoint精度 | 避免意外量化 |
-| KV cache/collective | FP8 cache，原生FP8-byte gather | 减少存储和通信 |
-| Reconstruction/packing | **一个原生融合内核** | 避免单独中间处理 |
-| FMHA/output | BF16 | 保留现有attention kernel |
+| Model | Moonshot Kimi-K3 | BF16 attention起点 |
+| Experts | 保留MXFP4 | 压缩 |
+| 其他attention projections | Online fp8_per_channel | 接近AMD权重收益 |
+| kv_b_proj | **保留BF16，省略target** | 使用原生融合 |
+| Convolutions/shared experts/residual projections | 保留checkpoint精度 | 保留exclusions |
+| Cache/communication | FP8/native FP8-byte collective | 节省内存/payload |
+| Reconstruction | 融合reorder/dequant/BF16 projection/packing | 避免单独中间处理 |
+| FMHA/output | **BF16** | 保留现有kernel |
 
 ```text
 FP8 compressed KV cache
  → FP8-byte all-gather
  → ONE kernel: reorder + dequant + BF16 kv_b projection + K/V packing
  → BF16 K/V + BF16 Q
- → BF16 FMHA
- → BF16 output
+ → BF16 FMHA → BF16 output
 ```
 
-- Targets：self_attn下的in_proj_qkvgfab, f_b_proj, g_a_proj, g_b_proj, o_proj, fused_qkv_a_proj, q_b_proj, q_proj, kv_a_proj_with_mqa, g_proj。
-- 首次smoke选择**303 attention linears**；仅证明选择，未完成量化。
-- 不安装AMD weight-conversion patch。
-- 精度方案接近AMD，kv_b保留BF16；online量化值可能不同。
+- self_attn targets：in_proj_qkvgfab, f_b_proj, g_a_proj, g_b_proj, o_proj, fused_qkv_a_proj, q_b_proj, q_proj, kv_a_proj_with_mqa, g_proj。
+- 首smoke选择303 linears，未证明量化完成；不安装AMD conversion patch。
+- 精度方案接近AMD，但kv_b BF16；量化值可能不同。
+- **23M pool及性能提升仍是目标，不是已验证结果。**
 
-## 收益与代价
+## 6. 优先改进：FP8 kv_b的融合重建
 
-| 预期收益 | 剩余代价/不确定性 |
-|---|---|
-| Attention weights小于参考 | Dynamic activation quantization仍有开销 |
-| 原生融合重建 | Projection及cache dequant仍必要 |
-| 更少中间HBM/dispatch | 需实测throughput |
-| KV pool可能接近23M | BF16 kv_b及runtime buffers占用内存，不保证容量 |
-| 保留BF16 FMHA | 新增projection quantization需accuracy验证 |
+| 方案 | 收益 | 要求 |
+|---|---|---|
+| 现有BF16-weight融合重建 | 消除单独reorder/decode/projection/packing | BF16权重存储 |
+| **支持FP8 weights/scales的融合重建** | 保留AMD compact kv_b，同时减少中间处理 | 实现并验证FP8-weight/scaled-input支持 |
+| 后续FP8 FMHA | 可能降低attention compute/bandwidth | Scaled FP8 Q/K/V、kernel支持、accuracy及完整调用测试 |
 
-## 为什么必须重建
+```text
+FP8 cache → FP8-byte gather
+ → fused reorder + scaled FP8-weight reconstruction + packing
+ → BF16 K/V → BF16 FMHA → BF16 output
+```
+
+- 兼顾收益需将支持FP8 kv_b的融合重建接入DCP路径。
+- 当前AITER已有per-row FP8 scale支持；固定vLLM传入空weight scale并限制BF16 eligibility。
+- Prototype `fp8_fused_reconstruction_probe.py`比较FP8/BF16融合及数值reference；尚未接入serving或GPU验证。
+- Serving需处理preshuffled weights、cache scales及custom op；prototype使用unshuffled weights。
+- **FP8 FMHA可选**，不是FP8 gather或消除单独重建准备的必要条件。
+- 内核可内部decode；FP8-weight支持不代表所有算术FP8。
+- Fully FP8候选：融合输出scaled FP8 K/V并准备scaled FP8 Q → FP8 FMHA → BF16输出。
+- 直接FP8输出仍量化；融合可避免BF16中间张量。
+- Conversion/padding/launch可能抵消收益；高精度accumulation不能恢复量化损失。
+
+## 7. 维度与验证
 
 | 张量/操作 | TP8本地维度 |
 |---|---|
-| Latent C | [T,512] |
-| RoPE key | [T,64] |
+| Latent C / RoPE key | [T,512] / [T,64] |
 | Cache row | [T,576] |
-| kv_b weight | [3072,512] |
+| kv_b | [3072,512] |
 | Reconstruction | C × W_kv_b^T → [T,3072] |
-| Packed K | [T,12,192] |
-| Packed V | [T,12,128] |
+| Packed K/V | [T,12,192] / [T,12,128] |
 
-- T为chunk token数；cache rows分布在DCP ranks。
-- 重建是**up-projection**，不只是head rearrangement。
-- Full-head FMHA不能直接使用压缩latent。
-- Dequantization无法恢复quantization loss。
+- 重建是up-projection，full-head FMHA不能直接使用512 latent。
+- T为chunk tokens，cache rows分布于DCP ranks。
+- Smoke C48 TP8/DCP8 warmup1/lane600秒。
+- 全8 GPU：FP8投影权重、24 BF16 kv_b、eligibility、uint8 collective、实际fused execution。
+- 测pool/throughput/errors；准确率另行real-verification。
 
-## 后续候选
-
-| 方案 | 流程变化 | 要求 |
-|---|---|---|
-| Fused FP8-weight reconstruction | FP8 cache/gather → fused FP8-weight reconstruction → BF16 K/V → BF16 FMHA | 内核支持FP8 weights/scales |
-| FP8 FMHA | 重建直接输出scaled FP8 K/V，准备scaled FP8 Q → FP8 FMHA → BF16输出 | Accuracy及完整调用性能验证 |
-
-- 直接FP8输出仍执行量化；融合可避免BF16中间张量。
-- 高精度accumulation不能恢复量化损失。
-- Preparation/padding/launch可能抵消FP8 FMHA收益。
-
-## 验证与状态
-
-- Smoke：**C48 TP8/DCP8，warmup1/lane，600秒**。
-- 全8 GPU证据：实际FP8 projection weights、24 BF16 kv_b、eligibility、uint8 collective、fused execution。
-- 测量KV pool、total/output throughput、request errors。
-- 单独real-verification accuracy；synthetic throughput不能证明accuracy。
-- Fastsafetensors通过后：相同smoke移除loader flag。
-
-| Run | 结果 |
+| Smoke | 状态 |
 |---|---|
-| [39717243502](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39717243502) | 全8 numerical preflight通过；GPU4 loading HSA resource exhaustion、free memory0 MB、nogds701；无pool/throughput结果 |
-| [39718556543](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39718556543) | Fastsafetensors queue限1重试；本修订时结果待定 |
+| [39717243502](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39717243502) | Fastsafetensors，preflight全8通过；GPU4 loading失败，0MB free,nogds701 |
+| [39718556543](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39718556543) | Queue1仍GPU0 loading失败，198MB free |
+| [39719727532](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39719727532) | 默认loader诊断，本修订时结果待定 |
 
-- Loading失败不能证明GPU硬件故障。
-- Queue限制是诊断修改，尚未证明解决问题。
+- Loading失败无pool/throughput测量，不证明硬件故障。
 
 ## 来源
 
 - [AMD model card](https://huggingface.co/amd/Kimi-K3-Quark-MXFP4-AttnFP8)
-- [固定版本MLA backend](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/backends/mla/rocm_aiter_mla.py)
+- [Moonshot checkpoint](https://huggingface.co/moonshotai/Kimi-K3)
+- [固定版本MLA](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/backends/mla/rocm_aiter_mla.py)
 - [固定版本gather/reconstruction](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py)

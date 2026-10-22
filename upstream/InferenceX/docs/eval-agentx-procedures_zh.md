@@ -370,3 +370,5 @@ gh run cancel <RUN_ID> --repo SemiAnalysisAI/InferenceX
 - Run39717243502 loader retry: VLLM_FASTSAFETENSORS_QUEUE_SIZE=1，限制 shard staging，保留 fastsafetensors 和 quantization settings。GPU4 loading resource exhaustion 不能证明硬件故障。
 
 - Run39718556543 queue1 仍在 GPU0 loading 失败（free198MB）。诊断 smoke 移除 fastsafetensors 和 queue override，保留 Moonshot quantization/benchmark settings。不算通过 loader comparison。
+
+- Standalone fp8_fused_reconstruction_probe.py 比较 AITER FP8-weight/scaled reconstruction、BF16 fusion 和 numerical references，覆盖全8 GPU。不修改 serving，preshuffle/layout integration 待完成。

@@ -372,3 +372,5 @@ Temporarily use --load-format fastsafetensors. No AMD conversion is installed. P
 - Loader retry after run39717243502: bound VLLM_FASTSAFETENSORS_QUEUE_SIZE=1 to reduce concurrent shard staging; retain fastsafetensors and all quantization settings. GPU4 resource exhaustion during loading is not proof of faulty hardware.
 
 - Run39718556543 repeated loader-stage HSA resource exhaustion on GPU0 (198MB free), despite queue1. Remove explicit fastsafetensors and its queue override for diagnostic smoke; retain the same Moonshot quantization and benchmark settings. This does not count as a passing loader comparison.
+
+- Standalone fp8_fused_reconstruction_probe.py compares existing AITER FP8-weight/scaled reconstruction with BF16-weight fusion and explicit numerical references on all8 GPUs. It does not patch serving; loaded preshuffle/layout integration remains required.
