@@ -8707,3 +8707,9 @@
   description:
     - 'Add only Moonshot self_attn.o_proj per-channel online FP8 to the baseline in_proj_qkvgfab plus fused FP8 kv_b experiment. Verify o_proj weights/scales on all8 GPUs after loading; retain BF16 FMHA, accuracy-first GSM8K and cached-context numerical checks, replay warmup0. Keep preceding two-target run unchanged for comparison.'
     - '仅新增 Moonshot self_attn.o_proj per-channel online FP8，保留 baseline in_proj_qkvgfab 和 fused FP8 kv_b。加载后验证全8 GPU o_proj 权重和 scales，保留 BF16 FMHA、GSM8K 和 cached-context 数值检查、replay warmup0。前一个两 target run 继续完成供比较。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Fix Moonshot postload probe to allow unquantized native FP32 conv1d alongside BF16, while rejecting quantized convolution weights/scales. Run39729399329 loaded weights but probe stopped startup before serving or accuracy; no kernel or accuracy failure established. Retain three-target o_proj accuracy experiment.'
+    - '修复 Moonshot postload probe，允许原生未量化 FP32/BF16 conv1d，拒绝量化卷积权重和 scales。run39729399329 加载权重后被 probe 阻止启动，未运行 serving/accuracy，不能判定 kernel 或精度失败。保留三 target o_proj 精度实验。'

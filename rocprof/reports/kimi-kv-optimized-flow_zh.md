@@ -186,3 +186,9 @@ FP8 cache → FP8-byte gather
 - Target：`*in_proj_qkvgfab`、`*.self_attn.kv_b_proj`、`*.self_attn.o_proj`。
 - 加载后要求全8 GPU FP8 o_proj 权重和 channel scales，保留 BF16 FMHA。
 - 先运行数值、cached-context 和 GSM8K 检查，再测吞吐。与 run39729399329 比较；精度和内存收益尚未证实。
+
+## Moonshot loader probe 修正
+
+- run39729399329 加载后失败，原因是 probe 拒绝原生 FP32 KDA conv1d。未运行 serving/GSM8K。
+- 允许未量化 BF16/FP32 conv1d，拒绝 FP8 卷积和 quantization scales。
+- fused kernel 和 targets 不变。run39729912013 也包含旧 probe，修正后使用含 o_proj 的三 target 实验。

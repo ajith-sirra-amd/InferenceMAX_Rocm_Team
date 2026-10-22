@@ -42,13 +42,17 @@ def verify_model(model):
                   "weight_shape=", tuple(weight.shape),
                   "scale_shape=", tuple(layer.weight_scale.shape),
                   "method=", type(layer.quant_method).__name__, flush=True)
+        elif name.endswith(".conv1d"):
+            if (weight.dtype not in (torch.bfloat16, torch.float32)
+                    or getattr(layer, "weight_scale", None) is not None):
+                raise RuntimeError(f"Convolution must remain unquantized: {name} {weight.dtype}")
         elif weight.dtype != torch.bfloat16:
             raise RuntimeError(f"Untargeted Moonshot attention weight changed dtype: {name} {weight.dtype}")
     if kv_count != 24 or not inproj_count or not oproj_count:
         raise RuntimeError(f"Unexpected Moonshot inventory: kv_b={kv_count}, inproj={inproj_count}, o_proj={oproj_count}")
     print("[MOONSHOT-FUSED-QUANT-VERIFIED]", "device=", str(device),
           "fp8_kv_b_linears=", kv_count, "fp8_inproj_linears=", inproj_count,
-          "fp8_o_proj_linears=", oproj_count, "remaining_attention=BF16", "checkpoint_experts_unchanged=True", flush=True)
+          "fp8_o_proj_linears=", oproj_count, "remaining_projection_weights=BF16", "conv1d=unquantized_native_dtype", "checkpoint_experts_unchanged=True", flush=True)
 
 
 def install():

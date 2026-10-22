@@ -191,3 +191,9 @@ FP8 cache → FP8-byte gather
 - Target set: `*in_proj_qkvgfab`, `*.self_attn.kv_b_proj`, `*.self_attn.o_proj`.
 - Require postload FP8 o_proj weights/channel scales on all8 GPUs. BF16 FMHA retained.
 - Run numerical/cached-context checks and GSM8K before throughput. Compare with run39729399329; accuracy and memory gains are unproven.
+
+## Moonshot loader probe correction
+
+- Run39729399329 failed after weight loading because the probe rejected native FP32 KDA conv1d weights. No serving or GSM8K result.
+- Allow unquantized BF16/FP32 conv1d; reject FP8 convolution and attached quantization scales.
+- Fused kernel and quantization targets unchanged. Run39729912013 also carries the old probe; corrected successor uses three targets including o_proj.
