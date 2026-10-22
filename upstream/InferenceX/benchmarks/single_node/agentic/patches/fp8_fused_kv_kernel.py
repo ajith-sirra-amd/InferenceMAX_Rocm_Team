@@ -374,9 +374,9 @@ def launch(cache, scales, indices, weight, weight_scale, k, v, shuffled, rows_pe
     chunks = triton.cdiv(total, 32)
     workers = min(chunks, max(1, (get_num_sms() * 6 + k.shape[1] - 1) // k.shape[1]))
     _triton_gather_kv_b_proj_flat[(k.shape[1] * workers,)](
-        total, cache, scales, indices, weight, weight_scale, k, v,
+        total, cache, scales, indices, weight, weight if weight_scale is None else weight_scale, k, v,
         TpNumHeads=k.shape[1], QkNopeHeadDim=128, VHeadDim=128,
         KV_CDim=512, KV_PeDim=64, ChunkK=32, PaddedK=128, PaddedV=128,
-        WEIGHT_PRESHUFFLE=shuffled, PER_ROW_SCALE=True, NO_SCALE=False,
+        WEIGHT_PRESHUFFLE=shuffled, PER_ROW_SCALE=weight_scale is not None, NO_SCALE=weight_scale is None,
         GRID_STRIDE=workers < chunks, ROWS_PER_RANK=rows_per_rank,
         num_stages=3)

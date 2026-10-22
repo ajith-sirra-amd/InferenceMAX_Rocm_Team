@@ -8689,3 +8689,9 @@
   description:
     - 'Integrate AMD Quark FP8 kv_b weights and channel scales into fused rank-aware cache reconstruction with BF16 K/V output and unchanged BF16 FMHA. Vendor the pinned AITER flat kernel with source-rank scale support; all8 numerical preflight, real cached-prefix requests and GSM8K-first serving validation. Set replay warmup per lane to0 and disable fast-mode override. No online checkpoint requantization or BF16 weight conversion.'
     - '将 AMD Quark FP8 kv_b 权重和 channel scales 接入 fused cache reconstruction，按源 rank scale 处理缓存，输出 BF16 K/V，保留 BF16 FMHA。使用固定 AITER flat kernel，运行全8 GPU 数值预检、真实 cached-prefix 请求和 GSM8K 验证。每 lane replay warmup 设为0，禁用 fast-mode override，不重新量化 checkpoint，不转换 BF16 权重。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Use the repository-vendored fused kernel for both FP8 and BF16 numerical preflight and timing; remove dependence on installed AITER gather-wrapper feature availability. No serving behavior change.'
+    - '数值预检和计时的 FP8/BF16 路径均使用本仓库固定 fused kernel，移除对容器 AITER gather wrapper 功能的依赖，不改变服务行为。'

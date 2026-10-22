@@ -10,7 +10,6 @@ import json
 import pathlib
 
 import torch
-from aiter.ops.triton.gather_kv_b_proj import gather_kv_b_proj
 from aiter.ops.shuffle import shuffle_weight
 from fp8_fused_kv_kernel import launch
 from fp8_fused_kv_b import validate_outputs
@@ -34,12 +33,10 @@ def check_and_measure(device, rows):
     bf16_weight = (raw_weight.float() * scale[:, None]).to(torch.bfloat16).contiguous()
 
     def fp8_call():
-        gather_kv_b_proj(cache.unsqueeze(1), cache_scale, cu, indices, cu,
-                         raw_weight, scale, k, v)
+        launch(cache, cache_scale, indices, raw_weight, scale, k, v, False, 0)
 
     def bf16_call():
-        gather_kv_b_proj(cache.unsqueeze(1), cache_scale, cu, indices, cu,
-                         bf16_weight, None, kb, vb)
+        launch(cache, cache_scale, indices, bf16_weight, None, kb, vb, False, 0)
 
     fp8_call()
     bf16_call()
