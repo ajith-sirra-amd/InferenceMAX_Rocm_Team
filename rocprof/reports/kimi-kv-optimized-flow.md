@@ -1,88 +1,129 @@
-# Kimi-K3: optimized KV communication and attention flow
+# Kimi-K3: problem and proposed KV flow
 
 **English** | [中文](./kimi-kv-optimized-flow_zh.md)
 
-## Key facts
+## Problem
 
-- FP8 all-gather transfers cache bytes; it does not use `kv_b_proj`.
-- BF16 `kv_b_proj` is required by the **pinned fused reconstruction implementation**, not by the collective.
-- The FP8 cache stores a compressed latent; FMHA consumes reconstructed full-head K/V.
-- Reconstruction is a matrix projection, not just head rearrangement.
-- FP8 attention-projection weights do not imply FP8 Q/K/V outputs.
-- Faster individual kernels do not establish faster end-to-end inference.
+| Full benchmark | Total tokens/s/GPU | KV-pool tokens |
+|---|---:|---:|
+| [Moonshot reference39239112271](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39239112271) | 15,476.47 | 20,951,355 |
+| [AMD + separate FP8-gather adaptation39601846940](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39601846940) | 15,258.78 | 23,098,919 |
 
-## Tensors and dimensions
+- AMD gained **10.25% KV capacity**, but total throughput was **1.41% lower**.
+- Goal: approach **23M KV-pool tokens** while recovering native fused context processing.
+- Hypothesis: separate cache decode/reorder and reconstruction preparation add overhead.
+- The benchmark comparison does not prove which operation caused the throughput gap.
 
-| Tensor / operation | Dimensions | Role |
+## Current drawback
+
+| Step | AMD + our separate gather adaptation | Drawback |
 |---|---|---|
-| Hidden states X | [T, 7168] | Attention projection input |
-| Compressed KV latent C | [T, 512] | Latent component of MLA cache |
-| RoPE key component | [T, 64] | Cached positional key component |
-| Compressed cache row | [T, 576] | 512 latent + 64 RoPE elements |
-| Local kv_b weight, TP8 | [3072, 512] | 12 heads × (128 key + 128 value) |
-| Reconstruction | C × W_kv_b^T → [T, 3072] | Produces local non-RoPE K and V |
-| Packed local K | [T, 12, 192] | 128 reconstructed + 64 RoPE |
-| Packed local V | [T, 12, 128] | Reconstructed values |
+| Cache | FP8 compressed KV | Compact; retain |
+| All-gather | Existing FP8 bytes through uint8 collective | Half BF16 payload; retain |
+| Cache decode/reorder | Separate processing into BF16 latent rows | Intermediate HBM traffic and launches |
+| Reconstruction | Separate FP8-weight kv_b GEMM plus required preparation | Misses native fused processing |
+| K/V packing and FMHA | BF16 K/V, BF16 FMHA | FP8 weights/cache do not make FMHA FP8 |
 
-- T: number of tokens in the relevant chunk.
-- Cache storage is distributed over DCP ranks; dimensions above describe token rows and each TP rank's reconstructed head set.
-- Dequantization approximates represented values; it does not recover information lost during quantization.
+- **FP8 all-gather does not require BF16 kv_b weights:** communication never reads those weights.
+- **The pinned fused reconstruction kernel requires BF16 kv_b weights**, contiguous layout and no separate weight scales.
+- AMD's FP8 kv_b weights fail that eligibility check.
 
-## Precision and mechanism
+## Which requirement comes first?
 
-| Stage | Practical flow in pinned runtime | Candidate optimized flow | Benefit / condition |
-|---|---|---|---|
-| Attention projections | FP8 weights/input arithmetic; BF16 outputs as required | Same, with producer/consumer quantization fusion where supported | Reduce GEMM cost; retain accurate normalization/RoPE |
-| Compressed KV cache | FP8 | FP8 | Smaller cache and HBM traffic |
-| KV all-gather | Existing FP8 bytes through uint8 collective | Same | Half BF16 payload; no new cache quantization |
-| Reconstruction weights | BF16 | FP8 weights plus channel scales | Smaller weight traffic; requires supported fused kernel |
-| Reorder + cache decode + projection + K/V packing | One native fused kernel with BF16 weights | One fused kernel supporting FP8 weights/scales | Avoid materialized intermediate cache and separate launches |
-| Reconstruction arithmetic | Native kernel implementation | Appropriate higher-precision accumulation | Verify implementation and numerical error |
-| Reconstructed K/V | BF16 | BF16 first; scaled FP8 only for validated FP8 FMHA | Avoid unnecessary precision transitions |
-| FMHA | BF16 | Fastest accurate BF16 or scaled FP8 implementation | Measure complete call, including preparation |
-| Attention output | BF16 | BF16 | Feed subsequent model operations |
-
-## Three flows
-
-| Flow | Pipeline | Status |
-|---|---|---|
-| Practical native fusion | FP8 cache → FP8-byte gather → fused reorder/dequant/BF16-weight reconstruction/packing → BF16 K/V → BF16 FMHA | Native path exists in pinned runtime; experiment must prove eligibility and execution |
-| FP8-weight reconstruction | FP8 cache → FP8-byte gather → fused reconstruction with FP8 weights/scales → BF16 K/V → BF16 FMHA | Proposed kernel improvement; pinned native fusion lacks this weight support |
-| FP8 FMHA | FP8 cache → FP8-byte gather → fused reconstruction with scaled FP8 K/V output + scaled FP8 Q preparation → FP8 FMHA → BF16 output | Candidate; requires accuracy and end-to-end performance validation |
-
-- Reconstruction cannot be removed when full-head FMHA consumes the compressed MLA cache.
-- Direct FP8 reconstruction output still quantizes reconstructed values; it can fuse that work and avoid a BF16 intermediate.
-- FP32 accumulation cannot undo FP8 quantization loss.
-- FP8 FMHA is not guaranteed to beat BF16 after conversion, padding, packing and launch overhead.
-
-## Moonshot experiment
-
-- Source: `moonshotai/Kimi-K3`; retain its compressed-tensors MXFP4 expert weights.
-- Online `fp8_per_channel` attention projections; retain BF16 `kv_b_proj`.
-- Explicit targets: `in_proj_qkvgfab`, `f_b_proj`, `g_a_proj`, `g_b_proj`, `o_proj`, `fused_qkv_a_proj`, `q_b_proj`, `q_proj`, `kv_a_proj_with_mqa`, `g_proj`.
-- Leave convolutions, shared experts and residual projections unchanged.
-- Matches AMD attention precision scheme except BF16 reconstruction; exported quantized values need not match.
-- Goal: approach 23M KV-pool tokens while recovering native fused processing.
-- Acceptance: all8 GPU quantization inventory, native eligibility, uint8 collective, fused execution, measured throughput/pool/errors.
-- Smoke: C48, TP8/DCP8, warmup1/lane, 600 seconds.
-- Accuracy: separate real-verification evaluation; synthetic throughput is not an accuracy test.
-
-## Latest smoke finding
-
-| Item | Evidence |
+| Question | Answer |
 |---|---|
-| Run | [39717243502](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39717243502) |
-| Loader | Explicit `fastsafetensors` |
-| Numerical preflight | Passed on GPUs0–7 |
-| Failure | GPU4: `HSA_STATUS_ERROR_OUT_OF_RESOURCES`; reported free memory0 MB; `nogds GPU operation failed: 701` |
-| Phase | Weight loading / worker initialization; server never became ready |
-| Quantization inventory | No completion marker |
-| Throughput / KV pool | Not measured |
-| Interpretation | Resource exhaustion during loader execution; hardware fault and exact loader cause not established |
-| Next diagnosis | Inspect loading/staging memory and profiler interaction; isolate loader on same GPUs before blaming hardware |
+| Does FP8 all-gather require BF16 kv_b_proj mathematically? | **No.** The collective transfers bytes and does not read projection weights |
+| Does our pinned native fused context path require BF16 kv_b_proj? | **Yes**, along with the other dtype/layout/metadata checks |
+| What is the direction in our experiment? | **Keep kv_b_proj BF16 → satisfy native fused-path eligibility → that path invokes FP8-byte all-gather and fused reconstruction** |
+| Does selecting FP8 all-gather convert kv_b_proj to BF16? | **No** |
+| Can FP8 all-gather work with FP8 kv_b_proj? | **Yes**; our AMD adaptation proved it, but reconstruction then used separate processing |
 
-## References
+- **BF16 kv_b is necessary for this native fused implementation, but not sufficient by itself.**
+- Actual uint8 collective and fused-execution logs must prove the path engaged.
+
+## Proposed solution
+
+| Component | Moonshot experiment | Purpose |
+|---|---|---|
+| Model | moonshotai/Kimi-K3 | BF16 attention starting point |
+| Expert weights | Retain checkpoint MXFP4 | Keep existing compression |
+| Other attention projections | Online fp8_per_channel | Save weight memory; FP8 GEMMs |
+| kv_b_proj | **Retain BF16; omit from targets** | Enable native fused reconstruction |
+| Convolutions/shared experts/residual projections | Retain checkpoint precision | Avoid unintended quantization |
+| KV cache and collective | FP8 cache; native FP8-byte gather | Compact storage and communication |
+| Reconstruction/packing | **One native fused kernel** | Avoid separate intermediate processing |
+| FMHA/output | BF16 | Retain current attention kernel |
+
+```text
+FP8 compressed KV cache
+ → FP8-byte all-gather
+ → ONE kernel: reorder + dequant + BF16 kv_b projection + K/V packing
+ → BF16 K/V + BF16 Q
+ → BF16 FMHA
+ → BF16 output
+```
+
+- Targets: in_proj_qkvgfab, f_b_proj, g_a_proj, g_b_proj, o_proj, fused_qkv_a_proj, q_b_proj, q_proj, kv_a_proj_with_mqa, g_proj under self_attn.
+- First smoke selected **303 attention linears**; this was selection evidence, not completed quantization.
+- No AMD weight-conversion patch is installed.
+- Matches AMD attention precision except BF16 kv_b; online quantized values can differ.
+
+## Benefits and tradeoffs
+
+| Expected benefit | Remaining cost / uncertainty |
+|---|---|
+| Smaller attention weights than reference | Dynamic activation quantization costs work |
+| Native fused reconstruction | Projection and cache dequantization remain necessary |
+| Less intermediate HBM traffic/dispatch | Throughput lift must be measured |
+| Potential KV pool near23M | BF16 kv_b and runtime buffers consume memory; capacity is not guaranteed |
+| BF16 context FMHA retained | New projection quantization needs accuracy validation |
+
+## Why reconstruction stays
+
+| Tensor / operation | Local dimensions at TP8 |
+|---|---|
+| Cached latent C | [T,512] |
+| Cached RoPE key | [T,64] |
+| Cache row | [T,576] |
+| kv_b weight | [3072,512] |
+| Reconstruction | C × W_kv_b^T → [T,3072] |
+| Packed K | [T,12,192] |
+| Packed V | [T,12,128] |
+
+- T: chunk token count; cache rows are distributed across DCP ranks.
+- Reconstruction is an **up-projection**, not head rearrangement.
+- Full-head FMHA cannot directly consume the compressed latent.
+- Dequantization does not recover quantization loss.
+
+## Future options
+
+| Option | Flow change | Requirement |
+|---|---|---|
+| Fused FP8-weight reconstruction | FP8 cache/communication → fused FP8-weight reconstruction → BF16 K/V → BF16 FMHA | Kernel support for FP8 weights/scales |
+| FP8 FMHA | Fused reconstruction outputs scaled FP8 K/V; prepare scaled FP8 Q → FP8 FMHA → BF16 output | Accuracy and complete-call performance validation |
+
+- Direct FP8 outputs still perform quantization; fusion can remove a BF16 intermediate.
+- Higher-precision accumulation cannot undo quantization loss.
+- FP8 FMHA may lose after preparation, padding and launch costs.
+
+## Validation and status
+
+- Smoke: **C48 TP8/DCP8, warmup1/lane,600seconds**.
+- Require all8 GPUs: actual FP8 projection weights,24 BF16 kv_b matrices, native eligibility, uint8 collective and fused execution.
+- Measure KV pool, total/output throughput and request errors.
+- Run real-verification accuracy separately; synthetic throughput does not establish accuracy.
+- After fastsafetensors passes: identical smoke without the loader flag.
+
+| Run | Finding |
+|---|---|
+| [39717243502](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39717243502) | All8 numerical preflights passed. Loading failed on GPU4: HSA resource exhaustion, reported free memory0 MB, nogds error701. No pool/throughput result |
+| [39718556543](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39718556543) | Retry: fastsafetensors queue bounded to1; outcome pending at this revision |
+
+- Loading failure does not establish faulty GPU hardware.
+- Queue limit is a diagnostic change, not a proven fix.
+
+## Sources
 
 - [AMD model card](https://huggingface.co/amd/Kimi-K3-Quark-MXFP4-AttnFP8)
 - [Pinned native MLA backend](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/backends/mla/rocm_aiter_mla.py)
-- [Pinned gather/reconstruction operations](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py)
+- [Pinned gather/reconstruction](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py)
