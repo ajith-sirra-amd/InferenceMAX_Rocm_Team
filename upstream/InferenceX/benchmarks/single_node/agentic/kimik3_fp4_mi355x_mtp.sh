@@ -25,6 +25,13 @@ else
 fi
 
 rocm-smi || true
+# Diagnose communicator startup before model loading; no collective tracing in replay.
+export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=INIT,NET,ENV
+mkdir -p "$RESULT_DIR"
+timeout --signal=TERM --kill-after=15s 180s \
+    torchrun --standalone --nnodes=1 --nproc-per-node=8 \
+    "$(dirname "$0")/patches/rccl_preflight.py" 2>&1 | tee "$RESULT_DIR/rccl_preflight.log"
 resolve_trace_source
 install_agentic_deps
 
