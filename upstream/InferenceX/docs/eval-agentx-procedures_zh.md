@@ -366,3 +366,5 @@ gh run cancel <RUN_ID> --repo SemiAnalysisAI/InferenceX
 使用 Moonshot MXFP4 experts，显式 online FP8 attention targets，保留 BF16 kv_b_proj、convolutions、shared experts 和 residual projections。Targets: in_proj_qkvgfab, f_b_proj, g_a_proj, g_b_proj, o_proj, fused_qkv_a_proj, q_b_proj, q_proj, kv_a_proj_with_mqa, g_proj。匹配 AMD attention precision，但 reconstruction 保留 BF16，量化值可能不同。
 
 临时 fastsafetensors，不安装 AMD conversion。Postload 检查 FP8 attention linears 和每 GPU24个连续 BF16 kv_b matrices。保留 numerical preflight 和全8设备 native execution gates。C48 TP8/DCP8 预热1次/600秒 smoke，实测23M KV pool 目标和 performance。需另行 real-verification accuracy eval。
+
+- Run39717243502 loader retry: VLLM_FASTSAFETENSORS_QUEUE_SIZE=1，限制 shard staging，保留 fastsafetensors 和 quantization settings。GPU4 loading resource exhaustion 不能证明硬件故障。

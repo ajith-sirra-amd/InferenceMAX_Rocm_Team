@@ -368,3 +368,5 @@ The installer rejects unexpected scales/layouts and preflights exact channel sca
 Use Moonshot existing MXFP4 experts with explicit online fp8_per_channel attention projection targets. Leave kv_b_proj BF16 and convolutions unchanged. Targets cover in_proj_qkvgfab, f_b_proj, g_a_proj, g_b_proj, o_proj, fused_qkv_a_proj, q_b_proj, q_proj, kv_a_proj_with_mqa, and g_proj. Retain shared experts and residual projections. The scheme matches AMD attention precision except BF16 reconstruction; exported values may differ.
 
 Temporarily use --load-format fastsafetensors. No AMD conversion is installed. Postload checks require FP8 attention linears and24 contiguous BF16 kv_b matrices per GPU. Retain numerical preflight and all8 native execution gates. C48 TP8/DCP8 warmup1/600second smoke targets23M KV pool; measure capacity and performance. Accuracy requires separate real-verification eval.
+
+- Loader retry after run39717243502: bound VLLM_FASTSAFETENSORS_QUEUE_SIZE=1 to reduce concurrent shard staging; retain fastsafetensors and all quantization settings. GPU4 resource exhaustion during loading is not proof of faulty hardware.

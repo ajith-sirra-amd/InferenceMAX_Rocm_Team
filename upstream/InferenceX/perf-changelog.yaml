@@ -8671,3 +8671,9 @@
   description:
     - 'Switch to Moonshot MXFP4 experts with selective online FP8 attention, leaving kv_b_proj BF16 for native fused FP8 KV gather. Temporarily fastsafetensors; postload inventory and all8 execution checks; C48 warmup1/600second smoke targeting23M KV pool.'
     - '切换 Moonshot MXFP4 experts，选择性 online FP8 attention，保留 BF16 kv_b_proj 以启用原生 fused FP8 KV gather。临时 fastsafetensors；postload inventory 和全8设备 execution checks；C48 预热1次/600秒 smoke，目标23M KV pool。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Bound fastsafetensors shard queue to1 after GPU4 loading resource exhaustion in39717243502. Retain Moonshot selective FP8 attention, BF16 kv_b, fastsafetensors, all8 verification and warmup1/600second smoke.'
+    - '在39717243502 GPU4 loading resource exhaustion 后，将 fastsafetensors shard queue 限制为1。保留 Moonshot selective FP8 attention、BF16 kv_b、fastsafetensors、全8设备 verification 和 warmup1/600second smoke。'
