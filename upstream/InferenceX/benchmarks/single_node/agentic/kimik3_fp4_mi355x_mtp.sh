@@ -38,6 +38,7 @@ timeout --signal=TERM --kill-after=15s 180s \
     "$(dirname "$0")/patches/rccl_preflight.py" 2>&1 | tee "$RESULT_DIR/rccl_preflight.log"
 resolve_trace_source
 install_agentic_deps
+python3 "$(dirname "$0")/patches/rccl_startup_probe.py"
 
 mkdir -p "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
