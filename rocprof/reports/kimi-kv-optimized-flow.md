@@ -117,7 +117,7 @@ FP8 compressed KV cache
 | Run | Finding |
 |---|---|
 | [39717243502](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39717243502) | All8 numerical preflights passed. Loading failed on GPU4: HSA resource exhaustion, reported free memory0 MB, nogds error701. No pool/throughput result |
-| [39718556543](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39718556543) | Retry: fastsafetensors queue bounded to1; outcome pending at this revision |
+| [39718556543](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39718556543) | Failed during loading on GPU0: HSA resource exhaustion,198MB free,nogds701. Queue1 did not resolve it; next diagnostic removes explicit fastsafetensors |
 
 - Loading failure does not establish faulty GPU hardware.
 - Queue limit is a diagnostic change, not a proven fix.

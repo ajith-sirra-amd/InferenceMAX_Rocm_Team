@@ -45,8 +45,6 @@ export AITER_FLYDSL_STAGE2_FP8=1
 export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
 export VLLM_ROCM_QUICK_REDUCE_MIN_SIZE_BYTES_MB=16
 export SAFETENSORS_FAST_GPU=1
-export VLLM_FASTSAFETENSORS_QUEUE_SIZE=1
-echo "[FASTSAFETENSORS] bounded shard queue=$VLLM_FASTSAFETENSORS_QUEUE_SIZE"
 export HSA_NO_SCRATCH_RECLAIM=1
 export VLLM_USE_BREAKABLE_CUDAGRAPH=0
 export VLLM_USE_DIRECT_DCP_A2A=0
@@ -237,7 +235,6 @@ VLLM_CMD=(
     --tensor-parallel-size "$TP"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
-    --load-format fastsafetensors
     --quantization-config '{"targets":{"*.self_attn.in_proj_qkvgfab":"fp8_per_channel","*.self_attn.f_b_proj":"fp8_per_channel","*.self_attn.g_a_proj":"fp8_per_channel","*.self_attn.g_b_proj":"fp8_per_channel","*.self_attn.o_proj":"fp8_per_channel","*.self_attn.fused_qkv_a_proj":"fp8_per_channel","*.self_attn.q_b_proj":"fp8_per_channel","*.self_attn.q_proj":"fp8_per_channel","*.self_attn.kv_a_proj_with_mqa":"fp8_per_channel","*.self_attn.g_proj":"fp8_per_channel"}}'
     --max-num-seqs "$MAX_NUM_SEQS"
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"

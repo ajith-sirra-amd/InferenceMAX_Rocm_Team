@@ -8677,3 +8677,9 @@
   description:
     - 'Bound fastsafetensors shard queue to1 after GPU4 loading resource exhaustion in39717243502. Retain Moonshot selective FP8 attention, BF16 kv_b, fastsafetensors, all8 verification and warmup1/600second smoke.'
     - '在39717243502 GPU4 loading resource exhaustion 后，将 fastsafetensors shard queue 限制为1。保留 Moonshot selective FP8 attention、BF16 kv_b、fastsafetensors、全8设备 verification 和 warmup1/600second smoke。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Remove explicit fastsafetensors and queue override after two loader-stage HSA resource failures. Diagnostic default-loader smoke retains Moonshot selective FP8 attention, BF16 kv_b and C48 warmup1/600seconds.'
+    - '两次 loader-stage HSA resource failure 后移除 fastsafetensors 和 queue override。默认 loader 诊断 smoke 保留 Moonshot selective FP8 attention、BF16 kv_b 和 C48 warmup1/600seconds。'
