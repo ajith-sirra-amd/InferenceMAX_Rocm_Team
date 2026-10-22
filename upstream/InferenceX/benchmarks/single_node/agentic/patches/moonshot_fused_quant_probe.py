@@ -70,19 +70,20 @@ def verify_model(model):
                   "weight_shape=", tuple(weight.shape),
                   "scale_shape=", tuple(layer.weight_scale.shape),
                   "method=", type(layer.quant_method).__name__, flush=True)
-        elif name.endswith(".conv1d"):
+        elif "conv1d" in name:
             if (weight.dtype not in (torch.bfloat16, torch.float32)
                     or getattr(layer, "weight_scale", None) is not None):
                 raise RuntimeError(f"Convolution must remain unquantized: {name} {weight.dtype}")
-        elif weight.dtype != torch.bfloat16:
-            raise RuntimeError(f"Untargeted Moonshot attention weight changed dtype: {name} {weight.dtype}")
+        else:
+            raise RuntimeError(f"AMD attention coverage has an unhandled live linear: {name}; "
+                               f"dtype={weight.dtype}; add an explicit online FP8 target")
     if kv_count != 24 or not inproj_count or not oproj_count or qkva_count != 24 or gate_count != 24 or extra_count == 0:
         raise RuntimeError(f"Unexpected Moonshot inventory: kv_b={kv_count}, inproj={inproj_count}, o_proj={oproj_count}, qkv_a={qkva_count}, g_proj={gate_count}, extra={extra_inventory}")
     print("[MOONSHOT-FUSED-QUANT-VERIFIED]", "device=", str(device),
           "fp8_kv_b_linears=", kv_count, "fp8_inproj_linears=", inproj_count,
           "fp8_o_proj_linears=", oproj_count, "fp8_qkv_a_linears=", qkva_count,
           "fp8_g_proj_linears=", gate_count, "fp8_extra_attention_linears=", extra_count, "extra_inventory=", extra_inventory,
-          "untargeted_projection_weights=BF16", "conv1d=unquantized_native_dtype", "checkpoint_experts_unchanged=True", flush=True)
+          "amd_attention_linear_coverage=verified", "conv1d=unquantized_native_dtype", "checkpoint_experts_unchanged=True", flush=True)
 
 
 def install():
