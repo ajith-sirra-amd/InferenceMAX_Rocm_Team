@@ -361,3 +361,10 @@ Use `scancel` or process termination only with explicit approval and a concrete 
 On `perf/kimi-attnfp8-kv-allgather-20261021`, the item2 smoke converts only AMD Quark per-channel FP8 `kv_b_proj` to contiguous BF16 once during loading, before Quark packing. Other checkpoint quantization and FP8 KV cache remain enabled. Native context dispatch then gathers FP8 bytes and fuses reorder, dequantization, reconstruction and K/V packing, followed by BF16 FMHA. The separate byte-gather adaptation is disabled.
 
 The installer rejects unexpected scales/layouts and preflights exact channel scaling plus the real native fused reconstruction on all8 GPUs. C48 TP8/DCP8 uses one warmup request per lane and600seconds; the completion gate requires BF16 conversion, native eligibility, uint8 transport and actual fused execution on all8 GPUs. Record throughput, KV pool and request errors before deciding on a full run. Synthetic DSpark throughput does not establish model accuracy; run real-verification eval separately. BF16 weights add roughly1.5MiB per converted layer/GPU; measure the resulting pool rather than assuming23M is retained.
+
+
+### Moonshot selective attention FP8 smoke
+
+Use Moonshot existing MXFP4 experts with explicit online fp8_per_channel attention projection targets. Leave kv_b_proj BF16 and convolutions unchanged. Targets cover in_proj_qkvgfab, f_b_proj, g_a_proj, g_b_proj, o_proj, fused_qkv_a_proj, q_b_proj, q_proj, kv_a_proj_with_mqa, and g_proj. Retain shared experts and residual projections. The scheme matches AMD attention precision except BF16 reconstruction; exported values may differ.
+
+Temporarily use --load-format fastsafetensors. No AMD conversion is installed. Postload checks require FP8 attention linears and24 contiguous BF16 kv_b matrices per GPU. Retain numerical preflight and all8 native execution gates. C48 TP8/DCP8 warmup1/600second smoke targets23M KV pool; measure capacity and performance. Accuracy requires separate real-verification eval.

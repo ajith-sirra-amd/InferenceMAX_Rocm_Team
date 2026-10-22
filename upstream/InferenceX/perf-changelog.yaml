@@ -8665,3 +8665,9 @@
   description:
     - 'Convert only AMD Quark kv_b_proj to BF16 at load time to enable native fused FP8 KV gather/reconstruction. Disable separate gather adaptation; GPU preflight and all8 execution gate; C48 TP8/DCP8 warmup1/600second smoke. Retain other AMD quantization and BF16 FMHA.'
     - '仅在加载时将 AMD Quark kv_b_proj 转换为 BF16，启用原生 fused FP8 KV gather/reconstruction。禁用单独 gather adaptation；GPU preflight 和全8设备执行门禁；C48 TP8/DCP8 预热1次/600秒 smoke。保留其他 AMD 量化和 BF16 FMHA。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Switch to Moonshot MXFP4 experts with selective online FP8 attention, leaving kv_b_proj BF16 for native fused FP8 KV gather. Temporarily fastsafetensors; postload inventory and all8 execution checks; C48 warmup1/600second smoke targeting23M KV pool.'
+    - '切换 Moonshot MXFP4 experts，选择性 online FP8 attention，保留 BF16 kv_b_proj 以启用原生 fused FP8 KV gather。临时 fastsafetensors；postload inventory 和全8设备 execution checks；C48 预热1次/600秒 smoke，目标23M KV pool。'

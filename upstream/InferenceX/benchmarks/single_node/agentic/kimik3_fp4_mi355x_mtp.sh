@@ -31,7 +31,7 @@ install_agentic_deps
 mkdir -p "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/native_dcp_probe.py"
-python3 "$(dirname "$0")/patches/bf16_kv_b.py"
+python3 "$(dirname "$0")/patches/moonshot_quant_probe.py"
 
 
 export AIPERF_WARMUP_REQUESTS_PER_LANE=1
@@ -235,6 +235,8 @@ VLLM_CMD=(
     --tensor-parallel-size "$TP"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
+    --load-format fastsafetensors
+    --quantization-config '{"targets":{"*.self_attn.in_proj_qkvgfab":"fp8_per_channel","*.self_attn.f_b_proj":"fp8_per_channel","*.self_attn.g_a_proj":"fp8_per_channel","*.self_attn.g_b_proj":"fp8_per_channel","*.self_attn.o_proj":"fp8_per_channel","*.self_attn.fused_qkv_a_proj":"fp8_per_channel","*.self_attn.q_b_proj":"fp8_per_channel","*.self_attn.q_proj":"fp8_per_channel","*.self_attn.kv_a_proj_with_mqa":"fp8_per_channel","*.self_attn.g_proj":"fp8_per_channel"}}'
     --max-num-seqs "$MAX_NUM_SEQS"
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
     --max-model-len "$SERVER_MAX_MODEL_LEN"
@@ -340,7 +342,8 @@ else
 import pathlib, re, sys
 text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
 for marker, condition in [
-    ('KV-B-BF16-CONVERTED', 'dtype= torch.bfloat16'),
+    ('MOONSHOT-KV-B-BF16', 'dtype= torch.bfloat16'),
+    ('MOONSHOT-QUANT-VERIFIED', 'bf16_kv_b_linears= 24'),
     ('NATIVE-DCP-ELIGIBILITY', 'eligible= True'),
     ('NATIVE-KV-COLLECTIVE', 'dtype= torch.uint8'),
     ('NATIVE-DCP-FUSED-EXECUTED', 'weight_dtype= torch.bfloat16'),
