@@ -8713,3 +8713,9 @@
   description:
     - 'Fix Moonshot postload probe to allow unquantized native FP32 conv1d alongside BF16, while rejecting quantized convolution weights/scales. Run39729399329 loaded weights but probe stopped startup before serving or accuracy; no kernel or accuracy failure established. Retain three-target o_proj accuracy experiment.'
     - '修复 Moonshot postload probe，允许原生未量化 FP32/BF16 conv1d，拒绝量化卷积权重和 scales。run39729399329 加载权重后被 probe 阻止启动，未运行 serving/accuracy，不能判定 kernel 或精度失败。保留三 target o_proj 精度实验。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Use passing AMD Quark broad attention FP8 accuracy as reference to add Moonshot fused_qkv_a_proj and g_proj online per-channel FP8. Estimated extra raw weight savings598.5MiB/GPU at TP8; actual pool/accuracy unproven. Keep in_proj_qkvgfab, kv_b_proj, o_proj; all8 target inventory and fusion gates, numerical/cached-context checks and GSM8K. Preserve current o_proj-only increment run for comparison.'
+    - '参考 AMD Quark 广泛 attention FP8 精度通过结果，新增 Moonshot fused_qkv_a_proj 和 g_proj online per-channel FP8。TP8 预计额外原始权重节省598.5MiB/GPU，实际 pool/accuracy 待验证。保留其他三 target、全8 GPU 日志、数值和 cached-context 检查及 GSM8K，保留当前 o_proj 增量 run 供比较。'

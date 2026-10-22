@@ -192,3 +192,12 @@ FP8 cache → FP8-byte gather
 - run39729399329 加载后失败，原因是 probe 拒绝原生 FP32 KDA conv1d。未运行 serving/GSM8K。
 - 允许未量化 BF16/FP32 conv1d，拒绝 FP8 卷积和 quantization scales。
 - fused kernel 和 targets 不变。run39729912013 也包含旧 probe，修正后使用含 o_proj 的三 target 实验。
+
+## AMD Quark 参考的 Moonshot 扩展量化
+
+- AMD checkpoint 使用 `*self_attn*` per-channel FP8 权重和 dynamic FP8 inputs，排除卷积； fused reconstruction 的 GSM8K strict96.59% 通过。
+- 新增 Moonshot `fused_qkv_a_proj`（346.5MiB/GPU）和 `g_proj`（252MiB/GPU），保留其他三 target。
+- 额外原始权重节省598.5MiB/GPU，不含 scales/runtime overhead。
+- Moonshot online quantization 仍需独立验证，不等同于 AMD checkpoint。
+- 本轮 q_b_proj/f_b_proj 保持 BF16；排除卷积、router、lm_head、residual projections 和 shared experts。
+- run39731052931 保持不变，后面排队扩展精度实验。

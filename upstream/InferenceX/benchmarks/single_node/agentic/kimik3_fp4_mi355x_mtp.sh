@@ -238,7 +238,7 @@ VLLM_CMD=(
     --tensor-parallel-size "$TP"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
-    --quantization-config '{"targets":{"*in_proj_qkvgfab":"fp8_per_channel","*.self_attn.kv_b_proj":"fp8_per_channel","*.self_attn.o_proj":"fp8_per_channel"}}'
+    --quantization-config '{"targets":{"*in_proj_qkvgfab":"fp8_per_channel","*.self_attn.kv_b_proj":"fp8_per_channel","*.self_attn.o_proj":"fp8_per_channel","*.self_attn.fused_qkv_a_proj":"fp8_per_channel","*.self_attn.g_proj":"fp8_per_channel"}}'
     --max-num-seqs "$MAX_NUM_SEQS"
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
     --max-model-len "$SERVER_MAX_MODEL_LEN"
@@ -345,6 +345,8 @@ text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
 for marker, condition in [
     ('MOONSHOT-FUSED-QUANT-VERIFIED', 'fp8_kv_b_linears= 24'),
     ('MOONSHOT-O-PROJ-FP8', 'weight_dtype= torch.float8_e4m3fn'),
+    ('MOONSHOT-QKV-A-FP8', 'weight_dtype= torch.float8_e4m3fn'),
+    ('MOONSHOT-G-PROJ-FP8', 'weight_dtype= torch.float8_e4m3fn'),
     ('FP8-FUSED-KV-VERIFIED', 'weight_dtype= torch.float8_e4m3fn'),
     ('FP8-FUSED-KV-CONTEXT-EXECUTED', 'weight_dtype= torch.float8_e4m3fn'),
     ('NATIVE-KV-COLLECTIVE', 'dtype= torch.uint8'),

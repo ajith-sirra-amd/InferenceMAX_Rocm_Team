@@ -197,3 +197,12 @@ FP8 cache → FP8-byte gather
 - Run39729399329 failed after weight loading because the probe rejected native FP32 KDA conv1d weights. No serving or GSM8K result.
 - Allow unquantized BF16/FP32 conv1d; reject FP8 convolution and attached quantization scales.
 - Fused kernel and quantization targets unchanged. Run39729912013 also carries the old probe; corrected successor uses three targets including o_proj.
+
+## AMD Quark reference for broader Moonshot quantization
+
+- AMD checkpoint config uses `*self_attn*` FP8 per-channel weights and dynamic FP8 inputs, with explicit convolution exclusions; GSM8K strict96.59% passed with fused reconstruction.
+- Add Moonshot `fused_qkv_a_proj` (346.5MiB/GPU raw) and `g_proj` (252MiB/GPU raw), alongside in_proj_qkvgfab, kv_b_proj and o_proj.
+- Estimated additional savings beyond o_proj experiment:598.5MiB/GPU before scales/runtime overhead.
+- Reference reduces uncertainty; Moonshot online quantization is independently validated. This does not exactly reproduce the AMD checkpoint.
+- Keep q_b_proj and f_b_proj BF16 for this increment; exclude convolutions, router, lm_head, residual projections and shared experts.
+- Current run39731052931 continues unchanged; queue broader accuracy experiment behind it.
