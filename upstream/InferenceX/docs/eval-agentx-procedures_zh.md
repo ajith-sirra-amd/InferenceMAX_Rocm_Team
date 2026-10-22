@@ -352,3 +352,10 @@ gh run cancel <RUN_ID> --repo SemiAnalysisAI/InferenceX
 - 每个 backend/frontend 与 metrics source 都在实时证据中有所体现。
 - Fast/smoke 结果明确标为诊断用途；只有 canonical candidate 用于最终比较。
 - 在报告成功前，工作流与 artifact collection 均已得出 green 结论。
+
+
+## Kimi AMD BF16 reconstruction experiment
+
+在 `perf/kimi-attnfp8-kv-allgather-20261021` 分支，item2 smoke 仅在加载时将 AMD Quark per-channel FP8 `kv_b_proj` 转换为连续 BF16，时机在 Quark packing 之前。保留其他 checkpoint 量化和 FP8 KV cache。原生 context 路径传输 FP8 字节，融合 reorder、dequantization、reconstruction 和 K/V packing，随后运行 BF16 FMHA。禁用单独的 byte-gather adaptation。
+
+安装器拒绝意外 scale/layout，在全8个 GPU 预检精确 channel scaling 和真实原生 fused reconstruction。C48 TP8/DCP8 每 lane 预热1次，运行600秒；完成门禁要求全8个 GPU 的 BF16 conversion、native eligibility、uint8 transport 和 actual fused execution 证据。记录 throughput、KV pool 和 request errors 后再决定 full run。Synthetic DSpark throughput 不能证明 model accuracy，需单独运行 real-verification eval。BF16 weights 每转换层/GPU 约增加1.5MiB；实测 KV pool，不假定保持23M。

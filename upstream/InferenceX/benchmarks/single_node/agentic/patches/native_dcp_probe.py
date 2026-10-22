@@ -29,6 +29,18 @@ def patch_backend(source):
                   flush=True)
 """
     method = method.replace(anchor, probe + anchor)
+    executed_anchor = '            if output is None:\n'
+    if method.count(executed_anchor) != 1:
+        raise ValueError('Unexpected native fused execution layout')
+    executed = """            if row_indices.numel() and not getattr(self, '_native_fused_logged', False):
+                self._native_fused_logged = True
+                print('[NATIVE-DCP-FUSED-EXECUTED]', 'device=', str(q.device),
+                      'rows=', row_indices.numel(), 'gathered_dtype=', str(gathered.dtype),
+                      'k_dtype=', str(k.dtype), 'v_dtype=', str(v.dtype),
+                      'output_dtype=', str(attn_output.dtype),
+                      'weight_dtype=', str(weight.dtype), flush=True)
+"""
+    method = method.replace(executed_anchor, executed + executed_anchor)
     result = source[:start] + method + source[stop:]
     compile(result, '<native-dcp-probe>', 'exec')
     return result

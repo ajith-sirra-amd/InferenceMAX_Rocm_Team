@@ -354,3 +354,10 @@ Use `scancel` or process termination only with explicit approval and a concrete 
 - Every backend/frontend and metrics source is represented in live evidence.
 - Fast/smoke results are labeled diagnostic. Only the canonical candidate is used for final comparison.
 - Workflow and artifact collection conclude green before success is reported.
+
+
+## Kimi AMD BF16 reconstruction experiment
+
+On `perf/kimi-attnfp8-kv-allgather-20261021`, the item2 smoke converts only AMD Quark per-channel FP8 `kv_b_proj` to contiguous BF16 once during loading, before Quark packing. Other checkpoint quantization and FP8 KV cache remain enabled. Native context dispatch then gathers FP8 bytes and fuses reorder, dequantization, reconstruction and K/V packing, followed by BF16 FMHA. The separate byte-gather adaptation is disabled.
+
+The installer rejects unexpected scales/layouts and preflights exact channel scaling plus the real native fused reconstruction on all8 GPUs. C48 TP8/DCP8 uses one warmup request per lane and600seconds; the completion gate requires BF16 conversion, native eligibility, uint8 transport and actual fused execution on all8 GPUs. Record throughput, KV pool and request errors before deciding on a full run. Synthetic DSpark throughput does not establish model accuracy; run real-verification eval separately. BF16 weights add roughly1.5MiB per converted layer/GPU; measure the resulting pool rather than assuming23M is retained.

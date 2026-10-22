@@ -31,24 +31,10 @@ install_agentic_deps
 mkdir -p "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/native_dcp_probe.py"
-python3 - "$(dirname "$0")/patches/fp8_kv_allgather.py" <<'RAWGATHER'
-import pathlib, shutil, sys, py_compile
-import vllm
-site = pathlib.Path(vllm.__file__).parent
-helper = pathlib.Path(sys.argv[1]).read_text()
-namespace = {}
-exec(helper[helper.index('def patch(source):'):], namespace)
-path = site / 'model_executor/layers/attention/mla_attention.py'
-path.write_text(namespace['patch'](path.read_text()))
-shutil.copyfile(sys.argv[1], site / 'v1/attention/backends/mla/prefill/_fp8_kv_gather.py')
-py_compile.compile(str(path), doraise=True)
-from vllm.v1.attention.backends.mla.prefill import _fp8_kv_gather
-_fp8_kv_gather.validate_decode()
-print('[FP8-KV-ALLGATHER] installed native byte gather adaptation; quantized reconstruction retained')
-RAWGATHER
+python3 "$(dirname "$0")/patches/bf16_kv_b.py"
 
 
-export AIPERF_WARMUP_REQUESTS_PER_LANE=10
+export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm
@@ -350,10 +336,26 @@ else
         echo '[NATIVE-DCP-PROBE] missing native dispatch or collective evidence' >&2
         exit 1
     fi
-    if ! grep -q '\[FP8-KV-ALLGATHER-VERIFIED\]' "$SERVER_LOG"; then
-        echo '[FP8-KV-ALLGATHER] missing exact parity evidence' >&2
-        exit 1
-    fi
+    python3 - "$SERVER_LOG" <<'NATIVEGATE'
+import pathlib, re, sys
+text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
+for marker, condition in [
+    ('KV-B-BF16-CONVERTED', 'dtype= torch.bfloat16'),
+    ('NATIVE-DCP-ELIGIBILITY', 'eligible= True'),
+    ('NATIVE-KV-COLLECTIVE', 'dtype= torch.uint8'),
+    ('NATIVE-DCP-FUSED-EXECUTED', 'weight_dtype= torch.bfloat16'),
+]:
+    devices = {
+        int(match.group(1))
+        for line in text.splitlines()
+        if '[' + marker + ']' in line and condition in line
+        for match in [re.search(r'device= cuda:(\d+)', line)]
+        if match
+    }
+    if devices != set(range(8)):
+        raise SystemExit(f'[NATIVE-DCP-GATE] {marker}: expected all8 GPUs, got {sorted(devices)}')
+print('[NATIVE-DCP-GATE] BF16 conversion, eligibility, uint8 collective and fused execution verified on all8 GPUs')
+NATIVEGATE
     if ! grep -q '\[ATTNFP8-CONTEXT-INPUT\]' "$SERVER_LOG"; then
         echo "[ATTNFP8-SMOKE] no actual context input evidence" >&2
         exit 1
