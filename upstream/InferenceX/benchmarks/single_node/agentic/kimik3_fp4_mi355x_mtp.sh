@@ -26,6 +26,10 @@ fi
 
 rocm-smi || true
 # Diagnose communicator startup before model loading; no collective tracing in replay.
+# Single-node RCCL bootstrap must stay on loopback; eno1 self-connect timed out.
+export NCCL_SOCKET_IFNAME="=lo"
+export NCCL_SOCKET_FAMILY=AF_INET
+export NCCL_IB_DISABLE=1
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=INIT,NET,ENV
 mkdir -p "$RESULT_DIR"
