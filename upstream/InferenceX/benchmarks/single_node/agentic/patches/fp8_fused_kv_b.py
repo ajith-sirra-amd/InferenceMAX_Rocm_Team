@@ -9,13 +9,16 @@ from vllm.platforms import current_platform
 
 def projection_weight(layer, heads):
     scheme = getattr(layer, "scheme", None)
-    kernel = getattr(scheme, "fp8_linear", None)
+    method = getattr(layer, "quant_method", None)
+    online_ptpc = type(method).__name__ == "Fp8PtpcOnlineLinearMethod"
+    quark_ptpc = (type(scheme).__name__ == "QuarkW8A8Fp8"
+                  and getattr(scheme, "weight_qscheme", None) == "per_channel")
+    kernel = getattr(method if online_ptpc else scheme, "fp8_linear", None)
     name = type(kernel).__name__
     weight = getattr(layer, "weight", None)
     scale = getattr(layer, "weight_scale", None)
     dtype = current_platform.fp8_dtype()
-    if (type(scheme).__name__ != "QuarkW8A8Fp8"
-            or getattr(scheme, "weight_qscheme", None) != "per_channel"
+    if (not (online_ptpc or quark_ptpc)
             or weight is None or scale is None
             or weight.dtype != dtype or scale.numel() != heads * 256
             or getattr(layer, "bias", None) is not None):

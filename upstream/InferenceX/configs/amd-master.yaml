@@ -1890,7 +1890,7 @@ minimaxm3-fp4-mi355x-vllm-agentic-mtp:
 
 kimik3-fp4-mi355x-vllm-agentic-mtp:
   image: vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce
-  model: amd/Kimi-K3-Quark-MXFP4-AttnFP8
+  model: moonshotai/Kimi-K3
   model-prefix: kimik3
   runner: cluster:mi355x-amds-2
   precision: fp4

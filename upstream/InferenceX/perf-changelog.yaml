@@ -8695,3 +8695,9 @@
   description:
     - 'Use the repository-vendored fused kernel for both FP8 and BF16 numerical preflight and timing; remove dependence on installed AITER gather-wrapper feature availability. No serving behavior change.'
     - '数值预检和计时的 FP8/BF16 路径均使用本仓库固定 fused kernel，移除对容器 AITER gather wrapper 功能的依赖，不改变服务行为。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Use Moonshot Kimi-K3 only for subsequent experiments. Match the15476-token baseline online in_proj_qkvgfab target and add only per-channel FP8 kv_b_proj for the new fused reconstruction. Accept pinned Fp8PtpcOnlineLinearMethod layout/scales, verify postload inventory, retain BF16 other attention/FMHA, source-rank FP8 gather and accuracy-first checks. Keep replay warmup0 and let the already-running AMD run complete.'
+    - '后续实验仅使用 Moonshot Kimi-K3，保留 baseline 的 in_proj_qkvgfab online FP8 target，仅新增 per-channel FP8 kv_b_proj 以验证 fused reconstruction。支持 Fp8PtpcOnlineLinearMethod 布局和 scales，检查 postload inventory，保留其他 BF16 attention/FMHA、FP8 gather 和 accuracy-first checks。replay warmup0，让已运行 AMD run 完成。'

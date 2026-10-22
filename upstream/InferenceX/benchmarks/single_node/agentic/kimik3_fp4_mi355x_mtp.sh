@@ -32,6 +32,7 @@ mkdir -p "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/native_dcp_probe.py"
 python3 "$(dirname "$0")/patches/fp8_fused_kv_b.py"
+python3 "$(dirname "$0")/patches/moonshot_fused_quant_probe.py"
 python3 "$(dirname "$0")/patches/fp8_fused_reconstruction_probe.py" --output "$RESULT_DIR/fp8_fused_reconstruction_preflight.json"
 
 
@@ -237,6 +238,7 @@ VLLM_CMD=(
     --tensor-parallel-size "$TP"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
+    --quantization-config '{"targets":{"*in_proj_qkvgfab":"fp8_per_channel","*.self_attn.kv_b_proj":"fp8_per_channel"}}'
     --max-num-seqs "$MAX_NUM_SEQS"
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
     --max-model-len "$SERVER_MAX_MODEL_LEN"
@@ -341,6 +343,7 @@ python3 - "$SERVER_LOG" <<'FP8GATE'
 import pathlib, re, sys
 text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
 for marker, condition in [
+    ('MOONSHOT-FUSED-QUANT-VERIFIED', 'fp8_kv_b_linears= 24'),
     ('FP8-FUSED-KV-VERIFIED', 'weight_dtype= torch.float8_e4m3fn'),
     ('FP8-FUSED-KV-CONTEXT-EXECUTED', 'weight_dtype= torch.float8_e4m3fn'),
     ('NATIVE-KV-COLLECTIVE', 'dtype= torch.uint8'),

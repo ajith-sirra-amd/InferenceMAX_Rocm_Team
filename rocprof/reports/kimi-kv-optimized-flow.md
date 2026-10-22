@@ -173,3 +173,14 @@ FP8 cache → FP8-byte gather
 | Other warning | 280 hipBLASLt internal-error fallback warnings; causal link to empty replies unproven |
 
 - Empty response failures returned HTTP200; no server traceback observed. Investigate generation/streaming behavior with the accuracy gate.
+
+## Moonshot-only follow-up ? 2026-10-22
+
+- User-selected model: **moonshotai/Kimi-K3 only** for subsequent experiments.
+- Keep baseline target `*in_proj_qkvgfab: fp8_per_channel`.
+- Add **only** `*.self_attn.kv_b_proj: fp8_per_channel`; other attention weights remain BF16 and existing checkpoint expert quantization is retained.
+- Quantize kv_b weights once during loading. Cached latent is already FP8; fused context reconstruction introduces no additional activation quantization.
+- Loader probe requires24 FP8 kv_b linears per GPU and checks supported online PTPC weight layout/channel scales.
+- FP8 cache ? byte all-gather ? fused FP8-weight reconstruction ? BF16 K/V ? BF16 FMHA.
+- Accuracy-first validation; replay warmup per lane0. Pool and throughput improvement remain unproven.
+- Already dispatched AMD run39726650098 is allowed to finish; it is not the model selected for subsequent experiments.
