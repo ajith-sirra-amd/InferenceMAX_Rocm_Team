@@ -11,13 +11,17 @@ import pathlib
 
 import torch
 from aiter.ops.triton.gather_kv_b_proj import gather_kv_b_proj
+from aiter.ops.shuffle import shuffle_weight
+from fp8_fused_kv_kernel import launch
+from fp8_fused_kv_b import validate_outputs
+from vllm.platforms import current_platform
 
 
 @torch.no_grad()
 def check_and_measure(device, rows):
     torch.cuda.set_device(device)
     torch.manual_seed(42)
-    dtype = torch.float8_e4m3fn
+    dtype = current_platform.fp8_dtype()
     cache = (torch.randn((rows + 7, 576), device=device) * 0.5).to(dtype)
     raw_weight = (torch.randn((3072, 512), device=device) * 0.5).to(dtype)
     scale = torch.linspace(0.015625, 0.0625, 3072, device=device)
@@ -39,6 +43,13 @@ def check_and_measure(device, rows):
 
     fp8_call()
     bf16_call()
+    rank_scales = torch.tensor([0.5, 2.0], device=device)
+    split = (cache.shape[0] + 1) // 2
+    packed = shuffle_weight(raw_weight)
+    for shuffled, candidate in [(False, raw_weight), (True, packed)]:
+        launch(cache, rank_scales, indices, candidate, scale, k, v, shuffled, split)
+        validate_outputs(cache, rank_scales, indices, candidate, scale, shuffled, split, k, v)
+    fp8_call()
     # Independent explicit projection reference, including row permutation,
     # varying channel scales and the unprojected RoPE component.
     selected = cache.float().index_select(0, indices.long()) * cache_scale
@@ -71,16 +82,21 @@ def check_and_measure(device, rows):
         return start.elapsed_time(end) / 50
 
     fp8_ms, bf16_ms = timing(fp8_call), timing(bf16_call)
+    fused_ms = timing(lambda: launch(cache, rank_scales, indices, packed, scale, k, v, True, split))
+    fp8_call()
     error = torch.cat(((k.float()-ref_k).flatten(), (v.float()-ref_v).flatten()))
     reference = torch.cat((ref_k.flatten(), ref_v.flatten()))
     result = {
         "device": str(device), "rows": rows,
         "fp8_weight_fused_ms": fp8_ms, "bf16_weight_fused_ms": bf16_ms,
+        "integrated_preshuffled_rank_scaled_ms": fused_ms,
+        "bf16_over_integrated_speed_ratio": bf16_ms / fused_ms,
         "bf16_over_fp8_speed_ratio": bf16_ms / fp8_ms,
         "max_abs_error": error.abs().max().item(),
         "relative_rms_error": (error.square().mean().sqrt() /
                                reference.square().mean().sqrt()).item(),
-        "fp8_weight_layout": "contiguous_unshuffled_NK",
+        "fp8_weight_layout": "unshuffled_and_AITER_preshuffled_validated",
+        "unequal_rank_scales_validated": True,
         "output_dtype": str(k.dtype), "numerical_checks": "passed",
         "scope": "local_reconstruction_only_no_collective_no_fmha",
     }
@@ -93,6 +109,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
     results = []
+    if torch.cuda.device_count() != 8:
+        raise RuntimeError('Expected all8 GPUs for numerical preflight')
     for index in range(torch.cuda.device_count()):
         for rows in (33, 256, 2048):
             results.append(check_and_measure(torch.device(f"cuda:{index}"), rows))

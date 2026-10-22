@@ -31,10 +31,12 @@ install_agentic_deps
 mkdir -p "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/native_dcp_probe.py"
-python3 "$(dirname "$0")/patches/moonshot_quant_probe.py"
+python3 "$(dirname "$0")/patches/fp8_fused_kv_b.py"
+python3 "$(dirname "$0")/patches/fp8_fused_reconstruction_probe.py" --output "$RESULT_DIR/fp8_fused_reconstruction_preflight.json"
 
 
-export AIPERF_WARMUP_REQUESTS_PER_LANE=1
+export AIPERF_WARMUP_REQUESTS_PER_LANE=0
+export AIPERF_EXPERIMENTAL_FAST=0
 
 export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
 export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm
@@ -235,7 +237,6 @@ VLLM_CMD=(
     --tensor-parallel-size "$TP"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
-    --quantization-config '{"targets":{"*.self_attn.in_proj_qkvgfab":"fp8_per_channel","*.self_attn.f_b_proj":"fp8_per_channel","*.self_attn.g_a_proj":"fp8_per_channel","*.self_attn.g_b_proj":"fp8_per_channel","*.self_attn.o_proj":"fp8_per_channel","*.self_attn.fused_qkv_a_proj":"fp8_per_channel","*.self_attn.q_b_proj":"fp8_per_channel","*.self_attn.q_proj":"fp8_per_channel","*.self_attn.kv_a_proj_with_mqa":"fp8_per_channel","*.self_attn.g_proj":"fp8_per_channel"}}'
     --max-num-seqs "$MAX_NUM_SEQS"
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
     --max-model-len "$SERVER_MAX_MODEL_LEN"
@@ -314,6 +315,8 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 pin_workers_to_ccd || true
 
+python3 "$(dirname "$0")/patches/fp8_cached_context_check.py" "$PORT" "$MODEL" "$RESULT_DIR"
+
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     check_env_vars RUN_EVAL IS_AGENTIC
     export EVAL_FRAMEWORK=lm-eval
@@ -333,19 +336,16 @@ if [ "${EVAL_ONLY:-false}" = "true" ]; then
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
-    if ! grep -q '\[NATIVE-DCP-ELIGIBILITY\]' "$SERVER_LOG" || ! grep -q '\[NATIVE-KV-COLLECTIVE\]' "$SERVER_LOG"; then
-        echo '[NATIVE-DCP-PROBE] missing native dispatch or collective evidence' >&2
-        exit 1
-    fi
-    python3 - "$SERVER_LOG" <<'NATIVEGATE'
+fi
+python3 - "$SERVER_LOG" <<'FP8GATE'
 import pathlib, re, sys
 text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
 for marker, condition in [
-    ('MOONSHOT-KV-B-BF16', 'dtype= torch.bfloat16'),
-    ('MOONSHOT-QUANT-VERIFIED', 'bf16_kv_b_linears= 24'),
-    ('NATIVE-DCP-ELIGIBILITY', 'eligible= True'),
+    ('FP8-FUSED-KV-VERIFIED', 'weight_dtype= torch.float8_e4m3fn'),
+    ('FP8-FUSED-KV-CONTEXT-EXECUTED', 'weight_dtype= torch.float8_e4m3fn'),
     ('NATIVE-KV-COLLECTIVE', 'dtype= torch.uint8'),
-    ('NATIVE-DCP-FUSED-EXECUTED', 'weight_dtype= torch.bfloat16'),
+    ('NATIVE-DCP-FUSED-EXECUTED', 'weight_dtype= torch.float8_e4m3fn'),
+    ('ATTNFP8-CONTEXT-INPUT', 'torch.bfloat16'),
 ]:
     devices = {
         int(match.group(1))
@@ -355,11 +355,6 @@ for marker, condition in [
         if match
     }
     if devices != set(range(8)):
-        raise SystemExit(f'[NATIVE-DCP-GATE] {marker}: expected all8 GPUs, got {sorted(devices)}')
-print('[NATIVE-DCP-GATE] BF16 conversion, eligibility, uint8 collective and fused execution verified on all8 GPUs')
-NATIVEGATE
-    if ! grep -q '\[ATTNFP8-CONTEXT-INPUT\]' "$SERVER_LOG"; then
-        echo "[ATTNFP8-SMOKE] no actual context input evidence" >&2
-        exit 1
-    fi
-fi
+        raise SystemExit(f'[FP8-FUSED-GATE] {marker}: expected all8 GPUs, got {sorted(devices)}')
+print('[FP8-FUSED-GATE] FP8 weights/scales, uint8 transport, BF16 K/V and cached-context execution verified on all8 GPUs')
+FP8GATE

@@ -150,3 +150,26 @@ FP8 cache → FP8-byte gather
 - [Moonshot Kimi-K3 checkpoint](https://huggingface.co/moonshotai/Kimi-K3)
 - [Pinned native MLA backend](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/backends/mla/rocm_aiter_mla.py)
 - [Pinned gather/reconstruction](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py)
+
+## Implementation and validation status ? 2026-10-22
+
+- **Implemented in the perf branch; GPU validation pending.**
+- AMD model: existing FP8 kv_b weights + channel scales; no BF16 weight conversion.
+- Flow: FP8 cache ? uint8 all-gather ? fused row reorder / source-rank scales / FP8-weight projection / K/V packing ? BF16 K/V ? BF16 FMHA.
+- Pinned AITER flat kernel is vendored in this repository; installed image AITER remains unchanged. Supports AITER preshuffled weights with register unshuffle.
+- Validation: all8 GPU numerical preflight, unequal rank scales, reordered rows and masked tails; real decoded-checkpoint FP32 reference; long cached-prefix HTTP requests; full GSM8K with real DSpark verification.
+- Replay warmup per lane: **0**; fast override: **0**. Serving startup profiling and graph capture still run.
+- Fail the experiment if FP8 fused execution is missing, outputs violate numerical limits, or GSM8K regresses. A full throughput run needs separate successful validation.
+
+| Moonshot diagnostic39719727532 | Observed |
+| --- | --- |
+| Loader | Default loader reached serving |
+| KV pool | 22,534,301 tokens |
+| Profiling throughput | 11,641.85674 total tokens/s/GPU; 60.77441 output tokens/s/GPU; 600s smoke only |
+| Warmup errors | 85/99 records; empty streamed responses |
+| Profiling errors | 4/478 records =0.84%; empty streamed responses |
+| Native fusion / transport | BF16 kv_b fused reconstruction and FP8-byte gather verified on all8 |
+| Verdict | Not a clean smoke pass; no full-run promotion |
+| Other warning | 280 hipBLASLt internal-error fallback warnings; causal link to empty replies unproven |
+
+- Empty response failures returned HTTP200; no server traceback observed. Investigate generation/streaming behavior with the accuracy gate.
