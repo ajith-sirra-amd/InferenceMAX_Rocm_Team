@@ -36,6 +36,8 @@ mkdir -p "$RESULT_DIR"
 timeout --signal=TERM --kill-after=15s 180s \
     torchrun --standalone --nnodes=1 --nproc-per-node=8 \
     "$(dirname "$0")/patches/rccl_preflight.py" 2>&1 | tee "$RESULT_DIR/rccl_preflight.log"
+# Keep verbose diagnostics in preflight only; serving graph warnings flood logs.
+export NCCL_DEBUG=VERSION
 resolve_trace_source
 install_agentic_deps
 python3 "$(dirname "$0")/patches/rccl_startup_probe.py"
