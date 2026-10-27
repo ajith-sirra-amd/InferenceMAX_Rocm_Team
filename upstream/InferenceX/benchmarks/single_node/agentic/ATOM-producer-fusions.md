@@ -40,3 +40,8 @@
 | Performance | Throughput gain and 23M KV capacity remain unproven |
 
 - Run [40464699186](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40464699186) stopped before model loading: GPU0 passed 64 numerical cases and FP8 scaled-MM; the first nonempty GPU1 producer launch failed because the caller remained on GPU0. Producer launches now guard the input tensor device. Empty inputs no longer emit kernel-execution markers. The all-GPU preflight deliberately exercises tensors on GPUs different from the caller's current device.
+
+- Shared MLP gate_up_proj still requires a separate BF16-to-FP8 input conversion. The SiTU fusion removes the separate conversion before down_proj; quantized weights do not eliminate every conversion.
+- Run40465923893 passed 64 producer numerical/scaled-MM cases on each of all8 GPUs (512 cases). It stopped during checkpoint load after Docker SIGTERM followed by SIGKILL10seconds later; no container OOM event was recorded, and the stop caller is unknown.
+- The replacement launcher uses a container name unique to GitHub run/attempt/runner and cleanup targets that same name. Docker stop grace is90seconds. CPU validation executes the real launcher with a Docker stub before scheduling GPUs.
+- Failure and Docker-event logs are retained under results/atom-producer-fp8/. The status checker is utils/monitor_kimi_run.py; it polls GitHub every600seconds and reports status. The active Codex turn handles failures; the script does not launch a new Codex turn.

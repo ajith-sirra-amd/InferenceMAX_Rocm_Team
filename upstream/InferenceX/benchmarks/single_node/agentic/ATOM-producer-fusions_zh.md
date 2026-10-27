@@ -40,3 +40,8 @@
 | 性能 | 吞吐提升及 23M KV 容量尚未证实 |
 
 - [run40464699186](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40464699186) 在模型加载前停止：GPU0 通过64项数值及 FP8 scaled-MM 检查；caller 仍处于 GPU0，首个非空 GPU1 producer launch 失败。现使用输入 tensor 所在 device guard；空输入不再输出 kernel 已执行日志。全 GPU preflight 覆盖 tensor GPU 与 caller 当前 GPU 不同的情况。
+
+- shared MLP gate_up_proj 仍需要独立 BF16-to-FP8 输入转换。SiTU 融合去除 down_proj 前的独立转换；权重量化不等于消除所有转换。
+- run40465923893 全部8 GPU 各通过64项 producer 数值/scaled-MM 检查，共512项。加载 checkpoint 时 Docker 收到 SIGTERM，10秒后 SIGKILL；无 container OOM 事件，停止发起方未知。
+- 替代 launcher 使用 GitHub run/attempt/runner 唯一 container 名称，cleanup 只处理同一名称；Docker 停止宽限为90秒。GPU 调度前使用 Docker stub 执行真实 launcher 的 CPU 验证。
+- 失败及 Docker 事件日志保存在 results/atom-producer-fp8/。utils/monitor_kimi_run.py 每600秒查询 GitHub 状态，由活跃 Codex turn 处理失败；脚本本身不会启动新的 Codex turn。
