@@ -103,7 +103,7 @@ jobs:
           run: |
             date -u
             hostname
-            docker events --since "2026-10-27T07:14:00Z" --until "2026-10-27T07:24:00Z" --filter type=container --filter container=bmk-server --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'
+            docker events --since "2026-10-27T07:41:00Z" --until "2026-10-27T07:47:00Z" --filter type=container --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'
             docker ps --format '{{.Names}} {{.Status}}'
             docker info --format 'Memory={{.MemTotal}} CgroupDriver={{.CgroupDriver}} CgroupVersion={{.CgroupVersion}}'
             cat /proc/meminfo
@@ -114,7 +114,7 @@ jobs:
                 cat "$task_path"
               fi
             done
-            journalctl -k --since "2026-10-27 07:14:00 UTC" --until "2026-10-27 07:24:00 UTC" --no-pager 2>&1 | grep -Ei 'oom|killed process|out of memory|permission|journal files' || true
+            journalctl -k --since "2026-10-27 07:41:00 UTC" --until "2026-10-27 07:47:00 UTC" --no-pager 2>&1 | grep -Ei 'oom|killed process|out of memory|permission|journal files' || true
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest
