@@ -261,6 +261,9 @@ jobs:
           path: |
             results/server.log
             results/attnfp8_checkpoint_config.json
+            results/atom_quant_preflight.log
+            results/rccl_preflight.log
+            results/fp8_fused_reconstruction_preflight.json
             results/lmcache_server.log
             results/benchmark.log
             results/config.yaml

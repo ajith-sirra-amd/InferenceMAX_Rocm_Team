@@ -38,3 +38,5 @@
 | benchmark | 每 lane warmup 10；测量 3600 秒；关闭 fast mode；自动 weight loader |
 | 精度 | 用户未要求本实验运行 GSM8K；kernel 检查不能证明模型精度 |
 | 性能 | 吞吐提升及 23M KV 容量尚未证实 |
+
+- [run40464699186](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40464699186) 在模型加载前停止：GPU0 通过64项数值及 FP8 scaled-MM 检查；caller 仍处于 GPU0，首个非空 GPU1 producer launch 失败。现使用输入 tensor 所在 device guard；空输入不再输出 kernel 已执行日志。全 GPU preflight 覆盖 tensor GPU 与 caller 当前 GPU 不同的情况。

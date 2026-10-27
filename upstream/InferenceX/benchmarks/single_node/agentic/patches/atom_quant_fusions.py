@@ -61,14 +61,17 @@ def producer_quant(x: torch.Tensor, gate: torch.Tensor, mode: int,
     output = torch.empty((x.shape[0], width), dtype=dtype, device=x.device)
     scales = torch.empty((x.shape[0], 1), dtype=torch.float32, device=x.device)
     if x.shape[0]:
-        _producer_quant[(x.shape[0],)](
-            x, gate, output, scales, width, x.stride(0), x.stride(1),
-            gate.stride(0), gate.stride(1), mode, beta, linear_beta,
-            float(torch.finfo(dtype).max), triton.next_power_of_2(width),
-            num_warps=4 if width <= 2048 else 8, enable_fp_fusion=False,
-        )
+        # Triton resolves the launch stream on the current device. A caller may
+        # hold tensors on another GPU (the all-GPU preflight does exactly that).
+        with torch.cuda.device(x.device):
+            _producer_quant[(x.shape[0],)](
+                x, gate, output, scales, width, x.stride(0), x.stride(1),
+                gate.stride(0), gate.stride(1), mode, beta, linear_beta,
+                float(torch.finfo(dtype).max), triton.next_power_of_2(width),
+                num_warps=4 if width <= 2048 else 8, enable_fp_fusion=False,
+            )
     key = (mode, str(x.device))
-    if key not in _seen:
+    if x.shape[0] and key not in _seen:
         _seen.add(key)
         print("[ATOM-QUANT-FUSION-EXECUTED]", "device=", str(x.device),
               "mode=", mode, "input_dtype=", str(x.dtype),
@@ -135,6 +138,8 @@ def preflight():
     for device in range(8):
         torch.manual_seed(17)
         dev = f"cuda:{device}"
+        print("[ATOM-PREFLIGHT-DEVICE]", "tensor_device=", dev,
+              "caller_current_device=", torch.cuda.current_device(), flush=True)
         cases = 0
         for rows in (0, 1, 33, 256):
             for mode, width in ((0, 128), (1, 1536), (2, 768), (2, 4224)):

@@ -38,3 +38,5 @@
 | Benchmark | Warmup 10 requests/lane; measured duration 3600 seconds; fast mode disabled; automatic weight loader |
 | Accuracy | No GSM8K run requested for this experiment; kernel checks do not establish model accuracy |
 | Performance | Throughput gain and 23M KV capacity remain unproven |
+
+- Run [40464699186](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40464699186) stopped before model loading: GPU0 passed 64 numerical cases and FP8 scaled-MM; the first nonempty GPU1 producer launch failed because the caller remained on GPU0. Producer launches now guard the input tensor device. Empty inputs no longer emit kernel-execution markers. The all-GPU preflight deliberately exercises tensors on GPUs different from the caller's current device.
