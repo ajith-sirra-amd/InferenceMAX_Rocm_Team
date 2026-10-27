@@ -11,7 +11,7 @@ import time
 def github_json(repo, path):
     result = subprocess.run(
         ["gh", "api", f"repos/{repo}/{path}"],
-        capture_output=True, text=True, timeout=60, check=True,
+        capture_output=True, text=True, encoding="utf-8", timeout=60, check=True,
     )
     return json.loads(result.stdout)
 
