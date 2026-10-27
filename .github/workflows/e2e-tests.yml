@@ -104,51 +104,27 @@ jobs:
             date -u
             hostname
             docker events --since "2026-10-27T07:51:00Z" --until "2026-10-27T07:57:00Z" --filter type=container --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'
-            ps -eo pid,ppid,comm,etimes | awk 'NR == 1 || $2 != 2'
-            systemctl list-timers --all --no-pager 2>&1 || true
-            systemctl --user list-timers --all --no-pager 2>&1 || true
             python3 - <<'PY'
-            import subprocess
-            result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
-            import pathlib, shlex
-            for file in [pathlib.Path("/etc/crontab"), *pathlib.Path("/etc/cron.d").glob("*")]:
+            import pathlib, re
+            for name in ["/etc/docker/spur-authz.py", "/var/spool/spur/job10316/spur_job.sh"]:
+                path = pathlib.Path(name)
+                print("READ_SOURCE", name)
                 try:
-                    text = file.read_text()
-                except (OSError, UnicodeError):
+                    lines = path.read_text().splitlines()
+                except OSError as error:
+                    print(type(error).__name__)
                     continue
-                for line in text.splitlines():
-                    if not line.strip() or line.lstrip().startswith("#") or "=" in line.split()[0]:
-                        continue
-                    fields = line.split()
-                    if len(fields) > 6:
-                        print("system_cron", str(file), "schedule", " ".join(fields[:5]), "user", fields[5], "command", fields[6])
-            for process in pathlib.Path("/proc").glob("[0-9]*"):
-                try:
-                    comm = (process / "comm").read_text().strip()
-                    if comm not in ["bash", "python3", "sleep", "sh"]:
-                        continue
-                    args = (process / "cmdline").read_bytes().decode(errors="replace").split(chr(0))
-                    scripts = [arg for arg in args[1:] if arg.endswith((".sh", ".py")) and " " not in arg]
-                    print("process_identity", process.name, comm, "scripts", scripts, "mentions_docker", any("docker" in arg for arg in args))
-                except OSError:
-                    continue
-            print("user_crontab_status", result.returncode)
-            for line in result.stdout.splitlines():
-                if line.strip() and not line.lstrip().startswith("#"):
-                    fields = line.split()
-                    print("cron_schedule", " ".join(fields[:5]), "mentions_docker", "docker" in line.lower(), "mentions_cleanup", any(x in line.lower() for x in ["cleanup", "monitor", "watchdog"]))
+                selected = set()
+                for i, line in enumerate(lines):
+                    if any(key in line.lower() for key in ["docker", "label", "stop", "kill", "timeout", "600", "job_id", "jobid", "allocation", "expiry", "expire", "deadline", "duration"]):
+                        selected.update(range(max(0, i-3), min(len(lines), i+5)))
+                for i in sorted(selected):
+                    line = lines[i]
+                    if re.search(r"(token|password|secret|credential|authorization)", line, re.I):
+                        print(i+1, "[sensitive line omitted]")
+                    else:
+                        print(i+1, line)
             PY
-            docker ps --format '{{.Names}} {{.Status}}'
-            docker info --format 'Memory={{.MemTotal}} CgroupDriver={{.CgroupDriver}} CgroupVersion={{.CgroupVersion}}'
-            cat /proc/meminfo
-            cat /proc/self/cgroup
-            for task_path in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.events; do
-              if [ -r "$task_path" ]; then
-                echo "$task_path"
-                cat "$task_path"
-              fi
-            done
-            journalctl -k --since "2026-10-27 07:51:00 UTC" --until "2026-10-27 07:57:00 UTC" --no-pager 2>&1 | grep -Ei 'oom|killed process|out of memory|permission|journal files' || true
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest
