@@ -104,19 +104,32 @@ jobs:
             date -u
             hostname
             python3 - <<'PY'
-            import subprocess, re
-            commands = [
-                ["sudo", "-n", "crontab", "-l"],
-                ["sudo", "-n", "journalctl", "-u", "docker", "-u", "cron", "-u", "spurd", "--since", "2026-10-27 07:40:00 UTC", "--until", "2026-10-27 08:14:00 UTC", "--no-pager"],
-            ]
-            for command in commands:
-                result = subprocess.run(command, capture_output=True, text=True, timeout=30)
-                print("READ_COMMAND", command[2:4], "status", result.returncode)
+            import pathlib, subprocess, re, shutil
+            for binary in ["spur", "spurd"]:
+                executable = shutil.which(binary)
+                print("EXECUTABLE", binary, executable)
+                if not executable:
+                    continue
+                result = subprocess.run([executable, "--help"], capture_output=True, text=True, timeout=20)
                 for line in (result.stdout + result.stderr).splitlines():
-                    if re.search(r"(token|password|secret|credential|authorization)", line, re.I):
-                        print("[sensitive line omitted]")
-                    elif command[2] == "crontab" or re.search(r"(stop|kill|docker|10316|cron|not allowed|denied)", line, re.I):
+                    if not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
                         print(line)
+                try:
+                    lines = pathlib.Path(executable).read_text().splitlines()
+                except (OSError, UnicodeError):
+                    continue
+                selected = set()
+                for i, line in enumerate(lines):
+                    if any(key in line.lower() for key in ["container", "docker", "label", "cleanup"]):
+                        selected.update(range(max(0, i-2), min(len(lines), i+4)))
+                for i in sorted(selected):
+                    if not re.search(r"(token|password|secret|credential|authorization)", lines[i], re.I):
+                        print("SOURCE", i+1, lines[i])
+            result = subprocess.run(["systemctl", "cat", "spurd"], capture_output=True, text=True, timeout=20)
+            print("SPUR_SERVICE_STATUS", result.returncode)
+            for line in (result.stdout + result.stderr).splitlines():
+                if not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
+                    print(line)
             PY
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
