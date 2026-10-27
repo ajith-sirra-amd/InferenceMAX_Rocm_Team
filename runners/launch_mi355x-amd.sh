@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+source "$GITHUB_WORKSPACE/upstream/InferenceX/benchmarks/benchmark_lib.sh" --validation-only
+check_env_vars BMK_CONTAINER_NAME
+server_name="$BMK_CONTAINER_NAME"
+
 if [[ $RUNNER_NAME == *mi355x* ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/models"
 elif [[ $RUNNER_NAME == *gbt* ]]; then
@@ -144,10 +148,10 @@ elif [[ $FRAMEWORK == "atom" ]]; then
 fi
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
 
-server_name="bmk-server"
+echo "[container] isolated name=$server_name"
 
 # Cleanup: force-remove any stale server container.
-docker rm -f $server_name 2>/dev/null || true
+docker rm -f "$server_name" 2>/dev/null || true
 for _ in $(seq 1 30); do
     docker ps -aq -f "name=^${server_name}$" | grep -q . || break
     sleep 1
@@ -194,7 +198,7 @@ export MODEL_PATH="${HF_HUB_CACHE%/}/${MODEL_NAME}"
 
 export PYTHONDONTWRITEBYTECODE=1
 
-docker run --rm --init --network host --shm-size=512g --name=$server_name \
+docker run --rm --init --network host --shm-size=512g --name="$server_name" --stop-timeout=90 \
 --ipc=host \
 --ulimit memlock=-1 --ulimit stack=67108864 --pull ${PULL_POLICY:-always} \
 --device=/dev/kfd --device=/dev/dri --group-add "$(getent group video | cut -d: -f3)" --group-add "$(getent group render | cut -d: -f3)" \
@@ -256,6 +260,6 @@ if ls gpucore.* 1> /dev/null 2>&1; then
 fi
 
 # Cleanup: stop server container
-docker stop $server_name 2>/dev/null || true
-docker rm $server_name 2>/dev/null || true
+docker stop "$server_name" 2>/dev/null || true
+docker rm "$server_name" 2>/dev/null || true
 exit "$benchmark_rc"

@@ -1,0 +1,100 @@
+ï»¿2026-10-27T07:33:38.5207607Z Current runner version: '2.338.0'
+2026-10-27T07:33:38.5325773Z Runner name: 'mi355x-amd_pit2_p03_g07'
+2026-10-27T07:33:38.5326203Z Runner group name: 'Default'
+2026-10-27T07:33:38.5326666Z Machine name: 'pit2-p03-g09'
+2026-10-27T07:33:38.5328199Z ##[group]GITHUB_TOKEN Permissions
+2026-10-27T07:33:38.5329448Z Contents: read
+2026-10-27T07:33:38.5329717Z Metadata: read
+2026-10-27T07:33:38.5330010Z Packages: read
+2026-10-27T07:33:38.5330274Z ##[endgroup]
+2026-10-27T07:33:38.5331451Z Secret source: Actions
+2026-10-27T07:33:38.5331922Z Cache mode: write
+2026-10-27T07:33:38.5332306Z Prepare workflow directory
+2026-10-27T07:33:38.7274601Z Prepare all required actions
+2026-10-27T07:33:38.7344315Z Complete job name: inspect-runner
+2026-10-27T07:33:38.9992029Z ##[group]Run date -u
+2026-10-27T07:33:38.9992415Z [36;1mdate -u[0m
+2026-10-27T07:33:38.9992643Z [36;1mhostname[0m
+2026-10-27T07:33:38.9993541Z [36;1mdocker events --since "2026-10-27T07:14:00Z" --until "2026-10-27T07:24:00Z" --filter type=container --filter container=bmk-server --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'[0m
+2026-10-27T07:33:38.9994526Z [36;1mdocker ps --format '{{.Names}} {{.Status}}'[0m
+2026-10-27T07:33:38.9995015Z [36;1mdocker info --format 'Memory={{.MemTotal}} CgroupDriver={{.CgroupDriver}} CgroupVersion={{.CgroupVersion}}'[0m
+2026-10-27T07:33:38.9995477Z [36;1mcat /proc/meminfo[0m
+2026-10-27T07:33:38.9995725Z [36;1mcat /proc/self/cgroup[0m
+2026-10-27T07:33:38.9996085Z [36;1mfor task_path in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.events; do[0m
+2026-10-27T07:33:38.9996477Z [36;1m  if [ -r "$task_path" ]; then[0m
+2026-10-27T07:33:38.9996772Z [36;1m    echo "$task_path"[0m
+2026-10-27T07:33:38.9997036Z [36;1m    cat "$task_path"[0m
+2026-10-27T07:33:38.9997283Z [36;1m  fi[0m
+2026-10-27T07:33:38.9997495Z [36;1mdone[0m
+2026-10-27T07:33:38.9998044Z [36;1mjournalctl -k --since "2026-10-27 07:14:00 UTC" --until "2026-10-27 07:24:00 UTC" --no-pager 2>&1 | grep -Ei 'oom|killed process|out of memory|permission|journal files' || true[0m
+2026-10-27T07:33:39.0038401Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-27T07:33:39.0038825Z ##[endgroup]
+2026-10-27T07:33:39.0232684Z Tue Oct 27 07:33:39 UTC 2026
+2026-10-27T07:33:39.0234323Z pit2-p03-g09
+2026-10-27T07:33:39.0353128Z 1793085366 create signal= exitCode= name=bmk-server
+2026-10-27T07:33:39.0353511Z 1793085366 attach signal= exitCode= name=bmk-server
+2026-10-27T07:33:39.0353843Z 1793085366 start signal= exitCode= name=bmk-server
+2026-10-27T07:33:39.0354163Z 1793085603 kill signal=15 exitCode= name=bmk-server
+2026-10-27T07:33:39.0354516Z 1793085613 kill signal=9 exitCode= name=bmk-server
+2026-10-27T07:33:39.0354839Z 1793085613 stop signal= exitCode= name=bmk-server
+2026-10-27T07:33:39.0355156Z 1793085613 die signal= exitCode=137 name=bmk-server
+2026-10-27T07:33:39.0355474Z 1793085616 destroy signal= exitCode= name=bmk-server
+2026-10-27T07:33:39.0919289Z Memory=3246161969152 CgroupDriver=systemd CgroupVersion=2
+2026-10-27T07:33:39.0942913Z MemTotal:       3170080048 kB
+2026-10-27T07:33:39.0943196Z MemFree:        66916644 kB
+2026-10-27T07:33:39.0943505Z MemAvailable:   2985375504 kB
+2026-10-27T07:33:39.0943750Z Buffers:               8 kB
+2026-10-27T07:33:39.0943988Z Cached:         2821904408 kB
+2026-10-27T07:33:39.0944249Z SwapCached:        49048 kB
+2026-10-27T07:33:39.0944489Z Active:         345586360 kB
+2026-10-27T07:33:39.0944726Z Inactive:       2477361100 kB
+2026-10-27T07:33:39.0944971Z Active(anon):    1124660 kB
+2026-10-27T07:33:39.0945208Z Inactive(anon):   620248 kB
+2026-10-27T07:33:39.0945447Z Active(file):   344461700 kB
+2026-10-27T07:33:39.0945708Z Inactive(file): 2476740852 kB
+2026-10-27T07:33:39.0945956Z Unevictable:       30860 kB
+2026-10-27T07:33:39.0946189Z Mlocked:           27788 kB
+2026-10-27T07:33:39.0946425Z SwapTotal:      1873043452 kB
+2026-10-27T07:33:39.0946667Z SwapFree:       1872104956 kB
+2026-10-27T07:33:39.0947146Z Zswap:                 0 kB
+2026-10-27T07:33:39.0947383Z Zswapped:              0 kB
+2026-10-27T07:33:39.1037119Z Dirty:                68 kB
+2026-10-27T07:33:39.1037461Z Writeback:             0 kB
+2026-10-27T07:33:39.1037781Z AnonPages:       1067204 kB
+2026-10-27T07:33:39.1038379Z Mapped:          1462156 kB
+2026-10-27T07:33:39.1038635Z Shmem:            692940 kB
+2026-10-27T07:33:39.1038884Z KReclaimable:   117058860 kB
+2026-10-27T07:33:39.1039154Z Slab:           177499948 kB
+2026-10-27T07:33:39.1039410Z SReclaimable:   117058860 kB
+2026-10-27T07:33:39.1039664Z SUnreclaim:     60441088 kB
+2026-10-27T07:33:39.1039908Z KernelStack:       63296 kB
+2026-10-27T07:33:39.1040148Z PageTables:        38052 kB
+2026-10-27T07:33:39.1040653Z SecPageTables:         0 kB
+2026-10-27T07:33:39.1040893Z NFS_Unstable:          0 kB
+2026-10-27T07:33:39.1041135Z Bounce:                0 kB
+2026-10-27T07:33:39.1041382Z WritebackTmp:          0 kB
+2026-10-27T07:33:39.1041635Z CommitLimit:    3458083476 kB
+2026-10-27T07:33:39.1041895Z Committed_AS:   12885148 kB
+2026-10-27T07:33:39.1042147Z VmallocTotal:   13743895347199 kB
+2026-10-27T07:33:39.1042407Z VmallocUsed:    15080796 kB
+2026-10-27T07:33:39.1042656Z VmallocChunk:          0 kB
+2026-10-27T07:33:39.1042931Z Percpu:          1431040 kB
+2026-10-27T07:33:39.1043183Z HardwareCorrupted:     0 kB
+2026-10-27T07:33:39.1043430Z AnonHugePages:     98304 kB
+2026-10-27T07:33:39.1043676Z ShmemHugePages:        0 kB
+2026-10-27T07:33:39.1043918Z ShmemPmdMapped:        0 kB
+2026-10-27T07:33:39.1044162Z FileHugePages:  18771968 kB
+2026-10-27T07:33:39.1044395Z FilePmdMapped:         0 kB
+2026-10-27T07:33:39.1044627Z Unaccepted:            0 kB
+2026-10-27T07:33:39.1044857Z HugePages_Total:       0
+2026-10-27T07:33:39.1045092Z HugePages_Free:        0
+2026-10-27T07:33:39.1045317Z HugePages_Rsvd:        0
+2026-10-27T07:33:39.1045547Z HugePages_Surp:        0
+2026-10-27T07:33:39.1045781Z Hugepagesize:       2048 kB
+2026-10-27T07:33:39.1046018Z Hugetlb:               0 kB
+2026-10-27T07:33:39.1046252Z DirectMap4k:    44838056 kB
+2026-10-27T07:33:39.1046487Z DirectMap2M:    2756505600 kB
+2026-10-27T07:33:39.1046724Z DirectMap1G:    1493172224 kB
+2026-10-27T07:33:39.1053398Z 0::/user.slice/user-300143.slice/session-114758.scope
+2026-10-27T07:33:39.1053777Z No journal files were opened due to insufficient permissions.
+2026-10-27T07:33:39.1617226Z Cleaning up orphan processes

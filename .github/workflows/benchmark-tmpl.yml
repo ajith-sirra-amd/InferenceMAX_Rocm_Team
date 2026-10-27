@@ -164,8 +164,9 @@ jobs:
 
           # Remove only a stale benchmark mounted to this repository workspace.
           if [[ "${{ runner.name }}" == mi355x-amd_* ]]; then
-            if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' bmk-server 2>/dev/null | grep -Fxq "$GITHUB_WORKSPACE"; then
-              docker rm -f bmk-server
+            task_container_name="bmk-server-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-${{ runner.name }}"
+            if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "$task_container_name" 2>/dev/null | grep -Fxq "$GITHUB_WORKSPACE"; then
+              docker rm -f "$task_container_name"
             fi
           fi
 
@@ -196,6 +197,7 @@ jobs:
       - name: Launch job script
         env:
           RUNNER_NAME: ${{ runner.name }}
+          BMK_CONTAINER_NAME: bmk-server-${{ github.run_id }}-${{ github.run_attempt }}-${{ runner.name }}
           RUNNER_TYPE: ${{ inputs.runner }}
           # Hash uniquely on {EXP_NAME}_{PRECISION}_{FRAMEWORK}_tp{}-ep{}-dpa{}_disagg-{}_spec-{}_conc{}_{runner}
           RESULT_FILENAME: ${{ env.EXP_NAME }}_${{ env.PRECISION }}_${{ env.FRAMEWORK }}_tp${{ env.TP }}-ep${{ env.EP_SIZE }}-dpa${{ env.DP_ATTENTION }}_disagg-${{ env.DISAGG }}_spec-${{ env.SPEC_DECODING }}_conc${{ env.CONC }}_${{ runner.name }}

@@ -8779,3 +8779,9 @@
   description:
     - 'Fix Triton producer launch device selection after run40464699186 passed all64 numerical cases and FP8 scaled-MM on GPU0 but failed first nonempty GPU1 launch with an inaccessible-pointer error. Guard each launch with the input tensor device; do not log empty tensors as executed kernels. Preserve eight-GPU numerical gate and full Moonshot TP8 DCP8 C48 benchmark with warmup10, duration3600, no GSM8K. Retain preflight logs in artifacts.'
     - 'run40464699186 在 GPU0 通过64项数值及 FP8 scaled-MM 检查，但首个非空 GPU1 launch 报 pointer 无法访问。修复 Triton launch 的当前 GPU 选择，使用输入 tensor 所在 device guard；空输入不再记录为已执行 kernel。保留八 GPU 检查及 Moonshot TP8 DCP8 C48 完整 benchmark，warmup10、3600秒、不运行 GSM8K；artifact 保留 preflight 日志。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Isolate MI355X benchmark container names by GitHub run, attempt and runner after run40465923893 passed all8 numerical/scaled-MM and RCCL checks but Docker received SIGTERM then SIGKILL10seconds later during checkpoint load. No container OOM event; external stop caller unknown. Workflow supplies and launcher validates BMK_CONTAINER_NAME; cleanup targets only this run and uses90second Docker stop grace. Preserve Moonshot quantization, BF16 FMHA, warmup10, duration3600 and no GSM8K.'
+    - '根据 Docker 事件修复 MI355X benchmark container 命名隔离，run40465923893 八 GPU 数值及 RCCL 检查均通过，但加载时收到 SIGTERM，10秒后 SIGKILL。无 container OOM 事件，停止发起方未知。使用 GitHub run/attempt/runner 唯一名称，workflow 提供 BMK_CONTAINER_NAME 并由 launcher 验证；cleanup 只处理本 run，Docker 停止宽限为90秒。保持 Moonshot 量化、BF16 FMHA、warmup10、3600秒及不运行 GSM8K。'
