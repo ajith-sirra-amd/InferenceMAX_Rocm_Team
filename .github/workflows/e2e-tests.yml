@@ -105,6 +105,18 @@ jobs:
               with:
                 ref: ${{ github.sha }}
 
+            - name: Validate Kimi producer patch syntax before GPU scheduling
+              run: |
+                  bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+                  python3 - <<'PY'
+                  import pathlib
+                  root = pathlib.Path("upstream/InferenceX/benchmarks/single_node/agentic/patches")
+                  for name in ("atom_quant_fusions.py", "atom_quant_fusions_patch.py", "atom_quant_fusions_probe.py", "moonshot_fused_quant_probe.py"):
+                      path = root / name
+                      compile(path.read_text(), str(path), "exec")
+                  print("Kimi producer patch syntax validated before GPU scheduling")
+                  PY
+
             - id: get-jobs
               run: |
                   pip install pydantic

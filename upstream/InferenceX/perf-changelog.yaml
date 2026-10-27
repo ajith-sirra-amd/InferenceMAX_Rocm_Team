@@ -8767,3 +8767,9 @@
   description:
     - 'Queue Moonshot GSM8K accuracy with AMD checkpoint attention-layer coverage: online per-channel FP8 attention linear weights, retaining FP32/BF16 q/k/v convolution exclusions and existing MXFP4 experts. Restore eleven explicit live/fused/alias target patterns and require postload verification of every attention LinearBase, rejecting unexpected untargeted linears. Retain fused FP8 kv_b reconstruction, uint8 all-gather and BF16 FMHA. Online dynamic per-token activation scaling differs from Quark; do not claim identical quantized values. Preserve AMD full run39799457716 pinned at858b66b.'
     - '? AMD checkpoint ???????? Moonshot ?? GSM8K ??????????????????? FP8??? q/k/v ??? FP32/BF16 ?????? MXFP4 experts??????????????????????? LinearBase?????????????? FP8 kv_b ???uint8 all-gather ? BF16 FMHA???? token ????????? Quark?????????????????858b66b? AMD ??????39799457716?'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Adapt ATOM-inspired strided, sigmoid-multiply and SiTU producer FP8 quantization to pinned Moonshot Kimi vLLM. Add per-channel FP8 dense/shared MLP weights (about1.50GiB/GPU raw savings atTP8); require compatible prequantized consumers, eight-GPU numerical/scaled-MM preflight and all8 runtime markers. Retain fused FP8-weight KV reconstruction, uint8 latent all-gather and BF16 FMHA. Run full3600seconds with warmup10 and no GSM8K at user request; throughput, capacity and model accuracy remain unproven. Validate Linux syntax before GPU scheduling.'
+    - '在固定 Moonshot Kimi vLLM 中适配参考 ATOM 的非连续输入、sigmoid 乘法和 SiTU producer FP8 融合。新增 dense/shared MLP 逐通道 FP8 权重，TP8 原始权重预计节省约1.50GiB/GPU；要求兼容的预量化 consumer、八 GPU 数值及 scaled-MM 检查和全 GPU 运行日志。保留 FP8 权重 KV 重建、uint8 latent all-gather 与 BF16 FMHA。按用户要求 warmup10、完整测量3600秒，不运行 GSM8K；吞吐、容量和模型精度尚未证实。GPU 调度前检查 Linux 语法。'

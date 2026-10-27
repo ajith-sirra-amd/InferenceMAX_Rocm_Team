@@ -6,6 +6,10 @@ wait_for_amd_gpu_clean
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 check_env_vars DCP_SIZE EVAL_ONLY
+if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
+    echo "[ATOM-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
+    exit 1
+fi
 
 DP_SIZE=1
 export DP_SIZE
@@ -46,7 +50,10 @@ mkdir -p "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
 python3 "$(dirname "$0")/patches/native_dcp_probe.py"
 python3 "$(dirname "$0")/patches/fp8_fused_kv_b.py"
+python3 "$(dirname "$0")/patches/atom_quant_fusions_patch.py"
 python3 "$(dirname "$0")/patches/moonshot_fused_quant_probe.py"
+timeout --signal=TERM --kill-after=15s 600s \
+    python3 "$(dirname "$0")/patches/atom_quant_fusions.py" 2>&1 | tee "$RESULT_DIR/atom_quant_preflight.log"
 python3 "$(dirname "$0")/patches/fp8_fused_reconstruction_probe.py" --output "$RESULT_DIR/fp8_fused_reconstruction_preflight.json"
 
 
@@ -252,7 +259,7 @@ VLLM_CMD=(
     --tensor-parallel-size "$TP"
     --gpu-memory-utilization "$GPU_MEM_UTIL"
     --language-model-only
-    --quantization-config '{"targets":{"*in_proj_qkvgfab":"fp8_per_channel","*.self_attn.kv_b_proj":"fp8_per_channel","*.self_attn.o_proj":"fp8_per_channel","*.self_attn.fused_qkv_a_proj":"fp8_per_channel","*.self_attn.g_proj":"fp8_per_channel","*.self_attn.f_b_proj":"fp8_per_channel","*.self_attn.g_a_proj":"fp8_per_channel","*.self_attn.g_b_proj":"fp8_per_channel","*.self_attn.q_b_proj":"fp8_per_channel","*.self_attn.q_proj":"fp8_per_channel","*.self_attn.kv_a_proj_with_mqa":"fp8_per_channel"}}'
+    --quantization-config '{"targets":{"*in_proj_qkvgfab":"fp8_per_channel","*.self_attn.kv_b_proj":"fp8_per_channel","*.self_attn.o_proj":"fp8_per_channel","*.self_attn.fused_qkv_a_proj":"fp8_per_channel","*.self_attn.g_proj":"fp8_per_channel","*.self_attn.f_b_proj":"fp8_per_channel","*.self_attn.g_a_proj":"fp8_per_channel","*.self_attn.g_b_proj":"fp8_per_channel","*.self_attn.q_b_proj":"fp8_per_channel","*.self_attn.q_proj":"fp8_per_channel","*.self_attn.kv_a_proj_with_mqa":"fp8_per_channel","*.block_sparse_moe.shared_experts.gate_up_proj":"fp8_per_channel","*.block_sparse_moe.shared_experts.down_proj":"fp8_per_channel","language_model.model.layers.0.mlp.gate_up_proj":"fp8_per_channel","language_model.model.layers.0.mlp.down_proj":"fp8_per_channel"}}'
     --max-num-seqs "$MAX_NUM_SEQS"
     --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
     --max-model-len "$SERVER_MAX_MODEL_LEN"
@@ -357,6 +364,10 @@ python3 - "$SERVER_LOG" <<'FP8GATE'
 import pathlib, re, sys
 text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
 for marker, condition in [
+    ('ATOM-QUANT-CONSUMERS-VERIFIED', 'fp8_per_token_input=True'),
+    ('ATOM-QUANT-FUSION-EXECUTED', 'mode= 0'),
+    ('ATOM-QUANT-FUSION-EXECUTED', 'mode= 1'),
+    ('ATOM-QUANT-FUSION-EXECUTED', 'mode= 2'),
     ('MOONSHOT-FUSED-QUANT-VERIFIED', 'fp8_kv_b_linears= 24'),
     ('MOONSHOT-O-PROJ-FP8', 'weight_dtype= torch.float8_e4m3fn'),
     ('MOONSHOT-QKV-A-FP8', 'weight_dtype= torch.float8_e4m3fn'),

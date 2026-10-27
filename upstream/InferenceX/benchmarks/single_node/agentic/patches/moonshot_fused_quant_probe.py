@@ -5,6 +5,8 @@ import torch
 
 
 def verify_model(model):
+    from vllm.models.kimi_k3.amd._infx_atom_probe import verify_model as verify_producers
+    verify_producers(model)
     from vllm.model_executor.layers.linear import LinearBase
     from vllm.v1.attention.ops._infx_fp8_fused_kv import projection_weight
     kv_count = inproj_count = oproj_count = qkva_count = gate_count = extra_count = 0
