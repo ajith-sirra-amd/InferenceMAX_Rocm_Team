@@ -96,39 +96,22 @@ jobs:
     inspect-runner:
       if: ${{ inputs.runner-diagnostics-only }}
       runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
-      timeout-minutes: 5
+      timeout-minutes: 15
       steps:
-        - name: Read Docker lifecycle and host memory evidence
+        - name: Observe CPU-only container across recurring Docker stop boundary
           shell: bash
           run: |
             date -u
             hostname
-            docker events --since "2026-10-27T07:51:00Z" --until "2026-10-27T07:57:00Z" --filter type=container --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'
-            python3 - <<'PY'
-            import pathlib, subprocess, re
-            targets = ["/var/spool/spur/job10316/spur_job.sh", "/var/spool/cron/crontabs/root", "/etc/cron.d/sysstat"]
-            for name in targets:
-                print("HOST_FILE", name)
-                try:
-                    lines = pathlib.Path(name).read_text().splitlines()
-                except OSError as error:
-                    print(type(error).__name__)
-                    continue
-                for i, line in enumerate(lines):
-                    if re.search(r"(token|password|secret|credential|authorization)", line, re.I):
-                        print(i+1, "[sensitive line omitted]")
-                    else:
-                        print(i+1, line)
-            for unit in ["spurd", "spur", "cron"]:
-                result = subprocess.run(["journalctl", "-u", unit, "--since", "2026-10-27 07:40:00 UTC", "--until", "2026-10-27 08:06:00 UTC", "--no-pager"], capture_output=True, text=True)
-                print("UNIT_LOG", unit, result.returncode)
-                for line in (result.stdout + result.stderr).splitlines():
-                    if re.search(r"(10316|docker|stop|kill|expire|permission|journal files)", line, re.I) and not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
-                        print(line)
-            for prefix in ["/var/log/spur", "/var/log/spurd"]:
-                for file in pathlib.Path(prefix).parent.glob(pathlib.Path(prefix).name + "*"):
-                    print("SPUR_LOG_PATH", str(file))
-            PY
+            task_canary_name="bmk-server-canary-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            task_canary_since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            set +e
+            docker run --rm --init --name "$task_canary_name" --stop-timeout 30 --entrypoint /bin/bash vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce -c 'echo CPU_ONLY_CANARY_STARTED; sleep 650; echo CPU_ONLY_CANARY_SURVIVED'
+            task_canary_rc=$?
+            task_canary_until=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            echo "CPU_ONLY_CANARY_EXIT=$task_canary_rc"
+            docker events --since "$task_canary_since" --until "$task_canary_until" --filter type=container --filter "container=$task_canary_name" --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'
+            exit "$task_canary_rc"
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest
