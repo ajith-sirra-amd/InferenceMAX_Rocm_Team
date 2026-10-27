@@ -105,25 +105,29 @@ jobs:
             hostname
             docker events --since "2026-10-27T07:51:00Z" --until "2026-10-27T07:57:00Z" --filter type=container --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'
             python3 - <<'PY'
-            import pathlib, re
-            for name in ["/etc/docker/spur-authz.py", "/var/spool/spur/job10316/spur_job.sh"]:
-                path = pathlib.Path(name)
-                print("READ_SOURCE", name)
+            import pathlib, subprocess, re
+            targets = ["/var/spool/spur/job10316/spur_job.sh", "/var/spool/cron/crontabs/root", "/etc/cron.d/sysstat"]
+            for name in targets:
+                print("HOST_FILE", name)
                 try:
-                    lines = path.read_text().splitlines()
+                    lines = pathlib.Path(name).read_text().splitlines()
                 except OSError as error:
                     print(type(error).__name__)
                     continue
-                selected = set()
                 for i, line in enumerate(lines):
-                    if any(key in line.lower() for key in ["docker", "label", "stop", "kill", "timeout", "600", "job_id", "jobid", "allocation", "expiry", "expire", "deadline", "duration"]):
-                        selected.update(range(max(0, i-3), min(len(lines), i+5)))
-                for i in sorted(selected):
-                    line = lines[i]
                     if re.search(r"(token|password|secret|credential|authorization)", line, re.I):
                         print(i+1, "[sensitive line omitted]")
                     else:
                         print(i+1, line)
+            for unit in ["spurd", "spur", "cron"]:
+                result = subprocess.run(["journalctl", "-u", unit, "--since", "2026-10-27 07:40:00 UTC", "--until", "2026-10-27 08:06:00 UTC", "--no-pager"], capture_output=True, text=True)
+                print("UNIT_LOG", unit, result.returncode)
+                for line in (result.stdout + result.stderr).splitlines():
+                    if re.search(r"(10316|docker|stop|kill|expire|permission|journal files)", line, re.I) and not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
+                        print(line)
+            for prefix in ["/var/log/spur", "/var/log/spurd"]:
+                for file in pathlib.Path(prefix).parent.glob(pathlib.Path(prefix).name + "*"):
+                    print("SPUR_LOG_PATH", str(file))
             PY
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
