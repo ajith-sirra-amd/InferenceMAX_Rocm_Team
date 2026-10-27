@@ -104,32 +104,22 @@ jobs:
             date -u
             hostname
             python3 - <<'PY'
-            import pathlib, subprocess, re, shutil
-            for binary in ["spur", "spurd"]:
-                executable = shutil.which(binary)
-                print("EXECUTABLE", binary, executable)
-                if not executable:
-                    continue
-                result = subprocess.run([executable, "--help"], capture_output=True, text=True, timeout=20)
+            import pathlib, subprocess, re
+            for command in [["spur", "show", "job", "10316"], ["spur", "trigger", "--help"], ["spur", "crontab", "--help"]]:
+                result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+                print("READ_COMMAND", command, "status", result.returncode)
                 for line in (result.stdout + result.stderr).splitlines():
                     if not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
                         print(line)
-                try:
-                    lines = pathlib.Path(executable).read_text().splitlines()
-                except (OSError, UnicodeError):
-                    continue
-                selected = set()
+            path = pathlib.Path("/opt/spur/etc/spur.conf")
+            try:
+                lines = path.read_text().splitlines()
+            except OSError as error:
+                print("SPUR_CONFIG", type(error).__name__)
+            else:
                 for i, line in enumerate(lines):
-                    if any(key in line.lower() for key in ["container", "docker", "label", "cleanup"]):
-                        selected.update(range(max(0, i-2), min(len(lines), i+4)))
-                for i in sorted(selected):
-                    if not re.search(r"(token|password|secret|credential|authorization)", lines[i], re.I):
-                        print("SOURCE", i+1, lines[i])
-            result = subprocess.run(["systemctl", "cat", "spurd"], capture_output=True, text=True, timeout=20)
-            print("SPUR_SERVICE_STATUS", result.returncode)
-            for line in (result.stdout + result.stderr).splitlines():
-                if not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
-                    print(line)
+                    if re.search(r"(container|docker|cleanup|orphan|interval|epilog|prolog)", line, re.I) and not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
+                        print("SPUR_CONFIG", i+1, line)
             PY
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
