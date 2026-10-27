@@ -142,6 +142,7 @@ jobs:
               run: |
                   bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
                   bash -n runners/launch_mi355x-amd.sh
+                  python3 utils/test_mi355x_container_launcher.py
                   python3 - <<'PY'
                   import pathlib
                   root = pathlib.Path("upstream/InferenceX/benchmarks/single_node/agentic/patches")
