@@ -1,0 +1,40 @@
+2026-10-27T08:08:44.1999156Z Current runner version: '2.338.0'
+2026-10-27T08:08:44.2093333Z Runner name: 'mi355x-amd_pit2_p03_g07'
+2026-10-27T08:08:44.2093730Z Runner group name: 'Default'
+2026-10-27T08:08:44.2094235Z Machine name: 'pit2-p03-g09'
+2026-10-27T08:08:44.2095781Z ##[group]GITHUB_TOKEN Permissions
+2026-10-27T08:08:44.2096937Z Contents: read
+2026-10-27T08:08:44.2097258Z Metadata: read
+2026-10-27T08:08:44.2097530Z Packages: read
+2026-10-27T08:08:44.2097812Z ##[endgroup]
+2026-10-27T08:08:44.2098879Z Secret source: Actions
+2026-10-27T08:08:44.2099343Z Cache mode: write
+2026-10-27T08:08:44.2099682Z Prepare workflow directory
+2026-10-27T08:08:44.2466913Z Prepare all required actions
+2026-10-27T08:08:44.2516402Z Complete job name: inspect-runner
+2026-10-27T08:08:44.5069843Z ##[group]Run date -u
+2026-10-27T08:08:44.5070181Z [36;1mdate -u[0m
+2026-10-27T08:08:44.5070397Z [36;1mhostname[0m
+2026-10-27T08:08:44.5070770Z [36;1mtask_canary_name="bmk-server-canary-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"[0m
+2026-10-27T08:08:44.5071186Z [36;1mtask_canary_since=$(date -u +%Y-%m-%dT%H:%M:%SZ)[0m
+2026-10-27T08:08:44.5071504Z [36;1mset +e[0m
+2026-10-27T08:08:44.5072255Z [36;1mdocker run --rm --init --name "$task_canary_name" --stop-timeout 30 --entrypoint /bin/bash vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce -c 'echo CPU_ONLY_CANARY_STARTED; sleep 650; echo CPU_ONLY_CANARY_SURVIVED'[0m
+2026-10-27T08:08:44.5073050Z [36;1mtask_canary_rc=$?[0m
+2026-10-27T08:08:44.5073329Z [36;1mtask_canary_until=$(date -u +%Y-%m-%dT%H:%M:%SZ)[0m
+2026-10-27T08:08:44.5073659Z [36;1mecho "CPU_ONLY_CANARY_EXIT=$task_canary_rc"[0m
+2026-10-27T08:08:44.5074599Z [36;1mdocker events --since "$task_canary_since" --until "$task_canary_until" --filter type=container --filter "container=$task_canary_name" --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'[0m
+2026-10-27T08:08:44.5075502Z [36;1mexit "$task_canary_rc"[0m
+2026-10-27T08:08:44.5152480Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-27T08:08:44.5152902Z ##[endgroup]
+2026-10-27T08:08:44.5374213Z Tue Oct 27 08:08:44 UTC 2026
+2026-10-27T08:08:44.5374530Z pit2-p03-g09
+2026-10-27T08:08:44.6823962Z CPU_ONLY_CANARY_STARTED
+2026-10-27T08:10:03.2951802Z CPU_ONLY_CANARY_EXIT=143
+2026-10-27T08:10:03.3107814Z 1793088524 create signal= exitCode= name=bmk-server-canary-40471466861-1
+2026-10-27T08:10:03.3108129Z 1793088524 attach signal= exitCode= name=bmk-server-canary-40471466861-1
+2026-10-27T08:10:03.3108402Z 1793088524 start signal= exitCode= name=bmk-server-canary-40471466861-1
+2026-10-27T08:10:03.3108744Z 1793088602 kill signal=15 exitCode= name=bmk-server-canary-40471466861-1
+2026-10-27T08:10:03.3109007Z 1793088602 stop signal= exitCode= name=bmk-server-canary-40471466861-1
+2026-10-27T08:10:03.3109248Z 1793088602 die signal= exitCode=143 name=bmk-server-canary-40471466861-1
+2026-10-27T08:10:03.3167853Z ##[error]Process completed with exit code 143.
+2026-10-27T08:10:03.3863196Z Cleaning up orphan processes

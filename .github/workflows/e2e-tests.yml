@@ -96,22 +96,28 @@ jobs:
     inspect-runner:
       if: ${{ inputs.runner-diagnostics-only }}
       runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
-      timeout-minutes: 15
+      timeout-minutes: 5
       steps:
-        - name: Observe CPU-only container across recurring Docker stop boundary
+        - name: Read administrator scheduler evidence if already permitted
           shell: bash
           run: |
             date -u
             hostname
-            task_canary_name="bmk-server-canary-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-            task_canary_since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            set +e
-            docker run --rm --init --name "$task_canary_name" --stop-timeout 30 --entrypoint /bin/bash vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce -c 'echo CPU_ONLY_CANARY_STARTED; sleep 650; echo CPU_ONLY_CANARY_SURVIVED'
-            task_canary_rc=$?
-            task_canary_until=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            echo "CPU_ONLY_CANARY_EXIT=$task_canary_rc"
-            docker events --since "$task_canary_since" --until "$task_canary_until" --filter type=container --filter "container=$task_canary_name" --format '{{.Time}} {{.Action}} signal={{index .Actor.Attributes "signal"}} exitCode={{index .Actor.Attributes "exitCode"}} name={{index .Actor.Attributes "name"}}'
-            exit "$task_canary_rc"
+            python3 - <<'PY'
+            import subprocess, re
+            commands = [
+                ["sudo", "-n", "crontab", "-l"],
+                ["sudo", "-n", "journalctl", "-u", "docker", "-u", "cron", "-u", "spurd", "--since", "2026-10-27 07:40:00 UTC", "--until", "2026-10-27 08:14:00 UTC", "--no-pager"],
+            ]
+            for command in commands:
+                result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+                print("READ_COMMAND", command[2:4], "status", result.returncode)
+                for line in (result.stdout + result.stderr).splitlines():
+                    if re.search(r"(token|password|secret|credential|authorization)", line, re.I):
+                        print("[sensitive line omitted]")
+                    elif command[2] == "crontab" or re.search(r"(stop|kill|docker|10316|cron|not allowed|denied)", line, re.I):
+                        print(line)
+            PY
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest
