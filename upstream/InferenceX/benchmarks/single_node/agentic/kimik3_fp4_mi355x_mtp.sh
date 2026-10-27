@@ -7,7 +7,7 @@ wait_for_amd_gpu_clean
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 check_env_vars DCP_SIZE EVAL_ONLY
 if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
-    echo "[ATOM-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
+    echo "[NATIVE-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
     exit 1
 fi
 
@@ -29,39 +29,18 @@ else
 fi
 
 rocm-smi || true
-# Diagnose communicator startup before model loading; no collective tracing in replay.
-# Single-node RCCL bootstrap must stay on loopback; eno1 self-connect timed out.
+# Native single-node RCCL bootstrap; no runtime source patches or probes.
 export NCCL_SOCKET_IFNAME="=lo"
 export NCCL_SOCKET_FAMILY=AF_INET
 export NCCL_IB_DISABLE=1
-export NCCL_DEBUG=INFO
-export NCCL_DEBUG_SUBSYS=INIT,NET,ENV
-mkdir -p "$RESULT_DIR"
-timeout --signal=TERM --kill-after=15s 180s \
-    torchrun --standalone --nnodes=1 --nproc-per-node=8 \
-    "$(dirname "$0")/patches/rccl_preflight.py" 2>&1 | tee "$RESULT_DIR/rccl_preflight.log"
-# Keep verbose diagnostics in preflight only; serving graph warnings flood logs.
 export NCCL_DEBUG=VERSION
 resolve_trace_source
 install_agentic_deps
-python3 "$(dirname "$0")/patches/rccl_startup_probe.py"
-
 mkdir -p "$RESULT_DIR"
-python3 "$(dirname "$0")/patches/attnfp8_probe.py" "$MODEL_PATH" "$RESULT_DIR"
-python3 "$(dirname "$0")/patches/native_dcp_probe.py"
-python3 "$(dirname "$0")/patches/fp8_fused_kv_b.py"
-python3 "$(dirname "$0")/patches/atom_quant_fusions_patch.py"
-python3 "$(dirname "$0")/patches/moonshot_fused_quant_probe.py"
-timeout --signal=TERM --kill-after=15s 600s \
-    python3 "$(dirname "$0")/patches/atom_quant_fusions.py" 2>&1 | tee "$RESULT_DIR/atom_quant_preflight.log"
-python3 "$(dirname "$0")/patches/fp8_fused_reconstruction_probe.py" --output "$RESULT_DIR/fp8_fused_reconstruction_preflight.json"
-
 
 export AIPERF_WARMUP_REQUESTS_PER_LANE=10
 export AIPERF_EXPERIMENTAL_FAST=0
 
-export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
-export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2=1
 export AITER_BF16_FP8_MOE_BOUND=0
@@ -338,7 +317,6 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 
 pin_workers_to_ccd || true
 
-python3 "$(dirname "$0")/patches/fp8_cached_context_check.py" "$PORT" "$MODEL" "$RESULT_DIR"
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     check_env_vars RUN_EVAL IS_AGENTIC
@@ -360,33 +338,3 @@ else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
 fi
-python3 - "$SERVER_LOG" <<'FP8GATE'
-import pathlib, re, sys
-text = pathlib.Path(sys.argv[1]).read_text(errors='replace')
-for marker, condition in [
-    ('ATOM-QUANT-CONSUMERS-VERIFIED', 'fp8_per_token_input=True'),
-    ('ATOM-QUANT-FUSION-EXECUTED', 'mode= 0'),
-    ('ATOM-QUANT-FUSION-EXECUTED', 'mode= 1'),
-    ('ATOM-QUANT-FUSION-EXECUTED', 'mode= 2'),
-    ('MOONSHOT-FUSED-QUANT-VERIFIED', 'fp8_kv_b_linears= 24'),
-    ('MOONSHOT-O-PROJ-FP8', 'weight_dtype= torch.float8_e4m3fn'),
-    ('MOONSHOT-QKV-A-FP8', 'weight_dtype= torch.float8_e4m3fn'),
-    ('MOONSHOT-G-PROJ-FP8', 'weight_dtype= torch.float8_e4m3fn'),
-    ('MOONSHOT-EXTRA-ATTN-FP8', 'weight_dtype= torch.float8_e4m3fn'),
-    ('FP8-FUSED-KV-VERIFIED', 'weight_dtype= torch.float8_e4m3fn'),
-    ('FP8-FUSED-KV-CONTEXT-EXECUTED', 'weight_dtype= torch.float8_e4m3fn'),
-    ('NATIVE-KV-COLLECTIVE', 'dtype= torch.uint8'),
-    ('NATIVE-DCP-FUSED-EXECUTED', 'weight_dtype= torch.float8_e4m3fn'),
-    ('ATTNFP8-CONTEXT-INPUT', 'torch.bfloat16'),
-]:
-    devices = {
-        int(match.group(1))
-        for line in text.splitlines()
-        if '[' + marker + ']' in line and condition in line
-        for match in [re.search(r'device= cuda:(\d+)', line)]
-        if match
-    }
-    if devices != set(range(8)):
-        raise SystemExit(f'[FP8-FUSED-GATE] {marker}: expected all8 GPUs, got {sorted(devices)}')
-print('[FP8-FUSED-GATE] FP8 weights/scales, uint8 transport, BF16 K/V and cached-context execution verified on all8 GPUs')
-FP8GATE
