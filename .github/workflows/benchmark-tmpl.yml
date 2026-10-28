@@ -59,6 +59,11 @@ on:
         type: boolean
         required: false
         default: false
+      attention-path-probe-only:
+        description: "Run controlled prefix-repetition invocation probe"
+        type: boolean
+        required: false
+        default: false
       random-range-ratio:
         required: false
         type: string
@@ -118,6 +123,7 @@ env:
   DISAGG: ${{ inputs.disagg }}
   RUN_EVAL: ${{ inputs.run-eval }}
   EVAL_ONLY: ${{ inputs.eval-only }}
+  ATTENTION_PATH_PROBE_ONLY: ${{ inputs.attention-path-probe-only }}
   SCENARIO_TYPE: ${{ inputs.scenario-type }}
   SCENARIO_SUBDIR: ${{ inputs.scenario-type == 'agentic-coding' && 'agentic/' || 'fixed_seq_len/' }}
   IS_AGENTIC: ${{ inputs.scenario-type == 'agentic-coding' && '1' || '0' }}
@@ -210,7 +216,10 @@ jobs:
 
           bash ./runners/launch_${RUNNER_NAME%%_*}.sh
 
-          if [ "${{ inputs.eval-only }}" = "true" ]; then
+          if [ "${{ inputs.attention-path-probe-only }}" = "true" ]; then
+            test -s results/path_probe_summary.json
+            python3 -c 'import json; d=json.load(open("results/path_probe_summary.json")); assert d["kernel_invocation_pass"], d'
+          elif [ "${{ inputs.eval-only }}" = "true" ]; then
             echo "Eval-only mode: skipping benchmark result file check"
             # Verify eval produced results
             if ! ls results*.json 1>/dev/null 2>&1; then
@@ -249,7 +258,7 @@ jobs:
           path: agg_${{ env.RESULT_FILENAME }}.json
 
       - name: Upload agentic aggregated result
-        if: ${{ always() && inputs.scenario-type == 'agentic-coding' }}
+        if: ${{ always() && !inputs.attention-path-probe-only && inputs.scenario-type == 'agentic-coding' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bmk_agentic_${{ env.RESULT_FILENAME }}
@@ -262,6 +271,9 @@ jobs:
           name: agentic_${{ env.RESULT_FILENAME }}
           path: |
             results/server.log
+            results/path_probe*.json
+            results/path_probe*.log
+            results/path_probe*_command.txt
             results/attnfp8_checkpoint_config.json
             results/atom_quant_preflight.log
             results/rccl_preflight.log

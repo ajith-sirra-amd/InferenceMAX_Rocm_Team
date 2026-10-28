@@ -93,8 +93,9 @@ def _fused_qkv_amax(
     K_ROPE=None,
     ROPE_DIM: tl.constexpr = 0,
     ROPE_STRIDE: tl.constexpr = (0, 0, 0),
+    SKIP_Q: tl.constexpr = False,
 ):
-    kind = tl.program_id(1)
+    kind = tl.program_id(1) + (1 if SKIP_Q else 0)
     if kind == 0:
         _partial_amax(Q, Partial, NQ, SHAPES[0], STRIDES[0], PARTS, BLOCK)
     elif kind == 1:
@@ -178,8 +179,9 @@ def _fused_qkv_quant(
     K_ROPE=None,
     ROPE_DIM: tl.constexpr = 0,
     ROPE_STRIDE: tl.constexpr = (0, 0, 0),
+    SKIP_Q: tl.constexpr = False,
 ):
-    kind = tl.program_id(1)
+    kind = tl.program_id(1) + (1 if SKIP_Q else 0)
     if kind == 0:
         _quant_tensor(
             Q,
@@ -230,13 +232,16 @@ def _fused_qkv_quant(
         )
 
 
-def fused_qkv_per_tensor_quant(q, k, v, *, k_rope=None):
+def fused_qkv_per_tensor_quant(q, k, v, *, k_rope=None, quantized_q=None):
     """Quantize 3-D Q/K/V to E4M3 with independent per-tensor FP32 descales.
 
     Returns ``(q8, k8, v8, qs, ks, vs, gather_ks, gather_vs)`` with contiguous
     outputs and shape-[1] scales. Gather descales are ``max(ks/vs, 1e-6) * 2``.
     Reads strided inputs in one launch for small tensors, otherwise two.
     Zero/empty inputs use descale 1e-6 and gather descale 2e-6.
+
+    With ``quantized_q``, reuse Q8 and its scale from the same immutable
+    forward and launch only K/V work; cross-forward reuse is forbidden.
 
     With ``k_rope``, ``k`` is the NoPE part and K8 is the quantized logical
     concatenation along the last dimension. K's amax includes both parts.
@@ -274,13 +279,19 @@ def fused_qkv_per_tensor_quant(q, k, v, *, k_rope=None):
     output_shapes = (tuple(q.shape), k_shape, tuple(v.shape))
     shapes = tuple(shape[1:] for shape in output_shapes)
     strides = tuple(x.stride() for x in tensors)
+    skip_q = quantized_q is not None
+    if skip_q:
+        cached, cached_scale = quantized_q
+        if cached.shape != q.shape or cached.device != q.device or cached.dtype != torch.float8_e4m3fn:
+            raise ValueError("Cached FP8 Q must match this forward's Q tensor")
     outputs = tuple(
+        quantized_q[0] if i == 0 and skip_q else
         torch.empty(shape, device=q.device, dtype=torch.float8_e4m3fn)
-        for shape in output_shapes
+        for i, shape in enumerate(output_shapes)
     )
     scales = torch.empty(5, device=q.device, dtype=torch.float32)
     sizes = tuple(x.numel() for x in outputs)
-    n = max(sizes)
+    n = max(sizes[1:] if skip_q else sizes)
     single_pass = n <= 8192
     block = (
         max(256, triton.next_power_of_2(n))
@@ -290,7 +301,7 @@ def fused_qkv_per_tensor_quant(q, k, v, *, k_rope=None):
     parts = min(128, triton.next_power_of_2(triton.cdiv(n, block))) if n else 1
     partial = torch.empty((3, parts), device=q.device, dtype=torch.float32)
     if not single_pass:
-        _fused_qkv_amax[(parts, 3)](
+        _fused_qkv_amax[(parts, 2 if skip_q else 3)](
             *tensors,
             partial,
             *sizes,
@@ -301,9 +312,10 @@ def fused_qkv_per_tensor_quant(q, k, v, *, k_rope=None):
             k_rope,
             rope_dim,
             rope_stride,
+            SKIP_Q=skip_q,
             num_warps=4,
         )
-    _fused_qkv_quant[(max(1, triton.cdiv(n, block)), 3)](
+    _fused_qkv_quant[(max(1, triton.cdiv(n, block)), 2 if skip_q else 3)](
         *tensors,
         *outputs,
         partial,
@@ -317,9 +329,11 @@ def fused_qkv_per_tensor_quant(q, k, v, *, k_rope=None):
         k_rope,
         rope_dim,
         rope_stride,
+        SKIP_Q=skip_q,
         num_warps=4,
     )
-    return (*outputs, *(scales[i : i + 1] for i in range(5)))
+    return (*outputs, quantized_q[1] if skip_q else scales[0:1],
+            *(scales[i : i + 1] for i in range(1, 5)))
 
 
 @triton.jit(do_not_specialize=["TOKENS"])

@@ -52,6 +52,11 @@ on:
                 required: false
                 type: boolean
                 default: false
+            attention-path-probe-only:
+                description: "Controlled prefix-repetition kernel invocation smoke; skip agentic replay"
+                required: false
+                type: boolean
+                default: false
             agentic-eval-only:
                 description: "Run agentic recipe GSM8K accuracy evaluation only"
                 required: false
@@ -81,6 +86,11 @@ on:
                 required: false
                 type: boolean
                 default: false
+            attention-path-probe-only:
+                description: "Controlled prefix-repetition kernel invocation smoke; skip agentic replay"
+                required: false
+                type: boolean
+                default: false
             agentic-eval-only:
                 description: "Run agentic recipe GSM8K accuracy evaluation only"
                 required: false
@@ -103,6 +113,12 @@ jobs:
           with:
             ref: ${{ inputs.ref || github.sha }}
             persist-credentials: false
+        - name: Validate recipe and launcher before kernel execution
+          shell: bash
+          run: |
+            bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+            bash -n runners/launch_mi355x-amd.sh
+            python3 utils/test_mi355x_container_launcher.py
         - name: Run registered vLLM FlyDSL adapter numerical and timing smoke
           shell: bash
           run: |
@@ -283,6 +299,7 @@ jobs:
             disagg: 'false'
             run-eval: ${{ inputs.agentic-eval-only }}
             eval-only: ${{ inputs.agentic-eval-only }}
+            attention-path-probe-only: ${{ inputs.attention-path-probe-only }}
             scenario-type: agentic-coding
             ref: ${{ inputs.ref }}
 
@@ -389,7 +406,7 @@ jobs:
 
     collect-results:
         needs: [test-sweep-multi-node, test-sweep-single-node, test-sweep-agentic, test-sweep-multi-node-agentic]
-        if: ${{ always() && (needs.test-sweep-multi-node.result != 'skipped' || needs.test-sweep-single-node.result != 'skipped' || needs.test-sweep-agentic.result != 'skipped' || needs.test-sweep-multi-node-agentic.result != 'skipped') }}
+        if: ${{ !inputs.attention-path-probe-only && always() && (needs.test-sweep-multi-node.result != 'skipped' || needs.test-sweep-single-node.result != 'skipped' || needs.test-sweep-agentic.result != 'skipped' || needs.test-sweep-multi-node-agentic.result != 'skipped') }}
         uses: ./.github/workflows/collect-results.yml
         secrets: inherit
         with:
@@ -397,13 +414,13 @@ jobs:
 
     collect-evals:
         needs: [test-sweep-evals, test-sweep-multi-node-evals]
-        if: ${{ always() && (needs.test-sweep-evals.result != 'skipped' || needs.test-sweep-multi-node-evals.result != 'skipped') }}
+        if: ${{ !inputs.attention-path-probe-only && always() && (needs.test-sweep-evals.result != 'skipped' || needs.test-sweep-multi-node-evals.result != 'skipped') }}
         uses: ./.github/workflows/collect-evals.yml
         secrets: inherit
 
     collect-agentic-results:
         needs: [test-sweep-agentic, test-sweep-multi-node-agentic]
-        if: ${{ always() && (needs.test-sweep-agentic.result != 'skipped' || needs.test-sweep-multi-node-agentic.result != 'skipped') }}
+        if: ${{ !inputs.attention-path-probe-only && always() && (needs.test-sweep-agentic.result != 'skipped' || needs.test-sweep-multi-node-agentic.result != 'skipped') }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

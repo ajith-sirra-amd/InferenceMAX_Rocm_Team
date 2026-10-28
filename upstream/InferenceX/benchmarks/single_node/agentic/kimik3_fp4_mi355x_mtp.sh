@@ -5,7 +5,8 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
-check_env_vars DCP_SIZE EVAL_ONLY
+check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY
+case "$ATTENTION_PATH_PROBE_ONLY" in true|false) ;; *) echo "ATTENTION_PATH_PROBE_ONLY must be true or false" >&2; exit 1 ;; esac
 if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
     echo "[NATIVE-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
     exit 1
@@ -47,8 +48,10 @@ export NCCL_SOCKET_IFNAME="=lo"
 export NCCL_SOCKET_FAMILY=AF_INET
 export NCCL_IB_DISABLE=1
 export NCCL_DEBUG=VERSION
-resolve_trace_source
-install_agentic_deps
+if [ "$ATTENTION_PATH_PROBE_ONLY" = "false" ]; then
+    resolve_trace_source
+    install_agentic_deps
+fi
 mkdir -p "$RESULT_DIR"
 
 export AIPERF_EXPERIMENTAL_FAST=0
@@ -330,7 +333,15 @@ wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$S
 pin_workers_to_ccd || true
 
 
-if [ "${EVAL_ONLY:-false}" = "true" ]; then
+if [ "$ATTENTION_PATH_PROBE_ONLY" = "true" ]; then
+    if [ "$EVAL_ONLY" = "true" ]; then
+        echo "Attention path probe cannot be combined with eval-only" >&2
+        exit 1
+    fi
+    python3 "$ATOM_ATTENTION_PLUGIN_DIR/path_probe.py" \
+        --model "$MODEL" --tokenizer "$MODEL_PATH" --port "$PORT" \
+        --result-dir "$RESULT_DIR" --server-log "$SERVER_LOG"
+elif [ "$EVAL_ONLY" = "true" ]; then
     check_env_vars RUN_EVAL IS_AGENTIC
     export EVAL_FRAMEWORK=lm-eval
     export EVAL_TASKS_DIR="$INFERENCEX_REPO_ROOT/infx/evals/gsm8k.yaml"
