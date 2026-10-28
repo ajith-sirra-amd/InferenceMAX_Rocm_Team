@@ -111,3 +111,28 @@ Related upstream PRs, inspected at their current heads:
   No GSM8K reported. Identical-input references separate FMHA from quantization.
 - vllm-project/vllm#50181 is a Blackwell backend-selection fix, not an MI355X
   FP8 rounding correction. No upstream code or threshold has been imported here.
+
+## Full captured-chunk result: run 40684025796
+
+At source 5975367b961baa7f0ce957f37bce25c0be5a18d7, all 16 same-FP8-input
+arithmetic cases passed; zero passed the original BF16-difference gate.
+Q/K/V quantization matched the same-scale contiguous AITER HIP quantizer exactly
+over 17,694,720 / 35,389,440 / 23,592,960 elements.
+Native FP8 projection passed for supplied and diagnostic dynamic scales with zero
+clipping. With supplied scales its K/V RMS versus FP64 was 0.02239 / 0.02647.
+
+On the full captured chunk, Q-only rounding changed LSE by up to 0.513783;
+KV-only rounding by 0.370814; native weight conversion before final K/V quantization
+by 0.053012. Native FP8 projection with supplied scales plus FP8 FMHA had output RMS
+0.028700 and max LSE difference 0.934950 versus the historical BF16 kernel.
+Removing the BF16 intermediate therefore does not fix the failed LSE criterion.
+Disabling lazy rescale improves same-input FMHA RMS from about 0.0129 to 0.0030,
+but does not fix Q/K quantization and is not applied to serving.
+Denormal-handling changes were bit-identical in these tests.
+
+The next diagnostic separates NoPE and RoPE rounding and records the worst rows.
+It also tests per-request key centering: Kc = K - mean(K). Attention output is
+unchanged in exact arithmetic; LSE is restored by adding scale * dot(Q, mean(K)).
+The identity is checked independently before FP8 tests. The prototype uses BF16
+centered K and FP64 correction, so it is neither a production optimization nor
+evidence of performance. No serving thresholds or acceptance limits are changed.

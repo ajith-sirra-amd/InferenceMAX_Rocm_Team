@@ -1,0 +1,1011 @@
+{
+  "run_id": 40684025796,
+  "source": "5975367b961baa7f0ce957f37bce25c0be5a18d7",
+  "job_conclusion": "success",
+  "scope": "diagnostic completion; original numerical acceptance failed",
+  "measurements": {
+    "QUANTIZER_HIP_PARITY": [
+      {
+        "q": {
+          "mismatched_bytes": 0,
+          "elements": 17694720,
+          "max_fp8_value_difference": 0.0
+        },
+        "k": {
+          "mismatched_bytes": 0,
+          "elements": 35389440,
+          "max_fp8_value_difference": 0.0
+        },
+        "v": {
+          "mismatched_bytes": 0,
+          "elements": 23592960,
+          "max_fp8_value_difference": 0.0
+        }
+      }
+    ],
+    "BF16_ARITHMETIC": [
+      {
+        "rms": 0.00166590591149755,
+        "normalized_max_output_error": 0.003656042394790358,
+        "min_cosine": 0.9999966595028438,
+        "lse_max": 8.191103301413705e-06,
+        "normalized_max_lse_error": 3.3075240650504997e-07
+      }
+    ],
+    "NATIVE_FP8_PROJECTION": [
+      {
+        "native_linear_kernel": "AiterPreshuffledPerTokenFp8ScaledMMLinearKernel",
+        "results": {
+          "native_fp8_supplied": {
+            "k": {
+              "rms_vs_fp64": 0.022391527277122507,
+              "max_error_over_max_reference": 0.02232140302658081,
+              "clipping_fraction": 0.0,
+              "passes_projection_gate": true
+            },
+            "v": {
+              "rms_vs_fp64": 0.026469867410224654,
+              "max_error_over_max_reference": 0.03550796775117717,
+              "clipping_fraction": 0.0,
+              "passes_projection_gate": true
+            }
+          },
+          "native_fp8_dynamic": {
+            "k": {
+              "rms_vs_fp64": 0.028251128549602322,
+              "max_error_over_max_reference": 0.035714179277420044,
+              "clipping_fraction": 0.0,
+              "passes_projection_gate": true
+            },
+            "v": {
+              "rms_vs_fp64": 0.026469603339755374,
+              "max_error_over_max_reference": 0.03570842279791435,
+              "clipping_fraction": 0.0,
+              "passes_projection_gate": true
+            }
+          }
+        },
+        "scope": "native quantization of captured BF16 weight; captured scales held fixed or recomputed from FP64"
+      }
+    ],
+    "WEIGHT_QUANTIZATION_EFFECT": [
+      {
+        "rms": 0.01940857301150444,
+        "normalized_max_output_error": 0.017426032070963018,
+        "min_cosine": 0.9988762346140235,
+        "lse_max": 0.05301237151357441,
+        "normalized_max_lse_error": 0.0021406114423716646
+      }
+    ],
+    "QUANTIZATION_EFFECT": [
+      {
+        "quantized": "q_only",
+        "vs_bf16": {
+          "rms": 0.010746296890103016,
+          "normalized_max_output_error": 0.033595717686932196,
+          "min_cosine": 0.991424494302275,
+          "lse_max": 0.5137829774658336,
+          "normalized_max_lse_error": 0.020746284104221368
+        }
+      },
+      {
+        "quantized": "kv_only",
+        "vs_bf16": {
+          "rms": 0.016653666694046342,
+          "normalized_max_output_error": 0.05282439341246903,
+          "min_cosine": 0.9859030624891061,
+          "lse_max": 0.3708141218081309,
+          "normalized_max_lse_error": 0.014973277547717928
+        }
+      }
+    ],
+    "FULL_REFERENCE": [
+      {
+        "scale_policy": "supplied",
+        "lazy_rescale": true,
+        "daz": true,
+        "same_fp8_inputs": {
+          "rms": 0.01287814881440128,
+          "normalized_max_output_error": 0.020306689989041664,
+          "min_cosine": 0.9866988880373686,
+          "lse_max": 0.0005848513647990217,
+          "normalized_max_lse_error": 2.422767201185e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.021568160732232892,
+          "normalized_max_output_error": 0.05305775963799785,
+          "min_cosine": 0.9821087618624187,
+          "lse_max": 0.9354555361029284,
+          "normalized_max_lse_error": 0.03777319835425773
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.02163636313960242,
+          "normalized_max_output_error": 0.052845528455284556,
+          "min_cosine": 0.9820609178613893,
+          "lse_max": 0.9354534149169922,
+          "normalized_max_lse_error": 0.03777310964820231
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "supplied",
+        "lazy_rescale": false,
+        "daz": true,
+        "same_fp8_inputs": {
+          "rms": 0.002986952278506937,
+          "normalized_max_output_error": 0.008744909443249784,
+          "min_cosine": 0.9998202688920069,
+          "lse_max": 0.0005829440161662092,
+          "normalized_max_lse_error": 2.4148659428706057e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.025260796942647955,
+          "normalized_max_output_error": 0.0519332612336527,
+          "min_cosine": 0.9761444508384823,
+          "lse_max": 0.9354574434515612,
+          "normalized_max_lse_error": 0.03777327537198381
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.025319353060564473,
+          "normalized_max_output_error": 0.051829268292682924,
+          "min_cosine": 0.9760948007766778,
+          "lse_max": 0.935455322265625,
+          "normalized_max_lse_error": 0.037773186665922165
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "supplied",
+        "lazy_rescale": true,
+        "daz": false,
+        "same_fp8_inputs": {
+          "rms": 0.01287814881440128,
+          "normalized_max_output_error": 0.020306689989041664,
+          "min_cosine": 0.9866988880373686,
+          "lse_max": 0.0005848513647990217,
+          "normalized_max_lse_error": 2.422767201185e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.021568160732232892,
+          "normalized_max_output_error": 0.05305775963799785,
+          "min_cosine": 0.9821087618624187,
+          "lse_max": 0.9354555361029284,
+          "normalized_max_lse_error": 0.03777319835425773
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.02163636313960242,
+          "normalized_max_output_error": 0.052845528455284556,
+          "min_cosine": 0.9820609178613893,
+          "lse_max": 0.9354534149169922,
+          "normalized_max_lse_error": 0.03777310964820231
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "supplied",
+        "lazy_rescale": false,
+        "daz": false,
+        "same_fp8_inputs": {
+          "rms": 0.002986952278506937,
+          "normalized_max_output_error": 0.008744909443249784,
+          "min_cosine": 0.9998202688920069,
+          "lse_max": 0.0005829440161662092,
+          "normalized_max_lse_error": 2.4148659428706057e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.025260796942647955,
+          "normalized_max_output_error": 0.0519332612336527,
+          "min_cosine": 0.9761444508384823,
+          "lse_max": 0.9354574434515612,
+          "normalized_max_lse_error": 0.03777327537198381
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.025319353060564473,
+          "normalized_max_output_error": 0.051829268292682924,
+          "min_cosine": 0.9760948007766778,
+          "lse_max": 0.935455322265625,
+          "normalized_max_lse_error": 0.037773186665922165
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "native_fp8_supplied",
+        "lazy_rescale": true,
+        "daz": true,
+        "same_fp8_inputs": {
+          "rms": 0.012884707096010304,
+          "normalized_max_output_error": 0.027579431105643596,
+          "min_cosine": 0.9868648841270812,
+          "lse_max": 0.0005850417302788458,
+          "normalized_max_lse_error": 2.42361395395579e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.028648141964554754,
+          "normalized_max_output_error": 0.05713327448214197,
+          "min_cosine": 0.982611770494823,
+          "lse_max": 0.9349519960638659,
+          "normalized_max_lse_error": 0.037752865674573075
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.02869966193524335,
+          "normalized_max_output_error": 0.056910569105691054,
+          "min_cosine": 0.9825671159612703,
+          "lse_max": 0.9349498748779297,
+          "normalized_max_lse_error": 0.03775277697016141
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "native_fp8_supplied",
+        "lazy_rescale": false,
+        "daz": true,
+        "same_fp8_inputs": {
+          "rms": 0.002986858669307804,
+          "normalized_max_output_error": 0.008228154137918412,
+          "min_cosine": 0.9998219628498606,
+          "lse_max": 0.0005850417302788458,
+          "normalized_max_lse_error": 2.42361395395579e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.03142429283065724,
+          "normalized_max_output_error": 0.05713327448214197,
+          "min_cosine": 0.9768972375969794,
+          "lse_max": 0.9349500887152331,
+          "normalized_max_lse_error": 0.037752788656846996
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.03147167442901438,
+          "normalized_max_output_error": 0.056910569105691054,
+          "min_cosine": 0.9768518170736313,
+          "lse_max": 0.9349479675292969,
+          "normalized_max_lse_error": 0.03775269995244156
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "native_fp8_supplied",
+        "lazy_rescale": true,
+        "daz": false,
+        "same_fp8_inputs": {
+          "rms": 0.012884707096010304,
+          "normalized_max_output_error": 0.027579431105643596,
+          "min_cosine": 0.9868648841270812,
+          "lse_max": 0.0005850417302788458,
+          "normalized_max_lse_error": 2.42361395395579e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.028648141964554754,
+          "normalized_max_output_error": 0.05713327448214197,
+          "min_cosine": 0.982611770494823,
+          "lse_max": 0.9349519960638659,
+          "normalized_max_lse_error": 0.037752865674573075
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.02869966193524335,
+          "normalized_max_output_error": 0.056910569105691054,
+          "min_cosine": 0.9825671159612703,
+          "lse_max": 0.9349498748779297,
+          "normalized_max_lse_error": 0.03775277697016141
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "native_fp8_supplied",
+        "lazy_rescale": false,
+        "daz": false,
+        "same_fp8_inputs": {
+          "rms": 0.002986858669307804,
+          "normalized_max_output_error": 0.008228154137918412,
+          "min_cosine": 0.9998219628498606,
+          "lse_max": 0.0005850417302788458,
+          "normalized_max_lse_error": 2.42361395395579e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.03142429283065724,
+          "normalized_max_output_error": 0.05713327448214197,
+          "min_cosine": 0.9768972375969794,
+          "lse_max": 0.9349500887152331,
+          "normalized_max_lse_error": 0.037752788656846996
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.03147167442901438,
+          "normalized_max_output_error": 0.056910569105691054,
+          "min_cosine": 0.9768518170736313,
+          "lse_max": 0.9349479675292969,
+          "normalized_max_lse_error": 0.03775269995244156
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "native_fp8_dynamic",
+        "lazy_rescale": true,
+        "daz": true,
+        "same_fp8_inputs": {
+          "rms": 0.012642353384298602,
+          "normalized_max_output_error": 0.02745225786263333,
+          "min_cosine": 0.9876065707309761,
+          "lse_max": 0.000450243824026586,
+          "normalized_max_lse_error": 1.8384635554790598e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.027444739708674507,
+          "normalized_max_output_error": 0.06935981901457433,
+          "min_cosine": 0.9678680857010347,
+          "lse_max": 0.726169800018944,
+          "normalized_max_lse_error": 0.029322351342596725
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.027495664211268974,
+          "normalized_max_output_error": 0.06910569105691057,
+          "min_cosine": 0.9678103729093348,
+          "lse_max": 0.7261676788330078,
+          "normalized_max_lse_error": 0.029322263319733286
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "native_fp8_dynamic",
+        "lazy_rescale": false,
+        "daz": true,
+        "same_fp8_inputs": {
+          "rms": 0.003021440588820054,
+          "normalized_max_output_error": 0.008264280682198834,
+          "min_cosine": 0.9998255638937921,
+          "lse_max": 0.000450243824026586,
+          "normalized_max_lse_error": 1.8384635554790598e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.027982949338072136,
+          "normalized_max_output_error": 0.06935981901457433,
+          "min_cosine": 0.9619479790561989,
+          "lse_max": 0.726169800018944,
+          "normalized_max_lse_error": 0.029322351342596725
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.028033490857043198,
+          "normalized_max_output_error": 0.06910569105691057,
+          "min_cosine": 0.9618891222857774,
+          "lse_max": 0.7261676788330078,
+          "normalized_max_lse_error": 0.029322263319733286
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "native_fp8_dynamic",
+        "lazy_rescale": true,
+        "daz": false,
+        "same_fp8_inputs": {
+          "rms": 0.012642353384298602,
+          "normalized_max_output_error": 0.02745225786263333,
+          "min_cosine": 0.9876065707309761,
+          "lse_max": 0.000450243824026586,
+          "normalized_max_lse_error": 1.8384635554790598e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.027444739708674507,
+          "normalized_max_output_error": 0.06935981901457433,
+          "min_cosine": 0.9678680857010347,
+          "lse_max": 0.726169800018944,
+          "normalized_max_lse_error": 0.029322351342596725
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.027495664211268974,
+          "normalized_max_output_error": 0.06910569105691057,
+          "min_cosine": 0.9678103729093348,
+          "lse_max": 0.7261676788330078,
+          "normalized_max_lse_error": 0.029322263319733286
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "native_fp8_dynamic",
+        "lazy_rescale": false,
+        "daz": false,
+        "same_fp8_inputs": {
+          "rms": 0.003021440588820054,
+          "normalized_max_output_error": 0.008264280682198834,
+          "min_cosine": 0.9998255638937921,
+          "lse_max": 0.000450243824026586,
+          "normalized_max_lse_error": 1.8384635554790598e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.027982949338072136,
+          "normalized_max_output_error": 0.06935981901457433,
+          "min_cosine": 0.9619479790561989,
+          "lse_max": 0.726169800018944,
+          "normalized_max_lse_error": 0.029322351342596725
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.028033490857043198,
+          "normalized_max_output_error": 0.06910569105691057,
+          "min_cosine": 0.9618891222857774,
+          "lse_max": 0.7261676788330078,
+          "normalized_max_lse_error": 0.029322263319733286
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "dynamic",
+        "lazy_rescale": true,
+        "daz": true,
+        "same_fp8_inputs": {
+          "rms": 0.01262971988875443,
+          "normalized_max_output_error": 0.03409029201233098,
+          "min_cosine": 0.9874012611357953,
+          "lse_max": 0.0004505505758771733,
+          "normalized_max_lse_error": 1.8397547325721048e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.019553458270664216,
+          "normalized_max_output_error": 0.06935981901457433,
+          "min_cosine": 0.9678593657605641,
+          "lse_max": 0.727298950409569,
+          "normalized_max_lse_error": 0.029367945836435042
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.01962523553454175,
+          "normalized_max_output_error": 0.06910569105691057,
+          "min_cosine": 0.9677979449993463,
+          "lse_max": 0.7272968292236328,
+          "normalized_max_lse_error": 0.02936785780988561
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "dynamic",
+        "lazy_rescale": false,
+        "daz": true,
+        "same_fp8_inputs": {
+          "rms": 0.003017885139717412,
+          "normalized_max_output_error": 0.012700129309450494,
+          "min_cosine": 0.9998253673989145,
+          "lse_max": 0.0004505505758771733,
+          "normalized_max_lse_error": 1.8397547325721048e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.020366084609524784,
+          "normalized_max_output_error": 0.06935981901457433,
+          "min_cosine": 0.9619507570017327,
+          "lse_max": 0.727298950409569,
+          "normalized_max_lse_error": 0.029367945836435042
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.020435149159378288,
+          "normalized_max_output_error": 0.06910569105691057,
+          "min_cosine": 0.961889457030833,
+          "lse_max": 0.7272968292236328,
+          "normalized_max_lse_error": 0.02936785780988561
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "dynamic",
+        "lazy_rescale": true,
+        "daz": false,
+        "same_fp8_inputs": {
+          "rms": 0.01262971988875443,
+          "normalized_max_output_error": 0.03409029201233098,
+          "min_cosine": 0.9874012611357953,
+          "lse_max": 0.0004505505758771733,
+          "normalized_max_lse_error": 1.8397547325721048e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.019553458270664216,
+          "normalized_max_output_error": 0.06935981901457433,
+          "min_cosine": 0.9678593657605641,
+          "lse_max": 0.727298950409569,
+          "normalized_max_lse_error": 0.029367945836435042
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.01962523553454175,
+          "normalized_max_output_error": 0.06910569105691057,
+          "min_cosine": 0.9677979449993463,
+          "lse_max": 0.7272968292236328,
+          "normalized_max_lse_error": 0.02936785780988561
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      },
+      {
+        "scale_policy": "dynamic",
+        "lazy_rescale": false,
+        "daz": false,
+        "same_fp8_inputs": {
+          "rms": 0.003017885139717412,
+          "normalized_max_output_error": 0.012700129309450494,
+          "min_cosine": 0.9998253673989145,
+          "lse_max": 0.0004505505758771733,
+          "normalized_max_lse_error": 1.8397547325721048e-05
+        },
+        "original_bf16_inputs": {
+          "rms": 0.020366084609524784,
+          "normalized_max_output_error": 0.06935981901457433,
+          "min_cosine": 0.9619507570017327,
+          "lse_max": 0.727298950409569,
+          "normalized_max_lse_error": 0.029367945836435042
+        },
+        "historical_bf16_kernel": {
+          "rms": 0.020435149159378288,
+          "normalized_max_output_error": 0.06910569105691057,
+          "min_cosine": 0.961889457030833,
+          "lse_max": 0.7272968292236328,
+          "normalized_max_lse_error": 0.02936785780988561
+        },
+        "passes_aiter_style_arithmetic_gate": true,
+        "passes_original_bf16_gate": false
+      }
+    ],
+    "FULL_REFERENCE_COMPLETE": [
+      {
+        "queries": 7680,
+        "heads": 12,
+        "kv_tokens": 15360,
+        "scope": "all rows in one captured chunk; not model accuracy or performance acceptance",
+        "results": [
+          {
+            "scale_policy": "supplied",
+            "lazy_rescale": true,
+            "daz": true,
+            "same_fp8_inputs": {
+              "rms": 0.01287814881440128,
+              "normalized_max_output_error": 0.020306689989041664,
+              "min_cosine": 0.9866988880373686,
+              "lse_max": 0.0005848513647990217,
+              "normalized_max_lse_error": 2.422767201185e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.021568160732232892,
+              "normalized_max_output_error": 0.05305775963799785,
+              "min_cosine": 0.9821087618624187,
+              "lse_max": 0.9354555361029284,
+              "normalized_max_lse_error": 0.03777319835425773
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.02163636313960242,
+              "normalized_max_output_error": 0.052845528455284556,
+              "min_cosine": 0.9820609178613893,
+              "lse_max": 0.9354534149169922,
+              "normalized_max_lse_error": 0.03777310964820231
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "supplied",
+            "lazy_rescale": false,
+            "daz": true,
+            "same_fp8_inputs": {
+              "rms": 0.002986952278506937,
+              "normalized_max_output_error": 0.008744909443249784,
+              "min_cosine": 0.9998202688920069,
+              "lse_max": 0.0005829440161662092,
+              "normalized_max_lse_error": 2.4148659428706057e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.025260796942647955,
+              "normalized_max_output_error": 0.0519332612336527,
+              "min_cosine": 0.9761444508384823,
+              "lse_max": 0.9354574434515612,
+              "normalized_max_lse_error": 0.03777327537198381
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.025319353060564473,
+              "normalized_max_output_error": 0.051829268292682924,
+              "min_cosine": 0.9760948007766778,
+              "lse_max": 0.935455322265625,
+              "normalized_max_lse_error": 0.037773186665922165
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "supplied",
+            "lazy_rescale": true,
+            "daz": false,
+            "same_fp8_inputs": {
+              "rms": 0.01287814881440128,
+              "normalized_max_output_error": 0.020306689989041664,
+              "min_cosine": 0.9866988880373686,
+              "lse_max": 0.0005848513647990217,
+              "normalized_max_lse_error": 2.422767201185e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.021568160732232892,
+              "normalized_max_output_error": 0.05305775963799785,
+              "min_cosine": 0.9821087618624187,
+              "lse_max": 0.9354555361029284,
+              "normalized_max_lse_error": 0.03777319835425773
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.02163636313960242,
+              "normalized_max_output_error": 0.052845528455284556,
+              "min_cosine": 0.9820609178613893,
+              "lse_max": 0.9354534149169922,
+              "normalized_max_lse_error": 0.03777310964820231
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "supplied",
+            "lazy_rescale": false,
+            "daz": false,
+            "same_fp8_inputs": {
+              "rms": 0.002986952278506937,
+              "normalized_max_output_error": 0.008744909443249784,
+              "min_cosine": 0.9998202688920069,
+              "lse_max": 0.0005829440161662092,
+              "normalized_max_lse_error": 2.4148659428706057e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.025260796942647955,
+              "normalized_max_output_error": 0.0519332612336527,
+              "min_cosine": 0.9761444508384823,
+              "lse_max": 0.9354574434515612,
+              "normalized_max_lse_error": 0.03777327537198381
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.025319353060564473,
+              "normalized_max_output_error": 0.051829268292682924,
+              "min_cosine": 0.9760948007766778,
+              "lse_max": 0.935455322265625,
+              "normalized_max_lse_error": 0.037773186665922165
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "native_fp8_supplied",
+            "lazy_rescale": true,
+            "daz": true,
+            "same_fp8_inputs": {
+              "rms": 0.012884707096010304,
+              "normalized_max_output_error": 0.027579431105643596,
+              "min_cosine": 0.9868648841270812,
+              "lse_max": 0.0005850417302788458,
+              "normalized_max_lse_error": 2.42361395395579e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.028648141964554754,
+              "normalized_max_output_error": 0.05713327448214197,
+              "min_cosine": 0.982611770494823,
+              "lse_max": 0.9349519960638659,
+              "normalized_max_lse_error": 0.037752865674573075
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.02869966193524335,
+              "normalized_max_output_error": 0.056910569105691054,
+              "min_cosine": 0.9825671159612703,
+              "lse_max": 0.9349498748779297,
+              "normalized_max_lse_error": 0.03775277697016141
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "native_fp8_supplied",
+            "lazy_rescale": false,
+            "daz": true,
+            "same_fp8_inputs": {
+              "rms": 0.002986858669307804,
+              "normalized_max_output_error": 0.008228154137918412,
+              "min_cosine": 0.9998219628498606,
+              "lse_max": 0.0005850417302788458,
+              "normalized_max_lse_error": 2.42361395395579e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.03142429283065724,
+              "normalized_max_output_error": 0.05713327448214197,
+              "min_cosine": 0.9768972375969794,
+              "lse_max": 0.9349500887152331,
+              "normalized_max_lse_error": 0.037752788656846996
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.03147167442901438,
+              "normalized_max_output_error": 0.056910569105691054,
+              "min_cosine": 0.9768518170736313,
+              "lse_max": 0.9349479675292969,
+              "normalized_max_lse_error": 0.03775269995244156
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "native_fp8_supplied",
+            "lazy_rescale": true,
+            "daz": false,
+            "same_fp8_inputs": {
+              "rms": 0.012884707096010304,
+              "normalized_max_output_error": 0.027579431105643596,
+              "min_cosine": 0.9868648841270812,
+              "lse_max": 0.0005850417302788458,
+              "normalized_max_lse_error": 2.42361395395579e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.028648141964554754,
+              "normalized_max_output_error": 0.05713327448214197,
+              "min_cosine": 0.982611770494823,
+              "lse_max": 0.9349519960638659,
+              "normalized_max_lse_error": 0.037752865674573075
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.02869966193524335,
+              "normalized_max_output_error": 0.056910569105691054,
+              "min_cosine": 0.9825671159612703,
+              "lse_max": 0.9349498748779297,
+              "normalized_max_lse_error": 0.03775277697016141
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "native_fp8_supplied",
+            "lazy_rescale": false,
+            "daz": false,
+            "same_fp8_inputs": {
+              "rms": 0.002986858669307804,
+              "normalized_max_output_error": 0.008228154137918412,
+              "min_cosine": 0.9998219628498606,
+              "lse_max": 0.0005850417302788458,
+              "normalized_max_lse_error": 2.42361395395579e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.03142429283065724,
+              "normalized_max_output_error": 0.05713327448214197,
+              "min_cosine": 0.9768972375969794,
+              "lse_max": 0.9349500887152331,
+              "normalized_max_lse_error": 0.037752788656846996
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.03147167442901438,
+              "normalized_max_output_error": 0.056910569105691054,
+              "min_cosine": 0.9768518170736313,
+              "lse_max": 0.9349479675292969,
+              "normalized_max_lse_error": 0.03775269995244156
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "native_fp8_dynamic",
+            "lazy_rescale": true,
+            "daz": true,
+            "same_fp8_inputs": {
+              "rms": 0.012642353384298602,
+              "normalized_max_output_error": 0.02745225786263333,
+              "min_cosine": 0.9876065707309761,
+              "lse_max": 0.000450243824026586,
+              "normalized_max_lse_error": 1.8384635554790598e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.027444739708674507,
+              "normalized_max_output_error": 0.06935981901457433,
+              "min_cosine": 0.9678680857010347,
+              "lse_max": 0.726169800018944,
+              "normalized_max_lse_error": 0.029322351342596725
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.027495664211268974,
+              "normalized_max_output_error": 0.06910569105691057,
+              "min_cosine": 0.9678103729093348,
+              "lse_max": 0.7261676788330078,
+              "normalized_max_lse_error": 0.029322263319733286
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "native_fp8_dynamic",
+            "lazy_rescale": false,
+            "daz": true,
+            "same_fp8_inputs": {
+              "rms": 0.003021440588820054,
+              "normalized_max_output_error": 0.008264280682198834,
+              "min_cosine": 0.9998255638937921,
+              "lse_max": 0.000450243824026586,
+              "normalized_max_lse_error": 1.8384635554790598e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.027982949338072136,
+              "normalized_max_output_error": 0.06935981901457433,
+              "min_cosine": 0.9619479790561989,
+              "lse_max": 0.726169800018944,
+              "normalized_max_lse_error": 0.029322351342596725
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.028033490857043198,
+              "normalized_max_output_error": 0.06910569105691057,
+              "min_cosine": 0.9618891222857774,
+              "lse_max": 0.7261676788330078,
+              "normalized_max_lse_error": 0.029322263319733286
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "native_fp8_dynamic",
+            "lazy_rescale": true,
+            "daz": false,
+            "same_fp8_inputs": {
+              "rms": 0.012642353384298602,
+              "normalized_max_output_error": 0.02745225786263333,
+              "min_cosine": 0.9876065707309761,
+              "lse_max": 0.000450243824026586,
+              "normalized_max_lse_error": 1.8384635554790598e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.027444739708674507,
+              "normalized_max_output_error": 0.06935981901457433,
+              "min_cosine": 0.9678680857010347,
+              "lse_max": 0.726169800018944,
+              "normalized_max_lse_error": 0.029322351342596725
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.027495664211268974,
+              "normalized_max_output_error": 0.06910569105691057,
+              "min_cosine": 0.9678103729093348,
+              "lse_max": 0.7261676788330078,
+              "normalized_max_lse_error": 0.029322263319733286
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "native_fp8_dynamic",
+            "lazy_rescale": false,
+            "daz": false,
+            "same_fp8_inputs": {
+              "rms": 0.003021440588820054,
+              "normalized_max_output_error": 0.008264280682198834,
+              "min_cosine": 0.9998255638937921,
+              "lse_max": 0.000450243824026586,
+              "normalized_max_lse_error": 1.8384635554790598e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.027982949338072136,
+              "normalized_max_output_error": 0.06935981901457433,
+              "min_cosine": 0.9619479790561989,
+              "lse_max": 0.726169800018944,
+              "normalized_max_lse_error": 0.029322351342596725
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.028033490857043198,
+              "normalized_max_output_error": 0.06910569105691057,
+              "min_cosine": 0.9618891222857774,
+              "lse_max": 0.7261676788330078,
+              "normalized_max_lse_error": 0.029322263319733286
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "dynamic",
+            "lazy_rescale": true,
+            "daz": true,
+            "same_fp8_inputs": {
+              "rms": 0.01262971988875443,
+              "normalized_max_output_error": 0.03409029201233098,
+              "min_cosine": 0.9874012611357953,
+              "lse_max": 0.0004505505758771733,
+              "normalized_max_lse_error": 1.8397547325721048e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.019553458270664216,
+              "normalized_max_output_error": 0.06935981901457433,
+              "min_cosine": 0.9678593657605641,
+              "lse_max": 0.727298950409569,
+              "normalized_max_lse_error": 0.029367945836435042
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.01962523553454175,
+              "normalized_max_output_error": 0.06910569105691057,
+              "min_cosine": 0.9677979449993463,
+              "lse_max": 0.7272968292236328,
+              "normalized_max_lse_error": 0.02936785780988561
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "dynamic",
+            "lazy_rescale": false,
+            "daz": true,
+            "same_fp8_inputs": {
+              "rms": 0.003017885139717412,
+              "normalized_max_output_error": 0.012700129309450494,
+              "min_cosine": 0.9998253673989145,
+              "lse_max": 0.0004505505758771733,
+              "normalized_max_lse_error": 1.8397547325721048e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.020366084609524784,
+              "normalized_max_output_error": 0.06935981901457433,
+              "min_cosine": 0.9619507570017327,
+              "lse_max": 0.727298950409569,
+              "normalized_max_lse_error": 0.029367945836435042
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.020435149159378288,
+              "normalized_max_output_error": 0.06910569105691057,
+              "min_cosine": 0.961889457030833,
+              "lse_max": 0.7272968292236328,
+              "normalized_max_lse_error": 0.02936785780988561
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "dynamic",
+            "lazy_rescale": true,
+            "daz": false,
+            "same_fp8_inputs": {
+              "rms": 0.01262971988875443,
+              "normalized_max_output_error": 0.03409029201233098,
+              "min_cosine": 0.9874012611357953,
+              "lse_max": 0.0004505505758771733,
+              "normalized_max_lse_error": 1.8397547325721048e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.019553458270664216,
+              "normalized_max_output_error": 0.06935981901457433,
+              "min_cosine": 0.9678593657605641,
+              "lse_max": 0.727298950409569,
+              "normalized_max_lse_error": 0.029367945836435042
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.01962523553454175,
+              "normalized_max_output_error": 0.06910569105691057,
+              "min_cosine": 0.9677979449993463,
+              "lse_max": 0.7272968292236328,
+              "normalized_max_lse_error": 0.02936785780988561
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          },
+          {
+            "scale_policy": "dynamic",
+            "lazy_rescale": false,
+            "daz": false,
+            "same_fp8_inputs": {
+              "rms": 0.003017885139717412,
+              "normalized_max_output_error": 0.012700129309450494,
+              "min_cosine": 0.9998253673989145,
+              "lse_max": 0.0004505505758771733,
+              "normalized_max_lse_error": 1.8397547325721048e-05
+            },
+            "original_bf16_inputs": {
+              "rms": 0.020366084609524784,
+              "normalized_max_output_error": 0.06935981901457433,
+              "min_cosine": 0.9619507570017327,
+              "lse_max": 0.727298950409569,
+              "normalized_max_lse_error": 0.029367945836435042
+            },
+            "historical_bf16_kernel": {
+              "rms": 0.020435149159378288,
+              "normalized_max_output_error": 0.06910569105691057,
+              "min_cosine": 0.961889457030833,
+              "lse_max": 0.7272968292236328,
+              "normalized_max_lse_error": 0.02936785780988561
+            },
+            "passes_aiter_style_arithmetic_gate": true,
+            "passes_original_bf16_gate": false
+          }
+        ]
+      }
+    ]
+  }
+}
