@@ -98,29 +98,23 @@ jobs:
       runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
       timeout-minutes: 5
       steps:
-        - name: Read administrator scheduler evidence if already permitted
+        - name: Inspect installed vLLM and ATOM attention kernel APIs
           shell: bash
           run: |
             date -u
             hostname
-            python3 - <<'PY'
-            import pathlib, subprocess, re
-            for command in [["spur", "show", "job", "10316"], ["spur", "trigger", "--help"], ["spur", "crontab", "--help"]]:
-                result = subprocess.run(command, capture_output=True, text=True, timeout=20)
-                print("READ_COMMAND", command, "status", result.returncode)
-                for line in (result.stdout + result.stderr).splitlines():
-                    if not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
-                        print(line)
-            path = pathlib.Path("/opt/spur/etc/spur.conf")
-            try:
-                lines = path.read_text().splitlines()
-            except OSError as error:
-                print("SPUR_CONFIG", type(error).__name__)
-            else:
-                for i, line in enumerate(lines):
-                    if re.search(r"(container|docker|cleanup|orphan|interval|epilog|prolog)", line, re.I) and not re.search(r"(token|password|secret|credential|authorization)", line, re.I):
-                        print("SPUR_CONFIG", i+1, line)
-            PY
+            df -h "$GITHUB_WORKSPACE"
+            df -i "$GITHUB_WORKSPACE"
+            docker ps --format '{{.Names}} {{.Status}}'
+            docker run --rm --init --network host --ipc=host --shm-size=4g \
+              --name "atom-attention-inspect-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+              --device=/dev/kfd --device=/dev/dri \
+              --group-add "$(getent group video | cut -d: -f3)" \
+              --group-add "$(getent group render | cut -d: -f3)" \
+              -v "$GITHUB_WORKSPACE":/repo:ro \
+              --entrypoint python3 \
+              vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce \
+              /repo/utils/atom_attention/inspect_installed.py
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest
