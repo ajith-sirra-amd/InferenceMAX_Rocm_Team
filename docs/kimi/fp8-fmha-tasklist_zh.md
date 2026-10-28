@@ -32,3 +32,11 @@
 - 不运行 serving smoke；保持固定 GSM8K 任务、评分和测试门槛。
 - 使用精确代码版本和实际执行证据，不把插件结果当作原生 PR 验证。
 - 保存证据，同步中英文文档；基准行为变化仅追加到性能变更日志。
+
+## 原生 GPU 验证工具
+
+e2e 工作流在 `runner-diagnostics-only=true` 时可接受精确 fork commit 参数 `native-vllm-sha`。
+[验证脚本](../../utils/atom_attention/native_vllm_gpu_validate.py) 检出指定版本，使用仓库内的 `.venv` 和对应基础版本的预编译库，执行原生 `flydsl_fp8` kernel 测试。
+它记录源码哈希、软件/GPU 信息和 JUnit 结果；选中的测试缺失或跳过均判为验证失败。
+这只是 kernel 验证。模型 GSM8K、服务同步检查、完整性能及历史捕获 BF16 门槛仍需分别验证。
+等待当前完整性能结果并选定最终原生版本后再派发；当前性能运行期间未启动原生 GPU 测试。

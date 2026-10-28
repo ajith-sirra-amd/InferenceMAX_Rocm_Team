@@ -47,6 +47,11 @@ on:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
                 type: string
+            native-vllm-sha:
+                description: "Exact fork commit for native vLLM GPU kernel validation; diagnostics only"
+                required: false
+                type: string
+                default: ""
             failure-fixture-run-id:
                 description: "Diagnostics only: replay atom_fp8_failure.pt from this run"
                 required: false
@@ -91,6 +96,11 @@ on:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
                 type: string
+            native-vllm-sha:
+                description: "Exact fork commit for native vLLM GPU kernel validation; diagnostics only"
+                required: false
+                type: string
+                default: ""
             failure-fixture-run-id:
                 description: "Diagnostics only: replay atom_fp8_failure.pt from this run"
                 required: false
@@ -129,7 +139,7 @@ jobs:
         actions: read
       if: ${{ inputs.runner-diagnostics-only }}
       runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
-      timeout-minutes: 30
+      timeout-minutes: 90
       steps:
         - name: Checkout inspection code
           uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -152,6 +162,7 @@ jobs:
             github-token: ${{ github.token }}
             run-id: ${{ inputs.failure-fixture-run-id }}
         - name: Validate direct FP8 KV projection and backend graph replay
+          if: ${{ inputs.native-vllm-sha == '' }}
           env:
             FAILURE_FIXTURE_RUN_ID: ${{ inputs.failure-fixture-run-id }}
           shell: bash
@@ -186,6 +197,34 @@ jobs:
               --entrypoint python3 \
               vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce \
               /repo/utils/atom_attention/direct_kv_diagnostics.py
+        - name: Validate exact native vLLM FP8 kernel source
+          if: ${{ inputs.native-vllm-sha != '' }}
+          env:
+            NATIVE_VLLM_SHA: ${{ inputs.native-vllm-sha }}
+          shell: bash
+          run: |
+            native_work_dir="$GITHUB_WORKSPACE/.native-fp8-validation/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            mkdir -p "$native_work_dir"
+            docker run --rm --init --network host --ipc=host --shm-size=8g \
+              --name "native-fp8-validate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+              --device=/dev/kfd --device=/dev/dri \
+              --group-add "$(getent group video | cut -d: -f3)" \
+              --group-add "$(getent group render | cut -d: -f3)" \
+              -v "$GITHUB_WORKSPACE":/repo:ro \
+              -v "$native_work_dir":/work \
+              -e PYTHONDONTWRITEBYTECODE=1 \
+              --entrypoint python3 \
+              vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce \
+              /repo/utils/atom_attention/native_vllm_gpu_validate.py \
+              --native-sha "$NATIVE_VLLM_SHA"
+        - name: Upload native GPU validation evidence
+          if: ${{ always() && inputs.native-vllm-sha != '' }}
+          uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a8875d1fc6a0a
+          with:
+            name: native-vllm-fp8-kernel-validation-${{ github.run_id }}
+            path: .native-fp8-validation/${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+            if-no-files-found: error
+
     wait-for-prerequisite:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest

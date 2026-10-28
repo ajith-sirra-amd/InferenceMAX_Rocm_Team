@@ -32,3 +32,11 @@ These are prototype results. Exact native-PR GPU validation is still pending; th
 - No serving smoke runs. Preserve fixed GSM8K task/scoring and test thresholds.
 - Use exact code revisions and actual execution proof; do not present plugin evidence as native-PR validation.
 - Store evidence and keep English/Chinese documentation synchronized. Append benchmark behavior changes to the performance changelog.
+
+## Native GPU validation harness
+
+The e2e workflow now accepts `native-vllm-sha` with an exact fork commit when `runner-diagnostics-only=true`.
+The [runner](../../utils/atom_attention/native_vllm_gpu_validate.py) checks out that revision, uses a repository-local `.venv` and matching-base precompiled libraries, and runs the native `flydsl_fp8` kernel tests.
+It records source hashes, package/GPU provenance, and JUnit results; missing or skipped selected tests fail validation.
+This is kernel validation only. Model GSM8K, serving synchronization, full performance, and the historical captured-BF16 criterion remain separate checks.
+Dispatch follows the current full performance result and final native source selection; no native GPU job was launched during the active performance run.
