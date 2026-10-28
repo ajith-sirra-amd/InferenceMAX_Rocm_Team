@@ -54,3 +54,32 @@ Previously queued run 40713116775 was cancelled before its GPU benchmark job;
 the agentic benchmark job was skipped. Only GSM8K run 40712931283 continues.
 Do not dispatch or restart a full performance run without a new user instruction.
 The accuracy checker and artifact collector remain active.
+
+## GSM8K completed; full performance authorized again
+
+The later instruction to dispatch the full run supersedes the cancellation above.
+The cancelled run remains cancelled. A new [full performance run 40719654583](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583)
+uses execution source `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`, identical to the tested candidate.
+Its workflow revision is `a6ac3e9550b5df48ddd52238d91165952a5a8580`; only documentation/evidence changed since the tested source.
+The standard 3,600-second AgentX replay uses concurrency 48 and TP8/DCP8 on eight MI355X GPUs.
+Compare against 17,406.08912 total input + output tokens/s/GPU, with request errors and actual FP8 execution checked.
+The checker and artifact collector poll every 60 seconds.
+
+GSM8K run 40712931283 completed successfully on all 1,319 questions, five-shot, temperature 0:
+
+| Scoring | Correct | Accuracy | Change from cached-only FP8 prototype |
+| --- | ---: | ---: | ---: |
+| Strict | 1,279 / 1,319 | 96.96740% | -2 answers |
+| Flexible | 1,278 / 1,319 | 96.89158% | -3 answers |
+
+Artifacts `12828229398` (results/samples) and `12828099867` (server log) were checked directly.
+The unchanged validator with `require_causal=True` verified cached FP8 projection/FMHA and causal FP8 calls on the same eight workers during evaluation.
+This is plugin evidence under eager/512-token accuracy routing, not native-PR GPU validation.
+It does not close the captured-BF16 LSE gate.
+
+After the performance result, include new-token FP8 in native PR #64288 only if the measured uplift supports it.
+Then validate the final native revision on GPU: kernel numerics, graph replay, optimized-path GSM8K, synchronization checks, serving performance, and required CI.
+The reviewer also requested each reference PR (#59124 and #62447) alone versus the same PR plus direct FP8 up-projection, with identical weights and runtime settings within each pair.
+Those ablations remain pending and are separate from run 40719654583.
+Update the PR with actual native evidence and mark it ready for review only after the required checks pass.
+The additional-environment-variable discussion remains open for a later decision.

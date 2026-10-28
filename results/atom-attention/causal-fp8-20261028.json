@@ -64,7 +64,7 @@
     "run_id": 40712931283,
     "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40712931283",
     "prerequisite": 40712781470,
-    "result": "pending",
+    "result": "success",
     "dispatch": {
       "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
       "inputs": {
@@ -78,19 +78,222 @@
         "after-run-id": "40712781470",
         "failure-fixture-run-id": ""
       }
-    }
+    },
+    "questions": 1319,
+    "fewshot": 5,
+    "temperature": 0,
+    "strict_correct": 1279,
+    "flexible_correct": 1278,
+    "strict_percent": 96.96739954510993,
+    "flexible_percent": 96.89158453373769,
+    "results_artifact_id": 12828229398,
+    "server_log_artifact_id": 12828099867,
+    "actual_cached_and_causal_fp8_workers": 8,
+    "execution_proof": {
+      "workers": 8,
+      "records": [
+        {
+          "pid": 1926,
+          "fp8_projection": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12,
+          "phase": "gsm8k_evaluation"
+        },
+        {
+          "pid": 1932,
+          "fp8_projection": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12,
+          "phase": "gsm8k_evaluation"
+        },
+        {
+          "pid": 1929,
+          "fp8_projection": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12,
+          "phase": "gsm8k_evaluation"
+        },
+        {
+          "pid": 1930,
+          "fp8_projection": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12,
+          "phase": "gsm8k_evaluation"
+        },
+        {
+          "pid": 1927,
+          "fp8_projection": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12,
+          "phase": "gsm8k_evaluation"
+        },
+        {
+          "pid": 1928,
+          "fp8_projection": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12,
+          "phase": "gsm8k_evaluation"
+        },
+        {
+          "pid": 1931,
+          "fp8_projection": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12,
+          "phase": "gsm8k_evaluation"
+        },
+        {
+          "pid": 1925,
+          "fp8_projection": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12,
+          "phase": "gsm8k_evaluation"
+        }
+      ],
+      "scope": "native FP8 projection and FP8 FMHA invoked during evaluation; not a numerical threshold result",
+      "causal_records": [
+        {
+          "pid": 1926,
+          "phase": "gsm8k_evaluation",
+          "causal": true,
+          "prepared_qkv_reused": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12
+        },
+        {
+          "pid": 1927,
+          "phase": "gsm8k_evaluation",
+          "causal": true,
+          "prepared_qkv_reused": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12
+        },
+        {
+          "pid": 1928,
+          "phase": "gsm8k_evaluation",
+          "causal": true,
+          "prepared_qkv_reused": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12
+        },
+        {
+          "pid": 1931,
+          "phase": "gsm8k_evaluation",
+          "causal": true,
+          "prepared_qkv_reused": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12
+        },
+        {
+          "pid": 1925,
+          "phase": "gsm8k_evaluation",
+          "causal": true,
+          "prepared_qkv_reused": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12
+        },
+        {
+          "pid": 1932,
+          "phase": "gsm8k_evaluation",
+          "causal": true,
+          "prepared_qkv_reused": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12
+        },
+        {
+          "pid": 1929,
+          "phase": "gsm8k_evaluation",
+          "causal": true,
+          "prepared_qkv_reused": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12
+        },
+        {
+          "pid": 1930,
+          "phase": "gsm8k_evaluation",
+          "causal": true,
+          "prepared_qkv_reused": true,
+          "q_dtype": "torch.float8_e4m3fn",
+          "k_dtype": "torch.float8_e4m3fn",
+          "v_dtype": "torch.float8_e4m3fn",
+          "q_tokens": 512,
+          "kv_tokens": 512,
+          "heads": 12
+        }
+      ]
+    },
+    "scope": "plugin evaluation with eager/512-token accuracy routing; native PR validation remains pending"
   },
   "full_performance": {
-    "run_id": 40713116775,
-    "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40713116775",
+    "run_id": 40719654583,
+    "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583",
     "prerequisite": 40712931283,
     "duration_seconds": 3600,
-    "result": "cancelled before GPU benchmark",
+    "result": "in_progress",
     "dispatch": {
       "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
       "inputs": {
         "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
-        "test-name": "Kimi causal FP8 prepared-QKV full performance bb8bed7",
+        "test-name": "Kimi causal FP8 full performance after GSM8K bb8bed7 154818",
         "ref": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
         "runner-diagnostics-only": "false",
         "attention-path-probe-only": "false",
@@ -100,15 +303,125 @@
         "failure-fixture-run-id": ""
       }
     },
-    "user_instruction": "Do not dispatch full run; cancel previously queued run",
-    "workflow_status_at_check": "in_progress",
-    "workflow_conclusion_at_check": null,
-    "gpu_job_started": false,
-    "dispatch_authorized": false
+    "dispatch_utc": "2026-10-28T15:48:18Z",
+    "workflow_head_sha": "a6ac3e9550b5df48ddd52238d91165952a5a8580",
+    "execution_source_sha": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+    "dispatch_authorized": true,
+    "user_instruction": "Also, you can dispatch full run now. Accuracy test passed."
   },
   "limitations": [
-    "Controlled causal tests do not resolve the prior captured-BF16 numerical failure.",
-    "No causal-path GSM8K or throughput result yet.",
-    "Native vLLM PR #64288 is separate and still needs GPU validation."
-  ]
+    "Controlled causal tests and GSM8K do not resolve the prior captured-BF16 LSE gate failure.",
+    "New-token causal throughput remains pending; compare with established cached-only FP8 result 17406.08912.",
+    "Native vLLM PR #64288 requires GPU validation at its final code revision.",
+    "Matched reference-PR ablations remain pending."
+  ],
+  "full_performance_history": [
+    {
+      "run_id": 40713116775,
+      "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40713116775",
+      "prerequisite": 40712931283,
+      "duration_seconds": 3600,
+      "result": "cancelled before GPU benchmark",
+      "dispatch": {
+        "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+        "inputs": {
+          "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+          "test-name": "Kimi causal FP8 prepared-QKV full performance bb8bed7",
+          "ref": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+          "runner-diagnostics-only": "false",
+          "attention-path-probe-only": "false",
+          "agentic-eval-only": "false",
+          "duration-override": "",
+          "after-run-id": "40712931283",
+          "failure-fixture-run-id": ""
+        }
+      },
+      "user_instruction": "Do not dispatch full run; cancel previously queued run",
+      "workflow_status_at_check": "in_progress",
+      "workflow_conclusion_at_check": null,
+      "gpu_job_started": false,
+      "dispatch_authorized": false
+    }
+  ],
+  "native_followup": {
+    "user_instruction": "After this New Token Quant FP8, validate PR on GPU and update PR. Once it all passes all checks, make it open.",
+    "pr": 64288,
+    "current_head": "08e5d81a0d4fc76c20a97f9a517195db5a5dc5be",
+    "include_causal_condition": "only after measured performance uplift and accuracy evidence",
+    "required_checks": [
+      "Review full-run throughput, request errors, and actual cached/causal execution on all eight workers.",
+      "Validate final native source with GPU kernel, causal masking if included, changed-input graph replay, and nonunit-scale tests.",
+      "Resolve or rigorously characterize the existing captured-BF16 numerical failure without loosening the gate merely to pass.",
+      "Run VLLM_GPU_SYNC_CHECK=error with the optimized native path active.",
+      "Run full GSM8K on exact native source with real speculative verification and eight-worker path evidence.",
+      "Measure exact native serving performance and the requested reference-PR ablations under matched settings.",
+      "Complete required static/CI checks and update the PR with native results, retaining distinct prototype evidence.",
+      "Mark ready for review only after required checks pass; leave environment-variable design discussion open until decided."
+    ],
+    "automatic_ready_enabled": false
+  },
+  "incremental_comparison_plan": {
+    "comment": "https://github.com/vllm-project/vllm/pull/64288#issuecomment-6473587403",
+    "native_pr_dependency": "independent of both reference PRs",
+    "status": "planned; source adaptation and GPU measurements pending",
+    "pairs": [
+      {
+        "reference_pr": 59124,
+        "reference_sha": "132f6daa6b17cb4000ef58355943bb39339104f2",
+        "variants": [
+          "reference alone",
+          "reference with direct FP8 cached KV projection"
+        ]
+      },
+      {
+        "reference_pr": 62447,
+        "reference_sha": "cefacabced64eda821bcb49493cc970056d15429",
+        "variants": [
+          "reference alone",
+          "reference with direct FP8 cached KV projection"
+        ]
+      }
+    ],
+    "controls": {
+      "model": "moonshotai/Kimi-K3",
+      "gpus": 8,
+      "gpu": "MI355X",
+      "tp": 8,
+      "dcp": 8,
+      "activation_dtype": "bfloat16",
+      "kv_cache_dtype": "fp8",
+      "quantization_config": {
+        "targets": {
+          "*in_proj_qkvgfab": "fp8_per_channel",
+          "*.self_attn.o_proj": "fp8_per_channel",
+          "*.self_attn.fused_qkv_a_proj": "fp8_per_channel",
+          "*.self_attn.g_proj": "fp8_per_channel",
+          "*.self_attn.f_b_proj": "fp8_per_channel",
+          "*.self_attn.g_a_proj": "fp8_per_channel",
+          "*.self_attn.g_b_proj": "fp8_per_channel",
+          "*.self_attn.q_b_proj": "fp8_per_channel",
+          "*.self_attn.kv_b_proj": "fp8_per_channel",
+          "*.self_attn.q_proj": "fp8_per_channel",
+          "*.self_attn.kv_a_proj_with_mqa": "fp8_per_channel",
+          "*.block_sparse_moe.shared_experts.gate_up_proj": "fp8_per_channel",
+          "*.block_sparse_moe.shared_experts.down_proj": "fp8_per_channel",
+          "language_model.model.layers.0.mlp.gate_up_proj": "fp8_per_channel",
+          "language_model.model.layers.0.mlp.down_proj": "fp8_per_channel"
+        }
+      },
+      "concurrency": 48,
+      "replay_duration_seconds": 3600,
+      "random_seed": 42,
+      "dataset": "semianalysisai/cc-traces-weka-062126",
+      "num_dataset_entries": 393,
+      "notes": [
+        "Use identical container/native-library/AITER versions, CPU/CCD affinity, graph settings, cache/offload settings and speculative configuration.",
+        "Pin code for each arm on a shared base before meaningful comparisons.",
+        "Record complete performance and actual backend invocation, not just readiness.",
+        "Repeat and alternate run order; report request errors and workload populations as well as throughput and latency."
+      ]
+    },
+    "isolation": "Keep each reference causal attention, Q quantization, FP8 weight configuration, scales policy, and runtime settings fixed within its pair; replace only eligible cached KV projection/output handoff. Do not claim simple cherry-picking automatically exercises both paths.",
+    "ready_for_review": "pending native validation and matched evidence"
+  }
 }
