@@ -74,8 +74,13 @@
   },
   "prototype_performance": {
     "run": 40695099743,
-    "status": "in_progress",
-    "result": null
+    "status": "completed",
+    "conclusion": "success",
+    "total_tps_per_gpu": 17406.08912,
+    "vs_established_pct": 2.8988865703449163,
+    "eight_worker_execution": true,
+    "measured_errors": 5,
+    "accuracy_run": false
   },
   "related_prs_reviewed": [
     59124,

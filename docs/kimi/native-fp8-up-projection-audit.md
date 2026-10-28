@@ -344,3 +344,39 @@ rather than adopting the reference's full-Q slice reuse at the same time.
 This follow-up is reviewed but not implemented or dispatched. Keep it separate from
 #64288 and validate causal masking, same-FP8-input output/LSE, model accuracy and full-run
 performance. Full run 40695099743 and its 60-second checker/collector remain active.
+
+## Completed full performance run (2026-10-28)
+
+[Run 40695099743](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40695099743)
+completed successfully at execution source `14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78`.
+The configured 3600-second AgentX replay used concurrency 48, eight MI355X,
+TP8/DCP8 and normal graph/routing settings. Its reported measurement window is
+3580.06515 seconds versus 3627.79603 for the established run.
+
+| Metric | Established 40646139769 | Current 40695099743 |
+|---|---:|---:|
+| Total input + output tokens/s/GPU | 16915.72154 | 17406.08912 (+2.8989%) |
+| Output tokens/s/GPU | 117.84290 | 120.16691 (+1.9721%) |
+| Mean TTFT, seconds | 1.87909 | 1.76809 |
+| p95 TTFT, seconds | 4.61033 | 4.36319 |
+| Mean TPOT, milliseconds | 24.68 | 23.15 |
+| Mean end-to-end latency, seconds | 19.29718 | 18.04654 |
+| Successful measured requests | 3598 | 3644 |
+| Measured errors | 7/3605 (0.1942%) | 5/3649 (0.1370%) |
+
+Current raw records include 425 warmup errors and 5 measured errors
+(4 empty-content responses and 1 client connection error). Warmup and error
+exclusions overlap; the 430 raw errors are not 430 measured failures.
+FP8-cache x FP8-weight projection with direct FP8 output and FP8 cached FMHA
+actually executed on all eight worker PIDs 1921-1928.
+Workload settings match; completed request populations and cache hits differ.
+This is a single full-run observation, not isolated kernel or CCD attribution.
+
+Performance uses synthetic speculative acceptance, as did the established run.
+The separate full GSM8K result remains 1281/1319 with real verification;
+this performance run is not an accuracy test. Native PR #64288 still needs
+its own GPU validation. The historical BF16 absolute-LSE criterion remains unpassed.
+
+[Machine-readable result](../../results/atom-attention/run40695099743/performance_evidence.json).
+The next requested experiment is causal FP8 attention using already-prepared
+new-token Q/K/V and their original descales, separately from the native PR.
