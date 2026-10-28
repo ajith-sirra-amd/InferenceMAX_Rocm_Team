@@ -46,3 +46,5 @@ The [runner](../../utils/atom_attention/native_vllm_gpu_validate.py) checks out 
 It records source hashes, package/GPU provenance, and JUnit results; missing or skipped selected tests fail validation.
 This is kernel validation only. Model GSM8K, serving synchronization, full performance, and the historical captured-BF16 criterion remain separate checks.
 Dispatch follows the current full performance result and final native source selection; no native GPU job was launched during the active performance run.
+
+The native harness resolves an explicit wheel URL for the exact upstream merge-base and requires matching ROCm, Python ABI, Torch, and Triton metadata. Missing or incompatible builds stop validation rather than falling back to another wheel. Resolver checks covered acceptance, Torch mismatch, Python ABI mismatch, and missing-build rejection; these are setup checks, not GPU numerical results.

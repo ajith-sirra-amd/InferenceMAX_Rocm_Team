@@ -46,3 +46,5 @@ e2e 工作流在 `runner-diagnostics-only=true` 时可接受精确 fork commit �
 它记录源码哈希、软件/GPU 信息和 JUnit 结果；选中的测试缺失或跳过均判为验证失败。
 这只是 kernel 验证。模型 GSM8K、服务同步检查、完整性能及历史捕获 BF16 门槛仍需分别验证。
 等待当前完整性能结果并选定最终原生版本后再派发；当前性能运行期间未启动原生 GPU 测试。
+
+原生验证脚本为精确 upstream merge-base 解析明确的 wheel URL，并要求 ROCm、Python ABI、Torch 和 Triton 元数据匹配。构建缺失或不兼容时停止验证，不回退到其他 wheel。解析器已检查正常接受、Torch 不匹配、Python ABI 不匹配及构建缺失拒绝；这些只是环境准备检查，不是 GPU 数值结果。

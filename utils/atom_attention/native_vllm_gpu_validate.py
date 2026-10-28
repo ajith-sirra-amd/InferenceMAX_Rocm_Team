@@ -25,6 +25,56 @@ def run(command, *, cwd, env, capture=False):
     return result.stdout if capture else None
 
 
+def resolve_exact_rocm_wheel(commit, runtime):
+    """Require the requested build and matching Torch/Triton binary versions."""
+    from urllib.parse import urljoin
+    from urllib.request import urlopen
+
+    hip = re.match(r"(\d+)\.(\d+)", runtime["hip"] or "")
+    if hip is None:
+        raise RuntimeError("Cannot identify the installed ROCm version")
+    variant = "rocm" + "".join(hip.groups())
+    index = f"https://wheels.vllm.ai/rocm/{commit}/{variant}/"
+    supported_tags = set(runtime["tags"])
+    selected = {}
+    for package in ("vllm", "torch", "triton"):
+        with urlopen(index + package + "/metadata.json", timeout=30) as response:
+            entries = json.load(response)
+        compatible = []
+        for entry in entries:
+            if entry.get("package_name") != package:
+                continue
+            if entry.get("variant") != variant:
+                continue
+            tags = {
+                f"{python}-{abi}-{platform}"
+                for python in entry["python_tag"].split(".")
+                for abi in entry["abi_tag"].split(".")
+                for platform in entry["platform_tag"].split(".")
+            }
+            if tags & supported_tags:
+                compatible.append(entry)
+        if len(compatible) != 1:
+            raise RuntimeError(
+                f"Expected one compatible {package} wheel for {commit}/{variant}; "
+                f"found {len(compatible)}"
+            )
+        selected[package] = compatible[0]
+    for package in ("torch", "triton"):
+        expected = selected[package]["version"]
+        if "+" not in expected:
+            expected += "+" + selected[package]["variant"]
+        if runtime[package] != expected:
+            raise RuntimeError(
+                f"Installed {package} {runtime[package]} differs from the "
+                f"requested build's {expected}; use matching dependencies"
+            )
+    wheel_url = urljoin(index + "vllm/", selected["vllm"]["path"])
+    if not wheel_url.startswith("https://wheels.vllm.ai/") or commit not in wheel_url:
+        raise RuntimeError("Wheel metadata does not resolve to the requested commit")
+    return wheel_url, selected
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--native-sha", required=True)
@@ -87,6 +137,19 @@ def main():
         run(["uv", "pip", "install", "--python", python, "setuptools>=77",
              "setuptools-scm>=8", "setuptools-rust", "wheel", "packaging",
              "pytest", "pytest-asyncio", "pytest-forked", "tblib"], cwd=source, env=env)
+        runtime_code = (
+            "import json,torch,triton; from packaging.tags import sys_tags; "
+            "print(json.dumps({'torch':torch.__version__,'hip':torch.version.hip,"
+            "'triton':triton.__version__,'tags':[str(t) for t in sys_tags()]}))"
+        )
+        runtime_output = run([python, "-c", runtime_code], cwd=source,
+                             env=env, capture=True)
+        runtime = json.loads(runtime_output.strip().splitlines()[-1])
+        wheel_url, wheel_metadata = resolve_exact_rocm_wheel(base, runtime)
+        env["VLLM_PRECOMPILED_WHEEL_LOCATION"] = wheel_url
+        record["precompiled_wheel"] = wheel_url
+        record["precompiled_metadata"] = wheel_metadata
+        record["binary_runtime"] = {k: v for k, v in runtime.items() if k != "tags"}
         run(["uv", "pip", "install", "--python", python, "--no-build-isolation",
              "--no-deps", "--editable", "."], cwd=source, env=env)
         provenance_code = (

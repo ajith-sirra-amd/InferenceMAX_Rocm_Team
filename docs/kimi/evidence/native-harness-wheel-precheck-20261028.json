@@ -1,0 +1,21 @@
+{
+  "scope": "setup resolver only; not GPU execution or numerical acceptance",
+  "upstream_base": "a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df",
+  "published_wheel_url": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm72-wheels/vllm-0.33.0rc1.dev182%2Bga1cfd2c1b.rocm72-cp312-cp312-manylinux_2_39_x86_64.whl",
+  "simulated_runtime_for_resolver_checks": {
+    "hip": "7.2.0",
+    "torch": "2.13.0+git733fca1",
+    "triton": "3.8.0+git669b31ac",
+    "tags": [
+      "cp312-cp312-manylinux_2_39_x86_64",
+      "cp312-cp312-manylinux_2_35_x86_64"
+    ]
+  },
+  "checks": {
+    "accepted_exact_build": true,
+    "reject_torch_mismatch": true,
+    "reject_python_abi_mismatch": true,
+    "missing_build_no_fallback": true
+  },
+  "actual_runner_runtime_verified": false
+}
