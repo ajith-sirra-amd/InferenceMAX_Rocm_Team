@@ -60,3 +60,6 @@ Shell 验证及实际 GPU 检查在诊断任务中执行。
 [运行 40670162135](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40670162135)，源提交 7e24cd6a5c7eb7d324ea106c76f7a160a840e687，通过同 scale K/V 字节精确验证、实际 backend Q 复用与清理，以及输入变化后的 graph replay。两个 cache scale 均无截断；BF16 投影相对 FP64 的 RMS 误差为 0.136–0.175%，最终 FP8 K/V 相对 BF16 投影为 2.645–2.753%。backend 输出相对原动态 scale 路径的 RMS 为 3.580%（eager）和 4.148%（改变输入后 graph replay）。
 
 [结构化证据](../../results/atom-attention/run40670162135/summary.json)。新增的独立 BF16 注意力比较将在模型 smoke 启动前的直接 K/V 预检中执行；真实模型验证仍待完成。首次运行 40669975181 在数值检查前因诊断导入作用域错误失败，已修复，未修改内核或门限。
+
+
+完整性能运行可设置 after-run-id 为前置数值运行 ID，ref 必须与其源 SHA 完全一致。workflow 在分配 GPU 前等待前置运行成功；失败时不调度性能任务。空值保留直接执行行为。

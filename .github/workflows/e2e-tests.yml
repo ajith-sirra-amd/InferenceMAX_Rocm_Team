@@ -47,6 +47,11 @@ on:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
                 type: string
+            after-run-id:
+                description: "Wait for this run to succeed before GPU scheduling; requires exact ref"
+                required: false
+                type: string
+                default: ""
             runner-diagnostics-only:
                 description: Run isolated FP8 attention and BF16 projection GPU diagnostics
                 required: false
@@ -81,6 +86,11 @@ on:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
                 type: string
+            after-run-id:
+                description: "Wait for this run to succeed before GPU scheduling; requires exact ref"
+                required: false
+                type: string
+                default: ""
             runner-diagnostics-only:
                 description: Run isolated FP8 attention and BF16 projection GPU diagnostics
                 required: false
@@ -140,7 +150,29 @@ jobs:
               --entrypoint python3 \
               vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce \
               /repo/utils/atom_attention/direct_kv_diagnostics.py
+    wait-for-prerequisite:
+        if: ${{ !inputs.runner-diagnostics-only }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        permissions:
+            actions: read
+        steps:
+            - name: Wait for preceding numerical run
+              if: ${{ inputs.after-run-id != '' }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PREREQUISITE_RUN_ID: ${{ inputs.after-run-id }}
+                  SOURCE_REF: ${{ inputs.ref }}
+              run: |
+                  case "$PREREQUISITE_RUN_ID" in ''|*[!0-9]*) echo "Expected numeric prerequisite run ID" >&2; exit 1 ;; esac
+                  PRECEDING_SHA=$(gh run view "$PREREQUISITE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq '.headSha')
+                  test "$PRECEDING_SHA" = "$SOURCE_REF" || { echo "Prerequisite source SHA differs from requested execution ref" >&2; exit 1; }
+                  gh run watch "$PREREQUISITE_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status --interval 30
+                  PRECEDING_RESULT=$(gh run view "$PREREQUISITE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')
+                  test "$PRECEDING_RESULT" = "success"
+
     get-jobs:
+        needs: wait-for-prerequisite
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest
         outputs:

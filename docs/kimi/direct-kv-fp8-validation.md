@@ -72,3 +72,6 @@ timings and synthetic errors. Those timings exclude serving and DCP communicatio
 [Run 40670162135](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40670162135), source 7e24cd6a5c7eb7d324ea106c76f7a160a840e687, passed exact same-scale K/V bytes, actual-backend Q reuse and cleanup, and changed-input graph replay. Both cache scales had zero clipping. BF16 projection relative RMS versus FP64 was 0.136–0.175%; final supplied-scale FP8 K/V versus BF16 projection was 2.645–2.753%. Backend attention RMS versus the old dynamic-scale path was 3.580% eager and 4.148% after changed-input graph replay.
 
 [Structured evidence](../../results/atom-attention/run40670162135/summary.json). The additional independent BF16 attention comparison runs in the direct-KV preflight before model startup in the serving smoke. Real-model validation remains pending. First attempt 40669975181 stopped before numerical checks on a diagnostic import-scoping error; that was fixed without changing the kernel or thresholds.
+
+
+A full performance run can be dispatched with after-run-id set to its preceding numerical run ID and ref set to the identical source SHA. The workflow waits before GPU scheduling and proceeds only on success. A failed prerequisite prevents performance execution. An empty value preserves immediate execution.
