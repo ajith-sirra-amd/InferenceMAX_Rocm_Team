@@ -64,8 +64,34 @@ def run_case(cache_scale):
         (x.float() * s.reciprocal()).clamp(-448, 448).to(torch.float8_e4m3fn)
         for x, s in ((k, supplied[:1]), (v, supplied[1:]))
     )
-    for actual, expected in zip(direct[:2], same_scale_reference):
-        torch.testing.assert_close(actual.float(), expected.float(), rtol=0, atol=0)
+    mismatches = []
+    for name, actual, expected, bf16, ref64, scale8 in zip(
+        ("K", "V"), direct[:2], same_scale_reference, (k, v), (k64, v64),
+        (direct[2], direct[3]),
+    ):
+        mask = actual.view(torch.uint8) != expected.view(torch.uint8)
+        count = mask.sum().item()
+        if count:
+            from vllm._aiter_ops import rocm_aiter_ops
+            hip_ref, _ = rocm_aiter_ops.per_tensor_quant(bf16, torch.float8_e4m3fn, scale8)
+            dynamic_candidate = expand_context_fp8(cache, scale, indices, weight, heads, mode="fused_amax")
+            dynamic8 = existing[1] if name == "K" else existing[2]
+            fused8 = dynamic_candidate[0] if name == "K" else dynamic_candidate[1]
+            positions = mask.nonzero()[:8]
+            values = []
+            for pos in positions:
+                idx = tuple(pos.tolist())
+                values.append({"index": idx, "candidate": actual.float()[idx].item(),
+                    "torch_quant": expected.float()[idx].item(), "hip_quant": hip_ref.float()[idx].item(),
+                    "native_bf16": bf16[idx].item(), "fp64_projection": ref64[idx].item(),
+                    "scaled_native_fp64": (bf16[idx].double()/scale8.double()).item()})
+            print("KV_CHAIN_MISMATCH_DETAIL", json.dumps({"name": name, "cache_scale": cache_scale,
+                "mismatches": count, "total": actual.numel(), "values": values,
+                "candidate_vs_hip_mismatches": (actual.view(torch.uint8)!=hip_ref.view(torch.uint8)).sum().item(),
+                "fused_amax_vs_native_dynamic_mismatches": (fused8.view(torch.uint8)!=dynamic8.view(torch.uint8)).sum().item(),
+                "global_fp8_value_error": metric(actual.float(), expected.float()),
+                "scale": scale8.item(), "torch_reciprocal": scale8.reciprocal().item()}), flush=True)
+            mismatches.append(name)
     rows = {}
     for name, bf16, fp64, fp8, descale, supplied8, supplied_scale in [
         ("K", k, k64, k8, ks, direct[0], direct[2]),
@@ -90,13 +116,15 @@ def run_case(cache_scale):
     print("KV_CHAIN_NUMERICS", json.dumps({
         "cache_scale": scale.item(), "kv_tokens": 8192, "heads": heads,
         "raw_fp8_to_bf16_widening_max_abs": 0.0,
-        "supplied_scale_projection_matches_separate_quant_exactly": True,
+        "supplied_scale_projection_matches_separate_quant_exactly": not mismatches,
         "reference": "FP64 dequantization/projection of identical FP8 cache and BF16 weights",
         "native_order": "widen raw FP8 to BF16; BF16 dot with FP32 accumulation; apply cache scale; round to BF16",
         "K_includes": "128 projected columns plus 64 RoPE columns per head",
         "results": rows,
         "scope": "synthetic tensor errors; not model accuracy or loss versus an unquantized original cache",
     }, allow_nan=False), flush=True)
+    if mismatches:
+        raise AssertionError("Same-scale mismatch diagnostic: " + str(mismatches))
 
 
 if __name__ == "__main__":
