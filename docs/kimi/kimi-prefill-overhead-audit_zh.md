@@ -8,7 +8,7 @@
 - FP8 FMHA 核函数更快，不代表完整 attention 调用更快；还需计入展开、量化、通信、合并。
 - 旧版全 FP8 agentic smoke：11,789.99 total tokens/sec/GPU，且存在请求错误；短测不能与完整基线直接比较。
 - 当前方案：causal 和小 cached chunk 保留 BF16，较大 cached chunk 使用 FlyDSL FP8。
-- 当前 smoke：[40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020)；测试 SHA：`e4cf47a7650321e4bd40c83746088a2679ec0509`。实际调用及 KV 容量等待 artifact 验证。
+- 当前 smoke：[40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020)；测试 SHA：`e4cf47a7650321e4bd40c83746088a2679ec0509`。实际调用及 KV 容量已通过 artifact 验证，详见文末状态。
 
 ## 先区分模型和基线
 
@@ -127,3 +127,16 @@
 
 - 使用已有 perf/kimi-attnfp8-kv-allgather-20261021 分支。
 - 不修改 chore/sa-agentx-v1.0；代码仅写入本仓库。
+
+## 已验证的前缀 smoke 与恢复监控的完整 replay  2026-10-28
+
+- Smoke [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020) 通过：**20/20 请求成功、0 失败**，prefix-hit tokens 增加 **620,544**。
+- 实际 GPU KV 容量为 **22,665,373 tokens**。8 个 worker 均确认 BF16 causal、FP8 cached FMHA、主模型 ASM PS 禁用、同一 forward 内 Q 复用和 native fused FP8 gather。
+- Numerical preflight 与 QUERY_REUSE_PASS 均通过。最新 Q1024/KV8192 完整调用计时：BF16 **172.28 µs**，hybrid **111.99 µs（1.538）**；两个 cached chunk 为 **337.45 / 204.27 µs（1.652）**。这些是单 GPU 诊断，不包含 KV 重建和 collective。
+- 每个 worker 在线量化 **489 层**，kv_b 权重保留 BF16。模型加载 **439.4440.3 秒**、占用 **184.08 GiB/GPU**，比旧测试的 23.6 分钟更短。
+- 请求的 FULL_AND_PIECEWISE 实际降为 **FULL_DECODE_ONLY**，原因是模型没有 compiled submodule 且关闭了 breakable graphs。Graph capture 占用 **9.209.64 GiB/GPU**。
+- Attention block 实际对齐为 **1536 tokens**，Mamba page padding 为 **3.97%**。Planner 还报告新增 18 个 padding layers，相关 cache grouping 最多可能浪费 **26.09%**；这是上界，不是全局显存浪费的实测值。
+- 此次受控前缀 smoke 未出现 hipBLASLt recovery warning；完整 AgentX 的形状不同，仍需检查。
+- 已自动启动 [full run40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769)，**07:20 UTC** 时仍在运行。不要重复 dispatch。
+- Full 配置：Moonshot、TP8/DCP8、C48、DSpark k4、warmup10/lane、3600 秒、无 GSM8K。已完成的 setup-job 日志确认 checkout 为 **e4cf47a7650321e4bd40c83746088a2679ec0509**；workflow head 是后续文档提交。
+- 原本地 watcher 于 07:05 UTC 终止。新会话已恢复每 60 秒检查；完整 throughput、请求错误和 cache-hit rate 仍待结果。

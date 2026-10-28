@@ -1,18 +1,18 @@
 # vLLM Kimi hybrid BF16 / FlyDSL FP8 prefill
 
-[中文](atom-flydsl-attention_zh.md) · [Overhead audit](kimi-prefill-overhead-audit.md) · [Baselines](atom-attention-BASELINES.md)
+[中文](atom-flydsl-attention_zh.md)  [Overhead audit](kimi-prefill-overhead-audit.md)  [Baselines](atom-attention-BASELINES.md)
 
 - Framework: native vLLM in the pinned ROCm image.
 - Model: **Moonshot Kimi-K3**; native draft remains Inferact/Kimi-K3-DSpark.
 - FP8 API: `aiter.ops.flydsl.flydsl_flash_attn_fp8_func`, also used by ATOM.
 - Extension lives in this repository; installed vLLM/AITER source is not patched.
 - Current source under test: `e4cf47a7650321e4bd40c83746088a2679ec0509`.
-- Current smoke: [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020). Actual model path engagement is pending artifacts.
+- Current smoke: [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020). Artifacts confirm all eight workers, 20/20 successful requests and 22,665,373 KV tokens. Full replay [40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769) was dispatched automatically; results are pending.
 
 | Stage | Current candidate |
 |---|---|
 | Loader, scheduler, weight quantization and KV storage | Native vLLM recipe, Moonshot checkpoint, online FP8 targets |
-| DCP and latent KV expansion | BF16 kv_b weights make pinned native fused compact-FP8 gather/expansion eligible; verify actual route marker |
+| DCP and latent KV expansion | BF16 kv_b weights make pinned native fused compact-FP8 gather/expansion eligible; the smoke verified the actual route on all eight workers |
 | Expanded K/V | BF16; direct FP8 expansion is not implemented |
 | Causal FMHA | Native BF16 |
 | Cached FMHA with max Q < 512 or max KV < 8192 | Native BF16 |
@@ -24,10 +24,10 @@
 
 - FP8 kv_b online weight override was removed: approximately 36 MiB/GPU raw weight cost over 24 MLA layers.
 - TP8 has **12 heads/rank**: Q/K head size192; V head size128.
-- Complete cached-attention diagnostic: Q1024/KV8192 improved 1.656× including quantization; Q256/KV4096 regressed 0.827×.
+- Complete cached-attention diagnostic: Q1024/KV8192 improved 1.656 including quantization; Q256/KV4096 regressed 0.827.
 - QKV preparation costs about55µs in those diagnostics; KV-only preparation still costs about52µs.
 - Full throughput and 23M KV pool are not established by standalone kernel timing.
-- Numerical RMS drift is roughly4–5% versus unquantized FP64 reference; no model accuracy claim.
+- Numerical RMS drift is roughly45% versus unquantized FP64 reference; no model accuracy claim.
 
 ## Validation and continuation
 
@@ -43,6 +43,6 @@
 
 - Old all-FP8 smoke40634885348:22,695,620 KV tokens,11,789.99 total and61.13 output tokens/sec/GPU; measured requests476success/2empty-response errors.
 - Old warmup also had85empty-response errors; job success alone does not establish acceptable request quality.
-- Primary baseline39239112271 is Moonshot,15,476.47 total tokens/sec/GPU; historical “AMD baseline” labels are inaccurate.
+- Primary baseline39239112271 is Moonshot,15,476.47 total tokens/sec/GPU; historical AMD baseline labels are inaccurate.
 - Communication, expansion GEMM and offload costs are not yet isolated. Roofline work remains on hold.
 - See the [overhead audit](kimi-prefill-overhead-audit.md) for exact matrix flow, costs and remaining constraints.

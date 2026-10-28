@@ -1,0 +1,12 @@
+{
+  "smoke_run": 40643563020,
+  "raw_artifact_id": 12797620926,
+  "full_run": 40646139769,
+  "tested_source": "e4cf47a7650321e4bd40c83746088a2679ec0509",
+  "last_observed_utc": "2026-10-28T07:20:14Z",
+  "full_status": "in_progress",
+  "warmup_requests_per_lane": 10,
+  "duration_seconds": 3600,
+  "checkpoint": "moonshotai/Kimi-K3",
+  "next": "Inspect full artifacts and compare total/output throughput, request errors, KV pool and cache-hit rates with run39239112271; do not duplicate dispatch."
+}

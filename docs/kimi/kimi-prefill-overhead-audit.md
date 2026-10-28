@@ -8,7 +8,7 @@
 - A faster FP8 FMHA kernel can still produce a slower complete attention call: expansion, quantization, communication and merging also consume time.
 - Previous all-FP8 agentic smoke completed at **11,789.99 total tokens/sec/GPU**; its short duration and request errors prevent a matched baseline comparison.
 - Current candidate keeps BF16 where measured conversion overhead outweighed FP8 compute savings and uses FP8 for larger cached-context chunks.
-- Current smoke: [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020), source `e4cf47a7650321e4bd40c83746088a2679ec0509`. Kernel invocation and KV capacity are pending artifact verification.
+- Current smoke: [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020), source `e4cf47a7650321e4bd40c83746088a2679ec0509`. Artifact verification passed; see the verified smoke and full-replay status below.
 
 ## References: checkpoint names matter
 
@@ -138,3 +138,16 @@ Paths below are repository-relative.
 
 - Working branch: `perf/kimi-attnfp8-kv-allgather-20261021`.
 - Preserve `chore/sa-agentx-v1.0`; code writes stay in this repository.
+
+## Verified prefix smoke and resumed full replay  2026-10-28
+
+- Smoke [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020) passed: **20/20 successful requests, zero failures**, and **620,544** additional prefix-hit tokens.
+- Runtime capacity: **22,665,373 GPU KV tokens**. All eight workers confirmed BF16 causal, FP8 cached FMHA, disabled main ASM PS metadata, same-forward Q reuse, and native fused FP8 gather.
+- Both numerical preflight and QUERY_REUSE_PASS succeeded. The latest Q1024/KV8192 complete-call diagnostic measured **172.28 µs BF16 versus 111.99 µs hybrid (1.538)**; two cached chunks measured **337.45 versus 204.27 µs (1.652)**. These remain single-GPU diagnostics excluding reconstruction and collectives.
+- This smoke loaded **489 online-quantized layers per worker**, retaining BF16 kv_b weights. Model loading was **439.4440.3 seconds** and **184.08 GiB/GPU**, shorter than the older 23.6-minute observation.
+- Requested FULL_AND_PIECEWISE was **resolved to FULL_DECODE_ONLY** because the model had no compiled submodule and breakable graphs were disabled. Graph capture used **9.209.64 GiB/GPU**.
+- Runtime aligned attention blocks to **1536 tokens**, padded Mamba pages by **3.97%**, and warned that 18 added padding layers could waste at most **26.09%** of the affected cache grouping. The latter is a planner bound, not a measured global memory loss.
+- No hipBLASLt recovery warning appeared in this controlled prefix smoke. That does not establish its absence in full AgentX shapes.
+- Automatic continuation already dispatched [full run40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769). It was in progress at **07:20 UTC**. Do not dispatch a duplicate.
+- Full settings: Moonshot, TP8/DCP8, C48, DSpark k4, warmup10/lane, duration3600 seconds, no GSM8K. The completed setup-job log verifies checkout **e4cf47a7650321e4bd40c83746088a2679ec0509**; the workflow head is a later documentation commit.
+- The prior local watcher terminated at 07:05 UTC. Monitoring resumed in the replacement session with 60-second checks. Full throughput, request errors and cache-hit rates are still pending.

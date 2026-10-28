@@ -1,0 +1,90 @@
+{
+  "run_id": 40643563020,
+  "source_ref": "e4cf47a7650321e4bd40c83746088a2679ec0509",
+  "preflight_pass": {
+    "ATOM_ATTENTION_PREFLIGHT_PASS": true,
+    "QUERY_REUSE_PASS": true
+  },
+  "measurements": [
+    {
+      "q_tokens": 1024,
+      "kv_tokens": 1024,
+      "heads": 12,
+      "causal": true,
+      "bf16_fmha_ms": 0.035888299345970154,
+      "candidate_complete_call_ms": 0.03524029850959778,
+      "bf16_over_candidate": 1.0183880632054207,
+      "candidate_path": "BF16",
+      "scope": "attention plus adapter preparation; shared-host diagnostic"
+    },
+    {
+      "q_tokens": 4096,
+      "kv_tokens": 4096,
+      "heads": 12,
+      "causal": true,
+      "bf16_fmha_ms": 0.10256489515304565,
+      "candidate_complete_call_ms": 0.10204889774322509,
+      "bf16_over_candidate": 1.005056374162109,
+      "candidate_path": "BF16",
+      "scope": "attention plus adapter preparation; shared-host diagnostic"
+    },
+    {
+      "q_tokens": 256,
+      "kv_tokens": 4096,
+      "heads": 12,
+      "causal": false,
+      "bf16_fmha_ms": 0.08722479939460755,
+      "candidate_complete_call_ms": 0.086428701877594,
+      "bf16_over_candidate": 1.0092110317489327,
+      "candidate_path": "BF16",
+      "scope": "attention plus adapter preparation; shared-host diagnostic"
+    },
+    {
+      "q_tokens": 1024,
+      "kv_tokens": 8192,
+      "heads": 12,
+      "causal": false,
+      "bf16_fmha_ms": 0.17227749824523925,
+      "candidate_complete_call_ms": 0.11198899745941163,
+      "bf16_over_candidate": 1.5383430707795924,
+      "candidate_path": "FlyDSL FP8 cached context",
+      "scope": "attention plus adapter preparation; shared-host diagnostic"
+    },
+    {
+      "q_tokens": 256,
+      "kv_tokens": 4096,
+      "heads": 12,
+      "qkv_quant_ms": 0.05772849917411804,
+      "kv_quant_with_reused_q_ms": 0.057924401760101316,
+      "fp8_fmha_without_quant_ms": 0.03795230090618133,
+      "two_chunk_bf16_ms": 0.17000149488449096,
+      "two_chunk_candidate_ms": 0.17192150354385377,
+      "two_chunk_candidate_host_wall_ms": 0.19283834844827652,
+      "pair_speed_ratio": 0.9888320621924234,
+      "q_reuse_logical_bytes_saved_per_extra_chunk": 2949120,
+      "fp8_q_retained_bytes": 589824,
+      "expanded_bf16_kv_bytes_per_chunk": 31457280,
+      "fp8_kv_bytes_per_chunk": 15728640,
+      "traffic_note": "Logical tensor traffic estimate; no measured HBM counters.",
+      "scope": "single GPU shared-host kernel diagnostic; excludes KV expansion and collectives"
+    },
+    {
+      "q_tokens": 1024,
+      "kv_tokens": 8192,
+      "heads": 12,
+      "qkv_quant_ms": 0.058744502067565915,
+      "kv_quant_with_reused_q_ms": 0.052924501895904544,
+      "fp8_fmha_without_quant_ms": 0.05161240100860596,
+      "two_chunk_bf16_ms": 0.33745489120483396,
+      "two_chunk_candidate_ms": 0.20426580905914307,
+      "two_chunk_candidate_host_wall_ms": 0.2061772160232067,
+      "pair_speed_ratio": 1.6520380613826926,
+      "q_reuse_logical_bytes_saved_per_extra_chunk": 11796480,
+      "fp8_q_retained_bytes": 2359296,
+      "expanded_bf16_kv_bytes_per_chunk": 62914560,
+      "fp8_kv_bytes_per_chunk": 31457280,
+      "traffic_note": "Logical tensor traffic estimate; no measured HBM counters.",
+      "scope": "single GPU shared-host kernel diagnostic; excludes KV expansion and collectives"
+    }
+  ]
+}

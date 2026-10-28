@@ -1,16 +1,16 @@
 # vLLM Kimi：BF16 / FlyDSL FP8 混合 prefill
 
-[English](atom-flydsl-attention.md) · [开销审计](kimi-prefill-overhead-audit_zh.md) · [基线](atom-attention-BASELINES.md)
+[English](atom-flydsl-attention.md)  [开销审计](kimi-prefill-overhead-audit_zh.md)  [基线](atom-attention-BASELINES.md)
 
 - Native vLLM、固定 ROCm image；Moonshot Kimi-K3。
 - 使用 ATOM 同样的 AITER FlyDSL FP8 FMHA API，不替换 vLLM 框架。
 - 不 patch 安装的 vLLM/AITER source；使用本仓库扩展。
-- 当前 smoke40643563020，source SHA e4cf47a7650321e4bd40c83746088a2679ec0509；等待实际调用证据。
+- 当前 smoke40643563020，source SHA e4cf47a7650321e4bd40c83746088a2679ec0509；已验证全部 8 workers 的实际调用、20/20 请求成功和 22,665,373 KV tokens。Full replay [40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769) 已自动启动，结果待完成。
 
 | 步骤 | 当前路径 |
 |---|---|
 | Loader / scheduler / weight quant / KV storage | Native vLLM + Moonshot + online FP8 targets |
-| DCP / latent expansion | BF16 kv_b 权重适配 native fused compact FP8 gather；等待 marker 验证 |
+| DCP / latent expansion | BF16 kv_b 权重适配 native fused compact FP8 gather；smoke 已确认全部 8 workers 的 marker |
 | Expanded K/V | BF16；没有直接输出 FP8 expanded KV |
 | Causal FMHA | BF16 |
 | Cached max Q < 512 或 max KV < 8192 | BF16 |
@@ -22,9 +22,9 @@
 
 - 删除 FP8 kv_b weight override，原始权重成本约36 MiB/GPU。
 - TP8 每 rank12 heads；Q/K head192，V head128。
-- 完整 cached call diagnostic：Q1024/KV8192 改善1.656×；Q256/KV4096 退化0.827×。
+- 完整 cached call diagnostic：Q1024/KV8192 改善1.656；Q256/KV4096 退化0.827。
 - QKV quant 约55µs，Q reuse 后 KV quant 仍约52µs。
-- Numerical drift 约4–5% RMS，不是模型 accuracy 证据。
+- Numerical drift 约45% RMS，不是模型 accuracy 证据。
 
 ## 验证与自动继续
 

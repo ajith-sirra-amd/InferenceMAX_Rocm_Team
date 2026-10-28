@@ -1,0 +1,81 @@
+{
+  "model": "moonshotai/Kimi-K3",
+  "framework": "vllm",
+  "smoke_type": "prefix_repetition",
+  "stages": [
+    {
+      "prefix_tokens": 32768,
+      "suffix_tokens": 1024,
+      "output_tokens": 16,
+      "prompts": 16,
+      "concurrency": 8,
+      "completed": 16,
+      "failed": 0,
+      "duration_seconds": 13.901732926256955
+    },
+    {
+      "prefix_tokens": 131072,
+      "suffix_tokens": 1024,
+      "output_tokens": 8,
+      "prompts": 4,
+      "concurrency": 1,
+      "completed": 4,
+      "failed": 0,
+      "duration_seconds": 13.541796923615038
+    }
+  ],
+  "prefix_hit_tokens_increment": 620544,
+  "gpu_kv_tokens": 22665373,
+  "bf16_causal_pids": [
+    1918,
+    1919,
+    1920,
+    1921,
+    1922,
+    1923,
+    1924,
+    1925
+  ],
+  "fp8_cached_context_pids": [
+    1918,
+    1919,
+    1920,
+    1921,
+    1922,
+    1923,
+    1924,
+    1925
+  ],
+  "disabled_asm_metadata_pids": [
+    1918,
+    1919,
+    1920,
+    1921,
+    1922,
+    1923,
+    1924,
+    1925
+  ],
+  "query_reuse_pids": [
+    1918,
+    1919,
+    1920,
+    1921,
+    1922,
+    1923,
+    1924,
+    1925
+  ],
+  "native_fused_fp8_gather_pids": [
+    1918,
+    1919,
+    1920,
+    1921,
+    1922,
+    1923,
+    1924,
+    1925
+  ],
+  "scope": "Kernel invocation and HTTP stability; no agentic throughput or model accuracy claim.",
+  "kernel_invocation_pass": true
+}
