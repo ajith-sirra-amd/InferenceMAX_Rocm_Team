@@ -30,7 +30,7 @@ jobs:
           bash -n runners/launch_mi355x-amd.sh
       - name: Upload CPU check evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a8875d1fc6a0a
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: native-harness-cpu-checks
           path: native-harness-checks.xml
