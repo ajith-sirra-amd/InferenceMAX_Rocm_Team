@@ -48,3 +48,9 @@ This is kernel validation only. Model GSM8K, serving synchronization, full perfo
 Dispatch follows the current full performance result and final native source selection; no native GPU job was launched during the active performance run.
 
 The native harness resolves an explicit wheel URL for the exact upstream merge-base and requires matching ROCm, Python ABI, Torch, and Triton metadata. Missing or incompatible builds stop validation rather than falling back to another wheel. Resolver checks covered acceptance, Torch mismatch, Python ABI mismatch, and missing-build rejection; these are setup checks, not GPU numerical results.
+
+## Native serving preparation
+
+The validation runner has a separate `--prepare-only` mode that installs the exact native source and prepares a repository-local environment. Its result is `prepared`, never a GPU-test pass. A standalone `native_fp8_validation` observer checks native source hashes and records successful FP8 projection/cached/causal dispatches by rank and process during an explicitly marked phase. It does not replace native numerical kernels. An explicitly selected accuracy-stress mode only changes the cached eligibility predicate to positive query/context lengths; eager evaluation and 512-token scheduler chunks remain caller responsibilities. The observer records this override and rejects it as normal replay evidence.
+
+The observer and installer are prepared; the serving recipe is not yet wired to them, and GPU observation has not run. CPU tests reject incomplete, BF16, warmup-only, wrong-revision, restarted-worker, graph-capture-only, and stress-as-replay evidence. The `replay` marker covers the launched replay including warmup and does not establish steady-state kernel residency.

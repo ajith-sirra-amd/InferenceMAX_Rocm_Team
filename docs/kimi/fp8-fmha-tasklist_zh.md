@@ -48,3 +48,9 @@ e2e 工作流在 `runner-diagnostics-only=true` 时可接受精确 fork commit �
 等待当前完整性能结果并选定最终原生版本后再派发；当前性能运行期间未启动原生 GPU 测试。
 
 原生验证脚本为精确 upstream merge-base 解析明确的 wheel URL，并要求 ROCm、Python ABI、Torch 和 Triton 元数据匹配。构建缺失或不兼容时停止验证，不回退到其他 wheel。解析器已检查正常接受、Torch 不匹配、Python ABI 不匹配及构建缺失拒绝；这些只是环境准备检查，不是 GPU 数值结果。
+
+## 原生服务准备
+
+验证脚本新增独立 `--prepare-only` 模式，安装精确原生版本并准备仓库内环境；结果标记为 `prepared`，绝不作为 GPU 测试通过。独立 `native_fp8_validation` observer 校验原生源码哈希，并在明确标记的阶段按 rank 和进程记录成功的 FP8 投影、缓存及因果 dispatch，不替换原生数值 kernel。显式启用 accuracy-stress 时，仅将缓存 eligibility 改为 query/context 长度大于零；eager 评估及 512-token scheduler chunk 仍由调用方配置。observer 记录该 override，且拒绝将其当作正常 replay 证据。
+
+observer 和安装脚本已准备，但 serving recipe 尚未接入，也未执行 GPU 观测。CPU 测试拒绝不完整、BF16、仅预热、版本不符、worker 重启、仅 graph capture 以及把 stress 当 replay 的证据。`replay` 标记覆盖所启动的 replay（包含预热），不能证明稳态 kernel 驻留。

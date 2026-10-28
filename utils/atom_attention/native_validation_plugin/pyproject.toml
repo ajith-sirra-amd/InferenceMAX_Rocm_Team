@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inferencex-native-fp8-validation"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[project.entry-points."vllm.general_plugins"]
+native_fp8_validation = "native_fp8_validation:register"
+
+[tool.setuptools.packages.find]
+include = ["native_fp8_validation*"]

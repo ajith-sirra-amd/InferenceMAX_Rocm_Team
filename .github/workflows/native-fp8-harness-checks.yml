@@ -1,0 +1,37 @@
+name: Native FP8 validation harness checks
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - utils/atom_attention/native_vllm_gpu_validate.py
+      - utils/atom_attention/native_validation_plugin/**
+      - utils/atom_attention/test_native_validation.py
+      - .github/workflows/native-fp8-harness-checks.yml
+permissions:
+  contents: read
+jobs:
+  cpu-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PIP_CACHE_DIR: ${{ github.workspace }}/.ci-cache/pip
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Check native validation behavior
+        run: |
+          python3 -m venv .ci-env
+          .ci-env/bin/python -m pip install pytest
+          .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py --junitxml=native-harness-checks.xml
+          bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+          bash -n runners/launch_mi355x-amd.sh
+      - name: Upload CPU check evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a8875d1fc6a0a
+        with:
+          name: native-harness-cpu-checks
+          path: native-harness-checks.xml
+          if-no-files-found: error

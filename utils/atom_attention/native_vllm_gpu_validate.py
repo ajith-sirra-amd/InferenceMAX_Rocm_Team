@@ -79,10 +79,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--native-sha", required=True)
     parser.add_argument("--require-causal", action="store_true")
+    parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--work-dir", default="/work")
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9a-f]{40}", args.native_sha):
         parser.error("native-sha must be an exact 40-character commit SHA")
-    root = Path("/work").resolve()
+    root = Path(args.work_dir).resolve()
+    if root != Path("/work") and not root.is_relative_to(Path("/outputs/.native-fp8-validation")):
+        parser.error("work-dir must be a repository-mounted validation directory")
+    root.mkdir(parents=True, exist_ok=True)
     source = root / "vllm"
     evidence = root / "evidence"
     evidence.mkdir(parents=True, exist_ok=True)
@@ -167,6 +172,38 @@ def main():
         )
         record["environment"] = run([python, "-c", provenance_code], cwd=source,
                                     env=env, capture=True)
+        source_hashes = {
+            p: hashlib.sha256((source / p).read_bytes()).hexdigest()
+            for p in changed if p.startswith(("vllm/", "tests/")) and (source / p).is_file()
+        }
+        record["source_hashes"] = source_hashes
+        record["source_root"] = str(source)
+        if args.prepare_only:
+            observer = Path(__file__).resolve().parent / "native_validation_plugin"
+            run(["uv", "pip", "install", "--python", python, "--no-deps",
+                 "--editable", observer], cwd=source, env=env)
+            import shlex
+            exports = {
+                name: env[name] for name in (
+                    "UV_CACHE_DIR", "XDG_CACHE_HOME", "HF_HOME", "PYTHONPYCACHEPREFIX",
+                    "TMPDIR", "TRITON_CACHE_DIR", "VLLM_ROCM_USE_AITER",
+                    "VLLM_ROCM_USE_AITER_LINEAR",
+                    "VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN",
+                )
+            }
+            exports.update({
+                "VIRTUAL_ENV": str(source / ".venv"),
+                "VLLM_PLUGINS": "native_fp8_validation",
+                "INFERENCEX_NATIVE_VLLM_SHA": args.native_sha,
+                "INFERENCEX_NATIVE_MANIFEST": str(evidence / "native-validation.json"),
+            })
+            lines = ["unset PYTHONPATH"]
+            lines.extend(f"export {key}={shlex.quote(value)}"
+                         for key, value in exports.items())
+            lines.append("export PATH=" + shlex.quote(str(python.parent)) + ':"$PATH"')
+            (evidence / "native-env.sh").write_text("\n".join(lines) + "\n")
+            record.update(status="prepared", scope="native installation only; GPU tests not run")
+            return
         test_path = "tests/kernels/attention/test_rocm_aiter_mla_prefill_fusions.py"
         junit = evidence / "native-kernel-tests.xml"
         result = subprocess.run(
