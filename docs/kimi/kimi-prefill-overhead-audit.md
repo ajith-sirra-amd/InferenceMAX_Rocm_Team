@@ -70,9 +70,11 @@ GPU diagnostics use 12 heads on a shared host. These are CUDA-event timings, not
 | Expanded FP8 K/V storage | 3,840 bytes/token/rank | Logical tensor size |
 | K/V conversion minimum read + write | 11,520 bytes/token/rank | Estimate; excludes scales, reductions, allocations and rereads |
 | BF16 kv_b weight tradeoff | Approximately 36 MiB/GPU over 24 MLA layers versus FP8 | Raw weight estimate; runtime KV pool still must be measured |
+| hipBLASLt recovery in old smoke | 96 warnings across 12 GEMM shapes, m2880/k7168 | Observed recovery to BLAS fallback; duration and invocation count unmeasured |
 | DCP collective, expansion GEMM, offload and merge time | Not isolated in current evidence | Do not substitute GPU peak bandwidth estimates for measurements |
 | Prior model loading | Approximately 23.6 minutes, 184.12 GiB/GPU loaded | Startup cost in old smoke; excluded from its reporting window |
 
+- Old-smoke request JSONL confirms warmup14success/85empty-response errors and measured476success/2empty-response errors. Watch the new server logs for the GEMM recovery warnings; their duration and contribution to throughput are unmeasured.
 - Numerical FP8 checks show roughly 4–5% RMS drift versus an unquantized FP64 reference.
 - Numerical checks are not model accuracy evidence. GSM8K is disabled by user instruction.
 - Crossover policy is provisional: BF16 if `max_query_len < 512` **or** `max_seq_len < 8192`; FP8 otherwise. It is supported by the measured examples, not an exhaustive shape sweep.

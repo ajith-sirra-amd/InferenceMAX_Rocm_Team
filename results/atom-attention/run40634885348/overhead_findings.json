@@ -1,0 +1,106 @@
+{
+  "run_id": 40634885348,
+  "hipblas_recovery_warning_count": 96,
+  "hipblas_recovery_shapes": [
+    {
+      "m": 2880,
+      "n": 1779,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1778,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1791,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1780,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1776,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1750,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1751,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1741,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1756,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1792,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1759,
+      "k": 7168,
+      "warning_count": 8
+    },
+    {
+      "m": 2880,
+      "n": 1742,
+      "k": 7168,
+      "warning_count": 8
+    }
+  ],
+  "request_counts": [
+    {
+      "phase": "warmup",
+      "error": true,
+      "count": 85
+    },
+    {
+      "phase": "warmup",
+      "error": false,
+      "count": 14
+    },
+    {
+      "phase": "profiling",
+      "error": false,
+      "count": 476
+    },
+    {
+      "phase": "profiling",
+      "error": true,
+      "count": 2
+    }
+  ],
+  "interpretation": [
+    "HIPBLAS_STATUS_INTERNAL_ERROR warnings announce recovery to the BLAS fallback.",
+    "Warning count does not establish fallback duration or total invocation count; warning suppression may occur.",
+    "No causal attribution of throughput regression to GEMM fallback is established.",
+    "Check the current smoke and full server logs for recurrence."
+  ]
+}

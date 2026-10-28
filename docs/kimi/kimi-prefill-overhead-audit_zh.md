@@ -70,6 +70,7 @@
 | FP8 expanded K/V | 3,840 bytes/token/rank | 逻辑张量大小 |
 | KV 转换最少读写 | 11,520 bytes/token/rank | 估算，不含 reduction、scale、重读和分配 |
 | BF16 kv_b 对比 FP8 权重 | 24 MLA layers 约增加 36 MiB/GPU | 原始权重估算，不等于 KV pool 变化 |
+| 旧 smoke hipBLASLt recovery | 12 shapes 共96 warnings，m2880/k7168 | 观察到 BLAS fallback；未测耗时和实际调用次数 |
 | DCP / expansion GEMM / offload / merge | 尚未独立测量 | 不可用峰值带宽替代实测 |
 | 旧 smoke 模型加载 | 约 23.6 分钟，184.12 GiB/GPU | Startup，未计入 reporting window |
 
