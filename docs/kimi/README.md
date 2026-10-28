@@ -57,3 +57,5 @@
 - [kimi-kv-optimized-flow.md](kimi-kv-optimized-flow.md)
 - [kimi-kv-optimized-flow_zh.md](kimi-kv-optimized-flow_zh.md)
 - [profiles-readme.md](profiles-readme.md)
+
+- [FP8 FMHA dataflow and equations](fp8-fmha-dataflow.md): BF16 kv_b_proj, expanded FP8 operands, and ATOM direct-output scaling.

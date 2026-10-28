@@ -59,3 +59,5 @@
 - [kimi-kv-optimized-flow.md](kimi-kv-optimized-flow.md)
 - [kimi-kv-optimized-flow_zh.md](kimi-kv-optimized-flow_zh.md)
 - [profiles-readme.md](profiles-readme.md)
+
+- [FP8 FMHA 数据流与公式](fp8-fmha-dataflow_zh.md)：BF16 kv_b_proj、展开 FP8 张量以及 ATOM 直接输出的 scale 策略。
