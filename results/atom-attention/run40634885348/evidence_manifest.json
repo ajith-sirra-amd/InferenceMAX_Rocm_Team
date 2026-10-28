@@ -1,0 +1,65 @@
+{
+  "smoke_run": 40634885348,
+  "smoke_job": 122639529823,
+  "kernel_run": 40642162788,
+  "kernel_job": 122662551549,
+  "artifact_ids": [
+    12796061172,
+    12795293154,
+    12795178593
+  ],
+  "files": {
+    "results/atom-attention/run40634885348/server.log": {
+      "utf8_bytes": 2269220,
+      "sha256": "aed4147807fd0edc3639f5c732b079a1f85ada151954b49d58c48f8f91b7df7f"
+    },
+    "results/atom-attention/run40634885348/benchmark.log": {
+      "utf8_bytes": 97671,
+      "sha256": "500c22cc437fa7eec72268a8b6d7a985e57271094333ae8619caee7927922d5f"
+    },
+    "results/atom-attention/run40634885348/benchmark_command.txt": {
+      "utf8_bytes": 749,
+      "sha256": "c4e825ddbd2c22945c832bc39fd603fd424f2c1a191e4a82bfe7f6543b28d91d"
+    },
+    "results/atom-attention/run40634885348/vllm_command.txt": {
+      "utf8_bytes": 3285,
+      "sha256": "fba4e3fce995166019f2971a7520c2efabe3f90816562677bd48e97c80c54b9c"
+    },
+    "results/atom-attention/run40634885348/workload_distribution_summary.txt": {
+      "utf8_bytes": 447,
+      "sha256": "78c6091ec6ec7ae574e028673ce0b07857317df0a485dadab1d1106319decc42"
+    },
+    "results/atom-attention/run40634885348/aiperf_artifacts/profile_export.jsonl": {
+      "utf8_bytes": 1589550,
+      "sha256": "f33368c38fd65dbfdf61e454358f6bdb240094d96cc41ed2a29e7ab9c07b9d5f"
+    },
+    "results/atom-attention/run40634885348/aiperf_artifacts/profile_export_aiperf.json": {
+      "utf8_bytes": 44262,
+      "sha256": "71ae97e04db8725bd7817705f658a19647a78727c81ba2076473887ee5099959"
+    },
+    "results/atom-attention/run40634885348/aiperf_artifacts/profile_export_aiperf.csv": {
+      "utf8_bytes": 7602,
+      "sha256": "ab3843fd25800836a5b1828d535c4b369d04f0946f2975ef41e95d81c23c8753"
+    },
+    "results/atom-attention/run40634885348/aiperf_artifacts/server_metrics_export.csv": {
+      "utf8_bytes": 34143,
+      "sha256": "3514a33932989d673146debcc2c1ab22b5a0709ef8b0ad8eb85e105b17e64414"
+    },
+    "results/atom-attention/run40634885348/aiperf_artifacts/logs/aiperf.log": {
+      "utf8_bytes": 76821,
+      "sha256": "1b681da4eac8e8da43485c68db5e9a8288258055edae1547d6b72023c10299c6"
+    },
+    "results/atom-attention/run40634885348/benchmark_summary.json": {
+      "utf8_bytes": 5794,
+      "sha256": "a6ef9d02e52dd9409533578f3e92f314a09176d08a56edfe41839c9635ff7316"
+    },
+    "results/atom-attention/run40642162788_kernel_smoke.log": {
+      "utf8_bytes": 33955,
+      "sha256": "e7660779ffdcb6f9cd16c947fbca4b94f2c6b75be6ef47e5ecfb18a3858e701b"
+    }
+  },
+  "notes": [
+    "Token-like credential strings are redacted in logs before publishing.",
+    "Large metrics JSON, timeslice exports and plots remain in the GitHub artifact; they are not copied into git."
+  ]
+}
