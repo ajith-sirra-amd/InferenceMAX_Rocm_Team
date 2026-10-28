@@ -1,6 +1,6 @@
 # Kimi-K3：权重量化、KV容量与融合attention
 
-[English](./kimi-kv-optimized-flow.md) | **中文**
+[English](kimi-kv-optimized-flow.md) | **中文**
 
 ## 1. 模型与问题
 

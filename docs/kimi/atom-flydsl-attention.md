@@ -1,6 +1,6 @@
 # vLLM with ATOM's FlyDSL FP8 attention
 
-[??](README_zh.md)
+[??](atom-flydsl-attention_zh.md)
 
 - Framework: native vLLM, current pinned ROCm image.
 - Model: Moonshot Kimi-K3.

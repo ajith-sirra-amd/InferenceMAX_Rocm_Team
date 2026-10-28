@@ -1,3 +1,5 @@
+[Kimi-K3 documentation](docs/kimi/README.md)
+
 #  InferenceX™, Open Source Continuous Inference Standard and Research Platform 
 ## Trusted by Operators of Trillion Dollar Token Factories such as OpenAI, Microsoft, Oracle, etc, & ML Community such as PyTorch Foundation, vLLM, SGLang, Tri Dao
 

@@ -1,6 +1,6 @@
 # Kimi-K3: weight quantization, KV capacity and fused attention
 
-**English** | [中文](./kimi-kv-optimized-flow_zh.md)
+**English** | [中文](kimi-kv-optimized-flow_zh.md)
 
 ## 1. Models and problem
 

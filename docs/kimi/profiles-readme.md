@@ -2,7 +2,7 @@
 
 Unprocessed profiler output, committed verbatim. Nothing here has been filtered,
 recomputed, or reformatted. For the analysis derived from it see
-[../Kimi-K3-Where-The-Time-Goes.md](../Kimi-K3-Where-The-Time-Goes.md).
+[../Kimi-K3-Where-The-Time-Goes.md](Kimi-K3-Where-The-Time-Goes.md).
 
 ## `T124_rocprofv3_k_kernel_stats_no-offload.csv` — current
 

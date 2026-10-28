@@ -140,7 +140,7 @@ Measured on 8× MI355X, DCP=8, concurrency 52. Current data is
 [T124](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/33033974874)
 (rocprofv3, **no KV offload**); [T116](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/32964875218)
 (offload ON) is kept below for the before/after. Raw profiler output is committed
-verbatim under [kimi-k3-profiles/](kimi-k3-profiles/).
+verbatim under [kimi-k3-profiles/](../../kimi-k3-profiles).
 
 ---
 

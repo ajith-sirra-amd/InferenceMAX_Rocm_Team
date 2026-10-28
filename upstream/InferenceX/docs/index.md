@@ -51,3 +51,5 @@ This is the mandatory low-context router for InferenceX work. Pick the one page 
 2. Do not load large YAML, JSON, logs, generated matrices, or whole reference files when a filtered view answers the question.
 3. Source code, workflow YAML, schemas, launchers, and collectors win over explanatory docs.
 4. When behavior changes, update the nearest English guide first and its `_zh.md` counterpart in the same change.
+
+- [Kimi-K3](../../../docs/kimi/README.md)
