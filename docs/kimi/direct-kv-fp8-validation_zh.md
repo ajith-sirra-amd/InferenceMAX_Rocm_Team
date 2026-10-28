@@ -70,3 +70,6 @@ Shell 验证及实际 GPU 检查在诊断任务中执行。
 运行 40670763935 的独立 backend 预检通过，真实模型缓存调用则未通过 LSE 最大绝对误差 0.20 的门限。同 scale K/V 字节及注意力精确比较先通过，失败调用无 K/V 截断，输出 RMS 约为 2–3%，但相对 BF16 的部分 LSE 最大误差约 0.8–1.0。完整性能运行 40671001137 因前置失败而未分配 GPU。
 
 下一轮仅添加失败诊断：对误差最大的 query/head 使用独立 FP64，分离 Q 量化、K 量化与 FMHA 算术误差，并保存首个 rank-zero 合成前缀输入供离线复现。保留原数值门限，禁止将诊断失败视为通过。
+
+
+可通过 runner-diagnostics-only=true 和 failure-fixture-run-id=<保存输入的运行 ID> 执行独立 GPU 复现。workflow 下载该运行的 agentic artifact，并以只读方式挂载 atom_fp8_failure.pt；仅包含合成前缀触发的单个缓存分块，不加载完整模型。比较 supplied、dynamic、AITER 每 tile softmax rescale 和二次幂 scale 诊断。每项均报告原始门限是否通过；任务完成不等于数值验收。
