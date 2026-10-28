@@ -175,3 +175,20 @@ All tensors consumed by FMHA remain FP8. Native FP8 projection is still real.
 No claim is made that the extra packing traffic or 256-column attention is faster.
 Kernel-only timings exclude packing and projection, and are labelled accordingly.
 This is diagnostic work, not production integration or model-accuracy evidence.
+
+## Residual-column result and NoPE balancing diagnostic
+
+Run 40685906330 at c53e307afbaff423bd0d3fc16f18d3299afdc2b0 completed.
+The cache-aligned primary K RoPE was exact; there was zero clipping and no
+underflow in duplicated RoPE. Q RoPE reconstruction RMS was 0.0006364.
+Native FP8 projection with 256-column residual FMHA reached max LSE 0.217426
+and output RMS 0.024845 (lazy) or 0.021295 (eager), still failing 0.20.
+Same-input arithmetic passed in all eight cases. Native residual FMHA took
+0.5778 ms versus 0.5568 ms for the old 192-column FMHA, excluding packing.
+
+Next: model-independent per-head NoPE balancing, Q'=Q/c and K'=cK, with
+c=sqrt(amax(Q_NoPE)*K_scale/(amax(K_NoPE)*Q_scale)).
+Native projection changes only its temporary per-channel descales; packed FP8
+weights are not quantized again. RoPE residual handling is unchanged.
+The diagnostic uses captured K maxima, so passing it would not establish a
+production scale policy. Original numerical limits remain unchanged.

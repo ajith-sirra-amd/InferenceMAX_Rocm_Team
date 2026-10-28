@@ -1,0 +1,537 @@
+{
+  "run_id": 40685906330,
+  "source": "c53e307afbaff423bd0d3fc16f18d3299afdc2b0",
+  "scope": "diagnostic; residual columns still failed original gate",
+  "measurements": {
+    "ROPE_RESIDUAL_Q_ERROR": [
+      {
+        "relative_rms": 0.000636421444555332,
+        "max_absolute": 0.012277128174901009
+      }
+    ],
+    "ROPE_CACHE_ALIGNMENT": [
+      {
+        "projection": "bf16_weight",
+        "scale_exponent": -5.0,
+        "primary_rope_max_error": 0.0,
+        "primary_rope_exact": true,
+        "key_clipping_fraction": 0.0,
+        "low_rope_underflow_fraction": 0.0
+      },
+      {
+        "projection": "native_fp8_weight",
+        "scale_exponent": -5.0,
+        "primary_rope_max_error": 0.0,
+        "primary_rope_exact": true,
+        "key_clipping_fraction": 0.0,
+        "low_rope_underflow_fraction": 0.0
+      }
+    ],
+    "CAPTURED_ROPE_RESIDUAL_CASE": [
+      {
+        "projection": "bf16_weight",
+        "case": "cache_aligned_only",
+        "lazy_rescale": true,
+        "same_fp8_inputs": {
+          "rms": 0.01270773799923654,
+          "normalized_max_output_error": 0.0199265623090513,
+          "min_cosine": 0.987937485103851,
+          "lse_max": 0.0005974090534976995,
+          "normalized_max_lse_error": 2.4202039292259716e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.01794470675387741,
+          "normalized_max_output_error": 0.06504065040650407,
+          "min_cosine": 0.9764555315836159,
+          "lse_max": 0.5142650604248047,
+          "normalized_max_lse_error": 0.020765748679627466
+        },
+        "quantization_only": {
+          "rms": 0.01288687263979422,
+          "normalized_max_output_error": 0.06499573398627079,
+          "min_cosine": 0.9915136045865108,
+          "lse_max": 0.5143672101540595,
+          "normalized_max_lse_error": 0.02076987511027745
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.5445211887359619,
+        "baseline_fmha_ms": 0.5568192481994629,
+        "timing_scope": "FMHA only, excludes residual construction and projection"
+      },
+      {
+        "projection": "bf16_weight",
+        "case": "cache_aligned_only",
+        "lazy_rescale": false,
+        "same_fp8_inputs": {
+          "rms": 0.003010138296289798,
+          "normalized_max_output_error": 0.007665568098697886,
+          "min_cosine": 0.9998258038354516,
+          "lse_max": 0.0005974090534976995,
+          "normalized_max_lse_error": 2.4202039292259716e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.01339915750370892,
+          "normalized_max_output_error": 0.06504065040650407,
+          "min_cosine": 0.9915008457835386,
+          "lse_max": 0.5142650604248047,
+          "normalized_max_lse_error": 0.020765748679627466
+        },
+        "quantization_only": {
+          "rms": 0.01288687263979422,
+          "normalized_max_output_error": 0.06499573398627079,
+          "min_cosine": 0.9915136045865108,
+          "lse_max": 0.5143672101540595,
+          "normalized_max_lse_error": 0.02076987511027745
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.5585853099822998,
+        "baseline_fmha_ms": 0.5568192481994629,
+        "timing_scope": "FMHA only, excludes residual construction and projection"
+      },
+      {
+        "projection": "bf16_weight",
+        "case": "rope_residual_256",
+        "lazy_rescale": true,
+        "same_fp8_inputs": {
+          "rms": 0.012695963893254832,
+          "normalized_max_output_error": 0.028559856392947596,
+          "min_cosine": 0.9879093480363148,
+          "lse_max": 0.0006011908098599861,
+          "normalized_max_lse_error": 2.4284193023202744e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.015424631454990546,
+          "normalized_max_output_error": 0.06504065040650407,
+          "min_cosine": 0.9881011100644546,
+          "lse_max": 0.22267532348632812,
+          "normalized_max_lse_error": 0.008991510721829325
+        },
+        "quantization_only": {
+          "rms": 0.007928452457836153,
+          "normalized_max_output_error": 0.06361519664199453,
+          "min_cosine": 0.998779062296185,
+          "lse_max": 0.22263581498306806,
+          "normalized_max_lse_error": 0.008989916116325103
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.5894395351409912,
+        "baseline_fmha_ms": 0.5568192481994629,
+        "timing_scope": "FMHA only, excludes residual construction and projection"
+      },
+      {
+        "projection": "bf16_weight",
+        "case": "rope_residual_256",
+        "lazy_rescale": false,
+        "same_fp8_inputs": {
+          "rms": 0.0030120367403383935,
+          "normalized_max_output_error": 0.011810010721586708,
+          "min_cosine": 0.9998221355127878,
+          "lse_max": 0.0006011908098599861,
+          "normalized_max_lse_error": 2.4284193023202744e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.008793613034291997,
+          "normalized_max_output_error": 0.06097560975609756,
+          "min_cosine": 0.9988479951059277,
+          "lse_max": 0.22267532348632812,
+          "normalized_max_lse_error": 0.008991510721829325
+        },
+        "quantization_only": {
+          "rms": 0.007928452457836153,
+          "normalized_max_output_error": 0.06361519664199453,
+          "min_cosine": 0.998779062296185,
+          "lse_max": 0.22263581498306806,
+          "normalized_max_lse_error": 0.008989916116325103
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.6099717617034912,
+        "baseline_fmha_ms": 0.5568192481994629,
+        "timing_scope": "FMHA only, excludes residual construction and projection"
+      },
+      {
+        "projection": "native_fp8_weight",
+        "case": "cache_aligned_only",
+        "lazy_rescale": true,
+        "same_fp8_inputs": {
+          "rms": 0.012711945341762993,
+          "normalized_max_output_error": 0.02668681223287628,
+          "min_cosine": 0.9880739994662117,
+          "lse_max": 0.0005959762536136282,
+          "normalized_max_lse_error": 2.4142772906838747e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.02647810613697912,
+          "normalized_max_output_error": 0.07723577235772358,
+          "min_cosine": 0.9749322290282014,
+          "lse_max": 0.5142612457275391,
+          "normalized_max_lse_error": 0.02076559464418776
+        },
+        "quantization_only": {
+          "rms": 0.023270122530036116,
+          "normalized_max_output_error": 0.0774530878422124,
+          "min_cosine": 0.9915818599180385,
+          "lse_max": 0.5143618181927181,
+          "normalized_max_lse_error": 0.02076965738573854
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.5340150356292724,
+        "baseline_fmha_ms": 0.5568192481994629,
+        "timing_scope": "FMHA only, excludes residual construction and projection"
+      },
+      {
+        "projection": "native_fp8_weight",
+        "case": "cache_aligned_only",
+        "lazy_rescale": false,
+        "same_fp8_inputs": {
+          "rms": 0.003020475331784784,
+          "normalized_max_output_error": 0.00949902611888252,
+          "min_cosine": 0.9998329149503148,
+          "lse_max": 0.0005959762536136282,
+          "normalized_max_lse_error": 2.4142772906838747e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.023557075543786964,
+          "normalized_max_output_error": 0.07723577235772358,
+          "min_cosine": 0.9915676665564711,
+          "lse_max": 0.5142593383789062,
+          "normalized_max_lse_error": 0.02076551762646791
+        },
+        "quantization_only": {
+          "rms": 0.023270122530036116,
+          "normalized_max_output_error": 0.0774530878422124,
+          "min_cosine": 0.9915818599180385,
+          "lse_max": 0.5143618181927181,
+          "normalized_max_lse_error": 0.02076965738573854
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.527711009979248,
+        "baseline_fmha_ms": 0.5568192481994629,
+        "timing_scope": "FMHA only, excludes residual construction and projection"
+      },
+      {
+        "projection": "native_fp8_weight",
+        "case": "rope_residual_256",
+        "lazy_rescale": true,
+        "same_fp8_inputs": {
+          "rms": 0.012685991657969421,
+          "normalized_max_output_error": 0.02286580718484707,
+          "min_cosine": 0.9880546899790849,
+          "lse_max": 0.000599783960531397,
+          "normalized_max_lse_error": 2.42266079512837e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.024844754296581305,
+          "normalized_max_output_error": 0.07317073170731707,
+          "min_cosine": 0.9865372862583907,
+          "lse_max": 0.21742630004882812,
+          "normalized_max_lse_error": 0.00877955795679691
+        },
+        "quantization_only": {
+          "rms": 0.020956011302216828,
+          "normalized_max_output_error": 0.07183003260793305,
+          "min_cosine": 0.9983556021062815,
+          "lse_max": 0.21737444878911916,
+          "normalized_max_lse_error": 0.008777464940199346
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.5778035163879395,
+        "baseline_fmha_ms": 0.5568192481994629,
+        "timing_scope": "FMHA only, excludes residual construction and projection"
+      },
+      {
+        "projection": "native_fp8_weight",
+        "case": "rope_residual_256",
+        "lazy_rescale": false,
+        "same_fp8_inputs": {
+          "rms": 0.0030201403872649273,
+          "normalized_max_output_error": 0.008924341284982007,
+          "min_cosine": 0.9998319878398609,
+          "lse_max": 0.000599783960531397,
+          "normalized_max_lse_error": 2.42266079512837e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.021294729371318676,
+          "normalized_max_output_error": 0.07317073170731707,
+          "min_cosine": 0.9982396918148364,
+          "lse_max": 0.21742630004882812,
+          "normalized_max_lse_error": 0.00877955795679691
+        },
+        "quantization_only": {
+          "rms": 0.020956011302216828,
+          "normalized_max_output_error": 0.07183003260793305,
+          "min_cosine": 0.9983556021062815,
+          "lse_max": 0.21737444878911916,
+          "normalized_max_lse_error": 0.008777464940199346
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.5727714538574219,
+        "baseline_fmha_ms": 0.5568192481994629,
+        "timing_scope": "FMHA only, excludes residual construction and projection"
+      }
+    ],
+    "CAPTURED_ROPE_RESIDUAL_COMPLETE": [
+      {
+        "scope": "diagnostic native projection plus unchanged AITER FMHA; no serving integration",
+        "softmax_scale": 0.07216878364870322,
+        "results": [
+          {
+            "projection": "bf16_weight",
+            "case": "cache_aligned_only",
+            "lazy_rescale": true,
+            "same_fp8_inputs": {
+              "rms": 0.01270773799923654,
+              "normalized_max_output_error": 0.0199265623090513,
+              "min_cosine": 0.987937485103851,
+              "lse_max": 0.0005974090534976995,
+              "normalized_max_lse_error": 2.4202039292259716e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.01794470675387741,
+              "normalized_max_output_error": 0.06504065040650407,
+              "min_cosine": 0.9764555315836159,
+              "lse_max": 0.5142650604248047,
+              "normalized_max_lse_error": 0.020765748679627466
+            },
+            "quantization_only": {
+              "rms": 0.01288687263979422,
+              "normalized_max_output_error": 0.06499573398627079,
+              "min_cosine": 0.9915136045865108,
+              "lse_max": 0.5143672101540595,
+              "normalized_max_lse_error": 0.02076987511027745
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.5445211887359619,
+            "baseline_fmha_ms": 0.5568192481994629,
+            "timing_scope": "FMHA only, excludes residual construction and projection"
+          },
+          {
+            "projection": "bf16_weight",
+            "case": "cache_aligned_only",
+            "lazy_rescale": false,
+            "same_fp8_inputs": {
+              "rms": 0.003010138296289798,
+              "normalized_max_output_error": 0.007665568098697886,
+              "min_cosine": 0.9998258038354516,
+              "lse_max": 0.0005974090534976995,
+              "normalized_max_lse_error": 2.4202039292259716e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.01339915750370892,
+              "normalized_max_output_error": 0.06504065040650407,
+              "min_cosine": 0.9915008457835386,
+              "lse_max": 0.5142650604248047,
+              "normalized_max_lse_error": 0.020765748679627466
+            },
+            "quantization_only": {
+              "rms": 0.01288687263979422,
+              "normalized_max_output_error": 0.06499573398627079,
+              "min_cosine": 0.9915136045865108,
+              "lse_max": 0.5143672101540595,
+              "normalized_max_lse_error": 0.02076987511027745
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.5585853099822998,
+            "baseline_fmha_ms": 0.5568192481994629,
+            "timing_scope": "FMHA only, excludes residual construction and projection"
+          },
+          {
+            "projection": "bf16_weight",
+            "case": "rope_residual_256",
+            "lazy_rescale": true,
+            "same_fp8_inputs": {
+              "rms": 0.012695963893254832,
+              "normalized_max_output_error": 0.028559856392947596,
+              "min_cosine": 0.9879093480363148,
+              "lse_max": 0.0006011908098599861,
+              "normalized_max_lse_error": 2.4284193023202744e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.015424631454990546,
+              "normalized_max_output_error": 0.06504065040650407,
+              "min_cosine": 0.9881011100644546,
+              "lse_max": 0.22267532348632812,
+              "normalized_max_lse_error": 0.008991510721829325
+            },
+            "quantization_only": {
+              "rms": 0.007928452457836153,
+              "normalized_max_output_error": 0.06361519664199453,
+              "min_cosine": 0.998779062296185,
+              "lse_max": 0.22263581498306806,
+              "normalized_max_lse_error": 0.008989916116325103
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.5894395351409912,
+            "baseline_fmha_ms": 0.5568192481994629,
+            "timing_scope": "FMHA only, excludes residual construction and projection"
+          },
+          {
+            "projection": "bf16_weight",
+            "case": "rope_residual_256",
+            "lazy_rescale": false,
+            "same_fp8_inputs": {
+              "rms": 0.0030120367403383935,
+              "normalized_max_output_error": 0.011810010721586708,
+              "min_cosine": 0.9998221355127878,
+              "lse_max": 0.0006011908098599861,
+              "normalized_max_lse_error": 2.4284193023202744e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.008793613034291997,
+              "normalized_max_output_error": 0.06097560975609756,
+              "min_cosine": 0.9988479951059277,
+              "lse_max": 0.22267532348632812,
+              "normalized_max_lse_error": 0.008991510721829325
+            },
+            "quantization_only": {
+              "rms": 0.007928452457836153,
+              "normalized_max_output_error": 0.06361519664199453,
+              "min_cosine": 0.998779062296185,
+              "lse_max": 0.22263581498306806,
+              "normalized_max_lse_error": 0.008989916116325103
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.6099717617034912,
+            "baseline_fmha_ms": 0.5568192481994629,
+            "timing_scope": "FMHA only, excludes residual construction and projection"
+          },
+          {
+            "projection": "native_fp8_weight",
+            "case": "cache_aligned_only",
+            "lazy_rescale": true,
+            "same_fp8_inputs": {
+              "rms": 0.012711945341762993,
+              "normalized_max_output_error": 0.02668681223287628,
+              "min_cosine": 0.9880739994662117,
+              "lse_max": 0.0005959762536136282,
+              "normalized_max_lse_error": 2.4142772906838747e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.02647810613697912,
+              "normalized_max_output_error": 0.07723577235772358,
+              "min_cosine": 0.9749322290282014,
+              "lse_max": 0.5142612457275391,
+              "normalized_max_lse_error": 0.02076559464418776
+            },
+            "quantization_only": {
+              "rms": 0.023270122530036116,
+              "normalized_max_output_error": 0.0774530878422124,
+              "min_cosine": 0.9915818599180385,
+              "lse_max": 0.5143618181927181,
+              "normalized_max_lse_error": 0.02076965738573854
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.5340150356292724,
+            "baseline_fmha_ms": 0.5568192481994629,
+            "timing_scope": "FMHA only, excludes residual construction and projection"
+          },
+          {
+            "projection": "native_fp8_weight",
+            "case": "cache_aligned_only",
+            "lazy_rescale": false,
+            "same_fp8_inputs": {
+              "rms": 0.003020475331784784,
+              "normalized_max_output_error": 0.00949902611888252,
+              "min_cosine": 0.9998329149503148,
+              "lse_max": 0.0005959762536136282,
+              "normalized_max_lse_error": 2.4142772906838747e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.023557075543786964,
+              "normalized_max_output_error": 0.07723577235772358,
+              "min_cosine": 0.9915676665564711,
+              "lse_max": 0.5142593383789062,
+              "normalized_max_lse_error": 0.02076551762646791
+            },
+            "quantization_only": {
+              "rms": 0.023270122530036116,
+              "normalized_max_output_error": 0.0774530878422124,
+              "min_cosine": 0.9915818599180385,
+              "lse_max": 0.5143618181927181,
+              "normalized_max_lse_error": 0.02076965738573854
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.527711009979248,
+            "baseline_fmha_ms": 0.5568192481994629,
+            "timing_scope": "FMHA only, excludes residual construction and projection"
+          },
+          {
+            "projection": "native_fp8_weight",
+            "case": "rope_residual_256",
+            "lazy_rescale": true,
+            "same_fp8_inputs": {
+              "rms": 0.012685991657969421,
+              "normalized_max_output_error": 0.02286580718484707,
+              "min_cosine": 0.9880546899790849,
+              "lse_max": 0.000599783960531397,
+              "normalized_max_lse_error": 2.42266079512837e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.024844754296581305,
+              "normalized_max_output_error": 0.07317073170731707,
+              "min_cosine": 0.9865372862583907,
+              "lse_max": 0.21742630004882812,
+              "normalized_max_lse_error": 0.00877955795679691
+            },
+            "quantization_only": {
+              "rms": 0.020956011302216828,
+              "normalized_max_output_error": 0.07183003260793305,
+              "min_cosine": 0.9983556021062815,
+              "lse_max": 0.21737444878911916,
+              "normalized_max_lse_error": 0.008777464940199346
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.5778035163879395,
+            "baseline_fmha_ms": 0.5568192481994629,
+            "timing_scope": "FMHA only, excludes residual construction and projection"
+          },
+          {
+            "projection": "native_fp8_weight",
+            "case": "rope_residual_256",
+            "lazy_rescale": false,
+            "same_fp8_inputs": {
+              "rms": 0.0030201403872649273,
+              "normalized_max_output_error": 0.008924341284982007,
+              "min_cosine": 0.9998319878398609,
+              "lse_max": 0.000599783960531397,
+              "normalized_max_lse_error": 2.42266079512837e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.021294729371318676,
+              "normalized_max_output_error": 0.07317073170731707,
+              "min_cosine": 0.9982396918148364,
+              "lse_max": 0.21742630004882812,
+              "normalized_max_lse_error": 0.00877955795679691
+            },
+            "quantization_only": {
+              "rms": 0.020956011302216828,
+              "normalized_max_output_error": 0.07183003260793305,
+              "min_cosine": 0.9983556021062815,
+              "lse_max": 0.21737444878911916,
+              "normalized_max_lse_error": 0.008777464940199346
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.5727714538574219,
+            "baseline_fmha_ms": 0.5568192481994629,
+            "timing_scope": "FMHA only, excludes residual construction and projection"
+          }
+        ]
+      }
+    ]
+  }
+}

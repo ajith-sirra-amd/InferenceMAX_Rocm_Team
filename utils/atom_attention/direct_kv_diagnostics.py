@@ -4,7 +4,7 @@ import os
 if __name__ == "__main__":
     fixture_path = os.environ.get("FAILURE_FIXTURE_PATH", "")
     if fixture_path:
-        from rope_residual_diagnostics import run
+        from rope_balanced_diagnostics import run
         run(fixture_path)
     else:
         from fp8_weight_preflight import run as run_fp8_weights
