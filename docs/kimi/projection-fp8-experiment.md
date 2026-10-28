@@ -95,7 +95,7 @@ arithmetic error to 1.157% RMS. FP8 LSE maximum absolute error versus the
 original-input FP64 reference was 0.01509. These are tensor-error metrics,
 not percentages of correctly answered model questions.
 
-ATOM-style supplied scales had 3.770% RMS error versus BF16 with no clipping
+ATOM-style supplied scales had 3.700% RMS error versus BF16 with no clipping
 in the ordinary synthetic case. In the deliberate 4x cached-range stress
 case, K clipped 1.688% of values and V clipped 0.715%; output RMS error rose
 to 19.875%, exceeding the 10% diagnostic gate. This is evidence about the
@@ -125,3 +125,6 @@ and hybrid routing. The next useful check is scale/range behavior on
 representative Kimi new-token and cached tensors before a serving performance
 comparison. The existing ATOM FMHA algorithm is reused; SA's fixed GSM8K
 remains the model evaluation. Production serving still uses the existing path.
+
+
+The follow-up `utils/atom_attention/projection_numerics.py` reports K/V errors separately for cache widening, BF16 projection, and final FP8 quantization. It uses the same FP8 cache and BF16 weights for an independent FP64 reference, with cache scales 0.125 and 0.137. The diagnostics job currently runs this focused follow-up. Results pending.

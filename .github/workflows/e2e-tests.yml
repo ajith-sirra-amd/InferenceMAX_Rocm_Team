@@ -119,7 +119,7 @@ jobs:
             bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
             bash -n runners/launch_mi355x-amd.sh
             python3 utils/test_mi355x_container_launcher.py
-        - name: Compare BF16 projection epilogues and FP8 FMHA accuracy
+        - name: Measure FP8 cache to projected FP8 KV numerical errors
           shell: bash
           run: |
             date -u
@@ -137,7 +137,7 @@ jobs:
               -e ATOM_USE_FLYDSL_FP8_PREFILL_ATTN=1 \
               --entrypoint python3 \
               vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce \
-              /repo/utils/atom_attention/projection_experiment.py
+              /repo/utils/atom_attention/projection_numerics.py
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest

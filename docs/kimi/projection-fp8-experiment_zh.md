@@ -72,7 +72,7 @@ Q512/KV8192 的真实插件输出了 `ATOM-FP8-ENGAGED`。
 相对原始输入 FP64 参考的 FP8 LSE 最大绝对误差为 0.01509。
 这些是张量误差，不是模型答题准确率。
 
-普通合成输入中，ATOM supplied scale 路径相对 BF16 的 RMS 误差为 3.770%，没有截断。
+普通合成输入中，ATOM supplied scale 路径相对 BF16 的 RMS 误差为 3.700%，没有截断。
 缓存范围放大 4 倍的压力诊断中，K/V 截断比例分别为 1.688%/0.715%，输出 RMS 误差为 19.875%，超过 10% 诊断门限。
 这说明 scale 复用存在范围假设，并不是同 scale 投影等价性失败；job 成功不代表压力诊断准确率通过。
 
@@ -93,3 +93,6 @@ Supplied-scale 投影阶段在不计准备时加速 1.55–1.98 倍，单个缓�
 后续只验证本次引入的 BF16 输出逻辑、scale 传递和混合路由。
 下一步检查真实 Kimi 新 token 与缓存张量的范围，再进行服务性能比较。
 复用的 ATOM FMHA 算法保持原样，SA 固定 GSM8K 仍作为模型评估。生产服务尚未切换到候选路径。
+
+
+后续 `utils/atom_attention/projection_numerics.py` 分别测量缓存扩宽、BF16 投影和最终 FP8 量化的 K/V 误差。使用相同 FP8 缓存和 BF16 权重计算独立 FP64 参考，cache scale 为 0.125 和 0.137。当前 diagnostics job 运行该定向测量，结果待完成。
