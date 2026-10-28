@@ -239,3 +239,33 @@ is pinned to the same source. Its exact-source prerequisite passed and the
 MI355X agentic eval job started. Score and eight-worker evaluation-phase FP8
 execution proof are pending. The live checker polls this run every 60 seconds
 while its Python tool session remains available.
+
+## Full GSM8K passed with actual FP8 execution
+
+Run [40688077118](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40688077118)
+at `14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78` completed successfully.
+The full 1319-question, five-shot, temperature-zero evaluation used real speculative
+verification, native FP8 `kv_b_proj`, and the unchanged 192-column AITER FP8 FMHA.
+`GSM8K_FP8_EXECUTION_PROOF_PASS` records actual evaluation-phase native FP8 projection
+and E4M3 Q/K/V FMHA calls on all eight workers. The server-log artifact independently
+passes the same verifier.
+
+| GSM8K metric | Earlier BF16-routed run | Native FP8 stress run | Difference |
+|---|---:|---:|---:|
+| Strict match | 1282/1319 (97.1948%) | 1281/1319 (97.1190%) | -1 answer / -0.0758 percentage points |
+| Flexible extract | 1281/1319 (97.1190%) | 1281/1319 (97.1190%) | 0 answers |
+
+All sample document, prompt, and target hashes match the baseline. Flexible scoring
+lost 14 previously correct answers and gained 14; strict scoring lost 14 and gained 13.
+Equal aggregate accuracy therefore does not mean identical answers. Both scores exceed
+the unchanged repository GSM8K floor of 0.90.
+
+[Machine-readable evidence](../../results/atom-attention/run40688077118/gsm8k_evidence.json)
+includes artifact identities, paired changes, exact metrics and all eight execution
+records. The raw eval artifact is `12818760410`; server logs are `12818805276`.
+
+This is model-accuracy evidence for the explicit eager/512-token stress configuration.
+The original BF16 absolute-LSE criterion remains unpassed; no acceptance threshold or
+serving kernel was changed to obtain this score. The next performance smoke uses this
+same source with normal routing and graph settings. No native-projection performance
+improvement is claimed yet.

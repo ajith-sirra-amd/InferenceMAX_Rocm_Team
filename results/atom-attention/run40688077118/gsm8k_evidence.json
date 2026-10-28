@@ -1,0 +1,219 @@
+{
+  "run_id": 40688077118,
+  "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40688077118",
+  "source_commit": "14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78",
+  "workflow_conclusion": "success",
+  "prerequisite_run_id": 40687966988,
+  "model": "moonshotai/Kimi-K3",
+  "hardware": "MI355X",
+  "tp": 8,
+  "dcp": 8,
+  "task": "gsm8k",
+  "questions": 1319,
+  "num_fewshot": 5,
+  "temperature": 0,
+  "eval_limit": null,
+  "real_speculative_verification": true,
+  "accuracy_stress": true,
+  "max_batched_tokens": 512,
+  "enforce_eager": true,
+  "metrics": {
+    "alias": "gsm8k",
+    "exact_match,strict-match": 0.9711902956785443,
+    "exact_match_stderr,strict-match": 0.004607484283767479,
+    "exact_match,flexible-extract": 0.9711902956785443,
+    "exact_match_stderr,flexible-extract": 0.004607484283767479
+  },
+  "repository_threshold": 0.9,
+  "baseline_run_id": 40658068830,
+  "baseline_metrics": {
+    "alias": "gsm8k",
+    "exact_match,strict-match": 0.9719484457922669,
+    "exact_match_stderr,strict-match": 0.0045482295338363475,
+    "exact_match,flexible-extract": 0.9711902956785443,
+    "exact_match_stderr,flexible-extract": 0.0046074842837674525
+  },
+  "paired_comparison": {
+    "flexible-extract": {
+      "baseline_count": 1319,
+      "current_count": 1319,
+      "paired_comparable": true,
+      "hash_mismatch_doc_ids": [],
+      "baseline_correct": 1281.0,
+      "current_correct": 1281.0,
+      "lost_doc_ids": [
+        287,
+        298,
+        307,
+        319,
+        406,
+        515,
+        539,
+        584,
+        706,
+        780,
+        901,
+        958,
+        1012,
+        1019
+      ],
+      "gained_doc_ids": [
+        107,
+        209,
+        283,
+        409,
+        505,
+        523,
+        583,
+        639,
+        835,
+        943,
+        1001,
+        1059,
+        1161,
+        1165
+      ]
+    },
+    "strict-match": {
+      "baseline_count": 1319,
+      "current_count": 1319,
+      "paired_comparable": true,
+      "hash_mismatch_doc_ids": [],
+      "baseline_correct": 1282.0,
+      "current_correct": 1281.0,
+      "lost_doc_ids": [
+        287,
+        298,
+        307,
+        319,
+        406,
+        515,
+        539,
+        584,
+        706,
+        780,
+        901,
+        958,
+        1012,
+        1019
+      ],
+      "gained_doc_ids": [
+        107,
+        209,
+        283,
+        409,
+        505,
+        523,
+        583,
+        639,
+        835,
+        943,
+        1059,
+        1161,
+        1165
+      ]
+    }
+  },
+  "execution_proof": {
+    "workers": 8,
+    "records": [
+      {
+        "pid": 1921,
+        "fp8_projection": true,
+        "q_dtype": "torch.float8_e4m3fn",
+        "k_dtype": "torch.float8_e4m3fn",
+        "v_dtype": "torch.float8_e4m3fn",
+        "q_tokens": 512,
+        "kv_tokens": 512,
+        "heads": 12,
+        "phase": "gsm8k_evaluation"
+      },
+      {
+        "pid": 1923,
+        "fp8_projection": true,
+        "q_dtype": "torch.float8_e4m3fn",
+        "k_dtype": "torch.float8_e4m3fn",
+        "v_dtype": "torch.float8_e4m3fn",
+        "q_tokens": 512,
+        "kv_tokens": 512,
+        "heads": 12,
+        "phase": "gsm8k_evaluation"
+      },
+      {
+        "pid": 1925,
+        "fp8_projection": true,
+        "q_dtype": "torch.float8_e4m3fn",
+        "k_dtype": "torch.float8_e4m3fn",
+        "v_dtype": "torch.float8_e4m3fn",
+        "q_tokens": 512,
+        "kv_tokens": 512,
+        "heads": 12,
+        "phase": "gsm8k_evaluation"
+      },
+      {
+        "pid": 1927,
+        "fp8_projection": true,
+        "q_dtype": "torch.float8_e4m3fn",
+        "k_dtype": "torch.float8_e4m3fn",
+        "v_dtype": "torch.float8_e4m3fn",
+        "q_tokens": 512,
+        "kv_tokens": 512,
+        "heads": 12,
+        "phase": "gsm8k_evaluation"
+      },
+      {
+        "pid": 1926,
+        "fp8_projection": true,
+        "q_dtype": "torch.float8_e4m3fn",
+        "k_dtype": "torch.float8_e4m3fn",
+        "v_dtype": "torch.float8_e4m3fn",
+        "q_tokens": 512,
+        "kv_tokens": 512,
+        "heads": 12,
+        "phase": "gsm8k_evaluation"
+      },
+      {
+        "pid": 1924,
+        "fp8_projection": true,
+        "q_dtype": "torch.float8_e4m3fn",
+        "k_dtype": "torch.float8_e4m3fn",
+        "v_dtype": "torch.float8_e4m3fn",
+        "q_tokens": 512,
+        "kv_tokens": 512,
+        "heads": 12,
+        "phase": "gsm8k_evaluation"
+      },
+      {
+        "pid": 1922,
+        "fp8_projection": true,
+        "q_dtype": "torch.float8_e4m3fn",
+        "k_dtype": "torch.float8_e4m3fn",
+        "v_dtype": "torch.float8_e4m3fn",
+        "q_tokens": 512,
+        "kv_tokens": 512,
+        "heads": 12,
+        "phase": "gsm8k_evaluation"
+      },
+      {
+        "pid": 1920,
+        "fp8_projection": true,
+        "q_dtype": "torch.float8_e4m3fn",
+        "k_dtype": "torch.float8_e4m3fn",
+        "v_dtype": "torch.float8_e4m3fn",
+        "q_tokens": 512,
+        "kv_tokens": 512,
+        "heads": 12,
+        "phase": "gsm8k_evaluation"
+      }
+    ],
+    "scope": "native FP8 projection and FP8 FMHA invoked during evaluation; not a numerical threshold result"
+  },
+  "eval_artifact_id": 12818760410,
+  "server_log_artifact_id": 12818805276,
+  "limitations": [
+    "Original BF16 absolute LSE <0.20 gate remains unpassed for native FP8 weights.",
+    "This eager, small-chunk accuracy stress run is not a throughput measurement.",
+    "Baseline used BF16 attention routing; differences include native weight conversion, forced FP8 routing and scheduler configuration.",
+    "Matching aggregate scores do not imply identical answers."
+  ]
+}

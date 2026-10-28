@@ -1,0 +1,94 @@
+{
+  "workers": 8,
+  "records": [
+    {
+      "pid": 1921,
+      "fp8_projection": true,
+      "q_dtype": "torch.float8_e4m3fn",
+      "k_dtype": "torch.float8_e4m3fn",
+      "v_dtype": "torch.float8_e4m3fn",
+      "q_tokens": 512,
+      "kv_tokens": 512,
+      "heads": 12,
+      "phase": "gsm8k_evaluation"
+    },
+    {
+      "pid": 1923,
+      "fp8_projection": true,
+      "q_dtype": "torch.float8_e4m3fn",
+      "k_dtype": "torch.float8_e4m3fn",
+      "v_dtype": "torch.float8_e4m3fn",
+      "q_tokens": 512,
+      "kv_tokens": 512,
+      "heads": 12,
+      "phase": "gsm8k_evaluation"
+    },
+    {
+      "pid": 1925,
+      "fp8_projection": true,
+      "q_dtype": "torch.float8_e4m3fn",
+      "k_dtype": "torch.float8_e4m3fn",
+      "v_dtype": "torch.float8_e4m3fn",
+      "q_tokens": 512,
+      "kv_tokens": 512,
+      "heads": 12,
+      "phase": "gsm8k_evaluation"
+    },
+    {
+      "pid": 1927,
+      "fp8_projection": true,
+      "q_dtype": "torch.float8_e4m3fn",
+      "k_dtype": "torch.float8_e4m3fn",
+      "v_dtype": "torch.float8_e4m3fn",
+      "q_tokens": 512,
+      "kv_tokens": 512,
+      "heads": 12,
+      "phase": "gsm8k_evaluation"
+    },
+    {
+      "pid": 1926,
+      "fp8_projection": true,
+      "q_dtype": "torch.float8_e4m3fn",
+      "k_dtype": "torch.float8_e4m3fn",
+      "v_dtype": "torch.float8_e4m3fn",
+      "q_tokens": 512,
+      "kv_tokens": 512,
+      "heads": 12,
+      "phase": "gsm8k_evaluation"
+    },
+    {
+      "pid": 1924,
+      "fp8_projection": true,
+      "q_dtype": "torch.float8_e4m3fn",
+      "k_dtype": "torch.float8_e4m3fn",
+      "v_dtype": "torch.float8_e4m3fn",
+      "q_tokens": 512,
+      "kv_tokens": 512,
+      "heads": 12,
+      "phase": "gsm8k_evaluation"
+    },
+    {
+      "pid": 1922,
+      "fp8_projection": true,
+      "q_dtype": "torch.float8_e4m3fn",
+      "k_dtype": "torch.float8_e4m3fn",
+      "v_dtype": "torch.float8_e4m3fn",
+      "q_tokens": 512,
+      "kv_tokens": 512,
+      "heads": 12,
+      "phase": "gsm8k_evaluation"
+    },
+    {
+      "pid": 1920,
+      "fp8_projection": true,
+      "q_dtype": "torch.float8_e4m3fn",
+      "k_dtype": "torch.float8_e4m3fn",
+      "v_dtype": "torch.float8_e4m3fn",
+      "q_tokens": 512,
+      "kv_tokens": 512,
+      "heads": 12,
+      "phase": "gsm8k_evaluation"
+    }
+  ],
+  "scope": "native FP8 projection and FP8 FMHA invoked during evaluation; not a numerical threshold result"
+}
