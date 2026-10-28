@@ -302,5 +302,45 @@ The checker and full-run artifact collector are active at 60-second intervals.
 [Full dispatch record](../../results/atom-attention/run40695099743/dispatch.json).
 [Existing vLLM PR implementation comparison](./vllm-fp8-prefill-pr-comparison.md)
 records overlap, distinct FP8 projection integration, and the requested native flag
-`VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN` (default 0). No new native fork code
-or upstream PR has been published; the tested plugin still uses its existing flags.
+`VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN` (default 0). Native fork code is now published in [draft vLLM PR #64288](https://github.com/vllm-project/vllm/pull/64288)
+from fork branch `perf/rocm-fp8-kv-proj-fmha`. The tested plugin and running
+benchmark still use the existing plugin flags; the native patch has not run on GPU.
+
+## Native vLLM draft PR published (2026-10-28)
+
+[PR #64288](https://github.com/vllm-project/vllm/pull/64288) contains eight changed files,
+commit `d7f52a37e4e38d893b70d09bbd7a94b5d80cd555`, based on upstream
+`ed6b8f4cd2b47e4240e7ff5feb5105444245b0c2`.
+It integrates native per-channel FP8 projection weight layouts, direct FP8 K/V output,
+FlyDSL cached-context FMHA, per-forward scale/Q lifetime, and the requested default-off
+`VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN` flag.
+Target-model causal attention stays BF16; draft-model routing is preserved.
+
+[Static checks](https://github.com/ajith-sirra-amd/vllm/actions/runs/40700944665) passed:
+all applicable targeted pre-commit hooks, Ruff, mypy, Markdown, SPDX,
+device API checks, Buildkite test tethering, Python syntax and Buildkite YAML.
+The exact final file blobs match the validated artifact. The QKV quantizer's executable
+AST matches the tested prototype; imports, formatting and license notices were adapted.
+
+GPU kernel tests, graph execution, synchronization checks, native-patch GSM8K and
+end-to-end performance remain pending, as explicitly requested before opening the draft.
+The earlier 97.119% prototype GSM8K result is identified separately in the PR.
+The original historical-BF16 absolute-LSE <0.20 criterion remains unpassed.
+
+[Publication and validation record](../../results/atom-attention/vllm-native-pr-20261028.json).
+
+## Separate follow-up: new-token causal FP8 attention
+
+Reference [PR #59124](https://github.com/vllm-project/vllm/pull/59124) calls the same
+FlyDSL API with `causal=True`, matching Q/KV sequence offsets, `cross_seqlen=True`,
+and independent Q/K/V descales. It guards empty inputs and 32-bit indexing limits.
+
+The direct-context preparation already computes FP8 new-token Q/K/V. The next candidate
+can feed these tensors to causal FMHA without another quantization pass. Causal attention
+must use the original new-token descales; the cached projection must retain its separate
+2x-headroom gather descales. Preserve current cached-context Q-slice scale populations
+rather than adopting the reference's full-Q slice reuse at the same time.
+
+This follow-up is reviewed but not implemented or dispatched. Keep it separate from
+#64288 and validate causal masking, same-FP8-input output/LSE, model accuracy and full-run
+performance. Full run 40695099743 and its 60-second checker/collector remain active.

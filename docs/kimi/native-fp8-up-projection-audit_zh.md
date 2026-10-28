@@ -266,4 +266,41 @@ GPU 作业 `122839857513` 已启动。检查器和完整运行产物收集器每
 [完整运行提交记录](../../results/atom-attention/run40695099743/dispatch.json)。
 [现有 vLLM PR 实现比较](./vllm-fp8-prefill-pr-comparison_zh.md)记录重叠范围、
 不同的 FP8 投影集成及用户指定的原生开关 `VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN`
-（默认 0）。尚未发布新的原生 fork 代码或上游 PR；已测试插件仍使用现有开关。
+（默认 0）。现已发布[原生 vLLM 草稿 PR #64288](https://github.com/vllm-project/vllm/pull/64288)，来自 fork 分支 `perf/rocm-fp8-kv-proj-fmha`。正在运行的 benchmark 仍使用已测试插件和旧开关；原生补丁尚未在 GPU 上验证。
+
+## 原生 vLLM 草稿 PR 已发布（2026-10-28）
+
+[PR #64288](https://github.com/vllm-project/vllm/pull/64288) 修改八个文件，
+提交为 `d7f52a37e4e38d893b70d09bbd7a94b5d80cd555`，基于上游
+`ed6b8f4cd2b47e4240e7ff5feb5105444245b0c2`。
+补丁集成原生逐通道 FP8 权重布局适配、直接 FP8 K/V 输出、FlyDSL 缓存上下文 FMHA、
+单次 forward 的 Q/scale 生命周期，以及默认关闭的
+`VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN`。
+目标模型新 token 因果注意力保持 BF16；draft 模型路由保持原状。
+
+[静态检查](https://github.com/ajith-sirra-amd/vllm/actions/runs/40700944665)通过：
+适用的 pre-commit hooks、Ruff、mypy、Markdown、SPDX、设备 API、
+Buildkite 测试绑定、Python 语法和 Buildkite YAML。
+最终文件 blob 与验证产物完全一致。QKV 量化器可执行 AST 与已测试原型一致；
+仅调整 import、格式及许可证说明。
+
+按用户明确要求，GPU kernel、图执行、同步检查、原生补丁 GSM8K 和端到端性能验证均待完成，
+先创建草稿 PR。PR 将原型 97.119% GSM8K 证据单独列出，
+不把它视为原生补丁验证。历史 BF16 绝对 LSE <0.20 条件仍未通过。
+
+[发布与验证记录](../../results/atom-attention/vllm-native-pr-20261028.json)。
+
+## 独立后续实验：新 token 因果 FP8 注意力
+
+参考 [PR #59124](https://github.com/vllm-project/vllm/pull/59124)，使用相同 FlyDSL API，
+设置 `causal=True`、相同 Q/KV 序列偏移、`cross_seqlen=True` 和独立 Q/K/V descale，
+并保护空输入和 32 位索引限制。
+
+当前直接上下文准备已计算新 token 的 FP8 Q/K/V，下一候选可以直接复用这些 tensor，
+不再增加一次量化。因果注意力必须使用原始新 token descale；缓存投影仍使用独立的
+2 倍余量 gather descale。保留当前缓存上下文 Q 切片的量化范围，
+不要同时采用参考 PR 的整段 Q 切片复用。
+
+该后续实验已审查，尚未实现或派发；与 #64288 分离。
+需要验证因果 mask、相同 FP8 输入的输出/LSE、模型准确率及完整性能。
+完整运行 40695099743 及每 60 秒检查的 checker/collector 仍在运行。

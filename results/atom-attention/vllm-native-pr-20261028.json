@@ -1,0 +1,94 @@
+{
+  "pull_request": "https://github.com/vllm-project/vllm/pull/64288",
+  "number": 64288,
+  "state": "open",
+  "draft": true,
+  "fork_branch": "perf/rocm-fp8-kv-proj-fmha",
+  "head_sha": "d7f52a37e4e38d893b70d09bbd7a94b5d80cd555",
+  "base_sha": "ed6b8f4cd2b47e4240e7ff5feb5105444245b0c2",
+  "feature_flag": "VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN",
+  "flag_default": "0",
+  "weight_config": {
+    "targets": {
+      "*.self_attn.kv_b_proj": "fp8_per_channel"
+    }
+  },
+  "scope": "Cached-context FP8 cache x FP8 weights -> FP8 K/V -> FP8 FMHA; BF16 causal target prefill",
+  "static_checks": {
+    "url": "https://github.com/ajith-sirra-amd/vllm/actions/runs/40700944665",
+    "artifact_id": 12822105949,
+    "pre_commit": 0,
+    "ruff": 0,
+    "mypy": "passed",
+    "syntax": "passed",
+    "buildkite_yaml": "passed",
+    "quantizer_executable_ast_matches_tested_prototype": true,
+    "validated_files": {
+      ".buildkite/test_areas/kernels.yaml": {
+        "git_blob_sha": "7b80d4c1d9eb1b882393f1e26dab83b8d16ec450",
+        "sha256": "74067e9c081ba83fa66b6d4f59c28709ab1854ba8ec88a9ea55c7214edc96a37"
+      },
+      "docs/configuration/env_vars.md": {
+        "git_blob_sha": "43c9547cf3b1696d8aaea75f89cbd4bbdbbd6721",
+        "sha256": "823b3a0f93081140aa71730a3158d2f2a0d6a4b9c597c102dd0b818deb063f9c"
+      },
+      "tests/kernels/attention/test_rocm_aiter_mla_prefill_fusions.py": {
+        "git_blob_sha": "5a710865467a773bcfdae6015474db0a81834ad2",
+        "sha256": "bf1955a1e985bf71d59207ddada25b2461882677157e93ff09e0253c5788cfcc"
+      },
+      "vllm/envs.py": {
+        "git_blob_sha": "a4f4fa1a7ef4ae396110325e9663708e8f0bb7f2",
+        "sha256": "f166a441f4e0806a375902a60fe7e4f3610aa547026191276d562ec4e4951c65"
+      },
+      "vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py": {
+        "git_blob_sha": "81a862abea77897c83227975951442ec6ecec65a",
+        "sha256": "105565beb3d5defe7918f0422f92d8e388272e9fa8f600c2e6eace416f01da7f"
+      },
+      "vllm/v1/attention/backends/mla/rocm_aiter_mla.py": {
+        "git_blob_sha": "f3eaf1ee1613fa623298cc582c72f75102a3abf9",
+        "sha256": "d7e23a4312325159f9263c06e440ffcf484e351ab8551a9fa900c343b7fb164d"
+      },
+      "vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py": {
+        "git_blob_sha": "58901686accc67ef00f76c5796c60a12f4c7533f",
+        "sha256": "2ee58e35bbb88574e1b98b336cb3800db7b953fcb87d6852b33e82eaad550f6f"
+      },
+      "vllm/v1/attention/ops/rocm_aiter_mla_fp8_quant.py": {
+        "git_blob_sha": "f43719ff9e5031986e172138ecd430e078e93591",
+        "sha256": "e18ade190ea928fa174ea680552f8867d236419e1dfb8d951beadd9220407ee7"
+      }
+    }
+  },
+  "gpu_validation": "pending for native patch; prototype evidence is not native-patch validation",
+  "prototype_gsm8k": {
+    "run": 40688077118,
+    "source_sha": "14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78",
+    "strict_correct": 1281,
+    "flexible_correct": 1281,
+    "total": 1319,
+    "eight_worker_fp8_execution_proof": true
+  },
+  "open_numerical_issue": {
+    "historical_bf16_max_lse_error": 0.93495,
+    "criterion": "absolute LSE < 0.20",
+    "passed": false
+  },
+  "prototype_performance": {
+    "run": 40695099743,
+    "status": "in_progress",
+    "result": null
+  },
+  "related_prs_reviewed": [
+    59124,
+    62447,
+    63935,
+    55741
+  ],
+  "next_experiment": {
+    "reference_pr": 59124,
+    "stage": "reviewed; implementation and GPU tests pending",
+    "change": "Reuse already quantized new-token Q/K/V for causal=True FMHA",
+    "scale_rule": "Use original new-token Q/K/V descales for causal attention; retain 2x gather descales for cached projection",
+    "preserve": "Existing cached-context Q slice quantization populations",
+    "include_in_initial_pr": false
+  }
+}
