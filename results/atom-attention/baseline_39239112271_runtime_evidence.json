@@ -1,0 +1,33 @@
+{
+  "run_id": 39239112271,
+  "raw_artifact_id": 12191813218,
+  "server_artifact_id": 12191793463,
+  "phases": {
+    "warmup": {
+      "success": 101,
+      "errors": 430,
+      "cancelled": 0
+    },
+    "profiling": {
+      "success": 3357,
+      "errors": 6,
+      "cancelled": 0
+    }
+  },
+  "duration_seconds": 3600,
+  "warmup_requests_per_lane": 10,
+  "actual_speculative_config": {
+    "method": "dspark",
+    "draft": "Inferact/Kimi-K3-DSpark",
+    "num_spec_tokens": 4
+  },
+  "resolved_cudagraph_mode": "FULL_DECODE_ONLY",
+  "final_graph_capture_gib_per_gpu": 6.96,
+  "loaded_model_gib_per_gpu": 187.43,
+  "kv_pool_tokens": 20951355,
+  "attention_block_tokens": 1536,
+  "notes": [
+    "Legacy aggregate spec_decoding=none is inconsistent with server configuration; use actual server configuration.",
+    "430 errors occurred during warmup; only 6 occurred during profiling."
+  ]
+}

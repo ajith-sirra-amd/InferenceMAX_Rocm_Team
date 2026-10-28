@@ -9,6 +9,7 @@
 
 | Document | Topic |
 |---|---|
+| [ATOM comparison and next candidates](atom-vllm-opportunities-2026-10-28.md) | Verified differences, baseline controls and proposed experiments |
 | [Current overhead audit](kimi-prefill-overhead-audit.md) | Problem, exact precision flow, measured costs and next-run gate |
 | [Baseline evidence](atom-attention-BASELINES.md) | Verified checkpoints, throughput and capacity |
 | [ATOM attention](atom-flydsl-attention.md) | Adapter, kernel smoke and constraints |

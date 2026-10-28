@@ -15,6 +15,8 @@
 
 - [当前开销审计](kimi-prefill-overhead-audit_zh.md)：问题、精度与矩阵流程、实测开销、下一次测试门槛。
 
+- [ATOM 对比与下一步候选](atom-vllm-opportunities-2026-10-28_zh.md)：已验证差异、基线对照和实验建议。
+
 ## 全部记录
 
 - [39726650098-validation.md](39726650098-validation.md)

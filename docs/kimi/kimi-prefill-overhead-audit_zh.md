@@ -134,7 +134,7 @@
 - 实际 GPU KV 容量为 **22,665,373 tokens**。8 个 worker 均确认 BF16 causal、FP8 cached FMHA、主模型 ASM PS 禁用、同一 forward 内 Q 复用和 native fused FP8 gather。
 - Numerical preflight 与 QUERY_REUSE_PASS 均通过。最新 Q1024/KV8192 完整调用计时：BF16 **172.28 µs**，hybrid **111.99 µs（1.538）**；两个 cached chunk 为 **337.45 / 204.27 µs（1.652）**。这些是单 GPU 诊断，不包含 KV 重建和 collective。
 - 每个 worker 在线量化 **489 层**，kv_b 权重保留 BF16。模型加载 **439.4440.3 秒**、占用 **184.08 GiB/GPU**，比旧测试的 23.6 分钟更短。
-- 请求的 FULL_AND_PIECEWISE 实际降为 **FULL_DECODE_ONLY**，原因是模型没有 compiled submodule 且关闭了 breakable graphs。Graph capture 占用 **9.209.64 GiB/GPU**。
+- 请求的 FULL_AND_PIECEWISE 实际降为 **FULL_DECODE_ONLY**，原因是模型没有 compiled submodule 且关闭了 breakable graphs。较早的 graph-sizing capture 占用 **9.209.64 GiB/GPU**；最终 capture 报告 **6.67 GiB/GPU**。这是两个阶段，不能相加为常驻显存。
 - Attention block 实际对齐为 **1536 tokens**，Mamba page padding 为 **3.97%**。Planner 还报告新增 18 个 padding layers，相关 cache grouping 最多可能浪费 **26.09%**；这是上界，不是全局显存浪费的实测值。
 - 此次受控前缀 smoke 未出现 hipBLASLt recovery warning；完整 AgentX 的形状不同，仍需检查。
 - 已自动启动 [full run40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769)，**07:20 UTC** 时仍在运行。不要重复 dispatch。
