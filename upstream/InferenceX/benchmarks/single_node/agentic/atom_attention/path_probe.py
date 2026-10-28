@@ -23,8 +23,8 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
     before = cache_hits(base_url)
     stages = []
     for prefix, suffix, output, prompts, concurrency in [
-        (32768, 256, 16, 16, 8),
-        (131072, 256, 8, 4, 1),
+        (32768, 1024, 16, 16, 8),
+        (131072, 1024, 8, 4, 1),
     ]:
         filename = f"path_probe_prefix{prefix}.json"
         command = [
@@ -65,6 +65,7 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
     cached = pids(r"\[ATOM-FP8-ENGAGED\] pid=(\d+) stage=cached_context")
     metadata = pids(r"\[ATOM-METADATA\] pid=(\d+) prefill_ps=disabled")
     reused = pids(r"\[ATOM-Q-REUSE\] pid=(\d+).*q_reuses=[1-9]")
+    fused = pids(r"\[ATOM-DCP-PATH\] pid=(\d+) route=native_fused_fp8_gather")
     pools = re.findall(r"GPU KV cache (?:size|capacity):\s*([\d,]+) tokens", text)
     summary = {
         "model": model, "framework": "vllm", "smoke_type": "prefix_repetition",
@@ -72,12 +73,13 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
         "gpu_kv_tokens": int(pools[-1].replace(",", "")) if pools else None,
         "bf16_causal_pids": causal, "fp8_cached_context_pids": cached,
         "disabled_asm_metadata_pids": metadata, "query_reuse_pids": reused,
+        "native_fused_fp8_gather_pids": fused,
         "scope": "Kernel invocation and HTTP stability; no agentic throughput or model accuracy claim.",
     }
     summary["kernel_invocation_pass"] = (
         after > before and summary["gpu_kv_tokens"] is not None
         and len(causal) >= 8 and len(cached) >= 8 and len(metadata) >= 8
-        and len(reused) >= 8
+        and len(reused) >= 8 and len(fused) >= 8
     )
     (destination / "path_probe_summary.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8",

@@ -32,6 +32,36 @@ class AtomFlyDSLMLAImpl(AiterMLAImpl):
             prefill_backend.end_forward()
 
 
+    def _context_parallel_compute_prefill_context(
+        self, q, cache, metadata, k_scale, dcp_world_size,
+        fused_mla_kv_concat_fn=None,
+    ):
+        arguments = (q, cache, metadata, k_scale, dcp_world_size, fused_mla_kv_concat_fn)
+        if getattr(self, "_dcp_route_checked", False) or torch.cuda.is_current_stream_capturing():
+            return super()._context_parallel_compute_prefill_context(*arguments)
+        # Pinned native fallback calls kv_b_proj as a module; its fused route
+        # expands directly from the weight tensor. Observe the actual call,
+        # rather than predicting the route from checkpoint/config flags.
+        calls = []
+        hook = self.kv_b_proj.register_forward_pre_hook(lambda *unused: calls.append(True))
+        try:
+            result = super()._context_parallel_compute_prefill_context(*arguments)
+        finally:
+            hook.remove()
+        context = metadata.prefill.chunked_context
+        if context is not None and context.chunks:
+            route = "fallback_bf16_gather" if calls else "native_fused_fp8_gather"
+            weight = getattr(self.kv_b_proj, "weight", None)
+            print(
+                f"[ATOM-DCP-PATH] pid={os.getpid()} route={route} "
+                f"kv_b_dtype={getattr(weight, 'dtype', None)} "
+                f"kv_b_module_calls={len(calls)} expanded_kv=BF16",
+                flush=True,
+            )
+            self._dcp_route_checked = True
+        return result
+
+
 class AtomFlyDSLMLAMetadataBuilder(AiterMLAMetadataBuilder):
     _reported_pids = set()
     def _init_fp8_prefill_ps_buffers(self, *args, **kwargs):
@@ -174,6 +204,17 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
         return result
 
     def run_prefill_context_chunk(self, chunk, q, k, v, out=None):
+        if chunk.max_query_len < 512 or chunk.max_seq_len < 8192:
+            result = super().run_prefill_context_chunk(chunk, q, k, v, out=out)
+            key = (os.getpid(), "cached_context_bf16", q.shape[1], q.shape[2], v.shape[2])
+            if key not in self._reported_paths and not torch.cuda.is_current_stream_capturing():
+                print(
+                    f"[ATOM-PREFILL-PATH] pid={os.getpid()} stage=cached_context "
+                    f"q={tuple(q.shape)} k={tuple(k.shape)} fmha=BF16 reason=small_context_conversion_cost",
+                    flush=True,
+                )
+                self._reported_paths.add(key)
+            return result
         return self._run(
             q, k, v, cu_q=chunk.query_start_loc, cu_k=chunk.cu_seq_lens,
             max_q=chunk.max_query_len, max_k=chunk.max_seq_len, causal=False,

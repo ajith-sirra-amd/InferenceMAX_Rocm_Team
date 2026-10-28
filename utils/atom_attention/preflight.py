@@ -69,6 +69,7 @@ def controlled_cases():
         (12, [17, 9], [17, 9], True),
         (24, [17, 9], [33, 0], False),
         (12, [1, 3], [0, 41], False),
+        (12, [512, 9], [8192, 0], False),
     ]:
         q = torch.randn((sum(qlens), heads, 192), device="cuda", dtype=torch.bfloat16)
         k = torch.randn((sum(klens), heads, 192), device="cuda", dtype=torch.bfloat16)
@@ -150,23 +151,23 @@ def timing_cases():
             "q_tokens": nq, "kv_tokens": nk, "heads": heads, "causal": causal,
             "bf16_fmha_ms": bf16, "candidate_complete_call_ms": fp8,
             "bf16_over_candidate": bf16 / fp8,
-            "candidate_path": "BF16 causal" if causal else "FlyDSL FP8 cached context",
+            "candidate_path": "BF16" if causal or nq < 512 or nk < 8192 else "FlyDSL FP8 cached context",
             "scope": "attention plus adapter preparation; shared-host diagnostic",
         }), flush=True)
 
 
 def query_reuse_case():
-    heads, nq = 12, 26
+    heads, nq = 12, 521
     q = torch.randn((nq, heads, 384), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
-    k1 = torch.randn((33, heads, 384), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
-    v1 = torch.randn((33, heads, 256), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
-    k2 = torch.randn((36, heads, 384), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
-    v2 = torch.randn((36, heads, 256), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
-    cuq = torch.tensor([0, 17, 26], device="cuda", dtype=torch.int32)
-    meta1 = SimpleNamespace(query_start_loc=cuq, max_query_len=17,
-        cu_seq_lens=torch.tensor([0, 33, 33], device="cuda", dtype=torch.int32), max_seq_len=33)
-    meta2 = SimpleNamespace(query_start_loc=cuq, max_query_len=17,
-        cu_seq_lens=torch.tensor([0, 29, 36], device="cuda", dtype=torch.int32), max_seq_len=29)
+    k1 = torch.randn((8192, heads, 384), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
+    v1 = torch.randn((8192, heads, 256), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
+    k2 = torch.randn((8199, heads, 384), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
+    v2 = torch.randn((8199, heads, 256), device="cuda", dtype=torch.bfloat16)[:, :, ::2]
+    cuq = torch.tensor([0, 512, 521], device="cuda", dtype=torch.int32)
+    meta1 = SimpleNamespace(query_start_loc=cuq, max_query_len=512,
+        cu_seq_lens=torch.tensor([0, 8192, 8192], device="cuda", dtype=torch.int32), max_seq_len=8192)
+    meta2 = SimpleNamespace(query_start_loc=cuq, max_query_len=512,
+        cu_seq_lens=torch.tensor([0, 8192, 8199], device="cuda", dtype=torch.int32), max_seq_len=8192)
     backend = make_backend(heads)
     def invoke():
         backend.begin_forward()
@@ -180,10 +181,10 @@ def query_reuse_case():
     torch.cuda.synchronize()
     assert stats == {"q_quantizations": 1, "q_reuses": 1}, stats
     for actual, k, v, lengths, label in [
-        (first, k1, v1, [33, 0], "reuse:first_strided_chunk"),
-        (second, k2, v2, [29, 7], "reuse:second_strided_chunk"),
+        (first, k1, v1, [8192, 0], "reuse:first_strided_chunk"),
+        (second, k2, v2, [8192, 7], "reuse:second_strided_chunk"),
     ]:
-        expected, expected_lse = reference(q, k, v, [17, 9], lengths, False)
+        expected, expected_lse = reference(q, k, v, [512, 9], lengths, False)
         check_output(actual[0], expected, actual[1], expected_lse, label)
     for _ in range(3):
         invoke()
@@ -195,13 +196,13 @@ def query_reuse_case():
     graph.replay()
     torch.cuda.synchronize()
     for actual, k, v, lengths, label in [
-        (first, k1, v1, [33, 0], "reuse:changed_input_graph:first"),
-        (second, k2, v2, [29, 7], "reuse:changed_input_graph:second"),
+        (first, k1, v1, [8192, 0], "reuse:changed_input_graph:first"),
+        (second, k2, v2, [8192, 7], "reuse:changed_input_graph:second"),
     ]:
-        expected, expected_lse = reference(q, k, v, [17, 9], lengths, False)
+        expected, expected_lse = reference(q, k, v, [512, 9], lengths, False)
         check_output(actual[0], expected, actual[1], expected_lse, label)
     first, second, stats = invoke()
-    expected, expected_lse = reference(q, k2, v2, [17, 9], [29, 7], False)
+    expected, expected_lse = reference(q, k2, v2, [512, 9], [8192, 7], False)
     check_output(second[0], expected, second[1], expected_lse, "reuse:fresh_forward_zero_q")
     assert stats == {"q_quantizations": 1, "q_reuses": 1}, stats
     print("QUERY_REUSE_PASS", json.dumps(stats), flush=True)
