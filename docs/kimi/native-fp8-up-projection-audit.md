@@ -269,3 +269,20 @@ The original BF16 absolute-LSE criterion remains unpassed; no acceptance thresho
 serving kernel was changed to obtain this score. The next performance smoke uses this
 same source with normal routing and graph settings. No native-projection performance
 improvement is claimed yet.
+
+## Performance smoke dispatched after GSM8K
+
+[Run 40694030981](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40694030981)
+executes source `14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78` with the successful GSM8K run as its
+exact-source prerequisite. GPU job `122836131583` has started. It requests a
+600-second replay with normal performance routing (query >=512, context >=8192),
+8192 batched tokens and graph execution. Accuracy stress is off.
+This diagnostic is not comparable as final evidence with the established
+3600-second 16915.72154 tokens/s/GPU result. Review its throughput, errors and
+eight-worker native-FP8 invocation evidence before the canonical run.
+
+[Dispatch record](../../results/atom-attention/run40694030981/dispatch.json).
+The persistent checker polls every 60 seconds. A companion collector downloads
+benchmark/server artifacts and extracts throughput and actual projection/FMHA
+worker records when they appear; it does not automatically approve or dispatch
+the canonical run.
