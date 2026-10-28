@@ -61,7 +61,7 @@ The previous BF16 prototype retains exact same-scale HIP byte checks.
 The original attention gates, RMS <0.10 and absolute LSE <0.20, are unchanged.
 
 CPU flag routing passed five tests and Python syntax checks passed during preparation.
-GPU validation of the new FP8 projection integration is pending. No performance
+Isolated GPU validation passed (details below). Real-model validation is pending. No performance
 improvement or model-accuracy pass is claimed for it.
 
 ## Real-model numerical finding
@@ -77,3 +77,37 @@ The old synthetic numerical passes remain valid for their inputs. GSM8K run
 40658068830 passed with BF16 attention and does not prove this FP8 path's accuracy.
 The captured-input replay investigates scales and softmax rescaling before another
 serving smoke or performance run. A completed diagnostic is not numerical acceptance.
+
+## GPU results and captured-input reference follow-up
+
+Run [40682885241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40682885241)
+at 58882515b58010bf1411d164c2cb44fab6e049a3 passed all four native weight
+layouts, actual selected AiterPreshuffledPerTokenFp8ScaledMMLinearKernel,
+FP8 x FP8 projection to FP8 FMHA, and changed-input graph replay.
+Projection RMS versus FP64 was approximately 0.0262--0.0266, with zero clipping.
+This is isolated GPU evidence; real Kimi serving and model accuracy remain unpassed.
+
+Run [40682306781](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40682306781)
+completed the earlier captured-input diagnostic. Supplied scales, dynamic scales,
+eager softmax rescaling, and power-of-two scales all failed the original 0.20
+absolute LSE gate. Diagnostic job success is not numerical acceptance.
+
+The next fixture replay uses attention_reference.py to compute FP64 attention for
+every query and head in the saved chunk. It reports Q-only, KV-only and native
+FP8-weight effects separately. Both old BF16 projection and native FP8 projection
+are tested, using captured scales or diagnostic scales computed from FP64 maxima.
+The latter is diagnostic only; it is not proposed as a production FP64 operation.
+Both lazy-rescale and denormal-handling settings are measured. Original BF16
+kernel gates remain unchanged and are reported independently from same-FP8-input
+arithmetic checks. Quantizer parity against contiguous AITER HIP inputs is
+reported without hiding one-ULP differences.
+
+Related upstream PRs, inspected at their current heads:
+- vllm-project/vllm#59124 (132f6daa6b17cb4000ef58355943bb39339104f2), open:
+  dynamic per-tensor Q/K/V, stride-aware quantizer and Q reuse for gfx950.
+  Author reports GSM8K 0.9621 for both arms; this does not validate our changes.
+- vllm-project/vllm#62447 (cefacabced64eda821bcb49493cc970056d15429), open:
+  opt-in ROCM_AITER_FA FP8, contiguous Q/K/V copies and dynamic per-tensor scales.
+  No GSM8K reported. Identical-input references separate FMHA from quantization.
+- vllm-project/vllm#50181 is a Blackwell backend-selection fix, not an MI355X
+  FP8 rounding correction. No upstream code or threshold has been imported here.

@@ -70,3 +70,33 @@ GPU 验证待执行，目前不声称性能提升或模型准确率通过。
 原合成输入数值测试的通过结论对其输入仍然有效。GSM8K 40658068830 使用
 BF16 注意力通过，不能证明此 FP8 路径准确率。后续先用保存的输入检查 scale
 和 softmax rescaling，再进行服务 smoke 或性能运行。诊断完成不等于数值验收。
+
+## GPU 结果与捕获输入的参考计算
+
+运行 [40682885241](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40682885241)
+使用提交 58882515b58010bf1411d164c2cb44fab6e049a3，通过四种原生权重布局、
+实际选中的 AiterPreshuffledPerTokenFp8ScaledMMLinearKernel、FP8 x FP8 投影到
+FP8 FMHA，以及输入变化后的 graph replay 检查。投影相对 FP64 的 RMS 约为
+0.0262--0.0266，未发生截断。这仅证明独立 GPU 测试通过；真实 Kimi 服务路径
+及模型精度尚未通过验证。
+
+运行 [40682306781](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40682306781)
+完成了之前的捕获输入诊断。提供的 scale、动态 scale、每轮 softmax 重缩放及
+二次幂 scale 均未通过原有绝对 LSE 误差小于 0.20 的检查。诊断任务成功不等于数值验收通过。
+
+下一次回放使用 attention_reference.py，为保存的 chunk 中所有 query 和 head
+计算 FP64 参考注意力，分别报告仅 Q 量化、仅 K/V 量化和原生 FP8 权重量化的影响。
+同时检查 BF16 与 FP8 投影，分别使用捕获的 scale 和根据 FP64 最大值计算的诊断
+scale；后者仅用于诊断，不是生产路径。测试 lazy-rescale 和 denormal 处理组合，
+单独保留原 BF16 kernel 验收结果与相同 FP8 输入的算术检查。与连续 AITER HIP
+输入的量化结果差异会明确报告，包括一个 ULP 的差异。
+
+已查看的上游 PR：
+- vllm-project/vllm#59124，提交 132f6daa6b17cb4000ef58355943bb39339104f2，仍开放：
+  gfx950 动态逐张量 Q/K/V 量化、支持 stride 的量化器及 Q 复用。
+  作者报告两组 GSM8K 均为 0.9621，但不能证明本分支改动的精度。
+- vllm-project/vllm#62447，提交 cefacabced64eda821bcb49493cc970056d15429，仍开放：
+  ROCM_AITER_FA 可选 FP8 路径，先创建连续 Q/K/V 再动态逐张量量化。
+  尚无 GSM8K 结果；相同输入参考用于区分 FMHA 与量化误差。
+- vllm-project/vllm#50181 修复 Blackwell 后端选择，不是 MI355X FP8 舍入修复。
+  本次未引入上游代码，也未改变验收阈值。
