@@ -9,5 +9,9 @@
   "performance_result_available": false,
   "artifact_upload_completed": false,
   "native_pr_promoted": false,
-  "recovery_run_id": 40730725939
+  "recovery_run_id": 40730725939,
+  "recovery_conclusion": "failure",
+  "recovery_error": "Self-hosted runner lost communication before executing steps",
+  "recovered_results_available": false,
+  "workspace_files_deleted": false
 }

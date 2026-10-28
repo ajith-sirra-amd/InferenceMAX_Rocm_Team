@@ -14,7 +14,7 @@
 
 ## 后续任务顺序
 
-1. [ ] **恢复并完成新 token 性能测量：** [40719654583](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583) 的 GPU job 122927005395 于 16:50:55 UTC 因 runner 磁盘配额错误失败。未上传基准 artifact，尚无新 token 性能提升证据。[恢复任务 40730725939](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40730725939) 保留工作区并尝试恢复现有日志/结果。先检查恢复证据，再决定仓库范围内清理或完整重跑。目标对照仍为代码 `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`、C48 + MTP，对比 **17,406.08912**。
+1. [ ] **恢复并完成新 token 性能测量：** [40719654583](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583) 的 GPU job 122927005395 于 16:50:55 UTC 因 runner 磁盘配额错误失败。未上传基准 artifact，尚无新 token 性能提升证据。[恢复任务 40730725939](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40730725939) 在执行任何步骤前因 runner 与 GitHub 失联而失败。未删除文件，也未恢复结果。GPU 工作需要恢复 runner 存储/连接，或提供已请求的 SSH hostname/user。恢复证据后再决定仓库范围内清理或完整重跑。目标对照仍为代码 `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`、C48 + MTP，对比 **17,406.08912**。
 2. [ ] **有条件地加入原生 PR：** 只有新 token 测得性能提升才加入 PR #64288；否则验证已确立的缓存上下文实现。候选代码位于 fork 的 `checks/fp8-mla-causal-20261028` 分支，PR 分支尚未改变。
 3. [ ] **原生 GPU 正确性：** 验证最终实现的投影/FMHA 数值、因果 mask（若包含）、非单位 scale、真实 FP8 执行、更改输入后的 graph replay，以及服务运行中的 `VLLM_GPU_SYNC_CHECK=error`。不得仅为通过测试而放宽捕获 BF16 参考的 LSE 门槛。
 4. [ ] **原生完整 GSM8K：** 1,319 题，five-shot，temperature 0，真实 speculative verification。记录最终原生 commit，并证明评估阶段八个 worker 执行预期的缓存/因果路径。
@@ -56,3 +56,5 @@ e2e 工作流在 `runner-diagnostics-only=true` 时可接受精确 fork commit �
 recipe 现已接入 e2e 工作流的精确 `native-vllm-sha`，选择原生 ROCM_AITER_MLA / ROCM_AITER_FA backend，并保存安装来源和调用证据。尚未执行 GPU 观测及原生模型评估，派发前必须通过 CPU 集成检查。当前调用方与现有 PR 一致，仅要求缓存 FP8 证据（`INFERENCEX_NATIVE_REQUIRE_CAUSAL=0`）；若因果 FP8 测得提升并加入 PR，必须显式改为 1。CPU 测试拒绝不完整、BF16、仅预热、版本不符、worker 重启、仅 graph capture 以及把 stress 当 replay 的证据。`replay` 标记覆盖所启动的 replay（包含预热），不能证明稳态 kernel 驻留。
 
 原生环境/执行证据 CPU CI [40729902162](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40729902162) 在代码 `0e40f469f1623c09336a034fa3d130b3b294fa4c` 通过 **15 项测试，零失败/错误/跳过**；JUnit artifact 为 `12834722522`。这不是 GPU 数值验证。早先 setup 阶段失败来自错误的 artifact action pin；两个新增工作流均已改用仓库中经验证的现有 pin。
+
+原生服务集成 CI [40732677087](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40732677087) 在 `bf9b27bd72d9a46814721c6d33811991a142afc8` 通过：15 项原生环境/证据测试、recipe/launcher Bash 语法及现有容器启动器验证。未派发原生 GPU 测试或额外完整基准。PR #64288 仍为 draft，代码为 `08e5d81a0d4fc76c20a97f9a517195db5a5dc5be`。
