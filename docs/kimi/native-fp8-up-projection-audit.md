@@ -157,3 +157,21 @@ For native FP8 weights the actual ATOM projection computes NoPE and V, and only
 RoPE is replaced from the original compact cache after an FP32 reference transform.
 This does not claim fused-transform availability or speed. BF16 transform rounding
 for Q is explicit. This is an experiment beyond the inspected ATOM/vLLM PR paths.
+
+## Rotation result and residual-column diagnostic
+
+Run 40685301834 at a5a4d299d8ce5e5e14759bcca02f3957fbc7f889 passed all eight
+same-input arithmetic checks but failed every original BF16 gate.
+Unsigned RoPE rotation with native FP8 weights reached max LSE 0.536367;
+the signed variant reached 0.635032. Neither is adopted.
+
+The next diagnostic preserves primary cached RoPE codes using a K descale aligned
+to the compact cache descale by an integer power of two. It adds 64 FP8 columns:
+Q carries 16 times its scaled RoPE rounding residual, while K duplicates RoPE
+divided by 16. The 256-column dot product therefore includes a residual correction
+without changing AITER's FP8 FMHA implementation. The original model softmax scale
+is passed explicitly; it must not change to 1/sqrt(256).
+All tensors consumed by FMHA remain FP8. Native FP8 projection is still real.
+No claim is made that the extra packing traffic or 256-column attention is faster.
+Kernel-only timings exclude packing and projection, and are labelled accordingly.
+This is diagnostic work, not production integration or model-accuracy evidence.
