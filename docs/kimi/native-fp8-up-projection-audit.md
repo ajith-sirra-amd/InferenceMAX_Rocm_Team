@@ -136,3 +136,24 @@ unchanged in exact arithmetic; LSE is restored by adding scale * dot(Q, mean(K))
 The identity is checked independently before FP8 tests. The prototype uses BF16
 centered K and FP64 correction, so it is neither a production optimization nor
 evidence of performance. No serving thresholds or acceptance limits are changed.
+
+## RoPE localization and next diagnostic
+
+Run 40684733665 at f1c199b5cb3209e4ec0a43edebf55e0324585ec1 completed.
+Maximum LSE shifts from quantizing one part were: Q NoPE 0.158969,
+Q RoPE 0.512855, K NoPE 0.106059, K RoPE 0.370712.
+At the worst row, RoPE contributed approximately -0.729 to the peak-score change,
+while NoPE contributed approximately -0.00165. The original top key had probability
+0.99547. The positional columns dominate this captured failure.
+
+Key-centering's unquantized identity passed (max LSE error 1.78e-14).
+The FP8 prototype lowered max LSE difference from 0.727297 to 0.479201,
+still failing 0.20. It is not promoted to serving.
+
+The next diagnostic applies the same normalized 64-column Walsh-Hadamard matrix
+to Q/K RoPE, with and without one fixed random sign vector (seed 20261028).
+The unquantized attention identity is verified first. Original gates are retained.
+For native FP8 weights the actual ATOM projection computes NoPE and V, and only
+RoPE is replaced from the original compact cache after an FP32 reference transform.
+This does not claim fused-transform availability or speed. BF16 transform rounding
+for Q is explicit. This is an experiment beyond the inspected ATOM/vLLM PR paths.
