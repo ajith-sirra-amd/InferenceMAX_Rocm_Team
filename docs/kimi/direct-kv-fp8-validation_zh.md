@@ -35,7 +35,7 @@ Torch 倒数乘法得到 0.0078125。全局相对 RMS 差异为 3.0243e-08。
    workflow 设置 `ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT=1`；由于验证使用主机断言，
    recipe 添加 `--enforce-eager`。每次优化缓存调用均与独立同 scale AITER 量化
    精确比较 K/V 字节及注意力输出/LSE，并从当前 BF16 输入重新计算 Q。
-   同时相对之前动态 scale FP8 路径检查注意力相对 RMS <0.10、LSE 最大误差 <0.20，
+   同时相对之前动态 scale FP8 路径及独立 BF16 注意力路径检查相对 RMS <0.10、LSE 最大误差 <0.20，
    并报告 K/V 截断比例。
 3. 探针要求全部八个 worker 均具有直接输出和验证成功标记。检查证据后才运行启用 graph 的性能测试。
 
@@ -53,3 +53,10 @@ Shell 验证及实际 GPU 检查在诊断任务中执行。
 
 初始内核计时和合成误差见[投影证据](./projection-fp8-experiment_zh.md)；
 这些计时不包含模型服务与 DCP 通信。
+
+
+## 已完成的 GPU 预检
+
+[运行 40670162135](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40670162135)，源提交 7e24cd6a5c7eb7d324ea106c76f7a160a840e687，通过同 scale K/V 字节精确验证、实际 backend Q 复用与清理，以及输入变化后的 graph replay。两个 cache scale 均无截断；BF16 投影相对 FP64 的 RMS 误差为 0.136–0.175%，最终 FP8 K/V 相对 BF16 投影为 2.645–2.753%。backend 输出相对原动态 scale 路径的 RMS 为 3.580%（eager）和 4.148%（改变输入后 graph replay）。
+
+[结构化证据](../../results/atom-attention/run40670162135/summary.json)。新增的独立 BF16 注意力比较将在模型 smoke 启动前的直接 K/V 预检中执行；真实模型验证仍待完成。首次运行 40669975181 在数值检查前因诊断导入作用域错误失败，已修复，未修改内核或门限。

@@ -1,0 +1,12 @@
+{
+  "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+  "inputs": {
+    "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+    "test-name": "Kimi direct KV FP8 integration numerics and graph replay 7e24cd6",
+    "ref": "7e24cd6a5c7eb7d324ea106c76f7a160a840e687",
+    "runner-diagnostics-only": "true",
+    "attention-path-probe-only": "false",
+    "agentic-eval-only": "false",
+    "duration-override": "600"
+  }
+}

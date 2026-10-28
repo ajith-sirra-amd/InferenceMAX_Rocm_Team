@@ -85,6 +85,8 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
         "direct_fp8_kv_validation_calls": len(validated),
         "direct_fp8_kv_max_rms_vs_dynamic": max((x["rms_vs_dynamic"] for x in validated), default=None),
         "direct_fp8_kv_max_lse_error": max((x["lse_max_vs_dynamic"] for x in validated), default=None),
+        "direct_fp8_kv_max_rms_vs_bf16": max((x["rms_vs_bf16"] for x in validated), default=None),
+        "direct_fp8_kv_max_lse_vs_bf16": max((x["lse_max_vs_bf16"] for x in validated), default=None),
         "direct_fp8_kv_max_k_clipping": max((x["k_clipping_fraction"] for x in validated), default=None),
         "direct_fp8_kv_max_v_clipping": max((x["v_clipping_fraction"] for x in validated), default=None),
         "scope": "Kernel invocation and HTTP stability; no agentic throughput or model accuracy claim.",

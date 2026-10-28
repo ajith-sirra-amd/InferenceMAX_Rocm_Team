@@ -44,7 +44,7 @@ was not changed to accommodate the Torch reference, and exact byte checks remain
    Every optimized cached call compares K/V bytes and attention output/LSE exactly
    with separate same-scale AITER quantization, recomputing Q from live BF16 input.
    It also checks attention relative RMS <0.10 and LSE max error <0.20 against the
-   prior dynamic-scale FP8 path, and reports K/V clipping.
+   prior dynamic-scale FP8 path and a separate BF16 attention call, and reports K/V clipping.
 3. The probe requires output and successful validation markers on all eight
    workers. Only after inspecting that evidence may graph-enabled performance run.
 
@@ -65,3 +65,10 @@ Shell validation and actual GPU checks execute in the diagnostics job.
 
 See [projection evidence](./projection-fp8-experiment.md) for the initial kernel
 timings and synthetic errors. Those timings exclude serving and DCP communication.
+
+
+## Completed GPU preflight
+
+[Run 40670162135](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40670162135), source 7e24cd6a5c7eb7d324ea106c76f7a160a840e687, passed exact same-scale K/V bytes, actual-backend Q reuse and cleanup, and changed-input graph replay. Both cache scales had zero clipping. BF16 projection relative RMS versus FP64 was 0.136–0.175%; final supplied-scale FP8 K/V versus BF16 projection was 2.645–2.753%. Backend attention RMS versus the old dynamic-scale path was 3.580% eager and 4.148% after changed-input graph replay.
+
+[Structured evidence](../../results/atom-attention/run40670162135/summary.json). The additional independent BF16 attention comparison runs in the direct-KV preflight before model startup in the serving smoke. Real-model validation remains pending. First attempt 40669975181 stopped before numerical checks on a diagnostic import-scoping error; that was fixed without changing the kernel or thresholds.

@@ -1,0 +1,187 @@
+{
+  "run_id": 40670162135,
+  "job_id": 122754601031,
+  "source": "7e24cd6a5c7eb7d324ea106c76f7a160a840e687",
+  "conclusion": "success",
+  "cache_chain": [
+    {
+      "cache_scale": 0.125,
+      "kv_tokens": 8192,
+      "heads": 12,
+      "raw_fp8_to_bf16_widening_max_abs": 0.0,
+      "supplied_scale_projection_matches_separate_quant_exactly": true,
+      "same_scale_reference": "AITER HIP per_tensor_quant",
+      "torch_reciprocal_boundary_differences": [],
+      "reference": "FP64 dequantization/projection of identical FP8 cache and BF16 weights",
+      "native_order": "widen raw FP8 to BF16; BF16 dot with FP32 accumulation; apply cache scale; round to BF16",
+      "K_includes": "128 projected columns plus 64 RoPE columns per head",
+      "results": {
+        "K": {
+          "bf16_projection_vs_fp64": {
+            "rms": 0.0013542178814893145,
+            "relative_rms": 0.0013559575320577454,
+            "max_abs": 0.015548177063465118,
+            "reference_rms": 0.9987170316714927
+          },
+          "final_dynamic_fp8_vs_bf16_projection": {
+            "rms": 0.02680721082638451,
+            "relative_rms": 0.026841658784810086,
+            "max_abs": 0.1964283585548401,
+            "reference_rms": 0.9987166233390513
+          },
+          "whole_chain_dynamic_fp8_vs_fp64": {
+            "rms": 0.02684571583946784,
+            "relative_rms": 0.02688020228766679,
+            "max_abs": 0.2105082869529724,
+            "reference_rms": 0.9987170316714927
+          },
+          "atom_supplied_fp8_vs_bf16_projection": {
+            "rms": 0.027493697631389688,
+            "relative_rms": 0.027529027743093782,
+            "max_abs": 0.1763390302658081,
+            "reference_rms": 0.9987166233390513
+          },
+          "dynamic_clipping_fraction": 0.0,
+          "supplied_clipping_fraction": 0.0,
+          "dynamic_scale": 0.012276786379516125,
+          "supplied_scale": 0.0220424123108387
+        },
+        "V": {
+          "bf16_projection_vs_fp64": {
+            "rms": 0.001660454875238289,
+            "relative_rms": 0.001661231700829172,
+            "max_abs": 0.01561775803565979,
+            "reference_rms": 0.999532379745405
+          },
+          "final_dynamic_fp8_vs_bf16_projection": {
+            "rms": 0.026526310517233764,
+            "relative_rms": 0.02653873870381223,
+            "max_abs": 0.21875029802322388,
+            "reference_rms": 0.999531696411153
+          },
+          "whole_chain_dynamic_fp8_vs_fp64": {
+            "rms": 0.026570177571859546,
+            "relative_rms": 0.026582608137844764,
+            "max_abs": 0.23436123132705688,
+            "reference_rms": 0.999532379745405
+          },
+          "atom_supplied_fp8_vs_bf16_projection": {
+            "rms": 0.02643312917073239,
+            "relative_rms": 0.026445513699706866,
+            "max_abs": 0.17857134342193604,
+            "reference_rms": 0.999531696411153
+          },
+          "dynamic_clipping_fraction": 0.0,
+          "supplied_clipping_fraction": 0.0,
+          "dynamic_scale": 0.014160157181322575,
+          "supplied_scale": 0.0223214291036129
+        }
+      },
+      "scope": "synthetic tensor errors; not model accuracy or loss versus an unquantized original cache"
+    },
+    {
+      "cache_scale": 0.13699999451637268,
+      "kv_tokens": 8192,
+      "heads": 12,
+      "raw_fp8_to_bf16_widening_max_abs": 0.0,
+      "supplied_scale_projection_matches_separate_quant_exactly": true,
+      "same_scale_reference": "AITER HIP per_tensor_quant",
+      "torch_reciprocal_boundary_differences": [
+        "V"
+      ],
+      "reference": "FP64 dequantization/projection of identical FP8 cache and BF16 weights",
+      "native_order": "widen raw FP8 to BF16; BF16 dot with FP32 accumulation; apply cache scale; round to BF16",
+      "K_includes": "128 projected columns plus 64 RoPE columns per head",
+      "results": {
+        "K": {
+          "bf16_projection_vs_fp64": {
+            "rms": 0.0019114314528971281,
+            "relative_rms": 0.0017462472498103207,
+            "max_abs": 0.015621596665624793,
+            "reference_rms": 1.09459382289922
+          },
+          "final_dynamic_fp8_vs_bf16_projection": {
+            "rms": 0.02917012934422513,
+            "relative_rms": 0.026649100642238834,
+            "max_abs": 0.2142859697341919,
+            "reference_rms": 1.0946008923839803
+          },
+          "whole_chain_dynamic_fp8_vs_fp64": {
+            "rms": 0.02938394066942003,
+            "relative_rms": 0.02684460669766216,
+            "max_abs": 0.22982183055012584,
+            "reference_rms": 1.09459382289922
+          },
+          "atom_supplied_fp8_vs_bf16_projection": {
+            "rms": 0.029743612598234315,
+            "relative_rms": 0.027173020600645015,
+            "max_abs": 0.19196414947509766,
+            "reference_rms": 1.0946008923839803
+          },
+          "dynamic_clipping_fraction": 0.0,
+          "supplied_clipping_fraction": 0.0,
+          "dynamic_scale": 0.01346261240541935,
+          "supplied_scale": 0.0241350457072258
+        },
+        "V": {
+          "bf16_projection_vs_fp64": {
+            "rms": 0.0018214428744758608,
+            "relative_rms": 0.0016626780013462522,
+            "max_abs": 0.015606160730449403,
+            "reference_rms": 1.0954874443524594
+          },
+          "final_dynamic_fp8_vs_bf16_projection": {
+            "rms": 0.029063275970888768,
+            "relative_rms": 0.02653001393109396,
+            "max_abs": 0.24107158184051514,
+            "reference_rms": 1.095486645667598
+          },
+          "whole_chain_dynamic_fp8_vs_fp64": {
+            "rms": 0.029125287164378712,
+            "relative_rms": 0.02658660061740335,
+            "max_abs": 0.2565691811813213,
+            "reference_rms": 1.0954874443524594
+          },
+          "atom_supplied_fp8_vs_bf16_projection": {
+            "rms": 0.028993047344513787,
+            "relative_rms": 0.02646590669012236,
+            "max_abs": 0.1964283585548401,
+            "reference_rms": 1.095486645667598
+          },
+          "dynamic_clipping_fraction": 0.0,
+          "supplied_clipping_fraction": 0.0,
+          "dynamic_scale": 0.0154854916036129,
+          "supplied_scale": 0.02455357275903225
+        }
+      },
+      "scope": "synthetic tensor errors; not model accuracy or loss versus an unquantized original cache"
+    }
+  ],
+  "backend_validations": [
+    {
+      "pid": 7,
+      "call": 1,
+      "same_scale_kv_exact": true,
+      "same_scale_fmha_exact": true,
+      "q_tokens": 512,
+      "kv_tokens": 8192,
+      "rms_vs_dynamic": 0.035799577832221985,
+      "lse_max_vs_dynamic": 0.0054569244384765625,
+      "k_clipping_fraction": 0.0,
+      "v_clipping_fraction": 0.0
+    },
+    {
+      "pid": 7,
+      "call": 2,
+      "same_scale_kv_exact": true,
+      "same_scale_fmha_exact": true,
+      "q_tokens": 512,
+      "kv_tokens": 8192,
+      "rms_vs_dynamic": 0.041479043662548065,
+      "lse_max_vs_dynamic": 0.0011272430419921875,
+      "k_clipping_fraction": 0.0,
+      "v_clipping_fraction": 0.0
+    }
+  ],
+  "scope": "Synthetic cache-chain and actual backend graph replay; not model accuracy or serving throughput"
+}

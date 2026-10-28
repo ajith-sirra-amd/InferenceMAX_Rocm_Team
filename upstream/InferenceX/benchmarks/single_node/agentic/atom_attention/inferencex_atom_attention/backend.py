@@ -355,11 +355,24 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
                / dynamic.float().square().mean().sqrt().clamp_min(1e-6)).item()
         lse_max = ((actual_lse[finite_lse] - dynamic_lse[finite_lse]).abs().max().item()
                    if finite_lse.any().item() else 0.0)
+        bf16, bf16_lse = super().run_prefill_context_chunk(chunk, q, k, v)
+        if not torch.isfinite(bf16).all().item():
+            raise RuntimeError("Nonfinite BF16 attention reference")
+        if not torch.equal(torch.isneginf(actual_lse), torch.isneginf(bf16_lse)):
+            raise RuntimeError("BF16 reference LSE empty-row mismatch")
+        finite_bf16_lse = torch.isfinite(bf16_lse)
+        if not torch.isfinite(actual_lse[finite_bf16_lse]).all().item():
+            raise RuntimeError("Nonfinite optimized LSE against BF16 reference")
+        rms_bf16 = ((actual.float() - bf16.float()).square().mean().sqrt()
+                    / bf16.float().square().mean().sqrt().clamp_min(1e-6)).item()
+        lse_bf16 = ((actual_lse[finite_bf16_lse] - bf16_lse[finite_bf16_lse]).abs().max().item()
+                    if finite_bf16_lse.any().item() else 0.0)
         k_clip = (k.float().abs() > 448 * ks).float().mean().item() if k.numel() else 0.0
         v_clip = (v.float().abs() > 448 * vs).float().mean().item() if v.numel() else 0.0
-        if rms >= 0.10 or lse_max >= 0.20:
+        if max(rms, rms_bf16) >= 0.10 or max(lse_max, lse_bf16) >= 0.20:
             raise RuntimeError(
                 f"Direct KV numerical gate failed: rms={rms}, lse={lse_max}, "
+                f"rms_bf16={rms_bf16}, lse_bf16={lse_bf16}, "
                 f"k_clip={k_clip}, v_clip={v_clip}"
             )
         self._direct_validations += 1
@@ -368,5 +381,6 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
             "same_scale_kv_exact": True, "same_scale_fmha_exact": True,
             "q_tokens": q.shape[0], "kv_tokens": k.shape[0],
             "rms_vs_dynamic": rms, "lse_max_vs_dynamic": lse_max,
+            "rms_vs_bf16": rms_bf16, "lse_max_vs_bf16": lse_bf16,
             "k_clipping_fraction": k_clip, "v_clipping_fraction": v_clip,
         }), flush=True)

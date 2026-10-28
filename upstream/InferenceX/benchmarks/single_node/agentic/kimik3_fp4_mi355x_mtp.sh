@@ -73,6 +73,9 @@ fi
 mkdir -p "$RESULT_DIR"
 if [ "$ATTENTION_PATH_PROBE_ONLY" = "true" ]; then
     python3 /outputs/utils/atom_attention/preflight.py 2>&1 | tee "$RESULT_DIR/atom_attention_preflight.log"
+    if [ "$ATOM_USE_FUSED_KV_FP8_OUTPUT" = "1" ]; then
+        python3 /outputs/utils/atom_attention/direct_kv_preflight.py 2>&1 | tee "$RESULT_DIR/atom_direct_kv_preflight.log"
+    fi
 fi
 
 export AIPERF_EXPERIMENTAL_FAST=0
