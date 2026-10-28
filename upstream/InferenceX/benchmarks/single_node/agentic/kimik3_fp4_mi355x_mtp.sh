@@ -53,6 +53,9 @@ if [ "$ATTENTION_PATH_PROBE_ONLY" = "false" ]; then
     install_agentic_deps
 fi
 mkdir -p "$RESULT_DIR"
+if [ "$ATTENTION_PATH_PROBE_ONLY" = "true" ]; then
+    python3 /outputs/utils/atom_attention/preflight.py 2>&1 | tee "$RESULT_DIR/atom_attention_preflight.log"
+fi
 
 export AIPERF_EXPERIMENTAL_FAST=0
 

@@ -272,6 +272,7 @@ jobs:
           path: |
             results/server.log
             results/path_probe*.json
+            results/atom_attention_preflight.log
             results/path_probe*.log
             results/path_probe*_command.txt
             results/attnfp8_checkpoint_config.json
