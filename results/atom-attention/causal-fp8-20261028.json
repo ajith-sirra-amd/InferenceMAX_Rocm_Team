@@ -423,5 +423,76 @@
     },
     "isolation": "Keep each reference causal attention, Q quantization, FP8 weight configuration, scales policy, and runtime settings fixed within its pair; replace only eligible cached KV projection/output handoff. Do not claim simple cherry-picking automatically exercises both paths.",
     "ready_for_review": "pending native validation and matched evidence"
-  }
+  },
+  "steady_state_profile": {
+    "requested": true,
+    "after": "complete native PR validation and required review tasks",
+    "workload": "same agentic replay on final optimized native source",
+    "steady_state_evidence": [
+      "model/graph startup complete",
+      "warmup requests excluded",
+      "stable throughput and cache behavior across successive observation windows"
+    ],
+    "capture": "short CPU/GPU trace across all eight workers; preserve unprofiled performance evidence separately",
+    "analysis": [
+      "top kernels by aggregate GPU time and call count",
+      "HBM traffic and materialized intermediates",
+      "DCP/MoE communication and overlap",
+      "CPU launch gaps and GPU idle intervals"
+    ],
+    "output": "ranked optimization opportunities and a concrete next experiment",
+    "write_scope": [
+      "ajith-sirra-amd/InferenceMAX_Rocm_Team",
+      "ajith-sirra-amd/vllm"
+    ]
+  },
+  "concurrency_sweep": {
+    "requested": true,
+    "after": "steady-state profile after native PR validation and review tasks",
+    "baseline": {
+      "concurrency": 48,
+      "mtp": true
+    },
+    "points": [
+      {
+        "concurrency": 56,
+        "mtp": true
+      },
+      {
+        "concurrency": 64,
+        "mtp": true
+      },
+      {
+        "concurrency": 96,
+        "mtp": false
+      }
+    ],
+    "controls": [
+      "same final optimized source",
+      "same model and weight quantization",
+      "same eight MI355X GPUs and TP8/DCP8",
+      "same NUMA/CCD binding, offload, graphs, and replay dataset",
+      "same full measurement duration"
+    ],
+    "metrics": [
+      "total input+output tokens/s/GPU",
+      "output tokens/s/GPU",
+      "TTFT",
+      "TPOT",
+      "successful and failed requests",
+      "GPU/cache utilization"
+    ],
+    "no_mtp_check": "Omit speculative configuration and synthetic speculative acceptance; verify actual server arguments and execution.",
+    "interpretation": "C96 without MTP changes both concurrency and speculation; report the configuration result without attributing it solely to concurrency."
+  },
+  "write_boundary": {
+    "allowed_write_repositories": [
+      "ajith-sirra-amd/InferenceMAX_Rocm_Team",
+      "ajith-sirra-amd/vllm"
+    ],
+    "user_instruction": "Respect boundaries. No write permissions outside these two repos.",
+    "codex_wakeup_enabled": false,
+    "system_scheduler_installed": false
+  },
+  "checker_interval_seconds": 300
 }
