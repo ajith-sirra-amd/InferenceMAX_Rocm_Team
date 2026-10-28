@@ -1,0 +1,27 @@
+{
+  "run_id": 40695099743,
+  "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40695099743",
+  "gpu_job_id": 122839857513,
+  "execution_source": "14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78",
+  "dispatch": {
+    "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+    "inputs": {
+      "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+      "test-name": "Kimi native FP8 projection FMHA canonical performance 14250d6",
+      "ref": "14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78",
+      "runner-diagnostics-only": "false",
+      "attention-path-probe-only": "false",
+      "agentic-eval-only": "false",
+      "duration-override": "",
+      "after-run-id": "40688077118",
+      "failure-fixture-run-id": ""
+    }
+  },
+  "mode": "full canonical agentic performance",
+  "requested_duration_seconds": 3600,
+  "smoke_run_id": 40694030981,
+  "smoke_conclusion": "cancelled at user request; not a numerical or performance failure",
+  "accuracy_prerequisite_run": 40688077118,
+  "accuracy_score": 0.9711902956785443,
+  "monitor_interval_seconds": 60
+}

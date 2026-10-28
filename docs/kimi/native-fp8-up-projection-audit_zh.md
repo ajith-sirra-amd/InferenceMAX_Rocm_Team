@@ -252,3 +252,18 @@ Python 工具会话保持可用期间，检查器每 60 秒查询一次该运行
 [提交记录](../../results/atom-attention/run40694030981/dispatch.json)。
 持久检查器每 60 秒轮询一次。配套收集器会在产物出现后下载 benchmark 和服务日志，
 提取吞吐量及实际投影/FMHA worker 记录；收集器不会自动批准或提交完整性能运行。
+
+## 按用户要求改为完整运行并取消冒烟测试
+
+用户要求直接完整运行，不做冒烟测试。已通过 GitHub Actions 取消 40694030981，
+GPU 作业已清理。这次取消不是数值或性能失败。
+
+完整[运行 40695099743](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40695099743)
+使用相同已验证源码 `14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78`、正常路由及图执行，
+按配置进行 3600 秒、并发 48、TP8/DCP8 的 agentic 回放。GSM8K 前置条件通过，
+GPU 作业 `122839857513` 已启动。检查器和完整运行产物收集器每 60 秒检查一次。
+
+[完整运行提交记录](../../results/atom-attention/run40695099743/dispatch.json)。
+[现有 vLLM PR 实现比较](./vllm-fp8-prefill-pr-comparison_zh.md)记录重叠范围、
+不同的 FP8 投影集成及用户指定的原生开关 `VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN`
+（默认 0）。尚未发布新的原生 fork 代码或上游 PR；已测试插件仍使用现有开关。

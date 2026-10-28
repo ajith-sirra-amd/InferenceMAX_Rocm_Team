@@ -286,3 +286,21 @@ The persistent checker polls every 60 seconds. A companion collector downloads
 benchmark/server artifacts and extracts throughput and actual projection/FMHA
 worker records when they appear; it does not automatically approve or dispatch
 the canonical run.
+
+## Full run selected; smoke cancelled by request
+
+The user requested a full run and no smoke. Run 40694030981 was cancelled through
+GitHub Actions and its GPU job cleaned up. This cancellation is not a numerical
+or performance failure.
+
+Full [run 40695099743](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40695099743)
+uses the same validated execution source `14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78`, normal routing,
+graph execution and the configured 3600-second agentic replay at concurrency 48,
+TP8/DCP8. Its GSM8K prerequisite passed; GPU job `122839857513` started.
+The checker and full-run artifact collector are active at 60-second intervals.
+
+[Full dispatch record](../../results/atom-attention/run40695099743/dispatch.json).
+[Existing vLLM PR implementation comparison](./vllm-fp8-prefill-pr-comparison.md)
+records overlap, distinct FP8 projection integration, and the requested native flag
+`VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN` (default 0). No new native fork code
+or upstream PR has been published; the tested plugin still uses its existing flags.

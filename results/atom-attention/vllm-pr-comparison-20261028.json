@@ -1,0 +1,44 @@
+{
+  "inspected_at_utc": "2026-10-28T13:29:45Z",
+  "implementation_commit": "14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78",
+  "prs": [
+    {
+      "number": 59124,
+      "title": "[ROCm][Perf][MLA] Add opt-in FlyDSL FP8 prefill attention for AITER MLA",
+      "state": "open",
+      "draft": false,
+      "merged": false,
+      "mergeable_state": "dirty",
+      "updated_at": "2026-10-27T23:00:58Z",
+      "head_sha": "132f6daa6b17cb4000ef58355943bb39339104f2",
+      "author": "gbyu-amd",
+      "url": "https://github.com/vllm-project/vllm/pull/59124"
+    },
+    {
+      "number": 62447,
+      "title": "[ROCm][Perf] Opt-in FlyDSL FP8 attention for ROCM_AITER_FA MLA prefill",
+      "state": "open",
+      "draft": false,
+      "merged": false,
+      "mergeable_state": "blocked",
+      "updated_at": "2026-10-28T04:35:14Z",
+      "head_sha": "cefacabced64eda821bcb49493cc970056d15429",
+      "author": "whx-sjtu",
+      "url": "https://github.com/vllm-project/vllm/pull/62447"
+    }
+  ],
+  "dependency_62444": {
+    "head": "657817758b794af097b1bd40dbb4c4b6a780569f",
+    "scope": "CPU offload LRU refresh; no FP8 projection change"
+  },
+  "fork_main": "0beab6c251e8046c0c6cf2fef114cd23b58cda74",
+  "upstream_main": "0beab6c251e8046c0c6cf2fef114cd23b58cda74",
+  "requested_native_flag": "VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN",
+  "native_flag_default": 0,
+  "native_flag_status": "requested name for native port; current tested plugin still uses ATOM flags",
+  "overlap": "AITER FlyDSL FP8 FMHA with dynamic per-tensor Q/K/V quantization",
+  "distinct_current_integration": "vLLM native online FP8 kv_b_proj weights into unchanged AITER gather_kv_b_proj_flydsl; direct FP8 K/V stores consumed by FMHA",
+  "pr_weight_precision_caveat": "Neither PR selects kv_b_proj weight quantization or adds the direct FP8-cache x FP8-weight -> FP8-K/V fusion. Existing model/config may independently use FP8 projection weights.",
+  "kernel_origin": "Projection and FMHA kernels are existing AITER kernels, not newly invented kernels.",
+  "numerical_comparison": "Different scaling/routing policies and different tests; no claim of byte-identical numerics or direct performance ranking."
+}
