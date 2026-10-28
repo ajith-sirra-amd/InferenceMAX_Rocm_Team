@@ -1,0 +1,73 @@
+{
+  "repository": "ajith-sirra-amd/InferenceMAX_Rocm_Team",
+  "preserved_branches": [
+    "chore/sa-agentx-v1.0",
+    "perf/kimi-attnfp8-kv-allgather-20261021"
+  ],
+  "deleted_branch_heads": [
+    {
+      "name": "ajith-glm-5.2",
+      "sha": "53b3a0fca1cd034abd2b2173c779c9d46a2c90f2"
+    },
+    {
+      "name": "chore/sa-agentx-c1-c20",
+      "sha": "7fc41e62d657f1d8f41d9533fd6084e87359358a"
+    },
+    {
+      "name": "dependabot/github_actions/github-actions-da94f8b9d8",
+      "sha": "1f5498004319f31c4951a0c129acf9cc411b78f5"
+    },
+    {
+      "name": "exp/c12-mnbt16k",
+      "sha": "a32686eabf5a6abb8b56d137c0fd003423680a13"
+    },
+    {
+      "name": "exp/glm52-hicache-chunk-32k",
+      "sha": "e8e6c4b03c6dae67c98b15d8d2e1b24ab4fd2ceb"
+    },
+    {
+      "name": "exp/glm52-hicache-io-threads-4",
+      "sha": "6845c3c50e5b7798cb396389dbeba0e66007f5ee"
+    },
+    {
+      "name": "exp/glm52-hicache-memfrac-088",
+      "sha": "1b894f0f615af118629ca6601353fb5d4387b111"
+    },
+    {
+      "name": "exp/glm52-hicache-prefetch-wait",
+      "sha": "a1aeb4054b4897476564cab5d69cbc85f9268577"
+    },
+    {
+      "name": "kimik3-agentic-smoke",
+      "sha": "4e28a56e2b4afaacb068b352d0f41a7c3fe4646b"
+    },
+    {
+      "name": "perf/fp8ctx-asm-lse-fix-20261015",
+      "sha": "27604f6e071bb76a91c5bfda2edb610c5471d6d7"
+    },
+    {
+      "name": "perf/fp8ctx-asm-performance-only-20261015",
+      "sha": "74bc3baf2df75a932956c304c927f6904eadb748"
+    },
+    {
+      "name": "perf/fp8ctx-asm-smoke-20261015",
+      "sha": "08b1042b4cbfa72d8f6443ccacddcf35f5955467"
+    },
+    {
+      "name": "perf/fp8ctx-flydsl-smoke-20261015",
+      "sha": "e5c6651b71de46e7b886e75ef0b4eb45b69db20f"
+    },
+    {
+      "name": "perf/fp8ctx-raw-projection-20261015",
+      "sha": "6675b7e2eea3a6b7313c1f9231ed4e258934b8b0"
+    },
+    {
+      "name": "perf/kimi-attnfp8-smoke-20261019",
+      "sha": "3b9eea1baee121dd6baeaaa3bcb6bee73d4df1c1"
+    },
+    {
+      "name": "reports/kimi-c96-rocprof-20261015",
+      "sha": "0314996bf0954e8d1234bc0cce46a912e595ef5a"
+    }
+  ]
+}
