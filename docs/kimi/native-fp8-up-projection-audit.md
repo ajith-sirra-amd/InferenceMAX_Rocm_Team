@@ -380,3 +380,8 @@ its own GPU validation. The historical BF16 absolute-LSE criterion remains unpas
 [Machine-readable result](../../results/atom-attention/run40695099743/performance_evidence.json).
 The next requested experiment is causal FP8 attention using already-prepared
 new-token Q/K/V and their original descales, separately from the native PR.
+
+## Causal experiment started
+
+The separate causal implementation and GPU diagnostics are complete; full GSM8K and
+performance are queued with pass prerequisites. See [causal FP8 evidence](./causal-fp8-attention.md).

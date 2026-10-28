@@ -1,0 +1,109 @@
+{
+  "source_commit": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+  "reference_pr": 59124,
+  "reference_head": "132f6daa6b17cb4000ef58355943bb39339104f2",
+  "baseline_run": 40695099743,
+  "baseline_total_tps_per_gpu": 17406.08912,
+  "cpu_tests": {
+    "passed": 15
+  },
+  "gpu_diagnostics": {
+    "run_id": 40712781470,
+    "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40712781470",
+    "conclusion": "success",
+    "job_id": 122902250895,
+    "cases": 4,
+    "numerical_metrics": [
+      {
+        "case": "causal_same_fp8_[1]",
+        "relative_rms_vs_unquantized_reference": 0.0,
+        "max_lse_error": 2.6151537895202637e-05
+      },
+      {
+        "case": "causal_bf16_[1]",
+        "relative_rms_vs_unquantized_reference": 0.026972580701112747,
+        "max_lse_error": 0.06552696228027344
+      },
+      {
+        "case": "causal_same_fp8_[17, 9]",
+        "relative_rms_vs_unquantized_reference": 0.013771593570709229,
+        "max_lse_error": 3.838539123535156e-05
+      },
+      {
+        "case": "causal_bf16_[17, 9]",
+        "relative_rms_vs_unquantized_reference": 0.03799571096897125,
+        "max_lse_error": 0.10963249206542969
+      },
+      {
+        "case": "causal_same_fp8_[257, 33]",
+        "relative_rms_vs_unquantized_reference": 0.01711088977754116,
+        "max_lse_error": 5.3942203521728516e-05
+      },
+      {
+        "case": "causal_bf16_[257, 33]",
+        "relative_rms_vs_unquantized_reference": 0.04283221811056137,
+        "max_lse_error": 0.0964193046092987
+      },
+      {
+        "case": "causal_same_fp8_[512, 127]",
+        "relative_rms_vs_unquantized_reference": 0.018576445057988167,
+        "max_lse_error": 4.1604042053222656e-05
+      },
+      {
+        "case": "causal_bf16_[512, 127]",
+        "relative_rms_vs_unquantized_reference": 0.04441945254802704,
+        "max_lse_error": 0.10937625169754028
+      }
+    ],
+    "causal_masking": "passed",
+    "preallocated_output": "passed",
+    "single_quantization": "passed",
+    "changed_input_graph_replay": "passed"
+  },
+  "gsm8k": {
+    "run_id": 40712931283,
+    "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40712931283",
+    "prerequisite": 40712781470,
+    "result": "pending",
+    "dispatch": {
+      "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+      "inputs": {
+        "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+        "test-name": "Kimi causal FP8 prepared-QKV full GSM8K bb8bed7",
+        "ref": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+        "runner-diagnostics-only": "false",
+        "attention-path-probe-only": "false",
+        "agentic-eval-only": "true",
+        "duration-override": "",
+        "after-run-id": "40712781470",
+        "failure-fixture-run-id": ""
+      }
+    }
+  },
+  "full_performance": {
+    "run_id": 40713116775,
+    "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40713116775",
+    "prerequisite": 40712931283,
+    "duration_seconds": 3600,
+    "result": "pending",
+    "dispatch": {
+      "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+      "inputs": {
+        "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+        "test-name": "Kimi causal FP8 prepared-QKV full performance bb8bed7",
+        "ref": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+        "runner-diagnostics-only": "false",
+        "attention-path-probe-only": "false",
+        "agentic-eval-only": "false",
+        "duration-override": "",
+        "after-run-id": "40712931283",
+        "failure-fixture-run-id": ""
+      }
+    }
+  },
+  "limitations": [
+    "Controlled causal tests do not resolve the prior captured-BF16 numerical failure.",
+    "No causal-path GSM8K or throughput result yet.",
+    "Native vLLM PR #64288 is separate and still needs GPU validation."
+  ]
+}

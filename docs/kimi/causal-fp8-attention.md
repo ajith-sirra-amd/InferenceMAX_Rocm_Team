@@ -30,3 +30,19 @@ projection and causal FP8 calls on the same eight workers during evaluation.
 The verifier uses a separate causal marker and rejects missing or pre-evaluation
 evidence. Full 3600-second performance follows successful diagnostics and GSM8K.
 No serving smoke or new performance/accuracy claim is made at preparation time.
+
+## GPU diagnostics passed; full runs queued
+
+Source: `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`.
+[GPU diagnostics](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40712781470) passed four causal cases,
+fixed-scale future masking, preallocated outputs, single quantization,
+and changed-input graph replay.
+Maximum controlled BF16-reference RMS was 0.04442 and LSE error 0.10964;
+same-FP8-reference RMS was at most 0.01858 and LSE error 0.00005395.
+These passes do not resolve the earlier real-model captured-BF16 failure.
+
+[Full GSM8K](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40712931283) requires the successful diagnostic.
+[Full performance](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40713116775) requires successful GSM8K,
+including causal invocation proof. Both execute the pinned source above.
+The checker and evidence collector poll every 60 seconds.
+[Dispatch and diagnostic evidence](../../results/atom-attention/causal-fp8-20261028.json).

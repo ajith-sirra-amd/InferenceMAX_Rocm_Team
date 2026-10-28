@@ -334,3 +334,8 @@ Buildkite 测试绑定、Python 语法和 Buildkite YAML。
 
 [机器可读结果](../../results/atom-attention/run40695099743/performance_evidence.json)。
 用户要求的下一实验是在独立候选中使用已准备的新 token FP8 Q/K/V 及原始 descale 执行因果注意力。
+
+## 因果实验已启动
+
+独立因果实现及 GPU 诊断已完成；完整 GSM8K 和性能运行按成功前置条件排队。
+参见[因果 FP8 证据](./causal-fp8-attention_zh.md)。

@@ -26,3 +26,17 @@ RMS <0.10、绝对 LSE <0.20 的诊断门限不变；
 实际执行缓存 FP8 投影和因果 FP8。独立因果标记拒绝缺失或评测前证据。
 诊断及 GSM8K 成功后再运行完整 3600 秒性能测试；不做服务冒烟测试，
 准备阶段不宣称新的性能或准确率结果。
+
+## GPU 诊断通过；完整运行已排队
+
+源码：`bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`。
+[GPU 诊断](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40712781470)通过四组因果输入、
+固定 scale 的未来 token 屏蔽、预分配输出、单次量化及输入变化后的图回放。
+受控 BF16 参考最大 RMS 为 0.04442、LSE 误差为 0.10964；
+相同 FP8 参考最大 RMS 为 0.01858、LSE 误差为 0.00005395。
+这些结果不代表之前真实模型捕获的 BF16 数值失败已解决。
+
+[完整 GSM8K](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40712931283)以诊断成功为前置条件。
+[完整性能](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40713116775)要求 GSM8K 及因果调用证明成功。
+两者执行上述固定源码。检查器和证据收集器每 60 秒轮询。
+[提交及诊断证据](../../results/atom-attention/causal-fp8-20261028.json)。
