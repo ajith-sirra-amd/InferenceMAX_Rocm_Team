@@ -370,6 +370,14 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
         k_clip = (k.float().abs() > 448 * ks).float().mean().item() if k.numel() else 0.0
         v_clip = (v.float().abs() > 448 * vs).float().mean().item() if v.numel() else 0.0
         if max(rms, rms_bf16) >= 0.10 or max(lse_max, lse_bf16) >= 0.20:
+            from .numerical_debug import diagnose_lse
+            try:
+                diagnose_lse(
+                    chunk, self.scale, q, k, v, independent, kv8, actual, actual_lse,
+                    bf16, bf16_lse, dynamic_lse,
+                )
+            except Exception as diagnostic_error:
+                print(f"[ATOM-FP8-LSE-DIAGNOSTIC-ERROR] {diagnostic_error}", flush=True)
             raise RuntimeError(
                 f"Direct KV numerical gate failed: rms={rms}, lse={lse_max}, "
                 f"rms_bf16={rms_bf16}, lse_bf16={lse_bf16}, "

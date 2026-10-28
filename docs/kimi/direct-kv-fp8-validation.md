@@ -75,3 +75,10 @@ timings and synthetic errors. Those timings exclude serving and DCP communicatio
 
 
 A full performance run can be dispatched with after-run-id set to its preceding numerical run ID and ref set to the identical source SHA. The workflow waits before GPU scheduling and proceeds only on success. A failed prerequisite prevents performance execution. An empty value preserves immediate execution.
+
+
+## Real Kimi LSE gate failure
+
+Run 40670763935 passed the isolated backend preflight but failed the real-model maximum absolute LSE error gate of 0.20. Same-scale K/V bytes and attention exact comparisons passed first; failing calls reported no K/V clipping and approximately 2–3% output RMS error, but some maximum LSE errors versus BF16 were about 0.8–1.0. Full run 40671001137 was blocked before GPU allocation by this failed prerequisite.
+
+The follow-up adds failure-only diagnostics: independent FP64 attention on the worst query/head rows separates Q quantization, K quantization, and FMHA arithmetic errors. One rank-zero compressed-cache fixture from the synthetic prefix is retained for isolated reproduction. Original gates remain unchanged; diagnostic failure is not acceptance.

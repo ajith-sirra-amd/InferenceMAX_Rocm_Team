@@ -1,0 +1,7 @@
+{
+  "run_id": 40670763935,
+  "source": "3c3e58cb1ca8d5323e4b269819132806e956fc8b",
+  "outcome": "failed_real_model_lse_gate",
+  "full_run_blocked": 40671001137,
+  "note": "K/V same-scale bytes and same-scale FMHA checks passed before the LSE gate. No clipping on reported failing calls. No performance results."
+}

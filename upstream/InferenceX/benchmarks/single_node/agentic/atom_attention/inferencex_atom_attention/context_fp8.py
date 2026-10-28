@@ -78,9 +78,17 @@ def compute_context(impl, q, cache, metadata, k_scale):
                     impl.kv_b_proj.weight, impl.num_heads, impl.qk_nope_head_dim,
                     impl.qk_rope_head_dim, impl.v_head_dim,
                 )
-                backend.validate_projected_fp8(
-                    chunk, query, k, v, kv8, attn_output, attn_lse,
-                )
+                try:
+                    backend.validate_projected_fp8(
+                        chunk, query, k, v, kv8, attn_output, attn_lse,
+                    )
+                except RuntimeError:
+                    from .numerical_debug import save_failure_input
+                    save_failure_input(
+                        query, gathered, k_scale, row_indices, impl.kv_b_proj.weight,
+                        chunk, backend._gather_scales, backend.scale,
+                    )
+                    raise
             if not getattr(impl, "_direct_kv_reported", False) and not torch.cuda.is_current_stream_capturing():
                 print(
                     f"[ATOM-FP8-KV-OUTPUT] pid={os.getpid()} kv_b=BF16 output=FP8 "
