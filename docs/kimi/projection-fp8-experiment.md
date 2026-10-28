@@ -124,7 +124,7 @@ Further validation is scoped to the introduced BF16 epilogue, scale handoff
 and hybrid routing. The next useful check is scale/range behavior on
 representative Kimi new-token and cached tensors before a serving performance
 comparison. The existing ATOM FMHA algorithm is reused; SA's fixed GSM8K
-remains the model evaluation. Production serving still uses the existing path.
+remains the model evaluation. The new opt-in serving integration is gated by the validation sequence below; no new serving result is established yet.
 
 
-The follow-up `utils/atom_attention/projection_numerics.py` reports K/V errors separately for cache widening, BF16 projection, and final FP8 quantization. It uses the same FP8 cache and BF16 weights for an independent FP64 reference, with cache scales 0.125 and 0.137. The diagnostics job currently runs this focused follow-up. Results pending.
+The follow-up `utils/atom_attention/projection_numerics.py` reports K/V errors separately for cache widening, BF16 projection, and final FP8 quantization. It uses the same FP8 cache and BF16 weights for an independent FP64 reference, with cache scales 0.125 and 0.137. The diagnostics job now runs this follow-up and integrated backend graph replay. See [direct-output validation](./direct-kv-fp8-validation.md) for the AITER reference correction and serving gates.

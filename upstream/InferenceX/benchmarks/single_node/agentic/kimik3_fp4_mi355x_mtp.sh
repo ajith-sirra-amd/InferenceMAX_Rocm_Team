@@ -6,6 +6,7 @@ wait_for_amd_gpu_clean
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY ATOM_USE_FLYDSL_FP8_PREFILL_ATTN
+check_env_vars ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT
 case "$ATTENTION_PATH_PROBE_ONLY" in true|false) ;; *) echo "ATTENTION_PATH_PROBE_ONLY must be true or false" >&2; exit 1 ;; esac
 if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
     echo "[NATIVE-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
@@ -27,7 +28,19 @@ case "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" in
     0|1) ;;
     *) echo "ATOM_USE_FLYDSL_FP8_PREFILL_ATTN must be 0 or 1" >&2; exit 1 ;;
 esac
-export ATOM_USE_FLYDSL_FP8_PREFILL_ATTN
+for flag_name in ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT; do
+    case "${!flag_name}" in
+        0|1) ;;
+        *) echo "$flag_name must be 0 or 1" >&2; exit 1 ;;
+    esac
+done
+if [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ]; then
+    if [ "$ATTENTION_PATH_PROBE_ONLY" != "true" ] || [ "$ATOM_USE_FUSED_KV_FP8_OUTPUT" != "1" ] || [ "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" != "1" ]; then
+        echo "Direct KV numerical validation requires the FP8 path probe" >&2
+        exit 1
+    fi
+fi
+export ATOM_USE_FLYDSL_FP8_PREFILL_ATTN ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT
 echo "[ATOM-FP8-CONFIG] framework=vllm fp8_prefill=$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN model=$MODEL plugin=$ATOM_ATTENTION_PLUGIN_DIR"
 
 DP_SIZE=1
@@ -279,6 +292,9 @@ VLLM_CMD=(
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
 
+if [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ]; then
+    VLLM_CMD+=(--enforce-eager)
+fi
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 

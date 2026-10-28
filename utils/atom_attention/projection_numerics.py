@@ -7,6 +7,7 @@ import torch
 from inferencex_atom_attention.projection_fp8 import expand_context_fp8
 from inferencex_atom_attention.quantize import fused_qkv_per_tensor_quant
 from projection_experiment import fixture, native
+from vllm._aiter_ops import rocm_aiter_ops
 
 
 def metric(actual, expected):
@@ -60,13 +61,24 @@ def run_case(cache_scale):
         cache, scale, indices, weight, heads,
         mode="supplied_scales", output_scales=supplied,
     )
-    same_scale_reference = tuple(
+    torch_reciprocal_reference = tuple(
         (x.float() * s.reciprocal()).clamp(-448, 448).to(torch.float8_e4m3fn)
         for x, s in ((k, supplied[:1]), (v, supplied[1:]))
     )
+    # Match the independent AITER HIP quantizer used by ATOM's supplied-scale path.
+    # Torch reciprocal+multiply can round across an FP8 boundary.
+    same_scale_reference = tuple(
+        rocm_aiter_ops.per_tensor_quant(x, torch.float8_e4m3fn, s)[0]
+        for x, s in ((k, supplied[:1]), (v, supplied[1:]))
+    )
+    for name, actual, expected in zip(("K", "V"), direct[:2], same_scale_reference):
+        torch.testing.assert_close(
+            actual.view(torch.uint8), expected.view(torch.uint8), rtol=0, atol=0,
+            msg=f"{name} differs from native AITER same-scale quantization",
+        )
     mismatches = []
     for name, actual, expected, bf16, ref64, scale8 in zip(
-        ("K", "V"), direct[:2], same_scale_reference, (k, v), (k64, v64),
+        ("K", "V"), direct[:2], torch_reciprocal_reference, (k, v), (k64, v64),
         (direct[2], direct[3]),
     ):
         mask = actual.view(torch.uint8) != expected.view(torch.uint8)
@@ -116,15 +128,15 @@ def run_case(cache_scale):
     print("KV_CHAIN_NUMERICS", json.dumps({
         "cache_scale": scale.item(), "kv_tokens": 8192, "heads": heads,
         "raw_fp8_to_bf16_widening_max_abs": 0.0,
-        "supplied_scale_projection_matches_separate_quant_exactly": not mismatches,
+        "supplied_scale_projection_matches_separate_quant_exactly": True,
+        "same_scale_reference": "AITER HIP per_tensor_quant",
+        "torch_reciprocal_boundary_differences": mismatches,
         "reference": "FP64 dequantization/projection of identical FP8 cache and BF16 weights",
         "native_order": "widen raw FP8 to BF16; BF16 dot with FP32 accumulation; apply cache scale; round to BF16",
         "K_includes": "128 projected columns plus 64 RoPE columns per head",
         "results": rows,
         "scope": "synthetic tensor errors; not model accuracy or loss versus an unquantized original cache",
     }, allow_nan=False), flush=True)
-    if mismatches:
-        raise AssertionError("Same-scale mismatch diagnostic: " + str(mismatches))
 
 
 if __name__ == "__main__":

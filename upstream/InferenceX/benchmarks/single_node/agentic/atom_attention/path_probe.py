@@ -2,6 +2,7 @@
 """Controlled prefix-sharing requests against the already-running Kimi server."""
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -66,6 +67,11 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
     metadata = pids(r"\[ATOM-METADATA\] pid=(\d+) prefill_ps=disabled")
     reused = pids(r"\[ATOM-Q-REUSE\] pid=(\d+).*q_reuses=[1-9]")
     fused = pids(r"\[ATOM-DCP-PATH\] pid=(\d+) route=native_fused_fp8_gather")
+    direct = pids(r"\[ATOM-FP8-KV-OUTPUT\] pid=(\d+)")
+    validated = [json.loads(x) for x in re.findall(r"\[ATOM-FP8-KV-VALIDATED\] (\{[^\n]*\})", text)]
+    validated_pids = sorted({row["pid"] for row in validated})
+    require_direct = os.environ.get("ATOM_USE_FUSED_KV_FP8_OUTPUT") == "1"
+    require_validation = os.environ.get("ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT") == "1"
     pools = re.findall(r"GPU KV cache (?:size|capacity):\s*([\d,]+) tokens", text)
     summary = {
         "model": model, "framework": "vllm", "smoke_type": "prefix_repetition",
@@ -74,12 +80,21 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
         "bf16_causal_pids": causal, "fp8_cached_context_pids": cached,
         "disabled_asm_metadata_pids": metadata, "query_reuse_pids": reused,
         "native_fused_fp8_gather_pids": fused,
+        "direct_fp8_kv_output_pids": direct,
+        "direct_fp8_kv_validated_pids": validated_pids,
+        "direct_fp8_kv_validation_calls": len(validated),
+        "direct_fp8_kv_max_rms_vs_dynamic": max((x["rms_vs_dynamic"] for x in validated), default=None),
+        "direct_fp8_kv_max_lse_error": max((x["lse_max_vs_dynamic"] for x in validated), default=None),
+        "direct_fp8_kv_max_k_clipping": max((x["k_clipping_fraction"] for x in validated), default=None),
+        "direct_fp8_kv_max_v_clipping": max((x["v_clipping_fraction"] for x in validated), default=None),
         "scope": "Kernel invocation and HTTP stability; no agentic throughput or model accuracy claim.",
     }
     summary["kernel_invocation_pass"] = (
         after > before and summary["gpu_kv_tokens"] is not None
         and len(causal) >= 8 and len(cached) >= 8 and len(metadata) >= 8
-        and len(reused) >= 8 and len(fused) >= 8
+        and len(reused) >= 8 and len(set(fused) | set(direct)) >= 8
+        and (not require_direct or len(direct) >= 8)
+        and (not require_validation or len(validated_pids) >= 8)
     )
     (destination / "path_probe_summary.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8",

@@ -96,3 +96,6 @@ Supplied-scale 投影阶段在不计准备时加速 1.55–1.98 倍，单个缓�
 
 
 后续 `utils/atom_attention/projection_numerics.py` 分别测量缓存扩宽、BF16 投影和最终 FP8 量化的 K/V 误差。使用相同 FP8 缓存和 BF16 权重计算独立 FP64 参考，cache scale 为 0.125 和 0.137。当前 diagnostics job 运行该定向测量，结果待完成。
+
+
+后续 AITER 参考舍入诊断、直接输出服务集成和数值门限见[直接输出验证](./direct-kv-fp8-validation_zh.md)。诊断任务现同时执行链路数值测量及 backend graph replay，集成服务结果尚待验证。
