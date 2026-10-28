@@ -25,7 +25,7 @@
 9. [ ] **profiling 后并发 sweep：** 完整测试 **C56 + MTP**、**C64 + MTP**、**C96 不启用 MTP**。固定代码、模型、权重、TP8/DCP8、CCD 绑定、offload、graph、数据集和时长。C96 必须移除 speculative 配置及模拟接受机制，并核实实际服务参数。
 10. [ ] **确定下一项优化：** 与 C48 + MTP 比较总吞吐、输出吞吐、TTFT、TPOT、请求错误及 cache/GPU 利用率。结合稳态 profile 排序后续机会，提出具体下一项实验。
 
-11. [ ] **NUMA/CCD 绑定上游贡献评估：** 检查 Kimi 启动脚本及 vLLM 现有 CPU affinity 支持，确认可移植的改动、拓扑和线程生命周期缺口、重复 PR 及独立贡献所需证据。此项是评估，尚未提交绑定 PR。
+11. [x] **NUMA/CCD 绑定上游贡献评估：** [源码评估已完成](./numa-ccd-upstream-assessment_zh.md)。现有原生按 GPU 配置的 CPU 列表可表达该选择；独立 AMD CCD 自动策略仍需拓扑处理和匹配测量。未提交新的绑定 PR，也不声称性能提升。
 
 ## 原生评估的实际执行证据
 

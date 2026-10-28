@@ -25,7 +25,7 @@ These are prototype results. Exact native-PR GPU validation is still pending; th
 9. [ ] **Concurrency sweep after profiling:** full runs at **C56 with MTP**, **C64 with MTP**, and **C96 without MTP**. Keep the code, model, weights, TP8/DCP8, CCD binding, offload, graph settings, dataset and duration fixed. For C96, omit speculative configuration and synthetic speculative acceptance and verify actual server settings.
 10. [ ] **Select the next optimization:** compare the sweep against C48 with MTP using total and output tokens/s/GPU, TTFT, TPOT, request errors, and cache/GPU utilization. Rank further opportunities from the steady-state profile and propose a concrete next experiment.
 
-11. [ ] **NUMA/CCD binding upstream assessment:** review the Kimi launch script and existing vLLM CPU-affinity support; identify portable changes, topology/thread-lifecycle gaps, duplicate PRs, and the evidence needed for a separate contribution. This is an assessment, not a submitted binding PR.
+11. [x] **NUMA/CCD binding upstream assessment:** [source review completed](./numa-ccd-upstream-assessment.md). Existing native per-GPU CPU-list binding can express the selection; a separate automatic AMD CCD policy needs topology handling and matched measurements. No new binding PR or performance claim.
 
 ## Native evaluation execution proof
 
