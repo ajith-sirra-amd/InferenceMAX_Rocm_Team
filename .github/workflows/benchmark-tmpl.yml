@@ -124,6 +124,7 @@ env:
   RUN_EVAL: ${{ inputs.run-eval }}
   EVAL_ONLY: ${{ inputs.eval-only }}
   ATTENTION_PATH_PROBE_ONLY: ${{ inputs.attention-path-probe-only }}
+  ATOM_USE_FLYDSL_FP8_PREFILL_ATTN: '1'
   SCENARIO_TYPE: ${{ inputs.scenario-type }}
   SCENARIO_SUBDIR: ${{ inputs.scenario-type == 'agentic-coding' && 'agentic/' || 'fixed_seq_len/' }}
   IS_AGENTIC: ${{ inputs.scenario-type == 'agentic-coding' && '1' || '0' }}

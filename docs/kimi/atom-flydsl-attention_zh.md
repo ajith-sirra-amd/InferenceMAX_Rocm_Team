@@ -2,6 +2,23 @@
 
 [English](atom-flydsl-attention.md)  [开销审计](kimi-prefill-overhead-audit_zh.md)  [基线](atom-attention-BASELINES.md)
 
+## 插件开关
+
+启动 vLLM 服务前，在服务环境中设置 `ATOM_USE_FLYDSL_FP8_PREFILL_ATTN=1`。插件创建 backend 时读取该开关；修改后需要重启服务。
+
+| 开关 | Prefill 行为 |
+|---|---|
+| 未设置或 `0` | 所有 prefill attention 使用 BF16，不导入 FlyDSL FP8 API |
+| `1` | 最大 query 长度 >= 512 且最大 KV 长度 >= 8192 的缓存块使用 FP8；causal 和较小缓存块使用 BF16 |
+
+只有字符串 `1` 启用 FP8。benchmark 脚本要求明确传入 `0` 或 `1`；可复用 benchmark workflow 设置 `'1'`，MI355X launcher 将其传入容器。仅消融 attention 时，将 workflow 中该环境变量改为 `'0'`。
+
+插件必须在 `PYTHONPATH` 中，并通过 `--attention-backend CUSTOM --attention-config '{"mla_prefill_backend":"CUSTOM"}'` 选择。插件的 `vllm.general_plugins` entry point 注册两个自定义 backend。如果 `VLLM_PLUGINS` 使用允许列表，需要包含 `inferencex_atom_attention`。只在原版 vLLM 中设置开关不会自动加载此扩展。
+
+此改动不需要修改已安装的 vLLM/AITER 源码。权重量化仍由 `--quantization-config` 独立控制；`kv_b_proj` 保持 BF16。关闭开关后，插件的原生通信、KV 展开集成和 metadata 策略仍然保留，因此这是 FMHA 消融，并非完整的原版 vLLM 基线。
+
+CPU 路由检查命令：`python -m unittest discover -s upstream/InferenceX/benchmarks/single_node/agentic/atom_attention/tests -p 'test_*.py'`。测试运行真实插件代码，仅替代外部 GPU/vLLM 依赖，覆盖关闭/未设置、启用阈值、causal/小块回退、缺少 API 和不支持的形状。GPU 数值及模型准确率需要单独的 GPU 运行验证。
+
 - Native vLLM、固定 ROCm image；Moonshot Kimi-K3。
 - 使用 ATOM 同样的 AITER FlyDSL FP8 FMHA API，不替换 vLLM 框架。
 - 不 patch 安装的 vLLM/AITER source；使用本仓库扩展。

@@ -5,7 +5,7 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
-check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY
+check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY ATOM_USE_FLYDSL_FP8_PREFILL_ATTN
 case "$ATTENTION_PATH_PROBE_ONLY" in true|false) ;; *) echo "ATTENTION_PATH_PROBE_ONLY must be true or false" >&2; exit 1 ;; esac
 if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
     echo "[NATIVE-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
@@ -23,7 +23,12 @@ else
     echo "[ATOM-FP8-CONFIG] Expected duration 600 (smoke) or 3600 (full)" >&2
     exit 1
 fi
-echo "[ATOM-FP8-CONFIG] framework=vllm prefill=AITER-FlyDSL-FP8 model=$MODEL plugin=$ATOM_ATTENTION_PLUGIN_DIR"
+case "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" in
+    0|1) ;;
+    *) echo "ATOM_USE_FLYDSL_FP8_PREFILL_ATTN must be 0 or 1" >&2; exit 1 ;;
+esac
+export ATOM_USE_FLYDSL_FP8_PREFILL_ATTN
+echo "[ATOM-FP8-CONFIG] framework=vllm fp8_prefill=$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN model=$MODEL plugin=$ATOM_ATTENTION_PLUGIN_DIR"
 
 DP_SIZE=1
 export DP_SIZE

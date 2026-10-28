@@ -2,7 +2,8 @@
 
 This first integration retains native KV expansion and DCP communication.
 Q reuse is restricted to one forward pass; metadata can outlive that pass.
-Causal calls retain BF16, while cached-context calls use FlyDSL FP8.
+FlyDSL FP8 is opt-in; eligible cached-context calls use it when enabled.
+Causal and small cached-context calls retain BF16.
 """
 import os
 
@@ -101,12 +102,17 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from aiter.ops.flydsl import (
-            flydsl_flash_attn_fp8_func,
-            flydsl_flash_attn_fp8_supported,
+        self._fp8_enabled = (
+            os.environ.get("ATOM_USE_FLYDSL_FP8_PREFILL_ATTN", "0") == "1"
         )
-        self._fp8_attention = flydsl_flash_attn_fp8_func
-        self._supported = flydsl_flash_attn_fp8_supported
+        if self._fp8_enabled:
+            from aiter.ops.flydsl import (
+                flydsl_flash_attn_fp8_func,
+                flydsl_flash_attn_fp8_supported,
+            )
+
+            self._fp8_attention = flydsl_flash_attn_fp8_func
+            self._supported = flydsl_flash_attn_fp8_supported
         self._supported_configs = set()
         self._q_cache = None
         self._q_quantizations = 0
@@ -131,6 +137,10 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
         self, q, k, v, *, cu_q, cu_k, max_q, max_k, causal,
         return_lse, stage, out=None,
     ):
+        if not self._fp8_enabled:
+            raise RuntimeError(
+                "FlyDSL FP8 prefill requires ATOM_USE_FLYDSL_FP8_PREFILL_ATTN=1"
+            )
         if any(x.dtype != torch.bfloat16 for x in (q, k, v)):
             raise ValueError("ATOM FlyDSL prefill requires BF16 expanded Q/K/V inputs")
         if q.ndim != 3 or k.ndim != 3 or v.ndim != 3:
@@ -204,13 +214,20 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
         return result
 
     def run_prefill_context_chunk(self, chunk, q, k, v, out=None):
-        if chunk.max_query_len < 512 or chunk.max_seq_len < 8192:
+        if (
+            not self._fp8_enabled
+            or chunk.max_query_len < 512
+            or chunk.max_seq_len < 8192
+        ):
             result = super().run_prefill_context_chunk(chunk, q, k, v, out=out)
-            key = (os.getpid(), "cached_context_bf16", q.shape[1], q.shape[2], v.shape[2])
+            reason = (
+                "small_context_conversion_cost" if self._fp8_enabled else "flag_disabled"
+            )
+            key = (os.getpid(), "cached_context_bf16", reason, q.shape[1], q.shape[2], v.shape[2])
             if key not in self._reported_paths and not torch.cuda.is_current_stream_capturing():
                 print(
                     f"[ATOM-PREFILL-PATH] pid={os.getpid()} stage=cached_context "
-                    f"q={tuple(q.shape)} k={tuple(k.shape)} fmha=BF16 reason=small_context_conversion_cost",
+                    f"q={tuple(q.shape)} k={tuple(k.shape)} fmha=BF16 reason={reason}",
                     flush=True,
                 )
                 self._reported_paths.add(key)

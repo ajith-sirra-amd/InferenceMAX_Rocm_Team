@@ -2,6 +2,23 @@
 
 [中文](atom-flydsl-attention_zh.md)  [Overhead audit](kimi-prefill-overhead-audit.md)  [Baselines](atom-attention-BASELINES.md)
 
+## Opt-in plugin flag
+
+Set `ATOM_USE_FLYDSL_FP8_PREFILL_ATTN=1` in the vLLM server environment **before startup**. The flag is read when the plugin backend is constructed; changing it requires a server restart.
+
+| Flag | Prefill behavior |
+|---|---|
+| Unset or `0` | BF16 for all prefill attention; no FlyDSL FP8 API import |
+| `1` | FP8 for cached chunks with max query length >= 512 and max KV length >= 8192; BF16 for causal and smaller cached chunks |
+
+Only the exact string `1` enables FP8. The benchmark recipe requires an explicit `0` or `1`; the reusable benchmark workflow sets `'1'` and the MI355X launcher forwards it into the container. For an attention-only ablation, set that workflow environment value to `'0'`.
+
+The plugin must be available on `PYTHONPATH` and selected using `--attention-backend CUSTOM --attention-config '{"mla_prefill_backend":"CUSTOM"}'`. Its `vllm.general_plugins` entry point registers both custom backends. If `VLLM_PLUGINS` is an allowlist, include `inferencex_atom_attention`. The flag alone does not enable this extension in stock vLLM.
+
+This change needs no installed vLLM/AITER source patch. Weight quantization remains independently controlled by `--quantization-config`; `kv_b_proj` stays BF16. Flag-off retains the plugin's native communication/expansion integration and metadata policy, so it is an FMHA ablation, not a complete stock-vLLM baseline.
+
+CPU routing checks: `python -m unittest discover -s upstream/InferenceX/benchmarks/single_node/agentic/atom_attention/tests -p 'test_*.py'`. These exercise the real plugin with external GPU/vLLM doubles, covering off/unset, enabled threshold, causal/small-chunk fallback, missing API and unsupported shapes. GPU numerics and model accuracy require the separate GPU runs.
+
 - Framework: native vLLM in the pinned ROCm image.
 - Model: **Moonshot Kimi-K3**; native draft remains Inferact/Kimi-K3-DSpark.
 - FP8 API: `aiter.ops.flydsl.flydsl_flash_attn_fp8_func`, also used by ATOM.
