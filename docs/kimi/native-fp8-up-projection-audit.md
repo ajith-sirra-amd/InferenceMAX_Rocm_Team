@@ -225,3 +225,17 @@ those CPU tests, native weight layouts, and large/small-context numerical plus
 changed-input graph checks before the full-model evaluation can start.
 A GSM8K result with execution proof is model-accuracy evidence for this stress
 configuration; it is not a throughput measurement or a strict BF16 numerical pass.
+
+## GPU prerequisite passed; GSM8K dispatched
+
+Run [40687966988](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40687966988)
+at 14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78 passed Bash syntax, all ten CPU
+checks, four native weight layouts, and both large (512 Q / 8192 KV) and small
+(64 Q / 256 KV) projection/FMHA chains with changed-input graph replay.
+FP8_ACCURACY_PATH_PREFLIGHT_PASS and FP8_NATIVE_SMALL_CONTEXT_PASS were emitted.
+
+Full GSM8K run [40688077118](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40688077118)
+is pinned to the same source. Its exact-source prerequisite passed and the
+MI355X agentic eval job started. Score and eight-worker evaluation-phase FP8
+execution proof are pending. The live checker polls this run every 60 seconds
+while its Python tool session remains available.

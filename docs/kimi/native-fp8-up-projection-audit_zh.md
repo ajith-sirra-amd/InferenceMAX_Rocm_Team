@@ -198,3 +198,16 @@ LSE 差异为 0.198254（该输入通过），原生 FP8 权重原型为 0.20825
 完整模型运行前的 GPU 前置任务将检查 Bash 语法、CPU 测试、原生权重布局，
 以及大/小 context 数值和输入变化后的 graph replay。
 附带调用证明的 GSM8K 结果只代表该压力配置的模型精度，不是吞吐或严格 BF16 数值通过证明。
+
+## GPU 前置检查已通过；GSM8K 已提交
+
+运行 [40687966988](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40687966988)
+使用提交 14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78，通过 Bash 语法、十项 CPU
+检查、四种原生权重布局，以及大 context（512 Q / 8192 KV）与小 context
+（64 Q / 256 KV）投影/FMHA 链及输入变化后的 graph replay。
+已输出 FP8_ACCURACY_PATH_PREFLIGHT_PASS 与 FP8_NATIVE_SMALL_CONTEXT_PASS。
+
+完整 GSM8K 运行 [40688077118](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40688077118)
+固定到同一提交。相同源版本的前置检查已通过，MI355X agentic eval job 已启动。
+评分及八个 worker 在评测阶段的 FP8 调用证明尚待完成。
+Python 工具会话保持可用期间，检查器每 60 秒查询一次该运行。

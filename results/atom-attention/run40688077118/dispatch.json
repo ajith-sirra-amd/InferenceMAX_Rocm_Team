@@ -1,0 +1,20 @@
+{
+  "run_id": 40688077118,
+  "source": "14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78",
+  "prerequisite": 40687966988,
+  "payload": {
+    "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+    "inputs": {
+      "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+      "test-name": "Kimi full GSM8K native FP8 projection FMHA execution proof 14250d6",
+      "ref": "14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78",
+      "runner-diagnostics-only": "false",
+      "attention-path-probe-only": "false",
+      "agentic-eval-only": "true",
+      "duration-override": "600",
+      "after-run-id": "40687966988",
+      "failure-fixture-run-id": ""
+    }
+  },
+  "status_at_record": "eval job started; score and execution proof pending"
+}
