@@ -32,3 +32,9 @@
 - Shared-host complete-attention timing including QKV quantization: cached context1.26x/1.62x; causal0.38x/0.94x. No end-to-end speedup claim.
 - Model smoke: TP8/DCP8 C48, warmup1,600seconds. Full benchmark: warmup10,3600seconds.
 - The read-only watcher reports current-attempt active steps and failure annotations every60seconds.
+
+## Automatic continuation
+
+- `utils/atom_attention/continue_benchmark.py` watches the smoke every60seconds and queues a full run only after success, eight-worker causal/cached FP8 engagement, and zero measured-phase request errors.
+- Full run pins the tested smoke source SHA, uses warmup10 and3600seconds, and skips GSM8K.
+- It does not cancel other runs, stop containers, or modify source. An unmet gate reports evidence and exits.
