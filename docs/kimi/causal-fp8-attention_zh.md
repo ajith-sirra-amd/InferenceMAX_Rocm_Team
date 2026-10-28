@@ -40,3 +40,10 @@ RMS <0.10、绝对 LSE <0.20 的诊断门限不变；
 [完整性能](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40713116775)要求 GSM8K 及因果调用证明成功。
 两者执行上述固定源码。检查器和证据收集器每 60 秒轮询。
 [提交及诊断证据](../../results/atom-attention/causal-fp8-20261028.json)。
+
+## 按用户要求取消完整性能运行
+
+用户要求：**不要提交完整性能运行**。
+已排队的运行 40713116775 在 GPU benchmark 启动前取消，agentic benchmark 作业已跳过。
+仅继续 GSM8K 运行 40712931283。没有新的用户指示，不得提交或重新启动完整性能运行。
+准确率检查器和产物收集器继续工作。

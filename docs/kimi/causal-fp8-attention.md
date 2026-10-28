@@ -46,3 +46,11 @@ These passes do not resolve the earlier real-model captured-BF16 failure.
 including causal invocation proof. Both execute the pinned source above.
 The checker and evidence collector poll every 60 seconds.
 [Dispatch and diagnostic evidence](../../results/atom-attention/causal-fp8-20261028.json).
+
+## Full performance cancelled at user request
+
+The user instructed: **Do not dispatch full run**.
+Previously queued run 40713116775 was cancelled before its GPU benchmark job;
+the agentic benchmark job was skipped. Only GSM8K run 40712931283 continues.
+Do not dispatch or restart a full performance run without a new user instruction.
+The accuracy checker and artifact collector remain active.

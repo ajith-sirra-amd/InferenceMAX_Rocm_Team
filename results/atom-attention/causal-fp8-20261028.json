@@ -85,7 +85,7 @@
     "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40713116775",
     "prerequisite": 40712931283,
     "duration_seconds": 3600,
-    "result": "pending",
+    "result": "cancelled before GPU benchmark",
     "dispatch": {
       "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
       "inputs": {
@@ -99,7 +99,12 @@
         "after-run-id": "40712931283",
         "failure-fixture-run-id": ""
       }
-    }
+    },
+    "user_instruction": "Do not dispatch full run; cancel previously queued run",
+    "workflow_status_at_check": "in_progress",
+    "workflow_conclusion_at_check": null,
+    "gpu_job_started": false,
+    "dispatch_authorized": false
   },
   "limitations": [
     "Controlled causal tests do not resolve the prior captured-BF16 numerical failure.",
