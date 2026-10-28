@@ -25,6 +25,12 @@ These are prototype results. Exact native-PR GPU validation is still pending; th
 9. [ ] **Concurrency sweep after profiling:** full runs at **C56 with MTP**, **C64 with MTP**, and **C96 without MTP**. Keep the code, model, weights, TP8/DCP8, CCD binding, offload, graph settings, dataset and duration fixed. For C96, omit speculative configuration and synthetic speculative acceptance and verify actual server settings.
 10. [ ] **Select the next optimization:** compare the sweep against C48 with MTP using total and output tokens/s/GPU, TTFT, TPOT, request errors, and cache/GPU utilization. Rank further opportunities from the steady-state profile and propose a concrete next experiment.
 
+11. [ ] **NUMA/CCD binding upstream assessment:** review the Kimi launch script and existing vLLM CPU-affinity support; identify portable changes, topology/thread-lifecycle gaps, duplicate PRs, and the evidence needed for a separate contribution. This is an assessment, not a submitted binding PR.
+
+## Native evaluation execution proof
+
+The current recipe loads the prototype through `PYTHONPATH` and selects `CUSTOM` attention. Native validation must install and import the exact fork revision, select the native backend, and exclude the prototype. Native cached eligibility currently requires query length >=512 and context length >=8192; ordinary GSM8K prompts may otherwise exercise BF16 fallback. Any test-only routing override must be disclosed and kept separate from production-routing performance evidence. Keep the fixed GSM8K task and scoring unchanged, and require successful optimized calls during evaluation on all eight workers.
+
 ## Operating constraints
 
 - Keep this active turn working; check run status every **five minutes**. The independent poller collects status; it does not wake a finished model turn. No Codex wake-up trigger or OS scheduler has been enabled.

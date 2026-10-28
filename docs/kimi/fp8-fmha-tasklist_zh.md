@@ -25,6 +25,12 @@
 9. [ ] **profiling 后并发 sweep：** 完整测试 **C56 + MTP**、**C64 + MTP**、**C96 不启用 MTP**。固定代码、模型、权重、TP8/DCP8、CCD 绑定、offload、graph、数据集和时长。C96 必须移除 speculative 配置及模拟接受机制，并核实实际服务参数。
 10. [ ] **确定下一项优化：** 与 C48 + MTP 比较总吞吐、输出吞吐、TTFT、TPOT、请求错误及 cache/GPU 利用率。结合稳态 profile 排序后续机会，提出具体下一项实验。
 
+11. [ ] **NUMA/CCD 绑定上游贡献评估：** 检查 Kimi 启动脚本及 vLLM 现有 CPU affinity 支持，确认可移植的改动、拓扑和线程生命周期缺口、重复 PR 及独立贡献所需证据。此项是评估，尚未提交绑定 PR。
+
+## 原生评估的实际执行证据
+
+当前 recipe 通过 `PYTHONPATH` 加载原型插件并选择 `CUSTOM` attention。原生验证必须安装并导入 fork 的精确版本、选择原生 backend，并排除原型插件。原生缓存路径目前要求 query 长度 >=512 且 context 长度 >=8192；普通 GSM8K prompt 可能只执行 BF16 fallback。若使用仅用于测试的 routing override，必须明确披露，并与生产路由的性能证据分开。固定 GSM8K 任务和评分保持不变，必须证明评估阶段八个 worker 均成功调用优化路径。
+
 ## 执行约束
 
 - 保持当前 turn 持续工作，每 **五分钟**检查运行状态。独立 poller 只收集状态，不能唤醒已结束的模型 turn。未启用 Codex 唤醒触发器或系统调度器。
