@@ -18,25 +18,41 @@
 
 Tkv、Tq 是本次缓存块或查询调用打包后的 token 数。12 是此 TP8 配置每个 rank 的本地 prefill head 数。
 
+**颜色：** 绿色 = FP8；蓝色 = BF16；黄色 = 类型转换；紫色 = FP32 scale/LSE。
+
 ```mermaid
 flowchart TD
-    C["压缩 KV 缓存：FP8<br/>512 latent + 64 RoPE"]
-    G["DCP all-gather：传输压缩 FP8"]
-    W["kv_b_proj 权重：BF16"]
-    R["融合重建<br/>latent x 权重；拆分 K/V；拼接 RoPE"]
-    B["展开 K/V：BF16"]
-    Q["查询投影输出：BF16 Q"]
-    K8["单独量化<br/>K8、V8、sK、sV"]
-    Q8["同一不可变 forward 内量化 Q 一次<br/>Q8、sQ"]
-    F["FP8 FMHA<br/>QK 转置乘法；softmax；加权 V"]
-    O["BF16 输出<br/>FP32 LSE 和原生分块合并"]
+    C["Compressed KV cache<br/>FP8"]
+    G["DCP all-gather<br/>FP8 payload"]
+    W["kv_b_proj weights<br/>BF16"]
+    R["Fused dequantization + up-projection<br/>BF16 operands"]
+    B["Expanded K and V<br/>BF16"]
+    Q["Query Q<br/>BF16"]
+    KQ["Quantize expanded K/V"]
+    QQ["Quantize Q; reuse within forward"]
+    K8["K8 and V8<br/>FP8"]
+    Q8["Q8<br/>FP8"]
+    S["sQ, sK, sV<br/>FP32 descales"]
+    F["FMHA with FP8 Q/K/V<br/>Higher-precision internal accumulation"]
+    O["Attention output<br/>BF16"]
+    L["LSE for chunk merge<br/>FP32"]
     C --> G --> R
     W --> R
-    R --> B --> K8 --> F
-    Q --> Q8 --> F
+    R --> B --> KQ --> K8 --> F
+    Q --> QQ --> Q8 --> F
+    KQ -.-> S
+    QQ -.-> S
+    S --> F
     F --> O
-    style B fill:#fff0cc,stroke:#b77900
-    style K8 fill:#fff0cc,stroke:#b77900
+    F --> L
+    classDef fp8 fill:#DCFCE7,stroke:#166534,color:#052E16,stroke-width:2px
+    classDef bf16 fill:#DBEAFE,stroke:#1E40AF,color:#172554,stroke-width:2px
+    classDef conversion fill:#FEF3C7,stroke:#92400E,color:#451A03,stroke-width:2px
+    classDef fp32 fill:#EDE9FE,stroke:#5B21B6,color:#2E1065,stroke-width:2px
+    class C,G,K8,Q8,F fp8
+    class W,B,Q,O bf16
+    class R,KQ,QQ conversion
+    class S,L fp32
 ```
 
 ## 1. 用 BF16 权重重建 K/V
@@ -44,13 +60,13 @@ flowchart TD
 下标 16、8 分别表示 BF16 和 E4M3 FP8。C16 表示根据压缩缓存及其 descale 恢复的 latent。逻辑投影为：
 
 $$
-Z_{16}=\operatorname{BF16}(C_{16}W_{\mathrm{kv},16}^{T}).
+Z_{16}=\mathrm{BF16}(C_{16}W_{\mathrm{kv},16}^{T}).
 $$
 
 C16 为 [Tkv,512]，权重为 [3072,512]，其中 3072=12 x (128+128)。Z16 重排为 [Tkv,12,256]，拆成 128 维的非 RoPE K 和 128 维 V。再向每个 K head 拼接缓存中 64 维 RoPE：
 
 $$
-K_{16}=\operatorname{concat}(K_{\mathrm{NoPE},16},K_{\mathrm{RoPE},16}),\qquad V_{16}=V_{\mathrm{projected},16}.
+K_{16}=\mathrm{concat}(K_{\mathrm{NoPE},16},K_{\mathrm{RoPE},16}),\qquad V_{16}=V_{\mathrm{projected},16}.
 $$
 
 实际内核融合了缓存行读取、反量化、投影及拼接；这些逻辑公式不表示每一步都有独立中间缓冲。
@@ -68,7 +84,7 @@ s_X =
 $$
 
 $$
-X_8=\operatorname{E4M3}\left(\operatorname{clip}(X_{16}/s_X,-448,448)\right),\qquad X_{16}\approx s_XX_8.
+X_8=\mathrm{E4M3}\left(\mathrm{clip}(X_{16}/s_X,-448,448)\right),\qquad X_{16}\approx s_XX_8.
 $$
 
 448 是 E4M3FN 的最大有限值。实现使用 FP32 倒数及舍入。这里的 descale 属于展开张量，不是压缩 KV 缓存的 descale。Q8 及其 scale 只在同一不可变 forward 内复用，每个缓存 K/V 块单独准备。
@@ -78,7 +94,7 @@ $$
 对一个 head：
 
 $$
-S\approx\alpha s_Qs_KQ_8K_8^T+M,\qquad P=\operatorname{softmax}(S),\qquad O_{16}\approx\operatorname{BF16}(s_VPV_8).
+S\approx\alpha s_Qs_KQ_8K_8^T+M,\qquad P=\mathrm{softmax}(S),\qquad O_{16}\approx\mathrm{BF16}(s_VPV_8).
 $$
 
 Alpha 是模型配置的 softmax scale；M 是 mask；P 是注意力权重。以上是逻辑运算，不包含所有指令和中间舍入。FlashAttention 使用分块 online softmax，不物化完整 S/P 矩阵。审阅的 AITER FP8 实现也会将概率 tile 转换用于 FP8 矩阵乘法；FP8 输入不代表累加器和 softmax 中间结果全部采用 FP8。API 返回 BF16 输出和自然对数形式的 FP32 LSE，vLLM 使用它们合并分块结果。
