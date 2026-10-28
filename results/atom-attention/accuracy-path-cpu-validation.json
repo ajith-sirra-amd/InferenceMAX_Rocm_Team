@@ -1,0 +1,5 @@
+{
+  "tests": 10,
+  "result": "pass",
+  "scope": "CPU routing and evaluation-phase evidence; GPU and model evaluation pending"
+}

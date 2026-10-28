@@ -17,6 +17,7 @@ class PrefillFlagTest(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch.dict(os.environ))
         os.environ.pop(FLAG, None)
+        os.environ.pop("ATOM_FP8_ACCURACY_STRESS", None)
 
         class NativePrefill:
             def __init__(self, **kwargs):
@@ -124,6 +125,37 @@ class PrefillFlagTest(unittest.TestCase):
         backend = self.backend_type()
         with self.assertRaisesRegex(RuntimeError, "FP8 is unsupported"):
             backend.run_prefill_context_chunk(self.chunk(), self.q, self.k, self.v)
+        self.quantize.assert_not_called()
+        self.fmha.assert_not_called()
+
+    def test_accuracy_stress_routes_small_context_but_keeps_causal_and_flag_gate(self):
+        os.environ[FLAG] = "1"
+        os.environ["ATOM_FP8_ACCURACY_STRESS"] = "1"
+        self.q.shape = (64, 12, 192)
+        self.k.shape = (256, 12, 192)
+        self.v.shape = (256, 12, 128)
+        backend = self.backend_type()
+        self.assertEqual(
+            backend.run_prefill_context_chunk(self.chunk(64, 256), self.q, self.k, self.v),
+            ("fp8_output", "fp32_lse"),
+        )
+        self.assertEqual(backend.run_prefill_new_tokens(self.q, self.k, self.v, True),
+                         ("bf16_output", "fp32_lse"))
+        os.environ[FLAG] = "0"
+        backend = self.backend_type()
+        self.assertEqual(
+            backend.run_prefill_context_chunk(self.chunk(64, 256), self.q, self.k, self.v),
+            ("bf16_output", "fp32_lse"),
+        )
+
+    def test_accuracy_stress_keeps_empty_context_on_native_path(self):
+        os.environ[FLAG] = "1"
+        os.environ["ATOM_FP8_ACCURACY_STRESS"] = "1"
+        backend = self.backend_type()
+        self.assertEqual(
+            backend.run_prefill_context_chunk(self.chunk(64, 0), self.q, self.k, self.v),
+            ("bf16_output", "fp32_lse"),
+        )
         self.quantize.assert_not_called()
         self.fmha.assert_not_called()
 

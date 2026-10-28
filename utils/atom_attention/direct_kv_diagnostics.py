@@ -1,5 +1,8 @@
-"""Run independent chain numerics or replay a captured real Kimi failure."""
+"""Run isolated chain checks or replay a captured Kimi diagnostic."""
 import os
+from pathlib import Path
+import subprocess
+import sys
 
 if __name__ == "__main__":
     fixture_path = os.environ.get("FAILURE_FIXTURE_PATH", "")
@@ -7,11 +10,11 @@ if __name__ == "__main__":
         from rope_balanced_diagnostics import run
         run(fixture_path)
     else:
+        root = Path(__file__).resolve().parents[2]
+        plugin = root / "upstream/InferenceX/benchmarks/single_node/agentic/atom_attention"
+        subprocess.run(["bash", "-n", str(plugin.parent / "kimik3_fp4_mi355x_mtp.sh")], check=True)
+        for name in ("test_prefill_flag.py", "test_accuracy_evidence.py"):
+            subprocess.run([sys.executable, str(plugin / "tests" / name)], check=True)
         from fp8_weight_preflight import run as run_fp8_weights
-        from projection_numerics import run_case
-        from direct_kv_preflight import run
         run_fp8_weights()
-        run_case(0.125)
-        run_case(0.137)
-        print("KV_CHAIN_NUMERICS_PASS", flush=True)
-        run()
+        print("FP8_ACCURACY_PATH_PREFLIGHT_PASS", flush=True)

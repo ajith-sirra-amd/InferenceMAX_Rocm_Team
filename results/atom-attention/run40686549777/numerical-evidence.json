@@ -1,0 +1,254 @@
+{
+  "run_id": 40686549777,
+  "source": "6d0f6947d8454751041e8d6a09249682a6b7528c",
+  "scope": "diagnostic; native FP8 still fails original gate",
+  "measurements": {
+    "RESIDUAL_NOPE_BALANCE_SETUP": [
+      {
+        "projection": "bf16_weight",
+        "balance_per_head": [
+          3.08939266204834,
+          3.081989288330078,
+          3.183628559112549,
+          3.0275800228118896,
+          3.2302913665771484,
+          2.871325731277466,
+          2.98028302192688,
+          3.222437858581543,
+          3.1843607425689697,
+          2.935197591781616,
+          2.6144332885742188,
+          3.4297006130218506
+        ],
+        "q_clipping_fraction": 0.0,
+        "k_clipping_fraction": 0.0,
+        "quantization_only": {
+          "rms": 0.007886342879982017,
+          "normalized_max_output_error": 0.061905494086419925,
+          "min_cosine": 0.9985716078458501,
+          "lse_max": 0.19831295183384512,
+          "normalized_max_lse_error": 0.008007771803933141
+        },
+        "with_nope_unquantized": {
+          "rms": 0.006240629766574734,
+          "normalized_max_output_error": 0.043157539416476556,
+          "min_cosine": 0.9993147668686668,
+          "lse_max": 0.01189066046186582,
+          "normalized_max_lse_error": 0.0004801385622884032
+        },
+        "scope": "scale calibration uses captured K maxima; diagnostic only"
+      },
+      {
+        "projection": "native_fp8_weight",
+        "balance_per_head": [
+          3.0958170890808105,
+          3.08842396736145,
+          3.1821675300598145,
+          3.0311663150787354,
+          3.242671489715576,
+          2.87664532661438,
+          2.991363525390625,
+          3.2119598388671875,
+          3.186608076095581,
+          2.9319231510162354,
+          2.6198489665985107,
+          3.440375566482544
+        ],
+        "q_clipping_fraction": 0.0,
+        "k_clipping_fraction": 0.0,
+        "quantization_only": {
+          "rms": 0.020959435848320926,
+          "normalized_max_output_error": 0.05293090690410401,
+          "min_cosine": 0.9980895854462207,
+          "lse_max": 0.2082843737855562,
+          "normalized_max_lse_error": 0.00841041253320297
+        },
+        "with_nope_unquantized": {
+          "rms": 0.020366144820666048,
+          "normalized_max_output_error": 0.049253708026266795,
+          "min_cosine": 0.9983556136601962,
+          "lse_max": 0.052605336672574055,
+          "normalized_max_lse_error": 0.0021241755913955166
+        },
+        "scope": "scale calibration uses captured K maxima; diagnostic only"
+      }
+    ],
+    "CAPTURED_BALANCED_RESIDUAL_CASE": [
+      {
+        "projection": "bf16_weight",
+        "lazy_rescale": true,
+        "same_fp8_inputs": {
+          "rms": 0.012684709556980147,
+          "normalized_max_output_error": 0.03098583488522085,
+          "min_cosine": 0.9877990097761206,
+          "lse_max": 0.000601133838554091,
+          "normalized_max_lse_error": 2.4279976931484706e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.015406753276873188,
+          "normalized_max_output_error": 0.06504065040650407,
+          "min_cosine": 0.9880057987976886,
+          "lse_max": 0.19825363159179688,
+          "normalized_max_lse_error": 0.008005375836845663
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": true,
+        "fmha_ms": 0.5840814590454102
+      },
+      {
+        "projection": "bf16_weight",
+        "lazy_rescale": false,
+        "same_fp8_inputs": {
+          "rms": 0.003014385315224778,
+          "normalized_max_output_error": 0.008104983449451373,
+          "min_cosine": 0.9998244855527922,
+          "lse_max": 0.000601133838554091,
+          "normalized_max_lse_error": 2.4279976931484706e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.00875029618600949,
+          "normalized_max_output_error": 0.06504065040650407,
+          "min_cosine": 0.9984596945172848,
+          "lse_max": 0.19825172424316406,
+          "normalized_max_lse_error": 0.00800529881912581
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": true,
+        "fmha_ms": 0.6082456588745118
+      },
+      {
+        "projection": "native_fp8_weight",
+        "lazy_rescale": true,
+        "same_fp8_inputs": {
+          "rms": 0.012686413984864215,
+          "normalized_max_output_error": 0.023586211610971783,
+          "min_cosine": 0.9881956140331828,
+          "lse_max": 0.0005997842133744768,
+          "normalized_max_lse_error": 2.4225081011546043e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.024841945359718384,
+          "normalized_max_output_error": 0.056910569105691054,
+          "min_cosine": 0.9869141973909346,
+          "lse_max": 0.208251953125,
+          "normalized_max_lse_error": 0.008409102724309295
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.5738813400268554
+      },
+      {
+        "projection": "native_fp8_weight",
+        "lazy_rescale": false,
+        "same_fp8_inputs": {
+          "rms": 0.0030254881598013217,
+          "normalized_max_output_error": 0.009192797000431126,
+          "min_cosine": 0.9998261328182281,
+          "lse_max": 0.0005978768647416643,
+          "normalized_max_lse_error": 2.41480438469845e-05
+        },
+        "vs_historical_bf16": {
+          "rms": 0.02130177373778581,
+          "normalized_max_output_error": 0.056910569105691054,
+          "min_cosine": 0.998039721833456,
+          "lse_max": 0.208251953125,
+          "normalized_max_lse_error": 0.008409102724309295
+        },
+        "passes_arithmetic_gate": true,
+        "passes_original_gate": false,
+        "fmha_ms": 0.5672332763671875
+      }
+    ],
+    "CAPTURED_BALANCED_RESIDUAL_COMPLETE": [
+      {
+        "scope": "diagnostic with captured maxima; no production scale selection, model accuracy or performance claim",
+        "results": [
+          {
+            "projection": "bf16_weight",
+            "lazy_rescale": true,
+            "same_fp8_inputs": {
+              "rms": 0.012684709556980147,
+              "normalized_max_output_error": 0.03098583488522085,
+              "min_cosine": 0.9877990097761206,
+              "lse_max": 0.000601133838554091,
+              "normalized_max_lse_error": 2.4279976931484706e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.015406753276873188,
+              "normalized_max_output_error": 0.06504065040650407,
+              "min_cosine": 0.9880057987976886,
+              "lse_max": 0.19825363159179688,
+              "normalized_max_lse_error": 0.008005375836845663
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": true,
+            "fmha_ms": 0.5840814590454102
+          },
+          {
+            "projection": "bf16_weight",
+            "lazy_rescale": false,
+            "same_fp8_inputs": {
+              "rms": 0.003014385315224778,
+              "normalized_max_output_error": 0.008104983449451373,
+              "min_cosine": 0.9998244855527922,
+              "lse_max": 0.000601133838554091,
+              "normalized_max_lse_error": 2.4279976931484706e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.00875029618600949,
+              "normalized_max_output_error": 0.06504065040650407,
+              "min_cosine": 0.9984596945172848,
+              "lse_max": 0.19825172424316406,
+              "normalized_max_lse_error": 0.00800529881912581
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": true,
+            "fmha_ms": 0.6082456588745118
+          },
+          {
+            "projection": "native_fp8_weight",
+            "lazy_rescale": true,
+            "same_fp8_inputs": {
+              "rms": 0.012686413984864215,
+              "normalized_max_output_error": 0.023586211610971783,
+              "min_cosine": 0.9881956140331828,
+              "lse_max": 0.0005997842133744768,
+              "normalized_max_lse_error": 2.4225081011546043e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.024841945359718384,
+              "normalized_max_output_error": 0.056910569105691054,
+              "min_cosine": 0.9869141973909346,
+              "lse_max": 0.208251953125,
+              "normalized_max_lse_error": 0.008409102724309295
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.5738813400268554
+          },
+          {
+            "projection": "native_fp8_weight",
+            "lazy_rescale": false,
+            "same_fp8_inputs": {
+              "rms": 0.0030254881598013217,
+              "normalized_max_output_error": 0.009192797000431126,
+              "min_cosine": 0.9998261328182281,
+              "lse_max": 0.0005978768647416643,
+              "normalized_max_lse_error": 2.41480438469845e-05
+            },
+            "vs_historical_bf16": {
+              "rms": 0.02130177373778581,
+              "normalized_max_output_error": 0.056910569105691054,
+              "min_cosine": 0.998039721833456,
+              "lse_max": 0.208251953125,
+              "normalized_max_lse_error": 0.008409102724309295
+            },
+            "passes_arithmetic_gate": true,
+            "passes_original_gate": false,
+            "fmha_ms": 0.5672332763671875
+          }
+        ]
+      }
+    ]
+  }
+}

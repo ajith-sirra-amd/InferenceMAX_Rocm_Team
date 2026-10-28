@@ -16,6 +16,7 @@ from vllm.v1.attention.backends.mla.prefill.aiter_flash_attn import (
 from vllm.v1.attention.backends.mla.rocm_aiter_mla import AiterMLABackend, AiterMLAImpl, AiterMLAMetadataBuilder
 
 from .quantize import fused_qkv_per_tensor_quant
+from .accuracy import record_accuracy_call, use_fp8_context
 
 class AtomFlyDSLMLAImpl(AiterMLAImpl):
     def process_weights_after_loading(self, act_dtype):
@@ -260,8 +261,7 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
     def run_prefill_context_chunk(self, chunk, q, k, v, out=None):
         if (
             not self._fp8_enabled
-            or chunk.max_query_len < 512
-            or chunk.max_seq_len < 8192
+            or not use_fp8_context(chunk.max_query_len, chunk.max_seq_len)
         ):
             result = super().run_prefill_context_chunk(chunk, q, k, v, out=out)
             reason = (
@@ -311,7 +311,7 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
             q_descale=qs, k_descale=ks, v_descale=vs, out=out, stream=None,
         )
 
-    def run_prefill_projected_fp8(self, chunk, q, kv8, out=None):
+    def run_prefill_projected_fp8(self, chunk, q, kv8, out=None, *, fp8_projection=False):
         if not self._direct_kv_enabled or self._gather_scales is None:
             raise RuntimeError("Direct FP8 KV requires this forward's supplied scales")
         if self._q_cache is None:
@@ -323,6 +323,8 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
         with torch.cuda.device(q.device):
             q8, qs = self._query_fp8(q)
             result = self._call_projected_fp8(chunk, q8, qs, kv8, out)
+        if not torch.cuda.is_current_stream_capturing():
+            record_accuracy_call(q8, kv8, fp8_projection=fp8_projection)
         key = (os.getpid(), "cached_context_direct_fp8")
         if key not in self._reported_paths and not torch.cuda.is_current_stream_capturing():
             print(

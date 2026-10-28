@@ -233,6 +233,23 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
+# Accuracy changes scheduler chunk size and cached-path eligibility, not GSM8K.
+# This exercises the same FP8 kernels on short fixed-task prompts.
+export ATOM_FP8_ACCURACY_STRESS=0
+if [ "$EVAL_ONLY" = "true" ]; then
+    if [ "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" != "1" ] || [ "$ATOM_USE_FUSED_KV_FP8_OUTPUT" != "1" ]; then
+        echo "This accuracy experiment requires native FP8 projection and FMHA" >&2
+        exit 1
+    fi
+    export ATOM_FP8_ACCURACY_STRESS=1
+    MAX_BATCHED_TOKENS=512
+    export ATOM_FP8_ACCURACY_ACTIVE_FILE="$RESULT_DIR/atom_fp8_accuracy_active"
+    if [ -e "$ATOM_FP8_ACCURACY_ACTIVE_FILE" ]; then
+        echo "Stale evaluation-phase marker exists" >&2
+        exit 1
+    fi
+fi
+
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
 
@@ -296,7 +313,7 @@ VLLM_CMD=(
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
 
-if [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ]; then
+if [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ] || [ "$ATOM_FP8_ACCURACY_STRESS" = "1" ]; then
     VLLM_CMD+=(--enforce-eager)
 fi
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
@@ -381,10 +398,14 @@ elif [ "$EVAL_ONLY" = "true" ]; then
     unset EVAL_SUITE EVAL_LIMIT
     mkdir -p "$EVAL_RESULT_DIR"
     echo "[GSM8K-EVAL] eval_only=$EVAL_ONLY task=$EVAL_TASKS_DIR concurrency=$EVAL_CONCURRENT_REQUESTS context=$EVAL_MAX_MODEL_LEN temperature=0 full_test_split=True real_verification=True"
+    printf '%s\n' "GSM8K evaluation phase" > "$ATOM_FP8_ACCURACY_ACTIVE_FILE"
     (
         cd "$AGENTIC_OUTPUT_DIR"
         run_eval --port "$PORT"
     ) 2>&1 | tee "$RESULT_DIR/gsm8k_eval.log"
+    python3 /outputs/utils/atom_attention/verify_accuracy_path.py \
+        --server-log "$SERVER_LOG" --workers "$TP" \
+        --output "$RESULT_DIR/gsm8k_fp8_execution_proof.json"
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"

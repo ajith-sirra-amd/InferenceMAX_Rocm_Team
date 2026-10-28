@@ -192,3 +192,36 @@ Native projection changes only its temporary per-channel descales; packed FP8
 weights are not quantized again. RoPE residual handling is unchanged.
 The diagnostic uses captured K maxima, so passing it would not establish a
 production scale policy. Original numerical limits remain unchanged.
+
+## Current outcome and next full-model validation
+
+All six captured-input diagnostic runs completed. Native FP8 projection and
+same-input FMHA arithmetic passed. The original BF16 LSE gate remains unpassed
+for native FP8 weights. Run 40686549777 at 6d0f6947d8454751041e8d6a09249682a6b7528c
+measured 0.198254 for the balanced BF16-weight prototype (pass on this fixture),
+and 0.208252 for the native FP8-weight prototype (fail). Neither experimental
+correction is installed in serving. Do not treat diagnostic job success as acceptance.
+
+The next full GSM8K uses the existing ATOM-equivalent native FP8 projection and
+192-column FP8 FMHA, without the diagnostic rotations, residuals, or balancing.
+Its purpose is model-accuracy measurement after isolated arithmetic validation.
+It does not erase or replace the failed 0.20 BF16-difference test.
+
+The earlier GSM8K run never reached FP8 attention because its prompts did not
+satisfy the performance thresholds. For EVAL_ONLY, this recipe now:
+- sets MAX_BATCHED_TOKENS=512 and ATOM_FP8_ACCURACY_STRESS=1;
+- uses FP8 cached attention for positive query/context lengths, preserving causal
+  new-token BF16 routing and the main FP8 opt-in flag;
+- uses eager execution for unambiguous invocation evidence;
+- retains full 1319-question GSM8K, five-shot, temperature zero, real speculative
+  verification, unchanged questions and scoring;
+- creates a phase marker only immediately before evaluation, then requires actual
+  native FP8 projection and E4M3 Q/K/V FMHA evidence from all eight worker PIDs.
+  Warmup, BF16 projection, wrong dtypes, empty calls, or missing workers cannot pass.
+
+Normal performance routing remains at query >=512 and context >=8192.
+Ten CPU routing/evidence tests passed. The GPU prerequisite runs Bash syntax,
+those CPU tests, native weight layouts, and large/small-context numerical plus
+changed-input graph checks before the full-model evaluation can start.
+A GSM8K result with execution proof is model-accuracy evidence for this stress
+configuration; it is not a throughput measurement or a strict BF16 numerical pass.

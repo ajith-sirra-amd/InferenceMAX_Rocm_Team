@@ -94,9 +94,9 @@ def layout_checks():
         raise AssertionError("Invalid projection scale accepted")
 
 
-def chain_checks():
+def chain_checks(nk=8192, nq=512):
     torch.manual_seed(109)
-    heads, nk, nq = 12, 8192, 512
+    heads = 12
     weight = (torch.randn((heads * 256, 512), device="cuda") / 32).to(torch.bfloat16)
     layer = quantize_layer(weight)
     from inferencex_atom_attention.backend import AtomFlyDSLMLAImpl
@@ -169,6 +169,8 @@ def chain_checks():
 def run():
     layout_checks()
     chain_checks()
+    chain_checks(nk=256, nq=64)
+    print("FP8_NATIVE_SMALL_CONTEXT_PASS", flush=True)
 
 
 if __name__ == "__main__":

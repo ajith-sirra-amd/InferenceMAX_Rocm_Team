@@ -23,6 +23,7 @@ from vllm.v1.attention.ops.rocm_aiter_mla_prefill import (
 )
 
 from .projection_fp8 import expand_context_fp8
+from .accuracy import use_fp8_context
 
 
 def eligible(impl, q, cache, metadata):
@@ -37,7 +38,7 @@ def eligible(impl, q, cache, metadata):
     )
     return (
         chunked is not None
-        and any(c.max_query_len >= 512 and c.max_seq_len >= 8192 for c in chunked.chunks)
+        and any(use_fp8_context(c.max_query_len, c.max_seq_len) for c in chunked.chunks)
         and _supports_fused_dcp_prefill_config(
             impl.kv_cache_dtype, prefill.q_data_type, impl.kv_lora_rank,
             impl.qk_nope_head_dim, impl.qk_rope_head_dim, impl.v_head_dim,
@@ -66,7 +67,7 @@ def compute_context(impl, q, cache, metadata, k_scale):
             chunk, chunked.dcp_manager.kv_gather, current_platform.fp8_dtype(),
         )
         query = q[chunk.token_slice]
-        if chunk.max_query_len >= 512 and chunk.max_seq_len >= 8192:
+        if use_fp8_context(chunk.max_query_len, chunk.max_seq_len):
             if params is None:
                 kv8 = expand_context_fp8(
                     gathered, k_scale, row_indices, impl.kv_b_proj.weight, impl.num_heads,
@@ -86,7 +87,9 @@ def compute_context(impl, q, cache, metadata, k_scale):
                         f"linear_kernel={params.linear_kernel}", flush=True,
                     )
                     impl._fp8_projection_called = True
-            attn_output, attn_lse = backend.run_prefill_projected_fp8(chunk, query, kv8)
+            attn_output, attn_lse = backend.run_prefill_projected_fp8(
+                chunk, query, kv8, fp8_projection=params is not None,
+            )
             if backend._validate_direct_kv:
                 # Graph capture cannot execute host assertions. The numerical
                 # smoke explicitly runs eager and checks every optimized call.
