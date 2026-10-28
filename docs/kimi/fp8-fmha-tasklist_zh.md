@@ -14,7 +14,7 @@
 
 ## 后续任务顺序
 
-1. [ ] **当前完整性能测试：** 跟进 [40719654583](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583)，执行代码 `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`，C48 + MTP。对比 **17,406.08912** 基线，检查吞吐、延迟、测量阶段请求错误和实际缓存/因果 FP8 调用。不要重复派发。
+1. [ ] **恢复并完成新 token 性能测量：** [40719654583](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583) 的 GPU job 122927005395 于 16:50:55 UTC 因 runner 磁盘配额错误失败。未上传基准 artifact，尚无新 token 性能提升证据。[恢复任务 40730725939](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40730725939) 保留工作区并尝试恢复现有日志/结果。先检查恢复证据，再决定仓库范围内清理或完整重跑。目标对照仍为代码 `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`、C48 + MTP，对比 **17,406.08912**。
 2. [ ] **有条件地加入原生 PR：** 只有新 token 测得性能提升才加入 PR #64288；否则验证已确立的缓存上下文实现。候选代码位于 fork 的 `checks/fp8-mla-causal-20261028` 分支，PR 分支尚未改变。
 3. [ ] **原生 GPU 正确性：** 验证最终实现的投影/FMHA 数值、因果 mask（若包含）、非单位 scale、真实 FP8 执行、更改输入后的 graph replay，以及服务运行中的 `VLLM_GPU_SYNC_CHECK=error`。不得仅为通过测试而放宽捕获 BF16 参考的 LSE 门槛。
 4. [ ] **原生完整 GSM8K：** 1,319 题，five-shot，temperature 0，真实 speculative verification。记录最终原生 commit，并证明评估阶段八个 worker 执行预期的缓存/因果路径。
@@ -54,3 +54,5 @@ e2e 工作流在 `runner-diagnostics-only=true` 时可接受精确 fork commit �
 验证脚本新增独立 `--prepare-only` 模式，安装精确原生版本并准备仓库内环境；结果标记为 `prepared`，绝不作为 GPU 测试通过。独立 `native_fp8_validation` observer 校验原生源码哈希，并在明确标记的阶段按 rank 和进程记录成功的 FP8 投影、缓存及因果 dispatch，不替换原生数值 kernel。显式启用 accuracy-stress 时，仅将缓存 eligibility 改为 query/context 长度大于零；eager 评估及 512-token scheduler chunk 仍由调用方配置。observer 记录该 override，且拒绝将其当作正常 replay 证据。
 
 observer 和安装脚本已准备，但 serving recipe 尚未接入，也未执行 GPU 观测。CPU 测试拒绝不完整、BF16、仅预热、版本不符、worker 重启、仅 graph capture 以及把 stress 当 replay 的证据。`replay` 标记覆盖所启动的 replay（包含预热），不能证明稳态 kernel 驻留。
+
+原生环境/执行证据 CPU CI [40729902162](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40729902162) 在代码 `0e40f469f1623c09336a034fa3d130b3b294fa4c` 通过 **15 项测试，零失败/错误/跳过**；JUnit artifact 为 `12834722522`。这不是 GPU 数值验证。早先 setup 阶段失败来自错误的 artifact action pin；两个新增工作流均已改用仓库中经验证的现有 pin。

@@ -1,0 +1,13 @@
+{
+  "run_id": 40719654583,
+  "gpu_job": 122927005395,
+  "execution_source": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+  "runner": "mi355x-amd_pit2_p03_g07",
+  "job_conclusion": "failure",
+  "completed_at": "2026-10-28T16:50:55Z",
+  "failure": "Disk quota exceeded while writing GitHub runner diagnostic logs",
+  "performance_result_available": false,
+  "artifact_upload_completed": false,
+  "native_pr_promoted": false,
+  "recovery_run_id": 40730725939
+}
