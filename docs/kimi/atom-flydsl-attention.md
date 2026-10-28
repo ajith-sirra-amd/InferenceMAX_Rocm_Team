@@ -1,40 +1,48 @@
-# vLLM with ATOM's FlyDSL FP8 attention
+# vLLM Kimi hybrid BF16 / FlyDSL FP8 prefill
 
-[??](atom-flydsl-attention_zh.md)
+[中文](atom-flydsl-attention_zh.md) · [Overhead audit](kimi-prefill-overhead-audit.md) · [Baselines](atom-attention-BASELINES.md)
 
-- Framework: native vLLM, current pinned ROCm image.
-- Model: Moonshot Kimi-K3.
-- Kernel: `aiter.ops.flydsl.flydsl_flash_attn_fp8_func`, also used by ATOM.
-- Registration: vLLM's general-plugin and custom attention/prefill registries.
-- Source edits: this repository only; no installed vLLM/AITER source patch.
+- Framework: native vLLM in the pinned ROCm image.
+- Model: **Moonshot Kimi-K3**; native draft remains Inferact/Kimi-K3-DSpark.
+- FP8 API: `aiter.ops.flydsl.flydsl_flash_attn_fp8_func`, also used by ATOM.
+- Extension lives in this repository; installed vLLM/AITER source is not patched.
+- Current source under test: `e4cf47a7650321e4bd40c83746088a2679ec0509`.
+- Current smoke: [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020). Actual model path engagement is pending artifacts.
 
-| Stage | First integration |
+| Stage | Current candidate |
 |---|---|
-| Weight quantization, KV cache, scheduling | Existing native vLLM recipe |
-| Latent KV expansion | Native vLLM; produces BF16 K/V |
-| DCP communication | Native path; FP8 all-gather is not claimed |
-| Attention preparation | ATOM fused dynamic per-tensor Q/K/V quantization |
-| Causal and cached-context FMHA | AITER FlyDSL FP8, BF16 output, FP32 natural-log LSE |
-| Decode | Native vLLM AITER implementation |
+| Loader, scheduler, weight quantization and KV storage | Native vLLM recipe, Moonshot checkpoint, online FP8 targets |
+| DCP and latent KV expansion | BF16 kv_b weights make pinned native fused compact-FP8 gather/expansion eligible; verify actual route marker |
+| Expanded K/V | BF16; direct FP8 expansion is not implemented |
+| Causal FMHA | Native BF16 |
+| Cached FMHA with max Q < 512 or max KV < 8192 | Native BF16 |
+| Larger cached FMHA | Fused dynamic Q/K/V quantization, then FlyDSL FP8 |
+| Query reuse | Identical Q views within one forward only; always cleared in finally |
+| Output and LSE | BF16 output and FP32 natural-log LSE; native chunk merge |
+| Main ASM PS buffers | Disabled before allocation; draft native PS can remain |
+| Decode and draft | Native vLLM AITER |
 
-- ATOM quantizer source: ROCm/ATOM commit `ebd5f84f3a6af6a99d23f85e5c1107b238d1cdaf`; MIT license retained.
-- Q is quantized per call. Cross-chunk Q reuse and direct FP8 up-projection are subsequent optimizations, not part of this first integration.
-- Adapter fails on unsupported configurations instead of silently claiming FP8 engagement.
-- Native AITER uncached ASM bypass is avoided by using vLLM's common prefill orchestration in the custom MLA implementation.
-- This first version can be slower than BF16 because preparation and expansion remain. Compare the complete call, not kernel-only timing.
-- GPU preflight covers ragged causal/noncausal inputs, empty cached rows, changed-input graph replay, and attention-plus-quantization timing.
-- Model loading, TP8/DCP8 communication, runtime engagement and KV capacity require a separate model smoke; standalone kernel success does not prove them.
+- FP8 kv_b online weight override was removed: approximately 36 MiB/GPU raw weight cost over 24 MLA layers.
+- TP8 has **12 heads/rank**: Q/K head size192; V head size128.
+- Complete cached-attention diagnostic: Q1024/KV8192 improved 1.656× including quantization; Q256/KV4096 regressed 0.827×.
+- QKV preparation costs about55µs in those diagnostics; KV-only preparation still costs about52µs.
+- Full throughput and 23M KV pool are not established by standalone kernel timing.
+- Numerical RMS drift is roughly4–5% versus unquantized FP64 reference; no model accuracy claim.
 
-## Current validation status
+## Validation and continuation
 
-- run40634449297: six numerical and changed-input graph checks passed.
-- Ordinary-input relative RMS error versus unquantized FP64 reference: 3.7% to5.0%; this is not GSM8K accuracy evidence.
-- Shared-host complete-attention timing including QKV quantization: cached context1.26x/1.62x; causal0.38x/0.94x. No end-to-end speedup claim.
-- Model smoke: TP8/DCP8 C48, warmup1,600seconds. Full benchmark: warmup10,3600seconds.
-- The read-only watcher reports current-attempt active steps and failure annotations every60seconds.
+- Kernel run40642162788 passed numerical, strided, empty-KV, same-forward reuse and changed-input graph tests.
+- Current prefix smoke runs the latest numerical preflight before model loading.
+- Actual `vllm bench serve --backend vllm` uses prefix_repetition at32K/128K prefixes, suffix1024 and short outputs.
+- Gate:20 successful requests, zero failures, increased cache hits, KV-capacity line, and all-eight-worker BF16causal / FP8cached / disabledmainPS / Qreuse / nativeFP8gather markers.
+- `utils/atom_attention/continue_benchmark.py` polls every60seconds, gates artifacts and dispatches the authorized full replay.
+- Full uses **warmup10 per lane,3600seconds**, no GSM8K, and the smoke-tested source SHA.
+- The controller avoids duplicate dispatches; an unmet gate requires diagnosis before another full run.
 
-## Automatic continuation
+## Evidence boundaries
 
-- `utils/atom_attention/continue_benchmark.py` watches the smoke every60seconds and queues a full run only after success, eight-worker causal/cached FP8 engagement, and zero measured-phase request errors.
-- Full run pins the tested smoke source SHA, uses warmup10 and3600seconds, and skips GSM8K.
-- It does not cancel other runs, stop containers, or modify source. An unmet gate reports evidence and exits.
+- Old all-FP8 smoke40634885348:22,695,620 KV tokens,11,789.99 total and61.13 output tokens/sec/GPU; measured requests476success/2empty-response errors.
+- Old warmup also had85empty-response errors; job success alone does not establish acceptable request quality.
+- Primary baseline39239112271 is Moonshot,15,476.47 total tokens/sec/GPU; historical “AMD baseline” labels are inaccurate.
+- Communication, expansion GEMM and offload costs are not yet isolated. Roofline work remains on hold.
+- See the [overhead audit](kimi-prefill-overhead-audit.md) for exact matrix flow, costs and remaining constraints.

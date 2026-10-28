@@ -13,6 +13,8 @@
 | [ATOM 注意力](atom-flydsl-attention_zh.md) | 适配器、内核验证和限制 |
 | [KV 流程](kimi-kv-optimized-flow_zh.md) | 潜在展开、精度和通信 |
 
+- [当前开销审计](kimi-prefill-overhead-audit_zh.md)：问题、精度与矩阵流程、实测开销、下一次测试门槛。
+
 ## 全部记录
 
 - [39726650098-validation.md](39726650098-validation.md)

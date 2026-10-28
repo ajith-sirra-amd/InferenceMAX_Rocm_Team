@@ -9,6 +9,7 @@
 
 | Document | Topic |
 |---|---|
+| [Current overhead audit](kimi-prefill-overhead-audit.md) | Problem, exact precision flow, measured costs and next-run gate |
 | [Baseline evidence](atom-attention-BASELINES.md) | Verified checkpoints, throughput and capacity |
 | [ATOM attention](atom-flydsl-attention.md) | Adapter, kernel smoke and constraints |
 | [KV flow](kimi-kv-optimized-flow.md) | Latent expansion, precisions and communication |
