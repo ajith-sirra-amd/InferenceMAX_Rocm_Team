@@ -96,14 +96,14 @@ jobs:
     inspect-runner:
       if: ${{ inputs.runner-diagnostics-only }}
       runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
-      timeout-minutes: 5
+      timeout-minutes: 20
       steps:
         - name: Checkout inspection code
           uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
           with:
             ref: ${{ inputs.ref || github.sha }}
             persist-credentials: false
-        - name: Inspect installed vLLM and ATOM attention kernel APIs
+        - name: Run registered vLLM FlyDSL adapter numerical and timing smoke
           shell: bash
           run: |
             date -u
@@ -117,9 +117,10 @@ jobs:
               --group-add "$(getent group video | cut -d: -f3)" \
               --group-add "$(getent group render | cut -d: -f3)" \
               -v "$GITHUB_WORKSPACE":/repo:ro \
+              -e PYTHONPATH=/repo/upstream/InferenceX/benchmarks/single_node/agentic/atom_attention \
               --entrypoint python3 \
               vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce \
-              /repo/utils/atom_attention/inspect_installed.py
+              /repo/utils/atom_attention/preflight.py
     get-jobs:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest

@@ -1,0 +1,2 @@
+[vllm.general_plugins]
+inferencex_atom_attention = inferencex_atom_attention.register:register

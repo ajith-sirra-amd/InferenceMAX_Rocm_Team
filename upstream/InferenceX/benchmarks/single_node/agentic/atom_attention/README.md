@@ -1,0 +1,26 @@
+# vLLM with ATOM's FlyDSL FP8 attention
+
+[??](README_zh.md)
+
+- Framework: native vLLM, current pinned ROCm image.
+- Model: Moonshot Kimi-K3.
+- Kernel: `aiter.ops.flydsl.flydsl_flash_attn_fp8_func`, also used by ATOM.
+- Registration: vLLM's general-plugin and custom attention/prefill registries.
+- Source edits: this repository only; no installed vLLM/AITER source patch.
+
+| Stage | First integration |
+|---|---|
+| Weight quantization, KV cache, scheduling | Existing native vLLM recipe |
+| Latent KV expansion | Native vLLM; produces BF16 K/V |
+| DCP communication | Native path; FP8 all-gather is not claimed |
+| Attention preparation | ATOM fused dynamic per-tensor Q/K/V quantization |
+| Causal and cached-context FMHA | AITER FlyDSL FP8, BF16 output, FP32 natural-log LSE |
+| Decode | Native vLLM AITER implementation |
+
+- ATOM quantizer source: ROCm/ATOM commit `ebd5f84f3a6af6a99d23f85e5c1107b238d1cdaf`; MIT license retained.
+- Q is quantized per call. Cross-chunk Q reuse and direct FP8 up-projection are subsequent optimizations, not part of this first integration.
+- Adapter fails on unsupported configurations instead of silently claiming FP8 engagement.
+- Native AITER uncached ASM bypass is avoided by using vLLM's common prefill orchestration in the custom MLA implementation.
+- This first version can be slower than BF16 because preparation and expansion remain. Compare the complete call, not kernel-only timing.
+- GPU preflight covers ragged causal/noncausal inputs, empty cached rows, changed-input graph replay, and attention-plus-quantization timing.
+- Model loading, TP8/DCP8 communication, runtime engagement and KV capacity require a separate model smoke; standalone kernel success does not prove them.
