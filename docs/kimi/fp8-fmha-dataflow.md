@@ -20,8 +20,55 @@ Tkv and Tq refer to packed token counts in the current chunk/query call. The twe
 
 **Colors:** green = FP8; blue = BF16; amber = format conversion; purple = FP32 scales/LSE.
 
+## Before all optimizations
+
+This is the MLA prefill baseline before the FP8 attention changes discussed here.
+The compressed KV cache was already FP8; projection weights, expanded K/V and
+FMHA operands were BF16. The diagram shows logical dataflow; gather,
+dequantization and projection may share a fused kernel.
+
 ```mermaid
 flowchart TD
+    subgraph Baseline["Before all optimizations | 15,476 Tokens/Sec/GPU"]
+        C0["Compressed KV cache<br/>FP8: latent + RoPE"]
+        G0["DCP all-gather<br/>FP8 payload"]
+        CS0["Cache descale<br/>FP32"]
+        W0["kv_b_proj weights<br/>BF16"]
+        U0["Gather/dequantization + up-projection<br/>BF16 projection operands"]
+        KV0["Expanded K and V<br/>BF16"]
+        Q0["Query Q<br/>BF16"]
+        F0["Fused FMHA<br/>BF16 Q/K/V operands"]
+        O0["Attention output<br/>BF16"]
+        L0["LSE for chunk merge<br/>FP32"]
+        C0 --> G0 --> U0 --> KV0 --> F0
+        W0 --> U0
+        CS0 --> U0
+        Q0 --> F0
+        F0 --> O0
+        F0 --> L0
+    end
+    classDef fp8 fill:#DCFCE7,stroke:#166534,color:#052E16,stroke-width:2px
+    classDef bf16 fill:#DBEAFE,stroke:#1E40AF,color:#172554,stroke-width:2px
+    classDef conversion fill:#FEF3C7,stroke:#92400E,color:#451A03,stroke-width:2px
+    classDef fp32 fill:#EDE9FE,stroke:#5B21B6,color:#2E1065,stroke-width:2px
+    class C0,G0 fp8
+    class W0,KV0,Q0,F0,O0 bf16
+    class U0 conversion
+    class CS0,L0 fp32
+```
+
+Exact full-run throughput: **15,476.46881 total input + output tokens/s/GPU**,
+[baseline run 39239112271](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/39239112271).
+
+## BF16 up-projection with FP8 FMHA — existing chart
+
+Exact full-run throughput: **16,915.72154 total input + output tokens/s/GPU**,
+[run 40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769).
+The chart below retains the original BF16-projection dataflow.
+
+```mermaid
+flowchart TD
+    subgraph Established["BF16 up-projection + FP8 FMHA | 16,916 Tokens/Sec/GPU"]
     C["Compressed KV cache<br/>FP8"]
     G["DCP all-gather<br/>FP8 payload"]
     W["kv_b_proj weights<br/>BF16"]
@@ -53,6 +100,7 @@ flowchart TD
     class W,B,Q,O bf16
     class R,KQ,QQ conversion
     class S,L fp32
+    end
 ```
 
 ## 1. Reconstruct the expanded K/V
@@ -132,3 +180,96 @@ The AITER isolated timing helper first derives scales from the same reconstructe
 - [ATOM scale source](https://github.com/ROCm/ATOM/blob/661ef7661eef0d804d2b52d81ed41d80aeaf9fdb/atom/model_ops/triton_fused_qkv_quant.py#L142)
 - [AITER direct-output contract](https://github.com/ROCm/aiter/blob/bbef5a6f2d3733b293c80d2cee6a8d464e88bc01/aiter/ops/flydsl/gather_kv_b_proj.py#L415)
 - [AITER supplied-scale timing helper](https://github.com/ROCm/aiter/blob/bbef5a6f2d3733b293c80d2cee6a8d464e88bc01/op_tests/test_flydsl_gather_kv_b_proj.py#L849)
+
+## FP8 up-projection with direct FP8 K/V — implemented path
+
+This chart records the completed cached-context plugin path at source
+`14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78`.
+It uses native online-quantized FP8 `kv_b_proj` weights and AITER's
+`gather_kv_b_proj_flydsl` to write FP8 K/V directly for FP8 FMHA.
+
+**Colors:** green = FP8; blue = BF16; amber = conversion; purple = FP32
+scales, accumulation or LSE. The nested kernel box contains internal steps,
+not separate intermediate buffers.
+
+```mermaid
+flowchart TD
+    subgraph Direct["FP8 up-projection + FP8 FMHA | 17,406 Tokens/Sec/GPU"]
+        subgraph Load["Once after model loading"]
+            WB["kv_b_proj checkpoint weights<br/>BF16"]
+            WQ["Native vLLM fp8_per_channel<br/>quantization and packing"]
+            W8["kv_b_proj weights<br/>FP8 E4M3"]
+            WS["Per-output-channel weight descales<br/>FP32"]
+            WB --> WQ --> W8
+            WQ -.-> WS
+        end
+        C8["Compressed KV cache<br/>FP8: 512 latent + 64 RoPE"]
+        G8["DCP compressed-cache gather<br/>FP8 payload"]
+        CS8["Cache descale<br/>FP32"]
+        subgraph Fused["One fused FlyDSL gather + up-projection kernel"]
+            M8["Latent x kv_b_proj<br/>FP8 x FP8 operands"]
+            A32["FP32 accumulation<br/>Apply cache and weight descales"]
+            E8["Split K/V and append cached RoPE<br/>Scale and round directly to FP8"]
+            M8 --> A32 --> E8
+        end
+        KV8["Expanded K8 and V8 stored directly<br/>FP8 E4M3"]
+        Q16["Query Q<br/>BF16"]
+        QQ8["Dynamic Q quantization<br/>Reuse matching Q within this forward"]
+        Q8D["Attention Q8<br/>FP8 E4M3"]
+        SQ8["Q descale<br/>FP32"]
+        NEW16["New-token K/V<br/>BF16"]
+        PREP8["New-token scale preparation"]
+        SKV8["Cached-output K/V descales<br/>FP32: 2 x max(new-token descale, 1e-6)"]
+        FM8["FlyDSL FMHA<br/>FP8 Q/K/V; higher-precision internals"]
+        OUT16["Attention output<br/>BF16"]
+        LSE32["Natural-log LSE for chunk merge<br/>FP32"]
+        C8 --> G8
+        G8 -->|Latent columns| M8
+        G8 -->|Cached RoPE columns| E8
+        W8 --> M8
+        WS --> A32
+        CS8 --> A32
+        CS8 --> E8
+        E8 --> KV8 --> FM8
+        Q16 --> QQ8 --> Q8D --> FM8
+        QQ8 -.-> SQ8 --> FM8
+        NEW16 --> PREP8 --> SKV8
+        SKV8 --> E8
+        SKV8 --> FM8
+        FM8 --> OUT16
+        FM8 --> LSE32
+    end
+    classDef fp8 fill:#DCFCE7,stroke:#166534,color:#052E16,stroke-width:2px
+    classDef bf16 fill:#DBEAFE,stroke:#1E40AF,color:#172554,stroke-width:2px
+    classDef conversion fill:#FEF3C7,stroke:#92400E,color:#451A03,stroke-width:2px
+    classDef fp32 fill:#EDE9FE,stroke:#5B21B6,color:#2E1065,stroke-width:2px
+    class C8,G8,W8,M8,KV8,Q8D,FM8 fp8
+    class WB,Q16,NEW16,OUT16 bf16
+    class WQ,E8,QQ8,PREP8 conversion
+    class WS,CS8,A32,SQ8,SKV8,LSE32 fp32
+```
+
+Exact full-run throughput: **17,406.08912 total input + output tokens/s/GPU**,
+[run 40695099743](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40695099743).
+
+The projection uses FP8 multiplication operands and FP32 accumulation. Its
+epilogue rescales, assembles RoPE and rounds directly into FP8 K/V storage.
+There is no expanded BF16 K/V buffer between cached up-projection and FMHA.
+FP8 storage does not mean every accumulator or scale operation runs in FP8.
+
+The Q and new-token scale boxes show logical dependencies. The implementation
+jointly quantizes new-token Q/K/V during preparation. Cached-query slices reuse
+Q8 only for an exact pointer/shape/stride match within the same forward;
+other slices retain their own quantization. Cached K/V output descales use
+2x headroom from the new-token ranges, without a cached-chunk amax pass.
+
+The throughput labels are rounded to the nearest whole token:
+**15,476 → 16,916 → 17,406 tokens/s/GPU**.
+They describe complete benchmark configurations, including other tuning;
+the differences are not isolated FMHA or up-projection kernel gains.
+
+The separate [causal FP8 experiment](causal-fp8-attention.md) reuses prepared
+new-token Q/K/V with their original descales. Its throughput is still pending;
+the 17,406 label belongs to the completed run with BF16 new-token causal attention.
+The [native projection audit](native-fp8-up-projection-audit.md) records
+implementation, accuracy evidence and the remaining numerical limitation.
