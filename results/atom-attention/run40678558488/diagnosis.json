@@ -1,0 +1,1822 @@
+{
+  "run_id": 40678558488,
+  "source": "a76428472cf24deaca902942be081aba6a72bceb",
+  "conclusion": "failure",
+  "gate_unchanged": {
+    "rms": 0.1,
+    "lse_max_abs": 0.2
+  },
+  "records": [
+    {
+      "pid": 2165,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        15360,
+        12,
+        192
+      ],
+      "v_shape": [
+        15360,
+        12,
+        128
+      ],
+      "q_descale": 0.0513392873108387,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.8388309478759766,
+      "old_dynamic_lse_p99_vs_bf16": 0.42468026280403137,
+      "rows": [
+        {
+          "head": 7,
+          "query": 5586,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 24.149280579970455,
+            "quantized_q_only": 23.633886750801768,
+            "supplied_quantized_k_only": 23.612759067586563,
+            "supplied_quantized_qk": 23.10890778563249,
+            "dynamic_quantized_qk": 23.38818923951417
+          },
+          "actual_lse": 23.108901977539062,
+          "bf16_fmha_lse": 24.149274826049805,
+          "dynamic_fp8_lse": 23.388185501098633,
+          "fmha_lse_error_on_quantized_inputs": -5.8080934266513395e-06,
+          "bf16_lse_error_on_bf16_inputs": -5.753920650164446e-06,
+          "row_output_rms_vs_fp64": 0.02307504444235091,
+          "row_fmha_rms_on_quantized_inputs": 0.0011193969605649778,
+          "original_logit_min": -6.310154136771162,
+          "original_logit_max": 24.149268206459713
+        },
+        {
+          "head": 5,
+          "query": 1134,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.941983850315076,
+            "quantized_q_only": 18.357240935225956,
+            "supplied_quantized_k_only": 18.52237204373522,
+            "supplied_quantized_qk": 17.952136750191407,
+            "dynamic_quantized_qk": 18.117469775265405
+          },
+          "actual_lse": 17.95212173461914,
+          "bf16_fmha_lse": 18.941978454589844,
+          "dynamic_fp8_lse": 18.117305755615234,
+          "fmha_lse_error_on_quantized_inputs": -1.501557226646355e-05,
+          "bf16_lse_error_on_bf16_inputs": -5.3957252319492e-06,
+          "row_output_rms_vs_fp64": 0.020366851238438677,
+          "row_fmha_rms_on_quantized_inputs": 0.014401690953614679,
+          "original_logit_min": -4.131390244408614,
+          "original_logit_max": 18.932595103871062
+        },
+        {
+          "head": 6,
+          "query": 6828,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.020243429046882,
+            "quantized_q_only": 18.485281067866353,
+            "supplied_quantized_k_only": 18.600539780067734,
+            "supplied_quantized_qk": 18.07891479608685,
+            "dynamic_quantized_qk": 18.337601820637477
+          },
+          "actual_lse": 18.078996658325195,
+          "bf16_fmha_lse": 19.02024269104004,
+          "dynamic_fp8_lse": 18.337631225585938,
+          "fmha_lse_error_on_quantized_inputs": 8.186223834627526e-05,
+          "bf16_lse_error_on_bf16_inputs": -7.380068431928066e-07,
+          "row_output_rms_vs_fp64": 0.02750487952486769,
+          "row_fmha_rms_on_quantized_inputs": 0.021704878921491023,
+          "original_logit_min": -2.2692835923350665,
+          "original_logit_max": 19.009716616372287
+        },
+        {
+          "head": 5,
+          "query": 2738,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.07115728287811,
+            "quantized_q_only": 19.58425318101008,
+            "supplied_quantized_k_only": 19.623462808579013,
+            "supplied_quantized_qk": 19.14758488944383,
+            "dynamic_quantized_qk": 19.23245876688989
+          },
+          "actual_lse": 19.147415161132812,
+          "bf16_fmha_lse": 20.071157455444336,
+          "dynamic_fp8_lse": 19.23232650756836,
+          "fmha_lse_error_on_quantized_inputs": -0.0001697283110182468,
+          "bf16_lse_error_on_bf16_inputs": 1.7256622442118896e-07,
+          "row_output_rms_vs_fp64": 0.01570981015235261,
+          "row_fmha_rms_on_quantized_inputs": 0.0027546359894612686,
+          "original_logit_min": -6.7026748274946835,
+          "original_logit_max": 20.070091729152047
+        }
+      ]
+    },
+    {
+      "pid": 2167,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        15360,
+        12,
+        192
+      ],
+      "v_shape": [
+        15360,
+        12,
+        128
+      ],
+      "q_descale": 0.0365513414144516,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.6713829040527344,
+      "old_dynamic_lse_p99_vs_bf16": 0.2668057084083557,
+      "rows": [
+        {
+          "head": 0,
+          "query": 3982,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.616549933280126,
+            "quantized_q_only": 17.13676762641778,
+            "supplied_quantized_k_only": 17.24500791362216,
+            "supplied_quantized_qk": 16.78181202236211,
+            "dynamic_quantized_qk": 17.03220745595209
+          },
+          "actual_lse": 16.781917572021484,
+          "bf16_fmha_lse": 17.616548538208008,
+          "dynamic_fp8_lse": 17.0323543548584,
+          "fmha_lse_error_on_quantized_inputs": 0.00010554965937359384,
+          "bf16_lse_error_on_bf16_inputs": -1.3950721182709458e-06,
+          "row_output_rms_vs_fp64": 0.07175022837760812,
+          "row_fmha_rms_on_quantized_inputs": 0.08014393301386695,
+          "original_logit_min": -1.2045596157603606,
+          "original_logit_max": 17.544544972688914
+        },
+        {
+          "head": 0,
+          "query": 6661,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 16.583341019323644,
+            "quantized_q_only": 16.185468393480043,
+            "supplied_quantized_k_only": 16.216784556784525,
+            "supplied_quantized_qk": 15.82859499243962,
+            "dynamic_quantized_qk": 15.956217942438592
+          },
+          "actual_lse": 15.828465461730957,
+          "bf16_fmha_lse": 16.58333969116211,
+          "dynamic_fp8_lse": 15.956047058105469,
+          "fmha_lse_error_on_quantized_inputs": -0.0001295307086621733,
+          "bf16_lse_error_on_bf16_inputs": -1.3281615345306363e-06,
+          "row_output_rms_vs_fp64": 0.03018895601539335,
+          "row_fmha_rms_on_quantized_inputs": 0.017409391506864096,
+          "original_logit_min": -4.9337671407327575,
+          "original_logit_max": 16.57451940808478
+        },
+        {
+          "head": 0,
+          "query": 1191,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 16.133282423852616,
+            "quantized_q_only": 15.743177423756848,
+            "supplied_quantized_k_only": 15.77976647940509,
+            "supplied_quantized_qk": 15.39971063974336,
+            "dynamic_quantized_qk": 15.461910469379811
+          },
+          "actual_lse": 15.399582862854004,
+          "bf16_fmha_lse": 16.133281707763672,
+          "dynamic_fp8_lse": 15.461898803710938,
+          "fmha_lse_error_on_quantized_inputs": -0.00012777688935550202,
+          "bf16_lse_error_on_bf16_inputs": -7.160889445856355e-07,
+          "row_output_rms_vs_fp64": 0.03186720149232164,
+          "row_fmha_rms_on_quantized_inputs": 0.02412450786679564,
+          "original_logit_min": -4.7874704481490555,
+          "original_logit_max": 16.11961915385968
+        },
+        {
+          "head": 0,
+          "query": 3538,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 15.15013462038595,
+            "quantized_q_only": 14.745040524428948,
+            "supplied_quantized_k_only": 14.81960101296745,
+            "supplied_quantized_qk": 14.424908518363019,
+            "dynamic_quantized_qk": 14.60772030863929
+          },
+          "actual_lse": 14.424846649169922,
+          "bf16_fmha_lse": 15.15013313293457,
+          "dynamic_fp8_lse": 14.607625961303711,
+          "fmha_lse_error_on_quantized_inputs": -6.186919309669747e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.4874513798446287e-06,
+          "row_output_rms_vs_fp64": 0.032151513931984656,
+          "row_fmha_rms_on_quantized_inputs": 0.03035521723369164,
+          "original_logit_min": -4.457459685459767,
+          "original_logit_max": 15.133690317760887
+        }
+      ]
+    },
+    {
+      "pid": 2169,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        15360,
+        12,
+        192
+      ],
+      "v_shape": [
+        15360,
+        12,
+        128
+      ],
+      "q_descale": 0.02636718936264515,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.8370113372802734,
+      "old_dynamic_lse_p99_vs_bf16": 0.4928280711174011,
+      "rows": [
+        {
+          "head": 11,
+          "query": 4299,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.790254063255546,
+            "quantized_q_only": 19.303609145294796,
+            "supplied_quantized_k_only": 19.350177933750874,
+            "supplied_quantized_qk": 18.874508462506302,
+            "dynamic_quantized_qk": 18.96372010715071
+          },
+          "actual_lse": 18.87457275390625,
+          "bf16_fmha_lse": 19.790252685546875,
+          "dynamic_fp8_lse": 18.96390724182129,
+          "fmha_lse_error_on_quantized_inputs": 6.42913999477912e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.3777086707023045e-06,
+          "row_output_rms_vs_fp64": 0.028483580299403184,
+          "row_fmha_rms_on_quantized_inputs": 0.003007845296127744,
+          "original_logit_min": -4.133283339140662,
+          "original_logit_max": 19.78984376834031
+        },
+        {
+          "head": 11,
+          "query": 1315,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.086450416730983,
+            "quantized_q_only": 20.632688966925027,
+            "supplied_quantized_k_only": 20.617749361111603,
+            "supplied_quantized_qk": 20.174192944411583,
+            "dynamic_quantized_qk": 20.25130729380927
+          },
+          "actual_lse": 20.174055099487305,
+          "bf16_fmha_lse": 21.086448669433594,
+          "dynamic_fp8_lse": 20.25094985961914,
+          "fmha_lse_error_on_quantized_inputs": -0.00013784492427859618,
+          "bf16_lse_error_on_bf16_inputs": -1.7472973894427923e-06,
+          "row_output_rms_vs_fp64": 0.028725884051834707,
+          "row_fmha_rms_on_quantized_inputs": 0.0036157059438391825,
+          "original_logit_min": -3.7596899455656594,
+          "original_logit_max": 21.0859560271879
+        },
+        {
+          "head": 6,
+          "query": 7238,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.24934863235417,
+            "quantized_q_only": 19.766211094673032,
+            "supplied_quantized_k_only": 19.809785734589614,
+            "supplied_quantized_qk": 19.340299878635648,
+            "dynamic_quantized_qk": 19.704843037952585
+          },
+          "actual_lse": 19.34029769897461,
+          "bf16_fmha_lse": 20.249347686767578,
+          "dynamic_fp8_lse": 19.704872131347656,
+          "fmha_lse_error_on_quantized_inputs": -2.1796610383262305e-06,
+          "bf16_lse_error_on_bf16_inputs": -9.455865921381701e-07,
+          "row_output_rms_vs_fp64": 0.07278407908026974,
+          "row_fmha_rms_on_quantized_inputs": 0.06681526896465008,
+          "original_logit_min": -0.9129407341574474,
+          "original_logit_max": 20.212168366270753
+        },
+        {
+          "head": 11,
+          "query": 4305,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.339969741063026,
+            "quantized_q_only": 20.898452960671104,
+            "supplied_quantized_k_only": 20.8655393424791,
+            "supplied_quantized_qk": 20.433917776012926,
+            "dynamic_quantized_qk": 20.502778577445806
+          },
+          "actual_lse": 20.433977127075195,
+          "bf16_fmha_lse": 21.339969635009766,
+          "dynamic_fp8_lse": 20.502958297729492,
+          "fmha_lse_error_on_quantized_inputs": 5.9351062269286103e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.0605326039581087e-07,
+          "row_output_rms_vs_fp64": 0.02833937177126349,
+          "row_fmha_rms_on_quantized_inputs": 0.0021317264484926888,
+          "original_logit_min": -4.132772484441013,
+          "original_logit_max": 21.339778239230487
+        }
+      ]
+    },
+    {
+      "pid": 2164,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        15360,
+        12,
+        192
+      ],
+      "v_shape": [
+        15360,
+        12,
+        128
+      ],
+      "q_descale": 0.0513392873108387,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.7272968292236328,
+      "old_dynamic_lse_p99_vs_bf16": 0.3965573310852051,
+      "rows": [
+        {
+          "head": 3,
+          "query": 1605,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.804430221771874,
+            "quantized_q_only": 20.316510003948586,
+            "supplied_quantized_k_only": 20.34552016186422,
+            "supplied_quantized_qk": 19.869074860844346,
+            "dynamic_quantized_qk": 20.07723100549037
+          },
+          "actual_lse": 19.868974685668945,
+          "bf16_fmha_lse": 20.804428100585938,
+          "dynamic_fp8_lse": 20.077131271362305,
+          "fmha_lse_error_on_quantized_inputs": -0.00010017517540106269,
+          "bf16_lse_error_on_bf16_inputs": -2.1211859362324503e-06,
+          "row_output_rms_vs_fp64": 0.022508578172498975,
+          "row_fmha_rms_on_quantized_inputs": 0.011361342315170204,
+          "original_logit_min": -0.7834854967900561,
+          "original_logit_max": 20.79989105308197
+        },
+        {
+          "head": 3,
+          "query": 530,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.752374459538252,
+            "quantized_q_only": 17.238591482072415,
+            "supplied_quantized_k_only": 17.36156586051757,
+            "supplied_quantized_qk": 16.860257546485716,
+            "dynamic_quantized_qk": 17.06202489925501
+          },
+          "actual_lse": 16.860353469848633,
+          "bf16_fmha_lse": 17.75237274169922,
+          "dynamic_fp8_lse": 17.062040328979492,
+          "fmha_lse_error_on_quantized_inputs": 9.592336291674997e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.7178390336880511e-06,
+          "row_output_rms_vs_fp64": 0.024065366227841917,
+          "row_fmha_rms_on_quantized_inputs": 0.018657094272648996,
+          "original_logit_min": -3.527407186025026,
+          "original_logit_max": 17.74425496149839
+        },
+        {
+          "head": 3,
+          "query": 5221,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.04685939018793,
+            "quantized_q_only": 18.599101488340494,
+            "supplied_quantized_k_only": 18.62914553002278,
+            "supplied_quantized_qk": 18.19243756656378,
+            "dynamic_quantized_qk": 18.36498549523989
+          },
+          "actual_lse": 18.192380905151367,
+          "bf16_fmha_lse": 19.046857833862305,
+          "dynamic_fp8_lse": 18.364952087402344,
+          "fmha_lse_error_on_quantized_inputs": -5.6661412411784795e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.5563256248185553e-06,
+          "row_output_rms_vs_fp64": 0.023925850599935024,
+          "row_fmha_rms_on_quantized_inputs": 0.02147818726904116,
+          "original_logit_min": -1.1444407628881232,
+          "original_logit_max": 19.037124470531154
+        },
+        {
+          "head": 1,
+          "query": 6260,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.04460678543401,
+            "quantized_q_only": 18.611021145550872,
+            "supplied_quantized_k_only": 18.631177349991795,
+            "supplied_quantized_qk": 18.20988256843476,
+            "dynamic_quantized_qk": 18.505199553774496
+          },
+          "actual_lse": 18.209951400756836,
+          "bf16_fmha_lse": 19.044607162475586,
+          "dynamic_fp8_lse": 18.50520896911621,
+          "fmha_lse_error_on_quantized_inputs": 6.883232207499645e-05,
+          "bf16_lse_error_on_bf16_inputs": 3.7704157662687976e-07,
+          "row_output_rms_vs_fp64": 0.03988898989025801,
+          "row_fmha_rms_on_quantized_inputs": 0.03796605858812918,
+          "original_logit_min": -1.3168947135865252,
+          "original_logit_max": 19.011474238965658
+        }
+      ]
+    },
+    {
+      "pid": 2170,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        15360,
+        12,
+        192
+      ],
+      "v_shape": [
+        15360,
+        12,
+        128
+      ],
+      "q_descale": 0.0452008955180645,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.6927242279052734,
+      "old_dynamic_lse_p99_vs_bf16": 0.3717489242553711,
+      "rows": [
+        {
+          "head": 3,
+          "query": 5732,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 23.510009592210846,
+            "quantized_q_only": 23.096622104116065,
+            "supplied_quantized_k_only": 22.98851507171679,
+            "supplied_quantized_qk": 22.584508509918944,
+            "dynamic_quantized_qk": 22.899952497952157
+          },
+          "actual_lse": 22.584484100341797,
+          "bf16_fmha_lse": 23.510009765625,
+          "dynamic_fp8_lse": 22.899921417236328,
+          "fmha_lse_error_on_quantized_inputs": -2.4409577147110895e-05,
+          "bf16_lse_error_on_bf16_inputs": 1.7341415414762196e-07,
+          "row_output_rms_vs_fp64": 0.02846265679585051,
+          "row_fmha_rms_on_quantized_inputs": 0.00535808709965552,
+          "original_logit_min": 0.13612861257397804,
+          "original_logit_max": 23.508224880612996
+        },
+        {
+          "head": 3,
+          "query": 4773,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 22.636716901078536,
+            "quantized_q_only": 22.251485448893476,
+            "supplied_quantized_k_only": 22.132278249604337,
+            "supplied_quantized_qk": 21.75571799428949,
+            "dynamic_quantized_qk": 22.09612532393498
+          },
+          "actual_lse": 21.75580596923828,
+          "bf16_fmha_lse": 22.636716842651367,
+          "dynamic_fp8_lse": 22.0961856842041,
+          "fmha_lse_error_on_quantized_inputs": 8.797494879075884e-05,
+          "bf16_lse_error_on_bf16_inputs": -5.8427168880825775e-08,
+          "row_output_rms_vs_fp64": 0.029908229206446278,
+          "row_fmha_rms_on_quantized_inputs": 0.002315943093098013,
+          "original_logit_min": -2.450466995220432,
+          "original_logit_max": 22.63641672906327
+        },
+        {
+          "head": 5,
+          "query": 2938,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 22.557380599443167,
+            "quantized_q_only": 22.17561994402095,
+            "supplied_quantized_k_only": 22.054906345432933,
+            "supplied_quantized_qk": 21.6817508962612,
+            "dynamic_quantized_qk": 22.073299935883664
+          },
+          "actual_lse": 21.68160057067871,
+          "bf16_fmha_lse": 22.5573787689209,
+          "dynamic_fp8_lse": 22.07329750061035,
+          "fmha_lse_error_on_quantized_inputs": -0.0001503255824886196,
+          "bf16_lse_error_on_bf16_inputs": -1.8305222688752565e-06,
+          "row_output_rms_vs_fp64": 0.02140683078469298,
+          "row_fmha_rms_on_quantized_inputs": 0.0029837080752163864,
+          "original_logit_min": -0.4161160249537775,
+          "original_logit_max": 22.556898291701728
+        },
+        {
+          "head": 3,
+          "query": 3674,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.27443009790183,
+            "quantized_q_only": 20.864297813273584,
+            "supplied_quantized_k_only": 20.806316812553735,
+            "supplied_quantized_qk": 20.407093632785017,
+            "dynamic_quantized_qk": 20.597426110606662
+          },
+          "actual_lse": 20.407033920288086,
+          "bf16_fmha_lse": 21.274429321289062,
+          "dynamic_fp8_lse": 20.59742546081543,
+          "fmha_lse_error_on_quantized_inputs": -5.9712496931041414e-05,
+          "bf16_lse_error_on_bf16_inputs": -7.766127687602875e-07,
+          "row_output_rms_vs_fp64": 0.029097756949559097,
+          "row_fmha_rms_on_quantized_inputs": 0.035341134352753954,
+          "original_logit_min": -0.6867247010291337,
+          "original_logit_max": 21.259327708466067
+        }
+      ]
+    },
+    {
+      "pid": 2171,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        15360,
+        12,
+        192
+      ],
+      "v_shape": [
+        15360,
+        12,
+        128
+      ],
+      "q_descale": 0.0327845998108387,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.6939067840576172,
+      "old_dynamic_lse_p99_vs_bf16": 0.3627837300300598,
+      "rows": [
+        {
+          "head": 4,
+          "query": 677,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.1687040080284,
+            "quantized_q_only": 20.75718887463399,
+            "supplied_quantized_k_only": 20.698316354787252,
+            "supplied_quantized_qk": 20.29615406073967,
+            "dynamic_quantized_qk": 20.51281130646042
+          },
+          "actual_lse": 20.296152114868164,
+          "bf16_fmha_lse": 21.168703079223633,
+          "dynamic_fp8_lse": 20.5128116607666,
+          "fmha_lse_error_on_quantized_inputs": -1.9458715065923116e-06,
+          "bf16_lse_error_on_bf16_inputs": -9.288047664313126e-07,
+          "row_output_rms_vs_fp64": 0.024835527688751198,
+          "row_fmha_rms_on_quantized_inputs": 0.004526190065117049,
+          "original_logit_min": -1.500118758389463,
+          "original_logit_max": 21.167487085879053
+        },
+        {
+          "head": 4,
+          "query": 3090,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.525625148021707,
+            "quantized_q_only": 18.08117993177392,
+            "supplied_quantized_k_only": 18.1178169845399,
+            "supplied_quantized_qk": 17.684555658002154,
+            "dynamic_quantized_qk": 18.01773238992707
+          },
+          "actual_lse": 17.684518814086914,
+          "bf16_fmha_lse": 18.525623321533203,
+          "dynamic_fp8_lse": 18.017732620239258,
+          "fmha_lse_error_on_quantized_inputs": -3.6843915239614944e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.8264885035534917e-06,
+          "row_output_rms_vs_fp64": 0.02949013793973456,
+          "row_fmha_rms_on_quantized_inputs": 0.034799623008763374,
+          "original_logit_min": -0.6804052406029786,
+          "original_logit_max": 18.514755526701567
+        },
+        {
+          "head": 0,
+          "query": 7568,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.232891444255184,
+            "quantized_q_only": 17.78415824711179,
+            "supplied_quantized_k_only": 17.840480441839325,
+            "supplied_quantized_qk": 17.406197766128212,
+            "dynamic_quantized_qk": 17.677765341612954
+          },
+          "actual_lse": 17.406219482421875,
+          "bf16_fmha_lse": 18.232891082763672,
+          "dynamic_fp8_lse": 17.6777400970459,
+          "fmha_lse_error_on_quantized_inputs": 2.171629366287675e-05,
+          "bf16_lse_error_on_bf16_inputs": -3.614915122795992e-07,
+          "row_output_rms_vs_fp64": 0.06736979322645059,
+          "row_fmha_rms_on_quantized_inputs": 0.11686609573931112,
+          "original_logit_min": -1.0887377686616315,
+          "original_logit_max": 18.194629938353998
+        },
+        {
+          "head": 0,
+          "query": 2470,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.154417405597755,
+            "quantized_q_only": 20.793858835591557,
+            "supplied_quantized_k_only": 20.68768322163936,
+            "supplied_quantized_qk": 20.33612834605295,
+            "dynamic_quantized_qk": 20.612889912098726
+          },
+          "actual_lse": 20.33612823486328,
+          "bf16_fmha_lse": 21.154417037963867,
+          "dynamic_fp8_lse": 20.61280632019043,
+          "fmha_lse_error_on_quantized_inputs": -1.1118966725121027e-07,
+          "bf16_lse_error_on_bf16_inputs": -3.6763388777671935e-07,
+          "row_output_rms_vs_fp64": 0.029802967202056836,
+          "row_fmha_rms_on_quantized_inputs": 0.03776295218451305,
+          "original_logit_min": 0.4875567572448706,
+          "original_logit_max": 21.144122012854815
+        }
+      ]
+    },
+    {
+      "pid": 2168,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        15360,
+        12,
+        192
+      ],
+      "v_shape": [
+        15360,
+        12,
+        128
+      ],
+      "q_descale": 0.0457589291036129,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.6747474670410156,
+      "old_dynamic_lse_p99_vs_bf16": 0.2972315847873688,
+      "rows": [
+        {
+          "head": 1,
+          "query": 6921,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.68230455289716,
+            "quantized_q_only": 21.280616382494557,
+            "supplied_quantized_k_only": 21.211256551115895,
+            "supplied_quantized_qk": 20.8211932261581,
+            "dynamic_quantized_qk": 21.145498515006658
+          },
+          "actual_lse": 20.8214111328125,
+          "bf16_fmha_lse": 21.682302474975586,
+          "dynamic_fp8_lse": 21.14573860168457,
+          "fmha_lse_error_on_quantized_inputs": 0.00021790665439880286,
+          "bf16_lse_error_on_bf16_inputs": -2.077921575249775e-06,
+          "row_output_rms_vs_fp64": 0.034171255062202886,
+          "row_fmha_rms_on_quantized_inputs": 0.06921850600958258,
+          "original_logit_min": 2.3501674059990587,
+          "original_logit_max": 21.65417957209113
+        },
+        {
+          "head": 1,
+          "query": 5596,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.8789824646216,
+            "quantized_q_only": 20.543595187664554,
+            "supplied_quantized_k_only": 20.42165000407848,
+            "supplied_quantized_qk": 20.09498985065219,
+            "dynamic_quantized_qk": 20.44398674104835
+          },
+          "actual_lse": 20.094745635986328,
+          "bf16_fmha_lse": 20.878982543945312,
+          "dynamic_fp8_lse": 20.44381332397461,
+          "fmha_lse_error_on_quantized_inputs": -0.0002442146658623301,
+          "bf16_lse_error_on_bf16_inputs": 7.932371204333322e-08,
+          "row_output_rms_vs_fp64": 0.02490229727100787,
+          "row_fmha_rms_on_quantized_inputs": 0.03874250778414956,
+          "original_logit_min": 0.17527548281388167,
+          "original_logit_max": 20.861262264005504
+        },
+        {
+          "head": 6,
+          "query": 5966,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.31293156061876,
+            "quantized_q_only": 16.904330495928605,
+            "supplied_quantized_k_only": 16.9352397280559,
+            "supplied_quantized_qk": 16.53876147028325,
+            "dynamic_quantized_qk": 16.748248695776574
+          },
+          "actual_lse": 16.53864097595215,
+          "bf16_fmha_lse": 17.312929153442383,
+          "dynamic_fp8_lse": 16.74810791015625,
+          "fmha_lse_error_on_quantized_inputs": -0.0001204943311030604,
+          "bf16_lse_error_on_bf16_inputs": -2.4071763782274047e-06,
+          "row_output_rms_vs_fp64": 0.04274491987464746,
+          "row_fmha_rms_on_quantized_inputs": 0.08752229619797235,
+          "original_logit_min": -1.4788633712385644,
+          "original_logit_max": 17.281752033658602
+        },
+        {
+          "head": 1,
+          "query": 1576,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.53710308127004,
+            "quantized_q_only": 21.229070091255764,
+            "supplied_quantized_k_only": 21.075356081500505,
+            "supplied_quantized_qk": 20.776276633383883,
+            "dynamic_quantized_qk": 21.04308477293532
+          },
+          "actual_lse": 20.776325225830078,
+          "bf16_fmha_lse": 21.53710174560547,
+          "dynamic_fp8_lse": 21.043025970458984,
+          "fmha_lse_error_on_quantized_inputs": 4.8592446194817285e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.3356645709450277e-06,
+          "row_output_rms_vs_fp64": 0.033505749797103045,
+          "row_fmha_rms_on_quantized_inputs": 0.07946892035807566,
+          "original_logit_min": 1.9592374675838706,
+          "original_logit_max": 21.49120909346295
+        }
+      ]
+    },
+    {
+      "pid": 2166,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        15360,
+        12,
+        192
+      ],
+      "v_shape": [
+        15360,
+        12,
+        128
+      ],
+      "q_descale": 0.03125,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.7825870513916016,
+      "old_dynamic_lse_p99_vs_bf16": 0.40985381603240967,
+      "rows": [
+        {
+          "head": 11,
+          "query": 4378,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.7537862295897,
+            "quantized_q_only": 18.275179713319446,
+            "supplied_quantized_k_only": 18.3418830175875,
+            "supplied_quantized_qk": 17.87527623660173,
+            "dynamic_quantized_qk": 17.971310436389132
+          },
+          "actual_lse": 17.875198364257812,
+          "bf16_fmha_lse": 18.753786087036133,
+          "dynamic_fp8_lse": 17.97119903564453,
+          "fmha_lse_error_on_quantized_inputs": -7.787234391898323e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.4255356717285395e-07,
+          "row_output_rms_vs_fp64": 0.023203452524482495,
+          "row_fmha_rms_on_quantized_inputs": 0.03538260226183671,
+          "original_logit_min": -1.7345288573465039,
+          "original_logit_max": 18.74338756528731
+        },
+        {
+          "head": 6,
+          "query": 2888,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.65880054343753,
+            "quantized_q_only": 17.167158021415467,
+            "supplied_quantized_k_only": 17.279326568735005,
+            "supplied_quantized_qk": 16.80336096045773,
+            "dynamic_quantized_qk": 16.997411179464798
+          },
+          "actual_lse": 16.803447723388672,
+          "bf16_fmha_lse": 17.658802032470703,
+          "dynamic_fp8_lse": 16.99750518798828,
+          "fmha_lse_error_on_quantized_inputs": 8.676293094111998e-05,
+          "bf16_lse_error_on_bf16_inputs": 1.4890331740957663e-06,
+          "row_output_rms_vs_fp64": 0.04597453540529,
+          "row_fmha_rms_on_quantized_inputs": 0.13575440889730686,
+          "original_logit_min": 0.36645612928639504,
+          "original_logit_max": 17.62221481161903
+        },
+        {
+          "head": 6,
+          "query": 3993,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.679036592002895,
+            "quantized_q_only": 18.23182732258135,
+            "supplied_quantized_k_only": 18.266750213600933,
+            "supplied_quantized_qk": 17.83013146980255,
+            "dynamic_quantized_qk": 18.15696829931588
+          },
+          "actual_lse": 17.830080032348633,
+          "bf16_fmha_lse": 18.679035186767578,
+          "dynamic_fp8_lse": 18.157005310058594,
+          "fmha_lse_error_on_quantized_inputs": -5.143745391578136e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.4052353165538989e-06,
+          "row_output_rms_vs_fp64": 0.033332274788445776,
+          "row_fmha_rms_on_quantized_inputs": 0.021425691406049326,
+          "original_logit_min": -2.119902348441878,
+          "original_logit_max": 18.6738041798631
+        },
+        {
+          "head": 11,
+          "query": 793,
+          "request": 0,
+          "kv_tokens": 15360,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.71763157527102,
+            "quantized_q_only": 18.274689412879862,
+            "supplied_quantized_k_only": 18.307170360757794,
+            "supplied_quantized_qk": 17.875367807476465,
+            "dynamic_quantized_qk": 18.115203979732875
+          },
+          "actual_lse": 17.875370025634766,
+          "bf16_fmha_lse": 18.71763038635254,
+          "dynamic_fp8_lse": 18.115163803100586,
+          "fmha_lse_error_on_quantized_inputs": 2.2181583005931316e-06,
+          "bf16_lse_error_on_bf16_inputs": -1.188918481886958e-06,
+          "row_output_rms_vs_fp64": 0.02376958362463113,
+          "row_fmha_rms_on_quantized_inputs": 0.03297535914286813,
+          "original_logit_min": -2.2485354128708366,
+          "original_logit_max": 18.707003787579062
+        }
+      ]
+    },
+    {
+      "pid": 2166,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        23040,
+        12,
+        192
+      ],
+      "v_shape": [
+        23040,
+        12,
+        128
+      ],
+      "q_descale": 0.0308314748108387,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.7319698333740234,
+      "old_dynamic_lse_p99_vs_bf16": 0.4037269055843353,
+      "rows": [
+        {
+          "head": 4,
+          "query": 5079,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.483080047718733,
+            "quantized_q_only": 19.000983213728166,
+            "supplied_quantized_k_only": 19.05392326411132,
+            "supplied_quantized_qk": 18.58436921751925,
+            "dynamic_quantized_qk": 18.88084129084628
+          },
+          "actual_lse": 18.584392547607422,
+          "bf16_fmha_lse": 19.483078002929688,
+          "dynamic_fp8_lse": 18.880821228027344,
+          "fmha_lse_error_on_quantized_inputs": 2.3330088172457408e-05,
+          "bf16_lse_error_on_bf16_inputs": -2.0447890456409823e-06,
+          "row_output_rms_vs_fp64": 0.02379042764768064,
+          "row_fmha_rms_on_quantized_inputs": 0.020425060735837552,
+          "original_logit_min": -1.6256533052390876,
+          "original_logit_max": 19.472031234207684
+        },
+        {
+          "head": 6,
+          "query": 1464,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.576263823197174,
+            "quantized_q_only": 21.155979653537845,
+            "supplied_quantized_k_only": 21.099234810435107,
+            "supplied_quantized_qk": 20.688801144873864,
+            "dynamic_quantized_qk": 21.004050380174554
+          },
+          "actual_lse": 20.688875198364258,
+          "bf16_fmha_lse": 21.576261520385742,
+          "dynamic_fp8_lse": 21.004112243652344,
+          "fmha_lse_error_on_quantized_inputs": 7.405349039402154e-05,
+          "bf16_lse_error_on_bf16_inputs": -2.302811431320606e-06,
+          "row_output_rms_vs_fp64": 0.026392389920437968,
+          "row_fmha_rms_on_quantized_inputs": 0.013249447600971994,
+          "original_logit_min": -0.11402296374329318,
+          "original_logit_max": 21.573140011864393
+        },
+        {
+          "head": 5,
+          "query": 2327,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.06499778640579,
+            "quantized_q_only": 16.552843346865675,
+            "supplied_quantized_k_only": 16.69391943522789,
+            "supplied_quantized_qk": 16.195310158934277,
+            "dynamic_quantized_qk": 16.41041217301937
+          },
+          "actual_lse": 16.19537353515625,
+          "bf16_fmha_lse": 17.06499671936035,
+          "dynamic_fp8_lse": 16.410449981689453,
+          "fmha_lse_error_on_quantized_inputs": 6.337622197349901e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.0670454386740857e-06,
+          "row_output_rms_vs_fp64": 0.022507617743716013,
+          "row_fmha_rms_on_quantized_inputs": 0.026993225540568457,
+          "original_logit_min": -4.9463668197495965,
+          "original_logit_max": 17.047080863726684
+        },
+        {
+          "head": 6,
+          "query": 6392,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.343591272905226,
+            "quantized_q_only": 19.913897837417284,
+            "supplied_quantized_k_only": 19.894651361058397,
+            "supplied_quantized_qk": 19.475212889654056,
+            "dynamic_quantized_qk": 19.83326687836852
+          },
+          "actual_lse": 19.475210189819336,
+          "bf16_fmha_lse": 20.343591690063477,
+          "dynamic_fp8_lse": 19.833274841308594,
+          "fmha_lse_error_on_quantized_inputs": -2.6998347202322748e-06,
+          "bf16_lse_error_on_bf16_inputs": 4.171582510537064e-07,
+          "row_output_rms_vs_fp64": 0.02701749632840896,
+          "row_fmha_rms_on_quantized_inputs": 0.022474112946174567,
+          "original_logit_min": -1.4715784041676865,
+          "original_logit_max": 20.337781555042955
+        }
+      ]
+    },
+    {
+      "pid": 2165,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        23040,
+        12,
+        192
+      ],
+      "v_shape": [
+        23040,
+        12,
+        128
+      ],
+      "q_descale": 0.0518973246216774,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.9349422454833984,
+      "old_dynamic_lse_p99_vs_bf16": 0.4150700569152832,
+      "rows": [
+        {
+          "head": 5,
+          "query": 6087,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 22.15331849257783,
+            "quantized_q_only": 21.765464423935665,
+            "supplied_quantized_k_only": 21.66257595067827,
+            "supplied_quantized_qk": 21.28350000402487,
+            "dynamic_quantized_qk": 21.497691508474322
+          },
+          "actual_lse": 21.283458709716797,
+          "bf16_fmha_lse": 22.153318405151367,
+          "dynamic_fp8_lse": 21.49759292602539,
+          "fmha_lse_error_on_quantized_inputs": -4.129430807253698e-05,
+          "bf16_lse_error_on_bf16_inputs": -8.742646429027445e-08,
+          "row_output_rms_vs_fp64": 0.02293408124649448,
+          "row_fmha_rms_on_quantized_inputs": 0.0033589091866106343,
+          "original_logit_min": -3.456644413558806,
+          "original_logit_max": 22.151887950368952
+        },
+        {
+          "head": 6,
+          "query": 2292,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.033206922287324,
+            "quantized_q_only": 18.588635293221184,
+            "supplied_quantized_k_only": 18.613236306992892,
+            "supplied_quantized_qk": 18.178952772348147,
+            "dynamic_quantized_qk": 18.42622157278118
+          },
+          "actual_lse": 18.17852783203125,
+          "bf16_fmha_lse": 19.033206939697266,
+          "dynamic_fp8_lse": 18.426156997680664,
+          "fmha_lse_error_on_quantized_inputs": -0.0004249403168969934,
+          "bf16_lse_error_on_bf16_inputs": 1.740994193255574e-08,
+          "row_output_rms_vs_fp64": 0.026963474277533293,
+          "row_fmha_rms_on_quantized_inputs": 0.0052243139723651515,
+          "original_logit_min": -7.8207481482849275,
+          "original_logit_max": 19.02950911652098
+        },
+        {
+          "head": 5,
+          "query": 5843,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.31288947619499,
+            "quantized_q_only": 16.823779576981167,
+            "supplied_quantized_k_only": 16.937072501329656,
+            "supplied_quantized_qk": 16.462199932077393,
+            "dynamic_quantized_qk": 16.377925341512864
+          },
+          "actual_lse": 16.46228790283203,
+          "bf16_fmha_lse": 17.31288719177246,
+          "dynamic_fp8_lse": 16.377944946289062,
+          "fmha_lse_error_on_quantized_inputs": 8.797075463817805e-05,
+          "bf16_lse_error_on_bf16_inputs": -2.284422528475716e-06,
+          "row_output_rms_vs_fp64": 0.025353420841578777,
+          "row_fmha_rms_on_quantized_inputs": 0.043451553070463333,
+          "original_logit_min": -3.816604008885773,
+          "original_logit_max": 17.2887549585226
+        },
+        {
+          "head": 6,
+          "query": 2083,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.72865948310272,
+            "quantized_q_only": 18.277411777526034,
+            "supplied_quantized_k_only": 18.32107154208269,
+            "supplied_quantized_qk": 17.88247797068099,
+            "dynamic_quantized_qk": 18.118388163868236
+          },
+          "actual_lse": 17.882503509521484,
+          "bf16_fmha_lse": 18.728660583496094,
+          "dynamic_fp8_lse": 18.118419647216797,
+          "fmha_lse_error_on_quantized_inputs": 2.553884049305566e-05,
+          "bf16_lse_error_on_bf16_inputs": 1.1003933728659376e-06,
+          "row_output_rms_vs_fp64": 0.048982208332312864,
+          "row_fmha_rms_on_quantized_inputs": 0.030902445360074693,
+          "original_logit_min": -4.964409135031026,
+          "original_logit_max": 18.705765123755352
+        }
+      ]
+    },
+    {
+      "pid": 2164,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        23040,
+        12,
+        192
+      ],
+      "v_shape": [
+        23040,
+        12,
+        128
+      ],
+      "q_descale": 0.0524553582072258,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.6504726409912109,
+      "old_dynamic_lse_p99_vs_bf16": 0.3988593816757202,
+      "rows": [
+        {
+          "head": 3,
+          "query": 6706,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.695824335318292,
+            "quantized_q_only": 20.21629557107042,
+            "supplied_quantized_k_only": 20.239600885540707,
+            "supplied_quantized_qk": 19.77153108462631,
+            "dynamic_quantized_qk": 20.096112028222368
+          },
+          "actual_lse": 19.771528244018555,
+          "bf16_fmha_lse": 20.695823669433594,
+          "dynamic_fp8_lse": 20.096208572387695,
+          "fmha_lse_error_on_quantized_inputs": -2.840607756127156e-06,
+          "bf16_lse_error_on_bf16_inputs": -6.658846984919364e-07,
+          "row_output_rms_vs_fp64": 0.023988680826485437,
+          "row_fmha_rms_on_quantized_inputs": 0.013653278816381037,
+          "original_logit_min": -1.726872772611387,
+          "original_logit_max": 20.690464020401336
+        },
+        {
+          "head": 3,
+          "query": 19,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.412381189395127,
+            "quantized_q_only": 21.01442878900229,
+            "supplied_quantized_k_only": 20.942612108947444,
+            "supplied_quantized_qk": 20.554436502335047,
+            "dynamic_quantized_qk": 20.857164471441795
+          },
+          "actual_lse": 20.5544376373291,
+          "bf16_fmha_lse": 21.412382125854492,
+          "dynamic_fp8_lse": 20.857162475585938,
+          "fmha_lse_error_on_quantized_inputs": 1.1349940542970671e-06,
+          "bf16_lse_error_on_bf16_inputs": 9.364593651639552e-07,
+          "row_output_rms_vs_fp64": 0.025311266843939754,
+          "row_fmha_rms_on_quantized_inputs": 0.022543225913069356,
+          "original_logit_min": 0.05845626514201619,
+          "original_logit_max": 21.39945714717555
+        },
+        {
+          "head": 3,
+          "query": 2467,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.458947403833886,
+            "quantized_q_only": 18.011678200797327,
+            "supplied_quantized_k_only": 18.05538286430452,
+            "supplied_quantized_qk": 17.61934306951102,
+            "dynamic_quantized_qk": 17.893094634908437
+          },
+          "actual_lse": 17.61922836303711,
+          "bf16_fmha_lse": 18.45895004272461,
+          "dynamic_fp8_lse": 17.893028259277344,
+          "fmha_lse_error_on_quantized_inputs": -0.00011470647391220723,
+          "bf16_lse_error_on_bf16_inputs": 2.6388907237162584e-06,
+          "row_output_rms_vs_fp64": 0.026087099124587287,
+          "row_fmha_rms_on_quantized_inputs": 0.02811924191266552,
+          "original_logit_min": -2.189192337683978,
+          "original_logit_max": 18.446258638473306
+        },
+        {
+          "head": 0,
+          "query": 3069,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 18.117213518528743,
+            "quantized_q_only": 17.670300496751548,
+            "supplied_quantized_k_only": 17.71612631513779,
+            "supplied_quantized_qk": 17.28008826631785,
+            "dynamic_quantized_qk": 17.469414503920238
+          },
+          "actual_lse": 17.280088424682617,
+          "bf16_fmha_lse": 18.117212295532227,
+          "dynamic_fp8_lse": 17.46941375732422,
+          "fmha_lse_error_on_quantized_inputs": 1.5836476663366739e-07,
+          "bf16_lse_error_on_bf16_inputs": -1.2229965165033718e-06,
+          "row_output_rms_vs_fp64": 0.026545686655375766,
+          "row_fmha_rms_on_quantized_inputs": 0.024786574010467965,
+          "original_logit_min": -4.29127391856544,
+          "original_logit_max": 18.109092886639967
+        }
+      ]
+    },
+    {
+      "pid": 2170,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        23040,
+        12,
+        192
+      ],
+      "v_shape": [
+        23040,
+        12,
+        128
+      ],
+      "q_descale": 0.0463169664144516,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.8616180419921875,
+      "old_dynamic_lse_p99_vs_bf16": 0.3764263987541199,
+      "rows": [
+        {
+          "head": 3,
+          "query": 4358,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.82372795755375,
+            "quantized_q_only": 20.231701185899762,
+            "supplied_quantized_k_only": 20.361362257852456,
+            "supplied_quantized_qk": 19.783037294420776,
+            "dynamic_quantized_qk": 19.962109624231257
+          },
+          "actual_lse": 19.782989501953125,
+          "bf16_fmha_lse": 20.823726654052734,
+          "dynamic_fp8_lse": 19.962108612060547,
+          "fmha_lse_error_on_quantized_inputs": -4.7792467650964454e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.3035010155704185e-06,
+          "row_output_rms_vs_fp64": 0.022539180247263688,
+          "row_fmha_rms_on_quantized_inputs": 0.008902892396387453,
+          "original_logit_min": -3.9222438370603845,
+          "original_logit_max": 20.820898522862503
+        },
+        {
+          "head": 3,
+          "query": 3648,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 22.5320607644423,
+            "quantized_q_only": 22.042973876370564,
+            "supplied_quantized_k_only": 22.032263081659785,
+            "supplied_quantized_qk": 21.5543622436153,
+            "dynamic_quantized_qk": 21.851882054899484
+          },
+          "actual_lse": 21.55428695678711,
+          "bf16_fmha_lse": 22.532058715820312,
+          "dynamic_fp8_lse": 21.85198402404785,
+          "fmha_lse_error_on_quantized_inputs": -7.528682819213373e-05,
+          "bf16_lse_error_on_bf16_inputs": -2.0486219867166255e-06,
+          "row_output_rms_vs_fp64": 0.022243839781379195,
+          "row_fmha_rms_on_quantized_inputs": 0.0061565334299965675,
+          "original_logit_min": -2.354296845514894,
+          "original_logit_max": 22.52994432037624
+        },
+        {
+          "head": 3,
+          "query": 7465,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 22.623439969678298,
+            "quantized_q_only": 22.156183440494537,
+            "supplied_quantized_k_only": 22.120899640502923,
+            "supplied_quantized_qk": 21.664242780204695,
+            "dynamic_quantized_qk": 21.920057414034215
+          },
+          "actual_lse": 21.664142608642578,
+          "bf16_fmha_lse": 22.623437881469727,
+          "dynamic_fp8_lse": 21.92005729675293,
+          "fmha_lse_error_on_quantized_inputs": -0.00010017156211716838,
+          "bf16_lse_error_on_bf16_inputs": -2.0882085713935794e-06,
+          "row_output_rms_vs_fp64": 0.022178144562226453,
+          "row_fmha_rms_on_quantized_inputs": 0.004574311192024527,
+          "original_logit_min": -1.638558316691242,
+          "original_logit_max": 22.621870669041023
+        },
+        {
+          "head": 3,
+          "query": 1768,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.521010613400954,
+            "quantized_q_only": 20.057744093630056,
+            "supplied_quantized_k_only": 20.0668489166576,
+            "supplied_quantized_qk": 19.614572932296397,
+            "dynamic_quantized_qk": 19.85847146383394
+          },
+          "actual_lse": 19.614572525024414,
+          "bf16_fmha_lse": 20.521011352539062,
+          "dynamic_fp8_lse": 19.858383178710938,
+          "fmha_lse_error_on_quantized_inputs": -4.0727198324930214e-07,
+          "bf16_lse_error_on_bf16_inputs": 7.391381089405513e-07,
+          "row_output_rms_vs_fp64": 0.023532696690530177,
+          "row_fmha_rms_on_quantized_inputs": 0.015203010905739854,
+          "original_logit_min": -3.4194336955353575,
+          "original_logit_max": 20.515353924897717
+        }
+      ]
+    },
+    {
+      "pid": 2167,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        23040,
+        12,
+        192
+      ],
+      "v_shape": [
+        23040,
+        12,
+        128
+      ],
+      "q_descale": 0.0359933041036129,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.6080608367919922,
+      "old_dynamic_lse_p99_vs_bf16": 0.255047470331192,
+      "rows": [
+        {
+          "head": 0,
+          "query": 4421,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.83423923518609,
+            "quantized_q_only": 20.530090068862357,
+            "supplied_quantized_k_only": 20.370565667206204,
+            "supplied_quantized_qk": 20.07336007815851,
+            "dynamic_quantized_qk": 20.374734795758243
+          },
+          "actual_lse": 20.073320388793945,
+          "bf16_fmha_lse": 20.834238052368164,
+          "dynamic_fp8_lse": 20.37468910217285,
+          "fmha_lse_error_on_quantized_inputs": -3.968936456644201e-05,
+          "bf16_lse_error_on_bf16_inputs": -1.182817925382551e-06,
+          "row_output_rms_vs_fp64": 0.027547191939587462,
+          "row_fmha_rms_on_quantized_inputs": 0.003816230631123179,
+          "original_logit_min": -3.2529760601929376,
+          "original_logit_max": 20.832539759864602
+        },
+        {
+          "head": 0,
+          "query": 6310,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 16.991373387622364,
+            "quantized_q_only": 16.567514094117527,
+            "supplied_quantized_k_only": 16.643434807139904,
+            "supplied_quantized_qk": 16.236967683718277,
+            "dynamic_quantized_qk": 16.486255830926332
+          },
+          "actual_lse": 16.23710060119629,
+          "bf16_fmha_lse": 16.99137306213379,
+          "dynamic_fp8_lse": 16.486412048339844,
+          "fmha_lse_error_on_quantized_inputs": 0.0001329174780124731,
+          "bf16_lse_error_on_bf16_inputs": -3.2548857475944715e-07,
+          "row_output_rms_vs_fp64": 0.08698271590555748,
+          "row_fmha_rms_on_quantized_inputs": 0.11713139710632245,
+          "original_logit_min": -2.3382255295342667,
+          "original_logit_max": 16.88585987710656
+        },
+        {
+          "head": 0,
+          "query": 1363,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.039012081953956,
+            "quantized_q_only": 16.661708238796034,
+            "supplied_quantized_k_only": 16.66825315729263,
+            "supplied_quantized_qk": 16.301823379946143,
+            "dynamic_quantized_qk": 16.43090464392236
+          },
+          "actual_lse": 16.301939010620117,
+          "bf16_fmha_lse": 17.039011001586914,
+          "dynamic_fp8_lse": 16.430950164794922,
+          "fmha_lse_error_on_quantized_inputs": 0.00011563067397446503,
+          "bf16_lse_error_on_bf16_inputs": -1.0803670420500566e-06,
+          "row_output_rms_vs_fp64": 0.032791209586918134,
+          "row_fmha_rms_on_quantized_inputs": 0.03883597392573699,
+          "original_logit_min": -4.3442228463502355,
+          "original_logit_max": 17.01524770660285
+        },
+        {
+          "head": 0,
+          "query": 205,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.19955723405419,
+            "quantized_q_only": 16.829862523144904,
+            "supplied_quantized_k_only": 16.83948628051131,
+            "supplied_quantized_qk": 16.484811701168713,
+            "dynamic_quantized_qk": 16.62290680055806
+          },
+          "actual_lse": 16.484758377075195,
+          "bf16_fmha_lse": 17.199556350708008,
+          "dynamic_fp8_lse": 16.622926712036133,
+          "fmha_lse_error_on_quantized_inputs": -5.332409351765932e-05,
+          "bf16_lse_error_on_bf16_inputs": -8.8334618197905e-07,
+          "row_output_rms_vs_fp64": 0.06402844958295678,
+          "row_fmha_rms_on_quantized_inputs": 0.10961078647118573,
+          "original_logit_min": -1.5705126492141455,
+          "original_logit_max": 17.121060663580348
+        }
+      ]
+    },
+    {
+      "pid": 2169,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        23040,
+        12,
+        192
+      ],
+      "v_shape": [
+        23040,
+        12,
+        128
+      ],
+      "q_descale": 0.02636718936264515,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.8346872329711914,
+      "old_dynamic_lse_p99_vs_bf16": 0.4929351508617401,
+      "rows": [
+        {
+          "head": 11,
+          "query": 7263,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 23.746326581974444,
+            "quantized_q_only": 23.243813200224967,
+            "supplied_quantized_k_only": 23.21894816690634,
+            "supplied_quantized_qk": 22.727665657140683,
+            "dynamic_quantized_qk": 22.91593896704108
+          },
+          "actual_lse": 22.727458953857422,
+          "bf16_fmha_lse": 23.746318817138672,
+          "dynamic_fp8_lse": 22.915802001953125,
+          "fmha_lse_error_on_quantized_inputs": -0.00020670328326133358,
+          "bf16_lse_error_on_bf16_inputs": -7.764835771695289e-06,
+          "row_output_rms_vs_fp64": 0.03080742774029717,
+          "row_fmha_rms_on_quantized_inputs": 0.0016865880507005474,
+          "original_logit_min": -6.836379735697668,
+          "original_logit_max": 23.746307644572656
+        },
+        {
+          "head": 4,
+          "query": 7263,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 22.429683407649083,
+            "quantized_q_only": 22.022245726906384,
+            "supplied_quantized_k_only": 21.929800532336927,
+            "supplied_quantized_qk": 21.53155721293047,
+            "dynamic_quantized_qk": 21.754327853340218
+          },
+          "actual_lse": 21.53155517578125,
+          "bf16_fmha_lse": 22.42967987060547,
+          "dynamic_fp8_lse": 21.75425910949707,
+          "fmha_lse_error_on_quantized_inputs": -2.037149219091816e-06,
+          "bf16_lse_error_on_bf16_inputs": -3.5370436144432915e-06,
+          "row_output_rms_vs_fp64": 0.026286571572543955,
+          "row_fmha_rms_on_quantized_inputs": 0.004905280566943904,
+          "original_logit_min": -1.908754399394984,
+          "original_logit_max": 22.428965963755996
+        },
+        {
+          "head": 11,
+          "query": 1255,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.264567028024942,
+            "quantized_q_only": 19.82523212418058,
+            "supplied_quantized_k_only": 19.813635815568905,
+            "supplied_quantized_qk": 19.384137607062055,
+            "dynamic_quantized_qk": 19.543983195375382
+          },
+          "actual_lse": 19.384140014648438,
+          "bf16_fmha_lse": 20.264562606811523,
+          "dynamic_fp8_lse": 19.54395294189453,
+          "fmha_lse_error_on_quantized_inputs": 2.4075863827022204e-06,
+          "bf16_lse_error_on_bf16_inputs": -4.421213418481784e-06,
+          "row_output_rms_vs_fp64": 0.03114718272827153,
+          "row_fmha_rms_on_quantized_inputs": 0.0031369176774639178,
+          "original_logit_min": -6.045855568917355,
+          "original_logit_max": 20.26418117620836
+        },
+        {
+          "head": 11,
+          "query": 4043,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.286108467727864,
+            "quantized_q_only": 20.880267592510325,
+            "supplied_quantized_k_only": 20.812977149544192,
+            "supplied_quantized_qk": 20.416253731434846,
+            "dynamic_quantized_qk": 20.49053753785932
+          },
+          "actual_lse": 20.416292190551758,
+          "bf16_fmha_lse": 21.286109924316406,
+          "dynamic_fp8_lse": 20.490625381469727,
+          "fmha_lse_error_on_quantized_inputs": 3.8459116911582214e-05,
+          "bf16_lse_error_on_bf16_inputs": 1.4565885422257452e-06,
+          "row_output_rms_vs_fp64": 0.03094810715514517,
+          "row_fmha_rms_on_quantized_inputs": 0.0035444417098642917,
+          "original_logit_min": -4.485317363964616,
+          "original_logit_max": 21.285583271596874
+        }
+      ]
+    },
+    {
+      "pid": 2168,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        23040,
+        12,
+        192
+      ],
+      "v_shape": [
+        23040,
+        12,
+        128
+      ],
+      "q_descale": 0.0454799123108387,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.5806217193603516,
+      "old_dynamic_lse_p99_vs_bf16": 0.293190062046051,
+      "rows": [
+        {
+          "head": 11,
+          "query": 4858,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 16.995965899358914,
+            "quantized_q_only": 16.585482499205604,
+            "supplied_quantized_k_only": 16.62134020174131,
+            "supplied_quantized_qk": 16.221164454170243,
+            "dynamic_quantized_qk": 16.463499257213595
+          },
+          "actual_lse": 16.22122573852539,
+          "bf16_fmha_lse": 16.9959659576416,
+          "dynamic_fp8_lse": 16.463449478149414,
+          "fmha_lse_error_on_quantized_inputs": 6.128435514796138e-05,
+          "bf16_lse_error_on_bf16_inputs": 5.8282687120936316e-08,
+          "row_output_rms_vs_fp64": 0.023584582356499285,
+          "row_fmha_rms_on_quantized_inputs": 0.025192816438789567,
+          "original_logit_min": -3.040061906467945,
+          "original_logit_max": 16.985172255180537
+        },
+        {
+          "head": 6,
+          "query": 2412,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 17.946131569367626,
+            "quantized_q_only": 17.570460510190333,
+            "supplied_quantized_k_only": 17.55700340510754,
+            "supplied_quantized_qk": 17.19388272778085,
+            "dynamic_quantized_qk": 17.3654009333269
+          },
+          "actual_lse": 17.19402313232422,
+          "bf16_fmha_lse": 17.946130752563477,
+          "dynamic_fp8_lse": 17.365509033203125,
+          "fmha_lse_error_on_quantized_inputs": 0.00014040454336949892,
+          "bf16_lse_error_on_bf16_inputs": -8.16804149650352e-07,
+          "row_output_rms_vs_fp64": 0.045761327511570665,
+          "row_fmha_rms_on_quantized_inputs": 0.1171685872010385,
+          "original_logit_min": -1.6301191868609035,
+          "original_logit_max": 17.908468516143024
+        },
+        {
+          "head": 1,
+          "query": 797,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 21.59929925714712,
+            "quantized_q_only": 21.327637188814975,
+            "supplied_quantized_k_only": 21.135209400278274,
+            "supplied_quantized_qk": 20.87165124399802,
+            "dynamic_quantized_qk": 21.15795508948281
+          },
+          "actual_lse": 20.871692657470703,
+          "bf16_fmha_lse": 21.59929847717285,
+          "dynamic_fp8_lse": 21.15798568725586,
+          "fmha_lse_error_on_quantized_inputs": 4.1413472683160535e-05,
+          "bf16_lse_error_on_bf16_inputs": -7.799742682834676e-07,
+          "row_output_rms_vs_fp64": 0.029293336389497587,
+          "row_fmha_rms_on_quantized_inputs": 0.09541595841253829,
+          "original_logit_min": 0.21366696291097506,
+          "original_logit_max": 21.552792694583655
+        },
+        {
+          "head": 1,
+          "query": 7645,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.71603294648043,
+            "quantized_q_only": 20.41947913961785,
+            "supplied_quantized_k_only": 20.278965052382908,
+            "supplied_quantized_qk": 19.992416133071725,
+            "dynamic_quantized_qk": 20.188613853810235
+          },
+          "actual_lse": 19.992172241210938,
+          "bf16_fmha_lse": 20.71603012084961,
+          "dynamic_fp8_lse": 20.188528060913086,
+          "fmha_lse_error_on_quantized_inputs": -0.00024389186078721536,
+          "bf16_lse_error_on_bf16_inputs": -2.825630819103253e-06,
+          "row_output_rms_vs_fp64": 0.0355920734538953,
+          "row_fmha_rms_on_quantized_inputs": 0.11471354628937999,
+          "original_logit_min": 0.8871975701332173,
+          "original_logit_max": 20.647972533912533
+        }
+      ]
+    },
+    {
+      "pid": 2171,
+      "q_shape": [
+        7680,
+        12,
+        192
+      ],
+      "k_shape": [
+        23040,
+        12,
+        192
+      ],
+      "v_shape": [
+        23040,
+        12,
+        128
+      ],
+      "q_descale": 0.0325055830180645,
+      "supplied_k_descale": 0.03055245615541935,
+      "dynamic_k_descale": 0.01785714365541935,
+      "old_dynamic_lse_max_vs_bf16": 0.6810836791992188,
+      "old_dynamic_lse_p99_vs_bf16": 0.3644065856933594,
+      "rows": [
+        {
+          "head": 0,
+          "query": 5199,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.02917386882272,
+            "quantized_q_only": 18.59466281906823,
+            "supplied_quantized_k_only": 18.61054316929204,
+            "supplied_quantized_qk": 18.187330651276707,
+            "dynamic_quantized_qk": 18.415729075490113
+          },
+          "actual_lse": 18.187328338623047,
+          "bf16_fmha_lse": 19.029170989990234,
+          "dynamic_fp8_lse": 18.415790557861328,
+          "fmha_lse_error_on_quantized_inputs": -2.312653659686248e-06,
+          "bf16_lse_error_on_bf16_inputs": -2.8788324861750425e-06,
+          "row_output_rms_vs_fp64": 0.02784164191045216,
+          "row_fmha_rms_on_quantized_inputs": 0.05247645900366646,
+          "original_logit_min": -1.5558298084274542,
+          "original_logit_max": 19.01551181900179
+        },
+        {
+          "head": 4,
+          "query": 2280,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.746143147296614,
+            "quantized_q_only": 19.347813497678324,
+            "supplied_quantized_k_only": 19.30744492219033,
+            "supplied_quantized_qk": 18.918418911807706,
+            "dynamic_quantized_qk": 19.065129070145876
+          },
+          "actual_lse": 18.9183349609375,
+          "bf16_fmha_lse": 19.746145248413086,
+          "dynamic_fp8_lse": 19.065061569213867,
+          "fmha_lse_error_on_quantized_inputs": -8.39508702057401e-05,
+          "bf16_lse_error_on_bf16_inputs": 2.101116471919795e-06,
+          "row_output_rms_vs_fp64": 0.01823130056654851,
+          "row_fmha_rms_on_quantized_inputs": 0.010874003748925627,
+          "original_logit_min": -1.6591301911961915,
+          "original_logit_max": 19.742636740276588
+        },
+        {
+          "head": 2,
+          "query": 4519,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 19.213769490588092,
+            "quantized_q_only": 18.805865186598535,
+            "supplied_quantized_k_only": 18.788444953190346,
+            "supplied_quantized_qk": 18.390383996718896,
+            "dynamic_quantized_qk": 18.60559706883348
+          },
+          "actual_lse": 18.390480041503906,
+          "bf16_fmha_lse": 19.21377182006836,
+          "dynamic_fp8_lse": 18.605648040771484,
+          "fmha_lse_error_on_quantized_inputs": 9.604478501046287e-05,
+          "bf16_lse_error_on_bf16_inputs": 2.3294802673490267e-06,
+          "row_output_rms_vs_fp64": 0.02618906711731675,
+          "row_fmha_rms_on_quantized_inputs": 0.030724292350030696,
+          "original_logit_min": -2.184806174156362,
+          "original_logit_max": 19.20743645208953
+        },
+        {
+          "head": 4,
+          "query": 7483,
+          "request": 0,
+          "kv_tokens": 23040,
+          "reference_fp64_lse": {
+            "bf16_inputs": 20.74953521426145,
+            "quantized_q_only": 20.386007421416416,
+            "supplied_quantized_k_only": 20.289871443215056,
+            "supplied_quantized_qk": 19.934994853461962,
+            "dynamic_quantized_qk": 20.196259440495794
+          },
+          "actual_lse": 19.93506622314453,
+          "bf16_fmha_lse": 20.749534606933594,
+          "dynamic_fp8_lse": 20.196332931518555,
+          "fmha_lse_error_on_quantized_inputs": 7.136968256915566e-05,
+          "bf16_lse_error_on_bf16_inputs": -6.073278555618344e-07,
+          "row_output_rms_vs_fp64": 0.019288273225243634,
+          "row_fmha_rms_on_quantized_inputs": 0.013866147628712985,
+          "original_logit_min": -0.871349409325778,
+          "original_logit_max": 20.74528997713405
+        }
+      ]
+    }
+  ],
+  "fixture_artifact_id": 12811859447,
+  "fixture_bytes": 47386054,
+  "established_dynamic_path_max_lse_vs_bf16": 0.9349422454833984
+}

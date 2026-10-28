@@ -85,3 +85,6 @@ The follow-up adds failure-only diagnostics: independent FP64 attention on the w
 
 
 For isolated GPU reproduction, dispatch runner-diagnostics-only=true and failure-fixture-run-id=<capture run ID>. The workflow downloads that run's agentic artifact and mounts atom_fp8_failure.pt read-only. It contains one cached chunk from synthetic prefix requests; the full model is not loaded. Cases compare supplied scales, dynamic scales, AITER per-tile softmax rescaling, and a power-of-two scale diagnostic. Each reports whether the original gate passes; job completion is not numerical acceptance.
+
+
+The new native-weight FP8 projection integration and its distinct validation contract are documented in [the FP8 up-projection audit](./native-fp8-up-projection-audit.md). The historical BF16 results above are not FP8 projection evidence.

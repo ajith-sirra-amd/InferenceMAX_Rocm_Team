@@ -1,0 +1,72 @@
+# 原生 FP8 上投影审查
+
+[English](./native-fp8-up-projection-audit.md) | **中文**
+
+已测得的 16915.72154 tokens/s/GPU 使用 BF16 kv_b_proj。缓存注意力路径为
+FP8 cache -> BF16 projection -> BF16 K/V -> dynamic FP8 K/V -> FP8 FMHA，
+并未执行 FP8 投影乘法。
+
+BF16 直接输出原型仍执行 BF16 乘法，FP32 累加结果先在寄存器内舍入到 BF16，
+再保存为 FP8。其资格检查明确排除 FP8 权重。单独开启权重量化会回退到原生
+解压路径，并不会调用 ATOM 的 FlyDSL 投影。
+
+## ATOM 配方与内核
+
+固定 ATOM 版本 773eb36254e43060bfd5fabcab7d3840bf591358 的
+recipes/Agentic-Kimi-K3.md 开启全局 ptpc_fp8 在线量化，未排除 kv_b_proj，
+并开启 FlyDSL gather/projection 和 FP8 FMHA。代码中的 Kimi BF16 回退注释
+适用于未开启在线转换的配置。
+
+适配器调用未修改的 AITER bbef5a6f2d3733b293c80d2cee6a8d464e88bc01
+gather_kv_b_proj_flydsl：E4M3 缓存乘以 E4M3 权重，FP32 累加，使用调用者提供
+的标量 descale 直接写 E4M3 K/V，不经过 BF16 舍入。新 token scale 准备和
+缓存注意力 Q 量化保留现有 ATOM 策略；因果及小块注意力保留原混合路由。
+
+## vLLM 集成
+
+配方在现有 targets 中新增 "*.self_attn.kv_b_proj": "fp8_per_channel"。
+转换和打包由原生 Fp8PtpcOnlineLinearMethod 完成，适配器仅获取缓冲区视图，
+不添加第二套权重量化器。
+
+| 原生线性内核 | 原生存储 | 适配方式 |
+|---|---|---|
+| AiterHipbMMPerTokenFp8ScaledMMLinearKernel | shuffled [N,K] 的转置视图，scale [1,N] | 先转置视图还原，再展平 scale |
+| AiterPreshuffledPerTokenFp8ScaledMMLinearKernel | shuffled [N,K] | 直接传入并启用 preshuffle |
+| AiterPerTokenFp8ScaledMMLinearKernel | 普通 [N,K] | 直接传入并关闭 preshuffle |
+| RowWiseTorchFP8ScaledMMLinearKernel | 普通转置 [K,N] | 转置还原，关闭 preshuffle |
+
+未审查的布局明确报错。检查 E4M3 dtype、连续 [heads*256,512] 存储、FP32
+逐通道 scale、无 bias、缓存维度、索引 dtype 和设备。保留原生 DCP 字节 gather
+及行顺序。同一符合条件的 forward 中，小块使用 FP8 投影输出 BF16，随后执行
+BF16 注意力。权重变化也影响新 token 投影和原生吸收后的 decode 权重，影响范围
+不限于缓存注意力。
+
+## 服务和性能运行前的证据
+
+加载就绪不等于实际调用。[ATOM-FP8-PROJECTION-READY] 记录加载参数；
+[ATOM-FP8-UP-PROJECTION] 仅在实际 FlyDSL 调用后输出。vllm bench serve
+prefix probe 要求八个 worker 都具备这些标记及投影、注意力验证标记，不能
+通过静默回退获得通过。
+
+GPU 预检使用稀疏且可精确量化的权重和可手算输出，执行原生在线转换及四种
+原生打包实现；同时执行原生线性内核选择、真实 backend 权重 hook、FP8 投影、
+注意力、scale/Q 生命周期和改变输入后的 graph replay。FP64 反量化 FP8 投影
+作为独立算术参考，输出量化要求 RMS <0.04、归一化最大误差 <0.07 且无截断。
+此前 BF16 原型继续执行同 scale HIP 字节精确比较。原注意力门限不变：
+RMS <0.10、绝对 LSE 误差 <0.20。
+
+准备阶段五项 CPU flag 路由测试及 Python 语法检查通过。新 FP8 投影集成的
+GPU 验证待执行，目前不声称性能提升或模型准确率通过。
+
+## 真实模型数值发现
+
+运行 40678558488 失败并保存 atom_fp8_failure.pt。八个 worker 的 16 次失败
+调用共检查 64 行：FP8 FMHA 相对相同 FP8 输入的 FP64 LSE 最大误差为
+0.00042494，而 Q/K 量化引起的 LSE 偏移最高为 1.04069066。原动态 scale
+路径相对 BF16 的 LSE 最大误差为 0.93494225，同样超过 0.20 门限。
+部分行相对相同 FP8 输入的注意力输出 RMS 误差达 0.13575，因此仅 LSE 一致
+不能证明 FMHA 正确。
+
+原合成输入数值测试的通过结论对其输入仍然有效。GSM8K 40658068830 使用
+BF16 注意力通过，不能证明此 FP8 路径准确率。后续先用保存的输入检查 scale
+和 softmax rescaling，再进行服务 smoke 或性能运行。诊断完成不等于数值验收。

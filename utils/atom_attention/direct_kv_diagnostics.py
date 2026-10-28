@@ -2,6 +2,8 @@
 import os
 
 if __name__ == "__main__":
+    from fp8_weight_preflight import run as run_fp8_weights
+    run_fp8_weights()
     fixture_path = os.environ.get("FAILURE_FIXTURE_PATH", "")
     if fixture_path:
         from replay_failure import run

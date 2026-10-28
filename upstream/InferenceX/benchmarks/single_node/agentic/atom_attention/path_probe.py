@@ -69,6 +69,11 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
     fused = pids(r"\[ATOM-DCP-PATH\] pid=(\d+) route=native_fused_fp8_gather")
     direct = pids(r"\[ATOM-FP8-KV-OUTPUT\] pid=(\d+)")
     validated = [json.loads(x) for x in re.findall(r"\[ATOM-FP8-KV-VALIDATED\] (\{[^\n]*\})", text)]
+    fp8_projection = pids(r"\[ATOM-FP8-UP-PROJECTION\] pid=(\d+)")
+    fp8_projection_ready = pids(r"\[ATOM-FP8-PROJECTION-READY\] pid=(\d+)")
+    fp8_projection_checks = [json.loads(x) for x in re.findall(
+        r"\[ATOM-FP8-PROJECTION-VALIDATED\] (\{[^\n]*\})", text)]
+    fp8_projection_validated = sorted({row["pid"] for row in fp8_projection_checks})
     validated_pids = sorted({row["pid"] for row in validated})
     require_direct = os.environ.get("ATOM_USE_FUSED_KV_FP8_OUTPUT") == "1"
     require_validation = os.environ.get("ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT") == "1"
@@ -81,6 +86,9 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
         "disabled_asm_metadata_pids": metadata, "query_reuse_pids": reused,
         "native_fused_fp8_gather_pids": fused,
         "direct_fp8_kv_output_pids": direct,
+        "fp8_projection_ready_pids": fp8_projection_ready,
+        "fp8_projection_called_pids": fp8_projection,
+        "fp8_projection_validated_pids": fp8_projection_validated,
         "direct_fp8_kv_validated_pids": validated_pids,
         "direct_fp8_kv_validation_calls": len(validated),
         "direct_fp8_kv_max_rms_vs_dynamic": max((x["rms_vs_dynamic"] for x in validated), default=None),
@@ -95,8 +103,14 @@ def run_probe(model, tokenizer, port, result_dir, server_log):
         after > before and summary["gpu_kv_tokens"] is not None
         and len(causal) >= 8 and len(cached) >= 8 and len(metadata) >= 8
         and len(reused) >= 8 and len(set(fused) | set(direct)) >= 8
-        and (not require_direct or len(direct) >= 8)
-        and (not require_validation or len(validated_pids) >= 8)
+        and (not require_direct or (
+            len(direct) >= 8 and len(fp8_projection) >= 8
+            and set(cached).issubset(fp8_projection)
+            and set(fp8_projection).issubset(fp8_projection_ready)
+        ))
+        and (not require_validation or (
+            len(validated_pids) >= 8 and len(fp8_projection_validated) >= 8
+        ))
     )
     (destination / "path_probe_summary.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8",

@@ -73,3 +73,6 @@ Shell 验证及实际 GPU 检查在诊断任务中执行。
 
 
 可通过 runner-diagnostics-only=true 和 failure-fixture-run-id=<保存输入的运行 ID> 执行独立 GPU 复现。workflow 下载该运行的 agentic artifact，并以只读方式挂载 atom_fp8_failure.pt；仅包含合成前缀触发的单个缓存分块，不加载完整模型。比较 supplied、dynamic、AITER 每 tile softmax rescale 和二次幂 scale 诊断。每项均报告原始门限是否通过；任务完成不等于数值验收。
+
+
+新的原生 FP8 权重投影集成及其独立验证规则见 [FP8 上投影审查](./native-fp8-up-projection-audit_zh.md)。上述历史 BF16 结果不能作为 FP8 投影证据。

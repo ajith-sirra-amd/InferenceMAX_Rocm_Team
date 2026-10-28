@@ -18,6 +18,22 @@ from vllm.v1.attention.backends.mla.rocm_aiter_mla import AiterMLABackend, Aiter
 from .quantize import fused_qkv_per_tensor_quant
 
 class AtomFlyDSLMLAImpl(AiterMLAImpl):
+    def process_weights_after_loading(self, act_dtype):
+        super().process_weights_after_loading(act_dtype)
+        self._atom_fp8_projection = None
+        if (os.environ.get("ATOM_USE_FLYDSL_FP8_PREFILL_ATTN", "0") == "1"
+                and os.environ.get("ATOM_USE_FUSED_KV_FP8_OUTPUT", "0") == "1"
+                and self.kv_b_proj.weight.dtype == torch.float8_e4m3fn):
+            from .fp8_up_projection import projection_weight
+            self._atom_fp8_projection = projection_weight(self.kv_b_proj, self.num_heads)
+            p = self._atom_fp8_projection
+            print(
+                f"[ATOM-FP8-PROJECTION-READY] pid={os.getpid()} "
+                f"weight={tuple(p.weight.shape)} dtype={p.weight.dtype} "
+                f"scales={tuple(p.scale.shape)} preshuffled={p.preshuffled} "
+                f"linear_kernel={p.linear_kernel}", flush=True,
+            )
+
     def forward_mha(
         self, q, kv_c_normed, k_pe, kv_c_and_k_pe_cache, attn_metadata,
         k_scale, output, output_scale=None,
@@ -318,20 +334,27 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
             self._reported_paths.add(key)
         return result
 
-    def validate_projected_fp8(self, chunk, q, k, v, kv8, actual, actual_lse):
+    def validate_projected_fp8(
+        self, chunk, q, k, v, kv8, actual, actual_lse, *, exact_bf16_projection=True,
+    ):
         import json
 
         k8, v8, ks, vs = kv8
         from vllm._aiter_ops import rocm_aiter_ops
 
-        # Independent HIP kernel; avoids Torch reciprocal boundary rounding.
-        reference8 = tuple(
-            rocm_aiter_ops.per_tensor_quant(x, torch.float8_e4m3fn, scale)[0]
-            for x, scale in ((k, ks), (v, vs))
-        )
-        for name, value, expected in zip(("K", "V"), (k8, v8), reference8):
-            if not torch.equal(value.view(torch.uint8), expected.view(torch.uint8)):
-                raise RuntimeError(f"Direct FP8 {name} differs from separate same-scale quantization")
+        if exact_bf16_projection:
+            # Independent HIP kernel; avoids Torch reciprocal boundary rounding.
+            reference8 = tuple(
+                rocm_aiter_ops.per_tensor_quant(x, torch.float8_e4m3fn, scale)[0]
+                for x, scale in ((k, ks), (v, vs))
+            )
+            for name, value, expected in zip(("K", "V"), (k8, v8), reference8):
+                if not torch.equal(value.view(torch.uint8), expected.view(torch.uint8)):
+                    raise RuntimeError(f"Direct FP8 {name} differs from separate same-scale quantization")
+        else:
+            # The caller separately checked FP8 projection against FP64.
+            # This comparison isolates Q reuse on identical FP8 K/V.
+            reference8 = (k8, v8)
         # Recompute Q from live inputs to detect stale reuse as well as KV errors.
         independent = fused_qkv_per_tensor_quant(q, k, v)
         reference, reference_lse = self._call_projected_fp8(
@@ -386,7 +409,8 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
         self._direct_validations += 1
         print("[ATOM-FP8-KV-VALIDATED] " + json.dumps({
             "pid": os.getpid(), "call": self._direct_validations,
-            "same_scale_kv_exact": True, "same_scale_fmha_exact": True,
+            "same_scale_kv_exact": exact_bf16_projection, "same_scale_fmha_exact": True,
+            "projection_reference": "bf16_exact" if exact_bf16_projection else "fp64_fp8_operands",
             "q_tokens": q.shape[0], "kv_tokens": k.shape[0],
             "rms_vs_dynamic": rms, "lse_max_vs_dynamic": lse_max,
             "rms_vs_bf16": rms_bf16, "lse_max_vs_bf16": lse_bf16,
