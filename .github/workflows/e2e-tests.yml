@@ -98,6 +98,11 @@ jobs:
       runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
       timeout-minutes: 5
       steps:
+        - name: Checkout inspection code
+          uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+          with:
+            ref: ${{ inputs.ref || github.sha }}
+            persist-credentials: false
         - name: Inspect installed vLLM and ATOM attention kernel APIs
           shell: bash
           run: |
