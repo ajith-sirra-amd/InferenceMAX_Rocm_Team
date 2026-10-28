@@ -84,7 +84,6 @@ def run_case(cache_scale):
         mask = actual.view(torch.uint8) != expected.view(torch.uint8)
         count = mask.sum().item()
         if count:
-            from vllm._aiter_ops import rocm_aiter_ops
             hip_ref, _ = rocm_aiter_ops.per_tensor_quant(bf16, torch.float8_e4m3fn, scale8)
             dynamic_candidate = expand_context_fp8(cache, scale, indices, weight, heads, mode="fused_amax")
             dynamic8 = existing[1] if name == "K" else existing[2]
