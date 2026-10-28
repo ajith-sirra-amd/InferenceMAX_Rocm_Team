@@ -7,6 +7,10 @@ on:
       - utils/atom_attention/native_validation_plugin/**
       - utils/atom_attention/test_native_validation.py
       - .github/workflows/native-fp8-harness-checks.yml
+      - .github/workflows/e2e-tests.yml
+      - .github/workflows/benchmark-tmpl.yml
+      - runners/launch_mi355x-amd.sh
+      - upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
 permissions:
   contents: read
 jobs:
@@ -28,6 +32,7 @@ jobs:
           .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py --junitxml=native-harness-checks.xml
           bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
           bash -n runners/launch_mi355x-amd.sh
+          .ci-env/bin/python utils/test_mi355x_container_launcher.py
       - name: Upload CPU check evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

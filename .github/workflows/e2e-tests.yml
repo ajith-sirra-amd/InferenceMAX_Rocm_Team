@@ -48,7 +48,7 @@ on:
                 required: false
                 type: string
             native-vllm-sha:
-                description: "Exact fork commit for native vLLM GPU kernel validation; diagnostics only"
+                description: "Exact fork commit for native GPU diagnostics or Kimi serving validation"
                 required: false
                 type: string
                 default: ""
@@ -97,7 +97,7 @@ on:
                 required: false
                 type: string
             native-vllm-sha:
-                description: "Exact fork commit for native vLLM GPU kernel validation; diagnostics only"
+                description: "Exact fork commit for native GPU diagnostics or Kimi serving validation"
                 required: false
                 type: string
                 default: ""
@@ -410,6 +410,7 @@ jobs:
             run-eval: ${{ inputs.agentic-eval-only }}
             eval-only: ${{ inputs.agentic-eval-only }}
             attention-path-probe-only: ${{ inputs.attention-path-probe-only }}
+            native-vllm-sha: ${{ inputs.native-vllm-sha }}
             scenario-type: agentic-coding
             ref: ${{ inputs.ref }}
 

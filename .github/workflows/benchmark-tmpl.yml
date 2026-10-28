@@ -64,6 +64,11 @@ on:
         type: boolean
         required: false
         default: false
+      native-vllm-sha:
+        description: "Exact fork revision for native Kimi validation"
+        type: string
+        required: false
+        default: ''
       random-range-ratio:
         required: false
         type: string
@@ -124,6 +129,8 @@ env:
   RUN_EVAL: ${{ inputs.run-eval }}
   EVAL_ONLY: ${{ inputs.eval-only }}
   ATTENTION_PATH_PROBE_ONLY: ${{ inputs.attention-path-probe-only }}
+  NATIVE_VLLM_SHA: ${{ inputs.native-vllm-sha }}
+  INFERENCEX_NATIVE_REQUIRE_CAUSAL: '0'
   ATOM_USE_FLYDSL_FP8_PREFILL_ATTN: '1'
   ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN: '1'
   ATOM_USE_FUSED_KV_FP8_OUTPUT: '1'
@@ -275,6 +282,9 @@ jobs:
           name: agentic_${{ env.RESULT_FILENAME }}
           path: |
             results/server.log
+            results/native_setup.log
+            results/*native_fp8_execution_proof.json
+            .native-fp8-validation/*/evidence/native-validation.json
             results/path_probe*.json
             results/atom_attention_preflight.log
             results/atom_direct_kv_preflight.log

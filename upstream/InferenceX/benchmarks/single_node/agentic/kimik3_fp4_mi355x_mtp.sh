@@ -5,17 +5,13 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
-check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY ATOM_USE_FLYDSL_FP8_PREFILL_ATTN
-check_env_vars ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN
+check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY
 case "$ATTENTION_PATH_PROBE_ONLY" in true|false) ;; *) echo "ATTENTION_PATH_PROBE_ONLY must be true or false" >&2; exit 1 ;; esac
 if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
     echo "[NATIVE-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
     exit 1
 fi
 
-# Load only this repository's vLLM extension; do not patch installed source.
-ATOM_ATTENTION_PLUGIN_DIR="$(cd "$(dirname "$0")/atom_attention" && pwd)"
-export PYTHONPATH="$ATOM_ATTENTION_PLUGIN_DIR${PYTHONPATH:+:$PYTHONPATH}"
 if [ "$DURATION" = "600" ]; then
     export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 elif [ "$DURATION" = "3600" ]; then
@@ -24,24 +20,67 @@ else
     echo "[ATOM-FP8-CONFIG] Expected duration 600 (smoke) or 3600 (full)" >&2
     exit 1
 fi
-case "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" in
-    0|1) ;;
-    *) echo "ATOM_USE_FLYDSL_FP8_PREFILL_ATTN must be 0 or 1" >&2; exit 1 ;;
-esac
-for flag_name in ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN; do
-    case "${!flag_name}" in
+
+NATIVE_MODE=0
+if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
+    check_env_vars INFERENCEX_NATIVE_REQUIRE_CAUSAL RESULT_FILENAME
+    case "$INFERENCEX_NATIVE_REQUIRE_CAUSAL" in
         0|1) ;;
-        *) echo "$flag_name must be 0 or 1" >&2; exit 1 ;;
+        *) echo "INFERENCEX_NATIVE_REQUIRE_CAUSAL must be 0 or 1" >&2; exit 1 ;;
     esac
-done
-if [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ]; then
-    if [ "$ATTENTION_PATH_PROBE_ONLY" != "true" ] || [ "$ATOM_USE_FUSED_KV_FP8_OUTPUT" != "1" ] || [ "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" != "1" ]; then
-        echo "Direct KV numerical validation requires the FP8 path probe" >&2
+    if [ "$ATTENTION_PATH_PROBE_ONLY" = "true" ]; then
+        echo "Native validation uses kernel tests and full evaluation/replay" >&2
         exit 1
     fi
+    NATIVE_MODE=1
+    unset PYTHONPATH
+    for task_atom_env in $(compgen -A variable ATOM_); do
+        unset "$task_atom_env"
+    done
+    unset task_atom_env
+    mkdir -p "$RESULT_DIR"
+    native_work_dir="/outputs/.native-fp8-validation/$RESULT_FILENAME"
+    python3 /outputs/utils/atom_attention/native_vllm_gpu_validate.py \
+        --native-sha "$NATIVE_VLLM_SHA" --prepare-only \
+        --work-dir "$native_work_dir" 2>&1 | tee "$RESULT_DIR/native_setup.log"
+    source "$native_work_dir/evidence/native-env.sh"
+    export INFERENCEX_NATIVE_PHASE_FILE="$RESULT_DIR/native_fp8_phase"
+    export INFERENCEX_NATIVE_ACCURACY_STRESS=0
+    if [ "$EVAL_ONLY" = "true" ]; then
+        export INFERENCEX_NATIVE_ACCURACY_STRESS=1
+        export VLLM_GPU_SYNC_CHECK=error
+    fi
+    if [ -e "$INFERENCEX_NATIVE_PHASE_FILE" ]; then
+        echo "Stale native execution-phase marker exists" >&2
+        exit 1
+    fi
+    echo "[NATIVE-FP8-CONFIG] sha=$NATIVE_VLLM_SHA stress=$INFERENCEX_NATIVE_ACCURACY_STRESS require_causal=$INFERENCEX_NATIVE_REQUIRE_CAUSAL"
+else
+    check_env_vars ATOM_USE_FLYDSL_FP8_PREFILL_ATTN ATOM_USE_FUSED_KV_FP8_OUTPUT
+    check_env_vars ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN
+    # Load only this repository's vLLM extension; do not patch installed source.
+    ATOM_ATTENTION_PLUGIN_DIR="$(cd "$(dirname "$0")/atom_attention" && pwd)"
+    export PYTHONPATH="$ATOM_ATTENTION_PLUGIN_DIR${PYTHONPATH:+:$PYTHONPATH}"
+    case "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" in
+        0|1) ;;
+        *) echo "ATOM_USE_FLYDSL_FP8_PREFILL_ATTN must be 0 or 1" >&2; exit 1 ;;
+    esac
+    for flag_name in ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN; do
+        case "${!flag_name}" in
+            0|1) ;;
+            *) echo "$flag_name must be 0 or 1" >&2; exit 1 ;;
+        esac
+    done
+    if [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ]; then
+        if [ "$ATTENTION_PATH_PROBE_ONLY" != "true" ] || [ "$ATOM_USE_FUSED_KV_FP8_OUTPUT" != "1" ] || [ "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" != "1" ]; then
+            echo "Direct KV numerical validation requires the FP8 path probe" >&2
+            exit 1
+        fi
+    fi
+    export ATOM_USE_FLYDSL_FP8_PREFILL_ATTN ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN
+    echo "[ATOM-FP8-CONFIG] framework=vllm fp8_prefill=$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN model=$MODEL plugin=$ATOM_ATTENTION_PLUGIN_DIR"
+
 fi
-export ATOM_USE_FLYDSL_FP8_PREFILL_ATTN ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN
-echo "[ATOM-FP8-CONFIG] framework=vllm fp8_prefill=$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN model=$MODEL plugin=$ATOM_ATTENTION_PLUGIN_DIR"
 
 DP_SIZE=1
 export DP_SIZE
@@ -233,21 +272,28 @@ case "$CONC" in
 esac
 export DCP_SIZE
 
-# Accuracy changes scheduler chunk size and cached-path eligibility, not GSM8K.
-# This exercises the same FP8 kernels on short fixed-task prompts.
-export ATOM_FP8_ACCURACY_STRESS=0
-if [ "$EVAL_ONLY" = "true" ]; then
-    if [ "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" != "1" ] || [ "$ATOM_USE_FUSED_KV_FP8_OUTPUT" != "1" ]; then
-        echo "This accuracy experiment requires native FP8 projection and FMHA" >&2
-        exit 1
+if [ "$NATIVE_MODE" = "1" ]; then
+    if [ "$EVAL_ONLY" = "true" ]; then
+        MAX_BATCHED_TOKENS=512
     fi
-    export ATOM_FP8_ACCURACY_STRESS=1
-    MAX_BATCHED_TOKENS=512
-    export ATOM_FP8_ACCURACY_ACTIVE_FILE="$RESULT_DIR/atom_fp8_accuracy_active"
-    if [ -e "$ATOM_FP8_ACCURACY_ACTIVE_FILE" ]; then
-        echo "Stale evaluation-phase marker exists" >&2
-        exit 1
+else
+    # Accuracy changes scheduler chunk size and cached-path eligibility, not GSM8K.
+    # This exercises the same FP8 kernels on short fixed-task prompts.
+    export ATOM_FP8_ACCURACY_STRESS=0
+    if [ "$EVAL_ONLY" = "true" ]; then
+        if [ "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" != "1" ] || [ "$ATOM_USE_FUSED_KV_FP8_OUTPUT" != "1" ]; then
+            echo "This accuracy experiment requires native FP8 projection and FMHA" >&2
+            exit 1
+        fi
+        export ATOM_FP8_ACCURACY_STRESS=1
+        MAX_BATCHED_TOKENS=512
+        export ATOM_FP8_ACCURACY_ACTIVE_FILE="$RESULT_DIR/atom_fp8_accuracy_active"
+        if [ -e "$ATOM_FP8_ACCURACY_ACTIVE_FILE" ]; then
+            echo "Stale evaluation-phase marker exists" >&2
+            exit 1
+        fi
     fi
+
 fi
 
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
@@ -257,7 +303,11 @@ LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 2 2 "$LADDER")
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-CP_ARGS=(--attention-backend CUSTOM)
+if [ "$NATIVE_MODE" = "1" ]; then
+    CP_ARGS=(--attention-backend ROCM_AITER_MLA)
+else
+    CP_ARGS=(--attention-backend CUSTOM)
+fi
 if [ "$DCP_SIZE" -gt 1 ]; then
     CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a)
 fi
@@ -279,7 +329,11 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
 
-ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"CUSTOM"}'
+if [ "$NATIVE_MODE" = "1" ]; then
+    ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
+else
+    ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"CUSTOM"}'
+fi
 
 SERVER_MAX_MODEL_LEN=1048576
 if [ "$EVAL_ONLY" = "true" ]; then
@@ -313,7 +367,11 @@ VLLM_CMD=(
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
 
-if [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ] || [ "$ATOM_FP8_ACCURACY_STRESS" = "1" ]; then
+if [ "$NATIVE_MODE" = "1" ]; then
+    if [ "$EVAL_ONLY" = "true" ]; then
+        VLLM_CMD+=(--enforce-eager)
+    fi
+elif [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ] || [ "$ATOM_FP8_ACCURACY_STRESS" = "1" ]; then
     VLLM_CMD+=(--enforce-eager)
 fi
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
@@ -398,19 +456,44 @@ elif [ "$EVAL_ONLY" = "true" ]; then
     unset EVAL_SUITE EVAL_LIMIT
     mkdir -p "$EVAL_RESULT_DIR"
     echo "[GSM8K-EVAL] eval_only=$EVAL_ONLY task=$EVAL_TASKS_DIR concurrency=$EVAL_CONCURRENT_REQUESTS context=$EVAL_MAX_MODEL_LEN temperature=0 full_test_split=True real_verification=True"
-    printf '%s\n' "GSM8K evaluation phase" > "$ATOM_FP8_ACCURACY_ACTIVE_FILE"
+    if [ "$NATIVE_MODE" = "1" ]; then
+        printf '%s\n' eval > "$INFERENCEX_NATIVE_PHASE_FILE"
+    else
+        printf '%s\n' "GSM8K evaluation phase" > "$ATOM_FP8_ACCURACY_ACTIVE_FILE"
+    fi
     (
         cd "$AGENTIC_OUTPUT_DIR"
         run_eval --port "$PORT"
     ) 2>&1 | tee "$RESULT_DIR/gsm8k_eval.log"
     causal_proof_args=()
-    if [ "$ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN" = "1" ]; then
-        causal_proof_args=(--require-causal)
+    if [ "$NATIVE_MODE" = "1" ]; then
+        if [ "$INFERENCEX_NATIVE_REQUIRE_CAUSAL" = "1" ]; then
+            causal_proof_args=(--require-causal)
+        fi
+        "$VIRTUAL_ENV/bin/python" -m native_fp8_validation "${causal_proof_args[@]}" \
+            --server-log "$SERVER_LOG" --workers "$TP" --native-sha "$NATIVE_VLLM_SHA" \
+            --phase eval --output "$RESULT_DIR/gsm8k_native_fp8_execution_proof.json"
+    else
+        if [ "$ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN" = "1" ]; then
+            causal_proof_args=(--require-causal)
+        fi
+        python3 /outputs/utils/atom_attention/verify_accuracy_path.py "${causal_proof_args[@]}" \
+            --server-log "$SERVER_LOG" --workers "$TP" \
+            --output "$RESULT_DIR/gsm8k_fp8_execution_proof.json"
     fi
-    python3 /outputs/utils/atom_attention/verify_accuracy_path.py "${causal_proof_args[@]}" \
-        --server-log "$SERVER_LOG" --workers "$TP" \
-        --output "$RESULT_DIR/gsm8k_fp8_execution_proof.json"
 else
     build_replay_cmd "$RESULT_DIR"
+    if [ "$NATIVE_MODE" = "1" ]; then
+        printf '%s\n' replay > "$INFERENCEX_NATIVE_PHASE_FILE"
+    fi
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    if [ "$NATIVE_MODE" = "1" ]; then
+        causal_proof_args=()
+        if [ "$INFERENCEX_NATIVE_REQUIRE_CAUSAL" = "1" ]; then
+            causal_proof_args=(--require-causal)
+        fi
+        "$VIRTUAL_ENV/bin/python" -m native_fp8_validation "${causal_proof_args[@]}" \
+            --server-log "$SERVER_LOG" --workers "$TP" --native-sha "$NATIVE_VLLM_SHA" \
+            --phase replay --output "$RESULT_DIR/native_fp8_execution_proof.json"
+    fi
 fi

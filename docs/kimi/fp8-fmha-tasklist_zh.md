@@ -53,6 +53,6 @@ e2e 工作流在 `runner-diagnostics-only=true` 时可接受精确 fork commit �
 
 验证脚本新增独立 `--prepare-only` 模式，安装精确原生版本并准备仓库内环境；结果标记为 `prepared`，绝不作为 GPU 测试通过。独立 `native_fp8_validation` observer 校验原生源码哈希，并在明确标记的阶段按 rank 和进程记录成功的 FP8 投影、缓存及因果 dispatch，不替换原生数值 kernel。显式启用 accuracy-stress 时，仅将缓存 eligibility 改为 query/context 长度大于零；eager 评估及 512-token scheduler chunk 仍由调用方配置。observer 记录该 override，且拒绝将其当作正常 replay 证据。
 
-observer 和安装脚本已准备，但 serving recipe 尚未接入，也未执行 GPU 观测。CPU 测试拒绝不完整、BF16、仅预热、版本不符、worker 重启、仅 graph capture 以及把 stress 当 replay 的证据。`replay` 标记覆盖所启动的 replay（包含预热），不能证明稳态 kernel 驻留。
+recipe 现已接入 e2e 工作流的精确 `native-vllm-sha`，选择原生 ROCM_AITER_MLA / ROCM_AITER_FA backend，并保存安装来源和调用证据。尚未执行 GPU 观测及原生模型评估，派发前必须通过 CPU 集成检查。当前调用方与现有 PR 一致，仅要求缓存 FP8 证据（`INFERENCEX_NATIVE_REQUIRE_CAUSAL=0`）；若因果 FP8 测得提升并加入 PR，必须显式改为 1。CPU 测试拒绝不完整、BF16、仅预热、版本不符、worker 重启、仅 graph capture 以及把 stress 当 replay 的证据。`replay` 标记覆盖所启动的 replay（包含预热），不能证明稳态 kernel 驻留。
 
 原生环境/执行证据 CPU CI [40729902162](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40729902162) 在代码 `0e40f469f1623c09336a034fa3d130b3b294fa4c` 通过 **15 项测试，零失败/错误/跳过**；JUnit artifact 为 `12834722522`。这不是 GPU 数值验证。早先 setup 阶段失败来自错误的 artifact action pin；两个新增工作流均已改用仓库中经验证的现有 pin。
