@@ -2,7 +2,7 @@
 
 # BF16 投影直接输出 FP8 K/V 的实验
 
-状态：已准备 GPU 验证。服务端插件尚未选择这些内核，目前没有新增性能或模型准确率结论。
+状态：GPU 内核实验已成功完成，压力诊断超过数值门限。服务端尚未选择这些内核，测量结果见下文。
 
 已检查 ATOM 提交 [773eb362](https://github.com/ROCm/ATOM/blob/773eb36254e43060bfd5fabcab7d3840bf591358/atom/model_ops/attention_mla.py#L1675)。
 缓存 FlyDSL 投影使用调用方提供的输出 scale。新 token 的 QKV 量化器按
@@ -52,3 +52,44 @@ python3 utils/atom_attention/projection_experiment.py
 
 此前 GSM8K 通过时，固定混合阈值选择的是 BF16 attention，不能验证这些内核。
 采用候选前仍需内核结果、真实模型 scale/截断证据、服务集成及新的受控运行。
+
+## GPU 结果：2026-10-28
+
+[Run 40666434375](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40666434375)
+已成功完成，测试提交为 `8e7bb0eab2195ef2778994806040efbcd067196d`。
+[结构化证据](../../results/atom-attention/run40666434375/projection_summary.json) 和
+[数值/耗时日志](../../results/atom-attention/run40666434375/numerical-and-timing.log) 已保存。
+Recipe 和 launcher 验证通过。
+
+新增 BF16 投影输出逻辑通过空输入、尾部、重排、手工常量、零值及修改输入/scale 的 graph replay 检查。
+动态模式的 FP8 字节和 scale 与现有路径完全一致。
+使用相同 supplied scale 时，直接 FP8 输出与 native BF16 投影后独立 Torch 量化的结果完全一致。
+
+Q512/KV8192 的真实插件输出了 `ATOM-FP8-ENGAGED`。
+现有 FP8 FMHA 相对 BF16 FMHA 的输出 RMS 误差为 3.655%。
+相对独立 FP64 参考，BF16 为 0.191%，FP8 为 3.650%。
+使用 FP8 反量化输入的 FP64 参考时，FMHA 算术本身的 RMS 误差为 1.157%。
+相对原始输入 FP64 参考的 FP8 LSE 最大绝对误差为 0.01509。
+这些是张量误差，不是模型答题准确率。
+
+普通合成输入中，ATOM supplied scale 路径相对 BF16 的 RMS 误差为 3.770%，没有截断。
+缓存范围放大 4 倍的压力诊断中，K/V 截断比例分别为 1.688%/0.715%，输出 RMS 误差为 19.875%，超过 10% 诊断门限。
+这说明 scale 复用存在范围假设，并不是同 scale 投影等价性失败；job 成功不代表压力诊断准确率通过。
+
+下表为 12 heads 的单次耗时，单位微秒：
+
+| 缓存 tokens | 现有投影 + 量化 | 融合最大值 | 重算 | Supplied scale | Supplied + 新 token 准备 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 8192 | 93.929 | 86.341 | 126.141 | 60.537 | 66.303 |
+| 16384 | 146.367 | 137.705 | 190.534 | 92.875 | 98.765 |
+| 65536 | 540.723 | 539.351 | 581.940 | 272.595 | 278.511 |
+
+Supplied-scale 投影阶段在不计准备时加速 1.55–1.98 倍，单个缓存 chunk 计入完整新 token 量化开销后为 1.42–1.94 倍。
+精确 scale 重算出现回退；融合最大值在 8K/16K 有小幅收益，64K 基本持平。
+
+这是共享主机上的 graph 微基准，日志中还存在其他容器和 queue-interception 警告。
+这些结果不能代表服务吞吐提升，也不包含模型和 DCP collective。
+
+后续只验证本次引入的 BF16 输出逻辑、scale 传递和混合路由。
+下一步检查真实 Kimi 新 token 与缓存张量的范围，再进行服务性能比较。
+复用的 ATOM FMHA 算法保持原样，SA 固定 GSM8K 仍作为模型评估。生产服务尚未切换到候选路径。

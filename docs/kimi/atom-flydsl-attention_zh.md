@@ -64,3 +64,6 @@ CPU 路由检查命令：`python -m unittest discover -s upstream/InferenceX/ben
 ## 投影输出实验
 
 [BF16 投影输出 FP8 实验](projection-fp8-experiment_zh.md) 比较 ATOM supplied scale 与精确动态方案，尚未在服务中启用。
+
+
+[原生等价性草案](../../patches/vllm/README_zh.md)：固定到测试所用 vLLM 提交，原生 GPU 验证尚未运行。

@@ -1,0 +1,19 @@
+{
+  "dispatch": {
+    "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+    "inputs": {
+      "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+      "test-name": "BF16 Projection FP8 Output - ATOM Scale Reuse and Accuracy - 8e7bb0eab219",
+      "ref": "8e7bb0eab2195ef2778994806040efbcd067196d",
+      "runner-diagnostics-only": "true",
+      "attention-path-probe-only": "false",
+      "agentic-eval-only": "false",
+      "duration-override": ""
+    }
+  },
+  "run_id": 40666434375,
+  "job_id": 122742010346,
+  "source_sha": "8e7bb0eab2195ef2778994806040efbcd067196d",
+  "completed_at": "2026-10-28T09:45:19Z",
+  "run_url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40666434375"
+}

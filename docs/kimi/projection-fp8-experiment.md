@@ -2,8 +2,7 @@
 
 # BF16 projection with FP8 K/V output experiment
 
-Status: prepared for GPU validation. The serving plugin does not select these
-kernels. No new performance or model-accuracy result is claimed.
+Status: GPU kernel experiment completed successfully; the stress diagnostic exceeded its numerical gate. The serving plugin does not select these kernels. See the measured results below.
 
 ATOM source was checked at [773eb362](https://github.com/ROCm/ATOM/blob/773eb36254e43060bfd5fabcab7d3840bf591358/atom/model_ops/attention_mla.py#L1675).
 Its cached FlyDSL projection accepts caller-supplied output scales. The
@@ -73,3 +72,56 @@ The existing GSM8K pass exercised BF16 attention under the fixed hybrid
 thresholds. It does not validate these kernels. Performance adoption requires
 kernel results, representative model-derived scale/clipping evidence,
 serving integration, and a new controlled run.
+
+## GPU result: 2026-10-28
+
+[Run 40666434375](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40666434375)
+completed successfully on source `8e7bb0eab2195ef2778994806040efbcd067196d`.
+[Structured evidence](../../results/atom-attention/run40666434375/projection_summary.json)
+and [numerical/timing log](../../results/atom-attention/run40666434375/numerical-and-timing.log)
+are retained. Recipe/launcher validation passed.
+
+The new BF16 projection epilogues passed empty/tail/reordered-row checks,
+hand-worked constant and zero cases, and changed-input/scale graph replay.
+Dynamic variants matched the current FP8 bytes and scales exactly. With
+identical supplied scales, direct FP8 output matched native BF16 projection
+followed by independent Torch quantization exactly on the covered cases.
+
+At Q512/KV8192, the real plugin emitted `ATOM-FP8-ENGAGED`.
+Current FP8 FMHA had **3.655% relative RMS output error versus BF16 FMHA**;
+against the independent FP64 reference, BF16 error was 0.191% and FP8 error
+was 3.650%. Using dequantized FP8 inputs for the FP64 reference isolated FMHA
+arithmetic error to 1.157% RMS. FP8 LSE maximum absolute error versus the
+original-input FP64 reference was 0.01509. These are tensor-error metrics,
+not percentages of correctly answered model questions.
+
+ATOM-style supplied scales had 3.770% RMS error versus BF16 with no clipping
+in the ordinary synthetic case. In the deliberate 4x cached-range stress
+case, K clipped 1.688% of values and V clipped 0.715%; output RMS error rose
+to 19.875%, exceeding the 10% diagnostic gate. This is evidence about the
+scale-reuse assumption, not a failure of same-scale projection equivalence.
+The overall job success does not turn that stress diagnostic into an accuracy pass.
+
+All times below are microseconds per call; 12 heads:
+
+| Cached tokens | Existing projection + quant | Fused maximum | Recompute | Supplied scales | Supplied + new-token preparation |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 8192 | 93.929 | 86.341 | 126.141 | 60.537 | 66.303 |
+| 16384 | 146.367 | 137.705 | 190.534 | 92.875 | 98.765 |
+| 65536 | 540.723 | 539.351 | 581.940 | 272.595 | 278.511 |
+
+The supplied-scale projection stage was 1.55–1.98x faster before scale
+preparation and 1.42–1.94x including the full measured ATOM new-token
+quantization charge for one cached chunk. Exact-scale recomputation regressed.
+Fusing the maximum showed a modest benefit at 8K/16K and essentially no
+benefit at 64K.
+
+These were graph microbenchmarks on a shared host with other containers present
+and a queue-interception warning in the log. They establish a candidate,
+not a serving-throughput gain. No model or DCP collective was measured.
+
+Further validation is scoped to the introduced BF16 epilogue, scale handoff
+and hybrid routing. The next useful check is scale/range behavior on
+representative Kimi new-token and cached tensors before a serving performance
+comparison. The existing ATOM FMHA algorithm is reused; SA's fixed GSM8K
+remains the model evaluation. Production serving still uses the existing path.

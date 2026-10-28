@@ -1,0 +1,55 @@
+{
+  "status": "draft_not_gpu_validated",
+  "vllm_base_sha": "1b2a666391f2a24228a1436b64d547c34cc6b6ce",
+  "reference_plugin_sha": "2a656fdc330761bb076b5c9115307dff4cbadc3a",
+  "reference_performance_serving_sha": "e4cf47a7650321e4bd40c83746088a2679ec0509",
+  "native_backend": "ROCM_AITER_FLYDSL_MLA",
+  "native_prefill_backend": "ROCM_AITER_FLYDSL_FP8",
+  "flag": "ATOM_USE_FLYDSL_FP8_PREFILL_ATTN",
+  "flag_default": "0",
+  "quantizer_copied_without_changes": true,
+  "patch_sha256": "237f0ee99742951383a235621c758f8ae6f8de7868de8579235c517c8b0e6720",
+  "files": {
+    "vllm/v1/attention/backends/mla/rocm_aiter_flydsl_mla.py": {
+      "before_sha256": null,
+      "after_sha256": "5c0a9215e795b9b183cc5ae0c99acbd97c64fe4c7ad93d76e83be0b2c3ba8a9d"
+    },
+    "vllm/v1/attention/ops/atom_per_tensor_fp8_quant.py": {
+      "before_sha256": null,
+      "after_sha256": "c3f0bc66a0991376347a02c87292f7b4055e1fa273e896a2254c92b11b77f9ff"
+    },
+    "vllm/v1/attention/ops/ATOM-FP8-QUANT-LICENSE": {
+      "before_sha256": null,
+      "after_sha256": "0baca809927cad448401b252ce3bae12687c2987597ad7088cf3423f872d5bcd"
+    },
+    "vllm/v1/attention/backends/registry.py": {
+      "before_sha256": "2daa48f44eb9727f701c5c09e6b6cb740933488ef621d03e71b6eca3808098ef",
+      "after_sha256": "72ca00ad7b573b7d016c81d9bccd26112e62f9c6780050180bc577469c67d8c8"
+    },
+    "vllm/v1/attention/backends/mla/prefill/registry.py": {
+      "before_sha256": "1ce5e42e08d3239b8f1de6fe5576be16daf61a6eff3cd094948d4888e39cfba2",
+      "after_sha256": "fa423935b3a62c2e59b1028121f341d6406685e4f10fe4494a8643a257796612"
+    },
+    "vllm/envs.py": {
+      "before_sha256": "5bf1b76a957f1690989267a0b81f425a6b3706ef50703aa66df57f159a3150d4",
+      "after_sha256": "d08d0f9346e747b39b0d4b38514615e6cfcd898df51bf3dc01aa203132a9104b"
+    },
+    "docs/design/attention_backends.md": {
+      "before_sha256": "53431b99c3dee0ca9862317f4743ba6a2b2ab4e24af44892fbdc8b668c518848",
+      "after_sha256": "264658e1ccbc67f1498d4143437be468ad04523f00fa317f7faf8f0384ca86ef"
+    }
+  },
+  "not_run": [
+    "git apply --check",
+    "native GPU parity",
+    "native serving smoke",
+    "native CUDA graph checks",
+    "native model evaluation",
+    "native performance",
+    "vLLM pre-commit"
+  ],
+  "existing_upstream_prs": [
+    59124,
+    62447
+  ]
+}

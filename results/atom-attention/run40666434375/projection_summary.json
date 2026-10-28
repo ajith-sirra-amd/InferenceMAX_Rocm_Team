@@ -1,0 +1,532 @@
+{
+  "run_id": 40666434375,
+  "job_id": 122742010346,
+  "run_url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40666434375",
+  "source_sha": "8e7bb0eab2195ef2778994806040efbcd067196d",
+  "status": "completed",
+  "conclusion": "success",
+  "runner_name": "mi355x-amd_pit2_p03_g07",
+  "atom_reference_sha": "773eb36254e43060bfd5fabcab7d3840bf591358",
+  "aiter_projection_reference_sha": "bbef5a6f2d3733b293c80d2cee6a8d464e88bc01",
+  "events": [
+    {
+      "kind": "PROJECTION_EXPERIMENT_START",
+      "data": {
+        "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=61623136-3031-6165-3061-316431613932, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+        "torch": "2.12.0+rocm10.0.0",
+        "hip": "7.15.26333",
+        "atom_reference": "773eb36254e43060bfd5fabcab7d3840bf591358",
+        "aiter_projection_reference": "bbef5a6f2d3733b293c80d2cee6a8d464e88bc01",
+        "bf16_projection": true,
+        "serving_enabled": false
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "fused_amax:tokens=0:heads=12"
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "recompute:tokens=0:heads=12"
+      }
+    },
+    {
+      "kind": "PROJECTION_SUPPLIED_PASS",
+      "data": {
+        "tokens": 0,
+        "heads": 12
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "fused_amax:tokens=1:heads=12"
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "recompute:tokens=1:heads=12"
+      }
+    },
+    {
+      "kind": "PROJECTION_SUPPLIED_PASS",
+      "data": {
+        "tokens": 1,
+        "heads": 12
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "fused_amax:tokens=33:heads=12"
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "recompute:tokens=33:heads=12"
+      }
+    },
+    {
+      "kind": "PROJECTION_SUPPLIED_PASS",
+      "data": {
+        "tokens": 33,
+        "heads": 12
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "fused_amax:tokens=257:heads=24"
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "recompute:tokens=257:heads=24"
+      }
+    },
+    {
+      "kind": "PROJECTION_SUPPLIED_PASS",
+      "data": {
+        "tokens": 257,
+        "heads": 24
+      }
+    },
+    {
+      "kind": "PROJECTION_HAND_REFERENCE_PASS",
+      "data": {}
+    },
+    {
+      "kind": "PROJECTION_ZERO_PASS",
+      "data": {}
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "graph:fused_amax"
+      }
+    },
+    {
+      "kind": "PROJECTION_GRAPH_PASS",
+      "data": {
+        "mode": "fused_amax"
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "graph:recompute"
+      }
+    },
+    {
+      "kind": "PROJECTION_GRAPH_PASS",
+      "data": {
+        "mode": "recompute"
+      }
+    },
+    {
+      "kind": "PROJECTION_GRAPH_PASS",
+      "data": {
+        "mode": "supplied_scales"
+      }
+    },
+    {
+      "kind": "FP8_ROUTE_PASS",
+      "data": {
+        "q_tokens": 512,
+        "kv_tokens": 8192,
+        "q_quantizations": 1,
+        "q_reuses": 0
+      }
+    },
+    {
+      "kind": "FP8_FMHA_ACCURACY",
+      "data": {
+        "q_tokens": 512,
+        "kv_tokens": 8192,
+        "bf16_vs_fp64": {
+          "relative_rms": 0.0019135703332722187,
+          "max_abs": 0.000627562403678894
+        },
+        "fp8_vs_fp64": {
+          "relative_rms": 0.03649749606847763,
+          "max_abs": 0.011201582849025726
+        },
+        "fp8_vs_bf16": {
+          "relative_rms": 0.036547061055898666,
+          "max_abs": 0.01123046875
+        },
+        "fp8_fmha_vs_dequantized_fp64": {
+          "relative_rms": 0.011573323048651218,
+          "max_abs": 0.003140069544315338
+        },
+        "fp8_lse_vs_fp64": {
+          "relative_rms": 0.00037302245618775487,
+          "max_abs": 0.015086174011230469
+        },
+        "fp8_lse_vs_dequantized_fp64": {
+          "relative_rms": 8.480761692908345e-08,
+          "max_abs": 2.86102294921875e-06
+        },
+        "rms_limit": 0.1,
+        "lse_abs_limit": 0.2,
+        "scope": "synthetic kernel numerical check; not model accuracy"
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "fused_amax:long_context"
+      }
+    },
+    {
+      "kind": "PROJECTION_ATTENTION",
+      "data": {
+        "mode": "fused_amax",
+        "stress": false,
+        "q_tokens": 512,
+        "kv_tokens": 8192,
+        "vs_dynamic": {
+          "relative_rms": 0.0,
+          "max_abs": 0.0
+        },
+        "vs_bf16": {
+          "relative_rms": 0.036547061055898666,
+          "max_abs": 0.01123046875
+        },
+        "lse_vs_dynamic": {
+          "relative_rms": 0.0,
+          "max_abs": 0.0
+        },
+        "clipping_fraction": {
+          "k": 0.0,
+          "v": 0.0
+        },
+        "scales": [
+          0.011439732275903225,
+          0.012416294775903225
+        ],
+        "numerical_gate_pass": true,
+        "diagnostic_only": false
+      }
+    },
+    {
+      "kind": "PROJECTION_EXACT_PASS",
+      "data": {
+        "case": "recompute:long_context"
+      }
+    },
+    {
+      "kind": "PROJECTION_ATTENTION",
+      "data": {
+        "mode": "recompute",
+        "stress": false,
+        "q_tokens": 512,
+        "kv_tokens": 8192,
+        "vs_dynamic": {
+          "relative_rms": 0.0,
+          "max_abs": 0.0
+        },
+        "vs_bf16": {
+          "relative_rms": 0.036547061055898666,
+          "max_abs": 0.01123046875
+        },
+        "lse_vs_dynamic": {
+          "relative_rms": 0.0,
+          "max_abs": 0.0
+        },
+        "clipping_fraction": {
+          "k": 0.0,
+          "v": 0.0
+        },
+        "scales": [
+          0.011439732275903225,
+          0.012416294775903225
+        ],
+        "numerical_gate_pass": true,
+        "diagnostic_only": false
+      }
+    },
+    {
+      "kind": "PROJECTION_ATTENTION",
+      "data": {
+        "mode": "supplied_scales",
+        "stress": false,
+        "q_tokens": 512,
+        "kv_tokens": 8192,
+        "vs_dynamic": {
+          "relative_rms": 0.03504825383424759,
+          "max_abs": 0.01953125
+        },
+        "vs_bf16": {
+          "relative_rms": 0.03700001537799835,
+          "max_abs": 0.015625
+        },
+        "lse_vs_dynamic": {
+          "relative_rms": 0.00043237520731054246,
+          "max_abs": 0.009177207946777344
+        },
+        "clipping_fraction": {
+          "k": 0.0,
+          "v": 0.0
+        },
+        "scales": [
+          0.0223214291036129,
+          0.0230189748108387
+        ],
+        "numerical_gate_pass": true,
+        "diagnostic_only": false
+      }
+    },
+    {
+      "kind": "PROJECTION_ATTENTION",
+      "data": {
+        "mode": "supplied_scales",
+        "stress": true,
+        "q_tokens": 512,
+        "kv_tokens": 8192,
+        "vs_dynamic": {
+          "relative_rms": 0.19419518113136292,
+          "max_abs": 7.0625
+        },
+        "vs_bf16": {
+          "relative_rms": 0.19874721765518188,
+          "max_abs": 6.90625
+        },
+        "lse_vs_dynamic": {
+          "relative_rms": 0.012989959679543972,
+          "max_abs": 2.2043190002441406
+        },
+        "clipping_fraction": {
+          "k": 0.016877545043826103,
+          "v": 0.007150094024837017
+        },
+        "scales": [
+          0.0213448666036129,
+          0.0239955373108387
+        ],
+        "numerical_gate_pass": false,
+        "diagnostic_only": true
+      }
+    },
+    {
+      "kind": "PROJECTION_TIMING",
+      "data": {
+        "kv_tokens": 8192,
+        "heads": 12,
+        "results": {
+          "native_projection_plus_dynamic_quant": {
+            "median_ms": 0.09392889738082885,
+            "samples_ms": [
+              0.09673494696617127,
+              0.09467694759368897,
+              0.09392889738082885,
+              0.09309089779853821,
+              0.09244089722633361
+            ],
+            "speed_ratio": 1.0
+          },
+          "fused_amax": {
+            "median_ms": 0.08634085059165955,
+            "samples_ms": [
+              0.08756489753723144,
+              0.08687689900398254,
+              0.08634085059165955,
+              0.08583689928054809,
+              0.08537884950637817
+            ],
+            "speed_ratio": 1.0878847815045998
+          },
+          "recompute": {
+            "median_ms": 0.1261412978172302,
+            "samples_ms": [
+              0.1289212942123413,
+              0.12753125429153442,
+              0.1261412978172302,
+              0.12519924640655516,
+              0.1241052508354187
+            ],
+            "speed_ratio": 0.7446324003810803
+          },
+          "supplied_scales": {
+            "median_ms": 0.06053659915924072,
+            "samples_ms": [
+              0.06086059808731079,
+              0.060616600513458255,
+              0.06053659915924072,
+              0.06035059690475464,
+              0.06026859879493714
+            ],
+            "speed_ratio": 1.551605122939763
+          }
+        },
+        "atom_scale_preparation": {
+          "median_ms": 0.005766050145030022,
+          "samples_ms": [
+            0.00577004998922348,
+            0.005766050145030022,
+            0.005912049859762192,
+            0.0057240501046180725,
+            0.005760100111365319
+          ]
+        },
+        "supplied_scales_total_one_chunk_ms": 0.06630264930427074,
+        "supplied_scales_total_four_chunks_ms": 0.2479124467819929,
+        "expanded_bf16_bytes": 62914560,
+        "scope": "single GPU graph kernel timing; excludes DCP, model and serving"
+      }
+    },
+    {
+      "kind": "PROJECTION_TIMING",
+      "data": {
+        "kv_tokens": 16384,
+        "heads": 12,
+        "results": {
+          "native_projection_plus_dynamic_quant": {
+            "median_ms": 0.1463674545288086,
+            "samples_ms": [
+              0.15383955240249633,
+              0.1476074457168579,
+              0.1463674545288086,
+              0.14592344760894777,
+              0.14584145545959473
+            ],
+            "speed_ratio": 1.0
+          },
+          "fused_amax": {
+            "median_ms": 0.13770534992218017,
+            "samples_ms": [
+              0.1390653967857361,
+              0.13785535097122192,
+              0.13729535341262816,
+              0.13770534992218017,
+              0.1374193549156189
+            ],
+            "speed_ratio": 1.0629031814052508
+          },
+          "recompute": {
+            "median_ms": 0.1905339002609253,
+            "samples_ms": [
+              0.19212394952774048,
+              0.19053789377212524,
+              0.1904718518257141,
+              0.19040385484695435,
+              0.1905339002609253
+            ],
+            "speed_ratio": 0.7681963909223856
+          },
+          "supplied_scales": {
+            "median_ms": 0.09287490248680115,
+            "samples_ms": [
+              0.09415894746780396,
+              0.09322295188903809,
+              0.09287490248680115,
+              0.09261494874954224,
+              0.09284089803695679
+            ],
+            "speed_ratio": 1.5759634800112925
+          }
+        },
+        "atom_scale_preparation": {
+          "median_ms": 0.005890050157904625,
+          "samples_ms": [
+            0.005890050157904625,
+            0.005874050036072731,
+            0.005992050096392631,
+            0.0059080500155687336,
+            0.0058560498058795925
+          ]
+        },
+        "supplied_scales_total_one_chunk_ms": 0.09876495264470578,
+        "supplied_scales_total_four_chunks_ms": 0.3773896601051092,
+        "expanded_bf16_bytes": 125829120,
+        "scope": "single GPU graph kernel timing; excludes DCP, model and serving"
+      }
+    },
+    {
+      "kind": "PROJECTION_TIMING",
+      "data": {
+        "kv_tokens": 65536,
+        "heads": 12,
+        "results": {
+          "native_projection_plus_dynamic_quant": {
+            "median_ms": 0.5407233715057373,
+            "samples_ms": [
+              0.5414593696594239,
+              0.5403873443603515,
+              0.5407233715057373,
+              0.5407273769378662,
+              0.5395333290100097
+            ],
+            "speed_ratio": 1.0
+          },
+          "fused_amax": {
+            "median_ms": 0.5393513679504395,
+            "samples_ms": [
+              0.5413233757019043,
+              0.5417133331298828,
+              0.5392173290252685,
+              0.5393513679504395,
+              0.5387993335723877
+            ],
+            "speed_ratio": 1.0025438028654892
+          },
+          "recompute": {
+            "median_ms": 0.5819397926330566,
+            "samples_ms": [
+              0.582083797454834,
+              0.5818337440490723,
+              0.5821317672729492,
+              0.581867790222168,
+              0.5819397926330566
+            ],
+            "speed_ratio": 0.9291740801211915
+          },
+          "supplied_scales": {
+            "median_ms": 0.2725947380065918,
+            "samples_ms": [
+              0.2775347471237183,
+              0.27349669933319093,
+              0.2725947380065918,
+              0.27258470058441164,
+              0.27217869758605956
+            ],
+            "speed_ratio": 1.9836163216498397
+          }
+        },
+        "atom_scale_preparation": {
+          "median_ms": 0.0059160500764846805,
+          "samples_ms": [
+            0.005912049859762192,
+            0.006002049893140793,
+            0.0059600498527288435,
+            0.005892099812626839,
+            0.0059160500764846805
+          ]
+        },
+        "supplied_scales_total_one_chunk_ms": 0.27851078808307644,
+        "supplied_scales_total_four_chunks_ms": 1.096295002102852,
+        "expanded_bf16_bytes": 503316480,
+        "scope": "single GPU graph kernel timing; excludes DCP, model and serving"
+      }
+    },
+    {
+      "kind": "PROJECTION_EXPERIMENT_PASS",
+      "data": {
+        "elapsed_seconds": 57.8719729417935
+      }
+    }
+  ],
+  "limitations": [
+    "Synthetic kernel checks, not model accuracy.",
+    "Supplied-scale stress case exceeded numerical gate and is reported as a failure diagnostic.",
+    "Graph microbenchmarks on a shared host; excludes serving, DCP, and full model execution.",
+    "BF16 projection retained; production serving does not select the prototype."
+  ],
+  "next_step": "Measure new-token versus cached K/V ranges on representative Kimi tensors before considering supplied scales for serving."
+}

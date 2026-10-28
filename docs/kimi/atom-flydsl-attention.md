@@ -68,3 +68,6 @@ CPU routing checks: `python -m unittest discover -s upstream/InferenceX/benchmar
 ## Projection-output experiment
 
 [BF16 projection with FP8 output experiment](projection-fp8-experiment.md) compares ATOM-style supplied scales with exact dynamic alternatives. It is not enabled in serving.
+
+
+[Native parity draft](../../patches/vllm/README.md): pinned to the tested vLLM commit; native GPU validation has not run.
