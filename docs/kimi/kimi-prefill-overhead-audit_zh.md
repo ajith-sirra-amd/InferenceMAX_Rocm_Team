@@ -48,7 +48,7 @@
 - 当前是 **FP8 通信 + BF16 展开**，随后再次量化以进行 FP8 FMHA。
 - 尚未实现直接输出 expanded FP8 K/V。
 - BF16 kv_b 权重是当前固定版本 native fused 实现的适配条件，并非 FP8 all-gather 的数学要求。
-- Fallback 会调用 kv_b_proj module 并 gather expanded BF16 KV；当前一次性 hook 观察实际 module 调用来判定 route。
+- 固定版本 fallback 先 gather compact BF16 latent KV，再重排并调用 kv_b_proj 展开；通信逻辑 payload 为1,152 bytes/token，compact FP8 为576 bytes/token。当前一次性 hook 观察实际 module 调用来判定 route。
 - FP8 kv_b 权重可以省显存，但不兼容的权重格式会使当前 fused 路径不可用。
 
 ## 已测开销

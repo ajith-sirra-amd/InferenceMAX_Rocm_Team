@@ -48,7 +48,7 @@
 - This is **FP8 communication plus BF16 expansion**, followed by FP8 attention preparation.
 - Direct production of expanded FP8 K/V is **not implemented**.
 - BF16 `kv_b_proj` weights are an eligibility requirement of the pinned native fused route used here; this is not a mathematical requirement of FP8 all-gather.
-- The fallback invokes the `kv_b_proj` module and gathers expanded BF16 KV. The candidate temporarily observes that module call to distinguish the actual route.
+- The pinned fallback gathers compact BF16 latent KV first, reorganizes it, then invokes the `kv_b_proj` module to expand K/V. Its collective payload is 1,152 bytes/token before padding, versus 576 bytes/token for compact FP8. The candidate temporarily observes that module call to distinguish the actual route.
 - Quantizing these weights to FP8 may save memory but can select the fallback when the fused implementation cannot consume that weight format.
 
 ## Measured complete-call costs
@@ -115,6 +115,12 @@ GPU diagnostics use 12 heads on a shared host. These are CUDA-event timings, not
 - The controller prevents a duplicate full dispatch and pins the tested source SHA.
 - A failed or incomplete gate requires logs and a correction before another full run.
 - Full-run comparison must include KV pool, total/output throughput, request errors, reporting duration and cache-hit rates.
+
+## Pinned native implementation cross-check
+
+- [Native AITER MLA](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/v1/attention/backends/mla/rocm_aiter_mla.py): fused eligibility explicitly checks BF16 contiguous kv_b weights, absent weight_scale/bias, BF16 Q and row-index metadata.
+- [Native common MLA](https://github.com/vllm-project/vllm/blob/1b2a666391f2a24228a1436b64d547c34cc6b6ce/vllm/model_executor/layers/attention/mla_attention.py): fallback communicates the compact latent representation in BF16, then expands; it does not communicate expanded per-head K/V.
+- The64K chunk cap applies to global context rows. Under DCP8 the local row budget is64K/8, so a cached128K prefix requires multiple chunks.
 
 ## Code locations
 
