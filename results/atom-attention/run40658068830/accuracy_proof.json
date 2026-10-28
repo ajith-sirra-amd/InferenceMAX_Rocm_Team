@@ -1,0 +1,68 @@
+{
+  "run_id": 40658068830,
+  "conclusion": "success",
+  "serving_source_sha": "e4cf47a7650321e4bd40c83746088a2679ec0509",
+  "setup_source_verified": true,
+  "model": "moonshotai/Kimi-K3",
+  "num_unique_questions": 1319,
+  "sample_rows": 2638,
+  "rows_per_filter": {
+    "strict-match": 1319,
+    "flexible-extract": 1319
+  },
+  "correct_answers": {
+    "strict-match": 1282,
+    "flexible-extract": 1281
+  },
+  "metrics": {
+    "alias": "gsm8k",
+    "exact_match,strict-match": 0.9719484457922669,
+    "exact_match_stderr,strict-match": 0.0045482295338363475,
+    "exact_match,flexible-extract": 0.9711902956785443,
+    "exact_match_stderr,flexible-extract": 0.0046074842837674525
+  },
+  "threshold": 0.9,
+  "both_metrics_pass": true,
+  "validator_log": [
+    "2026-10-28T09:01:06.2639725Z PASS: gsm8k exact_match,strict-match = 0.9719 (>= 0.9 from default)",
+    "2026-10-28T09:01:06.2639976Z PASS: gsm8k exact_match,flexible-extract = 0.9712 (>= 0.9 from default)"
+  ],
+  "config": {
+    "model": "local-chat-completions",
+    "model_args": {
+      "model": "moonshotai/Kimi-K3",
+      "base_url": "http://0.0.0.0:8897/v1/chat/completions",
+      "api_key": "EMPTY",
+      "eos_string": "</s>",
+      "max_retries": 5,
+      "num_concurrent": 48,
+      "timeout": 1800,
+      "tokenized_requests": false,
+      "max_length": 32768
+    },
+    "batch_size": 1,
+    "batch_sizes": [],
+    "device": "cuda:0",
+    "use_cache": null,
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "gen_kwargs": {
+      "max_tokens": 16384,
+      "temperature": 0,
+      "top_p": 1
+    },
+    "random_seed": 0,
+    "numpy_seed": 1234,
+    "torch_seed": 1234,
+    "fewshot_seed": 1234
+  },
+  "num_fewshot": 5,
+  "artifact_ids": {
+    "eval": 12803622799,
+    "server": 12803686399,
+    "raw": 12804360136
+  },
+  "fp8_fmha_engagement_markers": 0,
+  "q_reuse_markers": 0,
+  "interpretation": "Serving configuration passed full GSM8K; no FP8 FMHA calls occurred because the hybrid policy used BF16. This is not model-accuracy evidence for the cached FP8 kernel. Native port and later flag revision are not covered."
+}

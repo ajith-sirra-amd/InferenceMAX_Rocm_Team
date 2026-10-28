@@ -1,0 +1,25 @@
+{
+  "state": "dispatched",
+  "after_run": 40646139769,
+  "source_ref": "e4cf47a7650321e4bd40c83746088a2679ec0509",
+  "title": "vLLM Kimi Hybrid FP8 - Full GSM8K Accuracy - after 40646139769 - e4cf47a76503",
+  "payload": {
+    "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+    "inputs": {
+      "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+      "test-name": "vLLM Kimi Hybrid FP8 - Full GSM8K Accuracy - after 40646139769 - e4cf47a76503",
+      "ref": "e4cf47a7650321e4bd40c83746088a2679ec0509",
+      "runner-diagnostics-only": "false",
+      "attention-path-probe-only": "false",
+      "agentic-eval-only": "true",
+      "duration-override": "3600"
+    }
+  },
+  "last_checked_utc": "2026-10-28T08:36:20.679161+00:00",
+  "full_run_status": "in_progress",
+  "full_gpu_job_conclusion": "success",
+  "dispatch_started_utc": "2026-10-28T08:36:56.941277+00:00",
+  "dispatch_http_status": 204,
+  "run_id": 40658068830,
+  "url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40658068830"
+}

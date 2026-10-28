@@ -76,7 +76,7 @@ GPU diagnostics use 12 heads on a shared host. These are CUDA-event timings, not
 
 - Old-smoke request JSONL confirms warmup14success/85empty-response errors and measured476success/2empty-response errors. Watch the new server logs for the GEMM recovery warnings; their duration and contribution to throughput are unmeasured.
 - Numerical FP8 checks show roughly 4–5% RMS drift versus an unquantized FP64 reference.
-- Numerical checks are not model accuracy evidence. GSM8K is disabled by user instruction.
+- Numerical checks are not model accuracy evidence. GSM8K run40658068830 passed: strict-match 1282/1319 (97.1948%) and flexible-extract 1281/1319 (97.1190%), both above 90%. No FP8 FMHA engagement markers occurred; this validates the serving configuration on BF16-routed GSM8K prompts, not the cached FP8 kernel.
 - Crossover policy is provisional: BF16 if `max_query_len < 512` **or** `max_seq_len < 8192`; FP8 otherwise. It is supported by the measured examples, not an exhaustive shape sweep.
 
 ## Avoidable overhead and implemented changes
@@ -89,7 +89,7 @@ GPU diagnostics use 12 heads on a shared host. These are CUDA-event timings, not
 | Unused main-model native ASM PS planning/scratch | Disable before allocation in custom metadata builder | Native draft PS buffers may still be allocated |
 | FP8 kv_b weight override selects incompatible fused route | Remove `*.self_attn.kv_b_proj` from online FP8 targets | Costs approximately 36 MiB/GPU raw weight storage |
 | Broad diagnostic printing | One-time path/config markers and one-call route hook | No per-request tensor dumps |
-| Unnecessary model accuracy evaluation | Controlled prefix benchmark and numerical kernel checks | No new model-accuracy conclusion |
+| Model accuracy evaluation | Separate full GSM8K run40658068830, real verification | Both metrics pass; no FP8 FMHA engagement |
 | NCCL log flooding | `NCCL_DEBUG=VERSION`; explicit single-node loopback bootstrap | Reducing logging does not by itself fix a collective hang |
 
 - FP8 → FP4 → FP8 **weight formats across layers do not inherently cause activation casts**.
@@ -148,6 +148,6 @@ Paths below are repository-relative.
 - Requested FULL_AND_PIECEWISE was **resolved to FULL_DECODE_ONLY** because the model had no compiled submodule and breakable graphs were disabled. Earlier graph-sizing capture used **9.209.64 GiB/GPU**; final capture reported **6.67 GiB/GPU**. These are separate stages, not additive retained allocations.
 - Runtime aligned attention blocks to **1536 tokens**, padded Mamba pages by **3.97%**, and warned that 18 added padding layers could waste at most **26.09%** of the affected cache grouping. The latter is a planner bound, not a measured global memory loss.
 - No hipBLASLt recovery warning appeared in this controlled prefix smoke. That does not establish its absence in full AgentX shapes.
-- Automatic continuation already dispatched [full run40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769). It was in progress at **07:20 UTC**. Do not dispatch a duplicate.
+- Full performance run40646139769 succeeded: 16,915.72154 total and 117.84290 output tokens/s/GPU (+9.30% and +14.35% versus baseline39239112271). This is the complete candidate, not isolated FMHA attribution. [Results and evidence](fp8-fmha-results-2026-10-28.md). GSM8K run40658068830 passed: strict-match 1282/1319 (97.1948%) and flexible-extract 1281/1319 (97.1190%), both above 90%. No FP8 FMHA engagement markers occurred; this validates the serving configuration on BF16-routed GSM8K prompts, not the cached FP8 kernel.
 - Full settings: Moonshot, TP8/DCP8, C48, DSpark k4, warmup10/lane, duration3600 seconds, no GSM8K. The completed setup-job log verifies checkout **e4cf47a7650321e4bd40c83746088a2679ec0509**; the workflow head is a later documentation commit.
-- The prior local watcher terminated at 07:05 UTC. Monitoring resumed in the replacement session with 60-second checks. Full throughput, request errors and cache-hit rates are still pending.
+- Full throughput, measured/warmup errors and cache-hit rates are now recorded in the linked results. GSM8K run40658068830 passed: strict-match 1282/1319 (97.1948%) and flexible-extract 1281/1319 (97.1190%), both above 90%. No FP8 FMHA engagement markers occurred; this validates the serving configuration on BF16-routed GSM8K prompts, not the cached FP8 kernel.

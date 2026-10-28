@@ -22,7 +22,7 @@ CPU 路由检查命令：`python -m unittest discover -s upstream/InferenceX/ben
 - Native vLLM、固定 ROCm image；Moonshot Kimi-K3。
 - 使用 ATOM 同样的 AITER FlyDSL FP8 FMHA API，不替换 vLLM 框架。
 - 不 patch 安装的 vLLM/AITER source；使用本仓库扩展。
-- 当前 smoke40643563020，source SHA e4cf47a7650321e4bd40c83746088a2679ec0509；已验证全部 8 workers 的实际调用、20/20 请求成功和 22,665,373 KV tokens。Full replay [40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769) 已自动启动，结果待完成。
+- 当前 smoke40643563020，source SHA e4cf47a7650321e4bd40c83746088a2679ec0509；已验证全部 8 workers 的实际调用、20/20 请求成功和 22,665,373 KV tokens。Full replay [40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769) 已完成，详见[完整结果](fp8-fmha-results-2026-10-28_zh.md)。GSM8K run40658068830 已通过：strict-match 为 1282/1319（97.1948%），flexible-extract 为 1281/1319（97.1190%），均超过 90%。没有 FP8 FMHA engagement marker；验证的是 GSM8K 使用 BF16 路径的服务配置，并非 cached FP8 kernel 的模型准确率。
 
 | 步骤 | 当前路径 |
 |---|---|
@@ -41,7 +41,7 @@ CPU 路由检查命令：`python -m unittest discover -s upstream/InferenceX/ben
 - TP8 每 rank12 heads；Q/K head192，V head128。
 - 完整 cached call diagnostic：Q1024/KV8192 改善1.656；Q256/KV4096 退化0.827。
 - QKV quant 约55µs，Q reuse 后 KV quant 仍约52µs。
-- Numerical drift 约45% RMS，不是模型 accuracy 证据。
+- Numerical preflight 已通过其误差阈值，不是模型 accuracy 证据。
 
 ## 验证与自动继续
 
@@ -49,7 +49,7 @@ CPU 路由检查命令：`python -m unittest discover -s upstream/InferenceX/ben
 - 当前 prefix smoke 在模型加载前运行最新 preflight。
 - vllm bench serve prefix_repetition：32K/128K prefix、suffix1024、短输出。
 - Gate：20/20 请求成功、缓存命中增长、KV capacity 行、所有8 workers 的BF16 causal / FP8 cached / disabled main PS / Q reuse / native fused FP8 gather。
-- Controller 每60秒检查；通过后 full agentic replay：warmup10/lane、3600秒、无GSM8K、固定通过 smoke 的 SHA。
+- 完整性能 replay 已完成：warmup10/lane、3600秒、固定通过 smoke 的 SHA。用户后续要求的 GSM8K 已独立提交为 run40658068830。
 - 避免重复 dispatch；gate 失败先检查日志并修复。
 
 ## 已有结果与限制

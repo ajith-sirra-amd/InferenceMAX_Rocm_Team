@@ -6,7 +6,7 @@
 
 已检查本仓库的 Kimi ATOM 启动脚本、ATOM 版本 `661ef7661eef0d804d2b52d81ed41d80aeaf9fdb` 和运行中的 vLLM 版本 `1b2a666391f2a24228a1436b64d547c34cc6b6ce`。源码支持某路径，不等于历史镜像实际启用了该路径。
 
-Hybrid vLLM smoke40643563020 的20/20请求与全部8个worker路径检查均通过。正在监控完整 AgentX run40646139769，吞吐结果仍待完成。继续使用 Moonshot、现有 perf 分支、warmup10/lane、3600秒，不跑 GSM8K。
+完整性能 run40646139769 已成功：总吞吐 16,915.72154、输出吞吐 117.84290 tokens/s/GPU，相对 baseline39239112271 提升 9.30% 和 14.35%。这是完整候选配置的结果，不能归因于 FMHA 单项。详见[结果与证据](fp8-fmha-results-2026-10-28_zh.md)。GSM8K run40658068830 已通过：strict-match 为 1282/1319（97.1948%），flexible-extract 为 1281/1319（97.1190%），均超过 90%。没有 FP8 FMHA engagement marker；验证的是 GSM8K 使用 BF16 路径的服务配置，并非 cached FP8 kernel 的模型准确率。
 
 **重要更正：** 检查的 ATOM 版本中，`ATOM_USE_FLYDSL_FP8_PREFILL_ATTN` 默认值为 **0**，Kimi 脚本没有设置它。FlyDSL gather 开关默认开启。FP8 FMHA 是可选功能；没有镜像环境和实际调用证据，不能把 ATOM 测试的吞吐归因于 FP8 FMHA。
 

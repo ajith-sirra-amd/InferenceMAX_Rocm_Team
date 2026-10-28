@@ -23,8 +23,8 @@ CPU routing checks: `python -m unittest discover -s upstream/InferenceX/benchmar
 - Model: **Moonshot Kimi-K3**; native draft remains Inferact/Kimi-K3-DSpark.
 - FP8 API: `aiter.ops.flydsl.flydsl_flash_attn_fp8_func`, also used by ATOM.
 - Extension lives in this repository; installed vLLM/AITER source is not patched.
-- Current source under test: `e4cf47a7650321e4bd40c83746088a2679ec0509`.
-- Current smoke: [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020). Artifacts confirm all eight workers, 20/20 successful requests and 22,665,373 KV tokens. Full replay [40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769) was dispatched automatically; results are pending.
+- GPU-tested serving source: `e4cf47a7650321e4bd40c83746088a2679ec0509`.
+- Current smoke: [40643563020](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40643563020). Artifacts confirm all eight workers, 20/20 successful requests and 22,665,373 KV tokens. Full replay [40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769) completed; see the [full results](fp8-fmha-results-2026-10-28.md). GSM8K run40658068830 passed: strict-match 1282/1319 (97.1948%) and flexible-extract 1281/1319 (97.1190%), both above 90%. No FP8 FMHA engagement markers occurred; this validates the serving configuration on BF16-routed GSM8K prompts, not the cached FP8 kernel.
 
 | Stage | Current candidate |
 |---|---|
@@ -44,7 +44,7 @@ CPU routing checks: `python -m unittest discover -s upstream/InferenceX/benchmar
 - Complete cached-attention diagnostic: Q1024/KV8192 improved 1.656 including quantization; Q256/KV4096 regressed 0.827.
 - QKV preparation costs about55µs in those diagnostics; KV-only preparation still costs about52µs.
 - Full throughput and 23M KV pool are not established by standalone kernel timing.
-- Numerical RMS drift is roughly45% versus unquantized FP64 reference; no model accuracy claim.
+- Numerical preflight passed its error thresholds; it does not establish model accuracy.
 
 ## Validation and continuation
 
@@ -53,7 +53,7 @@ CPU routing checks: `python -m unittest discover -s upstream/InferenceX/benchmar
 - Actual `vllm bench serve --backend vllm` uses prefix_repetition at32K/128K prefixes, suffix1024 and short outputs.
 - Gate:20 successful requests, zero failures, increased cache hits, KV-capacity line, and all-eight-worker BF16causal / FP8cached / disabledmainPS / Qreuse / nativeFP8gather markers.
 - `utils/atom_attention/continue_benchmark.py` polls every60seconds, gates artifacts and dispatches the authorized full replay.
-- Full uses **warmup10 per lane,3600seconds**, no GSM8K, and the smoke-tested source SHA.
+- The completed performance run used **warmup10 per lane,3600seconds** and the smoke-tested SHA. The subsequently requested GSM8K evaluation is a separate run40658068830.
 - The controller avoids duplicate dispatches; an unmet gate requires diagnosis before another full run.
 
 ## Evidence boundaries

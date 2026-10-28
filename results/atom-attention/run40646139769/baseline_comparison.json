@@ -1,0 +1,75 @@
+{
+  "total_tokens_per_second_per_gpu": {
+    "baseline": 15476.46881,
+    "current": 16915.72154,
+    "relative_change_pct": 9.299619620400978
+  },
+  "output_tokens_per_second_per_gpu": {
+    "baseline": 103.05251,
+    "current": 117.8429,
+    "relative_change_pct": 14.352285063216797
+  },
+  "reporting_duration_seconds": {
+    "baseline": 3629.4955,
+    "current": 3627.79603,
+    "relative_change_pct": -0.0468238629859119
+  },
+  "ttft_p90_seconds": {
+    "baseline": 4.11628,
+    "current": 3.18346,
+    "relative_change_pct": -22.661723692265824
+  },
+  "itl_p90_seconds": {
+    "baseline": 0.04778,
+    "current": 0.04205,
+    "relative_change_pct": -11.992465466722491
+  },
+  "successful_requests": {
+    "baseline": 3357,
+    "current": 3598,
+    "relative_change_pct": 7.179028894846584
+  },
+  "gpu_kv_pool_tokens": {
+    "baseline": 20951355,
+    "current": 22665373,
+    "relative_change_pct": 8.180941041760793
+  },
+  "gpu_cache_hit_rate": {
+    "baseline": 0.81165,
+    "current": 0.85205,
+    "relative_change_pct": 4.977514938705108,
+    "percentage_point_change": 4.039999999999999
+  },
+  "cpu_external_cache_hit_rate": {
+    "baseline": 0.11884,
+    "current": 0.08192,
+    "relative_change_pct": -31.066980814540557,
+    "percentage_point_change": -3.6919999999999993
+  },
+  "overall_cache_hit_rate": {
+    "baseline": 0.9305,
+    "current": 0.93396,
+    "relative_change_pct": 0.3718430951101581,
+    "percentage_point_change": 0.34600000000000186
+  },
+  "mean_input_tokens": {
+    "baseline": 132970.49806,
+    "current": 135495.89188,
+    "relative_change_pct": 1.8992136277179883
+  },
+  "mean_actual_output_tokens": {
+    "baseline": 891.34018,
+    "current": 950.55031,
+    "relative_change_pct": 6.642820701743735
+  },
+  "mean_expected_output_tokens": {
+    "baseline": 1265.72927,
+    "current": 1272.07981,
+    "relative_change_pct": 0.5017297261364462
+  },
+  "average_total_gpu_power_w": {
+    "baseline": 8503.701,
+    "current": 8805.117,
+    "relative_change_pct": 3.544527259366248
+  }
+}

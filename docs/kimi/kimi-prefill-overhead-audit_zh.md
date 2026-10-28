@@ -88,7 +88,7 @@
 | 主模型未使用的 ASM PS scratch | 分配前禁用 | Draft native PS 仍可能存在 |
 | FP8 kv_b 权重不兼容 fused 路径 | 从 targets 删除 kv_b_proj | 约 36 MiB/GPU 原始权重成本 |
 | 大量诊断打印 | 一次性 marker 和一次 module hook | 无逐请求 tensor dump |
-| 不必要的 accuracy 测试 | Prefix smoke + numerical check | 不提供新增 accuracy 结论 |
+| 模型 accuracy 测试 | 独立完整 GSM8K run40658068830，真实验证 | 两项指标通过；未触发 FP8 FMHA |
 | NCCL 日志刷屏 | NCCL_DEBUG=VERSION + 单节点 loopback bootstrap | 降低日志不等于修复 hang |
 
 - 相邻层 FP8 → FP4 → FP8 **权重格式**并不必然触发激活 cast；应检查实际 GEMM 输入/输出 dtype 和 scale。
@@ -137,6 +137,6 @@
 - 请求的 FULL_AND_PIECEWISE 实际降为 **FULL_DECODE_ONLY**，原因是模型没有 compiled submodule 且关闭了 breakable graphs。较早的 graph-sizing capture 占用 **9.209.64 GiB/GPU**；最终 capture 报告 **6.67 GiB/GPU**。这是两个阶段，不能相加为常驻显存。
 - Attention block 实际对齐为 **1536 tokens**，Mamba page padding 为 **3.97%**。Planner 还报告新增 18 个 padding layers，相关 cache grouping 最多可能浪费 **26.09%**；这是上界，不是全局显存浪费的实测值。
 - 此次受控前缀 smoke 未出现 hipBLASLt recovery warning；完整 AgentX 的形状不同，仍需检查。
-- 已自动启动 [full run40646139769](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40646139769)，**07:20 UTC** 时仍在运行。不要重复 dispatch。
+- 完整性能 run40646139769 已成功：总吞吐 16,915.72154、输出吞吐 117.84290 tokens/s/GPU，相对 baseline39239112271 提升 9.30% 和 14.35%。这是完整候选配置的结果，不能归因于 FMHA 单项。详见[结果与证据](fp8-fmha-results-2026-10-28_zh.md)。GSM8K run40658068830 已通过：strict-match 为 1282/1319（97.1948%），flexible-extract 为 1281/1319（97.1190%），均超过 90%。没有 FP8 FMHA engagement marker；验证的是 GSM8K 使用 BF16 路径的服务配置，并非 cached FP8 kernel 的模型准确率。
 - Full 配置：Moonshot、TP8/DCP8、C48、DSpark k4、warmup10/lane、3600 秒、无 GSM8K。已完成的 setup-job 日志确认 checkout 为 **e4cf47a7650321e4bd40c83746088a2679ec0509**；workflow head 是后续文档提交。
-- 原本地 watcher 于 07:05 UTC 终止。新会话已恢复每 60 秒检查；完整 throughput、请求错误和 cache-hit rate 仍待结果。
+- 完整吞吐、正式测量/warmup 错误及 cache-hit rate 已记录于结果页。GSM8K run40658068830 已通过：strict-match 为 1282/1319（97.1948%），flexible-extract 为 1281/1319（97.1190%），均超过 90%。没有 FP8 FMHA engagement marker；验证的是 GSM8K 使用 BF16 路径的服务配置，并非 cached FP8 kernel 的模型准确率。

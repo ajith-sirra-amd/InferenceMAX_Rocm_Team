@@ -1,0 +1,315 @@
+{
+  "baseline": {
+    "input_bins": [
+      {
+        "input_tokens_min": 0,
+        "input_tokens_max_exclusive": 8192,
+        "requests": 157,
+        "time_to_first_token": {
+          "n": 157,
+          "mean": 753.57448477707,
+          "p50": 570.387081,
+          "p90": 1389.5916276000003
+        },
+        "inter_token_latency": {
+          "n": 157,
+          "mean": 39.69923760931769,
+          "p50": 34.68010641132075,
+          "p90": 56.53681292359609
+        },
+        "output_sequence_length": {
+          "n": 157,
+          "mean": 752.3885350318471,
+          "p50": 796.0,
+          "p90": 1478.4
+        },
+        "request_latency": {
+          "n": 157,
+          "mean": 25331.688371165605,
+          "p50": 22408.180809999998,
+          "p90": 54069.6682968
+        }
+      },
+      {
+        "input_tokens_min": 8192,
+        "input_tokens_max_exclusive": 32768,
+        "requests": 128,
+        "time_to_first_token": {
+          "n": 128,
+          "mean": 1712.148549765625,
+          "p50": 1249.546699,
+          "p90": 3164.5965248999996
+        },
+        "inter_token_latency": {
+          "n": 128,
+          "mean": 35.10196011270582,
+          "p50": 36.17423020110242,
+          "p90": 50.77055004503213
+        },
+        "output_sequence_length": {
+          "n": 128,
+          "mean": 372.8359375,
+          "p50": 176.5,
+          "p90": 725.3
+        },
+        "request_latency": {
+          "n": 128,
+          "mean": 12517.66618115625,
+          "p50": 8369.893084,
+          "p90": 27993.123732099997
+        }
+      },
+      {
+        "input_tokens_min": 32768,
+        "input_tokens_max_exclusive": 131072,
+        "requests": 1982,
+        "time_to_first_token": {
+          "n": 1982,
+          "mean": 2139.89811057669,
+          "p50": 1444.8624105,
+          "p90": 3926.9282203000002
+        },
+        "inter_token_latency": {
+          "n": 1982,
+          "mean": 25.778775982666023,
+          "p50": 24.39450632199088,
+          "p90": 48.084185084231365
+        },
+        "output_sequence_length": {
+          "n": 1982,
+          "mean": 694.9490413723512,
+          "p50": 305.5,
+          "p90": 1519.7000000000003
+        },
+        "request_latency": {
+          "n": 1982,
+          "mean": 15667.06407891675,
+          "p50": 7692.534170499999,
+          "p90": 30695.3349642
+        }
+      },
+      {
+        "input_tokens_min": 131072,
+        "input_tokens_max_exclusive": 262144,
+        "requests": 761,
+        "time_to_first_token": {
+          "n": 761,
+          "mean": 2612.690029844941,
+          "p50": 1640.841138,
+          "p90": 4533.167721
+        },
+        "inter_token_latency": {
+          "n": 761,
+          "mean": 24.268358290707987,
+          "p50": 25.810285067567566,
+          "p90": 45.1801499844413
+        },
+        "output_sequence_length": {
+          "n": 761,
+          "mean": 1325.6754270696451,
+          "p50": 534.0,
+          "p90": 3452.0
+        },
+        "request_latency": {
+          "n": 761,
+          "mean": 29756.059493749013,
+          "p50": 9993.782600999999,
+          "p90": 71818.466909
+        }
+      },
+      {
+        "input_tokens_min": 262144,
+        "input_tokens_max_exclusive": null,
+        "requests": 329,
+        "time_to_first_token": {
+          "n": 329,
+          "mean": 3583.281628267477,
+          "p50": 2339.256127,
+          "p90": 5389.932505599999
+        },
+        "inter_token_latency": {
+          "n": 329,
+          "mean": 27.420352320096242,
+          "p50": 30.692187641604008,
+          "p90": 46.592944233644985
+        },
+        "output_sequence_length": {
+          "n": 329,
+          "mean": 1337.8510638297873,
+          "p50": 670.0,
+          "p90": 3671.799999999999
+        },
+        "request_latency": {
+          "n": 329,
+          "mean": 37981.2183178541,
+          "p50": 15194.857284,
+          "p90": 93739.58509299997
+        }
+      }
+    ],
+    "output_length_mismatch_pct": {
+      "n": 3357,
+      "mean": 0.0,
+      "p50": 0.0,
+      "negative_count": 0,
+      "positive_count": 0
+    }
+  },
+  "current": {
+    "input_bins": [
+      {
+        "input_tokens_min": 0,
+        "input_tokens_max_exclusive": 8192,
+        "requests": 169,
+        "time_to_first_token": {
+          "n": 169,
+          "mean": 927.2746172781065,
+          "p50": 562.367941,
+          "p90": 1404.297177599998
+        },
+        "inter_token_latency": {
+          "n": 169,
+          "mean": 35.594455766968395,
+          "p50": 31.967119676842103,
+          "p90": 49.51542641767123
+        },
+        "output_sequence_length": {
+          "n": 169,
+          "mean": 747.3727810650887,
+          "p50": 796.0,
+          "p90": 1454.3999999999996
+        },
+        "request_latency": {
+          "n": 169,
+          "mean": 22930.360305177514,
+          "p50": 21485.061827999998,
+          "p90": 46343.105883599994
+        }
+      },
+      {
+        "input_tokens_min": 8192,
+        "input_tokens_max_exclusive": 32768,
+        "requests": 157,
+        "time_to_first_token": {
+          "n": 157,
+          "mean": 1503.4432521910828,
+          "p50": 1158.379064,
+          "p90": 2692.343379
+        },
+        "inter_token_latency": {
+          "n": 157,
+          "mean": 31.962708647918138,
+          "p50": 31.56449437857143,
+          "p90": 45.25543398614869
+        },
+        "output_sequence_length": {
+          "n": 157,
+          "mean": 679.5859872611464,
+          "p50": 173.0,
+          "p90": 717.2
+        },
+        "request_latency": {
+          "n": 157,
+          "mean": 10646.142831082801,
+          "p50": 7426.707936,
+          "p90": 21488.133746599997
+        }
+      },
+      {
+        "input_tokens_min": 32768,
+        "input_tokens_max_exclusive": 131072,
+        "requests": 2064,
+        "time_to_first_token": {
+          "n": 2064,
+          "mean": 1716.5868380789727,
+          "p50": 1215.62847,
+          "p90": 3024.8937620999995
+        },
+        "inter_token_latency": {
+          "n": 2064,
+          "mean": 23.497472830737657,
+          "p50": 23.815365039152432,
+          "p90": 42.47324184251533
+        },
+        "output_sequence_length": {
+          "n": 2064,
+          "mean": 762.8304263565891,
+          "p50": 306.0,
+          "p90": 1560.400000000001
+        },
+        "request_latency": {
+          "n": 2064,
+          "mean": 13935.325369897771,
+          "p50": 6885.8997815,
+          "p90": 26678.7895071
+        }
+      },
+      {
+        "input_tokens_min": 131072,
+        "input_tokens_max_exclusive": 262144,
+        "requests": 846,
+        "time_to_first_token": {
+          "n": 846,
+          "mean": 2050.1846366406617,
+          "p50": 1413.3532805,
+          "p90": 3249.3399955
+        },
+        "inter_token_latency": {
+          "n": 846,
+          "mean": 22.015529575041267,
+          "p50": 24.11116330925266,
+          "p90": 39.53634814642384
+        },
+        "output_sequence_length": {
+          "n": 846,
+          "mean": 1340.8274231678488,
+          "p50": 535.0,
+          "p90": 3460.5
+        },
+        "request_latency": {
+          "n": 846,
+          "mean": 25861.37047255319,
+          "p50": 9067.152716999999,
+          "p90": 60568.438329
+        }
+      },
+      {
+        "input_tokens_min": 262144,
+        "input_tokens_max_exclusive": null,
+        "requests": 362,
+        "time_to_first_token": {
+          "n": 362,
+          "mean": 3013.048202201657,
+          "p50": 1993.4324265,
+          "p90": 4520.454586999998
+        },
+        "inter_token_latency": {
+          "n": 362,
+          "mean": 26.398950344185142,
+          "p50": 29.804451153604496,
+          "p90": 40.69337640132059
+        },
+        "output_sequence_length": {
+          "n": 362,
+          "mean": 1321.1519337016575,
+          "p50": 680.0,
+          "p90": 3613.7999999999997
+        },
+        "request_latency": {
+          "n": 362,
+          "mean": 36583.79235325967,
+          "p50": 18312.190985,
+          "p90": 92869.60295379994
+        }
+      }
+    ],
+    "output_length_mismatch_pct": {
+      "n": 3598,
+      "mean": 0.0,
+      "p50": 0.0,
+      "negative_count": 0,
+      "positive_count": 0
+    }
+  },
+  "note": "Input-length bins are descriptive; not paired identical request schedules. Raw osl_mismatch_diff_pct does not establish agreement with trace expected output length."
+}

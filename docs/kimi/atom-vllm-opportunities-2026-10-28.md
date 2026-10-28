@@ -6,7 +6,7 @@
 
 Reviewed the repository's Kimi ATOM launch script, ATOM source at `661ef7661eef0d804d2b52d81ed41d80aeaf9fdb`, and the serving vLLM source at `1b2a666391f2a24228a1436b64d547c34cc6b6ce`. ATOM source capability is not evidence that a historical image enabled that path.
 
-The hybrid vLLM prefix smoke40643563020 passed 20/20 requests and all-eight-worker path checks. Full AgentX run40646139769 is being monitored; its throughput result is pending. Keep Moonshot, the existing perf branch, warmup10/lane,3600seconds and no GSM8K.
+Full performance run40646139769 succeeded: 16,915.72154 total and 117.84290 output tokens/s/GPU (+9.30% and +14.35% versus baseline39239112271). This is the complete candidate, not isolated FMHA attribution. [Results and evidence](fp8-fmha-results-2026-10-28.md). GSM8K run40658068830 passed: strict-match 1282/1319 (97.1948%) and flexible-extract 1281/1319 (97.1190%), both above 90%. No FP8 FMHA engagement markers occurred; this validates the serving configuration on BF16-routed GSM8K prompts, not the cached FP8 kernel.
 
 **Important correction:** ATOM's `ATOM_USE_FLYDSL_FP8_PREFILL_ATTN` defaults to **0** at the inspected revision; this Kimi script does not set it. Its FlyDSL gather switch defaults to1. FP8 FMHA exists as an opt-in capability; do not attribute an ATOM benchmark's throughput to it without the image environment and actual invocation evidence.
 
