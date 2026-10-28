@@ -1,0 +1,47 @@
+name: Recover Kimi run 40719654583
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/kimi-attnfp8-kv-allgather-20261021]
+    paths: [.github/workflows/recover-kimi-run.yml]
+permissions:
+  contents: read
+jobs:
+  recover-existing-results:
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 20
+    steps:
+      - name: Inspect preserved workspace and disk usage
+        shell: bash
+        run: |
+          set -eo pipefail
+          test "${{ runner.name }}" = "mi355x-amd_pit2_p03_g07"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5"
+          test "$(realpath "$GITHUB_WORKSPACE")" = "$(git -C "$GITHUB_WORKSPACE" rev-parse --show-toplevel)"
+          date -u
+          df -h "$GITHUB_WORKSPACE"
+          df -i "$GITHUB_WORKSPACE"
+          quota -s 2>/dev/null || true
+          docker ps --format '{{.Names}} {{.Status}}'
+          du -x -h --max-depth=2 "$GITHUB_WORKSPACE" 2>/dev/null | sort -h | tail -25
+          find "$GITHUB_WORKSPACE/results" -maxdepth 3 -type f -printf '%s %p\n' | sort -nr | sed -n '1,20p'
+          stat -c '%y %s %n' "$GITHUB_WORKSPACE/results/server.log" "$GITHUB_WORKSPACE/results/benchmark.log" || true
+      - name: Upload existing failed-run evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: recovered-kimi-40719654583
+          if-no-files-found: error
+          path: |
+            kimik3*.json
+            results/server.log
+            results/benchmark.log
+            results/config.yaml
+            results/vllm_command.txt
+            results/benchmark_command.txt
+            results/ccdmap.txt
+            results/aiperf_artifacts/profile_export_aiperf*.json
+            results/aiperf_artifacts/profile_export_aiperf*.csv
+            results/aiperf_artifacts/server_metrics_export.json
+            results/aiperf_artifacts/gpu_telemetry_export.jsonl
+            results/aiperf_artifacts/logs/*.log
+            gpu_metrics.csv
