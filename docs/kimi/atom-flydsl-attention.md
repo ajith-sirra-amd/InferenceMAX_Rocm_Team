@@ -63,3 +63,8 @@ CPU routing checks: `python -m unittest discover -s upstream/InferenceX/benchmar
 - Primary baseline39239112271 is Moonshot,15,476.47 total tokens/sec/GPU; historical AMD baseline labels are inaccurate.
 - Communication, expansion GEMM and offload costs are not yet isolated. Roofline work remains on hold.
 - See the [overhead audit](kimi-prefill-overhead-audit.md) for exact matrix flow, costs and remaining constraints.
+
+
+## Projection-output experiment
+
+[BF16 projection with FP8 output experiment](projection-fp8-experiment.md) compares ATOM-style supplied scales with exact dynamic alternatives. It is not enabled in serving.

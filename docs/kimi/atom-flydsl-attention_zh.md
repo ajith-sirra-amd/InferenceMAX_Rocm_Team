@@ -59,3 +59,8 @@ CPU 路由检查命令：`python -m unittest discover -s upstream/InferenceX/ben
 - 主基线39239112271 实际为Moonshot：15,476.47 total tokens/sec/GPU。
 - 未单独测量communication、expansion GEMM和offload；roofline 暂停。
 - 详见[开销审计](kimi-prefill-overhead-audit_zh.md)。
+
+
+## 投影输出实验
+
+[BF16 投影输出 FP8 实验](projection-fp8-experiment_zh.md) 比较 ATOM supplied scale 与精确动态方案，尚未在服务中启用。
