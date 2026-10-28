@@ -101,12 +101,12 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
                 stream=None,
             )
             if stage not in self._logged_stages and not torch.cuda.is_current_stream_capturing():
-                logger.info(
-                    "[ATOM-FP8-ENGAGED] pid=%d stage=%s q=%s k=%s v=%s "
-                    "input=BF16 fmha=E4M3 output=BF16 causal=%s lse=%s "
+                print(
+                    f"[ATOM-FP8-ENGAGED] pid={os.getpid()} stage={stage} "
+                    f"q={tuple(q.shape)} k={tuple(k.shape)} v={tuple(v.shape)} "
+                    f"input=BF16 fmha=E4M3 output=BF16 causal={causal} lse={return_lse} "
                     "api=aiter.ops.flydsl.flydsl_flash_attn_fp8_func",
-                    os.getpid(), stage, tuple(q.shape), tuple(k.shape), tuple(v.shape),
-                    causal, return_lse,
+                    flush=True,
                 )
                 self._logged_stages.add(stage)
             return result

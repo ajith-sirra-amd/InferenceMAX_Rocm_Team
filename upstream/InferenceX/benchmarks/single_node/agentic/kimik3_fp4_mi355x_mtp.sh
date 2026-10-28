@@ -11,6 +11,19 @@ if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
     exit 1
 fi
 
+# Load only this repository's vLLM extension; do not patch installed source.
+ATOM_ATTENTION_PLUGIN_DIR="$(cd "$(dirname "$0")/atom_attention" && pwd)"
+export PYTHONPATH="$ATOM_ATTENTION_PLUGIN_DIR${PYTHONPATH:+:$PYTHONPATH}"
+if [ "$DURATION" = "600" ]; then
+    export AIPERF_WARMUP_REQUESTS_PER_LANE=1
+elif [ "$DURATION" = "3600" ]; then
+    export AIPERF_WARMUP_REQUESTS_PER_LANE=10
+else
+    echo "[ATOM-FP8-CONFIG] Expected duration 600 (smoke) or 3600 (full)" >&2
+    exit 1
+fi
+echo "[ATOM-FP8-CONFIG] framework=vllm prefill=AITER-FlyDSL-FP8 model=$MODEL plugin=$ATOM_ATTENTION_PLUGIN_DIR"
+
 DP_SIZE=1
 export DP_SIZE
 TOTAL_RANKS=$(( TP * DP_SIZE ))
@@ -38,7 +51,6 @@ resolve_trace_source
 install_agentic_deps
 mkdir -p "$RESULT_DIR"
 
-export AIPERF_WARMUP_REQUESTS_PER_LANE=10
 export AIPERF_EXPERIMENTAL_FAST=0
 
 export VLLM_ROCM_USE_AITER=1
@@ -200,7 +212,7 @@ LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
 CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 2 2 "$LADDER")
 COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
 
-CP_ARGS=(--attention-backend ROCM_AITER_MLA)
+CP_ARGS=(--attention-backend CUSTOM)
 if [ "$DCP_SIZE" -gt 1 ]; then
     CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a)
 fi
@@ -222,7 +234,7 @@ if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
 
 echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
 
-ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
+ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"CUSTOM"}'
 
 SERVER_MAX_MODEL_LEN=1048576
 if [ "$EVAL_ONLY" = "true" ]; then

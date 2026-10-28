@@ -24,3 +24,11 @@
 - This first version can be slower than BF16 because preparation and expansion remain. Compare the complete call, not kernel-only timing.
 - GPU preflight covers ragged causal/noncausal inputs, empty cached rows, changed-input graph replay, and attention-plus-quantization timing.
 - Model loading, TP8/DCP8 communication, runtime engagement and KV capacity require a separate model smoke; standalone kernel success does not prove them.
+
+## Current validation status
+
+- run40634449297: six numerical and changed-input graph checks passed.
+- Ordinary-input relative RMS error versus unquantized FP64 reference: 3.7% to5.0%; this is not GSM8K accuracy evidence.
+- Shared-host complete-attention timing including QKV quantization: cached context1.26x/1.62x; causal0.38x/0.94x. No end-to-end speedup claim.
+- Model smoke: TP8/DCP8 C48, warmup1,600seconds. Full benchmark: warmup10,3600seconds.
+- The read-only watcher reports current-attempt active steps and failure annotations every60seconds.
