@@ -6,7 +6,7 @@ wait_for_amd_gpu_clean
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY ATOM_USE_FLYDSL_FP8_PREFILL_ATTN
-check_env_vars ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT
+check_env_vars ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN
 case "$ATTENTION_PATH_PROBE_ONLY" in true|false) ;; *) echo "ATTENTION_PATH_PROBE_ONLY must be true or false" >&2; exit 1 ;; esac
 if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
     echo "[NATIVE-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
@@ -28,7 +28,7 @@ case "$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN" in
     0|1) ;;
     *) echo "ATOM_USE_FLYDSL_FP8_PREFILL_ATTN must be 0 or 1" >&2; exit 1 ;;
 esac
-for flag_name in ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT; do
+for flag_name in ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN; do
     case "${!flag_name}" in
         0|1) ;;
         *) echo "$flag_name must be 0 or 1" >&2; exit 1 ;;
@@ -40,7 +40,7 @@ if [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ]; then
         exit 1
     fi
 fi
-export ATOM_USE_FLYDSL_FP8_PREFILL_ATTN ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT
+export ATOM_USE_FLYDSL_FP8_PREFILL_ATTN ATOM_USE_FUSED_KV_FP8_OUTPUT ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN
 echo "[ATOM-FP8-CONFIG] framework=vllm fp8_prefill=$ATOM_USE_FLYDSL_FP8_PREFILL_ATTN model=$MODEL plugin=$ATOM_ATTENTION_PLUGIN_DIR"
 
 DP_SIZE=1
@@ -403,7 +403,11 @@ elif [ "$EVAL_ONLY" = "true" ]; then
         cd "$AGENTIC_OUTPUT_DIR"
         run_eval --port "$PORT"
     ) 2>&1 | tee "$RESULT_DIR/gsm8k_eval.log"
-    python3 /outputs/utils/atom_attention/verify_accuracy_path.py \
+    causal_proof_args=()
+    if [ "$ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN" = "1" ]; then
+        causal_proof_args=(--require-causal)
+    fi
+    python3 /outputs/utils/atom_attention/verify_accuracy_path.py "${causal_proof_args[@]}" \
         --server-log "$SERVER_LOG" --workers "$TP" \
         --output "$RESULT_DIR/gsm8k_fp8_execution_proof.json"
 else

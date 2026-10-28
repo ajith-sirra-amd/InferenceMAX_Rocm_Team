@@ -17,4 +17,7 @@ if __name__ == "__main__":
             subprocess.run([sys.executable, str(plugin / "tests" / name)], check=True)
         from fp8_weight_preflight import run as run_fp8_weights
         run_fp8_weights()
+        if os.environ.get("ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN", "0") == "1":
+            from causal_fp8_preflight import run as run_causal
+            run_causal()
         print("FP8_ACCURACY_PATH_PREFLIGHT_PASS", flush=True)

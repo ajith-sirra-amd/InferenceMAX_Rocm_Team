@@ -180,6 +180,7 @@ jobs:
               -e PYTHONPATH=/repo/upstream/InferenceX/benchmarks/single_node/agentic/atom_attention \
               -e VLLM_ROCM_USE_AITER=1 -e VLLM_ROCM_USE_AITER_LINEAR=1 \
               -e ATOM_USE_FLYDSL_FP8_PREFILL_ATTN=1 \
+              -e ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN=1 \
               -e ATOM_USE_FUSED_KV_FP8_OUTPUT=1 \
               -e ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT=0 \
               --entrypoint python3 \

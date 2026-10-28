@@ -18,6 +18,7 @@ class PrefillFlagTest(unittest.TestCase):
         self.enterContext(patch.dict(os.environ))
         os.environ.pop(FLAG, None)
         os.environ.pop("ATOM_FP8_ACCURACY_STRESS", None)
+        os.environ.pop("ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN", None)
 
         class NativePrefill:
             def __init__(self, **kwargs):
@@ -159,6 +160,58 @@ class PrefillFlagTest(unittest.TestCase):
         self.quantize.assert_not_called()
         self.fmha.assert_not_called()
 
+
+    def test_causal_reuses_prepared_qkv_and_original_scales(self):
+        os.environ[FLAG] = "1"
+        os.environ["ATOM_USE_FUSED_KV_FP8_OUTPUT"] = "1"
+        os.environ["ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN"] = "1"
+        self.k.shape, self.v.shape = self.q.shape, (512, 12, 128)
+        for value in (self.q, self.k, self.v):
+            value.numel = lambda: 1000
+        self.quantize.return_value = ("q8", "k8", "v8", 1.0, 2.0, 3.0, 4.0, 6.0)
+        sys.modules["torch"].cat = tuple
+        backend = self.backend_type()
+        backend._prefill_metadata = self.chunk(512, 512)
+        backend.begin_forward(direct_kv=True)
+        try:
+            result = backend.run_prefill_new_tokens(self.q, self.k, self.v, True)
+            self.assertEqual(result, ("fp8_output", "fp32_lse"))
+            self.quantize.assert_called_once()
+            self.fmha.assert_called_once()
+            call = self.fmha.call_args
+            self.assertEqual(call.args, ("q8", "k8", "v8"))
+            self.assertEqual([call.kwargs[x] for x in ("q_descale", "k_descale", "v_descale")],
+                             [1.0, 2.0, 3.0])
+            self.assertIs(call.kwargs["causal"], True)
+            self.assertEqual(call.kwargs["cu_seqlens_q"], call.kwargs["cu_seqlens_kv"])
+            self.assertEqual(backend._gather_scales, (4.0, 6.0))
+        finally:
+            stats = backend.end_forward()
+        self.assertEqual(stats["q_quantizations"], 1)
+        self.assertIsNone(backend._q_cache)
+
+    def test_causal_opt_in_without_preparation_stays_bf16(self):
+        os.environ[FLAG] = "1"
+        os.environ["ATOM_USE_FUSED_KV_FP8_OUTPUT"] = "1"
+        os.environ["ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN"] = "1"
+        backend = self.backend_type()
+        self.assertEqual(backend.run_prefill_new_tokens(self.q, self.k, self.v, True),
+                         ("bf16_output", "fp32_lse"))
+        self.quantize.assert_not_called()
+        self.fmha.assert_not_called()
+
+    def test_oversized_direct_preparation_fails_before_quantization(self):
+        os.environ[FLAG] = "1"
+        backend = self.backend_type()
+        self.q.numel = lambda: 2**31
+        backend.begin_forward(direct_kv=True)
+        try:
+            with self.assertRaisesRegex(ValueError, "32-bit"):
+                backend.run_prefill_new_tokens(self.q, self.k, self.v, True)
+        finally:
+            backend.end_forward()
+        self.quantize.assert_not_called()
+        self.fmha.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()

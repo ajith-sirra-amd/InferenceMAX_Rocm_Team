@@ -237,6 +237,7 @@ docker run --rm --init --network host --shm-size=512g --name="$server_name" --st
 -e EVAL_ONLY \
 -e ATTENTION_PATH_PROBE_ONLY \
 -e ATOM_USE_FLYDSL_FP8_PREFILL_ATTN \
+-e ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN \
 -e ATOM_USE_FUSED_KV_FP8_OUTPUT \
 -e ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT \
 -e IS_AGENTIC \

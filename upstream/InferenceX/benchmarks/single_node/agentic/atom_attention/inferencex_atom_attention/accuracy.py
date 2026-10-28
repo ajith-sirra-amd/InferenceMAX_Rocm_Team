@@ -5,6 +5,8 @@ import os
 _STRESS = "ATOM_FP8_ACCURACY_STRESS"
 _MARKER = "[ATOM-FP8-ACCURACY-CALL]"
 _reported_pids = set()
+_causal_reported_pids = set()
+_CAUSAL_MARKER = "[ATOM-FP8-CAUSAL-ACCURACY-CALL]"
 
 
 def use_fp8_context(max_query_len, max_seq_len):
@@ -46,7 +48,7 @@ def _validate_record(payload):
         raise RuntimeError("FP8 proof was not recorded during GSM8K")
 
 
-def validate_accuracy_log(log, workers):
+def validate_accuracy_log(log, workers, *, require_causal=False):
     records = {}
     decoder = json.JSONDecoder()
     for line in log.splitlines():
@@ -57,5 +59,47 @@ def validate_accuracy_log(log, workers):
         records[payload["pid"]] = payload
     if len(records) != workers:
         raise RuntimeError(f"Expected {workers} FP8 workers during GSM8K, observed {len(records)}")
-    return {"workers": workers, "records": list(records.values()),
-            "scope": "native FP8 projection and FP8 FMHA invoked during evaluation; not a numerical threshold result"}
+    proof = {"workers": workers, "records": list(records.values()),
+             "scope": "native FP8 projection and FP8 FMHA invoked during evaluation; not a numerical threshold result"}
+    if require_causal:
+        causal_records = {}
+        for line in log.splitlines():
+            if _CAUSAL_MARKER not in line:
+                continue
+            payload, _ = decoder.raw_decode(line.split(_CAUSAL_MARKER, 1)[1].lstrip())
+            _validate_causal_record(payload)
+            causal_records[payload["pid"]] = payload
+        if set(causal_records) != set(records):
+            raise RuntimeError("Causal FP8 must execute on the same workers as FP8 projection")
+        proof["causal_records"] = list(causal_records.values())
+    return proof
+
+
+def record_causal_accuracy_call(q8, k8, v8, *, reused):
+    """Record an actual causal call only during the explicit evaluation phase."""
+    if os.environ.get(_STRESS, "0") != "1":
+        return
+    pid = os.getpid()
+    if pid in _causal_reported_pids:
+        return
+    phase_file = os.environ.get("ATOM_FP8_ACCURACY_ACTIVE_FILE", "")
+    if not phase_file or not os.path.isfile(phase_file):
+        return
+    payload = {
+        "pid": pid, "phase": "gsm8k_evaluation", "causal": True,
+        "prepared_qkv_reused": reused,
+        "q_dtype": str(q8.dtype), "k_dtype": str(k8.dtype), "v_dtype": str(v8.dtype),
+        "q_tokens": q8.shape[0], "kv_tokens": k8.shape[0], "heads": q8.shape[1],
+    }
+    _validate_causal_record(payload)
+    print(_CAUSAL_MARKER + " " + json.dumps(payload), flush=True)
+    _causal_reported_pids.add(pid)
+
+
+def _validate_causal_record(payload):
+    # Reuse the dtype/shape/evaluation-phase checks; projection has separate proof.
+    _validate_record({**payload, "fp8_projection": True})
+    if payload.get("causal") is not True or payload.get("prepared_qkv_reused") is not True:
+        raise RuntimeError("Causal FP8 proof requires causal execution and prepared QKV reuse")
+    if payload["q_tokens"] != payload["kv_tokens"]:
+        raise RuntimeError("New-token causal proof requires equal Q/KV token counts")

@@ -3,7 +3,7 @@
 This first integration retains native KV expansion and DCP communication.
 Q reuse is restricted to one forward pass; metadata can outlive that pass.
 FlyDSL FP8 is opt-in; eligible cached-context calls use it when enabled.
-Causal and small cached-context calls retain BF16.
+Causal FP8 can reuse already-prepared Q/K/V; small cached calls retain BF16.
 """
 import os
 
@@ -16,7 +16,7 @@ from vllm.v1.attention.backends.mla.prefill.aiter_flash_attn import (
 from vllm.v1.attention.backends.mla.rocm_aiter_mla import AiterMLABackend, AiterMLAImpl, AiterMLAMetadataBuilder
 
 from .quantize import fused_qkv_per_tensor_quant
-from .accuracy import record_accuracy_call, use_fp8_context
+from .accuracy import record_accuracy_call, record_causal_accuracy_call, use_fp8_context
 
 class AtomFlyDSLMLAImpl(AiterMLAImpl):
     def process_weights_after_loading(self, act_dtype):
@@ -144,6 +144,9 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
         self._validate_direct_kv = self._direct_kv_enabled and (
             os.environ.get("ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT", "0") == "1"
         )
+        self._causal_fp8_enabled = self._direct_kv_enabled and (
+            os.environ.get("ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN", "0") == "1"
+        )
         self._prepare_direct_kv = False
         self._gather_scales = None
         self._direct_validations = 0
@@ -173,7 +176,7 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
 
     def _run(
         self, q, k, v, *, cu_q, cu_k, max_q, max_k, causal,
-        return_lse, stage, out=None,
+        return_lse, stage, out=None, quantized=None,
     ):
         if not self._fp8_enabled:
             raise RuntimeError(
@@ -196,17 +199,22 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
         # Preserve the vendored ATOM quantizer's stream/device semantics on
         # each TP rank; do not rely on cuda:0 being the current device.
         with torch.cuda.device(q.device):
-            key = (q.data_ptr(), tuple(q.shape), tuple(q.stride()))
-            cached_q = self._q_cache.get(key) if self._q_cache is not None else None
-            q8, k8, v8, qs, ks, vs, _, _ = fused_qkv_per_tensor_quant(
-                q, k, v, quantized_q=cached_q,
-            )
-            if cached_q is None:
-                self._q_quantizations += 1
-                if self._q_cache is not None:
-                    self._q_cache[key] = (q8, qs)
+            if quantized is None:
+                key = (q.data_ptr(), tuple(q.shape), tuple(q.stride()))
+                cached_q = self._q_cache.get(key) if self._q_cache is not None else None
+                q8, k8, v8, qs, ks, vs, _, _ = fused_qkv_per_tensor_quant(
+                    q, k, v, quantized_q=cached_q,
+                )
+                if cached_q is None:
+                    self._q_quantizations += 1
+                    if self._q_cache is not None:
+                        self._q_cache[key] = (q8, qs)
+                else:
+                    self._q_reuses += 1
             else:
-                self._q_reuses += 1
+                # Prepared by this call's direct-KV setup: retain the original
+                # Q/K/V descales, not the separate 2x gather-output descales.
+                q8, k8, v8, qs, ks, vs = quantized[:6]
             result = self._fp8_attention(
                 q8, k8, v8,
                 softmax_scale=self.scale,
@@ -223,6 +231,8 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
                 out=out,
                 stream=None,
             )
+            if causal and not torch.cuda.is_current_stream_capturing():
+                record_causal_accuracy_call(q8, k8, v8, reused=quantized is not None)
             path_key = (os.getpid(), stage, q.shape[1], q.shape[2], v.shape[2])
             if path_key not in self._reported_paths and not torch.cuda.is_current_stream_capturing():
                 print(
@@ -238,21 +248,41 @@ class AtomFlyDSLPrefillBackend(AiterFlashAttnPrefillBackend):
     def run_prefill_new_tokens(
         self, q, k, v, return_softmax_lse, out=None, output_scale=None,
     ):
+        quant = None
         if self._prepare_direct_kv:
+            if any(x.numel() >= 2**31 for x in (q, k, v)):
+                raise ValueError("FP8 preparation exceeds the 32-bit indexing limit")
             with torch.cuda.device(q.device):
                 quant = fused_qkv_per_tensor_quant(q, k, v)
                 key = (q.data_ptr(), tuple(q.shape), tuple(q.stride()))
                 self._q_cache[key] = (quant[0], quant[3])
                 self._q_quantizations += 1
                 self._gather_scales = torch.cat((quant[6], quant[7]))
+        if (
+            self._causal_fp8_enabled
+            and quant is not None
+            and output_scale is None
+            and q.shape == k.shape
+            and q.shape[:2] == v.shape[:2]
+            and q.shape[0] > 0
+            and max(x.numel() for x in (q, k, v)) < 2**31
+        ):
+            metadata = self._prefill_metadata
+            return self._run(
+                q, k, v,
+                cu_q=metadata.query_start_loc, cu_k=metadata.query_start_loc,
+                max_q=metadata.max_query_len, max_k=metadata.max_query_len,
+                causal=True, return_lse=return_softmax_lse,
+                stage="new_tokens", out=out, quantized=quant,
+            )
         result = super().run_prefill_new_tokens(
             q, k, v, return_softmax_lse, out=out, output_scale=output_scale,
         )
-        path_key = (os.getpid(), "new_tokens", q.shape[1], q.shape[2], v.shape[2])
+        path_key = (os.getpid(), "new_tokens_bf16", q.shape[1], q.shape[2], v.shape[2])
         if path_key not in self._reported_paths and not torch.cuda.is_current_stream_capturing():
             print(
                 f"[ATOM-PREFILL-PATH] pid={os.getpid()} stage=new_tokens "
-                f"q={tuple(q.shape)} fmha=BF16 reason=causal_complete_call_regression",
+                f"q={tuple(q.shape)} fmha=BF16 reason=causal_fp8_not_eligible_or_disabled",
                 flush=True,
             )
             self._reported_paths.add(path_key)
