@@ -2,6 +2,19 @@
 
 **English** | [中文](./fp8-fmha-tasklist_zh.md)
 
+## Next dispatch: user decision on 2026-10-29
+
+The user confirmed the replacement servers are identical and explicitly declined
+an additional server/control validation run. Do not dispatch the prepared
+`checks/kimi-causal-fp8-control-20261029` branch for that purpose.
+Compare the current full causal-FP8 run against the established
+**17,406.08912 total tokens/s/GPU** reference, with latency and errors reported.
+After its result is reviewed, select the native candidate and proceed with native
+GPU numericals, full GSM8K and native performance. Required matched comparisons
+against the other FP8 PRs remain a separate later task.
+
+The fresh GPU job reached `Launch job script`; no throughput result is available yet.
+
 ## 2026-10-29 current run
 
 The original retry job `123215353998` never published a setup step. The operator
