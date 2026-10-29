@@ -51,3 +51,5 @@ as untested. Explicit binding retains strict memory placement. Check installed
 affinity and allocation policy before measuring. Keep policy comparisons at
 matched concurrency, MTP, source, weights and workload.
 
+
+**2026-10-29 user update:** Native NUMA work is postponed. The sweep extension above is deferred; retain the existing CCD pinning until the user reopens this task.
