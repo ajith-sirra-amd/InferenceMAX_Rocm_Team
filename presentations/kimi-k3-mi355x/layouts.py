@@ -35,7 +35,14 @@ def render(c):
         return
     if v in ("journey","architecture"):cards(c,3 if len(it)==6 else 2);return
     if v in ("compare","questions"):cards(c,3);return
-    if v in ("stats","glossary"):cards(c,3 if len(it)==6 else 2);return
+    if v=="stats":
+        cols=3 if len(it)==6 else 2;w=(12.1-.25*(cols-1))/cols
+        for i,a in enumerate(it):
+            x=.62+(i%cols)*(w+.25);y=2.13+(i//cols)*2.1;col=["teal","bf16","fp8","fp32","amber","teal"][i%6]
+            c.reveal(c.rect(x,y,w,1.85,"card",col,True),c.text(x+.22,y+.21,w-.44,.62,a[0],30,col,True),
+                     c.text(x+.22,y+1.04,w-.44,.58,a[1],15,"white"))
+        return
+    if v=="glossary":cards(c,3);return
     if v in ("flow","pipeline"):flow(c);return
     if v=="equation":
         for i,a in enumerate(it):
@@ -88,7 +95,7 @@ def render(c):
                 allow=j<=i
                 row.append(c.rect(x0+j*cw,y0+i*cw,cw-.055,cw-.055,"teal" if allow else "card2"))
                 if not allow:row.append(c.text(x0+j*cw+.13,y0+i*cw+.12,.18,.18,"×",9,"muted"))
-            if i%2==1:c.reveal(*row)
+            c.reveal(*row)
         if v=="splitmask":
             pref=[]
             for i in range(n):

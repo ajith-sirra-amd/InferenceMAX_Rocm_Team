@@ -1,5 +1,6 @@
 from pathlib import Path
 import json, math, copy, re, textwrap
+from PIL import ImageFont
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -40,7 +41,12 @@ class Canvas:
         self.slide.background.fill.solid();self.slide.background.fill.fore_color.rgb=rgb("bg")
         self.rect(0,0,W,.075,"teal")
         self.text(.5,.23,11,.28,CHAPTERS[data["chapter"]].upper(),10,"teal",bold=True)
-        self.text(.5,.69,12.3,.79,data["title"],29 if len(data["title"])<58 else 26,"white",bold=True)
+        title_size=29
+        title_font_path="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        while ImageFont.truetype(title_font_path,title_size).getlength(data["title"])>12.0*72*.94 and title_size>19:
+            title_size-=1
+        title_shape=self.text(.5,.69,12.3,.65,data["title"],title_size,"white",bold=True)
+        title_shape.text_frame.word_wrap=False
         self.text(.52,1.47,12.1,.43,data["subtitle"],15,"muted")
         self.rect(.5,7.06,12.33,.012,"line")
         self.text(.5,7.15,4.2,.18,"KIMI-K3  /  MI355X  •  29 OCT 2026",8,"muted")
@@ -108,6 +114,14 @@ def make_prs():
     p.core_properties.subject="Conceptual teaching deck with linked technical handbook"
     p.core_properties.author="Ajith Sirra"
     p.core_properties.keywords="Kimi-K3, MI355X, KDA, MLA, FP8, FMHA, ROCm, vLLM"
+    for part in p.part.package.iter_parts():
+        if str(part.partname).startswith("/ppt/theme/"):
+            doc=etree.fromstring(part.blob)
+            ns={"a":"http://schemas.openxmlformats.org/drawingml/2006/main"}
+            for tag in ["hlink","folHlink"]:
+                for node in doc.xpath("//a:clrScheme/a:"+tag+"/*",namespaces=ns):
+                    node.tag="{"+ns["a"]+"}srgbClr";node.attrib.clear();node.set("val",C["teal"])
+            part._blob=etree.tostring(doc,xml_declaration=True,encoding="UTF-8",standalone=True)
     return p
 def add_animation(slide,groups):
     # Standard DrawingML entrance effects, grouped into explicit mouse-click builds.
