@@ -2,6 +2,8 @@
 
 This is a conceptual course with an editable animated PowerPoint, a static reference PowerPoint/PDF, a narrated chaptered video and detailed Markdown notes.
 
+[Download the narrated video and chapter files](VIDEO.md).
+
 ## How to use it
 
 - Open **Kimi-K3_MI355X_Animated.pptx** in desktop PowerPoint and start Slide Show (F5). Click to reveal the next operation. The Animation Pane exposes editable fade entrance groups.
