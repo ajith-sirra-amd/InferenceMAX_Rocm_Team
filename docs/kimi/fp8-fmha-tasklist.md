@@ -113,3 +113,20 @@ Its published Torch 2.13.0 and Triton 3.8.0+git669b31ac wheels match the native
 base dependencies. Actual container/GPU compatibility still requires validation.
 Prototype runs retain their original matrix image (Torch 2.12.0).
 Native source remains exact and uses the precompiled wheel for its own merge-base.
+
+## Sweep binding variant requested 2026-10-29
+
+For C56 + MTP, C64 + MTP, and C96 without MTP, include native vLLM NUMA
+binding with the recipe CCD pinning disabled (`PIN_CCD=0`, explicitly forwarded
+from the caller). Preserve the current FP8 measurement and native correctness
+validation configurations. Compare binding policies at the same concurrency;
+changes in concurrency must not be attributed to binding.
+
+Merged vLLM #61258 supports ROCm automatic GPU-to-NUMA detection via AMD SMI;
+its reported GPU serving validation did not cover AMD. Use the final validated
+native source and verify `numactl`, launch eligibility, worker CPU affinity and
+memory policy. Automatic native mode uses soft GPU-local memory preference;
+explicit `--numa-bind` requests strict memory binding and is a separate policy.
+The Intel PCT core selector is not an AMD CCD selector. ROCm packaging PR #55433
+is still open; do not count a silently unbound launch as this experiment.
+

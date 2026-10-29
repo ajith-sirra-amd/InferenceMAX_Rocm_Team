@@ -34,3 +34,17 @@ vLLM 已有 `--numa-bind`、`--numa-bind-nodes` 和按可见 GPU 配置的 `--nu
 - [vLLM NUMA 配置](https://github.com/vllm-project/vllm/blob/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/vllm/config/parallel.py)
 - [vLLM NUMA 工具](https://github.com/vllm-project/vllm/blob/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/vllm/utils/numa_utils.py)
 - [Worker 启动集成](https://github.com/vllm-project/vllm/blob/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/vllm/v1/executor/multiproc_executor.py)
+
+## 请求扩展并发测试（2026-10-29）
+
+用户要求在 FP8 验证和稳定态 profiling 后，在 C56/C64 使用 MTP、C96 不使用
+MTP 的测试中尝试原生 NUMA 绑定并关闭脚本 CCD pinning。这更新了此前在所有
+后续并发实验中固定绑定方式的安排；当前 FP8 验证配置保持不变。
+
+原生 ROCm 检测通过 `amdsmi_topo_get_numa_node_number` 获取每个可见 GPU 的
+NUMA 节点。CPU 拓扑路径适用于 AMD CPU，可选 PCT 核心选择仅针对 Intel。
+已合并 #61258 提供带本地内存软偏好的自动绑定，并明确说明 AMD serving
+尚未验证。显式绑定仍使用严格内存策略。测量前检查 `numactl`（打包修复
+#55433 尚未合并）、允许的 CPU/内存节点、实际 worker affinity 和分配策略。
+不同绑定策略在相同并发、MTP、源码、权重和负载下比较。
+

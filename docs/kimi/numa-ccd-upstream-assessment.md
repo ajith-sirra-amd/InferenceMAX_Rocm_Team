@@ -34,3 +34,20 @@ Sources:
 - [vLLM NUMA configuration](https://github.com/vllm-project/vllm/blob/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/vllm/config/parallel.py)
 - [vLLM NUMA utilities](https://github.com/vllm-project/vllm/blob/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/vllm/utils/numa_utils.py)
 - [Worker launch integration](https://github.com/vllm-project/vllm/blob/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/vllm/v1/executor/multiproc_executor.py)
+
+## Requested sweep extension (2026-10-29)
+
+The user requested native NUMA binding without the recipe CCD pinning for
+C56/C64 with MTP and C96 without MTP, after FP8 validation and steady-state
+profiling. This supersedes the earlier instruction to keep binding fixed for
+all later concurrency experiments; current FP8 validation stays fixed.
+
+Native ROCm topology detection calls `amdsmi_topo_get_numa_node_number` for each
+visible GPU. The CPU topology path is applicable to AMD CPUs; the optional PCT
+core selection is Intel-specific. Merged #61258 provides best-effort automatic
+binding with soft local-memory preference and explicitly reports AMD serving
+as untested. Explicit binding retains strict memory placement. Check installed
+`numactl` (open packaging fix #55433), allowed CPU/memory nodes, actual worker
+affinity and allocation policy before measuring. Keep policy comparisons at
+matched concurrency, MTP, source, weights and workload.
+

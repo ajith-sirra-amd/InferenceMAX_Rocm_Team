@@ -107,3 +107,18 @@ digest 为 `sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd
 发布的 Torch 2.13.0 和 Triton 3.8.0+git669b31ac wheel 与原生基线依赖匹配。
 实际容器及 GPU 兼容性仍待验证。原型性能测试保留原矩阵镜像（Torch 2.12.0）。
 原生源码仍固定到完整提交，并使用自身 merge-base 的预编译 wheel。
+
+## 2026-10-29 请求增加绑定方式测试
+
+在 C56 + MTP、C64 + MTP 和 C96 不使用 MTP 的测试中，增加原生 vLLM NUMA
+绑定并关闭脚本 CCD pinning 的方案（`PIN_CCD=0`，由调用方明确传递）。
+当前 FP8 性能运行及原生正确性验证配置保持原状。绑定方式在相同并发下比较，
+不能将并发变化的效果归因于绑定。
+
+已合并的 vLLM #61258 通过 AMD SMI 支持 ROCm GPU 到 NUMA 节点的自动检测；
+其报告的 GPU serving 验证未覆盖 AMD。使用最终验证后的原生源码，并确认
+`numactl`、启动条件、worker CPU affinity 和内存策略。原生自动模式使用
+GPU 本地内存软偏好；显式 `--numa-bind` 使用严格内存绑定，属于另一种策略。
+Intel PCT 核心选择并非 AMD CCD 选择。ROCm 打包 PR #55433 仍未合并，
+不能将实际未绑定的运行计为该实验。
+
