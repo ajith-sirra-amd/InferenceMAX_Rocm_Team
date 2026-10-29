@@ -1,0 +1,176 @@
+[
+  {
+    "chapter": "09",
+    "title": "Six questions that check understanding",
+    "subtitle": "Answer these before interpreting the next performance result.",
+    "viz": "questions",
+    "items": [
+      [
+        "1–2",
+        "Why cache K/V but usually not Q? Why does KDA need state recovery?"
+      ],
+      [
+        "3–4",
+        "Why are TP8 + DCP8 still eight GPUs? Why does a legacy RoPE field not prove rotation?"
+      ],
+      [
+        "5–6",
+        "What BF16 traffic does direct FP8 projection remove? Why is GSM8K not an LSE test?"
+      ]
+    ],
+    "note": "Suggested answers: Future steps use new queries, while cached K/V preserve earlier context. KDA is recurrent, so rejected speculative tokens must not contaminate future state. DCP partitions context within the tensor-parallel group rather than creating another independent eight-device dimension. The K3 checkpoint uses NoPE in MLA even though generic layout names retain a RoPE-width field. Direct FP8 cached projection avoids materializing and rereading expanded BF16 K/V and avoids the separate cached-output quantizer, while retaining higher-precision accumulation and required scaling. GSM8K measures end-to-end task outcomes; LSE tests measure attention normalization fidelity and its effect on chunk merging. Each is necessary evidence for its own claim.",
+    "refs": [
+      "model",
+      "flow",
+      "audit"
+    ]
+  },
+  {
+    "chapter": "10",
+    "title": "Tensor atlas: the cached-prefill path at TP8",
+    "subtitle": "Shapes shown per rank; token counts depend on the current packed call.",
+    "viz": "table",
+    "items": [
+      [
+        "Hidden state X",
+        "[T, 7,168]"
+      ],
+      [
+        "Compressed cache row",
+        "512 latent + 64 shared K values"
+      ],
+      [
+        "kv_b_proj weight",
+        "[3,072, 512]"
+      ],
+      [
+        "Query Q / key K",
+        "[Tq,12,192] / [Tk,12,192]"
+      ],
+      [
+        "Value V / output O",
+        "[Tk,12,128] / [Tq,12,128]"
+      ],
+      [
+        "LSE",
+        "[12,Tq] in this adapter"
+      ]
+    ],
+    "note": "Read each dimension by role. Tq is the packed number of query tokens and Tk the packed number of cached key/value tokens in this call. Twelve is the local head count, not the request count. The 192 key/query width includes 128 projected head-specific features and 64 shared-key layout features. Value width is 128. The weight's output dimension is 12*(128+128)=3,072. Other backends may transpose LSE or use different packed layouts, so this atlas is explicitly for the documented adapter. Logical shape does not determine contiguous layout; strides, alignment, scale granularity and pointer identity remain part of the kernel contract.",
+    "refs": [
+      "flow"
+    ]
+  },
+  {
+    "chapter": "10",
+    "title": "Glossary: model concepts",
+    "subtitle": "Keep the mathematical role separate from the implementation.",
+    "viz": "glossary",
+    "items": [
+      [
+        "Attention / FMHA",
+        "Weighted context retrieval / fused implementation"
+      ],
+      [
+        "KDA / MLA",
+        "Recurrent delta attention / latent-cache attention"
+      ],
+      [
+        "Latent / projection",
+        "Compressed feature space / learned matrix transform"
+      ],
+      [
+        "MoE / router",
+        "Expert pool / token-to-expert selection"
+      ],
+      [
+        "Residual / gate",
+        "Depth information path / learned modulation"
+      ],
+      [
+        "LSE",
+        "Logarithm of unnormalized attention mass"
+      ]
+    ],
+    "note": "A model concept specifies an operation or parameterization. A kernel specifies how that operation executes on hardware. FMHA means fused multi-head attention and can accept BF16 or FP8 operands. A latent is a learned lower-dimensional representation, while quantization is a numerical representation change; the two can coexist. A gate modulates information, and different gates in KDA, MLA and MoE have different meanings. Residual mixing concerns information flow across depth. LSE is a scalar per query/head used to preserve normalization when attention is partitioned. The handbook glossary includes expanded definitions and cross-references to the equations where each term appears.",
+    "refs": [
+      "attention",
+      "model",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "10",
+    "title": "Glossary: execution concepts",
+    "subtitle": "Name the resource or mechanism before tuning it.",
+    "viz": "glossary",
+    "items": [
+      [
+        "HBM / LDS",
+        "Device memory / workgroup-shared on-chip memory"
+      ],
+      [
+        "CU / XCD / wave",
+        "Compute unit / GPU chiplet / 64-lane execution group"
+      ],
+      [
+        "TP / DCP / EP",
+        "Tensor / decode-context / expert parallelism"
+      ],
+      [
+        "NUMA / CCD",
+        "CPU-memory locality / CPU compute die"
+      ],
+      [
+        "GEMM / MFMA",
+        "Matrix multiplication / matrix instruction family"
+      ],
+      [
+        "Quant / descale",
+        "Round into compact format / restore numerical units"
+      ]
+    ],
+    "note": "HBM capacity limits residency, while bandwidth limits how quickly large tensors move. LDS is a smaller explicitly managed memory inside the GPU execution hierarchy. CU, XCD and wavefront describe different scales of parallel execution. TP shards model calculations, DCP partitions context within a TP group and EP distributes expert ownership. NUMA and CCD concern host CPU topology and should not be confused with GPU XCDs. GEMM is an operation, MFMA an instruction family and a kernel a scheduled implementation using instructions and memory. A quantization scale may be represented as a multiplier or reciprocal depending on the API, so read the contract rather than inferring it from a variable name.",
+    "refs": [
+      "amd",
+      "code"
+    ]
+  },
+  {
+    "chapter": "10",
+    "title": "Source map and further reading",
+    "subtitle": "Pinned model facts, implementation references and campaign evidence.",
+    "viz": "sources",
+    "items": [
+      [
+        "Model + architecture",
+        "Checkpoint, model card and AMD Kimi implementation"
+      ],
+      [
+        "Algorithms + hardware",
+        "Attention, FlashAttention, Kimi Linear and ROCm specs"
+      ],
+      [
+        "FP8 implementation",
+        "Campaign data flow, ATOM and AITER source"
+      ],
+      [
+        "Evidence",
+        "Benchmark runs, GSM8K results and native PR status"
+      ]
+    ],
+    "note": "The companion source manifest provides full URLs and revision IDs, and the chapter documents link each technical claim to relevant sources. The model checkpoint and card are pinned to f831ab66814297da540d832a5235f8e904f29d06. The inspected native Kimi AMD implementation is pinned to 08e5d81a0d4fc76c20a97f9a517195db5a5dc5be. Campaign documents are pinned to b786b8cae9992c190c3d3323197c937d8ed8f8b8. Prototype serving evidence uses bb8bed732f514fd697856c5abd1d2bdd9d56a1e5 for new-token FP8 and 14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78 for the established direct-projection stage. Software capabilities and measured results are dated, and should be rechecked when changing the source or runtime.",
+    "refs": [
+      "model",
+      "code",
+      "amd",
+      "flash",
+      "kda",
+      "flow",
+      "atom",
+      "aiter",
+      "gsm",
+      "pr"
+    ]
+  }
+]

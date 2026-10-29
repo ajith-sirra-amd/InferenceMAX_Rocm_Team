@@ -1,0 +1,295 @@
+[
+  {
+    "chapter": "03",
+    "title": "MoE selects a small subset of a large expert pool",
+    "subtitle": "Each token activates 16 routed experts, plus the shared branch.",
+    "viz": "experts",
+    "items": [
+      [
+        "Router",
+        "Compute scores for 896 routed experts"
+      ],
+      [
+        "Select + weight",
+        "Top 16 per token; normalize selected weights"
+      ],
+      [
+        "Experts",
+        "Different learned feature transformations"
+      ],
+      [
+        "Combine",
+        "Weighted routed output + shared output"
+      ]
+    ],
+    "note": "A mixture-of-experts layer contains many learned feed-forward networks. A router scores experts for each token, selects a configured subset and combines their outputs. Kimi-K3 uses sigmoid router scores, a correction-bias mechanism for selection, and renormalized selected weights in the inspected implementation. The routing logits and correction bias are handled in FP32. Sixteen out of 896 routed experts is about 1.79 percent of the pool per token, but a batch of many tokens can collectively touch many more experts. Sparse activation reduces compute relative to running every expert; it does not remove the need to store the full expert pool somewhere accessible.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "Latent MoE reduces the routed branch's width",
+    "subtitle": "Experts operate in a smaller feature space, then return to model width.",
+    "viz": "flow",
+    "items": [
+      [
+        "Hidden state",
+        "7,168",
+        "bf16"
+      ],
+      [
+        "Routed down-projection",
+        "3,584 latent features",
+        "bf16"
+      ],
+      [
+        "Selected experts",
+        "Intermediate width 3,072 each",
+        "amber"
+      ],
+      [
+        "Normalize + up-project",
+        "Back to 7,168",
+        "bf16"
+      ]
+    ],
+    "formula": "routed(x) = W_up · norm(Σ_e w_e · Expert_e(W_down x))",
+    "note": "The routed branch uses a learned down-projection from hidden width 7,168 to routed-expert width 3,584. Selected experts transform that lower-dimensional representation. Their weighted combination is normalized when latent_moe_use_norm is enabled and projected back to hidden width. The router itself scores from the original hidden representation in the inspected code. Shared experts operate on the original hidden space and form a parallel branch. Do not confuse this routed-expert up-projection with attention kv_b_proj: they both expand features but have different weights, inputs, mathematical roles and performance costs. Runtime implementations can fuse parts of the routed tail with communication or residual processing.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "SiTU-GLU is the expert's gated nonlinearity",
+    "subtitle": "Two projection branches interact, with soft clipping to control range.",
+    "viz": "equation",
+    "items": [
+      [
+        "Gate branch",
+        "g = 4 tanh(a/4) · sigmoid(a)"
+      ],
+      [
+        "Value branch",
+        "u = 25 tanh(b/25)"
+      ],
+      [
+        "Multiply + project",
+        "z = g ⊙ u; then apply the down-projection"
+      ]
+    ],
+    "formula": "Expert(x) = W_down [SiTU(W_gate x) ⊙ softclip(W_up x)]",
+    "note": "Kimi-K3's hidden_act is situ, with activation_situ_beta=4 and activation_situ_linear_beta=25. The inspected SiTU implementation computes beta*tanh(gate/beta)*sigmoid(gate), and softly clips the up branch with linear_beta*tanh(up/linear_beta). It then multiplies the two branches elementwise. This is a gated linear unit variant, not simply an ordinary ReLU or a plain SiLU. The clipping is smooth, which shapes the activation range without a hard discontinuity. The two configured shared experts are implemented as a combined shared feed-forward branch with intermediate width 2*3,072=6,144. The first dense layer has intermediate width 33,792.",
+    "refs": [
+      "model",
+      "activation",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "Attention Residuals attend across depth",
+    "subtitle": "Learn which earlier layer-block representations should contribute.",
+    "viz": "residual",
+    "items": [
+      [
+        "Earlier blocks",
+        "Stored depth representations"
+      ],
+      [
+        "Learned weights",
+        "Content-dependent mixing over available blocks"
+      ],
+      [
+        "Current sublayer",
+        "Consumes the mixed representation"
+      ],
+      [
+        "Block size",
+        "Configured as 12 layers"
+      ]
+    ],
+    "note": "Ordinary residual addition sums a previous representation and a new transformation with a fixed structure. Attention Residuals add learned mixing over available representations across depth. In the inspected Kimi-K3 implementation, block-state storage and learned projection/norm operations produce the residual input for attention and feed-forward sublayers. This is a different axis from token attention: token attention retrieves across sequence positions, while Attention Residuals mix across model depth. The checkpoint uses attn_res_block_size=12. Block storage limits the overhead compared with keeping every sublayer output independently. GPU execution introduces extra norm, scoring, weighted-sum and state-management work that can be targets for fusion.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "Vision joins the model through visual tokens",
+    "subtitle": "A vision encoder and projector connect images/video to the text backbone.",
+    "viz": "flow",
+    "items": [
+      [
+        "Image / video",
+        "Patch and frame preparation",
+        "neutral"
+      ],
+      [
+        "MoonViT-V2",
+        "27 layers; hidden width 1,024",
+        "bf16"
+      ],
+      [
+        "Patch merging + projector",
+        "Map visual features to width 7,168",
+        "bf16"
+      ],
+      [
+        "Hybrid backbone",
+        "Reason over visual and text representations",
+        "bf16"
+      ]
+    ],
+    "note": "The model is natively multimodal, but visual input has an additional processing path. The checkpoint vision configuration uses 14-pixel patches, 27 encoder layers, width 1,024 and 12 vision attention heads, followed by patch merging and a projector that matches the text hidden width of 7,168. The model card names this encoder MoonViT-V2 and reports about 401 million vision parameters. Dynamic image preprocessing, spatial/temporal attention and patch merging affect the number and cost of visual tokens. The campaign's agentic text throughput figures should not be read as image or video throughput. Exact multimodal packing details belong to the processor implementation.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  },
+  {
+    "chapter": "04",
+    "title": "MI355X supplies compute, capacity and bandwidth",
+    "subtitle": "The GPU must move tensors and execute them efficiently.",
+    "viz": "gpu",
+    "items": [
+      [
+        "Architecture",
+        "AMD CDNA 4 / gfx950"
+      ],
+      [
+        "Compute structure",
+        "256 CUs across 8 XCDs"
+      ],
+      [
+        "Memory",
+        "288 GB advertised HBM3E capacity"
+      ],
+      [
+        "Execution group",
+        "64-lane wavefront"
+      ]
+    ],
+    "note": "MI355X is an AMD Instinct accelerator built on CDNA 4. The ROCm specification table lists gfx950, 256 compute units, 32 CUs per XCD, and 64-lane wavefronts. HBM3E stores weights, persistent caches and large activations. XCD is a compute chiplet inside one GPU; it is not another rank or a separate accelerator. A GPU is a hierarchy of compute units and memories rather than a single undifferentiated matrix multiplier. Peak arithmetic rates are dtype-dependent, but peak specifications alone cannot predict a serving workload. This deck uses the vendor's advertised memory capacity convention and does not infer a measured bandwidth from it.",
+    "refs": [
+      "amd"
+    ]
+  },
+  {
+    "chapter": "04",
+    "title": "The memory hierarchy determines reuse",
+    "subtitle": "Registers and LDS are small and close; HBM is large and farther away.",
+    "viz": "memory",
+    "items": [
+      [
+        "Registers",
+        "Per-thread / wave computation state"
+      ],
+      [
+        "LDS",
+        "On-chip workgroup-shared tiles"
+      ],
+      [
+        "Caches",
+        "Hardware-managed reuse"
+      ],
+      [
+        "HBM",
+        "Weights, KV, activations and workspaces"
+      ]
+    ],
+    "note": "A fast matrix or attention kernel loads a tile from HBM, reuses it many times close to the compute units, and writes only the required result. Registers hold accumulators and local values; LDS supports data sharing among threads in a workgroup. Cache hits can reduce HBM traffic, so logical tensor sizes are not the same as measured HBM bytes. Excessive register or LDS use can reduce occupancy, limiting the number of active workgroups and the ability to hide latency. A fused kernel can remove intermediate HBM traffic but increase local resource pressure. That is why fusion is a tradeoff to measure rather than an automatic performance guarantee.",
+    "refs": [
+      "amd",
+      "flash"
+    ]
+  },
+  {
+    "chapter": "04",
+    "title": "A GEMM becomes tiles, waves and matrix instructions",
+    "subtitle": "Large matrix products reuse data across many multiply-accumulates.",
+    "viz": "gemm",
+    "items": [
+      [
+        "Output tiles",
+        "Workgroups own regions of C"
+      ],
+      [
+        "Reduction tiles",
+        "Stream matching A and B blocks"
+      ],
+      [
+        "Matrix instructions",
+        "MFMA operates on small fragments"
+      ],
+      [
+        "Accumulators",
+        "Higher precision before output conversion"
+      ]
+    ],
+    "formula": "C[M,N] = A[M,K] × B[K,N];  work ≈ 2MNK FLOPs",
+    "note": "GEMM means general matrix multiplication. A GPU kernel divides the output into tiles, assigns them to workgroups and streams tiles of the reduction dimension K. Threads organized into wavefronts cooperate on loads and matrix instructions. MFMA is AMD's matrix fused multiply-accumulate instruction family. Input precision, tile shape, alignment, packing and accumulator precision affect which instructions are available. A large prefill M gives more reuse of weight tiles across tokens. A small decode M can leave work dominated by weight movement, launch overhead or inefficient tile occupancy. Transposition in a formula is a logical operation; the kernel may consume a packed layout without physically transposing a full tensor.",
+    "refs": [
+      "amd"
+    ]
+  },
+  {
+    "chapter": "04",
+    "title": "The roofline connects FLOPs to bytes",
+    "subtitle": "A kernel is limited by whichever resource it needs more urgently.",
+    "viz": "roofline",
+    "items": [
+      [
+        "Arithmetic intensity",
+        "Useful FLOPs / bytes moved"
+      ],
+      [
+        "Bandwidth region",
+        "Too little reuse to reach compute peak"
+      ],
+      [
+        "Compute region",
+        "Enough reuse; arithmetic throughput dominates"
+      ]
+    ],
+    "formula": "Attainable FLOP/s ≤ min(compute ceiling, bandwidth × intensity)",
+    "note": "Arithmetic intensity is work per byte moved at a chosen memory level. With low intensity, a kernel cannot feed the compute units quickly enough, so attainable performance is bounded by bandwidth times intensity. With enough reuse, the compute ceiling dominates. The roofline is an upper-bound model, not a complete latency model: launch cost, synchronization, cache behavior, occupancy and dependencies can hold a kernel below either ceiling. FP8 may improve both arithmetic throughput and operand byte count, but only where the kernel can exploit the corresponding instructions and layouts. A small or communication-bound operation can gain little from faster arithmetic.",
+    "refs": [
+      "amd"
+    ]
+  },
+  {
+    "chapter": "04",
+    "title": "Why eight GPUs are needed",
+    "subtitle": "Sparse activation reduces work; the full weight set still consumes memory.",
+    "viz": "capacity",
+    "items": [
+      [
+        "2.8T parameters",
+        "Model-card total; not all activated per token"
+      ],
+      [
+        "4-bit lower bound",
+        "≈ 1.4 TB before scales and higher-precision weights"
+      ],
+      [
+        "8 × MI355X",
+        "2,304 GB advertised aggregate HBM"
+      ],
+      [
+        "Remaining memory",
+        "Cache, activations, graph pools and workspaces"
+      ]
+    ],
+    "formula": "Ideal weight bytes = parameter count × bits per parameter / 8",
+    "note": "The simplest capacity estimate multiplies total parameters by bytes per parameter. At four bits, 2.8 trillion parameters would occupy about 1.4 trillion bytes. That is only a lower-bound illustration: the checkpoint leaves important modules in higher precision, and quantized weights require scales, packing metadata and sometimes runtime repacking. Eight MI355X accelerators provide 2,304 GB of advertised aggregate memory, but the memory is distributed across devices rather than a single automatically shared pool. Each rank needs its own local working memory and some replicated tensors. Activated parameter count estimates per-token model work; it must not replace total parameter count when estimating model residency.",
+    "refs": [
+      "model",
+      "amd"
+    ]
+  }
+]

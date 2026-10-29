@@ -1,0 +1,302 @@
+[
+  {
+    "chapter": "05",
+    "title": "The serving stack turns requests into kernels",
+    "subtitle": "Every layer of software has a different responsibility.",
+    "viz": "flow",
+    "items": [
+      [
+        "Client + API",
+        "Text, sessions and tool-call turns",
+        "neutral"
+      ],
+      [
+        "vLLM scheduler",
+        "Batching, cache blocks and speculation",
+        "amber"
+      ],
+      [
+        "PyTorch + backends",
+        "Tensor operations and dispatch",
+        "bf16"
+      ],
+      [
+        "AITER / FlyDSL / ROCm",
+        "GPU kernels, runtime and collectives",
+        "teal"
+      ]
+    ],
+    "note": "The API layer handles request formatting, tokenization and output streaming. The scheduler chooses which request tokens run next and manages cache allocation and prefix reuse. The model implementation maps those tokens through KDA, MLA, MoE and residual operations. Backend dispatch selects kernels such as AITER attention, matrix multiplication, routing and collective operations. HIP is the ROCm runtime interface for launches, memory and streams. RCCL supplies collective communication, although inherited interfaces and kernel names can still say NCCL. FlyDSL is used to implement specialized kernels; it is not itself an attention mathematical definition. Enabling a flag only requests a path—the runtime's eligibility checks determine whether it executes.",
+    "refs": [
+      "code",
+      "flow",
+      "amd"
+    ]
+  },
+  {
+    "chapter": "05",
+    "title": "Tensor parallelism splits model calculations",
+    "subtitle": "TP8 divides selected weight dimensions across eight ranks.",
+    "viz": "tp",
+    "items": [
+      [
+        "Column-parallel projection",
+        "Each rank computes a subset of output features"
+      ],
+      [
+        "Local heads / expert slices",
+        "Work proceeds on each GPU"
+      ],
+      [
+        "Row-parallel projection",
+        "Each rank contributes a partial output"
+      ],
+      [
+        "Collective reduction",
+        "Combine partial results where required"
+      ]
+    ],
+    "formula": "96 heads / 8 TP ranks = 12 local prefill heads per rank",
+    "note": "A rank is one participant in a distributed process group, typically associated with a GPU worker. Tensor parallelism shards dimensions of model weights and their calculations. For a column-parallel linear layer, ranks own different output features. A matching row-parallel layer consumes those partitions and produces partial contributions that must be combined. The exact collectives depend on the chosen implementation and possible fusion. TP8 does not imply that every tensor is divided evenly or that every expert is assigned wholly to one GPU. Some tensors are replicated, and MoE weights can be tensor-sharded even when expert parallelism is disabled.",
+    "refs": [
+      "code",
+      "model"
+    ]
+  },
+  {
+    "chapter": "05",
+    "title": "DCP partitions the context across the same ranks",
+    "subtitle": "TP8 and DCP8 use eight GPUs here—not sixty-four.",
+    "viz": "dcp",
+    "items": [
+      [
+        "Cache partition",
+        "Distribute compressed token history across ranks"
+      ],
+      [
+        "Attention work",
+        "Read local context or gather chunks as required"
+      ],
+      [
+        "Combine results",
+        "Communicate and merge attention contributions"
+      ],
+      [
+        "Same eight devices",
+        "DCP operates within the existing TP group"
+      ]
+    ],
+    "note": "Decode context parallelism distributes sequence-context storage and work among ranks in a tensor-parallel group. TP concerns model-feature dimensions; DCP concerns sequence-context ownership. Their sizes do not multiply the GPU count in this recipe. Under DCP8, different context rows belong to different ranks, subject to the configured interleave and block mapping. A decode implementation may exchange queries and merge local partial attention outputs. The campaign's cached-prefill route gathers compressed FP8 cache chunks before local up-projection and FMHA. Thus it is too simplistic to say that DCP always performs exactly one particular all-gather at every stage. Communication needs follow the chosen forward path.",
+    "refs": [
+      "code",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "05",
+    "title": "Collectives move or combine distributed tensors",
+    "subtitle": "All-gather, all-reduce and all-to-all solve different problems.",
+    "viz": "compare",
+    "items": [
+      [
+        "All-gather",
+        "Everyone receives all participants' pieces."
+      ],
+      [
+        "All-reduce",
+        "Everyone receives a reduction, such as a sum."
+      ],
+      [
+        "All-to-all",
+        "Each participant sends a different piece to each peer."
+      ]
+    ],
+    "note": "All-gather assembles distributed pieces, such as partitions needed by a subsequent computation. All-reduce combines contributions, often summing row-parallel outputs. All-to-all redistributes pieces according to destination, useful in some expert or context-parallel schemes. Communication performance depends on message size, topology, synchronization and rank skew. Small collectives are often latency-sensitive; large ones can be bandwidth-sensitive. A fast GPU may wait for a slower rank, so communication time cannot be diagnosed by bytes alone. Interconnect bandwidth is not the same as HBM bandwidth. Our diagrams show logical communication and intentionally avoid claiming an unverified physical link topology for the replacement server.",
+    "refs": [
+      "code",
+      "amd"
+    ]
+  },
+  {
+    "chapter": "05",
+    "title": "Merge attention chunks with their normalization mass",
+    "subtitle": "Average by exp(LSE), not by chunk length or a fixed 50/50 split.",
+    "viz": "merge",
+    "items": [
+      [
+        "Chunk A",
+        "Output O_A and LSE_A",
+        "bf16"
+      ],
+      [
+        "Chunk B",
+        "Output O_B and LSE_B",
+        "bf16"
+      ],
+      [
+        "Stable mass weights",
+        "Normalize exponentials of the two LSEs",
+        "fp32"
+      ],
+      [
+        "Merged output",
+        "w_A O_A + w_B O_B",
+        "bf16"
+      ]
+    ],
+    "formula": "L = logaddexp(L_A,L_B);  O = e^(L_A−L)O_A + e^(L_B−L)O_B",
+    "note": "Each separately computed attention chunk has normalized its own probabilities to sum to one. Those outputs cannot be simply added or averaged because the chunks may have very different total unnormalized attention mass. LSE tells us that mass in logarithmic form. Compute the log of the combined mass stably, then use exp(LSE_chunk-LSE_total) as each chunk's weight. The operation applies independently to each query and head. It supports merging cached-prefix attention with new-token causal attention, or local context partitions. An LSE error can therefore change the final output even when each chunk's normalized output appears reasonable. Log base and tensor layout must match the merge API.",
+    "refs": [
+      "flash",
+      "flow",
+      "causal"
+    ]
+  },
+  {
+    "chapter": "05",
+    "title": "Continuous batching keeps requests moving",
+    "subtitle": "The scheduler admits new work as other requests finish.",
+    "viz": "scheduler",
+    "items": [
+      [
+        "Request A",
+        "Decode next output token"
+      ],
+      [
+        "Request B",
+        "Process a new prompt chunk"
+      ],
+      [
+        "Request C",
+        "Reuse a prefix, then decode"
+      ],
+      [
+        "Next step",
+        "Rebuild the active token batch"
+      ]
+    ],
+    "note": "Continuous batching lets the server change batch membership between model steps. Requests with different prompt lengths, output lengths and completion times share GPU work. Chunked prefill limits how many prompt tokens a single step processes, allowing decode progress between chunks. The max-num-batched-tokens setting bounds the token work scheduled in a step; max-num-seqs bounds sequence slots; concurrency is the offered client workload and is not automatically equal to either limit. Ragged batches use packed token tensors plus sequence-offset metadata. More concurrency can improve hardware utilization while worsening latency or cache pressure. A mixed step can delay decoding when a large prefill chunk dominates its duration.",
+    "refs": [
+      "code"
+    ]
+  },
+  {
+    "chapter": "05",
+    "title": "Prefix reuse and offload trade compute for movement",
+    "subtitle": "Agentic turns often repeat a long prefix and append a small suffix.",
+    "viz": "cache",
+    "items": [
+      [
+        "HBM hit",
+        "Reuse resident prefix blocks"
+      ],
+      [
+        "Host-cache hit",
+        "Load cached state from CPU DRAM"
+      ],
+      [
+        "Miss",
+        "Recompute the needed prefix"
+      ],
+      [
+        "Hybrid state",
+        "MLA cache and KDA state must agree"
+      ]
+    ],
+    "note": "A multi-turn agent may repeatedly send a conversation or code context with a small appended tool result. Prefix caching recognizes reusable token blocks and avoids recomputing them. CPU-DRAM offload can retain more state than HBM alone, but moving it back costs bandwidth, synchronization and CPU work. For a hybrid KDA/MLA model, cache reuse also requires a consistent recurrent state at the reuse boundary; caching only an MLA row is not a complete hybrid-state solution. Cache misses, eviction, fragmentation and request dependency timing affect throughput. Raw input tokens counted by a benchmark can include reused prefix tokens, so input-plus-output throughput does not equal newly computed token throughput.",
+    "refs": [
+      "code",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "05",
+    "title": "MTP proposes several tokens; the target verifies them",
+    "subtitle": "Speed depends on accepted progress per complete draft-and-verify cycle.",
+    "viz": "spec",
+    "items": [
+      [
+        "Draft",
+        "Propose a block of candidate tokens"
+      ],
+      [
+        "Verify",
+        "Target evaluates the candidates together"
+      ],
+      [
+        "Accept / correct",
+        "Keep valid progress; handle rejection"
+      ],
+      [
+        "Commit state",
+        "Advance KV and recurrent state consistently"
+      ]
+    ],
+    "formula": "Useful speedup ≈ accepted progress per cycle / relative cycle cost",
+    "note": "Multi-token prediction and speculative decoding try to amortize expensive target-model execution across several output tokens. In this campaign, the serving recipe uses an external Kimi-K3 DSpark draft model. The target checkpoint has num_nextn_predict_layers=0, so do not imply it contains the active draft module used by the benchmark. A correct speculative algorithm must use the configured acceptance/rejection scheme and commit only the appropriate token and recurrent-state progress. High acceptance can help, but drafting, verification, communication and state recovery also cost time. The performance harness uses prescribed synthetic acceptance behavior, while GSM8K accuracy uses real speculative verification; those are different evidence types.",
+    "refs": [
+      "model",
+      "causal",
+      "code"
+    ]
+  },
+  {
+    "chapter": "05",
+    "title": "CPU placement and GPU graphs address dispatch overhead",
+    "subtitle": "Locality and launch reuse matter when individual GPU operations are short.",
+    "viz": "compare",
+    "items": [
+      [
+        "NUMA / CCD binding",
+        "Place worker CPU threads near relevant memory and devices."
+      ],
+      [
+        "Graph replay",
+        "Reuse a captured GPU launch dependency graph."
+      ],
+      [
+        "Tradeoffs",
+        "Affinity needs topology; graph pools consume persistent memory."
+      ]
+    ],
+    "note": "NUMA describes different CPU-memory locality domains. A CCD is an AMD CPU compute die, distinct from a GPU XCD. Binding worker threads to suitable cores can reduce migration, contention and remote-memory access, but core choices must come from the actual server topology. This campaign preserves its existing CCD pinning; native NUMA experiments are deferred. GPU graph replay reduces repeated host-side launch overhead by replaying a captured set of operations. ROCm uses HIP graph facilities, even when vLLM configuration or PyTorch APIs retain CUDA naming. Graphs require stable buffers and supported shapes/control flow; capture pools and intermediate storage can consume memory otherwise available for caches.",
+    "refs": [
+      "amd",
+      "code"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "Precision belongs to each object and each operation",
+    "subtitle": "“An FP8 path” does not mean every internal value uses eight bits.",
+    "viz": "dtype",
+    "items": [
+      [
+        "MXFP4 weights",
+        "4-bit values with block scaling",
+        "amber"
+      ],
+      [
+        "FP8 operands",
+        "Compact Q/K/V and projection operands",
+        "fp8"
+      ],
+      [
+        "BF16 activations",
+        "16-bit storage for many outputs",
+        "bf16"
+      ],
+      [
+        "FP32 internals",
+        "Scales, reductions and accumulators",
+        "fp32"
+      ]
+    ],
+    "note": "BF16 uses one sign bit, eight exponent bits and seven explicit fraction bits, offering a broad dynamic range but limited mantissa precision. E4M3 FP8 uses four exponent bits and three fraction bits; finite-range conventions depend on the exact format. MXFP4 is a block-scaled four-bit format, not a synonym for a scalar FP8 activation. A model can store routed-expert weights in MXFP4, dense weights in BF16 or online FP8, compressed cache in FP8, attention output in BF16 and softmax statistics in FP32 at the same time. Storage dtype, matrix-multiply operand dtype, accumulator dtype and output dtype must be stated separately.",
+    "refs": [
+      "model",
+      "flow",
+      "amd"
+    ]
+  }
+]

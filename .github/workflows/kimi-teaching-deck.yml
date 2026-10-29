@@ -1,0 +1,65 @@
+name: Kimi-K3 teaching deck and video
+on:
+  push:
+    branches: ["docs/kimi-k3-mi355x-teaching-20261029"]
+    paths:
+      - "presentations/kimi-k3-mi355x/**"
+      - ".github/workflows/kimi-teaching-deck.yml"
+permissions:
+  contents: write
+concurrency:
+  group: kimi-teaching-deck
+  cancel-in-progress: true
+jobs:
+  build-teaching-material:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install presentation and narration tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libreoffice-impress fonts-dejavu-core ffmpeg
+          python -m pip install python-pptx==1.0.2 Pillow==11.3.0 PyMuPDF==1.26.4 piper-tts==1.3.0
+      - name: Build editable slides and linked handbook
+        run: python presentations/kimi-k3-mi355x/build.py
+      - name: Render and check all slides
+        run: python presentations/kimi-k3-mi355x/render.py
+      - name: Publish deck and Markdown in the presentation branch
+        run: python presentations/kimi-k3-mi355x/publish.py
+      - name: Upload PowerPoint and handbook
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kimi-K3-PowerPoint-and-Handbook
+          path: presentations/kimi-k3-mi355x/output/Kimi-K3_PowerPoint_and_Handbook.zip
+          retention-days: 90
+      - name: Produce narrated progressive video
+        run: python presentations/kimi-k3-mi355x/video.py
+      - name: Upload narrated course and chapter videos
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kimi-K3-Narrated-Video-Course
+          path: |
+            presentations/kimi-k3-mi355x/output/videos/
+            presentations/kimi-k3-mi355x/output/video-validation.json
+          compression-level: 0
+          retention-days: 90
+      - name: Upload diagnostics and slide previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kimi-K3-Build-Review
+          path: |
+            presentations/kimi-k3-mi355x/output/*validation.json
+            presentations/kimi-k3-mi355x/output/contact-sheet-*.png
+            presentations/kimi-k3-mi355x/output/preview-slide-*.png
+            presentations/kimi-k3-mi355x/output/Kimi-K3_MI355X_Reference.pdf
+          retention-days: 90

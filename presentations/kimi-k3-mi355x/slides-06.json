@@ -1,0 +1,334 @@
+[
+  {
+    "chapter": "06",
+    "title": "Quantization changes numbers; dequantization rescales them",
+    "subtitle": "The scale preserves units, but it cannot recover rounding already lost.",
+    "viz": "quant",
+    "items": [
+      [
+        "Original X",
+        "Higher-precision values",
+        "bf16"
+      ],
+      [
+        "Choose s",
+        "Use range / representable maximum",
+        "fp32"
+      ],
+      [
+        "Quantize",
+        "X₈ = round_FP8(clip(X/s))",
+        "fp8"
+      ],
+      [
+        "Interpret",
+        "X ≈ s × X₈",
+        "bf16"
+      ]
+    ],
+    "formula": "For E4M3FN: s = max|X| / 448, with explicit zero-range handling",
+    "note": "To fit values into an FP8 format, divide by a scale, round to representable values and clip if necessary. A descale s converts a stored FP8 number back to its approximate real value. Some APIs instead pass its reciprocal, so always check the contract. For E4M3FN, the largest finite magnitude is 448; that value is not universal across all FP8 formats such as FNUZ variants. Dynamic quantization derives a scale from the current tensor, while static schemes reuse predetermined scales. Zero and extremely small ranges need explicit handling. Dequantizing an FP8 tensor restores its units and a wider storage dtype, but not the original BF16 information lost during quantization.",
+    "refs": [
+      "flow",
+      "audit"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "Scale granularity changes the accuracy/performance tradeoff",
+    "subtitle": "Per-tensor, per-channel and per-block scales cover different value groups.",
+    "viz": "compare",
+    "items": [
+      [
+        "Per-tensor",
+        "One scale; simple metadata; outliers affect the whole tensor."
+      ],
+      [
+        "Per-channel",
+        "Separate output-channel weight scales; tighter ranges."
+      ],
+      [
+        "Per-block",
+        "Scales shared by small groups; extra packing and metadata."
+      ]
+    ],
+    "note": "A single scale is cheap to manage but must cover the widest value range in the tensor. If one value is an outlier, most other values occupy only a small part of the available FP8 range. Per-channel weight quantization uses one scale for each output channel, reducing that coupling. Block scaling such as MX formats trades finer local ranges against additional scale storage and layout constraints. The direct up-projection uses online-quantized per-output-channel FP8 weights plus the cache descale and supplied K/V output descales. These scales are not interchangeable. The new-token causal path must retain its original Q/K/V descales rather than substituting headroom scales intended for cached reconstruction.",
+    "refs": [
+      "model",
+      "flow",
+      "causal"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "Stage 0: before the FP8 attention optimizations",
+    "subtitle": "The compressed cache was already FP8; the attention operands were BF16.",
+    "viz": "pipeline",
+    "items": [
+      [
+        "FP8 cache",
+        "Gather compressed history",
+        "fp8"
+      ],
+      [
+        "BF16 projection",
+        "Dequantize + kv_b_proj",
+        "bf16"
+      ],
+      [
+        "BF16 K/V",
+        "Expanded intermediate",
+        "bf16"
+      ],
+      [
+        "BF16 FMHA",
+        "BF16 Q joins K/V",
+        "bf16"
+      ],
+      [
+        "Output + LSE",
+        "BF16 / FP32",
+        "fp32"
+      ]
+    ],
+    "formula": "Established full configuration: 15,476.46881 total tokens/s/GPU",
+    "note": "This is the campaign's baseline attention data flow, not a claim that the entire model was unoptimized or uniformly BF16. The compressed KV cache was already FP8. The cached-prefill reconstruction used BF16 projection operands and produced expanded BF16 keys and values. Query operands were BF16, and the fused attention kernel accepted BF16 Q/K/V. Gathering, dequantization and projection can share a kernel; the conceptual boxes do not imply a separate HBM buffer for every step. The benchmark includes all model and serving work. Its throughput label therefore describes a full configuration and is not an isolated FMHA kernel measurement.",
+    "refs": [
+      "base",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "Stage 1: dynamic operands for FP8 FMHA",
+    "subtitle": "Keep BF16 up-projection, then quantize the expanded Q/K/V.",
+    "viz": "pipeline",
+    "items": [
+      [
+        "FP8 cache",
+        "Compressed history",
+        "fp8"
+      ],
+      [
+        "BF16 up-project",
+        "Expanded BF16 K/V",
+        "bf16"
+      ],
+      [
+        "Dynamic quantize",
+        "Q and expanded K/V",
+        "amber"
+      ],
+      [
+        "FP8 FMHA",
+        "FP8 Q/K/V operands",
+        "fp8"
+      ],
+      [
+        "Output + LSE",
+        "BF16 / FP32",
+        "fp32"
+      ]
+    ],
+    "formula": "Established full configuration: 16,915.72154 total tokens/s/GPU",
+    "note": "The first FP8 FMHA stage changes the attention operands while retaining BF16 kv_b_proj reconstruction. It dynamically quantizes Q and the expanded K/V to FP8 and passes the matching descales to the fused kernel. This introduces additional rounding and preparation work. In particular, expanded BF16 K/V are stored and then read by the quantizer before the FP8 output is stored. Q preparation can be reused within an immutable forward when the tensor identity and layout match. The measured full configuration is faster than the baseline, but the difference also reflects the complete runtime settings and cannot be claimed as a clean isolated speedup for the FMHA instruction sequence.",
+    "refs": [
+      "fmha",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "Stage 2: direct FP8 up-projection",
+    "subtitle": "FP8 cache × FP8 kv_b_proj → FP8 K/V storage → FP8 FMHA.",
+    "viz": "pipeline",
+    "items": [
+      [
+        "FP8 cache",
+        "Compressed latent + shared K",
+        "fp8"
+      ],
+      [
+        "FP8 × FP8",
+        "Projection operands",
+        "fp8"
+      ],
+      [
+        "FP32 accumulate",
+        "Descale and assemble K/V",
+        "fp32"
+      ],
+      [
+        "FP8 epilogue",
+        "Write K₈/V₈ directly",
+        "fp8"
+      ],
+      [
+        "FP8 FMHA",
+        "Return BF16 O / FP32 LSE",
+        "fp8"
+      ]
+    ],
+    "formula": "Established full configuration: 17,406.08912 total tokens/s/GPU",
+    "note": "The direct path uses compatible FP8 projection weights and compressed FP8 cache operands in AITER's fused gather/up-projection kernel. The matrix multiply accumulates in FP32. Its epilogue applies input and weight descales, splits the projected key/value components, appends the cached shared-key columns and rounds directly into FP8 output storage using supplied output descales. This removes the expanded BF16 K/V buffer between cached projection and attention, along with the separate cached-output quantization pass. It does not remove all quantization or all higher-precision arithmetic. Online weight conversion occurs after loading, and output scale policy still affects accuracy.",
+    "refs": [
+      "proj",
+      "flow",
+      "aiter",
+      "atom"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "Follow the units through the FP8 projection",
+    "subtitle": "Input, weight and output scales play separate roles.",
+    "viz": "equation",
+    "items": [
+      [
+        "Latent cache",
+        "C ≈ s_C C₈"
+      ],
+      [
+        "Weight channel j",
+        "W_j ≈ s_W,j W₈,j"
+      ],
+      [
+        "Accumulated projection",
+        "Z_j ≈ s_C s_W,j Σ_i C₈,i W₈,j,i"
+      ],
+      [
+        "FP8 output",
+        "K₈ = round_FP8(K/s_K); similarly for V"
+      ]
+    ],
+    "formula": "FP8 multiplication operands → FP32 accumulation → scaled FP8 epilogue",
+    "note": "Assume one cache descale s_C and an output-channel weight descale s_W,j for the illustrated projection contract. The raw FP8 dot product is in quantized units, so multiplying by both descales restores the physical activation units before applying the output quantization scale. Keys and values can use different output scales. The shared cached key columns must also be interpreted using their cache scale and encoded under the final K output scale. A missing scale, reciprocal-versus-descale confusion, wrong channel axis or reused scale from another forward can produce large numerical errors even when every tensor has the expected dtype. Kernel correctness must test nonunit, unequal scales.",
+    "refs": [
+      "flow",
+      "aiter",
+      "audit"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "What direct output actually removes",
+    "subtitle": "It removes a large BF16 intermediate and its separate quantization pass.",
+    "viz": "compare",
+    "items": [
+      [
+        "Earlier path",
+        "Write BF16 K/V → read BF16 K/V → quantize → write FP8 K/V."
+      ],
+      [
+        "Direct path",
+        "Accumulate locally → scale/round → write FP8 K/V."
+      ],
+      [
+        "Logical sizes per token/rank",
+        "BF16 expanded K/V: 7,680 bytes; FP8: 3,840 bytes."
+      ]
+    ],
+    "formula": "12 × (192 + 128) = 3,840 expanded values per token per TP rank",
+    "note": "At the measured local shape, each cached token expands into 12*(192+128)=3,840 values. A BF16 expanded buffer occupies 7,680 bytes per token per rank; FP8 occupies 3,840 bytes. Eliminating the BF16 materialization avoids one logical BF16 store and a later BF16 read, plus its separate quantizer's work, in that path. Those logical bytes are not a direct measurement of HBM traffic: caching, fusion, layout, workspace reuse and the chosen chunk size matter. The persistent MLA cache still stores its compressed representation; reducing an expanded temporary does not automatically increase the persistent KV cache capacity by the same amount.",
+    "refs": [
+      "flow",
+      "audit"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "Stage 3: reuse prepared FP8 for new-token attention",
+    "subtitle": "The causal call consumes existing Q₈/K₈/V₈ with their original descales.",
+    "viz": "newtoken",
+    "items": [
+      [
+        "Prepare once",
+        "New-token Q/K/V → FP8 + original scales",
+        "amber"
+      ],
+      [
+        "Cached branch",
+        "Direct FP8 cached projection + FP8 FMHA",
+        "fp8"
+      ],
+      [
+        "New-token branch",
+        "Causal FP8 FMHA on prepared tensors",
+        "fp8"
+      ],
+      [
+        "Merge",
+        "Use each branch's output and LSE",
+        "fp32"
+      ]
+    ],
+    "note": "The new-token experiment enables causal FP8 attention only for eligible forwards that already prepare the direct-FP8 cached path. It reuses the existing new-token Q/K/V tensors rather than adding another quantization pass. The new-token causal call uses the original Q/K/V descales, while cached reconstructed K/V use separate output scales with headroom. Forwards without direct-KV preparation retain the BF16 causal path. Therefore the phrase “all three FP8 paths enabled” means configured and eligible, not a claim that every model layer and every forward is FP8. Full new-token throughput remains unestablished after the latest runner-quota failure; the completed 17,406 result is the earlier cached-only stage.",
+    "refs": [
+      "causal",
+      "run",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "06",
+    "title": "Two attention branches need two different masks",
+    "subtitle": "The new query chunk sees all old context, plus its allowed new-token prefix.",
+    "viz": "splitmask",
+    "items": [
+      [
+        "Old cached prefix",
+        "All its keys precede every new query"
+      ],
+      [
+        "New-token block",
+        "Use a causal triangle within the chunk"
+      ],
+      [
+        "Same query outputs",
+        "Merge by natural-log LSE"
+      ],
+      [
+        "Scale discipline",
+        "Keep cached-output and new-token descales separate"
+      ]
+    ],
+    "note": "Let the old prefix contain P tokens and the new chunk N tokens. New query i sees old keys 0 through P-1 and new keys 0 through i. One efficient decomposition computes attention against the old prefix as a separate noncausal block, because all old keys are visible, and computes the new chunk using causal masking. Each branch returns normalized output and LSE. Merge those outputs using the mass-based rule. This decomposition is valid only when masks, positional/sequence offsets, softmax scale and per-tensor descales are consistent. Tests should modify future-token values under fixed scales and verify that earlier causal outputs do not change.",
+    "refs": [
+      "causal",
+      "flash"
+    ]
+  },
+  {
+    "chapter": "07",
+    "title": "Quantization error enters at several points",
+    "subtitle": "A wider accumulator cannot restore information lost before multiplication.",
+    "viz": "flow",
+    "items": [
+      [
+        "Cache quantization",
+        "Latent representation error",
+        "amber"
+      ],
+      [
+        "Weight quantization",
+        "Projection parameter error",
+        "amber"
+      ],
+      [
+        "Q/K/V rounding",
+        "Attention operand error",
+        "amber"
+      ],
+      [
+        "Softmax + merge",
+        "Errors can change relative attention mass",
+        "fp32"
+      ]
+    ],
+    "note": "Dequantizing a cache row to BF16 does not recreate its original unquantized value. Both the BF16-projection and direct-FP8-projection routes start from approximate cached information. Direct FP8 projection additionally uses quantized weights and an output-scale policy, while avoiding an expanded BF16 storage round-trip. It is therefore incorrect to assume that eliminating a quantize/dequantize pair must improve accuracy. FP32 accumulation reduces accumulation error but does not eliminate input, weight or output rounding. Q and K errors perturb scores before softmax; V errors affect the weighted content. Scale saturation and clipping can be more damaging than ordinary rounding for outlier values.",
+    "refs": [
+      "audit",
+      "flow"
+    ]
+  }
+]

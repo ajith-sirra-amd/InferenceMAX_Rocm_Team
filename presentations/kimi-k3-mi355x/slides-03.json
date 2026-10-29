@@ -1,0 +1,307 @@
+[
+  {
+    "chapter": "03",
+    "title": "The actual 93-layer pattern",
+    "subtitle": "Mostly three KDA layers followed by one MLA layer, then a final MLA.",
+    "viz": "layers",
+    "items": [
+      [
+        "Layers 1–92",
+        "23 groups of KDA → KDA → KDA → MLA"
+      ],
+      [
+        "Layer 93",
+        "One additional MLA layer"
+      ],
+      [
+        "Feed-forward side",
+        "Layer 1 dense; later layers use MoE"
+      ]
+    ],
+    "formula": "69 KDA + 24 MLA = 93 sequence-mixing layers",
+    "note": "The checkpoint lists full-attention layers using one-based indices: 4,8,12 and so on through 92, plus layer 93. The remaining 69 layers use KDA. Therefore a drawing that shows every layer as ordinary softmax attention would misrepresent this architecture. The first_k_dense_replace setting is 1, so the first decoder layer uses the dense feed-forward path and subsequent layers use the configured MoE path. Attention type and feed-forward type are separate choices within a decoder layer. The final MLA layer is an exception to the repeating four-layer pattern. Source arrays are included in the checkpoint snapshot shipped with the handbook.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "Checkpoint dimensions worth remembering",
+    "subtitle": "These numbers describe the referenced Kimi-K3 checkpoint.",
+    "viz": "stats",
+    "items": [
+      [
+        "7,168",
+        "Hidden-state width"
+      ],
+      [
+        "96",
+        "Attention heads"
+      ],
+      [
+        "512",
+        "Compressed KV latent width"
+      ],
+      [
+        "1,536",
+        "Query latent width"
+      ],
+      [
+        "896 / 16",
+        "Routed experts / selected per token"
+      ],
+      [
+        "1,048,576",
+        "Configured maximum context"
+      ]
+    ],
+    "note": "Hidden-state width is the size of each token's representation between sublayers. The query projection factors through a 1,536-dimensional latent, and MLA KV factors through a 512-dimensional latent plus a 64-column shared key component. There are 96 logical heads. The routed expert branch narrows the 7,168-dimensional hidden state to 3,584 features before expert computation; each routed expert has intermediate width 3,072. Two shared experts operate in addition to the selected routed experts. The configured context limit is an architectural/configuration limit, not proof that a particular GPU-memory budget, concurrency and offload setting can serve every request at that length.",
+    "refs": [
+      "model"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "KDA keeps a learned summary of the past",
+    "subtitle": "Update a state matrix instead of storing a growing key/value list.",
+    "viz": "state",
+    "items": [
+      [
+        "Previous state",
+        "Associative memory from earlier tokens"
+      ],
+      [
+        "Current token",
+        "Query, key, value and learned gates"
+      ],
+      [
+        "Updated state",
+        "Forget selectively; correct remembered content"
+      ],
+      [
+        "Output",
+        "Read the updated state with the query"
+      ]
+    ],
+    "note": "Kimi Delta Attention belongs to the family of recurrent linear-attention mechanisms. Instead of reading an ever-growing list of past key/value rows for every step, it maintains a matrix state for each head. The current key addresses that state, the current value supplies content, and learned gates control decay and update strength. A delta update corrects the mismatch between the content currently retrieved by the key and the desired value. This bounded state is efficient for long-sequence processing, but it is a compressed memory: it does not preserve an independently addressable row for every past token. Periodic MLA layers provide complementary explicit attention over token history.",
+    "refs": [
+      "model",
+      "kda",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "KDA's update, one step at a time",
+    "subtitle": "Decay → predict → correct → read.",
+    "viz": "equation",
+    "items": [
+      [
+        "Decay",
+        "S̄ = diag(α) S_previous"
+      ],
+      [
+        "Correct",
+        "r = v − S̄ᵀk;   S = S̄ + βkrᵀ"
+      ],
+      [
+        "Read",
+        "o = Sᵀq"
+      ]
+    ],
+    "formula": "S ∈ R^(d_k × d_v);  α controls forgetting;  β controls update strength",
+    "note": "This is an explanatory column-vector convention for the gated delta rule, not a literal transcription of a fused kernel. The state S maps a key-space vector to a value-space vector. First apply a learned decay to obtain Sbar. Query that decayed memory with the current key k, compare the retrieved value with the desired current value v, and form the residual r. The rank-one update beta times k times r transpose writes the correction. Finally the query q reads the updated state. Actual KDA includes normalization, learned gate parameterizations, short convolutions, output gating and chunked algorithms; those details preserve the conceptual sequence while changing efficient implementation.",
+    "refs": [
+      "kda",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "KDA prefill and decode use different algorithms",
+    "subtitle": "The state is recurrent; processing a known chunk can still be parallelized.",
+    "viz": "compare",
+    "items": [
+      [
+        "Prefill",
+        "Chunked matrix operations process known token blocks."
+      ],
+      [
+        "Decode",
+        "Update a small persistent state for each arriving token."
+      ],
+      [
+        "Speculative verification",
+        "Preserve state checkpoints and commit only accepted progress."
+      ]
+    ],
+    "note": "A recurrence does not require a GPU implementation to process every prompt token with an isolated tiny kernel. Chunked formulations express portions of the computation as matrix operations and carry a state between chunks. Decode benefits from a compact update because only a small number of tokens arrive. Kimi-K3 also uses a short causal convolution of width four before the recurrent mixing, so its persistent cache includes convolution history as well as the main state. Speculative generation creates an additional correctness issue: rejected candidate tokens must not permanently modify either state. Restore or checkpoint strategies must keep accepted and rejected histories consistent.",
+    "refs": [
+      "model",
+      "code",
+      "kda"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "MLA compresses the persistent token cache",
+    "subtitle": "Store a shared latent per token, then reconstruct what attention needs.",
+    "viz": "mla",
+    "items": [
+      [
+        "Hidden state",
+        "7,168 features",
+        "bf16"
+      ],
+      [
+        "KV compression",
+        "512 latent + 64 shared K features",
+        "bf16"
+      ],
+      [
+        "Persistent cache",
+        "576 values per token / MLA layer",
+        "fp8"
+      ],
+      [
+        "Attention representation",
+        "Per-head K and V when needed",
+        "bf16"
+      ]
+    ],
+    "note": "MLA means Multi-head Latent Attention. A learned down-projection transforms each token's hidden state into a compact shared KV latent. The checkpoint also retains a 64-feature shared key component in the layout field historically named RoPE. In this NoPE checkpoint, do not interpret that name as an active positional rotation. The persistent cache stores the compressed representation rather than separate expanded K/V for every head. Prefill can reconstruct per-head K/V to use an efficient FMHA kernel. Some decode algorithms instead absorb projection matrices into queries and outputs, retaining computation in latent space. Compression is a learned model parameterization, distinct from FP8 numeric quantization.",
+    "refs": [
+      "model",
+      "flow",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "Query preparation also uses a latent projection",
+    "subtitle": "The current token's query is expanded into per-head features.",
+    "viz": "flow",
+    "items": [
+      [
+        "Hidden X",
+        "Width 7,168",
+        "bf16"
+      ],
+      [
+        "q_a + normalization",
+        "Query latent width 1,536",
+        "bf16"
+      ],
+      [
+        "q_b projection",
+        "96 × 192 query features",
+        "bf16"
+      ],
+      [
+        "TP8 local Q",
+        "[Tq, 12, 192]",
+        "bf16"
+      ]
+    ],
+    "note": "The query branch projects the hidden state down to a 1,536-dimensional latent, normalizes it, then applies q_b_proj to obtain per-head query features. In the local TP8 prefill representation, Q has 12 heads and width 192 per head. That width consists of 128 non-shared key-matching features plus the 64-column shared-key layout component. The implementation can fuse the initial Q/KV projections or gate preparation, so these boxes describe logical transformations rather than guaranteed individual kernels. Query preparation is not the same operation as kv_b_proj: q_b_proj expands the current query latent, while kv_b_proj reconstructs key/value features from compressed cached KV.",
+    "refs": [
+      "model",
+      "code",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "kv_b_proj reconstructs per-head keys and values",
+    "subtitle": "The weight matrix is neither the KV cache nor an FMHA input.",
+    "viz": "projection",
+    "items": [
+      [
+        "Compressed C",
+        "[Tk, 512]",
+        "fp8"
+      ],
+      [
+        "Local W_kv",
+        "[3,072, 512]",
+        "bf16"
+      ],
+      [
+        "Projected Z",
+        "[Tk, 12, 256] → K_base + V",
+        "bf16"
+      ],
+      [
+        "Assembled tensors",
+        "K [Tk,12,192]; V [Tk,12,128]",
+        "bf16"
+      ]
+    ],
+    "formula": "Z = C W_kvᵀ;  3,072 = 12 × (128 + 128)",
+    "note": "Under TP8, the projection weight has 3,072 output rows because each of 12 local heads needs 128 key features and 128 value features. Multiplication produces 256 features per head, which are split into the non-shared key part and the value. The 64-feature cached shared-key component is appended to every head's key, giving final key width 192. Thus C, W_kv, expanded K/V and attention output are four distinct objects. FMHA receives Q, K and V plus scales and metadata; it does not receive the kv_b_proj weight. Kernel fusion can perform row gathering, projection, splitting and assembly without materializing all of these logical intermediates.",
+    "refs": [
+      "flow",
+      "code"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "MLA decode can avoid expanded K/V",
+    "subtitle": "Associativity lets projections move across the attention calculation.",
+    "viz": "compare",
+    "items": [
+      [
+        "Explicit prefill path",
+        "Build K/V per head, then call FMHA."
+      ],
+      [
+        "Latent decode path",
+        "Transform Q into latent space; attend to compressed cache."
+      ],
+      [
+        "After the latent read",
+        "Apply the value projection to obtain each head's output."
+      ]
+    ],
+    "formula": "q(CW_Kᵀ)ᵀ = (qW_K)Cᵀ",
+    "note": "For the non-shared key part, projecting cached latent rows C to K and then taking q dot K is algebraically equivalent to first multiplying q by the key-projection weight and then taking its dot product with C. Similarly, multiplying attention probabilities by C and then by the value-projection weight is equivalent to using expanded values. These identities motivate MLA decode implementations that avoid expanding the entire history. Shared key components and masks still need their own correct handling. The performance tradeoff depends on query count and matrix shapes, so prefill and decode can legitimately choose different realizations of the same model. The direct FP8 up-projection experiment in this deck targets the expanded cached-prefill route.",
+    "refs": [
+      "code",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "Gated MLA controls the attention output",
+    "subtitle": "A learned gate modulates retrieved features before the next projection.",
+    "viz": "flow",
+    "items": [
+      [
+        "FMHA output",
+        "Weighted information from context",
+        "bf16"
+      ],
+      [
+        "Learned output gate",
+        "Feature-wise modulation",
+        "amber"
+      ],
+      [
+        "Output projection",
+        "Return to hidden width",
+        "bf16"
+      ],
+      [
+        "Residual mixing",
+        "Carry information into the next sublayer",
+        "bf16"
+      ]
+    ],
+    "note": "The checkpoint enables mla_use_output_gate. An output gate is different from a causal mask and different from an MoE router. The causal mask decides which token pairs are allowed. The attention softmax determines relative weights over allowed keys. The output gate modulates the retrieved features, typically through a learned bounded nonlinearity, and the output projection mixes head outputs into the model hidden space. Implementations may fuse gate preparation with an earlier projection and fuse gate application with output processing. Gate shape, dtype and operation order must still follow the reference path when optimizing a kernel.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  }
+]

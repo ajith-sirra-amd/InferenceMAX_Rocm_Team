@@ -1,0 +1,302 @@
+[
+  {
+    "chapter": "07",
+    "title": "The cached output scale is a policy to validate",
+    "subtitle": "Twice the new-token range is headroom—not a bound on all cached values.",
+    "viz": "quant",
+    "items": [
+      [
+        "New-token amax",
+        "Estimate current K/V ranges",
+        "bf16"
+      ],
+      [
+        "Cached output scale",
+        "2 × max(new-token descale, 10⁻⁶)",
+        "fp32"
+      ],
+      [
+        "Old cached outlier",
+        "May exceed that range",
+        "amber"
+      ],
+      [
+        "Validation",
+        "Measure clipping, output error and LSE error",
+        "fp32"
+      ]
+    ],
+    "note": "The inspected ATOM-inspired direct-output policy derives K/V output descales from the newly prepared token tensors and multiplies them by two, after applying a small floor. This avoids a separate amax pass over the reconstructed cached chunk, helping performance. But earlier context can contain values outside the new-token range. Zero, very small or unrepresentative new-token activations are especially important test cases. The policy does not prove that all cached values fit in FP8. Alternatives such as a cached-chunk range pass, conservative static scales or more granular scaling have different performance and accuracy costs. The presentation records the current policy and its unresolved numerical limitation rather than declaring it universally safe.",
+    "refs": [
+      "atom",
+      "flow",
+      "audit"
+    ]
+  },
+  {
+    "chapter": "07",
+    "title": "Validate three different questions separately",
+    "subtitle": "Arithmetic, quantization fidelity and model quality require different evidence.",
+    "viz": "compare",
+    "items": [
+      [
+        "Same FP8 operands",
+        "Does the kernel compute the intended quantized operation?"
+      ],
+      [
+        "Original BF16 reference",
+        "How much error does the full quantized path introduce?"
+      ],
+      [
+        "End-to-end model task",
+        "Does the executed implementation preserve task quality?"
+      ]
+    ],
+    "note": "A high-precision reference built from exactly the same FP8 operands and scales isolates arithmetic and implementation errors. Comparing with the original BF16 inputs instead measures the combined effect of quantization and kernel arithmetic. Full-model evaluation then tests whether errors affect actual task outcomes. These tests answer different questions and none automatically replaces the others. Include masks, nonunit independent scales, ragged sequences, strided views, empty/short cases where supported, extreme ranges and graph replay with changed inputs. A cached output tensor from a previous forward can make a superficial numerical test pass while serving the wrong data, so pointer reuse and graph replay need explicit coverage.",
+    "refs": [
+      "audit",
+      "causal"
+    ]
+  },
+  {
+    "chapter": "07",
+    "title": "Accuracy evidence is strong—but has a defined scope",
+    "subtitle": "The prototype passed full GSM8K; native-PR validation remains separate.",
+    "viz": "stats",
+    "items": [
+      [
+        "1,319",
+        "GSM8K questions"
+      ],
+      [
+        "96.9674%",
+        "Strict: 1,279 correct"
+      ],
+      [
+        "96.8916%",
+        "Flexible: 1,278 correct"
+      ],
+      [
+        "8 workers",
+        "Optimized-path invocation verified"
+      ]
+    ],
+    "note": "The new-token FP8 prototype's full evaluation used all 1,319 GSM8K questions, five-shot prompting, temperature zero and real speculative verification. It recorded successful cached FP8 projection, cached FP8 FMHA and causal FP8 calls on the same eight workers. Accuracy routing used eager execution with 512-token chunks to exercise the intended kernels; the normal performance run uses different routing and graphs. Controlled causal diagnostics passed, but the historical captured-BF16 absolute-LSE gate remains unpassed, with an observed discrepancy around 0.935 versus the unchanged 0.20 limit. The separately ported native vLLM PR has not inherited GPU validation merely because the prototype passed.",
+    "refs": [
+      "gsm",
+      "causal",
+      "audit",
+      "pr"
+    ]
+  },
+  {
+    "chapter": "07",
+    "title": "Execution proof is part of correctness",
+    "subtitle": "A passing test is useful only if it exercised the optimized path.",
+    "viz": "flow",
+    "items": [
+      [
+        "Pin the source",
+        "Exact serving code and image",
+        "neutral"
+      ],
+      [
+        "Verify operands",
+        "Dtypes, layouts and scales",
+        "fp8"
+      ],
+      [
+        "Observe calls",
+        "Successful execution on all workers",
+        "amber"
+      ],
+      [
+        "Separate phases",
+        "Warmup, capture, evaluation and replay",
+        "fp32"
+      ]
+    ],
+    "note": "A feature flag can be enabled while an eligibility guard routes the actual workload to BF16. Short GSM8K prompts can fail the normal large-cached-context threshold, so a test might report good accuracy without exercising the optimized path. Execution proof should identify the exact code revision, loaded implementation, worker identity, relevant call, input/output dtypes and successful completion during the evaluation phase. Graph capture alone is not proof of steady-state replay. A prototype plugin and a native backend can have different routing or integration bugs even when they call related kernels. Preserve the fixed task and thresholds, and disclose any accuracy-only routing override.",
+    "refs": [
+      "causal",
+      "audit",
+      "pr"
+    ]
+  },
+  {
+    "chapter": "08",
+    "title": "The three established performance stages",
+    "subtitle": "Total input + output tokens/s/GPU under the recorded full configurations.",
+    "viz": "performance",
+    "items": [
+      [
+        "Baseline",
+        "15,476.46881"
+      ],
+      [
+        "Cached FP8 FMHA",
+        "16,915.72154"
+      ],
+      [
+        "FP8 projection + FMHA",
+        "17,406.08912"
+      ]
+    ],
+    "note": "The first established full result is 15,476.46881 total input-plus-output tokens per second per GPU. The cached FP8 FMHA stage measured 16,915.72154, about 9.30 percent higher. The direct FP8 projection plus cached FP8 FMHA stage measured 17,406.08912, about 2.90 percent above the preceding stage and 12.47 percent above the baseline. These are full benchmark configurations, including other tuning, so the deltas are not isolated kernel attribution. All values are preserved exactly in the companion evidence table. New-token causal FP8 has accuracy evidence but no completed accepted performance result; the last attempt failed because the runner exhausted its disk quota.",
+    "refs": [
+      "base",
+      "fmha",
+      "proj",
+      "run",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "08",
+    "title": "Read throughput and latency together",
+    "subtitle": "A higher token rate can coexist with worse user-visible responsiveness.",
+    "viz": "stats",
+    "items": [
+      [
+        "TTFT",
+        "Time to first output token"
+      ],
+      [
+        "ITL / TPOT",
+        "Spacing or average time per output token"
+      ],
+      [
+        "Output tok/s",
+        "Actual generation rate"
+      ],
+      [
+        "Total tok/s",
+        "Input + output, including workload reuse semantics"
+      ]
+    ],
+    "note": "TTFT includes waiting, prompt processing and production of the first token. ITL measures gaps between successive streamed tokens; TPOT is an average derived from output generation time and token count, and exact definitions should come from the benchmark. Tail percentiles reveal stalls hidden by averages. Total token throughput can be dominated by long input prefixes and cache reuse, while output throughput reflects generated tokens. Normalize by the actual GPU count, keep request errors visible, and compare equivalent durations and workload definitions. Concurrency sweeps should identify a throughput-latency operating point rather than maximizing a single scalar at any cost.",
+    "refs": [
+      "base",
+      "proj"
+    ]
+  },
+  {
+    "chapter": "08",
+    "title": "Profile steady state before choosing the next kernel",
+    "subtitle": "Locate the critical path, then distinguish compute, memory and waiting.",
+    "viz": "timeline",
+    "items": [
+      [
+        "Warmup excluded",
+        "Model load, compilation and graph capture"
+      ],
+      [
+        "Stable replay window",
+        "Representative cache and request mix"
+      ],
+      [
+        "All workers",
+        "Kernels, copies, collectives and idle gaps"
+      ],
+      [
+        "Unprofiled confirmation",
+        "Measure final performance without tracing"
+      ]
+    ],
+    "note": "A useful serving profile captures a representative stable window after startup and warmup. Record CPU scheduling, GPU kernels, memory copies, collectives and rank timing together. Kernel-duration sums can exceed wall time when kernels overlap; calculate interval unions for busy time and avoid double-counting nested annotations. Separate prefill, decode and mixed steps where possible, and do not infer a whole forward's cost from one kernel name. A long gap before a collective might reflect rank skew rather than slow arithmetic. Tracing perturbs execution, so instrumented throughput is diagnostic evidence and should not replace an unprofiled benchmark. Historical profiles can guide hypotheses, but final conclusions need the current optimized source.",
+    "refs": [
+      "code",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "08",
+    "title": "Amdahl's law puts a ceiling on local speedups",
+    "subtitle": "The fastest kernel matters only for the fraction of time it can remove.",
+    "viz": "equation",
+    "items": [
+      [
+        "Fraction f",
+        "Share of end-to-end time affected"
+      ],
+      [
+        "Local speedup s",
+        "Improvement to that portion"
+      ],
+      [
+        "Remaining work",
+        "Unaffected time still has to execute"
+      ]
+    ],
+    "formula": "Overall speedup = 1 / [(1 − f) + f/s]",
+    "note": "If a kernel accounts for 20 percent of elapsed time and becomes twice as fast, total time becomes 80 percent plus 10 percent, giving a speedup of 1/0.9 or about 11.1 percent. It is not a 100 percent end-to-end improvement. If the optimization adds quantization, communication or synchronization, those costs must be included. The affected fraction must be measured on the relevant current workload; a percentage of GPU busy time is not automatically the same as a percentage of wall time. As one bottleneck improves, another can become dominant. This is why steady-state profiling should follow major execution-path changes.",
+    "refs": [
+      "flash",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "08",
+    "title": "Choose the next experiment from the limiting resource",
+    "subtitle": "Change one hypothesis at a time and preserve comparable evidence.",
+    "viz": "compare",
+    "items": [
+      [
+        "Memory-bound",
+        "Remove an intermediate; improve reuse or dtype."
+      ],
+      [
+        "Launch / sync-bound",
+        "Fuse small work; inspect graph coverage and rank skew."
+      ],
+      [
+        "Batch / cache-bound",
+        "Sweep C56 + MTP, C64 + MTP, C96 without MTP."
+      ]
+    ],
+    "note": "An experiment should state what resource is limiting, what change addresses it and what outcome would support the hypothesis. For the campaign, the planned concurrency points are C56 with MTP, C64 with MTP and C96 without MTP, preserving the existing CCD binding. Native NUMA changes are deferred. A valid comparison keeps the model, code, image, TP/DCP, workload, duration and relevant runtime settings fixed unless one is the deliberate independent variable. Read accuracy, errors and tail latency alongside throughput. Enabling another FP8 flag without establishing its eligibility, cost and numerical behavior is not a complete optimization experiment.",
+    "refs": [
+      "flow",
+      "causal",
+      "pr"
+    ]
+  },
+  {
+    "chapter": "09",
+    "title": "Trace one new token through the complete system",
+    "subtitle": "The architecture and serving machinery now form one connected picture.",
+    "viz": "journey",
+    "items": [
+      [
+        "Schedule",
+        "Choose tokens; resolve cache/state"
+      ],
+      [
+        "Project",
+        "Create Q/K/V or KDA update inputs"
+      ],
+      [
+        "Mix context",
+        "KDA recurrence or MLA attention"
+      ],
+      [
+        "Transform",
+        "Latent MoE and shared branch"
+      ],
+      [
+        "Mix depth",
+        "Attention Residuals"
+      ],
+      [
+        "Generate",
+        "Logits, sampling and state commit"
+      ]
+    ],
+    "note": "For a new token, the scheduler resolves which context and recurrent state are available and builds metadata. Each decoder layer performs its configured sequence-mixing operation: a KDA update or MLA attention. MLA may use latent-space decode or an expanded prefill path, depending on the workload. The feature transform is dense in the first layer and MoE thereafter. Attention Residuals combine information across depth. TP and DCP communication appear wherever distributed operands or results require it. After the final normalization and vocabulary projection, the sampler or speculative verifier selects output progress. Caches and recurrent state are updated consistently before the next step. Precision choices belong to individual edges and operations throughout this flow.",
+    "refs": [
+      "model",
+      "code",
+      "flow"
+    ]
+  }
+]

@@ -1,0 +1,285 @@
+[
+  {
+    "chapter": "00",
+    "title": "Kimi-K3 on AMD MI355X",
+    "subtitle": "From attention fundamentals to FP8 execution",
+    "viz": "cover",
+    "items": [
+      [
+        "Understand",
+        "Attention, KDA, MLA and MoE"
+      ],
+      [
+        "Trace",
+        "One token across eight GPUs"
+      ],
+      [
+        "Optimize",
+        "Precision, memory traffic and correctness"
+      ]
+    ],
+    "note": "This is a detailed teaching deck for an engineer who wants to understand both the model and its execution. Read the diagrams from left to right and use click-by-click builds in PowerPoint Slide Show. Green always identifies FP8, blue BF16, purple FP32 and amber a conversion or decision. Mathematical examples are deliberately small; checkpoint dimensions are labeled separately. The Markdown handbook contains deeper explanations and worked examples. Model facts are pinned to the Kimi-K3 checkpoint revision, while optimization evidence is pinned to this campaign. The presentation does not assume that every FP8 capability runs on every forward.",
+    "refs": [
+      "model",
+      "code",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "00",
+    "title": "A learning path with six stops",
+    "subtitle": "Build each concept before using it to explain performance.",
+    "viz": "journey",
+    "items": [
+      [
+        "01",
+        "Attention from first principles"
+      ],
+      [
+        "02",
+        "Kimi-K3 architecture"
+      ],
+      [
+        "03",
+        "GPU execution and memory"
+      ],
+      [
+        "04",
+        "Serving across eight GPUs"
+      ],
+      [
+        "05",
+        "FP8 data flow and numerics"
+      ],
+      [
+        "06",
+        "Evidence and optimization"
+      ]
+    ],
+    "note": "The full deck is designed for a long workshop or several shorter sessions. First learn why Q, K and V exist and how attention produces an output. Then distinguish KDA's recurrent state from MLA's compressed token cache. Next map matrix operations onto MI355X, and understand the scheduler and distributed collectives. Only after those pieces are in place do we introduce FP8 FMHA and the direct FP8 up-projection. The final section explains how to establish that a faster path is both executed and sufficiently accurate. Each slide links to its Markdown chapter. Use the glossary and tensor atlas as references during discussion.",
+    "refs": [
+      "model"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Attention asks: which earlier information matters?",
+    "subtitle": "A token builds its next representation by reading relevant context.",
+    "viz": "attention",
+    "items": [
+      [
+        "Current token",
+        "“it” needs context"
+      ],
+      [
+        "Earlier tokens",
+        "“The robot moved the box because it was heavy”"
+      ],
+      [
+        "Weighted read",
+        "Different context tokens contribute different amounts"
+      ]
+    ],
+    "note": "Attention is a learned retrieval-and-mixing operation. At each layer a token has a vector describing its current representation. It compares a query derived from that vector with keys from available context tokens. Those comparisons become weights, and the weights mix the corresponding values. In the example, resolving the meaning of “it” can require information about the robot, the box and the surrounding words. The illustration is conceptual, not an actual measured attention map. A head's weights are not a complete explanation of the model's reasoning, and different layers may use attention for different purposes.",
+    "refs": [
+      "attention"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Tokens become vectors; vectors become matrices",
+    "subtitle": "A token is an ID. Its hidden state is a learned list of numbers.",
+    "viz": "flow",
+    "items": [
+      [
+        "Text",
+        "Subword tokenization",
+        "neutral"
+      ],
+      [
+        "Token IDs",
+        "Indices into an embedding table",
+        "amber"
+      ],
+      [
+        "Hidden states X",
+        "T rows × d_model columns",
+        "bf16"
+      ],
+      [
+        "Kimi-K3 example",
+        "d_model = 7,168",
+        "bf16"
+      ]
+    ],
+    "formula": "X ∈ R^(T × d_model)",
+    "note": "A tokenizer turns text into discrete token IDs. A token is not always a word: common words, word fragments, punctuation and whitespace patterns may each have IDs. The embedding table maps each ID to a vector. After the first layer, the hidden state is contextual rather than a fixed lookup. Pack T token vectors as rows of X so a GPU can process them with matrix operations. A matrix's shape describes its logical dimensions; dtype describes how each number is represented; layout and strides describe where the numbers live in memory. The Kimi-K3 vocabulary has 163,840 entries and hidden width 7,168.",
+    "refs": [
+      "attention",
+      "model"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Q, K and V are three learned projections",
+    "subtitle": "Query = what to look for. Key = how to match. Value = what to retrieve.",
+    "viz": "qkv",
+    "items": [
+      [
+        "Q = XW_Q",
+        "One query per query token",
+        "bf16"
+      ],
+      [
+        "K = XW_K",
+        "One key per context token",
+        "bf16"
+      ],
+      [
+        "V = XW_V",
+        "Content to mix into the output",
+        "bf16"
+      ]
+    ],
+    "note": "A projection is a matrix multiplication with learned weights. For row-vector hidden states, Q=XW_Q, K=XW_K and V=XW_V. The same token can play all three roles in self-attention. Q and K need matching feature widths so their dot product is defined. V may have a different width. Query count Tq and key/value count Tk need not be equal: during decode a request may have one new query but thousands of cached keys. Projection weights are model parameters; Q, K and V are runtime activations. In MLA, the implementation factors some of these projections through smaller latent vectors, which we will introduce later.",
+    "refs": [
+      "attention"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "The dot product produces a matching score",
+    "subtitle": "Aligned features reinforce each other; unrelated features contribute less.",
+    "viz": "equation",
+    "items": [
+      [
+        "Multiply features",
+        "q = [1, 2],  k = [3, 1]"
+      ],
+      [
+        "Add the products",
+        "q · k = 1×3 + 2×1 = 5"
+      ],
+      [
+        "Control the scale",
+        "Usually divide by √d_k"
+      ]
+    ],
+    "formula": "score(q, k) = (q · k) / √d_k",
+    "note": "A dot product multiplies matching coordinates and sums the results. The raw score is not a probability and can be negative. If feature components have similar independent variance, summing more dimensions makes scores spread out more. The usual inverse-square-root factor compensates for that tendency and avoids overly saturated softmax. The general formula uses 1/sqrt(d_k), but an implementation should use the model's actual configured softmax scale, called alpha in later slides. Do not hard-code a new scale because a tensor was quantized. Quantization descales and the model softmax scale serve different purposes.",
+    "refs": [
+      "attention"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Softmax turns scores into relative weights",
+    "subtitle": "Subtract the maximum, exponentiate, and normalize each query row.",
+    "viz": "softmax",
+    "items": [
+      [
+        "Scores",
+        "[2, 1, 0]"
+      ],
+      [
+        "Stable exponentials",
+        "[1, 0.368, 0.135]"
+      ],
+      [
+        "Weights",
+        "[0.665, 0.245, 0.090]"
+      ]
+    ],
+    "formula": "p_j = exp(s_j − m) / Σ_i exp(s_i − m),  m = max_i s_i",
+    "note": "Softmax converts a row of scores into positive weights that sum to one. Subtracting the largest score leaves the probabilities unchanged because the shared exponential factor cancels. This subtraction prevents large positive exponentials from overflowing. The example subtracts 2 from [2,1,0] before exponentiation. Softmax is relative: increasing one score reduces other tokens' share even if their scores stay fixed. Masked entries are assigned negative infinity so their exponential contribution is zero. The log of the normalization sum, with the maximum added back, is called log-sum-exp or LSE; it is essential for exact merging of separately processed attention chunks.",
+    "refs": [
+      "attention",
+      "flash"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "The output is a weighted sum of values",
+    "subtitle": "Attention returns a vector—not the index of the best-matching token.",
+    "viz": "weighted",
+    "items": [
+      [
+        "V₁ = [10, 0]",
+        "Weight 0.665"
+      ],
+      [
+        "V₂ = [0, 10]",
+        "Weight 0.245"
+      ],
+      [
+        "V₃ = [5, 5]",
+        "Weight 0.090"
+      ]
+    ],
+    "formula": "O = 0.665V₁ + 0.245V₂ + 0.090V₃ ≈ [7.10, 2.90]",
+    "note": "Each attention weight multiplies the complete value vector, and the weighted vectors are summed. This is a soft read rather than an argmax lookup. A value need not resemble the word embedding of its token: it is a learned transformation of a contextual hidden state. In this two-dimensional example, the dominant value contributes mostly to the first output coordinate. With many tokens and heads, the same principle becomes the matrix product P times V. The output is then combined across heads and projected back to the model hidden width. Errors in Q and K can change the weights; errors in V change the content mixed by those weights.",
+    "refs": [
+      "attention"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Causal masking prevents future-token reads",
+    "subtitle": "A token can see the existing prefix and its own allowed position.",
+    "viz": "mask",
+    "items": [
+      [
+        "Rows are queries",
+        "One row for each new token"
+      ],
+      [
+        "Columns are keys",
+        "One column for each available token"
+      ],
+      [
+        "Future entries",
+        "Masked before softmax"
+      ]
+    ],
+    "formula": "M[i,j] = 0 for allowed keys; otherwise −∞",
+    "note": "In autoregressive generation, a token's prediction must not use information from future target tokens. For a sequence without a cached prefix, the allowed region is lower triangular, including the diagonal. With an existing prefix of length P and a new chunk of length N, new query i can attend to all prefix tokens and new tokens up to i. The cached-prefix attention portion therefore needs no causal triangle within that prefix block, while the new-token portion does. A backend's causal alignment when Tq differs from Tk must be checked carefully; setting causal=True is not sufficient unless the sequence offsets and alignment match the intended mask.",
+    "refs": [
+      "attention",
+      "causal"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "One equation joins the complete operation",
+    "subtitle": "Two matrix products surround the softmax.",
+    "viz": "flow",
+    "items": [
+      [
+        "QKᵀ",
+        "Tq × Tk score matrix",
+        "bf16"
+      ],
+      [
+        "Scale + mask",
+        "Apply model scale and visibility",
+        "amber"
+      ],
+      [
+        "Softmax",
+        "Normalize each query row",
+        "fp32"
+      ],
+      [
+        "PV",
+        "Tq × d_v output",
+        "bf16"
+      ]
+    ],
+    "formula": "O = softmax(αQKᵀ + M)V",
+    "note": "For one head, Q has shape [Tq,d_k], K has shape [Tk,d_k], and V has shape [Tk,d_v]. QK transpose has shape [Tq,Tk], one score for every query-key pair. Softmax works across the key dimension independently for each query. Multiplying the resulting probabilities by V produces [Tq,d_v]. A transpose changes how dimensions are interpreted; it need not imply a materialized copy. We often write the full score and probability matrices to understand the math, but an efficient FlashAttention implementation does not store them in global memory. Batch dimensions, ragged sequence offsets and head dimensions are omitted from this equation for clarity.",
+    "refs": [
+      "attention",
+      "flash"
+    ]
+  }
+]

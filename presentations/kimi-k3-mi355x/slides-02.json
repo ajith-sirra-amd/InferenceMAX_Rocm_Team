@@ -1,0 +1,283 @@
+[
+  {
+    "chapter": "01",
+    "title": "Multiple heads learn multiple kinds of relationships",
+    "subtitle": "Each head produces its own weighted read; an output projection mixes them.",
+    "viz": "heads",
+    "items": [
+      [
+        "Independent heads",
+        "Distinct learned Q/K/V projections"
+      ],
+      [
+        "Parallel reads",
+        "Different patterns can coexist"
+      ],
+      [
+        "Output projection",
+        "Concatenate head outputs → model width"
+      ]
+    ],
+    "formula": "Y = concat(O₁, …, O_H) W_O",
+    "note": "Multi-head attention gives the model several learned subspaces in which to retrieve information. Heads do not have guaranteed human-readable roles, but they can learn different relationships. In the Kimi-K3 MLA prefill path, there are 96 logical heads, giving 12 local heads per rank under TP8. Head count is distinct from the number of requests, GPU threads or attention layers. Multi-query attention and grouped-query attention reduce the number of separately stored key/value heads; MLA instead stores a low-dimensional shared latent cache and reconstructs or algebraically absorbs the expanded projections. These methods address related cache costs through different parameterizations.",
+    "refs": [
+      "attention",
+      "model",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Residuals, normalization and MLPs complete the block",
+    "subtitle": "Attention is one part of a model layer.",
+    "viz": "flow",
+    "items": [
+      [
+        "Normalize",
+        "Control activation magnitude",
+        "bf16"
+      ],
+      [
+        "Attention",
+        "Mix information across tokens",
+        "bf16"
+      ],
+      [
+        "Residual path",
+        "Preserve and combine earlier features",
+        "amber"
+      ],
+      [
+        "MLP / MoE",
+        "Transform features within each token",
+        "bf16"
+      ]
+    ],
+    "formula": "RMSNorm(x) = g ⊙ x / √(mean(x²) + ε)",
+    "note": "A conventional pre-normalized transformer alternates attention and a feed-forward network, with residual additions around the sublayers. RMSNorm rescales a vector using its root-mean-square magnitude and learned gain g; unlike LayerNorm, it does not subtract the mean. An MLP applies learned projections and a nonlinear activation independently to each token. Residual paths preserve information and support effective training of deep stacks. This slide is a prerequisite template, not the exact Kimi-K3 residual algorithm. Kimi-K3 uses Attention Residuals, which learn how to mix representations across depth; that change is introduced explicitly later.",
+    "refs": [
+      "attention",
+      "model",
+      "code"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Position information: separate the general idea from K3",
+    "subtitle": "RoPE is common in attention; this checkpoint's MLA uses NoPE.",
+    "viz": "compare",
+    "items": [
+      [
+        "General RoPE",
+        "Rotate query/key feature pairs according to position."
+      ],
+      [
+        "Kimi-K3 MLA",
+        "mla_use_nope = true; inspected wrapper passes rotary_emb=None."
+      ],
+      [
+        "Naming trap",
+        "A 64-column “RoPE” field still exists in the MLA layout."
+      ]
+    ],
+    "note": "A plain attention operation without position information is equivariant to reordering its inputs, so models need mechanisms that represent sequence order. RoPE is a common solution that rotates paired query/key features by position-dependent angles. However, this Kimi-K3 checkpoint sets mla_use_nope=true, and the inspected AMD MLA implementation passes no rotary embedding object. Its MLA tensor layout retains a 64-column field named qk_rope_head_dim, but that field name does not prove a rotary transform runs. KDA recurrence and short causal convolutions carry order information in the hybrid model. The deck labels those 64 columns as the shared K component or legacy RoPE slot.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Prefill and decode are different execution regimes",
+    "subtitle": "Prefill processes known tokens; decode produces the next token.",
+    "viz": "compare",
+    "items": [
+      [
+        "Prefill",
+        "Many query rows; large matrix products; new-token causal attention."
+      ],
+      [
+        "Decode",
+        "Few query rows per request; read cached history; repeat every output step."
+      ],
+      [
+        "Mixed serving",
+        "New prompt chunks can share a scheduler step with decoding requests."
+      ]
+    ],
+    "note": "During prefill, the server processes prompt tokens whose identities are already known. It can compute many query rows together while enforcing causal visibility. During ordinary decode, it computes the next token for each active request, typically one new query per request per step. Speculative verification increases that query count. Prefill often offers better weight reuse and larger GEMMs; decode often faces smaller operations, cache reads and synchronization overhead. These are tendencies, not universal bottleneck declarations. Long-context decode can have substantial attention traffic, and an agentic workload can alternate cached prefixes, new prompt chunks and output generation. Always profile the actual batch regime.",
+    "refs": [
+      "flash",
+      "code"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "The KV cache avoids recomputing the past",
+    "subtitle": "Cache persistent context; compute the new query for the current step.",
+    "viz": "cache",
+    "items": [
+      [
+        "Already processed",
+        "Reuse stored K/V or MLA latent rows"
+      ],
+      [
+        "New tokens",
+        "Append their cache entries"
+      ],
+      [
+        "Current query",
+        "Read the allowed history"
+      ]
+    ],
+    "formula": "Standard KV bytes ≈ 2 × layers × tokens × KV_heads × head_dim × bytes/value",
+    "note": "Without a cache, every generated token would force the model to recompute key/value representations for the entire earlier sequence. A KV cache retains those representations. Queries are generally not cached because a future output step uses a new query. The simple storage formula assumes equal key/value widths and ordinary attention; it does not describe MLA or recurrent KDA exactly. MLA stores a compressed per-token latent representation, while KDA keeps recurrent state plus short-convolution state. Cache allocation uses blocks and metadata rather than a single contiguous buffer per request. Prefix reuse, precision, sharding, alignment, scale storage and speculative state all affect real memory usage.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  },
+  {
+    "chapter": "01",
+    "title": "Why attention becomes expensive at long context",
+    "subtitle": "Every query can compare against many keys.",
+    "viz": "equation",
+    "items": [
+      [
+        "Full prefill",
+        "Attention pair count grows roughly with T²"
+      ],
+      [
+        "One-token decode",
+        "Attention pair count grows roughly with cached T"
+      ],
+      [
+        "Naive intermediates",
+        "Scores and probabilities can dominate temporary memory"
+      ]
+    ],
+    "formula": "Attention FLOPs ≈ 2TqTk(d_k + d_v) per head",
+    "note": "The approximate multiply-add count includes QK transpose and P times V and counts one multiply-add as two floating-point operations. It ignores masking savings, softmax and other elementwise work. During a full unchunked prefill, both Tq and Tk grow with sequence length, yielding quadratic pair count. With a single decode query, only Tk grows. A naive 32,768 by 32,768 score matrix contains over one billion elements: two GiB per head in a two-byte dtype before also storing probabilities. Practical fused kernels avoid materializing that matrix, and causal kernels skip some masked work. Reducing IO does not eliminate the underlying exact-attention comparisons.",
+    "refs": [
+      "flash"
+    ]
+  },
+  {
+    "chapter": "02",
+    "title": "FlashAttention changes data movement",
+    "subtitle": "Tile the computation and keep temporary scores close to the compute units.",
+    "viz": "tiles",
+    "items": [
+      [
+        "Load a Q tile",
+        "Keep queries in fast local storage"
+      ],
+      [
+        "Stream K/V tiles",
+        "Compute scores and update online softmax"
+      ],
+      [
+        "Write the final output",
+        "Avoid full score/probability matrices in HBM"
+      ]
+    ],
+    "note": "FlashAttention is an exact attention algorithm in real arithmetic that reorganizes computation around the memory hierarchy. It processes tiles that fit in registers and shared memory, called LDS on AMD GPUs, while streaming K/V from HBM. It updates the running softmax statistics and output accumulator for each tile. This avoids writing and rereading the entire score and probability matrices in HBM. Floating-point results can differ from a naive reference because operation order changes. “Fused” means operations share a kernel and reuse local intermediates; it does not specify the input dtype. A BF16 FMHA and an FP8 FMHA can both be fused implementations.",
+    "refs": [
+      "flash",
+      "amd"
+    ]
+  },
+  {
+    "chapter": "02",
+    "title": "Online softmax carries three pieces of state",
+    "subtitle": "A running maximum, a normalization sum, and a weighted accumulator.",
+    "viz": "flow",
+    "items": [
+      [
+        "m",
+        "Largest score seen so far",
+        "fp32"
+      ],
+      [
+        "l",
+        "Rescaled sum of exponentials",
+        "fp32"
+      ],
+      [
+        "a",
+        "Rescaled weighted value sum",
+        "fp32"
+      ],
+      [
+        "Finish",
+        "O = a/l;  LSE = m + ln(l)",
+        "bf16"
+      ]
+    ],
+    "formula": "m′ = max(m, max(s));  l′ = e^(m−m′)l + Σe^(s−m′)",
+    "note": "For each new score tile s, the maximum may increase. Rescale the old normalization sum by exp(m-m') and add the new tile's exponentials relative to m'. Rescale the old weighted accumulator by the same factor, then add the new probability-weighted values. At the end, divide the accumulated weighted values by the normalization sum. This produces the same normalized attention operation without storing every score. LSE is the natural logarithm of the unnormalized attention mass, not another attention output vector. The exact intermediate dtypes are kernel-specific; higher precision for reductions is crucial, and the campaign API returns BF16 output plus FP32 LSE.",
+    "refs": [
+      "flash",
+      "flow"
+    ]
+  },
+  {
+    "chapter": "02",
+    "title": "A fused kernel can still lose end to end",
+    "subtitle": "Kernel speed must repay quantization, memory traffic and dispatch costs.",
+    "viz": "compare",
+    "items": [
+      [
+        "Kernel-only view",
+        "Time just the new FMHA call."
+      ],
+      [
+        "Execution-path view",
+        "Include preparation, quantization, layout changes and launches."
+      ],
+      [
+        "Serving view",
+        "Include scheduling, communication, cache behavior and errors."
+      ]
+    ],
+    "formula": "Net saving = time removed − time introduced",
+    "note": "An FP8 matrix product can be faster than a BF16 matrix product while the complete serving path becomes slower. Preparing FP8 operands may require a maximum reduction, extra kernels and large temporary buffers. A layout conversion can add HBM traffic; a specialized kernel can have padding overhead or weaker occupancy on a particular shape. Synchronization may expose previously hidden work. For this reason, first measure the component, then the complete attention path, and finally the unchanged serving workload. This also explains why a prior FP8 ASM attempt could regress without disproving the potential of an FP8 fused implementation with lower preparation overhead.",
+    "refs": [
+      "flow",
+      "audit"
+    ]
+  },
+  {
+    "chapter": "03",
+    "title": "Kimi-K3 is a hybrid model",
+    "subtitle": "Different mechanisms share the work of understanding long context.",
+    "viz": "architecture",
+    "items": [
+      [
+        "KDA",
+        "69 layers: recurrent sequence mixing",
+        "teal"
+      ],
+      [
+        "Gated MLA",
+        "24 layers: compressed-cache attention",
+        "bf16"
+      ],
+      [
+        "Latent MoE",
+        "Sparse expert computation",
+        "amber"
+      ],
+      [
+        "Attention Residuals",
+        "Learned mixing across model depth",
+        "fp32"
+      ]
+    ],
+    "note": "The checkpoint combines Kimi Delta Attention with gated Multi-head Latent Attention. KDA handles most sequence-mixing layers using a recurrent state, while MLA periodically performs attention over cached token representations. The feature transformation side uses one dense layer followed by sparse mixture-of-experts layers, with a lower-dimensional routed-expert space. Attention Residuals govern information flow across depth. A vision encoder and projector can supply visual tokens, but the agentic text benchmark does not measure the full vision pipeline. The model card reports about 2.8 trillion total parameters and 104 billion activated parameters; those figures do not mean all weights are read for every token.",
+    "refs": [
+      "model",
+      "code"
+    ]
+  }
+]
