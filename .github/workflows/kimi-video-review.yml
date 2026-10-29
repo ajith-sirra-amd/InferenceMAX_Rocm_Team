@@ -1,0 +1,36 @@
+name: Review Kimi narrated video
+on:
+  push:
+    branches: ["docs/kimi-video-review-20261029"]
+    paths: [".github/workflows/kimi-video-review.yml"]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for final teaching build
+        run: gh run watch 40831163311 --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --interval 30 --exit-status
+      - name: Download course
+        run: gh run download 40831163311 --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --name Kimi-K3-Narrated-Video-Course --dir video-review
+      - name: Inspect encoded media
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          mkdir -p video-review/samples
+          VIDEO=$(find video-review -name Kimi-K3_MI355X_Full_Course.mp4 -print -quit)
+          ffprobe -v error -show_format -show_streams -show_chapters -of json "$VIDEO" > video-review/samples/media-probe.json
+          ffmpeg -loglevel error -ss 70 -i "$VIDEO" -frames:v 1 video-review/samples/frame-0070.png
+          ffmpeg -loglevel error -ss 245 -i "$VIDEO" -frames:v 1 video-review/samples/frame-0245.png
+          ffmpeg -loglevel error -ss 1900 -i "$VIDEO" -frames:v 1 video-review/samples/frame-1900.png
+          ffmpeg -loglevel error -ss 15 -i "$VIDEO" -t 12 -vn -c:a libmp3lame video-review/samples/narration-sample.mp3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kimi-K3-Video-Quality-Review
+          path: video-review/samples/
+          retention-days: 90
