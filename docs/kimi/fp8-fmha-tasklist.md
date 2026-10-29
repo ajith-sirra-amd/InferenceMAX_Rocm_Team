@@ -2,6 +2,22 @@
 
 **English** | [中文](./fp8-fmha-tasklist_zh.md)
 
+## 2026-10-29 recovery and restart
+
+The runner is online again. Recovery attempt 2 failed on disk quota; attempt 3
+reached the inspection step but found no Git checkout. The revised read-only
+[health job 40802919527](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40802919527)
+passed: host `pit2-p03-g15`, eight idle MI355X GPUs, the pinned image present,
+4.4 TiB reported filesystem free space, and an empty repository workspace.
+The runner label/name still ends in `g07`; use the recorded hostname for provenance.
+No old performance files were recovered and no files were deleted by recovery.
+
+[Full new-token performance attempt 2](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583/job/123215353998)
+was dispatched at 2026-10-29 01:52 UTC. It reruns the failed GPU job using the
+original workflow and source `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`,
+C48 + MTP, TP8/DCP8, and the full configured replay. Dispatch is not startup or
+a completed result. Native GPU validation remains the next gated stage.
+
 ## Completed evidence
 
 - [x] Established throughput: baseline **15,476.46881**, cached FP8 FMHA with BF16 projection **16,915.72154**, and direct FP8 projection + cached FP8 FMHA **17,406.08912** total input + output tokens/s/GPU.

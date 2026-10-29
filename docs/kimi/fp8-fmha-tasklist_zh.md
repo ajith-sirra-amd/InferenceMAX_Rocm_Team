@@ -2,6 +2,22 @@
 
 [English](./fp8-fmha-tasklist.md) | **中文**
 
+## 2026-10-29 恢复与重新运行
+
+Runner 已重新上线。恢复任务第 2 次尝试因磁盘配额失败；第 3 次尝试进入检查步骤，
+但工作区中没有 Git 仓库。更新后的只读
+[健康检查 40802919527](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40802919527)
+已通过：主机为 `pit2-p03-g15`，8 张 MI355X 均空闲，固定镜像已存在，
+文件系统报告约 4.4 TiB 可用空间，仓库工作区为空。
+Runner 名称仍以 `g07` 结尾，应使用实际主机名记录测试环境。
+未恢复旧性能文件；恢复流程未删除任何文件。
+
+[新 token FP8 完整性能测试第 2 次尝试](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583/job/123215353998)
+已于 2026-10-29 01:52 UTC 调度。重跑原失败 GPU 作业，保留原工作流及源码
+`bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`、C48 + MTP、TP8/DCP8
+和完整回放时长。已调度不代表服务已启动，也不代表已有性能结果。
+原生 PR 的 GPU 验证仍需在后续阶段完成。
+
 ## 已完成的证据
 
 - [x] 已确认吞吐量：基线 **15,476.46881**、BF16 投影加缓存 FP8 FMHA **16,915.72154**、直接 FP8 投影加缓存 FP8 FMHA **17,406.08912** 输入加输出 tokens/s/GPU。
