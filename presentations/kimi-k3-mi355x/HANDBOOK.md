@@ -2,7 +2,7 @@
 
 This is a conceptual course with an editable animated PowerPoint, a static reference PowerPoint/PDF, a narrated chaptered video and detailed Markdown notes.
 
-[Download the narrated video and chapter files](VIDEO.md).
+[Local video location and chapter guide](VIDEO.md).
 
 ## How to use it
 

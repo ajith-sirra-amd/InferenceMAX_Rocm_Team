@@ -1,4 +1,4 @@
-name: Kimi-K3 teaching deck and video
+name: Kimi-K3 teaching deck
 on:
   push:
     branches: ["docs/kimi-k3-mi355x-teaching-20261029"]
@@ -40,17 +40,6 @@ jobs:
         with:
           name: Kimi-K3-PowerPoint-and-Handbook
           path: presentations/kimi-k3-mi355x/output/Kimi-K3_PowerPoint_and_Handbook.zip
-          retention-days: 90
-      - name: Produce narrated progressive video
-        run: python presentations/kimi-k3-mi355x/video.py
-      - name: Upload narrated course and chapter videos
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kimi-K3-Narrated-Video-Course
-          path: |
-            presentations/kimi-k3-mi355x/output/videos/
-            presentations/kimi-k3-mi355x/output/video-validation.json
-          compression-level: 0
           retention-days: 90
       - name: Upload diagnostics and slide previews
         if: always()

@@ -1,6 +1,6 @@
 # Kimi-K3 on MI355X: narrated video course
 
-[Download the full video, 11 chapter videos and captions](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40831163311/artifacts/12879640023). The ZIP is approximately 120 MB; the full MP4 inside is approximately 60 MB.
+The video package is now retained in the owner's local Downloads folder. The GitHub video and media-review artifacts were removed after verifying the local ZIP against the original SHA-256 and checking every archive entry. Automated video publication is disabled.
 
 Duration: **55 minutes 18 seconds**. Resolution: **1280 x 720**. English synthetic narration, progressive diagram builds and burned-in captions; separate SRT and WebVTT files are included.
 
@@ -23,3 +23,11 @@ Duration: **55 minutes 18 seconds**. Resolution: **1280 x 720**. English synthet
 The build completed all 75 slides. Encoded-media inspection verified H.264 video, AAC mono audio at 22050 Hz, 11 embedded chapter markers and matched stream durations. The package contains 11 standalone chapter videos and 600 caption cues. Sample frames were checked for diagram readability and caption placement. PowerPoint animation targets, timing identifiers, slide bounds, PDF rendering, and all 75 Markdown links were checked. Native desktop PowerPoint playback was not available in this build environment.
 
 [Presentation build](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40831163311) - [Video inspection](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40832069969) - [Handbook](HANDBOOK.md)
+
+## Local archive verification
+
+Filename: Kimi-K3-Narrated-Video-Course.zip
+
+SHA-256: b00b0ebb4c6fb8efaae27b420ad2c147475640ebe5a6b34c8fdff2c5cb8bae85
+
+Full video inside the ZIP: videos/Kimi-K3_MI355X_Full_Course.mp4 (60,051,346 bytes). All 11 chapter videos and caption files are included.

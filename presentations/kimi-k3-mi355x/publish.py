@@ -32,7 +32,7 @@ A 75-slide conceptual teaching deck with click-by-click builds, speaker notes, a
 - [Source references](SOURCES.md)
 - [Slide overview](contact-sheet-01.png)
 
-The narrated MP4 course, chapter videos and captions are distributed as the **Kimi-K3-Narrated-Video-Course** artifact on the presentation-build GitHub Actions run.
+The narrated MP4 course, chapter videos and captions are retained in the owner's local Downloads folder. Automated video publication is disabled. See VIDEO.md for the chapter guide.
 
 Use desktop PowerPoint Slide Show for animation. The PDF and reference PPTX intentionally show complete diagrams.
 """
