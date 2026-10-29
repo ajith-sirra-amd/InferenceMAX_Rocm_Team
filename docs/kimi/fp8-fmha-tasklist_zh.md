@@ -2,21 +2,29 @@
 
 [English](./fp8-fmha-tasklist.md) | **中文**
 
-## 2026-10-29 恢复与重新运行
+## 2026-10-29 当前运行
 
-Runner 已重新上线。恢复任务第 2 次尝试因磁盘配额失败；第 3 次尝试进入检查步骤，
-但工作区中没有 Git 仓库。更新后的只读
-[健康检查 40802919527](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40802919527)
-已通过：主机为 `pit2-p03-g15`，8 张 MI355X 均空闲，固定镜像已存在，
-文件系统报告约 4.4 TiB 可用空间，仓库工作区为空。
-Runner 名称仍以 `g07` 结尾，应使用实际主机名记录测试环境。
-未恢复旧性能文件；恢复流程未删除任何文件。
+原重试作业 `123215353998` 未发布任何 setup 步骤。操作者确认没有 Docker
+容器或 GPU 活动，随后 runner 断开连接。取消于 02:06:10 UTC 完成。
+这属于 runner 启动失败，不是已完成的性能测量。
 
-[新 token FP8 完整性能测试第 2 次尝试](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583/job/123215353998)
-已于 2026-10-29 01:52 UTC 调度。重跑原失败 GPU 作业，保留原工作流及源码
-`bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`、C48 + MTP、TP8/DCP8
-和完整回放时长。已调度不代表服务已启动，也不代表已有性能结果。
-原生 PR 的 GPU 验证仍需在后续阶段完成。
+新的完整运行 [40804432321](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804432321)
+使用工作流版本 `75a52838ee8fa89461dc812913eb71b370b839bd`，服务源码仍为
+`bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`：C48 + MTP、TP8/DCP8、
+原型固定镜像和 3600 秒回放。前置验证及配置生成已通过。
+在 2026-10-29T02:09:49.605677+00:00，GPU 作业状态为 **queued**，runner 为 **offline**。
+尚无新 token FP8 吞吐量结果。已启动每 60 秒检查一次的前台 checker，
+该进程不能唤醒已结束的模型回合。
+
+此前 [健康检查 40802919527](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40802919527)
+在 `pit2-p03-g15` 上通过：8 张 MI355X 空闲、固定镜像存在、文件系统约 4.4 TiB
+可用空间、工作区为空。Runner 名称仍以 `g07` 结尾。
+既有 17,406.08912 结果的日志也标识同一实际主机。恢复流程未恢复或删除旧性能文件。
+
+原生安装修正在 `75a52838ee8fa89461dc812913eb71b370b839bd` 通过
+[CPU CI 40804336409](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804336409)：
+**18 项测试，零失败、错误或跳过**，launcher 和 Bash 检查也通过。
+Artifact 为 `12867865400`。原生 GPU 验证仍待执行。
 
 ## 已完成的证据
 

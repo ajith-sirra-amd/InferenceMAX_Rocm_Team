@@ -1,0 +1,41 @@
+{
+  "recorded_at_utc": "2026-10-29T02:09:49.605677+00:00",
+  "run_id": 40804432321,
+  "job_id": 123219958299,
+  "workflow_sha": "75a52838ee8fa89461dc812913eb71b370b839bd",
+  "serving_source": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+  "dispatch": {
+    "ref": "perf/kimi-attnfp8-kv-allgather-20261021",
+    "inputs": {
+      "generate-cli-command": "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp",
+      "test-name": "Kimi causal FP8 full C48 MTP fresh restart bb8bed7 20261029",
+      "ref": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+      "runner-diagnostics-only": "false",
+      "attention-path-probe-only": "false",
+      "agentic-eval-only": "false",
+      "duration-override": "3600",
+      "after-run-id": "40712931283",
+      "failure-fixture-run-id": "",
+      "native-vllm-sha": ""
+    }
+  },
+  "runner_status": "offline",
+  "job_status": "queued",
+  "supersedes": {
+    "run_id": 40719654583,
+    "attempt": 2,
+    "job_id": 123215353998,
+    "conclusion": "cancelled",
+    "serving_started": false
+  },
+  "performance_result": null,
+  "native_harness_cpu_ci": {
+    "run": 40804336409,
+    "artifact": 12867865400,
+    "tests": 18,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0
+  },
+  "native_gpu_validated": false
+}

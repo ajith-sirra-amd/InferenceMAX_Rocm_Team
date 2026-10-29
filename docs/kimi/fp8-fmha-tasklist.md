@@ -2,21 +2,31 @@
 
 **English** | [中文](./fp8-fmha-tasklist_zh.md)
 
-## 2026-10-29 recovery and restart
+## 2026-10-29 current run
 
-The runner is online again. Recovery attempt 2 failed on disk quota; attempt 3
-reached the inspection step but found no Git checkout. The revised read-only
-[health job 40802919527](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40802919527)
-passed: host `pit2-p03-g15`, eight idle MI355X GPUs, the pinned image present,
-4.4 TiB reported filesystem free space, and an empty repository workspace.
-The runner label/name still ends in `g07`; use the recorded hostname for provenance.
-No old performance files were recovered and no files were deleted by recovery.
+The original retry job `123215353998` never published a setup step. The operator
+confirmed no Docker container or GPU activity, and the runner disconnected.
+Cancellation completed at 02:06:10 UTC. This was a runner startup failure,
+not a completed performance measurement.
 
-[Full new-token performance attempt 2](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583/job/123215353998)
-was dispatched at 2026-10-29 01:52 UTC. It reruns the failed GPU job using the
-original workflow and source `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`,
-C48 + MTP, TP8/DCP8, and the full configured replay. Dispatch is not startup or
-a completed result. Native GPU validation remains the next gated stage.
+Fresh full run [40804432321](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804432321)
+uses workflow source `75a52838ee8fa89461dc812913eb71b370b839bd` and unchanged
+serving source `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`: C48 + MTP,
+TP8/DCP8, original prototype image, 3600-second replay. The prerequisite and
+configuration jobs passed. At 2026-10-29T02:09:49.605677+00:00, the GPU job is **queued**
+and the runner is **offline**. No new-token throughput is established.
+A 60-second foreground checker was started for this run; it does not wake a finished model turn.
+
+Earlier [health check 40802919527](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40802919527)
+passed on `pit2-p03-g15` (runner name still ends in `g07`), with eight idle MI355X,
+the pinned image present, 4.4 TiB filesystem space available, and an empty
+workspace. The established 17,406.08912 run log also identifies `pit2-p03-g15`.
+No old performance files were recovered or deleted by the recovery workflow.
+
+Native setup fixes at `75a52838ee8fa89461dc812913eb71b370b839bd` passed
+[CPU CI 40804336409](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804336409):
+**18 tests, zero failures/errors/skips**, plus launcher and Bash checks.
+Artifact `12867865400`. Native GPU validation remains pending.
 
 ## Completed evidence
 
