@@ -11,22 +11,49 @@ jobs:
     runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
     timeout-minutes: 20
     steps:
-      - name: Inspect preserved workspace and disk usage
+      - name: Inspect preserved workspace and runner health
+        id: inspect
         shell: bash
         run: |
-          set -eo pipefail
+          set -euo pipefail
           test "${{ runner.name }}" = "mi355x-amd_pit2_p03_g07"
-          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5"
-          test "$(realpath "$GITHUB_WORKSPACE")" = "$(git -C "$GITHUB_WORKSPACE" rev-parse --show-toplevel)"
+          workspace=$(realpath "$GITHUB_WORKSPACE")
+          test "$(basename "$workspace")" = "InferenceMAX_Rocm_Team"
           date -u
-          df -h "$GITHUB_WORKSPACE"
-          df -i "$GITHUB_WORKSPACE"
+          hostname
+          printf 'Workspace: %s\n' "$workspace"
+          df -h "$workspace"
+          df -i "$workspace"
           quota -s 2>/dev/null || true
+          free -h
+          ls -l /dev/kfd /dev/dri/render* || true
           docker ps --format '{{.Names}} {{.Status}}'
-          du -x -h --max-depth=2 "$GITHUB_WORKSPACE" 2>/dev/null | sort -h | tail -25
-          find "$GITHUB_WORKSPACE/results" -maxdepth 3 -type f -printf '%s %p\n' | sort -nr | sed -n '1,20p'
-          stat -c '%y %s %n' "$GITHUB_WORKSPACE/results/server.log" "$GITHUB_WORKSPACE/results/benchmark.log" || true
+          docker info --format 'Docker root: {{.DockerRootDir}}'
+          docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}'
+          if command -v rocm-smi >/dev/null; then
+            timeout 30 rocm-smi --showproductname --showuse --showmemuse || true
+          fi
+          find "$workspace" -mindepth 1 -maxdepth 1 -printf '%f\n'
+          timeout 90 du -x -h --max-depth=2 "$workspace" 2>/dev/null | sort -h | tail -25 || true
+          preserved=false
+          if [ -e "$workspace/.git" ]; then
+            current_sha=$(git -C "$workspace" rev-parse HEAD)
+            printf 'Existing checkout: %s\n' "$current_sha"
+            if [ "$current_sha" = "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5" ]; then
+              test "$workspace" = "$(git -C "$workspace" rev-parse --show-toplevel)"
+              preserved=true
+            fi
+          else
+            echo "No checkout in this workspace; prior run evidence is not established on this host."
+          fi
+          echo "preserved=$preserved" >> "$GITHUB_OUTPUT"
+          if [ -d "$workspace/results" ]; then
+            find "$workspace/results" -maxdepth 3 -type f -printf '%s %p\n' | sort -nr | sed -n '1,20p'
+            stat -c '%y %s %n' "$workspace/results/server.log" "$workspace/results/benchmark.log" || true
+          fi
+          printf 'Preserved original source: %s\n' "$preserved"
       - name: Upload existing failed-run evidence
+        if: steps.inspect.outputs.preserved == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: recovered-kimi-40719654583
