@@ -214,7 +214,7 @@ jobs:
               -v "$native_work_dir":/work \
               -e PYTHONDONTWRITEBYTECODE=1 \
               --entrypoint python3 \
-              vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce \
+              vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
               /repo/utils/atom_attention/native_vllm_gpu_validate.py \
               --native-sha "$NATIVE_VLLM_SHA"
         - name: Upload native GPU validation evidence
@@ -388,7 +388,7 @@ jobs:
         with:
             exp-name: ${{ matrix.config.exp-name }}
             runner: ${{ matrix.config.runner }}
-            image: ${{ matrix.config.image }}
+            image: ${{ inputs.native-vllm-sha != '' && 'vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716' || matrix.config.image }}
             model: ${{ matrix.config.model }}
             model-prefix: ${{ matrix.config.model-prefix }}
             framework: ${{ matrix.config.framework }}

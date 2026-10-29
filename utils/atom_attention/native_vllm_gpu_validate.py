@@ -27,8 +27,11 @@ def run(command, *, cwd, env, capture=False):
 
 def resolve_exact_rocm_wheel(commit, runtime):
     """Require the requested build and matching Torch/Triton binary versions."""
-    from urllib.parse import urljoin
+    from urllib.parse import unquote, urljoin, urlsplit
     from urllib.request import urlopen
+
+    from packaging.utils import parse_wheel_filename
+    from packaging.version import Version
 
     hip = re.match(r"(\d+)\.(\d+)", runtime["hip"] or "")
     if hip is None:
@@ -59,20 +62,30 @@ def resolve_exact_rocm_wheel(commit, runtime):
                 f"Expected one compatible {package} wheel for {commit}/{variant}; "
                 f"found {len(compatible)}"
             )
-        selected[package] = compatible[0]
+        entry = compatible[0]
+        wheel_url = urljoin(index + package + "/", entry["path"])
+        location = urlsplit(wheel_url)
+        if (location.scheme != "https" or location.netloc != "wheels.vllm.ai"
+                or commit not in location.path.split("/")):
+            raise RuntimeError("Wheel metadata does not resolve to the requested commit")
+        filename = unquote(location.path.rsplit("/", 1)[-1])
+        name, version, _, wheel_tags = parse_wheel_filename(filename)
+        metadata_version = Version(entry["version"])
+        if name != package or not supported_tags.intersection(map(str, wheel_tags)):
+            raise RuntimeError(f"Selected {package} wheel has incompatible name or tags")
+        if version.public != metadata_version.public:
+            raise RuntimeError(f"Selected {package} wheel disagrees with metadata version")
+        selected[package] = dict(
+            entry, resolved_wheel_url=wheel_url, wheel_version=str(version),
+        )
     for package in ("torch", "triton"):
-        expected = selected[package]["version"]
-        if "+" not in expected:
-            expected += "+" + selected[package]["variant"]
-        if runtime[package] != expected:
+        expected = selected[package]["wheel_version"]
+        if Version(runtime[package]) != Version(expected):
             raise RuntimeError(
                 f"Installed {package} {runtime[package]} differs from the "
                 f"requested build's {expected}; use matching dependencies"
             )
-    wheel_url = urljoin(index + "vllm/", selected["vllm"]["path"])
-    if not wheel_url.startswith("https://wheels.vllm.ai/") or commit not in wheel_url:
-        raise RuntimeError("Wheel metadata does not resolve to the requested commit")
-    return wheel_url, selected
+    return selected["vllm"]["resolved_wheel_url"], selected
 
 
 def main():

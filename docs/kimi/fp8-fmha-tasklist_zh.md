@@ -74,3 +74,17 @@ recipe 现已接入 e2e 工作流的精确 `native-vllm-sha`，选择原生 ROCM
 原生环境/执行证据 CPU CI [40729902162](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40729902162) 在代码 `0e40f469f1623c09336a034fa3d130b3b294fa4c` 通过 **15 项测试，零失败/错误/跳过**；JUnit artifact 为 `12834722522`。这不是 GPU 数值验证。早先 setup 阶段失败来自错误的 artifact action pin；两个新增工作流均已改用仓库中经验证的现有 pin。
 
 原生服务集成 CI [40732677087](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40732677087) 在 `bf9b27bd72d9a46814721c6d33811991a142afc8` 通过：15 项原生环境/证据测试、recipe/launcher Bash 语法及现有容器启动器验证。未派发原生 GPU 测试或额外完整基准。PR #64288 仍为 draft，代码为 `08e5d81a0d4fc76c20a97f9a517195db5a5dc5be`。
+
+## 原生依赖修正（2026-10-29）
+
+安装依赖的完整版本以发布的 wheel 文件名为准。当前原生基线的 Torch 元数据为
+`2.13.0`，但 wheel 版本为 `2.13.0+rocm10.0.0`；直接追加
+`rocm100` 会错误拒绝匹配环境。解析器现从 wheel 文件名获取版本，
+仍拒绝 Torch、Triton、ABI 或 ROCm 不匹配。
+
+仅原生诊断和原生服务使用固定 ROCm 10 镜像
+`nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b`，
+digest 为 `sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716`。
+发布的 Torch 2.13.0 和 Triton 3.8.0+git669b31ac wheel 与原生基线依赖匹配。
+实际容器及 GPU 兼容性仍待验证。原型性能测试保留原矩阵镜像（Torch 2.12.0）。
+原生源码仍固定到完整提交，并使用自身 merge-base 的预编译 wheel。

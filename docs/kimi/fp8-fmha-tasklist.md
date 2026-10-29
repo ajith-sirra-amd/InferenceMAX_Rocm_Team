@@ -74,3 +74,19 @@ The recipe now accepts the exact `native-vllm-sha` through the e2e workflow and 
 Native setup/evidence CPU CI [40729902162](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40729902162) passed **15 tests, zero failures/errors/skips** at source `0e40f469f1623c09336a034fa3d130b3b294fa4c`; JUnit artifact `12834722522`. This is not GPU numerical validation. The earlier setup-only failure used a malformed artifact action pin; both new workflows now use the verified existing repository pin.
 
 Native serving integration CI [40732677087](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40732677087) passed at `bf9b27bd72d9a46814721c6d33811991a142afc8`: 15 native setup/evidence tests, Bash syntax for recipe/launcher, and the existing container-launcher validation. No native GPU run or additional full benchmark was dispatched. PR #64288 remains draft at `08e5d81a0d4fc76c20a97f9a517195db5a5dc5be`.
+
+## Native dependency correction (2026-10-29)
+
+The published wheel filename is the source of the installed dependency version.
+For the current native base, Torch metadata says `2.13.0` while the wheel is
+`2.13.0+rocm10.0.0`; appending `rocm100` to the metadata version incorrectly
+rejects a matching runtime. The resolver now parses the actual wheel version
+and still rejects Torch, Triton, ABI, or ROCm mismatches.
+
+Native-only diagnostics and serving select the immutable ROCm 10 image
+`nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b`
+at digest `sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716`.
+Its published Torch 2.13.0 and Triton 3.8.0+git669b31ac wheels match the native
+base dependencies. Actual container/GPU compatibility still requires validation.
+Prototype runs retain their original matrix image (Torch 2.12.0).
+Native source remains exact and uses the precompiled wheel for its own merge-base.

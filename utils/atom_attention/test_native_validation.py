@@ -18,8 +18,8 @@ SHA = "a" * 40
 @pytest.fixture
 def runtime():
     return {
-        "hip": "7.2.0",
-        "torch": "2.13.0+git123",
+        "hip": "10.0.0",
+        "torch": "2.13.0+rocm10.0.0",
         "triton": "3.8.0+git456",
         "tags": ["cp312-cp312-manylinux_2_39_x86_64"],
     }
@@ -27,27 +27,50 @@ def runtime():
 
 def wheel_response(url, timeout):
     package = url.split("/")[-2]
-    versions = {"torch": "2.13.0+git123", "triton": "3.8.0+git456", "vllm": "0.33.0"}
+    versions = {"torch": "2.13.0", "triton": "3.8.0+git456", "vllm": "0.33.0"}
+    wheel_version = "2.13.0+rocm10.0.0" if package == "torch" else versions[package]
+    filename = f"{package}-{wheel_version}-cp312-cp312-manylinux_2_39_x86_64.whl"
     return io.BytesIO(json.dumps([{
         "package_name": package,
-        "variant": "rocm72",
+        "variant": "rocm100",
         "version": versions[package],
         "python_tag": "cp312",
         "abi_tag": "cp312",
         "platform_tag": "manylinux_2_39_x86_64",
-        "path": "native.whl",
+        "path": f"../../../{SHA}/rocm100-wheels/{filename.replace('+', '%2B')}",
     }]).encode())
 
 
 def test_exact_wheel_resolution(runtime):
     with patch("urllib.request.urlopen", side_effect=wheel_response):
         url, packages = resolve_exact_rocm_wheel(SHA, runtime)
-    assert url == f"https://wheels.vllm.ai/rocm/{SHA}/rocm72/vllm/native.whl"
-    assert packages["torch"]["version"] == "2.13.0+git123"
+    assert url == (
+        f"https://wheels.vllm.ai/rocm/{SHA}/rocm100-wheels/"
+        "vllm-0.33.0-cp312-cp312-manylinux_2_39_x86_64.whl"
+    )
+    assert packages["torch"]["version"] == "2.13.0"
+    assert packages["torch"]["wheel_version"] == "2.13.0+rocm10.0.0"
+
+
+@pytest.mark.parametrize("failure", ["metadata_version", "filename_abi"])
+def test_wheel_filename_must_match_metadata_and_runtime(runtime, failure):
+    def response(url, timeout):
+        entries = json.load(wheel_response(url, timeout))
+        if entries[0]["package_name"] == "torch":
+            if failure == "metadata_version":
+                entries[0]["version"] = "2.12.0"
+            else:
+                entries[0]["path"] = entries[0]["path"].replace("cp312-cp312", "cp311-cp311")
+        return io.BytesIO(json.dumps(entries).encode())
+
+    with patch("urllib.request.urlopen", side_effect=response):
+        with pytest.raises(RuntimeError):
+            resolve_exact_rocm_wheel(SHA, runtime)
 
 
 @pytest.mark.parametrize("change", [
     {"torch": "2.12.0"},
+    {"torch": "2.13.0+rocm10.0.1"},
     {"triton": "3.7.0"},
     {"tags": ["cp311-cp311-manylinux_2_39_x86_64"]},
     {"hip": None},
