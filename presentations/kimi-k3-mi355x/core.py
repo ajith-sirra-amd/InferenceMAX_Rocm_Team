@@ -95,7 +95,20 @@ class Canvas:
     def card(self,x,y,w,h,title,body="",color="teal",big=False):
         a=self.rect(x,y,w,h,"card",color,True)
         b=self.rect(x+.17,y+.2,.06,.35,color)
-        c=self.text(x+.34,y+.2,w-.5,.72 if not big else .95,title,21 if not big else 30,color,True)
+        title_size=30 if big else 21
+        available=(w-.5)*72*.93
+        font_path="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        while title_size>12:
+            font=ImageFont.truetype(font_path,title_size);lines=1;line=""
+            too_wide=False
+            for word in title.split():
+                if font.getlength(word)>available:too_wide=True
+                candidate=(line+" "+word).strip()
+                if line and font.getlength(candidate)>available:lines+=1;line=word
+                else:line=candidate
+            if not too_wide and lines*title_size*1.2 <= (68 if big else 49):break
+            title_size-=1
+        c=self.text(x+.34,y+.2,w-.5,.72 if not big else .95,title,title_size,color,True)
         d=self.text(x+.24,y+1.0,w-.46,h-1.12,body,16,"white") if body else None
         return [a,b,c,d]
     def label(self,x,y,w,text,color="teal"):
