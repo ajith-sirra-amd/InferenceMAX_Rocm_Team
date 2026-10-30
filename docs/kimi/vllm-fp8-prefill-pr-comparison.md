@@ -1,88 +1,86 @@
 # vLLM FP8 prefill PR implementation comparison
 
-**English** | [中文](./vllm-fp8-prefill-pr-comparison_zh.md)
+**English** | [??](./vllm-fp8-prefill-pr-comparison_zh.md)
 
-The FMHA portion substantially overlaps the existing PRs. The current experiment
-adds native vLLM FP8 up-projection and direct FP8 K/V output. Both kernels already
-exist in AITER; the distinct work is their vLLM integration and validation.
+The distinct work in [PR #64288](https://github.com/vllm-project/vllm/pull/64288)
+is the native handoff from FP8 cache ? FP8 projection weights to direct FP8 K/V
+and cached-context FP8 FMHA. Both kernels already exist in AITER; this PR
+integrates and validates their use in vLLM.
 
-Inspected PR #59124 at `132f6daa6b17cb4000ef58355943bb39339104f2`, #62447 at
-`cefacabced64eda821bcb49493cc970056d15429`, and the tested plugin at
-`14250d6c6c17cd54fb7cd480c74c5c4eb5da2e78`. This is a source comparison; neither
-PR was rerun in the current benchmark.
+Source review on 2026-10-30: #59124 is open at
+`132f6daa6b17cb4000ef58355943bb39339104f2`; #62447 is closed, unmerged, at
+`cefacabced64eda821bcb49493cc970056d15429`; #64288 is draft at
+`2f946cbab5000dedef23b117df991417e8917315`.
+Neither reference PR has been benchmarked in the current harness.
 
-| Area | PR #59124 | PR #62447 | Current tested implementation |
-|---|---|---|---|
-| FMHA kernel | AITER FlyDSL FP8 | AITER FlyDSL FP8 | AITER FlyDSL FP8 |
-| Entry point | Explicit `ROCM_AITER_FLYDSL_FP8` backend | `VLLM_ROCM_MLA_PREFILL_FLYDSL_FP8=1` inside `ROCM_AITER_FA` | InferenceMAX custom plugin; native port not yet submitted |
-| Cached K/V supplied to new attention code | Already-expanded BF16 tensors, then dynamically quantized | Already-expanded BF16 tensors, then dynamically quantized | FP8 cache times native FP8 weights, FP32 accumulation, direct FP8 K/V stores |
-| Native weight conversion | Unchanged by PR | Unchanged by PR | Explicit `*.self_attn.kv_b_proj: fp8_per_channel`; four native layouts validated |
-| K/V scales | Per cached chunk's actual K/V maxima | Per cached chunk's actual K/V maxima | ATOM gather descales from this forward's new-token K/V: `2 * max(amax/448, 1e-6)` |
-| Q reuse | Quantize full new-token Q, reuse matching slices in context calls | Re-quantize Q in each attention call | Cache by exact pointer/shape/stride within one forward; different subviews can quantize again |
-| Strided quantizer input | Direct stride-aware reads | Makes Q/K/V contiguous first | Stride-aware QKV quantizer; direct cached FP8 K/V avoids separate cached-K/V quantization |
-| New-token causal attention | FP8; explicitly bypasses competing ASM path | FP8 when this backend is reached; outer ASM dispatch unchanged | BF16 |
-| Cached attention routing | Eligible positive Q/KV lengths, with empty/int32 fallback | Opt-in supported shapes | Normal query >=512 and context >=8192; accuracy stress overrides only positive lengths |
-| GSM8K evidence | Author reports 96.21% for both arms | Author states no GSM8K/lm-eval yet | 97.119%, 1281/1319, all eight workers proved native FP8 execution |
+| Area | #59124 | #62447 | #64288 |
+| --- | --- | --- | --- |
+| FMHA | AITER FlyDSL FP8 | AITER FlyDSL FP8 | AITER FlyDSL FP8 |
+| Selection | `ROCM_AITER_FLYDSL_FP8` backend | FP8 env flag inside `ROCM_AITER_FA` | Default-off `VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN` |
+| Cached K/V before FMHA | BF16 expanded output, dynamically quantized | BF16 expanded output, dynamically quantized | Direct FP8 projection output |
+| Weight conversion | Unchanged by PR | Unchanged by PR | Explicit native `kv_b_proj: fp8_per_channel`; no second quantizer |
+| K/V scales | Actual cached-chunk maxima | Actual cached-chunk maxima | ATOM gather policy: `2 * max(new_token_amax/448, 1e-6)` |
+| Q reuse | Full-Q quantization reused by slices | Re-quantizes each call | Exact pointer/shape/stride reuse within one forward; distinct slices may re-quantize |
+| Strided quantization | Direct reads | Contiguous copies | Direct reads; cached K/V need no separate quantization |
+| New-token attention | FP8 with ASM bypass | FP8 if this backend is reached; outer ASM unchanged | BF16 |
+| Cached eligibility | Positive lengths with empty/int32 fallback | Supported shapes under opt-in | Query ?512, context ?8192; disclosed accuracy stress uses positive lengths |
 
-Neither PR requires `kv_b_proj` weights to remain BF16. Weight precision may already
-be selected by the model or quantization configuration. The missing change in these
-PRs is specifically the direct FP8-cache/FP8-weight/FP8-output fusion and handoff;
-turning on weight quantization alone does not supply that integration.
+Neither reference PR requires BF16 projection weights. Ordinary weight
+quantization can be enabled independently. The distinguishing change is direct
+FP8 projection output and its FMHA handoff.
 
-## Numerical distinctions
+## Validation and limits
 
-All three use per-tensor E4M3 quantization, but routing, tensor populations used
-for scales, and rounding details differ. Their accuracy results cannot certify
-this integration or establish byte-identical outputs.
+#64288 passed eight native GPU kernel tests at `332d6c9`; the current head only
+formats two test expressions and has the same executable AST. All applicable
+targeted static checks passed at `2f946cb`. Full native GSM8K and serving/runtime
+validation remain pending; see the [current task list](./fp8-fmha-tasklist.md).
 
-- #59124 compares with BF16 on its random fixtures: cosine >0.998, max LSE
-  difference <0.25 and mean <0.01. Its shared SDPA tests use FP8-specific
-  `rtol=2**-4, atol=0.3`. Its full-model scores are author-reported and were
-  obtained with a different serving configuration (including no spec decode).
-- #62447's committed attention tests compare with an FP32 reference on the
-  same dequantized FP8 inputs: LSE `atol=1e-3, rtol=0`, output relative norm
-  <=0.04. This separates kernel arithmetic from input-quantization error.
-- Current native projection and same-FP8-input arithmetic tests passed, as did
-  full GSM8K with execution proof. The original BF16 absolute LSE <0.20
-  criterion remains unpassed on the captured Kimi chunk. No limit was relaxed.
+The 97.119% GSM8K and 17,406.08912 total tokens/s/GPU results belong to the earlier
+plugin prototype, not the native PR. The separate prototype new-token FP8
+experiment measured 15,264.82341 tokens/s/GPU (-12.30182%) and is excluded.
+The captured historical-BF16 absolute LSE <0.20 gate remains unresolved.
 
-Reported speedups are not directly comparable: #59124 reports +4.5% with no
-spec decode; #62447 reports +1.5% in a two-node disaggregated setup. Its cited
-#62444 dependency only changes CPU-offload LRU handling, not projection. The
-established 16915.72154 tokens/s/GPU result used BF16 `kv_b_proj`; native FP8
-projection performance is being measured by full run 40695099743.
+All three quantize to per-tensor E4M3, but scale populations and rounding differ:
+- #59124's random-fixture tests compare against BF16: cosine >0.998, maximum
+  LSE difference <0.25 and mean <0.01. Shared SDPA tests use FP8-specific
+  `rtol=2**-4, atol=0.3`. Its author-reported 96.21% GSM8K used another
+  configuration without speculative decoding.
+- #62447 compares attention against FP32 using the same quantized operands:
+  LSE `atol=1e-3, rtol=0`, output relative norm ?0.04.
+- Our native tests retain their original tolerances. Same-operand arithmetic
+  checks do not close the separate captured-BF16 discrepancy.
 
-## Upstream scope and remaining opportunities
+Author-reported performance is not a matched comparison: #59124 reports +4.5%
+without speculative decoding; #62447 reports +1.5% in two-node disaggregation.
 
-A second dynamic-QKV-plus-FP8-FMHA PR would substantially duplicate existing work.
-The useful extension is native FP8 `kv_b_proj` plus direct FP8 output integration
-on an existing FP8 backend. #59124 is the closer foundation because it already
-has Q reuse, strided quantization and explicit ASM bypass; its merge conflicts
-need resolution. Preserving the tested BF16 causal routing and gather-scale
-policy requires explicit design, not an assertion that the paths are identical.
+## Reviewer-requested comparisons
 
-Two additional opportunities are visible in the current implementation:
-1. Reuse full-Q slices as #59124 does. Changing from per-view Q scales to full-Q
-   scales can change FP8 values, so numerical and model validation are required.
-2. During BF16 new-token causal attention, scale preparation currently writes
-   temporary FP8 K/V that are not consumed. A Q-output/KV-scale-only preparation
-   could avoid those stores, provided it preserves the exact scales and Q output.
-Neither change is installed in the active run.
+Run four arms on one common upstream base: #59124 alone and plus direct
+projection; #62447 alone and plus direct projection. Keep model checkpoint,
+native FP8 weight targets, eight MI355X, TP8/DCP8, C48, CPU/CCD binding,
+offload, graph configuration, MTP and replay inputs/duration identical within
+each pair. Verify actual backend and projection/FMHA execution in every arm.
 
-The requested native flag name follows the vLLM convention:
+Integrating direct projection must preserve the chosen reference's new-token
+routing and Q reuse. The ATOM output-scale policy differs from each reference's
+cached-chunk dynamic scales; document that difference and validate it rather
+than calling the compared outputs identical. Report total/output tokens/s/GPU,
+latency and measured errors, with raw artifacts and source identities.
 
-```bash
-export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
-```
+#64288 has no source dependency on either PR. The requested flag discussion
+remains open; native NUMA/CCD changes are postponed.
 
-Default: `0`. Weight quantization remains explicit in `--quantization-config`.
-This is the name selected for the native port, not a flag already present in the
-tested plugin. The user's vLLM fork main matches upstream main at
-`0beab6c251e8046c0c6cf2fef114cd23b58cda74`; no upstream PR for this work is open.
+## Later opportunities
+
+Reuse of full-Q slices changes scale populations and needs accuracy validation.
+By contrast, the current preparation writes temporary FP8 new-token K/V that
+BF16 causal attention does not consume. A Q-output/KV-scale-only preparation
+could remove those stores while preserving exactly the same Q output and scales.
+Neither change is adopted; correctness and native end-to-end evidence come first.
 
 ## Sources
 
-- [#59124 backend](https://github.com/vllm-project/vllm/blob/132f6daa6b17cb4000ef58355943bb39339104f2/vllm/v1/attention/backends/mla/prefill/aiter_flydsl_fp8.py) and [quantizer](https://github.com/vllm-project/vllm/blob/132f6daa6b17cb4000ef58355943bb39339104f2/vllm/v1/attention/ops/triton_per_tensor_fp8_quant.py).
-- [#62447 backend and quantizer](https://github.com/vllm-project/vllm/blob/cefacabced64eda821bcb49493cc970056d15429/vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py).
-- [#59124 tests](https://github.com/vllm-project/vllm/blob/132f6daa6b17cb4000ef58355943bb39339104f2/tests/kernels/attention/test_rocm_aiter_mla_flydsl_fp8_prefill.py) and [#62447 tests](https://github.com/vllm-project/vllm/blob/cefacabced64eda821bcb49493cc970056d15429/tests/kernels/attention/test_rocm_aiter_mla_flydsl_fp8_prefill.py).
-- [Current implementation audit](./native-fp8-up-projection-audit.md) and [GSM8K proof](../../results/atom-attention/run40688077118/gsm8k_evidence.json).
+- [#59124 backend](https://github.com/vllm-project/vllm/blob/132f6daa6b17cb4000ef58355943bb39339104f2/vllm/v1/attention/backends/mla/prefill/aiter_flydsl_fp8.py).
+- [#62447 backend](https://github.com/vllm-project/vllm/blob/cefacabced64eda821bcb49493cc970056d15429/vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py).
+- [Native audit](./native-fp8-up-projection-audit.md).
