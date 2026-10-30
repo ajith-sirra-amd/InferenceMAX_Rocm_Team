@@ -2,6 +2,49 @@
 
 [English](./fp8-fmha-tasklist.md) | **中文**
 
+
+## 运行时修复及原生精度重试：2026-10-30
+
+原生 PR 保持草稿状态，版本为 `2f946cbab5000dedef23b117df991417e8917315`。
+八项原生 GPU 内核测试及当前静态检查已通过；尚无原生 GSM8K 分数或服务性能结果。
+
+运行 41051436780 确认源码导入和 IPC 路径修复有效，但在模型执行前，
+worker 的 16x16 BF16 `torch.mm(x, x)` 失败，错误为
+`device kernel image is invalid` 和 `HIPBLAS_STATUS_INTERNAL_ERROR`。
+
+三个已完成的诊断将问题定位到验证脚本设置的 `TMPDIR`：
+
+- 41052806908：同一服务器上，两个镜像的 BF16/FP32/FP64 GEMM 均通过。
+  其中 BF16 使用转置操作数，与 worker 初始化不完全相同。
+- 41054279799：精确 worker GEMM、转置 BF16、FP32、FP64 在默认环境下均通过，
+  系统 Python 和虚拟环境结果一致；加入验证环境变量后均失败，ROCm 库路径相同。
+- 41054684302：单独设置 `TMPDIR` 即复现错误；另外八个变量单独设置均通过。
+  从完整验证环境中仅去掉 `TMPDIR` 后，四项 GEMM 全部通过。
+  提前创建所有缓存目录不能解决问题。
+
+修复提交 `941b262404f15d5c55874304dfc54e655cf53010` 保留容器默认临时目录，
+并记录实际临时路径。未修改 PR、ROCm 库、worker 初始化或优化内核路由，
+也未修改宿主机或驱动。临时目录触发错误的底层文件系统/运行时机制尚未确定。
+
+[CPU 检查 41055874246](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41055874246)
+已通过 20 项测试及相关 shell 检查，无失败、错误或跳过。
+[完整原生 GSM8K 重试 41055998426](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41055998426)
+使用该修复及 PR `2f946cb`：固定 1319 题、five-shot、temperature=0、
+C48 + 真实 MTP 验证、eager/512-token 压力路由、GPU 同步检查，
+并要求全部八个 worker 的优化路径执行证据。新 token 注意力仍为 BF16。
+已调度不代表精度通过。
+
+检查 41046329246、41048209579、41051436780、41052672056、41052806908 的
+作业日志，未发现磁盘配额或空间不足错误。日志搜索不能代替账户配额测量。
+
+新 token FP8 的性能回退仍是独立、尚未解释的问题。
+#59124 的 +4.5% 包含新 token 和缓存 FP8，未使用 MTP；
+本实验是在 FP8 投影和缓存 FMHA 基础上增加 causal FP8，并使用 MTP，
+从 17,406.08912 降至 15,264.82341 tokens/s/GPU。
+本实验复用已准备的 FP8 Q/K/V，与 #59124 一样使用 `cross_seqlen=True`，
+没有新增量化 pass。仍需实际形状分布及配对的内核计时。
+历史 BF16 绝对 LSE <0.20 门限仍未解决。
+
 ## ???????2026-10-30
 
 - ?? [GPU ?? 41044413189](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41044413189)?PR `332d6c9` ? **8 ???0 ???0 ???0 ??**????????/??????? FMHA????????????????????????? GPU 0 ????????????????

@@ -2,7 +2,63 @@
 
 **English** | [中文](./fp8-fmha-tasklist_zh.md)
 
-## Latest native validation: 2026-10-30
+
+## Runtime fix and native accuracy retry: 2026-10-30
+
+The native PR remains draft at `2f946cbab5000dedef23b117df991417e8917315`.
+Eight native GPU kernel tests and current static checks passed. There is still
+no native GSM8K score or native serving-performance result.
+
+Run [41051436780](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41051436780)
+confirmed the source-import and IPC-path fixes, then failed before model execution
+at the unchanged worker's 16x16 BF16 `torch.mm(x, x)). ROCm reported
+`device kernel image is invalid` and `HIPBLAS_STATUS_INTERNAL_ERROR`.
+
+Three completed diagnostics isolate the validation harness's `TMPDIR` override:
+
+- [41052806908](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41052806908):
+  BF16/FP32/FP64 GEMM passed in both images on the current runner. Its BF16
+  transposed-operand test was not identical to worker initialization.
+- [41054279799](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41054279799):
+  exact worker BF16 GEMM, transposed BF16, FP32 and FP64 pass with default
+  settings in both system Python and a virtual environment. All four fail with
+  native harness environment overrides; loaded ROCm library paths match.
+- [41054684302](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41054684302):
+  `TMPDIR` alone reproduces the failure. The other eight overrides individually
+  pass. Removing only `TMPDIR` from the full native environment makes all four
+  cases pass; pre-creating cache directories does not fix it.
+
+Harness fix [941b262](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/commit/941b262404f15d5c55874304dfc54e655cf53010)
+preserves the container's temporary directory and records the resolved directory.
+It does not alter the PR, ROCm libraries, worker initialization, or kernel routing.
+The precise filesystem/runtime mechanism behind the failing temporary path has
+not been established. No host or driver change was made.
+
+[Harness CI 41055874246](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41055874246)
+passed 20 tests with zero failures/errors/skips and the applicable shell checks.
+Full native [GSM8K retry 41055998426](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41055998426)
+is dispatched with this exact harness revision and PR `2f946cb`: fixed 1319
+questions, five-shot, temperature zero, C48 + real MTP verification,
+eager/512-token accuracy stress, GPU synchronization checks, and optimized-path
+execution proof required on all eight workers. New-token attention remains BF16.
+Dispatch is not an accuracy pass.
+
+No `Disk quota exceeded`, `No space left on device`, or `EDQUOT` text was found
+in the job logs of 41046329246, 41048209579, 41051436780, 41052672056 or 41052806908.
+This is a log search, not an account-quota measurement.
+
+The earlier new-token FP8 performance regression remains separate and unexplained.
+#59124 reports +4.5% for new-token plus cached-context FP8 without MTP; our
+17,406.08912 to 15,264.82341 comparison adds causal FP8 to an already optimized
+projection/cached-FMHA path with MTP. Our causal call reuses prepared FP8 Q/K/V,
+uses `cross_seqlen=True` like #59124, and introduces no extra quantization pass.
+Actual shape frequencies and matched per-call timings are still needed.
+The historical captured-BF16 absolute LSE <0.20 gate remains unresolved.
+
+[Runtime evidence](../../results/atom-attention/run41054684302/runtime-isolation.json)
+and [retry record](../../results/atom-attention/run41055998426/dispatch.json).
+
+## Earlier native validation: 2026-10-30
 
 - Native [GPU run 41044413189](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41044413189): **8 passed, 0 failed, 0 errors, 0 skips**, at PR `332d6c9`. Quantization, plain/shuffled projection and FMHA, changed-input graph replay, native weight loading and state cleanup passed. This is GPU-0 kernel evidence, not eight-worker model execution.
 - Current PR `2f946cbab5000dedef23b117df991417e8917315` formats two test expressions only; executable AST matches the GPU-tested test and production files are unchanged.

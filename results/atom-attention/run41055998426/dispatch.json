@@ -1,0 +1,9 @@
+{
+  "run_id": 41055998426,
+  "native_sha": "2f946cbab5000dedef23b117df991417e8917315",
+  "harness_sha": "941b262404f15d5c55874304dfc54e655cf53010",
+  "prerequisite_run_id": 41055874246,
+  "scope": "Full native GSM8K; fixed 1319, five-shot, temperature zero; real MTP verification; eager/512-token stress; eight-worker optimized-path and GPU sync evidence required",
+  "causal_fp8": false,
+  "runtime_fix": "Preserve container temporary directory; remove repository TMPDIR override"
+}

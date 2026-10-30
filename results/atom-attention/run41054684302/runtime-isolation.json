@@ -1,0 +1,1214 @@
+{
+  "scope": "runtime diagnosis only; no model or FP8 correctness claim",
+  "stages": [
+    {
+      "name": "all_native_dirs_exist",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasGemmEx( handle, opa, opb, m, n, k, &falpha, a, HIP_R_16BF, lda, b, HIP_R_16BF, ldb, &fbeta, c, std::is_same_v<C_Dtype, float> ? HIP_R_32F : HIP_R_16BF, ldc, compute_type, HIPBLAS_GEMM_DEFAULT)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "bf16_nt_control",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            16
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasGemmEx( handle, opa, opb, m, n, k, &falpha, a, HIP_R_16BF, lda, b, HIP_R_16BF, ldb, &fbeta, c, std::is_same_v<C_Dtype, float> ? HIP_R_32F : HIP_R_16BF, ldc, compute_type, HIPBLAS_GEMM_DEFAULT)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "fp32_nt_reference",
+          "dtype": "float32",
+          "shape_mnk": [
+            31,
+            3072,
+            512
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            512
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasSgemm( handle, opa, opb, m, n, k, &alpha, a, lda, b, ldb, &beta, c, ldc)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "fp64_nt_reference",
+          "dtype": "float64",
+          "shape_mnk": [
+            386,
+            3072,
+            512
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            512
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasDgemm( handle, opa, opb, m, n, k, &alpha, a, lda, b, ldb, &beta, c, ldc)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_UV_CACHE_DIR",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": null,
+            "TRITON_CACHE_DIR": null,
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_XDG_CACHE_HOME",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": null,
+            "TRITON_CACHE_DIR": null,
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_HF_HOME",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": null,
+            "TRITON_CACHE_DIR": null,
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_PYTHONPYCACHEPREFIX",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": null,
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_TMPDIR",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": null,
+            "TRITON_CACHE_DIR": null,
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasGemmEx( handle, opa, opb, m, n, k, &falpha, a, HIP_R_16BF, lda, b, HIP_R_16BF, ldb, &fbeta, c, std::is_same_v<C_Dtype, float> ? HIP_R_32F : HIP_R_16BF, ldc, compute_type, HIPBLAS_GEMM_DEFAULT)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_TRITON_CACHE_DIR",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": null,
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_VLLM_ROCM_USE_AITER",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": null,
+            "TRITON_CACHE_DIR": null,
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_VLLM_ROCM_USE_AITER_LINEAR",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": null,
+            "TRITON_CACHE_DIR": null,
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "only_VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": null,
+            "TRITON_CACHE_DIR": null,
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "native_without_TMPDIR",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "bf16_nt_control",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            16
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "fp32_nt_reference",
+          "dtype": "float32",
+          "shape_mnk": [
+            31,
+            3072,
+            512
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            512
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "fp64_nt_reference",
+          "dtype": "float64",
+          "shape_mnk": [
+            386,
+            3072,
+            512
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            512
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": null,
+            "XDG_CACHE_HOME": "/evidence/variable-work/cache",
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "passed",
+          "max_absolute_error": 0.0,
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "name": "native_without_XDG_CACHE_HOME",
+      "tests": [
+        {
+          "case": "bf16_nn_worker",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": false,
+          "rhs_stride": [
+            16,
+            1
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasGemmEx( handle, opa, opb, m, n, k, &falpha, a, HIP_R_16BF, lda, b, HIP_R_16BF, ldb, &fbeta, c, std::is_same_v<C_Dtype, float> ? HIP_R_32F : HIP_R_16BF, ldc, compute_type, HIPBLAS_GEMM_DEFAULT)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "bf16_nt_control",
+          "dtype": "bfloat16",
+          "shape_mnk": [
+            16,
+            16,
+            16
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            16
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasGemmEx( handle, opa, opb, m, n, k, &falpha, a, HIP_R_16BF, lda, b, HIP_R_16BF, ldb, &fbeta, c, std::is_same_v<C_Dtype, float> ? HIP_R_32F : HIP_R_16BF, ldc, compute_type, HIPBLAS_GEMM_DEFAULT)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "fp32_nt_reference",
+          "dtype": "float32",
+          "shape_mnk": [
+            31,
+            3072,
+            512
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            512
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasSgemm( handle, opa, opb, m, n, k, &alpha, a, lda, b, ldb, &beta, c, ldc)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        },
+        {
+          "case": "fp64_nt_reference",
+          "dtype": "float64",
+          "shape_mnk": [
+            386,
+            3072,
+            512
+          ],
+          "transpose_rhs": true,
+          "rhs_stride": [
+            1,
+            512
+          ],
+          "python": "/usr/bin/python3",
+          "prefix": "/usr",
+          "base_prefix": "/usr",
+          "torch": "2.13.0+rocm10.0.0",
+          "environment": {
+            "LD_LIBRARY_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/rocm_sysdeps/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib:/usr/local/lib/python3.12/dist-packages/_rocm_sdk_core/lib/rocm_sysdeps/lib",
+            "LD_PRELOAD": null,
+            "ROCM_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HIP_PATH": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel",
+            "HSA_XNACK": null,
+            "ROCBLAS_USE_HIPBLASLT": null,
+            "HIPBLASLT_TENSILE_LIBPATH": null,
+            "TMPDIR": "/evidence/variable-work/tmp",
+            "XDG_CACHE_HOME": null,
+            "PYTHONPYCACHEPREFIX": "/evidence/variable-work/cache/pycache",
+            "TRITON_CACHE_DIR": "/evidence/variable-work/cache/triton",
+            "HIP_VISIBLE_DEVICES": null,
+            "ROCR_VISIBLE_DEVICES": null
+          },
+          "scope": "fresh process; torch only; no vLLM or FP8 imports",
+          "gpu": "_CudaDeviceProperties(name='AMD Instinct MI355X', major=9, minor=5, gcnArchName='gfx950:sramecc+:xnack-', total_memory=294896MB, multi_processor_count=256, uuid=39376462-3563-3432-3034-306237323931, pci_bus_id=117, pci_device_id=0, pci_domain_id=0, L2_cache_size=4MB)",
+          "status": "runtime_error",
+          "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasDgemm( handle, opa, opb, m, n, k, &alpha, a, lda, b, ldb, &beta, c, ldc)`",
+          "loaded_libraries": [
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libamdhip64.so.7.16.26361-25e14349f2",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/libhsa-runtime64.so.1.21.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_devel/lib/librocm_kpack.so.0",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblas.so.3",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/libhipblaslt.so.1",
+            "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/librocblas.so.5",
+            "/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_hip.so"
+          ],
+          "rocm_python_modules": [
+            "_rocm_sdk_core",
+            "_rocm_sdk_libraries",
+            "rocm_sdk",
+            "rocm_sdk._dist_info",
+            "torch._rocm_init"
+          ],
+          "exit_code": 0
+        }
+      ]
+    }
+  ],
+  "code_objects": [
+    {
+      "path": "/usr/local/lib/python3.12/dist-packages/_rocm_sdk_libraries/lib/hipblaslt/library/gfx950/TensileLibrary_BB_BB_HA_Bias_SAV_UA_Type_BB_HPA_Contraction_l_Ailk_Bljk_Cijk_Dijk_ID75a0_gfx950.co",
+      "size": 5502839,
+      "magic_hex": "43434f420300010077f7530000000000b0f7ab0f00000000ef9e24fe53c510f1",
+      "sha256": "c4c28910e7773c97bde60ff34c1b055ac4edd5fce876ee82fa8a25e8bf704ed7"
+    }
+  ],
+  "run_id": 41054684302,
+  "job_id": 124059119256,
+  "artifact_id": 12976163125,
+  "source_sha": "96ec8555497f8d9310d35c02d22e207b3bbc1b0c",
+  "fix_sha": "941b262404f15d5c55874304dfc54e655cf53010",
+  "finding": "TMPDIR override alone reproduces; full environment without that override passes all four GEMM cases",
+  "limitation": "Underlying filesystem/runtime mechanism not established; not model accuracy or performance evidence"
+}
