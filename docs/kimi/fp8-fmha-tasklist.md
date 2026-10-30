@@ -2,6 +2,33 @@
 
 **English** | [中文](./fp8-fmha-tasklist_zh.md)
 
+## Resumed retry: 2026-10-30
+
+The user restarted [run 40804432321, attempt 2](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804432321/job/123956986964).
+At **2026-10-30T08:17:46.011600+00:00**, GPU job **123956986964** is **in progress**;
+runner 35 is online and busy. Cleanup and checkout passed; `Launch job script`
+is active. The retry currently has no failure annotations. GitHub's downloadable
+job log is not available yet, so this status alone does not prove GPU execution.
+
+The rerun preserves workflow source `75a52838ee8fa89461dc812913eb71b370b839bd`
+and serving source `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`: full 3600-second
+C48 + MTP replay with FP8 up-projection, cached FP8 FMHA and new-token causal FP8.
+No duplicate benchmark was dispatched. The prior attempt failed with quota errors
+in check-run annotations; it produced no accepted new-token performance result.
+
+Next: collect attempt-2 benchmark, raw-request and server artifacts; verify execution
+and compare throughput, latency and measured errors against **17,406.08912**
+total tokens/s/GPU. Select the native candidate only after this comparison, then
+run native GPU kernel validation, full GSM8K and full performance in order.
+The already-passed prototype GSM8K is not being repeated. No native NUMA change
+or serving smoke is planned.
+
+A session-bound poller checks every five minutes and ends on completion or after
+three hours. It does not wake a finished model turn or install a system scheduler.
+The exact native PR remains draft at `08e5d81a0d4fc76c20a97f9a517195db5a5dc5be`;
+its upstream pre-commit stopped at the contributor approval gate before code checks.
+Native GPU evidence and the captured-BF16 LSE criterion remain outstanding.
+
 ## Next dispatch: user decision on 2026-10-29
 
 The user confirmed the replacement servers are identical and explicitly declined

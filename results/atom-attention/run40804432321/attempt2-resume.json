@@ -1,0 +1,36 @@
+{
+  "recorded_at_utc": "2026-10-30T08:17:46.011600+00:00",
+  "run_id": 40804432321,
+  "attempt": 2,
+  "job_id": 123956986964,
+  "job_url": "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804432321/job/123956986964",
+  "workflow_sha": "75a52838ee8fa89461dc812913eb71b370b839bd",
+  "serving_source": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+  "started_at": "2026-10-30T08:02:24Z",
+  "status": "in_progress",
+  "active_steps": [
+    "Launch job script"
+  ],
+  "annotations": [],
+  "runners": [
+    {
+      "id": 35,
+      "name": "mi355x-amd_pit2_p03_g07",
+      "status": "online",
+      "busy": true
+    }
+  ],
+  "gpu_execution_confirmed_for_attempt": false,
+  "performance_result": null,
+  "comparison_total_tokens_per_second_per_gpu": 17406.08912,
+  "prototype_accuracy_run": 40712931283,
+  "prototype_accuracy_strict_correct": 1279,
+  "prototype_accuracy_total": 1319,
+  "native_candidates": {
+    "cached_only": "08e5d81a0d4fc76c20a97f9a517195db5a5dc5be",
+    "causal_if_perf_supports": "4519e097e50e557d95da5be3b6306dfeb08d03a9"
+  },
+  "next_gpu_job": "Native exact-source kernel validation after candidate selection; not dispatched",
+  "captured_bf16_lse_gate_resolved": false,
+  "artifact_selection": "Use only artifacts created during attempt 2; attempt-1 results_bmk 12871350668 is not the retry result."
+}
