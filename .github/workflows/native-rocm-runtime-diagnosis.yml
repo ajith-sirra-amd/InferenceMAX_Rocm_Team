@@ -1,0 +1,55 @@
+name: Native ROCm baseline runtime diagnosis
+on:
+  push:
+    branches: [checks/native-rocm-runtime-20261030]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Inspect host driver
+        shell: bash
+        run: |
+          mkdir -p runtime-diagnostics
+          {
+            uname -a
+            cat /sys/module/amdgpu/version || true
+            modinfo amdgpu | head -30 || true
+          } | tee runtime-diagnostics/host.txt
+      - name: Compare baseline GEMM in native and established images
+        shell: bash
+        run: |
+          images=(
+            "vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716"
+            "vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce"
+          )
+          names=(native-rocm100 established)
+          for index in 0 1; do
+            diagnostic_image="${images[$index]}"
+            diagnostic_name="${names[$index]}"
+            docker image inspect "$diagnostic_image" >/dev/null 2>&1 || docker pull "$diagnostic_image"
+            docker image inspect --format '{{json .RepoDigests}}' "$diagnostic_image" > "runtime-diagnostics/$diagnostic_name-image.json"
+            docker run --rm --init --network none --ipc=host --shm-size=4g \
+              --name "native-rocm-probe-$GITHUB_RUN_ID-$diagnostic_name" \
+              --device=/dev/kfd --device=/dev/dri \
+              --group-add "$(getent group video | cut -d: -f3)" \
+              --group-add "$(getent group render | cut -d: -f3)" \
+              -v "$GITHUB_WORKSPACE":/repo:ro \
+              -v "$GITHUB_WORKSPACE/runtime-diagnostics":/evidence \
+              -e PYTHONDONTWRITEBYTECODE=1 \
+              --entrypoint python3 "$diagnostic_image" \
+              /repo/utils/atom_attention/rocm_runtime_probe.py \
+              --output "/evidence/$diagnostic_name.json" 2>&1 | tee "runtime-diagnostics/$diagnostic_name.log"
+          done
+      - name: Upload baseline runtime evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-rocm-runtime-diagnosis
+          path: runtime-diagnostics/
+          if-no-files-found: error
