@@ -73,7 +73,7 @@ def main():
     if args.child:
         child(args.child)
         return
-    root = args.output.parent / "matrix-work"
+    root = args.output.parent / "variable-work"
     root.mkdir(parents=True, exist_ok=False)
     subprocess.run(["uv", "venv", "--system-site-packages", "--python", sys.executable,
                     str(root / "venv")], check=True)
@@ -87,16 +87,28 @@ def main():
         "VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN": "1",
     })
     Path(native_env["TMPDIR"]).mkdir()
-    stages = [
-        ("system_default", sys.executable, os.environ.copy()),
-        ("system_native_env", sys.executable, native_env),
-        ("venv_default", root / "venv/bin/python", os.environ.copy()),
-        ("venv_native_env", root / "venv/bin/python", native_env),
-    ]
+    # Create every cache parent first to separate missing-directory failures.
+    for key in ("UV_CACHE_DIR", "XDG_CACHE_HOME", "HF_HOME", "PYTHONPYCACHEPREFIX", "TRITON_CACHE_DIR"):
+        Path(native_env[key]).mkdir(parents=True, exist_ok=True)
+    stages = [("all_native_dirs_exist", sys.executable, native_env)]
+    changed = {k: v for k, v in native_env.items() if os.environ.get(k) != v}
+    for key, value in changed.items():
+        only = os.environ.copy()
+        only[key] = value
+        stages.append(("only_" + key, sys.executable, only))
+    for key in ("TMPDIR", "XDG_CACHE_HOME"):
+        without = native_env.copy()
+        if key in os.environ:
+            without[key] = os.environ[key]
+        else:
+            without.pop(key, None)
+        stages.append(("native_without_" + key, sys.executable, without))
+    # Recheck all arithmetic cases if pre-created directories resolve the failure.
     report = {"scope": "runtime diagnosis only; no model or FP8 correctness claim", "stages": []}
     for name, python, env in stages:
         stage = {"name": name, "tests": []}
-        for case in CASES:
+        selected_cases = CASES if name.startswith(("all_native", "native_without")) else ("bf16_nn_worker",)
+        for case in selected_cases:
             result = run_probe(python, env, case)
             stage["tests"].append(result)
             print(json.dumps({"stage": name, "case": case, "status": result["status"],
