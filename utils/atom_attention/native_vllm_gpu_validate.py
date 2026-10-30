@@ -233,6 +233,27 @@ def main():
             (evidence / "native-env.sh").write_text("\n".join(lines) + "\n")
             record.update(status="prepared", scope="native installation only; GPU tests not run")
             return
+        # Diagnose the reference BLAS failure in fresh processes before FP8 tests.
+        # These observations do not replace or relax any kernel acceptance check.
+        probe_code = 'import json, os, sys, torch\nkind = sys.argv[1]\ndtype = getattr(torch, kind)\nrows = 31 if kind == "float32" else 386\ntorch.manual_seed(7)\nlhs = torch.randn(rows, 512, device="cuda", dtype=dtype)\nrhs = torch.randn(3072, 512, device="cuda", dtype=dtype)\nresult = {"dtype": kind, "rocblas_use_hipblaslt": os.getenv("ROCBLAS_USE_HIPBLASLT"),\n          "shape": [rows, 512, 3072], "scope": "fresh process; no FP8 kernels imported"}\ntry:\n    out = lhs @ rhs.t()\n    torch.cuda.synchronize()\n    reference = lhs.cpu().double() @ rhs.cpu().double().t()\n    error = out.cpu().double() - reference\n    result.update(status="completed", max_absolute_error=error.abs().max().item(),\n                  normalized_rms=(error.square().mean()/reference.square().mean()).sqrt().item())\nexcept RuntimeError as exc:\n    result.update(status="runtime_error", error=str(exc))\nprint(json.dumps(result))\n'
+        record["reference_blas_diagnostics"] = []
+        for setting in (None, "0"):
+            for dtype in ("float32", "float64"):
+                probe_env = env.copy()
+                if setting is not None:
+                    probe_env["ROCBLAS_USE_HIPBLASLT"] = setting
+                probe = subprocess.run(
+                    [str(python), "-c", probe_code, dtype], cwd=source, env=probe_env,
+                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                )
+                observation = {"dtype": dtype, "requested_rocblas_use_hipblaslt": setting,
+                               "exit_code": probe.returncode}
+                if probe.returncode == 0:
+                    observation.update(json.loads(probe.stdout.strip().splitlines()[-1]))
+                else:
+                    observation.update(status="process_failed", stderr=probe.stderr)
+                record["reference_blas_diagnostics"].append(observation)
+                print("NATIVE_REFERENCE_BLAS_DIAGNOSTIC", json.dumps(observation), flush=True)
         test_path = "tests/kernels/attention/test_rocm_aiter_mla_prefill_fusions.py"
         junit = evidence / "native-kernel-tests.xml"
         result = subprocess.run(
