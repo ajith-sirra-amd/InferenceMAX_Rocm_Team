@@ -1,0 +1,17 @@
+{
+  "run_id": 41051436780,
+  "job_id": 124048344127,
+  "native_sha": "2f946cbab5000dedef23b117df991417e8917315",
+  "harness_sha": "415ea45b8a8a177c01c14f4559b6f40cc6f4fcb0",
+  "status": "failed_during_worker_initialization",
+  "server_log_artifact_id": 12975416163,
+  "import_and_ipc_fixes": "confirmed; exact source loaded and short IPC path accepted",
+  "first_failing_operation": "gpu_worker.py:534, torch.mm(x,x), BF16 16x16, before model execution",
+  "errors": [
+    "hipModuleLoad: device kernel image is invalid for gfx950 hipBLASLt code object",
+    "HIPBLAS_STATUS_INTERNAL_ERROR in hipblasLtMatmul and fallback hipblasGemmEx"
+  ],
+  "additional_artifact_failure": "mktemp directory mode 0700 prevented runner from reading installation manifest; make generated repository-local directory traversable",
+  "gsm8k_score": null,
+  "next": "Inspect loaded ROCm runtime libraries and code-object metadata; reproduce baseline BLAS on the same host before another full evaluation."
+}

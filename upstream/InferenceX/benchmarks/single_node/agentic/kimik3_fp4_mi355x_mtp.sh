@@ -42,6 +42,7 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
     # Unix-domain IPC socket paths must fit sockaddr_un.sun_path (107 bytes).
     mkdir -p /outputs/.native-fp8-validation
     native_work_dir="$(mktemp -d /outputs/.native-fp8-validation/serve.XXXXXXXX)"
+    chmod 755 "$native_work_dir"
     python3 /outputs/utils/atom_attention/native_vllm_gpu_validate.py \
         --native-sha "$NATIVE_VLLM_SHA" --prepare-only \
         --work-dir "$native_work_dir" 2>&1 | tee "$RESULT_DIR/native_setup.log"
