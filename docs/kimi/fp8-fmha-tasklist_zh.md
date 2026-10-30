@@ -19,9 +19,14 @@ eager/512-token 压力路由以及 `VLLM_GPU_SYNC_CHECK=error`。
 必须取得全部八个 worker 的 FP8 上投影和缓存上下文 FMHA 执行证据。
 新 token 注意力仍为 BF16。
 
-静态检查首次运行 41064827427 因验证脚本的文件列表语法错误而失败。
-该脚本已修正，检查分支提交 `4cc5a458439ef89082c589609dcb0bb99eb06e46` 已触发重试。
-PR 代码未受此脚本错误影响。检查结果待定。
+[静态检查 41065468482](https://github.com/ajith-sirra-amd/vllm/actions/runs/41065468482)
+已针对 PR 版本 `492080779e9feea19308092b0aba0840e87c6115` 完整通过。
+检查覆盖十个文件，包括两处元数据修复：Ruff、格式、适用的 pre-commit
+检查（含 mypy）、AST/YAML 解析及源码精确比对全部通过。
+[归档证据](../../results/atom-attention/run41065468482/static-evidence.json)
+包含文件哈希和检查输出。此前两次静态检查因检查脚本语法及浅克隆缺少目标
+提交而失败；检查脚本提交 `577c08da05d35b23c4dee34b61cf609d77010dbf` 已修复。
+完整原生 GSM8K 分数及八个 worker 执行证据仍待结果。
 新 token FP8 性能回退及历史绝对 LSE 门限仍为独立未解决任务。
 PR #64288 保持草稿状态。
 

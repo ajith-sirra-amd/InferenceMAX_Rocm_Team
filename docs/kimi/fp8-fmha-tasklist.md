@@ -21,9 +21,15 @@ real MTP verification, eager/512-token stress routing, and
 `VLLM_GPU_SYNC_CHECK=error`. FP8 up-projection and cached-context FMHA execution
 must be demonstrated on all eight workers. New-token attention remains BF16.
 
-[Static checks 41064827427](https://github.com/ajith-sirra-amd/vllm/actions/runs/41064827427)
-include both modified metadata files and the existing native FP8 patch files,
-with exact-source comparisons to PR `4920807`. The first check failed on a syntax error in the checker file list; checker commit `4cc5a458439ef89082c589609dcb0bb99eb06e46` corrects it and triggers a retry. The PR code is unaffected. Results are pending.
+[Static checks 41065468482](https://github.com/ajith-sirra-amd/vllm/actions/runs/41065468482)
+passed for exact PR revision `492080779e9feea19308092b0aba0840e87c6115`.
+Ruff, formatting, applicable targeted pre-commit hooks including mypy, AST/YAML,
+and exact-source comparisons passed across ten files, including both metadata
+fixes. [Archived evidence](../../results/atom-attention/run41065468482/static-evidence.json)
+includes file hashes and check output. The first two static attempts failed on
+checker setup (a file-list syntax error, then a missing shallow-history object);
+checker `577c08da05d35b23c4dee34b61cf609d77010dbf` corrects both.
+The full native GSM8K score and eight-worker execution proof remain pending.
 The new-token FP8 performance regression and historical absolute LSE gate remain
 separate unresolved tasks. PR #64288 remains draft.
 
