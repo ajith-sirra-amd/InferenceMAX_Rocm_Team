@@ -1,6 +1,6 @@
 # Kimi FP8 task list
 
-**English** | [??](./fp8-fmha-tasklist_zh.md)
+**English** | [中文](./fp8-fmha-tasklist_zh.md)
 
 
 ## Pinned metadata fix and native accuracy retry: 2026-10-30
@@ -23,9 +23,10 @@ must be demonstrated on all eight workers. New-token attention remains BF16.
 
 [Static checks 41064827427](https://github.com/ajith-sirra-amd/vllm/actions/runs/41064827427)
 include both modified metadata files and the existing native FP8 patch files,
-with exact-source comparisons to PR `4920807`. Results are pending.
+with exact-source comparisons to PR `4920807`. The first check failed on a syntax error in the checker file list; checker commit `4cc5a458439ef89082c589609dcb0bb99eb06e46` corrects it and triggers a retry. The PR code is unaffected. Results are pending.
 The new-token FP8 performance regression and historical absolute LSE gate remain
 separate unresolved tasks. PR #64288 remains draft.
+
 
 ## Runtime fix and native accuracy retry: 2026-10-30
 
