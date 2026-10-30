@@ -13,5 +13,8 @@
   "incorrect_variant": "rocm715",
   "correct_variant": "rocm100",
   "fix_commit": "e7b3309859056b3bd39d7c54bd347f0df4e77244",
-  "cpu_ci_pending": true
+  "cpu_ci_pending": false,
+  "cpu_ci_passed_run": 41037023409,
+  "later_ownership_fix_ci_passed_run": 41037738077,
+  "current_gpu_run": 41037832511
 }

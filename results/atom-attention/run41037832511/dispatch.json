@@ -1,0 +1,82 @@
+{
+  "run_id": 41037832511,
+  "job_id": 124002966316,
+  "recorded_at_utc": "2026-10-30T10:04:00.261616+00:00",
+  "workflow_source": "57cb67a739dd869e8f54e559bbb56541f741f5d5",
+  "execution_ref": "57cb67a739dd869e8f54e559bbb56541f741f5d5",
+  "native_sha": "08e5d81a0d4fc76c20a97f9a517195db5a5dc5be",
+  "status": "in_progress",
+  "conclusion": null,
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Restore previous native validation ownership",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "Checkout inspection code",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "name": "Validate recipe and launcher before kernel execution",
+      "status": "pending",
+      "conclusion": null
+    },
+    {
+      "name": "Download captured Kimi numerical fixture",
+      "status": "pending",
+      "conclusion": null
+    },
+    {
+      "name": "Validate direct FP8 KV projection and backend graph replay",
+      "status": "pending",
+      "conclusion": null
+    },
+    {
+      "name": "Validate exact native vLLM FP8 kernel source",
+      "status": "pending",
+      "conclusion": null
+    },
+    {
+      "name": "Restore native validation ownership",
+      "status": "pending",
+      "conclusion": null
+    },
+    {
+      "name": "Upload native GPU validation evidence",
+      "status": "pending",
+      "conclusion": null
+    },
+    {
+      "name": "Post Checkout inspection code",
+      "status": "pending",
+      "conclusion": null
+    }
+  ],
+  "causal_fp8_included": false,
+  "cpu_ci": {
+    "run_id": 41037738077,
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "workflow_shell_syntax": "passed"
+  },
+  "supersedes": [
+    {
+      "run": 41036211097,
+      "reason": "Wrong ROCm wheel variant derived from HIP component version; no numerical tests ran."
+    },
+    {
+      "run": 41037273374,
+      "reason": "Root-owned validation scratch prevented checkout; no numerical tests ran."
+    }
+  ],
+  "scope": "Native cached FP8 kernel validation; not model GSM8K, serving performance, or historical captured-BF16 acceptance."
+}

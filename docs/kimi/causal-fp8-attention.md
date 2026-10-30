@@ -33,6 +33,21 @@ No serving smoke or new performance/accuracy claim is made at preparation time.
 
 ## Result and native candidate: 2026-10-30
 
+### Native validation setup corrected
+
+Both setup fixes passed [GitHub CPU CI 41037738077](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41037738077):
+20 tests, no failures/errors/skips, plus native-workflow Bash syntax checks.
+The second GPU attempt, 41037273374, failed at checkout because the first
+diagnostic container left root-owned scratch files. Workflow revision
+`57cb67a739dd869e8f54e559bbb56541f741f5d5` restores runner ownership before
+checkout and after validation, only inside repository-local `.native-fp8-validation`,
+without following symlinks or deleting files.
+
+[Fresh native GPU run 41037832511](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41037832511) targets the unchanged PR revision
+`08e5d81a0d4fc76c20a97f9a517195db5a5dc5be`, with causal FP8 excluded.
+The ownership restoration step passed; native numerical results are pending.
+[Dispatch record](../../results/atom-attention/run41037832511/dispatch.json).
+
 [Attempt 2](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804432321/job/123956986964) completed successfully with no quota annotations.
 Full C48 + MTP new-token FP8 measured **15,264.82341 total tokens/s/GPU**,
 a **12.30182% regression** against **17,406.08912**.
