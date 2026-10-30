@@ -1,0 +1,55 @@
+{
+    "artifact_ids":  {
+                         "evaluation":  12984278793,
+                         "server_log":  12983749600,
+                         "native":  12984972378
+                     },
+    "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+    "server_runtime_errors":  0,
+    "fewshot":  5,
+    "max_num_batched_tokens":  512,
+    "source_hashes_match_static_run":  41065468482,
+    "causal_fp8":  false,
+    "strict_accuracy":  0.96891584533737685,
+    "run_id":  41064573708,
+    "status":  "passed",
+    "flexible_accuracy":  0.96815769522365425,
+    "server_tracebacks":  0,
+    "score_threshold":  0.9,
+    "server_quota_errors":  0,
+    "flexible_correct":  1277,
+    "questions":  1319,
+    "gpu_sync_check":  "error",
+    "concurrency":  48,
+    "temperature":  0,
+    "strict_correct":  1278,
+    "server_error_lines":  0,
+    "job_id":  124092675927,
+    "enforce_eager":  true,
+    "cached_fmha_ranks":  [
+                              0,
+                              1,
+                              2,
+                              3,
+                              4,
+                              5,
+                              6,
+                              7
+                          ],
+    "execution_sha":  "941b262404f15d5c55874304dfc54e655cf53010",
+    "limitations":  [
+                        "Normal-graph performance and historical absolute LSE \u003c0.20 numerical criterion remain unvalidated.",
+                        "Optional lm-eval Git metadata collection reported dubious ownership of /outputs; exact native source was independently verified."
+                    ],
+    "projection_ranks":  [
+                             0,
+                             1,
+                             2,
+                             3,
+                             4,
+                             5,
+                             6,
+                             7
+                         ],
+    "real_mtp_verification":  true
+}
