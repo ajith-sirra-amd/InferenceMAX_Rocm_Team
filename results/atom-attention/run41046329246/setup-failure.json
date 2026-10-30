@@ -1,0 +1,15 @@
+{
+  "run_id": 41046329246,
+  "job_id": 124031365148,
+  "native_sha": "2f946cbab5000dedef23b117df991417e8917315",
+  "harness_sha": "8e79ba48de02f3a247ec94a658b992d1257cd4bf",
+  "status": "failed_before_model_execution",
+  "server_log_artifact_id": 12973605044,
+  "setup_artifact_id": 12973111579,
+  "error": "ImportError: cannot import name 'rocm_aiter_mla_fp8_prefill' from 'vllm.v1.attention.ops' (/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/__init__.py)",
+  "root_cause": "Editable vLLM in a system-site-packages environment was shadowed by the image package outside the source checkout.",
+  "fix_commit": "cf766e90a95b0f5175d8b7a781e2667de9489940",
+  "fix": "Set PYTHONPATH to only the pinned native checkout; validate vLLM, CLI and FP8 module imports outside the checkout; export source path to serving workers.",
+  "numerical_result": null,
+  "gsm8k_score": null
+}
