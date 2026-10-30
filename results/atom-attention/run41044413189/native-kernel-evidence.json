@@ -1,0 +1,161 @@
+{
+  "run_id": 41044413189,
+  "job_id": 124024852370,
+  "artifact_id": 12971393220,
+  "artifact_sha256": "332c46ed67d11c3d43d7303124e7ecd0e54310595b17c022d7658a23564ae4bd",
+  "workflow_sha": "8e79ba48de02f3a247ec94a658b992d1257cd4bf",
+  "native_revision": "332d6c99acd5281098f1fc3e2a00cd06ef866a0d",
+  "pytest_summary": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "8",
+    "time": "38.324",
+    "timestamp": "2026-10-30T11:00:32.415823+00:00",
+    "hostname": "pit2-p03-g25"
+  },
+  "native_validation": {
+    "native_sha": "332d6c99acd5281098f1fc3e2a00cd06ef866a0d",
+    "require_causal": false,
+    "scope": "native kernel tests; model accuracy and serving sync checks are separate",
+    "status": "passed",
+    "precompiled_base": "a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df",
+    "binary_runtime": {
+      "torch": "2.13.0+rocm10.0.0",
+      "hip": "7.15.26333",
+      "triton": "3.8.0+git669b31ac",
+      "module_versions": {
+        "torch": "2.13.0+rocm10.0.0",
+        "triton": "3.8.0"
+      }
+    },
+    "precompiled_wheel": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/vllm-0.33.0rc1.dev182%2Bga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+    "precompiled_metadata": {
+      "vllm": {
+        "package_name": "vllm",
+        "version": "0.33.0rc1.dev182+ga1cfd2c1b",
+        "build_tag": null,
+        "python_tag": "cp312",
+        "abi_tag": "cp312",
+        "platform_tag": "manylinux_2_34_x86_64",
+        "variant": "rocm100",
+        "filename": "vllm-0.33.0rc1.dev182+ga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "path": "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/vllm-0.33.0rc1.dev182%2Bga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "resolved_wheel_url": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/vllm-0.33.0rc1.dev182%2Bga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "wheel_version": "0.33.0rc1.dev182+ga1cfd2c1b.rocm100"
+      },
+      "torch": {
+        "package_name": "torch",
+        "version": "2.13.0",
+        "build_tag": null,
+        "python_tag": "cp312",
+        "abi_tag": "cp312",
+        "platform_tag": "manylinux_2_34_x86_64",
+        "variant": "rocm100",
+        "filename": "torch-2.13.0+rocm10.0.0-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "path": "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/torch-2.13.0%2Brocm10.0.0-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "resolved_wheel_url": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/torch-2.13.0%2Brocm10.0.0-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "wheel_version": "2.13.0+rocm10.0.0"
+      },
+      "triton": {
+        "package_name": "triton",
+        "version": "3.8.0+git669b31ac",
+        "build_tag": null,
+        "python_tag": "cp312",
+        "abi_tag": "cp312",
+        "platform_tag": "manylinux_2_35_x86_64",
+        "variant": "rocm100",
+        "filename": "triton-3.8.0+git669b31ac-cp312-cp312-manylinux_2_35_x86_64.whl",
+        "path": "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/triton-3.8.0%2Bgit669b31ac-cp312-cp312-manylinux_2_35_x86_64.whl",
+        "resolved_wheel_url": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/triton-3.8.0%2Bgit669b31ac-cp312-cp312-manylinux_2_35_x86_64.whl",
+        "wheel_version": "3.8.0+git669b31ac"
+      }
+    },
+    "environment": "[aiter] import [module_aiter_core] under /usr/local/lib/python3.12/dist-packages/aiter/jit/module_aiter_core.so\n{\"torch\": \"2.13.0+rocm10.0.0\", \"hip\": \"7.15.26333\", \"vllm_file\": \"/work/vllm/vllm/__init__.py\", \"aiter_file\": \"/usr/local/lib/python3.12/dist-packages/aiter/__init__.py\", \"gpus\": [\"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\"]}\n",
+    "source_hashes": {
+      "tests/kernels/attention/test_rocm_aiter_mla_prefill_fusions.py": "27c671a80e2167fecd983733c14e17360c07bfdd99d586d600e3c7258f787dbc",
+      "vllm/envs.py": "f166a441f4e0806a375902a60fe7e4f3610aa547026191276d562ec4e4951c65",
+      "vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py": "105565beb3d5defe7918f0422f92d8e388272e9fa8f600c2e6eace416f01da7f",
+      "vllm/v1/attention/backends/mla/rocm_aiter_mla.py": "d7e23a4312325159f9263c06e440ffcf484e351ab8551a9fa900c343b7fb164d",
+      "vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py": "2ee58e35bbb88574e1b98b336cb3800db7b953fcb87d6852b33e82eaad550f6f",
+      "vllm/v1/attention/ops/rocm_aiter_mla_fp8_quant.py": "e18ade190ea928fa174ea680552f8867d236419e1dfb8d951beadd9220407ee7"
+    },
+    "source_root": "/work/vllm",
+    "reference_blas_diagnostics": [
+      {
+        "dtype": "float32",
+        "requested_rocblas_use_hipblaslt": null,
+        "exit_code": 0,
+        "rocblas_use_hipblaslt": null,
+        "shape": [
+          31,
+          512,
+          3072
+        ],
+        "scope": "fresh process; no FP8 kernels imported",
+        "status": "runtime_error",
+        "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasSgemm( handle, opa, opb, m, n, k, &alpha, a, lda, b, ldb, &beta, c, ldc)`"
+      },
+      {
+        "dtype": "float64",
+        "requested_rocblas_use_hipblaslt": null,
+        "exit_code": 0,
+        "rocblas_use_hipblaslt": null,
+        "shape": [
+          386,
+          512,
+          3072
+        ],
+        "scope": "fresh process; no FP8 kernels imported",
+        "status": "runtime_error",
+        "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasDgemm( handle, opa, opb, m, n, k, &alpha, a, lda, b, ldb, &beta, c, ldc)`"
+      },
+      {
+        "dtype": "float32",
+        "requested_rocblas_use_hipblaslt": "0",
+        "exit_code": 0,
+        "rocblas_use_hipblaslt": "0",
+        "shape": [
+          31,
+          512,
+          3072
+        ],
+        "scope": "fresh process; no FP8 kernels imported",
+        "status": "runtime_error",
+        "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasSgemm( handle, opa, opb, m, n, k, &alpha, a, lda, b, ldb, &beta, c, ldc)`"
+      },
+      {
+        "dtype": "float64",
+        "requested_rocblas_use_hipblaslt": "0",
+        "exit_code": 0,
+        "rocblas_use_hipblaslt": "0",
+        "shape": [
+          386,
+          512,
+          3072
+        ],
+        "scope": "fresh process; no FP8 kernels imported",
+        "status": "runtime_error",
+        "error": "CUDA error: HIPBLAS_STATUS_INTERNAL_ERROR when calling `hipblasDgemm( handle, opa, opb, m, n, k, &alpha, a, lda, b, ldb, &beta, c, ldc)`"
+      }
+    ],
+    "pytest_exit_code": 0,
+    "test_names": [
+      "test_flydsl_fp8_quantization_strides_and_zero[0]",
+      "test_flydsl_fp8_quantization_strides_and_zero[1]",
+      "test_flydsl_fp8_quantization_strides_and_zero[37]",
+      "test_flydsl_fp8_quantization_strides_and_zero[2048]",
+      "test_flydsl_fp8_projection_and_fmha_graph_replay[False]",
+      "test_flydsl_fp8_projection_and_fmha_graph_replay[True]",
+      "test_flydsl_fp8_native_weight_layout",
+      "test_flydsl_fp8_forward_scope_clears_after_error"
+    ]
+  },
+  "limits": [
+    "GPU kernel tests execute on GPU 0; eight visible GPUs are not eight-worker execution proof.",
+    "Native GSM8K, serving synchronization and performance remain separate gates.",
+    "Historical captured-BF16 absolute LSE <0.20 remains unresolved.",
+    "Fresh-process FP32/FP64 BLAS errors reproduced both with default settings and ROCBLAS_USE_HIPBLASLT=0."
+  ]
+}

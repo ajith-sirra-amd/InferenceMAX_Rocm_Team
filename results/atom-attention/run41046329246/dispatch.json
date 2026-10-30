@@ -1,0 +1,7 @@
+{
+  "run_id": 41046329246,
+  "native_sha": "2f946cbab5000dedef23b117df991417e8917315",
+  "workflow_sha": "8e79ba48de02f3a247ec94a658b992d1257cd4bf",
+  "scope": "full native GSM8K; eager/512-token accuracy stress routing; real speculative verification; synchronization checks",
+  "prerequisite_run_id": 41044413189
+}
