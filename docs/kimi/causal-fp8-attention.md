@@ -31,6 +31,45 @@ The verifier uses a separate causal marker and rejects missing or pre-evaluation
 evidence. Full 3600-second performance follows successful diagnostics and GSM8K.
 No serving smoke or new performance/accuracy claim is made at preparation time.
 
+## Result and native candidate: 2026-10-30
+
+[Attempt 2](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804432321/job/123956986964) completed successfully with no quota annotations.
+Full C48 + MTP new-token FP8 measured **15,264.82341 total tokens/s/GPU**,
+a **12.30182% regression** against **17,406.08912**.
+
+| Metric | Established cached FP8 | With new-token FP8 |
+| --- | ---: | ---: |
+| Total tokens/s/GPU | 17,406.08912 | 15,264.82341 |
+| Output tokens/s/GPU | 120.16691 | 100.53104 |
+| Mean TTFT, seconds | 1.76809 | 2.01387 |
+| p95 TTFT, seconds | 4.36319 | 5.43159 |
+| Mean TPOT, milliseconds | 23.15 | 28.61 |
+| Successful measured requests | 3,644 | 3,319 |
+| Measured errors | 5 / 3,649 | 8 / 3,327 |
+
+Server logs verify FP8 projection, cached FMHA and causal FMHA on all eight
+workers. Causal attention reuses prepared FP8 Q/K/V; it adds no second quantization
+pass. Actual server configuration confirms DSpark MTP, despite the summary's
+inconsistent `spec_decoding=none` field. The current host is `pit2-p03-g25`;
+the established host was `pit2-p03-g15`. The user confirmed identical servers
+and declined an extra server/control run. Request populations, output lengths
+and cache hits differ, so this is not an isolated causal-kernel measurement.
+
+**Decision:** do not promote new-token FP8. Keep cached-only native PR #64288
+at `08e5d81a0d4fc76c20a97f9a517195db5a5dc5be`.
+[Native kernel validation 41036211097](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41036211097) passed recipe/launcher preflight
+but failed during wheel resolution, before numerical tests. HIP component
+version `7.15.26333` was incorrectly used to request `rocm715`; the ROCm 10
+Torch package identifies the correct `rocm100` release. The exact-base
+`a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df` rocm100 metadata exists.
+Harness fix `e7b3309859056b3bd39d7c54bd347f0df4e77244` derives the release
+from the Torch package and checks exact installed distribution versions.
+The old resolver reproduced HTTP 404; the corrected resolver passed that case.
+Full CPU checks precede the next GPU attempt; native kernel/model results
+remain pending. The original captured-BF16 LSE gate remains unresolved.
+
+[Performance evidence](../../results/atom-attention/run40804432321/attempt2-performance-evidence.json).
+
 ## GPU diagnostics passed; full runs queued
 
 Source: `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`.

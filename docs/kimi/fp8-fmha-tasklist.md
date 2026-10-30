@@ -2,6 +2,45 @@
 
 **English** | [中文](./fp8-fmha-tasklist_zh.md)
 
+## Result and native candidate: 2026-10-30
+
+[Attempt 2](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804432321/job/123956986964) completed successfully with no quota annotations.
+Full C48 + MTP new-token FP8 measured **15,264.82341 total tokens/s/GPU**,
+a **12.30182% regression** against **17,406.08912**.
+
+| Metric | Established cached FP8 | With new-token FP8 |
+| --- | ---: | ---: |
+| Total tokens/s/GPU | 17,406.08912 | 15,264.82341 |
+| Output tokens/s/GPU | 120.16691 | 100.53104 |
+| Mean TTFT, seconds | 1.76809 | 2.01387 |
+| p95 TTFT, seconds | 4.36319 | 5.43159 |
+| Mean TPOT, milliseconds | 23.15 | 28.61 |
+| Successful measured requests | 3,644 | 3,319 |
+| Measured errors | 5 / 3,649 | 8 / 3,327 |
+
+Server logs verify FP8 projection, cached FMHA and causal FMHA on all eight
+workers. Causal attention reuses prepared FP8 Q/K/V; it adds no second quantization
+pass. Actual server configuration confirms DSpark MTP, despite the summary's
+inconsistent `spec_decoding=none` field. The current host is `pit2-p03-g25`;
+the established host was `pit2-p03-g15`. The user confirmed identical servers
+and declined an extra server/control run. Request populations, output lengths
+and cache hits differ, so this is not an isolated causal-kernel measurement.
+
+**Decision:** do not promote new-token FP8. Keep cached-only native PR #64288
+at `08e5d81a0d4fc76c20a97f9a517195db5a5dc5be`.
+[Native kernel validation 41036211097](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41036211097) passed recipe/launcher preflight
+but failed during wheel resolution, before numerical tests. HIP component
+version `7.15.26333` was incorrectly used to request `rocm715`; the ROCm 10
+Torch package identifies the correct `rocm100` release. The exact-base
+`a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df` rocm100 metadata exists.
+Harness fix `e7b3309859056b3bd39d7c54bd347f0df4e77244` derives the release
+from the Torch package and checks exact installed distribution versions.
+The old resolver reproduced HTTP 404; the corrected resolver passed that case.
+Full CPU checks precede the next GPU attempt; native kernel/model results
+remain pending. The original captured-BF16 LSE gate remains unresolved.
+
+[Performance evidence](../../results/atom-attention/run40804432321/attempt2-performance-evidence.json).
+
 ## Resumed retry: 2026-10-30
 
 The user restarted [run 40804432321, attempt 2](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40804432321/job/123956986964).
@@ -80,8 +119,8 @@ These are prototype results. Exact native-PR GPU validation is still pending; th
 
 ## Remaining work in order
 
-1. [ ] **Recover and complete the new-token performance measurement:** GPU job 122927005395 in [40719654583](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40719654583) failed on runner disk quota at 16:50:55 UTC. No benchmark artifact was uploaded; no new-token uplift is established. [Recovery job 40730725939](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/40730725939) failed before executing any steps: the runner lost communication with GitHub. No files were deleted and no results recovered. GPU work needs restored runner storage/connectivity or the requested SSH hostname/user. Recover evidence before repository-scoped cleanup or a full rerun. The intended comparison remains source `bb8bed732f514fd697856c5abd1d2bdd9d56a1e5`, C48 + MTP, against **17,406.08912**.
-2. [ ] **Conditional native integration:** if the new-token result shows uplift, add the prepared new-token FP8 implementation to PR #64288. Otherwise retain the established cached-context implementation for native validation. The candidate is isolated in the fork branch `checks/fp8-mla-causal-20261028`; its PR branch has not changed.
+1. [x] **New-token full performance completed:** 15,264.82341 total tokens/s/GPU, -12.30182%; evidence and limits are recorded above.
+2. [x] **Native candidate selected:** retain cached-only PR revision `08e5d81a0d4fc76c20a97f9a517195db5a5dc5be`; do not promote causal FP8. Native GPU validation continues after the setup correction.
 3. [ ] **Native GPU correctness:** run the final native implementation through projection/FMHA numerical checks, causal masking if included, nonunit scales, exact FP8 execution checks, changed-input graph replay, and `VLLM_GPU_SYNC_CHECK=error` in serving. Resolve the captured-BF16 LSE issue without loosening the gate merely to pass.
 4. [ ] **Native full GSM8K:** 1,319 questions, five-shot, temperature 0, real speculative verification. Record the exact native commit and prove the intended cached/causal paths execute on all eight workers during evaluation.
 5. [ ] **Native full performance:** run the final native source at C48 with MTP under the established workload and runtime settings. Report throughput, TTFT, TPOT, and measured request errors separately from prototype results.

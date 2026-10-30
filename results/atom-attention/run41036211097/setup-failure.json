@@ -1,0 +1,17 @@
+{
+  "run_id": 41036211097,
+  "job_id": 123997562436,
+  "artifact_id": 12967364596,
+  "native_sha": "08e5d81a0d4fc76c20a97f9a517195db5a5dc5be",
+  "workflow_sha": "3b035b869ce195ca111830494406e689ca0e27ac",
+  "precompiled_base": "a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df",
+  "status": "setup_failed",
+  "gpu_tests_executed": false,
+  "hip": "7.15.26333",
+  "torch": "2.13.0+rocm10.0.0",
+  "triton_module_version": "3.8.0",
+  "incorrect_variant": "rocm715",
+  "correct_variant": "rocm100",
+  "fix_commit": "e7b3309859056b3bd39d7c54bd347f0df4e77244",
+  "cpu_ci_pending": true
+}

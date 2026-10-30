@@ -1,0 +1,341 @@
+{
+  "run_id": 40804432321,
+  "attempt": 2,
+  "job_id": 123956986964,
+  "conclusion": "success",
+  "recorded_at_utc": "2026-10-30T09:57:14.827163+00:00",
+  "execution_source": "bb8bed732f514fd697856c5abd1d2bdd9d56a1e5",
+  "workflow_source": "75a52838ee8fa89461dc812913eb71b370b839bd",
+  "implementation": "plugin, not native PR #64288",
+  "host": "pit2-p03-g25",
+  "established_host": "pit2-p03-g15",
+  "summary_artifact_id": 12968365530,
+  "raw_artifact_id": 12968385519,
+  "server_log_artifact_id": 12967651828,
+  "summary": {
+    "hw": "",
+    "conc": 48,
+    "image": "vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce",
+    "recipe_fingerprint": "",
+    "model": "moonshotai/Kimi-K3",
+    "infmax_model_prefix": "kimik3",
+    "framework": "",
+    "precision": "",
+    "spec_decoding": "none",
+    "disagg": false,
+    "scenario_type": "agentic-coding",
+    "is_multinode": false,
+    "num_gpus": 8,
+    "tp": 8,
+    "ep": 1,
+    "dp_attention": "false",
+    "kv_offloading": "dram",
+    "kv_offload_backend": {
+      "name": "vllm-simple"
+    },
+    "allocated_cpu_dram_gb": 2249,
+    "num_requests_total": 3858,
+    "num_requests_successful": 3319,
+    "request_accounting": {
+      "records_total": 3858,
+      "records_profiled": 3319,
+      "records_dropped_total": 539,
+      "records_warmup_dropped": 531,
+      "records_error_dropped": 432,
+      "error_categories": {
+        "InvalidInferenceResultError": 431,
+        "ClientOSError": 1
+      }
+    },
+    "pp": 1,
+    "dcp_size": 8,
+    "pcp_size": 1,
+    "dataset": {
+      "source_type": "public_dataset",
+      "loader": "semianalysis_cc_traces_weka_062126",
+      "hf_dataset_name": "semianalysisai/cc-traces-weka-062126",
+      "hf_split": "train",
+      "num_dataset_entries": 393
+    },
+    "request_metrics": {
+      "qps": {
+        "window_seconds": 1,
+        "samples": 3624,
+        "mean": 0.91556,
+        "p50": 1,
+        "p75": 1,
+        "p90": 2,
+        "p95": 3,
+        "std": 1.07579
+      },
+      "latency": {
+        "ttft": {
+          "mean": 2.01387,
+          "p50": 1.41188,
+          "p75": 2.10238,
+          "p90": 3.42235,
+          "p95": 5.43159,
+          "std": 2.23838
+        },
+        "e2el": {
+          "mean": 20.93496,
+          "p50": 9.20596,
+          "p75": 21.04601,
+          "p90": 45.23969,
+          "p95": 76.19071,
+          "std": 37.42126
+        },
+        "itl": {
+          "mean": 0.02861,
+          "p50": 0.03063,
+          "p75": 0.03997,
+          "p90": 0.04884,
+          "p95": 0.05483,
+          "std": 0.01882
+        },
+        "tpot": {
+          "mean": 0.02861,
+          "p50": 0.03063,
+          "p75": 0.03997,
+          "p90": 0.04884,
+          "p95": 0.05483,
+          "std": 0.01882
+        },
+        "intvty": {
+          "mean": 34.95358,
+          "p50": 32.65066,
+          "p75": 25.02031,
+          "p90": 20.47388,
+          "p95": 18.23671,
+          "std": 2399.81436
+        },
+        "e2e_norm_intvty": {
+          "mean": 24.73503,
+          "p50": 26.73528,
+          "p75": 20.91362,
+          "p90": 16.17253,
+          "p95": 12.77696,
+          "std": 316.7126
+        },
+        "full_response_itl": {},
+        "full_response_intvty": {}
+      },
+      "tokens": {
+        "input": {
+          "mean": 132610.24827,
+          "p50": 91458,
+          "p75": 154437.5,
+          "p90": 259659.8,
+          "p95": 479115.2,
+          "std": 131339.94745
+        },
+        "output_actual": {
+          "mean": 879.13408,
+          "p50": 360,
+          "p75": 928,
+          "p90": 2119.2,
+          "p95": 3543.7,
+          "std": 1571.86151
+        },
+        "output_expected": {
+          "mean": 1259.33498,
+          "p50": 561.5,
+          "p75": 1509,
+          "p90": 3360,
+          "p95": 4626.45,
+          "std": 1933.66216
+        }
+      },
+      "throughput": {
+        "input": {
+          "tokens_per_second": 121314.339
+        },
+        "output": {
+          "tokens_per_second": 804.24832
+        },
+        "total": {
+          "tokens_per_second": 122118.58732
+        },
+        "duration_seconds": 3628.04115,
+        "per_gpu": {
+          "total_tput_tps": 15264.82341,
+          "output_tput_tps": 100.53104,
+          "input_tput_tps": 15164.29237
+        }
+      },
+      "cache": {
+        "theoretical_cache_hit_rate": 0.97055
+      }
+    },
+    "server_metrics": {
+      "present": true,
+      "adapter": "vllm",
+      "metric_count": 63,
+      "cache": {
+        "gpu_cache_hit_rate": 0.84801,
+        "cpu_cache_hit_rate": 0.08264,
+        "external_cache_hit_rate": 0.08264,
+        "overall_cache_hit_rate": 0.93065,
+        "prefix_cache_hits": 469673472,
+        "prefix_cache_queries": 553851696,
+        "external_prefix_cache_hits": 45769728,
+        "external_prefix_cache_queries": 84178224,
+        "cached_tokens_by_source": {},
+        "frontend_cache_hit_rate": null,
+        "router_kv_hit_rate": null,
+        "router_shared_cache_hit_rate": null,
+        "frontend_cached_tokens": null,
+        "frontend_input_tokens": null
+      },
+      "kv_cache": {
+        "gpu_usage_pct": 0.67689,
+        "gpu_total_tokens": 22695620,
+        "cpu_usage_pct": null,
+        "cpu_used_tokens": null,
+        "cpu_total_tokens": null
+      },
+      "kv_offload": {
+        "bytes_gpu_to_cpu": null,
+        "bytes_cpu_to_gpu": null,
+        "time_gpu_to_cpu": null,
+        "time_cpu_to_gpu": null,
+        "bandwidth_gpu_to_cpu_bytes_per_second": null,
+        "bandwidth_cpu_to_gpu_bytes_per_second": null
+      },
+      "tokens": {
+        "prompt_total": 553851696,
+        "generation_total": 3142991,
+        "requests_completed": 3319,
+        "prompt_by_source": {
+          "gpu_cache_hit": 469673472,
+          "cpu_or_external_cache_hit": 45769728,
+          "computed": 38408496,
+          "raw": {
+            "external_kv_transfer": 45769728,
+            "local_cache_hit": 469673472,
+            "local_compute": 38408496
+          }
+        }
+      },
+      "sources": [
+        {
+          "id": "combined|http://127.0.0.1:8897/metrics|engine=0",
+          "role": "combined",
+          "prompt_tokens": 553851696,
+          "generation_tokens": 3142991,
+          "prefix_cache_hit_rate": 0.84801,
+          "gpu_kv_cache_usage_pct": 0.67689
+        }
+      ]
+    },
+    "kv_cache_pool_tokens": 22695620,
+    "power_metric_schema_version": 2,
+    "power_valid": 1,
+    "avg_power_w": 996.863,
+    "p75_power_w": 1065.047,
+    "p75_total_gpu_power_w": 8520.379,
+    "p90_power_w": 1133.322,
+    "p90_total_gpu_power_w": 9066.573,
+    "avg_total_gpu_power_w": 7974.907,
+    "total_gpu_energy_j": 29028671.692,
+    "joules_per_successful_query": 8746.210211,
+    "joules_per_input_token": 0.065954,
+    "joules_per_output_token": 9.948665,
+    "joules_per_total_token": 0.06552
+  },
+  "execution_proof": {
+    "projection": {
+      "pids": [
+        1921,
+        1922,
+        1923,
+        1924,
+        1925,
+        1926,
+        1927,
+        1928
+      ],
+      "sample": "[ATOM-FP8-UP-PROJECTION] pid=1923 kernel=gather_kv_b_proj_flydsl weight=E4M3 cache=E4M3 output=E4M3 preshuffled=True linear_kernel=AiterPreshuffledPerTokenFp8ScaledMMLinearKernel",
+      "count": 192
+    },
+    "cached": {
+      "pids": [
+        1921,
+        1922,
+        1923,
+        1924,
+        1925,
+        1926,
+        1927,
+        1928
+      ],
+      "sample": "[ATOM-FP8-ENGAGED] pid=1923 stage=cached_context q=(7680, 12, 192) k=(15360, 12, 192) v=(15360, 12, 128) input=BF16_Q_FP8_KV fmha=E4M3 output=BF16 direct_kv=1",
+      "count": 8
+    },
+    "causal": {
+      "pids": [
+        1921,
+        1922,
+        1923,
+        1924,
+        1925,
+        1926,
+        1927,
+        1928
+      ],
+      "sample": "[ATOM-FP8-ENGAGED] pid=1922 stage=new_tokens q=(7680, 12, 192) k=(7680, 12, 192) v=(7680, 12, 128) input=BF16 fmha=E4M3 output=BF16 causal=True lse=True api=aiter.ops.flydsl.flydsl_flash_attn_fp8_func",
+      "count": 8
+    }
+  },
+  "execution_proof_scope": "One-time successful calls on eight worker PIDs; not steady-state kernel residency.",
+  "measured_errors": {
+    "requests": 3327,
+    "count": 8,
+    "percentage": 0.24045686804929367
+  },
+  "warmup": {
+    "records": 531,
+    "errors": 424
+  },
+  "raw_phase_counts": {
+    "warmup": 531,
+    "profiling": 3327
+  },
+  "comparison_run": 40695099743,
+  "comparison": {
+    "total_tps_gpu": {
+      "established": 17406.08912,
+      "current": 15264.82341,
+      "change_pct": -12.301819755361565
+    },
+    "output_tps_gpu": {
+      "established": 120.16691,
+      "current": 100.53104,
+      "change_pct": -16.340496730755582
+    },
+    "mean_ttft_s": {
+      "established": 1.76809,
+      "current": 2.01387,
+      "change_pct": 13.900876086624535
+    },
+    "p95_ttft_s": {
+      "established": 4.36319,
+      "current": 5.43159,
+      "change_pct": 24.486671449100307
+    },
+    "mean_tpot_ms": {
+      "established": 23.150000000000002,
+      "current": 28.61,
+      "change_pct": 23.585313174945988
+    }
+  },
+  "decision": "Keep causal FP8 out of native PR; validate cached-only native revision 08e5d81a0d4fc76c20a97f9a517195db5a5dc5be.",
+  "limitations": [
+    "Replacement host; user confirmed identical hardware and declined a separate server/control run.",
+    "Completed request populations, output lengths and cache hits differ; this does not isolate causal-kernel time.",
+    "Causal path reuses FP8 Q/K/V and adds no second QKV quantization pass.",
+    "Performance uses synthetic speculative acceptance, not real model-accuracy scoring.",
+    "Summary spec_decoding=none is inconsistent with actual server configuration: DSpark, four draft tokens, synthetic acceptance 3.36.",
+    "Prototype GSM8K remains passed; exact native validation and historical captured-BF16 LSE criterion remain pending."
+  ]
+}
