@@ -1,0 +1,51 @@
+name: Native ROCm exact-operation environment diagnosis
+on:
+  push:
+    branches: [checks/native-rocm-exact-gemm-20261030]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Compare exact worker GEMM and Python environments
+        shell: bash
+        run: |
+          mkdir -p exact-runtime-diagnostics
+          docker run --rm --init --network none --ipc=host --shm-size=4g \
+            --name "native-rocm-exact-$GITHUB_RUN_ID" \
+            --device=/dev/kfd --device=/dev/dri \
+            --group-add "$(getent group video | cut -d: -f3)" \
+            --group-add "$(getent group render | cut -d: -f3)" \
+            -v "$GITHUB_WORKSPACE":/repo:ro \
+            -v "$GITHUB_WORKSPACE/exact-runtime-diagnostics":/evidence \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            --entrypoint python3 \
+            vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+            /repo/utils/atom_attention/rocm_exact_gemm_probe.py \
+            --output /evidence/exact-runtime.json 2>&1 | tee exact-runtime-diagnostics/probe.log
+      - name: Restore diagnostic evidence ownership
+        if: always()
+        shell: bash
+        run: |
+          diagnostic_root="$GITHUB_WORKSPACE/exact-runtime-diagnostics"
+          test ! -L "$diagnostic_root"
+          test "$(realpath -e -- "$diagnostic_root")" = "$(realpath -e -- "$GITHUB_WORKSPACE")/exact-runtime-diagnostics"
+          docker run --rm --network none --user 0:0 \
+            --mount "type=bind,source=$diagnostic_root,target=/repair" \
+            --entrypoint chown \
+            vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+            --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+      - name: Upload exact-operation runtime evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-rocm-exact-gemm-diagnosis
+          path: |
+            exact-runtime-diagnostics/exact-runtime.json
+            exact-runtime-diagnostics/probe.log
+          if-no-files-found: error
