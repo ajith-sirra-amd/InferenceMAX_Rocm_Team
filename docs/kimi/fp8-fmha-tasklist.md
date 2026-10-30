@@ -1,7 +1,31 @@
 # Kimi FP8 task list
 
-**English** | [中文](./fp8-fmha-tasklist_zh.md)
+**English** | [??](./fp8-fmha-tasklist_zh.md)
 
+
+## Pinned metadata fix and native accuracy retry: 2026-10-30
+
+PR #64288 now includes commit `492080779e9feea19308092b0aba0840e87c6115`.
+Run [41055998426](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41055998426)
+reached serving, then strict GPU synchronization validation rejected two existing
+metadata transfers: the cached DSpark KV pointer table and DCP context row indices.
+Both sites now use `async_tensor_h2d`; integer values, pointer caching, FP8 kernels,
+and the strict synchronization check are preserved. This is an applied code fix,
+not yet a native model accuracy pass.
+
+Full native [GSM8K retry 41064573708](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41064573708)
+is running on `mi355x-amd_pit2_p03_g07`. It uses exact execution revision
+`941b262404f15d5c55874304dfc54e655cf53010` and PR revision `4920807`.
+The fixed 1319-question, five-shot, temperature-zero evaluation retains C48,
+real MTP verification, eager/512-token stress routing, and
+`VLLM_GPU_SYNC_CHECK=error`. FP8 up-projection and cached-context FMHA execution
+must be demonstrated on all eight workers. New-token attention remains BF16.
+
+[Static checks 41064827427](https://github.com/ajith-sirra-amd/vllm/actions/runs/41064827427)
+include both modified metadata files and the existing native FP8 patch files,
+with exact-source comparisons to PR `4920807`. Results are pending.
+The new-token FP8 performance regression and historical absolute LSE gate remain
+separate unresolved tasks. PR #64288 remains draft.
 
 ## Runtime fix and native accuracy retry: 2026-10-30
 

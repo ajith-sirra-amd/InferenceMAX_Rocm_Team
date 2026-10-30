@@ -1,0 +1,13 @@
+{
+    "static_run_id":  41064827427,
+    "static_sha":  "482df64621aaa5b8525aae624623e652e0c3e9e7",
+    "execution_sha":  "941b262404f15d5c55874304dfc54e655cf53010",
+    "scope":  "Full native GSM8K, fixed 1319, five-shot, temperature zero; C48 with real MTP verification; eager/512-token stress; eight-worker optimized-path evidence and strict GPU synchronization check",
+    "attempt":  1,
+    "job_id":  124092675927,
+    "causal_fp8":  false,
+    "status":  "running; no accuracy result",
+    "workflow_sha":  "2dbad427d99717edf16e4b1fb2147087e6bc5c88",
+    "run_id":  41064573708,
+    "native_sha":  "492080779e9feea19308092b0aba0840e87c6115"
+}
