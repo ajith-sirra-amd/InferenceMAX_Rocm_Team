@@ -186,11 +186,18 @@ def main():
         record["precompiled_metadata"] = wheel_metadata
         run(["uv", "pip", "install", "--python", python, "--no-build-isolation",
              "--no-deps", "--editable", "."], cwd=source, env=env)
+        # The image's system-site vLLM can precede setuptools' editable finder.
+        # Pin source imports for the CLI and spawned workers, independent of cwd.
+        env["PYTHONPATH"] = str(source)
         provenance_code = (
-            "import json,pathlib,torch,vllm,aiter; "
+            "import json,pathlib,sys,torch,vllm,aiter; "
             "from vllm.platforms import current_platform; "
-            "root=pathlib.Path.cwd().resolve(); "
-            "assert pathlib.Path(vllm.__file__).resolve().is_relative_to(root); "
+            "from vllm.entrypoints.cli import main as cli; "
+            "from vllm.v1.attention.ops import rocm_aiter_mla_fp8_prefill as fp8; "
+            "root=pathlib.Path(sys.argv[1]).resolve(); "
+            "assert pathlib.Path.cwd().resolve() != root; "
+            "assert all(pathlib.Path(m.__file__).resolve().is_relative_to(root) "
+            "for m in (vllm,cli,fp8)); "
             "assert current_platform.is_rocm() and torch.cuda.is_available(); "
             "assert torch.cuda.device_count()==8; "
             "assert all('gfx950' in torch.cuda.get_device_properties(i).gcnArchName "
@@ -199,7 +206,7 @@ def main():
             "'vllm_file':vllm.__file__,'aiter_file':aiter.__file__,"
             "'gpus':[torch.cuda.get_device_name(i) for i in range(8)]}))"
         )
-        record["environment"] = run([python, "-c", provenance_code], cwd=source,
+        record["environment"] = run([python, "-c", provenance_code, source], cwd=root,
                                     env=env, capture=True)
         source_hashes = {
             p: hashlib.sha256((source / p).read_bytes()).hexdigest()
@@ -214,7 +221,8 @@ def main():
             import shlex
             exports = {
                 name: env[name] for name in (
-                    "UV_CACHE_DIR", "XDG_CACHE_HOME", "HF_HOME", "PYTHONPYCACHEPREFIX",
+                    "PYTHONPATH", "UV_CACHE_DIR", "XDG_CACHE_HOME", "HF_HOME",
+                    "PYTHONPYCACHEPREFIX",
                     "TMPDIR", "TRITON_CACHE_DIR", "VLLM_ROCM_USE_AITER",
                     "VLLM_ROCM_USE_AITER_LINEAR",
                     "VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN",
