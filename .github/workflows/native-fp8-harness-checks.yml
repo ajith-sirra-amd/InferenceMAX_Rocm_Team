@@ -28,8 +28,17 @@ jobs:
       - name: Check native validation behavior
         run: |
           python3 -m venv .ci-env
-          .ci-env/bin/python -m pip install pytest
+          .ci-env/bin/python -m pip install pytest pyyaml
           .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py --junitxml=native-harness-checks.xml
+          .ci-env/bin/python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          import yaml
+          workflow = yaml.safe_load(Path('.github/workflows/e2e-tests.yml').read_text())
+          for step in workflow['jobs']['inspect-runner']['steps']:
+              if 'run' in step:
+                  subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
+          PY
           bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
           bash -n runners/launch_mi355x-amd.sh
           .ci-env/bin/python utils/test_mi355x_container_launcher.py

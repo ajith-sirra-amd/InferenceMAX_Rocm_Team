@@ -141,6 +141,21 @@ jobs:
       runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
       timeout-minutes: 90
       steps:
+        - name: Restore previous native validation ownership
+          if: ${{ inputs.native-vllm-sha != '' }}
+          shell: bash
+          run: |
+            native_root="$GITHUB_WORKSPACE/.native-fp8-validation"
+            if [ -d "$native_root" ]; then
+              test ! -L "$native_root"
+              workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+              test "$(realpath -e -- "$native_root")" = "$workspace_real/.native-fp8-validation"
+              docker run --rm --network none --user 0:0 \
+                --mount "type=bind,source=$native_root,target=/repair" \
+                --entrypoint chown \
+                vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+                --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+            fi
         - name: Checkout inspection code
           uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
           with:
@@ -217,6 +232,21 @@ jobs:
               vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
               /repo/utils/atom_attention/native_vllm_gpu_validate.py \
               --native-sha "$NATIVE_VLLM_SHA"
+        - name: Restore native validation ownership
+          if: ${{ always() && inputs.native-vllm-sha != '' }}
+          shell: bash
+          run: |
+            native_root="$GITHUB_WORKSPACE/.native-fp8-validation"
+            if [ -d "$native_root" ]; then
+              test ! -L "$native_root"
+              workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+              test "$(realpath -e -- "$native_root")" = "$workspace_real/.native-fp8-validation"
+              docker run --rm --network none --user 0:0 \
+                --mount "type=bind,source=$native_root,target=/repair" \
+                --entrypoint chown \
+                vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+                --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+            fi
         - name: Upload native GPU validation evidence
           if: ${{ always() && inputs.native-vllm-sha != '' }}
           uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
