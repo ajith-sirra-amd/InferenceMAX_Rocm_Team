@@ -127,13 +127,13 @@ def main():
         "XDG_CACHE_HOME": str(root / "cache"),
         "HF_HOME": str(root / "cache" / "huggingface"),
         "PYTHONPYCACHEPREFIX": str(root / "cache" / "pycache"),
-        "TMPDIR": str(root / "tmp"),
         "TRITON_CACHE_DIR": str(root / "cache" / "triton"),
         "VLLM_ROCM_USE_AITER": "1",
         "VLLM_ROCM_USE_AITER_LINEAR": "1",
         "VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN": "1",
     })
-    Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
+    # Preserve the container temporary directory: repository-backed TMPDIR
+    # reproduced ROCm compressed-code-object load failures (run 41054684302).
     if not shutil.which("uv"):
         raise RuntimeError("The diagnostic container must provide uv")
     record = {"native_sha": args.native_sha, "require_causal": args.require_causal,
@@ -166,13 +166,13 @@ def main():
              "setuptools-scm>=8", "setuptools-rust", "wheel", "packaging",
              "pytest", "pytest-asyncio", "pytest-forked", "tblib"], cwd=source, env=env)
         runtime_code = (
-            "import json,torch,triton; from packaging.tags import sys_tags; "
+            "import json,torch,triton,tempfile; from packaging.tags import sys_tags; "
             "from importlib.metadata import version; "
             "from packaging.version import Version; "
             "assert Version(torch.__version__).public == Version(version('torch')).public; "
             "assert Version(triton.__version__).public == Version(version('triton')).public; "
             "print(json.dumps({'torch':version('torch'),'hip':torch.version.hip,"
-            "'triton':version('triton'),'module_versions':"
+            "'triton':version('triton'),'temporary_directory':tempfile.gettempdir(),'module_versions':"
             "{'torch':torch.__version__,'triton':triton.__version__},"
             "'tags':[str(t) for t in sys_tags()]}))"
         )
@@ -223,7 +223,7 @@ def main():
                 name: env[name] for name in (
                     "PYTHONPATH", "UV_CACHE_DIR", "XDG_CACHE_HOME", "HF_HOME",
                     "PYTHONPYCACHEPREFIX",
-                    "TMPDIR", "TRITON_CACHE_DIR", "VLLM_ROCM_USE_AITER",
+                    "TRITON_CACHE_DIR", "VLLM_ROCM_USE_AITER",
                     "VLLM_ROCM_USE_AITER_LINEAR",
                     "VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN",
                 )
