@@ -52,6 +52,18 @@ def test_exact_wheel_resolution(runtime):
     assert packages["torch"]["wheel_version"] == "2.13.0+rocm10.0.0"
 
 
+def test_rocm_release_is_not_the_hip_component_version(runtime):
+    """ROCm 10 ships HIP 7.15; selecting rocm715 returns a real-world 404."""
+    def response(url, timeout):
+        if "/rocm100/" not in url:
+            raise HTTPError(url, 404, "Not Found", {}, None)
+        return wheel_response(url, timeout)
+
+    with patch("urllib.request.urlopen", side_effect=response):
+        url, _ = resolve_exact_rocm_wheel(SHA, runtime | {"hip": "7.15.26333"})
+    assert "/rocm100-wheels/" in url
+
+
 @pytest.mark.parametrize("failure", ["metadata_version", "filename_abi"])
 def test_wheel_filename_must_match_metadata_and_runtime(runtime, failure):
     def response(url, timeout):
@@ -72,6 +84,7 @@ def test_wheel_filename_must_match_metadata_and_runtime(runtime, failure):
     {"torch": "2.12.0"},
     {"torch": "2.13.0+rocm10.0.1"},
     {"triton": "3.7.0"},
+    {"triton": "3.8.0"},  # Dropping the wheel's git revision must still fail.
     {"tags": ["cp311-cp311-manylinux_2_39_x86_64"]},
     {"hip": None},
 ])

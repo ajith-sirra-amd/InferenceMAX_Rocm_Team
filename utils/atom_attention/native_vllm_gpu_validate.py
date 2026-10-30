@@ -36,12 +36,22 @@ def resolve_exact_rocm_wheel(commit, runtime):
     hip = re.match(r"(\d+)\.(\d+)", runtime["hip"] or "")
     if hip is None:
         raise RuntimeError("Cannot identify the installed ROCm version")
-    variant = "rocm" + "".join(hip.groups())
+    # HIP's component version can differ from the ROCm release (for example,
+    # HIP 7.15 in the ROCm 10 image). The Torch wheel records the release.
+    release = re.search(
+        r"(?:^|\.)rocm(\d+)\.(\d+)(?:\.|$)",
+        Version(runtime["torch"]).local or "",
+    )
+    if release is None:
+        raise RuntimeError("Torch wheel does not identify its ROCm release")
+    variant = "rocm" + "".join(release.groups())
     index = f"https://wheels.vllm.ai/rocm/{commit}/{variant}/"
     supported_tags = set(runtime["tags"])
     selected = {}
     for package in ("vllm", "torch", "triton"):
-        with urlopen(index + package + "/metadata.json", timeout=30) as response:
+        metadata_url = index + package + "/metadata.json"
+        print("NATIVE_WHEEL_METADATA", metadata_url, flush=True)
+        with urlopen(metadata_url, timeout=30) as response:
             entries = json.load(response)
         compatible = []
         for entry in entries:
@@ -157,17 +167,23 @@ def main():
              "pytest", "pytest-asyncio", "pytest-forked", "tblib"], cwd=source, env=env)
         runtime_code = (
             "import json,torch,triton; from packaging.tags import sys_tags; "
-            "print(json.dumps({'torch':torch.__version__,'hip':torch.version.hip,"
-            "'triton':triton.__version__,'tags':[str(t) for t in sys_tags()]}))"
+            "from importlib.metadata import version; "
+            "from packaging.version import Version; "
+            "assert Version(torch.__version__).public == Version(version('torch')).public; "
+            "assert Version(triton.__version__).public == Version(version('triton')).public; "
+            "print(json.dumps({'torch':version('torch'),'hip':torch.version.hip,"
+            "'triton':version('triton'),'module_versions':"
+            "{'torch':torch.__version__,'triton':triton.__version__},"
+            "'tags':[str(t) for t in sys_tags()]}))"
         )
         runtime_output = run([python, "-c", runtime_code], cwd=source,
                              env=env, capture=True)
         runtime = json.loads(runtime_output.strip().splitlines()[-1])
+        record["binary_runtime"] = {k: v for k, v in runtime.items() if k != "tags"}
         wheel_url, wheel_metadata = resolve_exact_rocm_wheel(base, runtime)
         env["VLLM_PRECOMPILED_WHEEL_LOCATION"] = wheel_url
         record["precompiled_wheel"] = wheel_url
         record["precompiled_metadata"] = wheel_metadata
-        record["binary_runtime"] = {k: v for k, v in runtime.items() if k != "tags"}
         run(["uv", "pip", "install", "--python", python, "--no-build-isolation",
              "--no-deps", "--editable", "."], cwd=source, env=env)
         provenance_code = (
