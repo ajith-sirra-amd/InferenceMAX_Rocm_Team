@@ -1,0 +1,15 @@
+{
+  "run_id": 41048209579,
+  "job_id": 124037618152,
+  "native_sha": "2f946cbab5000dedef23b117df991417e8917315",
+  "harness_sha": "c646e91892bc4b8849e33ce7c3ec15e9df6955c4",
+  "status": "failed_before_model_execution",
+  "artifact_ids": [
+    12973463231,
+    12972884997
+  ],
+  "import_fix": "confirmed: CLI and native module imported from exact checkout; model and DSpark configuration resolved",
+  "error": "ZMQ IPC socket path exceeds the Linux 107-byte sockaddr_un.sun_path limit. TMPDIR inherited the full benchmark filename.",
+  "fix": "Use a short, unique repository-local native working directory via mktemp; retain full benchmark identity in artifacts.",
+  "gsm8k_score": null
+}

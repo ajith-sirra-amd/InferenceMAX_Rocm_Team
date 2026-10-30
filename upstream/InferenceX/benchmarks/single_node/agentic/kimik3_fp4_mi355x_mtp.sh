@@ -39,7 +39,9 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
     done
     unset task_atom_env
     mkdir -p "$RESULT_DIR"
-    native_work_dir="/outputs/.native-fp8-validation/$RESULT_FILENAME"
+    # Unix-domain IPC socket paths must fit sockaddr_un.sun_path (107 bytes).
+    mkdir -p /outputs/.native-fp8-validation
+    native_work_dir="$(mktemp -d /outputs/.native-fp8-validation/serve.XXXXXXXX)"
     python3 /outputs/utils/atom_attention/native_vllm_gpu_validate.py \
         --native-sha "$NATIVE_VLLM_SHA" --prepare-only \
         --work-dir "$native_work_dir" 2>&1 | tee "$RESULT_DIR/native_setup.log"
