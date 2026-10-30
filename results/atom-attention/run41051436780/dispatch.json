@@ -1,0 +1,7 @@
+{
+  "run_id": 41051436780,
+  "native_sha": "2f946cbab5000dedef23b117df991417e8917315",
+  "harness_sha": "415ea45b8a8a177c01c14f4559b6f40cc6f4fcb0",
+  "prerequisite_run_id": 41051172001,
+  "scope": "full native GSM8K, fixed task, real MTP, eager/512-token accuracy stress, all-worker proof and GPU synchronization check"
+}

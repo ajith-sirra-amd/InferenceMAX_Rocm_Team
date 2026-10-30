@@ -4,40 +4,44 @@
 
 ## Latest native validation: 2026-10-30
 
-Native [GPU run 41044413189](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41044413189)
-passed **8 tests, 0 failures, 0 errors, 0 skips** at PR revision
-`332d6c99acd5281098f1fc3e2a00cd06ef866a0d`. Coverage includes quantization,
-plain/shuffled projection and FMHA, changed-input graph replay, native weight
-loading and forward-state cleanup. This is GPU-0 kernel evidence, not eight-worker
-model execution. [Machine-readable evidence](../../results/atom-attention/run41044413189/native-kernel-evidence.json).
+- Native [GPU run 41044413189](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41044413189): **8 passed, 0 failed, 0 errors, 0 skips**, at PR `332d6c9`. Quantization, plain/shuffled projection and FMHA, changed-input graph replay, native weight loading and state cleanup passed. This is GPU-0 kernel evidence, not eight-worker model execution.
+- Current PR `2f946cbab5000dedef23b117df991417e8917315` formats two test expressions only; executable AST matches the GPU-tested test and production files are unchanged.
+- [Static run 41046262627](https://github.com/ajith-sirra-amd/vllm/actions/runs/41046262627): all applicable targeted pre-commit hooks, Ruff, mypy, Markdown, SPDX, Buildkite registration, AST/YAML and exact-source checks passed. Artifact `12973200163`.
+- Upstream pre-commit requires contributor approval. ReadTheDocs build 35521392 stopped on this failed prerequisite before building the docs. Fork checks do not replace upstream CI.
+- Full native [GSM8K run 41051436780](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41051436780): dispatched at PR `2f946cb`, harness `415ea45b8a8a177c01c14f4559b6f40cc6f4fcb0`. Fixed 1,319 questions, five-shot, temperature zero, C48 + MTP with real verification; eager/512-token accuracy stress routing; `VLLM_GPU_SYNC_CHECK=error`; requires FP8 projection/cached-FMHA proof on eight workers. New-token attention remains BF16. No native GSM8K score yet.
 
-Earlier run 41037832511 passed 5/8; GPU FP64 reference GEMM failed and weight
-loading lacked TP setup. Run 41042897918 passed 7/8 after CPU FP64 references and
-the existing distributed fixture; its remaining GPU FP32 reference GEMM failed.
-The final reference runs on CPU FP64. GPU kernels and graph replay remain on GPU,
-and every numerical tolerance is unchanged. Fresh-process diagnostics reproduce
-both BLAS failures before importing FP8 kernels, including with
-`ROCBLAS_USE_HIPBLASLT=0`; serving-runtime compatibility is still to be checked.
+[Kernel evidence](../../results/atom-attention/run41044413189/native-kernel-evidence.json)
+and [current dispatch](../../results/atom-attention/run41051436780/dispatch.json).
 
-PR head `2f946cbab5000dedef23b117df991417e8917315` only formats two test expressions;
-its executable Python AST matches the GPU-tested test, and production files are
-unchanged. Static run 41044549904 failed on those two formatting expressions;
-all other applicable hooks passed. [Corrected static checks](https://github.com/ajith-sirra-amd/vllm/actions/runs/41046262627)
-are running against the new head.
+### Serving setup fixes, without changing native kernels
 
-Full native [GSM8K run 41046329246](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41046329246)
-is dispatched at that head with harness `8e79ba48de02f3a247ec94a658b992d1257cd4bf`:
-1,319 questions, five-shot, temperature zero, C48 + MTP with real verification,
-eager execution and explicitly disclosed 512-token accuracy stress routing.
-Requires optimized FP8 projection/cached FMHA evidence from all eight workers;
-`VLLM_GPU_SYNC_CHECK=error` is enabled. New-token causal attention remains BF16.
-No native model accuracy or native performance pass is claimed yet.
+[41046329246](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41046329246)
+failed before model execution: the image package shadowed editable native vLLM
+outside the source checkout. Fix `cf766e9` sets only the pinned checkout on
+`PYTHONPATH`, checks vLLM/CLI/FP8 imports from outside the checkout, and exports
+that source path to workers. [Failure evidence](../../results/atom-attention/run41046329246/setup-failure.json).
 
-The historical captured-BF16 absolute LSE <0.20 gate remains unresolved.
-New-token FP8 is excluded after the measured 12.30182% regression.
-The PR remains draft. Required follow-ups: native model/runtime results,
-the captured-input issue, native performance, matched reviewer comparisons,
-then profiling and the agreed concurrency sweeps.
+[41048209579](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41048209579)
+confirmed that import fix and resolved Kimi/DSpark configuration, then failed before
+model execution because the IPC path exceeded Linux's 107-byte socket-path limit.
+Fix `415ea45` uses a short unique repository-local working directory.
+The installation manifest now uploads with the artifacts. Neither attempt produced
+a GSM8K result. [Failure evidence](../../results/atom-attention/run41048209579/setup-failure.json).
+[Final harness CI 41051172001](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41051172001)
+passed 20 tests with no failures/errors/skips, plus recipe/launcher and workflow Bash checks.
+
+Earlier kernel runs passed 5/8 and 7/8. CPU FP64 reference calculations and the
+existing distributed fixture fixed those reference/setup failures; GPU kernels,
+graph replay, cases and tolerances are preserved. Fresh-process FP32/FP64 BLAS
+errors also reproduce before importing FP8 kernels, including with
+`ROCBLAS_USE_HIPBLASLT=0`; native serving compatibility remains to be established.
+
+The historical captured-BF16 absolute LSE <0.20 gate is unresolved. New-token FP8
+is excluded after its 12.30182% regression. PR #64288 stays draft. Required next
+work: native model/runtime validation, numerical closure, native performance and
+matched reviewer comparisons; then steady-state profiling and C56/C64 + MTP,
+C96 without MTP. #62447 is now closed/unmerged; its pinned implementation remains
+the requested comparison reference. Native NUMA changes remain postponed.
 
 The established 16915.72154 tokens/s/GPU run used BF16 kv_b_proj.
 Its cached attention path was FP8 cache -> BF16 projection -> BF16 K/V ->
