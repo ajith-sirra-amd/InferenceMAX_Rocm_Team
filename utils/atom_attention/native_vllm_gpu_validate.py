@@ -102,6 +102,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--native-sha", required=True)
     parser.add_argument("--require-causal", action="store_true")
+    parser.add_argument("--reference-comparison", action="store_true")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--work-dir", default="/work")
     args = parser.parse_args()
@@ -263,9 +264,14 @@ def main():
                 record["reference_blas_diagnostics"].append(observation)
                 print("NATIVE_REFERENCE_BLAS_DIAGNOSTIC", json.dumps(observation), flush=True)
         test_path = "tests/kernels/attention/test_rocm_aiter_mla_prefill_fusions.py"
+        test_paths = [test_path]
+        selection = "flydsl_fp8"
+        if args.reference_comparison:
+            test_paths.append("tests/kernels/attention/test_rocm_aiter_mla_flydsl_fp8_prefill.py")
+            selection = "flydsl_fp8 or fused_per_tensor_fp8"
         junit = evidence / "native-kernel-tests.xml"
         result = subprocess.run(
-            [str(python), "-m", "pytest", "-v", "-s", test_path, "-k", "flydsl_fp8",
+            [str(python), "-m", "pytest", "-v", "-s", *test_paths, "-k", selection,
              "--junitxml=" + str(junit)], cwd=source, env=env,
         )
         record["pytest_exit_code"] = result.returncode
@@ -278,6 +284,11 @@ def main():
             if isinstance(node, ast.FunctionDef) and node.name.startswith("test_flydsl_fp8")
         }
         actual_tests = {name.split("[", 1)[0] for name in record["test_names"]}
+        if args.reference_comparison:
+            expected_tests.update(
+                node.name for node in ast.parse((source / test_paths[1]).read_text()).body
+                if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
+            )
         if not expected_tests or not expected_tests.issubset(actual_tests):
             raise RuntimeError("Some selected native GPU tests did not execute")
         if not cases or any(case.find(tag) is not None for case in cases

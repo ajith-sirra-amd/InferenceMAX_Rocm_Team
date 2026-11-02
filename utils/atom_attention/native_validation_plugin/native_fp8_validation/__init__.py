@@ -6,17 +6,18 @@ from pathlib import Path
 import re
 
 MARKER = "NATIVE_FP8_EXECUTION "
-KINDS = {"projection", "cached_fmha", "causal_fmha"}
+KINDS = {"projection", "reference_projection", "cached_fmha", "causal_fmha"}
 _REGISTERED = False
 
 
-def validate_execution_log(text, workers, native_sha, *, require_causal, phase):
+def validate_execution_log(text, workers, native_sha, *, require_causal, phase,
+                           reference_projection=False):
     if workers <= 0 or not re.fullmatch(r"[0-9a-f]{40}", native_sha):
         raise ValueError("Expected positive worker count and exact native revision")
     if phase not in {"eval", "replay"}:
         raise ValueError("Expected eval or replay execution phase")
     stress_modes = set()
-    required = {"projection", "cached_fmha"}
+    required = {"reference_projection" if reference_projection else "projection", "cached_fmha"}
     if require_causal:
         required.add("causal_fmha")
     by_rank = {}
@@ -37,7 +38,10 @@ def validate_execution_log(text, workers, native_sha, *, require_causal, phase):
         kind = event.get("kind")
         if kind not in KINDS:
             raise ValueError("Unrecognized native FP8 execution event")
-        if event.get("dtype") != "torch.float8_e4m3fn" or event.get("nonempty") is not True:
+        if reference_projection and kind == "projection":
+            raise ValueError("Reference arm unexpectedly used direct FP8 projection")
+        expected_dtype = "torch.bfloat16" if kind == "reference_projection" else "torch.float8_e4m3fn"
+        if event.get("dtype") != expected_dtype or event.get("nonempty") is not True:
             raise ValueError("Execution evidence is not nonempty OCP FP8")
         if event.get("graph_capture") is not False:
             raise ValueError("Graph capture alone is not evaluation execution")
@@ -99,6 +103,8 @@ def register():
     if stress == "1":
         native.use_fp8_context = lambda query, context: query > 0 and context > 0
     phase_file = Path(os.environ["INFERENCEX_NATIVE_PHASE_FILE"])
+    expected_blas = os.getenv("INFERENCEX_NATIVE_EXPECT_BLAS")
+    reference_arm = os.getenv("INFERENCEX_NATIVE_COMPARISON") == "reference"
     emitted = set()
 
     def record(kind, tensors):
@@ -106,9 +112,14 @@ def register():
             return
         if torch.cuda.is_current_stream_capturing():
             return
-        if not all(t.dtype == torch.float8_e4m3fn and t.numel() for t in tensors):
+        dtype = torch.bfloat16 if kind == "reference_projection" else torch.float8_e4m3fn
+        if not all(t.dtype == dtype and t.numel() for t in tensors):
             raise RuntimeError("Native FP8 execution observer received other dtypes")
+        actual_blas = str(torch.backends.cuda.preferred_blas_library())
+        if expected_blas and actual_blas.lower().split(".")[-1] != expected_blas:
+            raise RuntimeError(f"Expected BLAS {expected_blas}, got {actual_blas}")
         event = {
+            "blas_backend": actual_blas,
             "native_sha": expected_sha,
             "kind": kind,
             "phase": phase_file.read_text().strip(),
@@ -126,6 +137,8 @@ def register():
 
     @functools.wraps(project)
     def observed_project(*args, **kwargs):
+        if reference_arm:
+            raise RuntimeError("Reference arm unexpectedly called direct FP8 projection")
         result = project(*args, **kwargs)
         if result[0].dtype == torch.float8_e4m3fn:
             record("projection", (args[0], args[3].weight, result[0], result[1]))
@@ -141,4 +154,17 @@ def register():
 
     native.project = observed_project
     flydsl.flydsl_flash_attn_fp8_func = observed_attention
+    if os.getenv("INFERENCEX_NATIVE_COMPARISON") in {"reference", "direct"}:
+        from vllm.v1.attention.backends.mla.prefill.aiter_flydsl_fp8 import (
+            AiterFlyDSLFP8PrefillBackend,
+        )
+        context = AiterFlyDSLFP8PrefillBackend.run_prefill_context_chunk
+
+        @functools.wraps(context)
+        def observed_context(self, chunk, q, k, v, *args, **kwargs):
+            result = context(self, chunk, q, k, v, *args, **kwargs)
+            record("reference_projection", (k, v))
+            return result
+
+        AiterFlyDSLFP8PrefillBackend.run_prefill_context_chunk = observed_context
     _REGISTERED = True

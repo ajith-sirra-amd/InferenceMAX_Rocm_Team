@@ -149,3 +149,28 @@ def test_incomplete_or_inapplicable_execution_is_rejected(events, failure):
         events = [dict(e, phase=phase) for e in events]
     with pytest.raises(ValueError):
         validate_execution_log(log_text(events), 8, SHA, require_causal=True, phase=phase)
+
+def test_reference_projection_requires_bf16_expansion_and_no_direct_calls(events):
+    baseline = [
+        dict(e, kind="reference_projection", dtype="torch.bfloat16")
+        if e["kind"] == "projection" else e for e in events
+    ]
+    validate_execution_log(
+        log_text(baseline), 8, SHA, require_causal=True, phase="eval",
+        reference_projection=True,
+    )
+    with pytest.raises(ValueError, match="unexpectedly used direct"):
+        validate_execution_log(
+            log_text(baseline + [events[0]]), 8, SHA,
+            require_causal=True, phase="eval", reference_projection=True,
+        )
+    with pytest.raises(ValueError, match="every required"):
+        validate_execution_log(
+            log_text(baseline), 8, SHA, require_causal=True, phase="eval",
+        )
+    baseline[0]["dtype"] = "torch.float8_e4m3fn"
+    with pytest.raises(ValueError, match="not nonempty"):
+        validate_execution_log(
+            log_text(baseline), 8, SHA, require_causal=True, phase="eval",
+            reference_projection=True,
+        )

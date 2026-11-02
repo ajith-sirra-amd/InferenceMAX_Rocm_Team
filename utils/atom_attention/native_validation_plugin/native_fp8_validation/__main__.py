@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--native-sha", required=True)
     parser.add_argument("--phase", required=True, choices=("eval", "replay"))
     parser.add_argument("--require-causal", action="store_true")
+    parser.add_argument("--reference-projection", action="store_true")
     args = parser.parse_args()
     proof = validate_execution_log(
         args.server_log.read_text(errors="replace"),
@@ -22,6 +23,7 @@ def main():
         args.native_sha,
         require_causal=args.require_causal,
         phase=args.phase,
+        reference_projection=args.reference_projection,
     )
     args.output.write_text(json.dumps(proof, indent=2) + "\n")
     print("NATIVE_FP8_EXECUTION_PROOF_PASS", json.dumps(proof), flush=True)

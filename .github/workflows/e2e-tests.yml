@@ -52,6 +52,11 @@ on:
                 required: false
                 type: string
                 default: ""
+            native-comparison:
+                description: "Matched reference comparison: native, reference, or direct"
+                required: false
+                type: string
+                default: "native"
             failure-fixture-run-id:
                 description: "Diagnostics only: replay atom_fp8_failure.pt from this run"
                 required: false
@@ -101,6 +106,11 @@ on:
                 required: false
                 type: string
                 default: ""
+            native-comparison:
+                description: "Matched reference comparison: native, reference, or direct"
+                required: false
+                type: string
+                default: "native"
             failure-fixture-run-id:
                 description: "Diagnostics only: replay atom_fp8_failure.pt from this run"
                 required: false
@@ -441,6 +451,7 @@ jobs:
             eval-only: ${{ inputs.agentic-eval-only }}
             attention-path-probe-only: ${{ inputs.attention-path-probe-only }}
             native-vllm-sha: ${{ inputs.native-vllm-sha }}
+            native-comparison: ${{ inputs.native-comparison }}
             scenario-type: agentic-coding
             ref: ${{ inputs.ref }}
 

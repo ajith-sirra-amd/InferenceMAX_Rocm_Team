@@ -33,6 +33,15 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
         exit 1
     fi
     NATIVE_MODE=1
+    check_env_vars INFERENCEX_NATIVE_COMPARISON
+    case "$INFERENCEX_NATIVE_COMPARISON" in
+        native|reference|direct) ;;
+        *) echo "Invalid native comparison mode" >&2; exit 1 ;;
+    esac
+    export TORCH_BLAS_PREFER_HIPBLASLT=0
+    export TORCH_BLAS_PREFER_CUBLASLT=0
+    export INFERENCEX_NATIVE_EXPECT_BLAS=cublas
+    export INFERENCEX_NATIVE_STACK_INTERVAL=0
     unset PYTHONPATH
     for task_atom_env in $(compgen -A variable ATOM_); do
         unset "$task_atom_env"
@@ -47,6 +56,13 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
         --native-sha "$NATIVE_VLLM_SHA" --prepare-only \
         --work-dir "$native_work_dir" 2>&1 | tee "$RESULT_DIR/native_setup.log"
     source "$native_work_dir/evidence/native-env.sh"
+    if [ "$INFERENCEX_NATIVE_COMPARISON" = "reference" ]; then
+        export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=0
+    fi
+    native_comparison_proof_args=()
+    if [ "$INFERENCEX_NATIVE_COMPARISON" = "reference" ]; then
+        native_comparison_proof_args=(--reference-projection)
+    fi
     export INFERENCEX_NATIVE_PHASE_FILE="$RESULT_DIR/native_fp8_phase"
     export INFERENCEX_NATIVE_ACCURACY_STRESS=0
     if [ "$EVAL_ONLY" = "true" ]; then
@@ -334,6 +350,9 @@ echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=
 
 if [ "$NATIVE_MODE" = "1" ]; then
     ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
+    if [ "$INFERENCEX_NATIVE_COMPARISON" != "native" ]; then
+        ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FLYDSL_FP8"}'
+    fi
 else
     ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"CUSTOM"}'
 fi
@@ -473,7 +492,7 @@ elif [ "$EVAL_ONLY" = "true" ]; then
         if [ "$INFERENCEX_NATIVE_REQUIRE_CAUSAL" = "1" ]; then
             causal_proof_args=(--require-causal)
         fi
-        "$VIRTUAL_ENV/bin/python" -m native_fp8_validation "${causal_proof_args[@]}" \
+        "$VIRTUAL_ENV/bin/python" -m native_fp8_validation "${causal_proof_args[@]}" "${native_comparison_proof_args[@]}" \
             --server-log "$SERVER_LOG" --workers "$TP" --native-sha "$NATIVE_VLLM_SHA" \
             --phase eval --output "$RESULT_DIR/gsm8k_native_fp8_execution_proof.json"
     else
@@ -495,7 +514,7 @@ else
         if [ "$INFERENCEX_NATIVE_REQUIRE_CAUSAL" = "1" ]; then
             causal_proof_args=(--require-causal)
         fi
-        "$VIRTUAL_ENV/bin/python" -m native_fp8_validation "${causal_proof_args[@]}" \
+        "$VIRTUAL_ENV/bin/python" -m native_fp8_validation "${causal_proof_args[@]}" "${native_comparison_proof_args[@]}" \
             --server-log "$SERVER_LOG" --workers "$TP" --native-sha "$NATIVE_VLLM_SHA" \
             --phase replay --output "$RESULT_DIR/native_fp8_execution_proof.json"
     fi

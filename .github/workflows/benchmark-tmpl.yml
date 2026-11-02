@@ -69,6 +69,11 @@ on:
         type: string
         required: false
         default: ''
+      native-comparison:
+        description: "Matched reference comparison: native, reference, or direct"
+        type: string
+        required: false
+        default: "native"
       random-range-ratio:
         required: false
         type: string
@@ -130,7 +135,8 @@ env:
   EVAL_ONLY: ${{ inputs.eval-only }}
   ATTENTION_PATH_PROBE_ONLY: ${{ inputs.attention-path-probe-only }}
   NATIVE_VLLM_SHA: ${{ inputs.native-vllm-sha }}
-  INFERENCEX_NATIVE_REQUIRE_CAUSAL: '0'
+  INFERENCEX_NATIVE_REQUIRE_CAUSAL: ${{ inputs.native-comparison != 'native' && '1' || '0' }}
+  INFERENCEX_NATIVE_COMPARISON: ${{ inputs.native-comparison }}
   ATOM_USE_FLYDSL_FP8_PREFILL_ATTN: '1'
   ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN: '1'
   ATOM_USE_FUSED_KV_FP8_OUTPUT: '1'

@@ -1,22 +1,89 @@
-name: Hello World Workflow
-
-# Defines what events trigger the pipeline
+name: PR 59124 direct projection comparison checks
+run-name: "PR59124 comparison - ${{ inputs.stage }}"
 on:
-  push:
-    branches:
-      - chore/sa-agentx-v1.0  # Runs automatically when you push code here
-  workflow_dispatch:          # Adds a manual "Run workflow" button in GitHub Actions UI
-
-# Defines the execution steps
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Run CPU checks or CPU plus GPU integration"
+        type: choice
+        options: [cpu, gpu]
+        default: cpu
+        required: true
+permissions:
+  contents: read
 jobs:
-  say-hello:
-    runs-on: ubuntu-latest    # Uses a standard Linux environment
-    
+  cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@v4
-
-      - name: Print a greeting message
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.6"
+      - name: Validate harness before GPU scheduling
         run: |
-          echo "Hello World!"
-          echo "GitHub Actions is working perfectly on your branch!"
+          uv venv --python 3.12
+          uv pip install pytest packaging pyyaml ruff==0.14.0
+          .venv/bin/python -m pytest -q utils/atom_attention/test_native_validation.py
+          bash -n runners/launch_mi355x-amd.sh
+          bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+          .venv/bin/python utils/test_mi355x_container_launcher.py
+          .venv/bin/python - <<'PY'
+          import pathlib, yaml
+          for name in ("hello.yml", "e2e-tests.yml", "benchmark-tmpl.yml"):
+              yaml.safe_load(pathlib.Path(".github/workflows", name).read_text())
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: ajith-sirra-amd/vllm
+          ref: f7ae576dbe16e49f78ace11faf32199dc9aae5b6
+          path: comparison-source
+          fetch-depth: 32
+      - name: Check comparison source
+        run: |
+          cd comparison-source
+          git diff --check a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df HEAD
+          git diff --name-only a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df HEAD -- '*.py' > .comparison-python-files
+          xargs -a .comparison-python-files ../.venv/bin/ruff check
+          ../.venv/bin/python - <<'PY'
+          import ast, pathlib
+          for path in pathlib.Path(".comparison-python-files").read_text().splitlines():
+              ast.parse(pathlib.Path(path).read_text())
+          PY
+  gpu:
+    if: ${{ inputs.stage == 'gpu' }}
+    needs: cpu
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run reference and direct integration GPU tests
+        shell: bash
+        run: |
+          set -eo pipefail
+          work="$GITHUB_WORKSPACE/.native-fp8-validation/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$work"
+          test ! -L "$work"
+          test "$(realpath -e "$work")" = "$(realpath -e "$GITHUB_WORKSPACE")/.native-fp8-validation/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          image='vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f'
+          repair() {
+            docker run --rm --network none --user 0:0 -v "$work":/repair --entrypoint chown "$image" --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+          }
+          trap repair EXIT
+          docker run --rm --init --network host --ipc=host --shm-size=8g \
+            --name "pr59124-compare-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --device=/dev/kfd --device=/dev/dri \
+            --group-add "$(getent group video | cut -d: -f3)" \
+            --group-add "$(getent group render | cut -d: -f3)" \
+            -v "$GITHUB_WORKSPACE":/repo:ro -v "$work":/work \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+            --entrypoint python3 "$image" \
+            /repo/utils/atom_attention/native_vllm_gpu_validate.py \
+            --native-sha f7ae576dbe16e49f78ace11faf32199dc9aae5b6 --reference-comparison
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr59124-comparison-gpu
+          path: .native-fp8-validation/${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+          if-no-files-found: error
