@@ -1,0 +1,20 @@
+{
+ "run_id":41402358706,
+ "attempt":1,
+ "gpu_job":125136853609,
+ "runner":"mi355x-amd_pit2_p03_g07",
+ "workflow_sha":"9b2ef642fe66a23af76b81ed64555f14317869c0",
+ "execution_sha":"2693f50611a445f3f0f2ad91f69b16350f6629c3",
+ "native_pr_sha":"492080779e9feea19308092b0aba0840e87c6115",
+ "image":"vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716",
+ "duration_seconds":3600,
+ "concurrency":48,
+ "tp":8,
+ "dcp":8,
+ "speculation":"MTP with synthetic acceptance, same as previous full replay",
+ "changes":["TORCH_BLAS_PREFER_HIPBLASLT=0","TORCH_BLAS_PREFER_CUBLASLT=0","periodic worker-stack capture every 60 seconds","assert observed BLAS backend during actual FP8 execution"],
+ "prerequisites":{"harness_run":41402131374,"tests_passed":20,"gpu_diagnostic":41401317715,"bf16_cases_per_image_passed":112,"native_tests_passed":8},
+ "required_checks":["TTFT and ITL coverage >=98%","complete native source/image provenance","direct FP8 projection and cached FMHA on all eight workers","inspect request errors, server logs and worker stacks"],
+ "scope":"instrumented full stability diagnostic; not an uninstrumented performance baseline",
+ "status_at_recording":"in_progress"
+}
