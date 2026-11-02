@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ajith-sirra-amd/vllm
-          ref: f7ae576dbe16e49f78ace11faf32199dc9aae5b6
+          ref: 2eb0ada53e6d0fcd658010d9869957026a229adb
           path: comparison-source
           fetch-depth: 32
       - name: Check comparison source
@@ -80,7 +80,7 @@ jobs:
             -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
             --entrypoint python3 "$image" \
             /repo/utils/atom_attention/native_vllm_gpu_validate.py \
-            --native-sha f7ae576dbe16e49f78ace11faf32199dc9aae5b6 --reference-comparison
+            --native-sha 2eb0ada53e6d0fcd658010d9869957026a229adb --reference-comparison
       - uses: actions/upload-artifact@v4
         if: always()
         with:
