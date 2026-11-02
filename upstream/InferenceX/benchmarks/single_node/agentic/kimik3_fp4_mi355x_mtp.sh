@@ -33,6 +33,11 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
         exit 1
     fi
     NATIVE_MODE=1
+    # Tested BF16 runtime workaround; native FP8 arithmetic stays unchanged.
+    export TORCH_BLAS_PREFER_HIPBLASLT=0
+    export TORCH_BLAS_PREFER_CUBLASLT=0
+    export INFERENCEX_NATIVE_EXPECT_BLAS=cublas
+    export INFERENCEX_NATIVE_STACK_INTERVAL=60
     unset PYTHONPATH
     for task_atom_env in $(compgen -A variable ATOM_); do
         unset "$task_atom_env"
