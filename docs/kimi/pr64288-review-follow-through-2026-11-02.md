@@ -22,14 +22,14 @@ Harness/workflow source: 190f103aad8911bff3a31a2ee0cbc12ed9070ce9.
 
 - Run 41443401220: CPU harness checks passed; two overlong integration-test lines failed Ruff, so GPU was skipped. Fixed in the next pinned source.
 - Run 41443627369: CPU passed (21 observer/installer tests plus launcher/source checks); GPU integration passed: 26 passed, no failures or skips (11 unrelated tests deselected). Artifact 13141920953; reference Q reuse/direct projection passed changed-input graph replay. Includes original native arithmetic tests, reference BF16/quantization tests, and shared-Q/direct-projection graph replay.
-- Run 41443951889: full reference C48/MTP replay cleared successful prerequisite 41443627369 and is starting. Direct projection OFF, ROCM_AITER_FLYDSL_FP8 ON, 3600 seconds. The prerequisite must succeed at the exact harness SHA before GPU scheduling.
-- Run 41444880140: Direct-ON replay queued on the single GPU runner after the same 26-test prerequisite passed. Reference 41443951889 runs first. Source, weights, image, workload, CCD binding and BLAS settings are identical; inspect reference results as soon as they are available.
+- Run 41443951889: full reference C48/MTP replay cleared successful prerequisite 41443627369 and subsequently failed (see failure evidence below). Direct projection OFF, ROCM_AITER_FLYDSL_FP8 ON, 3600 seconds. The prerequisite must succeed at the exact harness SHA before GPU scheduling.
+- Run 41444880140: cancelled before the GPU job started at the user's request. Do not resume without new authorization.
 
 The observer requires FP8 causal/cached FMHA on all eight workers. Reference mode requires BF16 expanded K/V and forbids direct native projection calls. Direct mode requires FP8 projection. Both use reference Q reuse; direct output scales remain new-token-derived times two, unlike reference actual-context maxima.
 
 ## Remaining
 
-Inspect GPU test reports and failures immediately. Complete matched full runs, check all-worker execution, coverage and request/server errors, update the reviewer with concise evidence, complete the checklist, then mark the PR ready for review under the user's authorization. Upstream CI and human review remain merge requirements.
+Inspect GPU test reports and failures immediately. Complete the standalone native replay and its gated GSM8K, check all-worker execution, coverage and request/server errors, update the reviewer with concise evidence, complete the checklist, then mark the PR ready for review under the user's authorization. Upstream CI and human review remain merge requirements.
 
 Broader profiling and C56/C64 MTP, C96 without MTP remain backlog after this PR task. Native NUMA changes are postponed.
 
@@ -38,9 +38,17 @@ Broader profiling and C56/C64 MTP, C96 without MTP remain backlog after this PR 
 The user explicitly prohibited adding the direct FP8 up-projection diff to PR #59124 or its author's branch. No such write occurred; integration code is only in the user's fork benchmark branch. Do not resume the combined benchmark without new authorization.
 
 - Combined run 41444880140: cancelled before the GPU job started.
-- Reference #59124 run 41443951889: continues.
-- Standalone native PR #64288 run 41447686785: queued, exact PR SHA 492080779e9feea19308092b0aba0840e87c6115, November 1 image e0d00e4b, full C48/TP8/DCP8/MTP replay. Native comparison mode keeps BF16 new-token attention.
+- Reference #59124 run 41443951889: failed; no valid throughput comparison.
+- Standalone native PR #64288 run 41447686785: active, exact PR SHA 492080779e9feea19308092b0aba0840e87c6115, November 1 image e0d00e4b, full C48/TP8/DCP8/MTP replay. Native comparison mode keeps BF16 new-token attention.
 - Full native GSM8K run 41447950940: dispatched with a success prerequisite on 41447686785. Workflow SHA 94f5efa4a61aae4f4a09d54e2c30d9b4dd56216d extends the prerequisite wait to 240 minutes; execution source remains 190f103aad8911bff3a31a2ee0cbc12ed9070ce9. Real MTP, eager 512-token stress routing, exact native source and eight-worker execution proof remain required.
 - Standalone vs reference results cannot isolate projection-only gain because causal routing/Q reuse/scale policy also differ. Update the PR with that distinction.
 - The historical 18,244.04135 native throughput is on earlier pinned image edad8b03, not e0d00e4b. The hipBLAS workaround has no isolated performance uplift measurement; both TORCH_BLAS_PREFER_HIPBLASLT=0 and TORCH_BLAS_PREFER_CUBLASLT=0 were tested together.
 - Kimi-K3.1 compatibility is unconfirmed. Native gating is configuration-based (512/128/64/128, gfx950, DCP >1, FP8 E4M3/native per-channel weights), but guessed checkpoint config URLs returned HTTP 401. An optional request for the exact K3.1 checkpoint/config URL is pending; do not claim validation.
+
+## Reference failure inspected at 13:46 UTC
+
+Run 41443951889 failed. The first watchdog report at 13:33:13 UTC was DCP KV all-gather in dcp.py:1649: PG 3, sequence 232455, 4,755,456 input elements and 38,043,648 output elements, after 600 seconds. A second timed-out group was logits all-gather: PG 2, sequence 2668, 1,064,960 input elements and 8,519,680 output elements. All eight ranks reported matching sequence/sizes within each group. No preceding server ERROR/Traceback/BLAS exception was found. Root cause remains unestablished; these traces do not assign fault to reference attention, integration, hardware or BLAS.
+
+Client errors were already present during warm-up: 434/531 records. Measurement produced 63 records, 52 errors, and only 1440.19 recorded seconds. The failed-request threshold aborted the replay after the engine died. This is not a valid performance baseline. Reference FP8 causal/cached attention and BF16 expanded K/V were observed on all eight workers; no direct projection events occurred.
+
+Full raw evidence remains in run artifacts 13146026833 and 13146571024; a structured failure summary is at results/atom-attention/run41443951889/failure-summary.json. Our standalone PR run continues and GSM8K remains gated behind its success. The cancelled combined arm stays cancelled.

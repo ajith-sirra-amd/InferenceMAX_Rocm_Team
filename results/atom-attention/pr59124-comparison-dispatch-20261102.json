@@ -27,8 +27,8 @@
     "stack_timer": false,
     "ccd_binding": true
   },
-  "status": "combined arm cancelled by user; reference running; standalone PR performance queued; GSM8K gated afterward",
-  "claims": "No new performance result yet. The requested comparison is now standalone configurations with different causal routing, not isolated projection uplift.",
+  "status": "reference failed; combined arm cancelled; native performance active; GSM8K gated afterward",
+  "claims": "Reference failed with collective timeouts and extensive request errors; no native/reference speedup claim is possible.",
   "required_checks": [
     "full-duration coverage",
     "all-eight-worker causal and cached FP8 execution",
@@ -44,5 +44,8 @@
   "standalone_native_sha": "492080779e9feea19308092b0aba0840e87c6115",
   "gsm8k_run": 41447950940,
   "gsm8k_prerequisite_run": 41447686785,
-  "gsm8k_workflow_sha": "94f5efa4a61aae4f4a09d54e2c30d9b4dd56216d"
+  "gsm8k_workflow_sha": "94f5efa4a61aae4f4a09d54e2c30d9b4dd56216d",
+  "reference_run_status": "failure",
+  "reference_valid_throughput": false,
+  "reference_failure_evidence": "results/atom-attention/run41443951889/failure-summary.json"
 }
