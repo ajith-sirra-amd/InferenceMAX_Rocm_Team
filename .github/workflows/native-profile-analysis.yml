@@ -1,0 +1,73 @@
+name: Analyze native Kimi steady profile
+on:
+  workflow_dispatch:
+    inputs:
+      profile-run-id:
+        description: Completed profiling run in this repository
+        required: true
+        type: string
+      native-sha:
+        description: Expected native vLLM commit
+        required: true
+        type: string
+        default: '492080779e9feea19308092b0aba0840e87c6115'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROFILE_RUN_ID: ${{ inputs.profile-run-id }}
+      NATIVE_SHA: ${{ inputs.native-sha }}
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Validate completed run and prepare analysis
+        run: |
+          case "$PROFILE_RUN_ID" in ''|*[!0-9]*) echo "Expected numeric run ID" >&2; exit 1 ;; esac
+          [[ "$NATIVE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p profile-analysis
+          gh run view "$PROFILE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion,headSha,url > profile-analysis/run.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          run = json.loads(Path("profile-analysis/run.json").read_text())
+          if run["status"] != "completed" or run["conclusion"] != "success":
+              raise SystemExit("Profile workflow must finish successfully first")
+          PY
+          python3 -m venv .analysis-env
+          .analysis-env/bin/python -m pip install ijson
+      - name: Download worker traces
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: native-steady-profile-${{ inputs.profile-run-id }}
+          path: profile-input
+          run-id: ${{ inputs.profile-run-id }}
+          github-token: ${{ github.token }}
+      - name: Download execution proof
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: agentic_*
+          merge-multiple: true
+          path: profile-evidence
+          run-id: ${{ inputs.profile-run-id }}
+          github-token: ${{ github.token }}
+      - name: Analyze GPU kernels and overlap
+        run: |
+          .analysis-env/bin/python utils/atom_attention/native_profile_analysis.py \
+            --trace-dir profile-input \
+            --proof-path profile-evidence/results/native_fp8_execution_proof.json \
+            --native-sha "$NATIVE_SHA" --expected-workers 8 \
+            --output profile-analysis
+      - name: Upload analysis
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-profile-analysis-${{ inputs.profile-run-id }}
+          path: profile-analysis/
+          if-no-files-found: error

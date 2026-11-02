@@ -7,6 +7,9 @@ on:
       - utils/atom_attention/native_validation_plugin/**
       - utils/atom_attention/test_native_validation.py
       - utils/atom_attention/native_steady_profile.py
+      - utils/atom_attention/native_profile_analysis.py
+      - utils/atom_attention/test_native_profile_analysis.py
+      - .github/workflows/native-profile-analysis.yml
       - utils/atom_attention/test_native_steady_profile.py
       - .github/workflows/native-fp8-harness-checks.yml
       - .github/workflows/e2e-tests.yml
@@ -30,8 +33,8 @@ jobs:
       - name: Check native validation behavior
         run: |
           python3 -m venv .ci-env
-          .ci-env/bin/python -m pip install pytest pyyaml
-          .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py utils/atom_attention/test_native_steady_profile.py --basetemp=.ci-profile-tests --junitxml=native-harness-checks.xml
+          .ci-env/bin/python -m pip install pytest pyyaml ijson
+          .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py utils/atom_attention/test_native_steady_profile.py utils/atom_attention/test_native_profile_analysis.py --basetemp=.ci-profile-tests --junitxml=native-harness-checks.xml
           .ci-env/bin/python - <<'PY'
           import subprocess
           from pathlib import Path
