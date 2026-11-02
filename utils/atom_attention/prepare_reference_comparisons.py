@@ -19,7 +19,7 @@ STATE = "vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py"
 def run(args, cwd, data=None, check=True):
     result = subprocess.run(args, cwd=cwd, input=data, text=True, capture_output=True)
     if check and result.returncode:
-        raise RuntimeError(f"{args}: {result.stderr[-4000:]}")
+        raise RuntimeError(f"{args}: {result.stdout[-6000:]} {result.stderr[-4000:]}")
     return result
 
 
