@@ -49,3 +49,15 @@ GSM8K 运行 41447950940 的第 1 次尝试在 GPU 调度前因 GitHub API HTTP 
 用户明确要求：**不修复 #59124（包括参考基准集成），不再次运行，只报告已观察到的失败。** 组合运行保持取消。本 PR 直接把 FP8 latent cache 与 FP8 权重上投影为 FP8 K/V，消除展开的 BF16 K/V 缓冲区及独立的缓存 K/V 量化步骤。#59124 的新 token 注意力为 FP8，本 PR 保持 BF16。失败的参考运行不能作为性能提升的基线。
 
 PR 描述和已有评审状态评论已更新，源代码未改变；所要求的后续准确率测试完成前仍保持 draft。
+
+## CI 复查与性能分析准备
+
+当前 PR head 仍为 `492080779e9feea19308092b0aba0840e87c6115`。DCO、Mergify Summary 和 Meta 检查通过。上游 `pre-run-check` 因贡献者尚无已合并 PR 且缺少授权标签而失败；pre-commit 被跳过，Read the Docs 的前置检查也阻止构建。这些状态未发现源码错误。日志明确禁止 agent 请求授权标签，因此未请求、添加标签或绕过 CI 策略。独立 fork 中针对当前源码的静态检查和严格文档构建已通过。
+
+公开说明聚焦直接 FP8 cached-K/V up-projection，仅简短说明 #59124 比较运行失败，不单列比较章节或强调精度差异。New-token FP8 留待后续独立工作，前提是准确率通过且性能显著提升。额外环境变量的讨论保持开放。
+
+GSM8K 运行 `41447950940` 的 attempt 2、job `125363224586` 在最近检查时仍在进行。需检查分数、精确源码、真实 MTP 和全部 worker 的优化路径执行证据后，再标记为可评审。
+
+稳态性能分析接线已单独发布到 `checks/native-steady-profile-20261102`，commit 为 `9da21ee27541876ead88045459ecbf0e74e7c670`。CPU 运行 `41476491034` 的 **30 个测试全部通过，无失败或跳过**，真实 launcher 和语法检查也通过。已检查 JUnit artifact `13157862094`，确认包括 SIGTERM 清理和启动响应丢失在内的全部九个控制器用例均执行。仅分析模式延长容器关闭时间，允许停止服务前导出 trace。
+
+性能分析默认关闭，仅允许独立原生完整 replay。等待测量阶段标记和 300 秒生成进展后，采集 20 秒 worker CPU/GPU 活动。输出和 artifact 均保存在本仓库。GPU 分析尚未派发。参见[性能分析指南](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/checks/native-steady-profile-20261102/docs/kimi/native-steady-profile_zh.md)。

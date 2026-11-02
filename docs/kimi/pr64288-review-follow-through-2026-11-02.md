@@ -72,3 +72,15 @@ The PR description and existing reviewer comment now include this difference and
 The PR summary, comparison table and current reviewer comment no longer emphasize unchanged BF16 new-token attention or contrast its precision with #59124. Public claims remain explicitly scoped to cached-context attention and direct FP8 cached-K/V up-projection; the source and full engineering evidence are unchanged.
 
 New-token FP8 is deferred to a later experiment. Prepare a separate future PR only after accuracy validation and a significant measured performance uplift. Do not add it to the current PR, and do not resume or fix the #59124 reference run. Current priority remains full native GSM8K attempt 2, review readiness, then the already-requested steady-state profile and concurrency sweep.
+
+## CI recheck and profiling preparation
+
+Current PR head remains `492080779e9feea19308092b0aba0840e87c6115`. DCO, Mergify Summary and the Meta check passed. Upstream `pre-run-check` failed because this contributor has zero merged PRs and none of the accepted authorization labels. Pre-commit is skipped, and Read the Docs' pre-run gate refuses the build. These statuses do not identify a source failure. The gate explicitly says agents must not request authorization labels; none was requested or added. No CI policy was bypassed. Independent current-source static checks and strict rendered documentation passed.
+
+Public presentation stays focused on direct FP8 cached-K/V up-projection. Include only one brief #59124 mention with its failed comparison outcome; no dedicated comparison section or precision contrast. New-token FP8 remains future separate work conditional on accuracy and significant uplift. The environment-variable discussion remains open.
+
+GSM8K run `41447950940`, attempt 2, job `125363224586`, is still active at the last check. Do not mark review readiness until its score, exact source, real MTP and all-worker optimized execution evidence have been inspected.
+
+Steady-state profiling wiring is published separately on `checks/native-steady-profile-20261102` at `9da21ee27541876ead88045459ecbf0e74e7c670`. CPU run `41476491034` passed **30 tests, zero failures/skips**, plus real launcher/syntax checks. JUnit artifact `13157862094` was inspected and contains all nine controller cases, including SIGTERM cleanup and lost start response. A profile-only shutdown allowance permits trace export before stopping the server.
+
+Profiling is default-off, restricted to a full standalone native replay, and waits for the measured-phase marker plus 300 seconds of generation progress before a 20-second worker CPU/GPU capture. Output and artifacts remain in this repository. GPU profiling has not yet been dispatched. See [profiling guide](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/checks/native-steady-profile-20261102/docs/kimi/native-steady-profile.md).
