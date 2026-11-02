@@ -21,8 +21,8 @@ Integration source: 2eb0ada53e6d0fcd658010d9869957026a229adb on the common base 
 Harness/workflow source: 190f103aad8911bff3a31a2ee0cbc12ed9070ce9.
 
 - Run 41443401220: CPU harness checks passed; two overlong integration-test lines failed Ruff, so GPU was skipped. Fixed in the next pinned source.
-- Run 41443627369: CPU passed (21 observer/installer tests plus launcher/source checks); GPU integration running. Includes original native arithmetic tests, reference BF16/quantization tests, and shared-Q/direct-projection graph replay.
-- Run 41443951889: full reference C48/MTP replay queued behind successful run 41443627369. Direct projection OFF, ROCM_AITER_FLYDSL_FP8 ON, 3600 seconds. The prerequisite must succeed at the exact harness SHA before GPU scheduling.
+- Run 41443627369: CPU passed (21 observer/installer tests plus launcher/source checks); GPU integration passed: 26 passed, no failures or skips (11 unrelated tests deselected). Artifact 13141920953; reference Q reuse/direct projection passed changed-input graph replay. Includes original native arithmetic tests, reference BF16/quantization tests, and shared-Q/direct-projection graph replay.
+- Run 41443951889: full reference C48/MTP replay cleared successful prerequisite 41443627369 and is starting. Direct projection OFF, ROCM_AITER_FLYDSL_FP8 ON, 3600 seconds. The prerequisite must succeed at the exact harness SHA before GPU scheduling.
 - Direct-ON replay: dispatch after inspecting the preceding results. Keep source, weights, image, workload, CCD binding and BLAS settings identical.
 
 The observer requires FP8 causal/cached FMHA on all eight workers. Reference mode requires BF16 expanded K/V and forbids direct native projection calls. Direct mode requires FP8 projection. Both use reference Q reuse; direct output scales remain new-token-derived times two, unlike reference actual-context maxima.
