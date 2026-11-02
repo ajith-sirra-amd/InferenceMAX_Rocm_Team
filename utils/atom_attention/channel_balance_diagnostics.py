@@ -263,11 +263,11 @@ def run(path, report):
                 )
                 report["cases"].append(record)
                 emit("CHANNEL_BALANCE_CASE", record)
-                if not arithmetic_pass:
-                    raise AssertionError("FMHA arithmetic gate failed")
                 if mode == "per_channel":
-                    candidates.append(original_pass)
+                    candidates.append(arithmetic_pass and original_pass)
             del same_ref, kw, k8, v8, expected_k
+    if not all(case["passes_arithmetic_gate"] for case in report["cases"]):
+        raise AssertionError("FMHA arithmetic gate failed; all finite cases recorded")
     if len(candidates) != 4 or not all(candidates):
         raise AssertionError("Per-channel candidate did not pass all four unchanged numerical gates")
     report["status"] = "diagnostic_candidate_passed"
