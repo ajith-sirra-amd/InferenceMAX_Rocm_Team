@@ -1,0 +1,39 @@
+name: Recover native worker stacks
+on:
+  push:
+    branches: [perf/kimi-attnfp8-kv-allgather-20261021]
+    paths: [.github/workflows/recover-native-stacks.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recover:
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 10
+    steps:
+      - name: Verify preserved checkout and read failure evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ runner.name }}" = "mi355x-amd_pit2_p03_g07"
+          task_workspace="$(realpath -e "$GITHUB_WORKSPACE")"
+          test "$(basename "$task_workspace")" = "InferenceMAX_Rocm_Team"
+          task_sha="$(git -c safe.directory="$task_workspace" -C "$task_workspace" rev-parse HEAD)"
+          test "$task_sha" = "2693f50611a445f3f0f2ad91f69b16350f6629c3"
+          date -u
+          free -h
+          df -h "$task_workspace"
+          test -d "$task_workspace/results/native_worker_stacks"
+          find "$task_workspace/results/native_worker_stacks" -maxdepth 1 -type f -printf '%s %f\n'
+          for task_file in "$task_workspace"/results/native_worker_stacks/*.log; do
+            printf '\nSTACK_FILE %s\n' "$(basename "$task_file")"
+            tail -90 "$task_file"
+          done
+          journalctl -k --since "2026-11-02 06:50:00 UTC" --until "2026-11-02 07:08:00 UTC" --no-pager 2>&1 | grep -Ei 'out of memory|killed process|oom|segfault|amdgpu|denied|permission|hint' | tail -40 || true
+      - name: Upload preserved stacks
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-stacks-41402358706
+          path: results/native_worker_stacks/*.log
+          if-no-files-found: error
