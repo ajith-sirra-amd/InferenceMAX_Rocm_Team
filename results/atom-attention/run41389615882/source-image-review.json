@@ -1,0 +1,151 @@
+{
+    "run_id":  41389615882,
+    "job_id":  125097892519,
+    "artifact_id":  13116885708,
+    "source_sha":  "67a80df36e80101aee6481f2873234f9e43af1cb",
+    "checked_at":  "2026-11-02T04:38:53.228020+00:00",
+    "scope":  "CPU source applicability and public registry metadata; no GPU validation or deployment",
+    "sources":  {
+                    "common_base":  "a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df",
+                    "native_head":  "492080779e9feea19308092b0aba0840e87c6115",
+                    "references":  {
+                                       "59124":  {
+                                                     "head":  "132f6daa6b17cb4000ef58355943bb39339104f2",
+                                                     "base":  "3897f95cf17619137536d2a7d325d9c2f39dc38f",
+                                                     "state":  "open",
+                                                     "checks":  {
+                                                                    "common_base":  {
+                                                                                        "exit_code":  1,
+                                                                                        "stdout":  "",
+                                                                                        "stderr":  "error: patch failed: vllm/v1/attention/backends/mla/rocm_aiter_mla.py:1019\nerror: vllm/v1/attention/backends/mla/rocm_aiter_mla.py: patch does not apply\n"
+                                                                                    },
+                                                                    "native_head":  {
+                                                                                        "exit_code":  1,
+                                                                                        "stdout":  "",
+                                                                                        "stderr":  "error: patch failed: vllm/v1/attention/backends/mla/rocm_aiter_mla.py:37\nerror: vllm/v1/attention/backends/mla/rocm_aiter_mla.py: patch does not apply\n"
+                                                                                    }
+                                                                }
+                                                 },
+                                       "62447":  {
+                                                     "head":  "cefacabced64eda821bcb49493cc970056d15429",
+                                                     "base":  "dbcf568821827d2a32223b46d4bc95862dc6c185",
+                                                     "state":  "closed",
+                                                     "checks":  {
+                                                                    "common_base":  {
+                                                                                        "exit_code":  0,
+                                                                                        "stdout":  "",
+                                                                                        "stderr":  ""
+                                                                                    },
+                                                                    "native_head":  {
+                                                                                        "exit_code":  1,
+                                                                                        "stdout":  "",
+                                                                                        "stderr":  "warning: vllm/envs.py has type 100644, expected 100755\nerror: patch failed: vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py:6\nerror: vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py: patch does not apply\n"
+                                                                                    }
+                                                                }
+                                                 }
+                                   },
+                    "scope":  "Patch applicability only; not runtime validation"
+                },
+    "image_candidates":  [
+                             {
+                                 "name":  "nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211",
+                                 "digest":  "sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f",
+                                 "last_updated":  "2026-11-01T05:07:41.940991Z",
+                                 "full_size":  8968161161,
+                                 "images":  [
+                                                {
+                                                    "architecture":  "amd64",
+                                                    "features":  "",
+                                                    "variant":  null,
+                                                    "digest":  "sha256:9cef62361792bd9cc621725c3af799993b6a68b6b62e3778dcf9b65ff6fcd872",
+                                                    "os":  "linux",
+                                                    "os_features":  "",
+                                                    "os_version":  null,
+                                                    "size":  8968161161,
+                                                    "status":  "active",
+                                                    "last_pulled":  "2026-11-02T04:24:56.454844762Z",
+                                                    "last_pushed":  "2026-11-01T05:07:39.703095506Z"
+                                                }
+                                            ]
+                             }
+                         ],
+    "image_build_versions":  [
+                                 {
+                                     "name":  "current",
+                                     "versions":  [
+                                                      "AITER_BRANCH=v0.1.26",
+                                                      "ROCM_SDK_VERSION=10.0.0",
+                                                      "TORCH_VERSION=2.13.0+rocm10.0.0",
+                                                      "TRITON_BRANCH=669b31ac"
+                                                  ],
+                                     "labels":  {
+                                                    "org.opencontainers.image.version":  "22.04"
+                                                }
+                                 },
+                                 {
+                                     "name":  "nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211",
+                                     "versions":  [
+                                                      "AITER_BRANCH=v0.1.27",
+                                                      "ROCM_SDK_VERSION=10.0.0",
+                                                      "TORCH_VERSION=2.13.0+rocm10.0.0",
+                                                      "TRITON_BRANCH=669b31ac"
+                                                  ],
+                                     "labels":  {
+                                                    "ai.vllm.rocm.ci-arch":  "gfx90a;gfx942;gfx950",
+                                                    "ai.vllm.rocm.stack":  "rocm",
+                                                    "ai.vllm.rocm.variant":  "rocm100",
+                                                    "org.opencontainers.image.version":  "0.33.0rc1.dev447+ge0d00e4b8"
+                                                }
+                                 }
+                             ],
+    "base_wheels":  {
+                        "vllm":  {
+                                     "url":  "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100/vllm/metadata.json",
+                                     "metadata":  [
+                                                      {
+                                                          "package_name":  "vllm",
+                                                          "version":  "0.33.0rc1.dev182+ga1cfd2c1b",
+                                                          "build_tag":  null,
+                                                          "python_tag":  "cp312",
+                                                          "abi_tag":  "cp312",
+                                                          "platform_tag":  "manylinux_2_34_x86_64",
+                                                          "variant":  "rocm100",
+                                                          "filename":  "vllm-0.33.0rc1.dev182+ga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+                                                          "path":  "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/vllm-0.33.0rc1.dev182%2Bga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl"
+                                                      }
+                                                  ]
+                                 },
+                        "torch":  {
+                                      "url":  "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100/torch/metadata.json",
+                                      "metadata":  [
+                                                       {
+                                                           "package_name":  "torch",
+                                                           "version":  "2.13.0",
+                                                           "build_tag":  null,
+                                                           "python_tag":  "cp312",
+                                                           "abi_tag":  "cp312",
+                                                           "platform_tag":  "manylinux_2_34_x86_64",
+                                                           "variant":  "rocm100",
+                                                           "filename":  "torch-2.13.0+rocm10.0.0-cp312-cp312-manylinux_2_34_x86_64.whl",
+                                                           "path":  "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/torch-2.13.0%2Brocm10.0.0-cp312-cp312-manylinux_2_34_x86_64.whl"
+                                                       }
+                                                   ]
+                                  },
+                        "triton":  {
+                                       "url":  "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100/triton/metadata.json",
+                                       "metadata":  [
+                                                        {
+                                                            "package_name":  "triton",
+                                                            "version":  "3.8.0+git669b31ac",
+                                                            "build_tag":  null,
+                                                            "python_tag":  "cp312",
+                                                            "abi_tag":  "cp312",
+                                                            "platform_tag":  "manylinux_2_35_x86_64",
+                                                            "variant":  "rocm100",
+                                                            "filename":  "triton-3.8.0+git669b31ac-cp312-cp312-manylinux_2_35_x86_64.whl",
+                                                            "path":  "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/triton-3.8.0%2Bgit669b31ac-cp312-cp312-manylinux_2_35_x86_64.whl"
+                                                        }
+                                                    ]
+                                   }
+                    }
+}
