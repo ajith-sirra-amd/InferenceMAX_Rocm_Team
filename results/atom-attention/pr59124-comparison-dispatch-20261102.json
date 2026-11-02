@@ -27,8 +27,8 @@
     "stack_timer": false,
     "ccd_binding": true
   },
-  "status": "reference in progress; direct queued on same runner",
-  "claims": "No performance result yet. Baseline and direct arm share source and weight targets; direct scale estimation differs from actual-context scale selection.",
+  "status": "combined arm cancelled by user; reference running; standalone PR performance queued; GSM8K gated afterward",
+  "claims": "No new performance result yet. The requested comparison is now standalone configurations with different causal routing, not isolated projection uplift.",
   "required_checks": [
     "full-duration coverage",
     "all-eight-worker causal and cached FP8 execution",
@@ -36,5 +36,13 @@
     "direct FP8 projection",
     "source and runtime parity",
     "request/server/BLAS/quota errors"
-  ]
+  ],
+  "direct_run_status": "cancelled before GPU job started",
+  "do_not_resume_combined_run": true,
+  "standalone_native_run": 41447686785,
+  "standalone_native_job": 125284947373,
+  "standalone_native_sha": "492080779e9feea19308092b0aba0840e87c6115",
+  "gsm8k_run": 41447950940,
+  "gsm8k_prerequisite_run": 41447686785,
+  "gsm8k_workflow_sha": "94f5efa4a61aae4f4a09d54e2c30d9b4dd56216d"
 }
