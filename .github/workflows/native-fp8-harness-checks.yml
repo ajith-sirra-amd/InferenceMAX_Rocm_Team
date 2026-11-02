@@ -6,6 +6,8 @@ on:
       - utils/atom_attention/native_vllm_gpu_validate.py
       - utils/atom_attention/native_validation_plugin/**
       - utils/atom_attention/test_native_validation.py
+      - utils/atom_attention/native_steady_profile.py
+      - utils/atom_attention/test_native_steady_profile.py
       - .github/workflows/native-fp8-harness-checks.yml
       - .github/workflows/e2e-tests.yml
       - .github/workflows/benchmark-tmpl.yml
@@ -29,7 +31,7 @@ jobs:
         run: |
           python3 -m venv .ci-env
           .ci-env/bin/python -m pip install pytest pyyaml
-          .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py --junitxml=native-harness-checks.xml
+          .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py utils/atom_attention/test_native_steady_profile.py --basetemp=.ci-profile-tests --junitxml=native-harness-checks.xml
           .ci-env/bin/python - <<'PY'
           import subprocess
           from pathlib import Path
