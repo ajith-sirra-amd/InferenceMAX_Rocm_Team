@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/native-fp8-source-review.yml
       - utils/atom_attention/pr_source_image_review.py
+      - utils/atom_attention/prepare_reference_comparisons.py
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,11 +22,17 @@ jobs:
         with:
           version: "0.9.6"
       - name: Prepare isolated Python
-        run: uv venv --python 3.12
+        run: |
+          uv venv --python 3.12
+          uv pip install ruff==0.14.0
       - name: Inspect source applicability and image metadata
         env:
           GH_TOKEN: ${{ github.token }}
         run: .venv/bin/python utils/atom_attention/pr_source_image_review.py
+      - name: Prepare and check comparison patches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .venv/bin/python utils/atom_attention/prepare_reference_comparisons.py
       - name: Upload review evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
