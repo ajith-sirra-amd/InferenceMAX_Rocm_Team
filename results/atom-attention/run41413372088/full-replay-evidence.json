@@ -1,0 +1,105 @@
+{
+  "run_id": 41413372088,
+  "job_id": 125171486390,
+  "attempt": 1,
+  "workflow_status": "success",
+  "execution_sha": "b56b28bb1fc7302f8f35095341165ddea89de4fa",
+  "workflow_sha": "3307b42d65b9d848ff9eb7425b0f62f1429a160e",
+  "native_sha": "492080779e9feea19308092b0aba0840e87c6115",
+  "image": "vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716",
+  "scope": "Native normal-routing C48 TP8/DCP8 full agentic replay; synthetic MTP acceptance; BF16 new-token attention",
+  "configured_duration_seconds": 3600,
+  "aggregate_duration_seconds": 3627.88643,
+  "coverage": {
+    "ttft": 100,
+    "itl": 100,
+    "required": 98
+  },
+  "tokens_per_second_per_gpu": 18244.04135,
+  "profiled_records": 3834,
+  "successful_profiled_records": 3823,
+  "profiled_errors": 11,
+  "error_rate_percent": 0.28690662493479396,
+  "error_categories": {
+    "InvalidInferenceResultError": 10,
+    "ClientOSError": 1
+  },
+  "requests_cancelled_after_grace_period": 8,
+  "server_runtime_errors": 0,
+  "server_blas_warnings": 0,
+  "server_quota_errors": 0,
+  "source_hashes_checked": 8,
+  "source_hash_mismatches": [],
+  "periodic_stack_dumps_enabled": false,
+  "blas_settings": {
+    "TORCH_BLAS_PREFER_HIPBLASLT": "0",
+    "TORCH_BLAS_PREFER_CUBLASLT": "0",
+    "observed": "_BlasBackend.Cublas"
+  },
+  "workers": [
+    {
+      "rank": 0,
+      "pid": 3642,
+      "projection": true,
+      "cached_fmha": true
+    },
+    {
+      "rank": 1,
+      "pid": 3645,
+      "projection": true,
+      "cached_fmha": true
+    },
+    {
+      "rank": 2,
+      "pid": 3644,
+      "projection": true,
+      "cached_fmha": true
+    },
+    {
+      "rank": 3,
+      "pid": 3646,
+      "projection": true,
+      "cached_fmha": true
+    },
+    {
+      "rank": 4,
+      "pid": 3648,
+      "projection": true,
+      "cached_fmha": true
+    },
+    {
+      "rank": 5,
+      "pid": 3643,
+      "projection": true,
+      "cached_fmha": true
+    },
+    {
+      "rank": 6,
+      "pid": 3647,
+      "projection": true,
+      "cached_fmha": true
+    },
+    {
+      "rank": 7,
+      "pid": 3649,
+      "projection": true,
+      "cached_fmha": true
+    }
+  ],
+  "artifacts": {
+    "aggregate": 13132141935,
+    "raw": 13132186591,
+    "server": 13132067164
+  },
+  "limitations": [
+    "10 empty-content responses; one request body write failed because transport was closing. Causes not fully established.",
+    "8 requests cancelled at configured duration plus grace-period cutoff; server drained to zero running requests.",
+    "No runtime errors/tracebacks/BLAS warnings/quota errors. Startup shared-memory waits occurred, with successful subsequent startup.",
+    "This result does not close the historical BF16-reference LSE criterion."
+  ],
+  "next_run": {
+    "id": 41426504427,
+    "purpose": "Newer-image full GSM8K, C48 TP8/DCP8 real MTP verification; same native SHA, explicit BLAS, timer disabled",
+    "status": "dispatched"
+  }
+}
