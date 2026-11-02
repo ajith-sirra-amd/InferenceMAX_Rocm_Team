@@ -27,7 +27,7 @@
     "stack_timer": false,
     "ccd_binding": true
   },
-  "status": "reference failed; combined arm cancelled; native performance active; GSM8K gated afterward",
+  "status": "native performance passed; GSM8K attempt 2 active after GitHub 502; reference failure report only",
   "claims": "Reference failed with collective timeouts and extensive request errors; no native/reference speedup claim is possible.",
   "required_checks": [
     "full-duration coverage",
@@ -47,5 +47,11 @@
   "gsm8k_workflow_sha": "94f5efa4a61aae4f4a09d54e2c30d9b4dd56216d",
   "reference_run_status": "failure",
   "reference_valid_throughput": false,
-  "reference_failure_evidence": "results/atom-attention/run41443951889/failure-summary.json"
+  "reference_failure_evidence": "results/atom-attention/run41443951889/failure-summary.json",
+  "reference_followup": "Do not fix or rerun #59124, including its benchmark integration",
+  "do_not_resume_reference_run": true,
+  "standalone_native_status": "success",
+  "standalone_native_total_tokens_per_second_per_gpu": 18276.23099,
+  "gsm8k_attempt": 2,
+  "gsm8k_first_attempt_failure": "GitHub API HTTP 502 in prerequisite watcher; no GPU evaluation"
 }

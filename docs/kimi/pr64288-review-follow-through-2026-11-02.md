@@ -54,3 +54,15 @@ Client errors were already present during warm-up: 434/531 records. Measurement 
 Full raw evidence remains in run artifacts 13146026833 and 13146571024; a structured failure summary is at results/atom-attention/run41443951889/failure-summary.json. Our standalone PR run continues and GSM8K remains gated behind its success. The cancelled combined arm stays cancelled.
 
 Warm-up control: successful native run 41413372088 had 437/531 empty-content warm-up errors, versus 434/531 for the failed reference. The harness uses extra one-token warm-up requests; these counts alone do not establish a numerical defect. The reference's measured-phase failure and collective timeout remain the actionable evidence.
+
+## Newer-nightly performance completed; reference work stopped by user
+
+Native run 41447686785 succeeded at **18,276.23099 total tokens/s/GPU**, using PR SHA 492080779e9feea19308092b0aba0840e87c6115 and image e0d00e4b. C48/TP8/DCP8, synthetic MTP k=4, normal routing/graphs, full 3600-second measured replay; aggregation includes 3625.89578 seconds of request activity. TTFT and ITL coverage both 100%. Eight workers proved direct FP8 projection and cached FMHA; new-token attention stayed BF16.
+
+Measured records: 3840 total, 3834 successful, 6 errors (five empty-content responses and one request-body write failure). Nine additional credits were cancelled at the duration/grace-period cutoff. No BLAS warnings or detected server runtime errors. The result is 0.1764% above the earlier-image 18,244.04135 result in one run; no causal nightly-image/workaround uplift is established.
+
+GSM8K run 41447950940 attempt 1 failed before GPU scheduling because its prerequisite watcher received GitHub API HTTP 502 at 14:56:41 UTC. No accuracy evaluation executed. Failed jobs were restarted as attempt 2 after the native performance run succeeded; the prerequisite passed. Keep following the full evaluation and inspect score, exact source, real MTP and all-worker execution.
+
+User instruction: **Do not attempt to fix #59124, including the reference benchmark integration, and do not rerun it. Report its observed failure only.** The combined arm remains cancelled. This PR differs by direct FP8 latent-cache/FP8-weight projection into FP8 K/V, eliminating the BF16 expanded K/V materialization and separate cached K/V quantization. #59124 uses FP8 new-token attention; this PR retains BF16. The failed reference is not a valid speedup baseline.
+
+The PR description and existing reviewer comment now include this difference and the completed newer-nightly result. Native source remains unchanged and PR stays draft pending the requested follow-up evaluation.
