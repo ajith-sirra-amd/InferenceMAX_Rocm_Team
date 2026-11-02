@@ -1,0 +1,246 @@
+{
+  "run": 41447950940,
+  "attempt": 2,
+  "status": "completed",
+  "conclusion": "success",
+  "workflow_sha": "94f5efa4a61aae4f4a09d54e2c30d9b4dd56216d",
+  "artifacts": [
+    {
+      "id": 13157993168,
+      "name": "eval_server_logs_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07",
+      "bytes": 35168
+    },
+    {
+      "id": 13157794027,
+      "name": "agentic_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07",
+      "bytes": 43872
+    },
+    {
+      "id": 13157663920,
+      "name": "eval_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_kimik3_tp8_conc48_kvdram-vllm-simple_spec-mtp_fp4_vllm_tp8-ep1-dpafalse_disagg-false_spec-mtp_conc48_mi355x-amd_pit2_p03_g07",
+      "bytes": 3594356
+    }
+  ],
+  "proof": {
+    "native_sha": "492080779e9feea19308092b0aba0840e87c6115",
+    "phase": "eval",
+    "accuracy_stress_routing": true,
+    "workers": [
+      {
+        "rank": 0,
+        "pid": 2847,
+        "kinds": [
+          "cached_fmha",
+          "projection"
+        ]
+      },
+      {
+        "rank": 1,
+        "pid": 2846,
+        "kinds": [
+          "cached_fmha",
+          "projection"
+        ]
+      },
+      {
+        "rank": 2,
+        "pid": 2843,
+        "kinds": [
+          "cached_fmha",
+          "projection"
+        ]
+      },
+      {
+        "rank": 3,
+        "pid": 2845,
+        "kinds": [
+          "cached_fmha",
+          "projection"
+        ]
+      },
+      {
+        "rank": 4,
+        "pid": 2849,
+        "kinds": [
+          "cached_fmha",
+          "projection"
+        ]
+      },
+      {
+        "rank": 5,
+        "pid": 2848,
+        "kinds": [
+          "cached_fmha",
+          "projection"
+        ]
+      },
+      {
+        "rank": 6,
+        "pid": 2844,
+        "kinds": [
+          "cached_fmha",
+          "projection"
+        ]
+      },
+      {
+        "rank": 7,
+        "pid": 2850,
+        "kinds": [
+          "cached_fmha",
+          "projection"
+        ]
+      }
+    ]
+  },
+  "server_arguments": {
+    "--speculative-config": "{\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":4,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"fp8\",\"draft_sample_method\":\"probabilistic\",\"rejection_sample_method\": \"block\"}",
+    "--max-num-batched-tokens": "512",
+    "--attention-config": "{\"mla_prefill_backend\":\"ROCM_AITER_FA\"}",
+    "--attention-backend": "ROCM_AITER_MLA",
+    "--kv-cache-dtype": "fp8",
+    "--decode-context-parallel-size": "8",
+    "--max-num-seqs": "96"
+  },
+  "eager": true,
+  "server_errors": [],
+  "mtp_lines": [
+    "(APIServer pid=1792) INFO 11-02 16:03:36 [metrics.py:120] SpecDecoding metrics: Mean acceptance length: 3.75, Accepted throughput: 28.10 tokens/s, Drafted throughput: 40.80 tokens/s, Accepted: 281 tokens, Drafted: 408 tokens, Per-position acceptance rate: 0.902, 0.784, 0.618, 0.451, Avg Draft acceptance rate: 68.9%",
+    "(APIServer pid=1792) INFO 11-02 16:03:46 [metrics.py:120] SpecDecoding metrics: Mean acceptance length: 3.94, Accepted throughput: 35.00 tokens/s, Drafted throughput: 47.60 tokens/s, Accepted: 350 tokens, Drafted: 476 tokens, Per-position acceptance rate: 0.958, 0.782, 0.689, 0.513, Avg Draft acceptance rate: 73.5%",
+    "(APIServer pid=1792) INFO 11-02 16:03:56 [metrics.py:120] SpecDecoding metrics: Mean acceptance length: 4.29, Accepted throughput: 11.20 tokens/s, Drafted throughput: 13.60 tokens/s, Accepted: 112 tokens, Drafted: 136 tokens, Per-position acceptance rate: 0.971, 0.912, 0.794, 0.618, Avg Draft acceptance rate: 82.4%"
+  ],
+  "provenance": {
+    "native_sha": "492080779e9feea19308092b0aba0840e87c6115",
+    "require_causal": false,
+    "scope": "native installation only; GPU tests not run",
+    "status": "prepared",
+    "precompiled_base": "a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df",
+    "binary_runtime": {
+      "torch": "2.13.0+rocm10.0.0",
+      "hip": "7.15.26333",
+      "triton": "3.8.0+git669b31ac",
+      "temporary_directory": "/tmp",
+      "module_versions": {
+        "torch": "2.13.0+rocm10.0.0",
+        "triton": "3.8.0"
+      }
+    },
+    "precompiled_wheel": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/vllm-0.33.0rc1.dev182%2Bga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+    "precompiled_metadata": {
+      "vllm": {
+        "package_name": "vllm",
+        "version": "0.33.0rc1.dev182+ga1cfd2c1b",
+        "build_tag": null,
+        "python_tag": "cp312",
+        "abi_tag": "cp312",
+        "platform_tag": "manylinux_2_34_x86_64",
+        "variant": "rocm100",
+        "filename": "vllm-0.33.0rc1.dev182+ga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "path": "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/vllm-0.33.0rc1.dev182%2Bga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "resolved_wheel_url": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/vllm-0.33.0rc1.dev182%2Bga1cfd2c1b.rocm100-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "wheel_version": "0.33.0rc1.dev182+ga1cfd2c1b.rocm100"
+      },
+      "torch": {
+        "package_name": "torch",
+        "version": "2.13.0",
+        "build_tag": null,
+        "python_tag": "cp312",
+        "abi_tag": "cp312",
+        "platform_tag": "manylinux_2_34_x86_64",
+        "variant": "rocm100",
+        "filename": "torch-2.13.0+rocm10.0.0-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "path": "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/torch-2.13.0%2Brocm10.0.0-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "resolved_wheel_url": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/torch-2.13.0%2Brocm10.0.0-cp312-cp312-manylinux_2_34_x86_64.whl",
+        "wheel_version": "2.13.0+rocm10.0.0"
+      },
+      "triton": {
+        "package_name": "triton",
+        "version": "3.8.0+git669b31ac",
+        "build_tag": null,
+        "python_tag": "cp312",
+        "abi_tag": "cp312",
+        "platform_tag": "manylinux_2_35_x86_64",
+        "variant": "rocm100",
+        "filename": "triton-3.8.0+git669b31ac-cp312-cp312-manylinux_2_35_x86_64.whl",
+        "path": "../../../a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/triton-3.8.0%2Bgit669b31ac-cp312-cp312-manylinux_2_35_x86_64.whl",
+        "resolved_wheel_url": "https://wheels.vllm.ai/rocm/a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df/rocm100-wheels/triton-3.8.0%2Bgit669b31ac-cp312-cp312-manylinux_2_35_x86_64.whl",
+        "wheel_version": "3.8.0+git669b31ac"
+      }
+    },
+    "environment": "[aiter] import [module_aiter_core] under /usr/local/lib/python3.12/dist-packages/aiter/jit/module_aiter_core.so\n{\"torch\": \"2.13.0+rocm10.0.0\", \"hip\": \"7.15.26333\", \"vllm_file\": \"/outputs/.native-fp8-validation/serve.P0zRlr7w/vllm/vllm/__init__.py\", \"aiter_file\": \"/usr/local/lib/python3.12/dist-packages/aiter/__init__.py\", \"gpus\": [\"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\", \"AMD Instinct MI355X\"]}\n",
+    "source_hashes": {
+      "tests/kernels/attention/test_rocm_aiter_mla_prefill_fusions.py": "72b7c413d7b3e7c84f1a784d23422dec2a4af1e1dcc933f7d12e35512653bf28",
+      "vllm/envs.py": "f166a441f4e0806a375902a60fe7e4f3610aa547026191276d562ec4e4951c65",
+      "vllm/models/kimi_k3/nvidia/dspark_mla.py": "dea42ec9154e7576617cfa87bb02c6c1c5235b878b9c738b3837c6dcf85314aa",
+      "vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py": "105565beb3d5defe7918f0422f92d8e388272e9fa8f600c2e6eace416f01da7f",
+      "vllm/v1/attention/backends/mla/rocm_aiter_mla.py": "d7e23a4312325159f9263c06e440ffcf484e351ab8551a9fa900c343b7fb164d",
+      "vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py": "2ee58e35bbb88574e1b98b336cb3800db7b953fcb87d6852b33e82eaad550f6f",
+      "vllm/v1/attention/ops/rocm_aiter_mla_fp8_quant.py": "e18ade190ea928fa174ea680552f8867d236419e1dfb8d951beadd9220407ee7",
+      "vllm/v1/attention/ops/rocm_aiter_mla_prefill.py": "d1919b4433bf0c820712e9a9c589c86e82951f7d35e3b7d675a449688012d574"
+    },
+    "source_root": "/outputs/.native-fp8-validation/serve.P0zRlr7w/vllm"
+  },
+  "accuracy": {
+    "results": {
+      "gsm8k": {
+        "alias": "gsm8k",
+        "exact_match,strict-match": 0.9673995451099318,
+        "exact_match_stderr,strict-match": 0.00489166902193959,
+        "exact_match,flexible-extract": 0.9666413949962093,
+        "exact_match_stderr,flexible-extract": 0.004946282649173772
+      }
+    },
+    "n-samples": {
+      "gsm8k": {
+        "original": 1319,
+        "effective": 1319
+      }
+    },
+    "n-shot": {
+      "gsm8k": 5
+    },
+    "config": {
+      "model": "local-chat-completions",
+      "model_args": {
+        "model": "moonshotai/Kimi-K3",
+        "base_url": "http://0.0.0.0:8897/v1/chat/completions",
+        "api_key": "EMPTY",
+        "eos_string": "</s>",
+        "max_retries": 5,
+        "num_concurrent": 48,
+        "timeout": 1800,
+        "tokenized_requests": false,
+        "max_length": 32768
+      },
+      "batch_size": 1,
+      "batch_sizes": [],
+      "device": "cuda:0",
+      "use_cache": null,
+      "limit": null,
+      "bootstrap_iters": 100000,
+      "gen_kwargs": {
+        "max_tokens": 16384,
+        "temperature": 0,
+        "top_p": 1
+      },
+      "random_seed": 0,
+      "numpy_seed": 1234,
+      "torch_seed": 1234,
+      "fewshot_seed": 1234
+    },
+    "task_hashes": {
+      "gsm8k": "817087e7f46d87196e8aec44051fb73ec5731beec1ba4bd3750c178d25237d60"
+    },
+    "total_evaluation_time_seconds": "975.7310503665358"
+  },
+  "sample_count": 2638,
+  "source_hashes_verified": true,
+  "unique_examples": 1319,
+  "strict_correct": 1276,
+  "flexible_correct": 1275,
+  "sample_rows_per_filter": 1319,
+  "worker_blas_backend": "_BlasBackend.Cublas",
+  "execution_ref": "190f103aad8911bff3a31a2ee0cbc12ed9070ce9",
+  "image_digest": "sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f",
+  "fp8_events_verified": 16,
+  "blas_backends_all_eight": "_BlasBackend.Cublas"
+}

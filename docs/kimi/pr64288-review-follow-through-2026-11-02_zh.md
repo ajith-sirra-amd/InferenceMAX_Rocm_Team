@@ -61,3 +61,19 @@ GSM8K 运行 `41447950940` 的 attempt 2、job `125363224586` 在最近检查时
 稳态性能分析接线已单独发布到 `checks/native-steady-profile-20261102`，commit 为 `9da21ee27541876ead88045459ecbf0e74e7c670`。CPU 运行 `41476491034` 的 **30 个测试全部通过，无失败或跳过**，真实 launcher 和语法检查也通过。已检查 JUnit artifact `13157862094`，确认包括 SIGTERM 清理和启动响应丢失在内的全部九个控制器用例均执行。仅分析模式延长容器关闭时间，允许停止服务前导出 trace。
 
 性能分析默认关闭，仅允许独立原生完整 replay。等待测量阶段标记和 300 秒生成进展后，采集 20 秒 worker CPU/GPU 活动。输出和 artifact 均保存在本仓库。GPU 分析尚未派发。参见[性能分析指南](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/checks/native-steady-profile-20261102/docs/kimi/native-steady-profile_zh.md)。
+
+## 原生验证完成并进入评审
+
+完整 GSM8K 运行 [41447950940](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41447950940) 的 attempt 2 成功。Strict：**1276/1319 = 96.7399%**；flexible：**1275/1319 = 96.6641%**。样本包含 1319 个独立题目，每种评分 filter 各一行，共 2638 行。
+
+已确认使用固定镜像 e0d00e4b，digest 为 `b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f`。真实 MTP k=4 采用 block 验证，日志记录了非零接受率。配置为 eager、512-token chunk、C48/TP8/DCP8、five-shot、temperature zero 和明确的准确率压力路由。此结果验证所述准确率配置下的优化算术路径；匹配的 BF16 对照仍属另一项验证。
+
+全部八个 worker 在评估阶段记录了非空 E4M3 直接投影和 cached FMHA，native SHA 为 `492080779e9feea19308092b0aba0840e87c6115`，BLAS backend 均为 `_BlasBackend.Cublas`。provenance 清单中的八个已安装源文件 hash 均与 fork commit 独立比对一致。未检测到服务运行时错误、BLAS 失败或磁盘配额错误。独立 GPU kernel 测试仍对应运行 41401317715；此次评估安装器使用 prepare-only 模式。
+
+Artifact：分数与样本 **13157663920**，执行证明、来源和服务日志 **13157794027**，独立服务日志 **13157993168**。[结构化报告](../../results/atom-attention/run41447950940/native-gsm8k-summary.json)。
+
+已更新 PR 描述和现有状态评论。**PR #64288 现为 OPEN、非 draft，可供评审**，源码保持已验证版本。上游 CI 授权和人工评审仍阻止合并，未请求或添加授权标签。
+
+下一项已授权稳态分析为 [41478604149](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41478604149)，workflow/execution SHA 为 `9da21ee27541876ead88045459ecbf0e74e7c670`，使用相同原生 PR 和镜像，完整 C48/MTP replay 并启用 profile。前置 CPU 运行 41476491034 已通过，仍需跟踪准备、采集及最终 trace 分析。
+
+后续 sweep：当前配置仅列出 C48，需明确添加 C56/C64。当前 launcher 指向的非 MTP Kimi script 不存在，C96 无 MTP 运行前需修正路由和 metadata。尚未派发这些 sweep。

@@ -84,3 +84,19 @@ GSM8K run `41447950940`, attempt 2, job `125363224586`, is still active at the l
 Steady-state profiling wiring is published separately on `checks/native-steady-profile-20261102` at `9da21ee27541876ead88045459ecbf0e74e7c670`. CPU run `41476491034` passed **30 tests, zero failures/skips**, plus real launcher/syntax checks. JUnit artifact `13157862094` was inspected and contains all nine controller cases, including SIGTERM cleanup and lost start response. A profile-only shutdown allowance permits trace export before stopping the server.
 
 Profiling is default-off, restricted to a full standalone native replay, and waits for the measured-phase marker plus 300 seconds of generation progress before a 20-second worker CPU/GPU capture. Output and artifacts remain in this repository. GPU profiling has not yet been dispatched. See [profiling guide](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/checks/native-steady-profile-20261102/docs/kimi/native-steady-profile.md).
+
+## Completed native validation and review readiness
+
+Full GSM8K run [41447950940](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41447950940), attempt 2, succeeded. Strict: **1276/1319 = 96.7399%**. Flexible: **1275/1319 = 96.6641%**. The sample artifact contains 1319 unique examples, with one row per scoring filter (2638 rows total).
+
+Validated on pinned image e0d00e4b, digest `b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f`. Real MTP k=4 used block verification and logged nonzero acceptance. Eager execution, 512-token chunks, C48/TP8/DCP8, five-shot, temperature zero and explicit accuracy-stress routing were confirmed. This validates the optimized arithmetic under the disclosed accuracy settings; a matched BF16 control remains separate.
+
+All eight workers recorded nonempty E4M3 direct projection and cached FMHA during evaluation, at native SHA `492080779e9feea19308092b0aba0840e87c6115`. Their BLAS backend was `_BlasBackend.Cublas`. All eight installed source hashes in the provenance manifest independently matched the fork commit. No server runtime errors, BLAS failure signatures or disk-quota errors were detected. The standalone GPU kernel suite remains run 41401317715; this evaluation's installer used prepare-only mode.
+
+Artifacts: scores/samples **13157663920**, raw proof/provenance/server log **13157794027**, standalone server log **13157993168**. [Structured report](../../results/atom-attention/run41447950940/native-gsm8k-summary.json).
+
+The PR description and existing status comment were updated. **PR #64288 is now OPEN, non-draft, ready for review**, at the unchanged validated source. Upstream CI authorization and human review still block merging. No authorization label was requested or added.
+
+Next authorized steady-state profile: [41478604149](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41478604149), workflow/execution SHA `9da21ee27541876ead88045459ecbf0e74e7c670`, same native PR and image, full C48/MTP replay, profile enabled. Prerequisite CPU run 41476491034 passed. Follow through setup, capture and final trace analysis; GPU trace evidence is pending.
+
+Future sweep preparation: the current master config lists only C48, so C56/C64 require explicit entries. The launcher's non-MTP Kimi script path does not exist at this revision; fix routing and metadata before C96 without MTP. These sweeps have not been dispatched.
