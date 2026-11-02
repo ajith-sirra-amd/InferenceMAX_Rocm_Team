@@ -4,7 +4,7 @@ on:
     branches: [checks/native-fp8-stack-20261102]
     paths:
       - .github/workflows/native-fp8-stack-diagnostic.yml
-      - utils/atom_attention/bf16_runtime_repro.py
+      - utils/atom_attention/bf16_blas_backend_repro.py
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,14 +34,14 @@ jobs:
           import ast, subprocess
           from pathlib import Path
           import yaml
-          ast.parse(Path("utils/atom_attention/bf16_runtime_repro.py").read_text())
+          ast.parse(Path("utils/atom_attention/bf16_blas_backend_repro.py").read_text())
           workflow = yaml.safe_load(Path(".github/workflows/native-fp8-stack-diagnostic.yml").read_text())
           for job in workflow["jobs"].values():
               for step in job["steps"]:
                   if "run" in step:
                       subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
           PY
-          .venv/bin/python utils/atom_attention/bf16_runtime_repro.py --help
+          .venv/bin/python utils/atom_attention/bf16_blas_backend_repro.py --help
   gpu-diagnostic:
     needs: code-checks
     runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
@@ -68,33 +68,61 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          task_work="$GITHUB_WORKSPACE/.native-stack-diagnostics/old"
+          task_work="$GITHUB_WORKSPACE/.native-stack-diagnostics/${{ github.run_id }}/old"
           mkdir -p "$task_work"
           docker run --rm --init --network host --ipc=host --shm-size=8g \
             --device=/dev/kfd --device=/dev/dri \
             -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
             -e PYTHONDONTWRITEBYTECODE=1 --entrypoint bash "$OLD_IMAGE" -lc \
-            'uv venv --system-site-packages /work/.bootstrap && /work/.bootstrap/bin/python /repo/utils/atom_attention/bf16_runtime_repro.py --output /work/evidence'
+            'uv venv --system-site-packages /work/.bootstrap && /work/.bootstrap/bin/python /repo/utils/atom_attention/bf16_blas_backend_repro.py --output /work/evidence'
       - name: Reproduce logged BF16 shapes on November 1 image
         id: new-bf16
+        continue-on-error: true
         shell: bash
         run: |
-          task_work="$GITHUB_WORKSPACE/.native-stack-diagnostics/new"
+          task_work="$GITHUB_WORKSPACE/.native-stack-diagnostics/${{ github.run_id }}/new"
           mkdir -p "$task_work"
           docker run --rm --init --network host --ipc=host --shm-size=8g \
             --device=/dev/kfd --device=/dev/dri \
             -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
             -e PYTHONDONTWRITEBYTECODE=1 --entrypoint bash "$NEW_IMAGE" -lc \
-            'uv venv --system-site-packages /work/.bootstrap && /work/.bootstrap/bin/python /repo/utils/atom_attention/bf16_runtime_repro.py --output /work/evidence'
+            'uv venv --system-site-packages /work/.bootstrap && /work/.bootstrap/bin/python /repo/utils/atom_attention/bf16_blas_backend_repro.py --output /work/evidence'
+      - name: Verify explicit hipBLAS backend on old image
+        id: old-blas-candidate
+        shell: bash
+        run: |
+          task_work="$GITHUB_WORKSPACE/.native-stack-diagnostics/${{ github.run_id }}/old-blas-candidate"
+          mkdir -p "$task_work"
+          docker run --rm --init --network host --ipc=host --shm-size=8g \
+            --device=/dev/kfd --device=/dev/dri \
+            -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+            --entrypoint bash "$OLD_IMAGE" -lc \
+            'uv venv --system-site-packages /work/.bootstrap && /work/.bootstrap/bin/python /repo/utils/atom_attention/bf16_blas_backend_repro.py --output /work/evidence --expect-blas cublas'
+      - name: Verify explicit hipBLAS backend on new image
+        id: new-blas-candidate
+        shell: bash
+        run: |
+          task_work="$GITHUB_WORKSPACE/.native-stack-diagnostics/${{ github.run_id }}/new-blas-candidate"
+          mkdir -p "$task_work"
+          docker run --rm --init --network host --ipc=host --shm-size=8g \
+            --device=/dev/kfd --device=/dev/dri \
+            -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+            --entrypoint bash "$NEW_IMAGE" -lc \
+            'uv venv --system-site-packages /work/.bootstrap && /work/.bootstrap/bin/python /repo/utils/atom_attention/bf16_blas_backend_repro.py --output /work/evidence --expect-blas cublas'
       - name: Validate unchanged native FP8 PR kernels on November 1 image
         shell: bash
         run: |
-          task_work="$GITHUB_WORKSPACE/.native-stack-diagnostics/native"
+          task_work="$GITHUB_WORKSPACE/.native-stack-diagnostics/${{ github.run_id }}/native"
           mkdir -p "$task_work"
           docker run --rm --init --network host --ipc=host --shm-size=8g \
             --device=/dev/kfd --device=/dev/dri \
             -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
             -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA \
+            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
             --entrypoint bash "$NEW_IMAGE" -lc \
             'uv venv --system-site-packages /work/.bootstrap && /work/.bootstrap/bin/python /repo/utils/atom_attention/native_vllm_gpu_validate.py --native-sha "$NATIVE_SHA"'
       - name: Restore evidence ownership
@@ -117,8 +145,10 @@ jobs:
         with:
           name: native-fp8-stack-diagnostic
           path: |
-            .native-stack-diagnostics/old/evidence/
-            .native-stack-diagnostics/new/evidence/
-            .native-stack-diagnostics/native/evidence/
+            .native-stack-diagnostics/${{ github.run_id }}/old/evidence/
+            .native-stack-diagnostics/${{ github.run_id }}/new/evidence/
+            .native-stack-diagnostics/${{ github.run_id }}/native/evidence/
+            .native-stack-diagnostics/${{ github.run_id }}/old-blas-candidate/evidence/
+            .native-stack-diagnostics/${{ github.run_id }}/new-blas-candidate/evidence/
           include-hidden-files: true
           if-no-files-found: error
