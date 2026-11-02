@@ -8,6 +8,7 @@ import re
 MARKER = "NATIVE_FP8_EXECUTION "
 KINDS = {"projection", "cached_fmha", "causal_fmha"}
 _REGISTERED = False
+_STACK_FILE = None
 
 
 def validate_execution_log(text, workers, native_sha, *, require_causal, phase):
@@ -67,7 +68,7 @@ def validate_execution_log(text, workers, native_sha, *, require_causal, phase):
 
 def register():
     """Observe native calls, with an explicitly selected evaluation routing override."""
-    global _REGISTERED
+    global _REGISTERED, _STACK_FILE
     if _REGISTERED:
         return
 
@@ -99,6 +100,28 @@ def register():
     if stress == "1":
         native.use_fp8_context = lambda query, context: query > 0 and context > 0
     phase_file = Path(os.environ["INFERENCEX_NATIVE_PHASE_FILE"])
+    expected_blas = os.getenv("INFERENCEX_NATIVE_EXPECT_BLAS")
+    stack_interval = int(os.getenv("INFERENCEX_NATIVE_STACK_INTERVAL", "0"))
+    if stack_interval:
+        import datetime
+        import faulthandler
+
+        if not 60 <= stack_interval <= 3600:
+            raise ValueError("Stack diagnostic interval must be 60..3600 seconds")
+        stack_dir = phase_file.parent / "native_worker_stacks"
+        stack_dir.mkdir(parents=True, exist_ok=True)
+        _STACK_FILE = (stack_dir / f"pid-{os.getpid()}.log").open("a")
+        _STACK_FILE.write(json.dumps({
+            "pid": os.getpid(),
+            "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "interval_seconds": stack_interval,
+            "scope": "periodic diagnostic stacks; not an uninstrumented benchmark",
+        }) + "\n")
+        _STACK_FILE.flush()
+        faulthandler.enable(file=_STACK_FILE, all_threads=True)
+        faulthandler.dump_traceback_later(
+            stack_interval, repeat=True, file=_STACK_FILE, exit=False,
+        )
     emitted = set()
 
     def record(kind, tensors):
@@ -108,7 +131,11 @@ def register():
             return
         if not all(t.dtype == torch.float8_e4m3fn and t.numel() for t in tensors):
             raise RuntimeError("Native FP8 execution observer received other dtypes")
+        actual_blas = str(torch.backends.cuda.preferred_blas_library())
+        if expected_blas and actual_blas.lower().split(".")[-1] != expected_blas:
+            raise RuntimeError(f"Expected BLAS {expected_blas}, got {actual_blas}")
         event = {
+            "blas_backend": actual_blas,
             "native_sha": expected_sha,
             "kind": kind,
             "phase": phase_file.read_text().strip(),
