@@ -268,11 +268,11 @@ jobs:
     wait-for-prerequisite:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest
-        timeout-minutes: 60
+        timeout-minutes: 240
         permissions:
             actions: read
         steps:
-            - name: Wait for preceding numerical run
+            - name: Wait for preceding validation or benchmark
               if: ${{ inputs.after-run-id != '' }}
               env:
                   GH_TOKEN: ${{ github.token }}
