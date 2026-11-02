@@ -142,3 +142,31 @@ BLAS/current-head native GPU evidence is archived at
 ../../results/atom-attention/run41401317715/stack-evidence.json.
 Follow this replay to completion and inspect the evidence before declaring
 the full serving stall fixed or dispatching the matched newer-image replay.
+## Startup failure and corrected diagnostic — 08:17Z
+
+Run 41402358706 failed before serving. Checkpoint loading stopped at 80/96
+shards, then EngineCore shut down workers at 07:06:47Z. The TCPStore
+connection resets are secondary. No native FP8 execution event, hipBLAS
+warning, quota error, or benchmark result exists in the archived server log.
+
+The new periodic stack files were not included in artifact paths, and the
+existing post-run cleanup deleted the workspace. Recovery 41411453288
+confirmed they were unavailable. This was a diagnostic collection mistake,
+fixed by workflow commit 715ba4532db9a2b79496fcf9a8173d024ce9b091.
+Execution commit 16260f819be89b47defeecbd377fd4e762e5501e also keeps fatal
+tracebacks in server.log while periodic samples go to separate files.
+
+Host diagnostic 41411641720 found all eight GPUs idle with reported RAS
+counters zero. It could not read kernel logs due runner-account permissions;
+this does not rule out a kernel or memory fault. Docker event check
+41411820242 records exit code 1 and no retained OOM event; it does not identify
+the first worker's exit cause.
+
+Corrected full diagnostic:
+[41411886545](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41411886545),
+execution 16260f819be89b47defeecbd377fd4e762e5501e, workflow
+d4f6823f4c954a9974c737259f5ab8d3b49090ed, unchanged PR SHA/current image,
+C48/MTP/3600 seconds. Harness 41411714298 passed 20/20 tests. The next result
+must establish startup, capture any first fatal event, and then pass the
+unchanged serving/coverage gates. Neither startup failure nor original
+late-run stall has a confirmed root-cause fix yet.
