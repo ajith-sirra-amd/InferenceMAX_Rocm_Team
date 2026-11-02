@@ -75,6 +75,24 @@ if sys.argv[1] == "run":
             for i in range(len(run) - 1)
         ), run
         trace.unlink()
+        env["NATIVE_STEADY_PROFILE"] = "0"
+        env["NATIVE_VLLM_SHA"] = "a" * 40
+        env["SPEC_DECODING"] = "none"
+        non_speculative = subprocess.run(
+            ["bash", str(ROOT / "runners/launch_mi355x-amd.sh")],
+            env=env, cwd=ROOT, capture_output=True, text=True, timeout=30,
+        )
+        assert non_speculative.returncode == 17, non_speculative.stderr
+        calls = [json.loads(line) for line in trace.read_text().splitlines()]
+        run = next(call for call in calls if call[0] == "run")
+        assert run[-1] == (
+            "benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh"
+        ), run
+        assert any(
+            run[i:i + 2] == ["-e", "SPEC_DECODING"]
+            for i in range(len(run) - 1)
+        ), run
+        trace.unlink()
         env.pop("BMK_CONTAINER_NAME")
         missing = subprocess.run(
             ["bash", str(ROOT / "runners/launch_mi355x-amd.sh")],

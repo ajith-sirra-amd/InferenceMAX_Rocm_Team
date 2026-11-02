@@ -152,6 +152,10 @@ elif [[ $FRAMEWORK == "atom" ]]; then
     FRAMEWORK_SUFFIX="_atom"
 fi
 SPEC_SUFFIX=$([[ "$SPEC_DECODING" == "mtp" ]] && printf '_mtp' || printf '')
+# The native Kimi recipe also handles the C96 non-speculative schedule.
+if [[ "$FRAMEWORK" == "vllm" && "$MODEL_CODE" == "kimik3" && "$SCENARIO_SUBDIR" == "agentic/" && -n "$NATIVE_VLLM_SHA" ]]; then
+    SPEC_SUFFIX="_mtp"
+fi
 
 echo "[container] isolated name=$server_name"
 
@@ -217,6 +221,7 @@ docker run --rm --init --network host --shm-size=512g --name="$server_name" --st
 -e MODEL_PATH \
 -e TP \
 -e CONC \
+-e SPEC_DECODING \
 -e ISL \
 -e OSL \
 -e MAX_MODEL_LEN \

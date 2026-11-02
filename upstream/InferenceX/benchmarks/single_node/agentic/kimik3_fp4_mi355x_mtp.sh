@@ -33,7 +33,7 @@ fi
 
 NATIVE_MODE=0
 if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
-    check_env_vars INFERENCEX_NATIVE_REQUIRE_CAUSAL RESULT_FILENAME
+    check_env_vars INFERENCEX_NATIVE_REQUIRE_CAUSAL RESULT_FILENAME SPEC_DECODING
     case "$INFERENCEX_NATIVE_REQUIRE_CAUSAL" in
         0|1) ;;
         *) echo "INFERENCEX_NATIVE_REQUIRE_CAUSAL must be 0 or 1" >&2; exit 1 ;;
@@ -302,6 +302,14 @@ case "$CONC" in
         ;;
 esac
 export DCP_SIZE
+
+if [ "$NATIVE_MODE" = "1" ]; then
+    case "$SPEC_DECODING" in
+        mtp) [ "${#SPEC_ARGS[@]}" -gt 0 ] || { echo "MTP metadata requires speculative arguments" >&2; exit 1; } ;;
+        none) [ "${#SPEC_ARGS[@]}" -eq 0 ] || { echo "Non-MTP metadata forbids speculative arguments" >&2; exit 1; } ;;
+        *) echo "Native Kimi supports spec-decoding=mtp or none" >&2; exit 1 ;;
+    esac
+fi
 
 if [ "$NATIVE_MODE" = "1" ]; then
     if [ "$EVAL_ONLY" = "true" ]; then
