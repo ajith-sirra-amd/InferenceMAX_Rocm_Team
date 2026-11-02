@@ -28,6 +28,8 @@ jobs:
           dmesg -T 2>&1 | grep -Ei 'out of memory|killed process|oom|segfault|amdgpu|denied|permitted' | tail -40 || true
           printf '\nREMAINING REPOSITORY EVIDENCE\n'
           find "$task_workspace" -maxdepth 2 -type d -name native_worker_stacks -print
+          printf '\nFAILED CONTAINER EVENTS\n'
+          timeout 10 docker events --since "2026-11-02T06:50:00Z" --until "2026-11-02T07:08:00Z" --filter container=bmk-server-41402358706-1-mi355x-amd_pit2_p03_g07 --format '{{json .}}' || true
           printf '\nGPU HEALTH\n'
           if command -v rocm-smi >/dev/null; then
             timeout 30 rocm-smi --showuse --showmemuse --showrasinfo || true
