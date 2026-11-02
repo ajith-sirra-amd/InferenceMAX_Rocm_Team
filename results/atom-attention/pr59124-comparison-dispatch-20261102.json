@@ -1,0 +1,40 @@
+{
+  "native_pr": 64288,
+  "native_pr_sha": "492080779e9feea19308092b0aba0840e87c6115",
+  "reference_pr": 59124,
+  "reference_sha": "132f6daa6b17cb4000ef58355943bb39339104f2",
+  "integration_sha": "2eb0ada53e6d0fcd658010d9869957026a229adb",
+  "harness_sha": "190f103aad8911bff3a31a2ee0cbc12ed9070ce9",
+  "validation_run": 41443627369,
+  "validation": {
+    "passed": 26,
+    "failed": 0,
+    "skipped": 0
+  },
+  "reference_run": 41443951889,
+  "reference_job": 125274652799,
+  "direct_run": 41444880140,
+  "direct_job": 125275576092,
+  "configuration": {
+    "duration": 3600,
+    "concurrency": 48,
+    "tp": 8,
+    "dcp": 8,
+    "mtp": "synthetic acceptance, k=4",
+    "image": "vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f",
+    "prefill_backend": "ROCM_AITER_FLYDSL_FP8",
+    "hipblaslt": false,
+    "stack_timer": false,
+    "ccd_binding": true
+  },
+  "status": "reference in progress; direct queued on same runner",
+  "claims": "No performance result yet. Baseline and direct arm share source and weight targets; direct scale estimation differs from actual-context scale selection.",
+  "required_checks": [
+    "full-duration coverage",
+    "all-eight-worker causal and cached FP8 execution",
+    "reference BF16 expanded K/V, no native projection",
+    "direct FP8 projection",
+    "source and runtime parity",
+    "request/server/BLAS/quota errors"
+  ]
+}
