@@ -100,3 +100,13 @@ The PR description and existing status comment were updated. **PR #64288 is now 
 Next authorized steady-state profile: [41478604149](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41478604149), workflow/execution SHA `9da21ee27541876ead88045459ecbf0e74e7c670`, same native PR and image, full C48/MTP replay, profile enabled. Prerequisite CPU run 41476491034 passed. Follow through setup, capture and final trace analysis; GPU trace evidence is pending.
 
 Future sweep preparation: the current master config lists only C48, so C56/C64 require explicit entries. The launcher's non-MTP Kimi script path does not exist at this revision; fix routing and metadata before C96 without MTP. These sweeps have not been dispatched.
+
+## Concurrency sweep preflight completed
+
+Separate branch `checks/native-concurrency-sweep-20261102`, SHA `d67152dac62f6f19a42a49c72bc2ae98b7747de1`, now contains separate C56/C64 MTP and C96 non-MTP configurations. The original C48 entry remains unchanged. Native non-MTP Kimi selects the existing shared recipe, passes `SPEC_DECODING` into the container, and rejects metadata/argument mismatches.
+
+CPU run [41479440563](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41479440563) passed: 30 pytest cases, zero failures/skips, launcher behavior and shell checks. Artifact **13159250994** was inspected: the actual matrix generator emitted exactly C56/MTP, C64/MTP and C96/none, each TP8/DCP8, 2249 GB CPU DRAM budget and duration 3600. The native workflow overrides the legacy matrix image with the pinned e0d00e4b image.
+
+Planned recipe settings: C56 uses k=4/AL=3.36/chunk=8192/max-seqs=112; C64 uses k=3/AL=3.00/chunk=24576/max-seqs=80; C96 has no MTP, chunk=24576/max-seqs=144. This compares complete configuration points, not concurrency alone. No sweep GPU job has been dispatched.
+
+Active profile run **41478604149**, GPU job **125390981568**, continues at the server/replay step. Its workflow and execution remain pinned to **9da21ee27541876ead88045459ecbf0e74e7c670**; sweep preparation does not change the running job. Keep following it through completion and inspect worker traces before scheduling sweeps.

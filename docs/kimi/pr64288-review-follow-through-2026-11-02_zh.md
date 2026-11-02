@@ -77,3 +77,13 @@ Artifact：分数与样本 **13157663920**，执行证明、来源和服务日�
 下一项已授权稳态分析为 [41478604149](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41478604149)，workflow/execution SHA 为 `9da21ee27541876ead88045459ecbf0e74e7c670`，使用相同原生 PR 和镜像，完整 C48/MTP replay 并启用 profile。前置 CPU 运行 41476491034 已通过，仍需跟踪准备、采集及最终 trace 分析。
 
 后续 sweep：当前配置仅列出 C48，需明确添加 C56/C64。当前 launcher 指向的非 MTP Kimi script 不存在，C96 无 MTP 运行前需修正路由和 metadata。尚未派发这些 sweep。
+
+## 并发扫描前置检查完成
+
+独立分支 `checks/native-concurrency-sweep-20261102`、SHA `d67152dac62f6f19a42a49c72bc2ae98b7747de1` 已加入 C56/C64 MTP 和 C96 无 MTP 的独立配置，原 C48 配置不变。原生非 MTP Kimi 选择现有共用 recipe，并向容器传入 `SPEC_DECODING`；metadata 与实际参数不一致时会报错。
+
+CPU 运行 [41479440563](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41479440563) 通过：30 个 pytest 用例无失败或跳过，launcher 行为和 shell 检查通过。已检查 artifact **13159250994**：实际 matrix generator 仅生成 C56/MTP、C64/MTP 和 C96/none，均为 TP8/DCP8、2249 GB CPU DRAM 预算、3600 秒。原生 workflow 将旧 matrix 镜像替换为固定的 e0d00e4b 镜像。
+
+计划参数：C56 为 k=4/AL=3.36/chunk=8192/max-seqs=112；C64 为 k=3/AL=3.00/chunk=24576/max-seqs=80；C96 无 MTP，chunk=24576/max-seqs=144。这是完整配置点的比较，不是仅改变并发的对照。尚未派发 sweep GPU job。
+
+当前 profile 运行 **41478604149**、GPU job **125390981568** 仍处于服务/replay 步骤。workflow 和执行版本固定为 **9da21ee27541876ead88045459ecbf0e74e7c670**，并发扫描准备不会改变正在执行的任务。需继续跟踪至结束，检查 worker trace 后再安排 sweep。
