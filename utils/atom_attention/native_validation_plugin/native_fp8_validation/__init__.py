@@ -118,7 +118,8 @@ def register():
             "scope": "periodic diagnostic stacks; not an uninstrumented benchmark",
         }) + "\n")
         _STACK_FILE.flush()
-        faulthandler.enable(file=_STACK_FILE, all_threads=True)
+        # Fatal signals remain visible in server.log; periodic stacks use a file.
+        faulthandler.enable(all_threads=True)
         faulthandler.dump_traceback_later(
             stack_interval, repeat=True, file=_STACK_FILE, exit=False,
         )
