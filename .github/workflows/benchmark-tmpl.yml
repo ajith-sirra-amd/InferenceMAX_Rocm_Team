@@ -69,6 +69,11 @@ on:
         type: string
         required: false
         default: ''
+      native-steady-profile:
+        description: "Capture the native agentic replay after warm-up and settling"
+        type: boolean
+        required: false
+        default: false
       native-comparison:
         description: "Matched reference comparison: native, reference, or direct"
         type: string
@@ -135,6 +140,11 @@ env:
   EVAL_ONLY: ${{ inputs.eval-only }}
   ATTENTION_PATH_PROBE_ONLY: ${{ inputs.attention-path-probe-only }}
   NATIVE_VLLM_SHA: ${{ inputs.native-vllm-sha }}
+  NATIVE_STEADY_PROFILE: ${{ inputs.native-steady-profile && '1' || '0' }}
+  NATIVE_PROFILE_SETTLE_SECONDS: '300'
+  NATIVE_PROFILE_CAPTURE_SECONDS: '20'
+  NATIVE_PROFILE_TIMEOUT_SECONDS: '7200'
+  NATIVE_PROFILE_POLL_SECONDS: '5'
   INFERENCEX_NATIVE_REQUIRE_CAUSAL: ${{ inputs.native-comparison != 'native' && '1' || '0' }}
   INFERENCEX_NATIVE_COMPARISON: ${{ inputs.native-comparison }}
   ATOM_USE_FLYDSL_FP8_PREFILL_ATTN: '1'
@@ -337,6 +347,15 @@ jobs:
           # results/aiperf_artifacts/profile_export_raw.jsonl (full HTTP bodies
           # per request — recoverable by re-running the same trace).
           if-no-files-found: ignore
+
+      - name: Upload native steady-state profile
+        if: ${{ always() && inputs.native-steady-profile }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-steady-profile-${{ github.run_id }}
+          path: results/native_steady_profile/
+          compression-level: 0
+          if-no-files-found: error
 
       - name: Upload server logs
         if: always()

@@ -6,6 +6,7 @@ import json
 import math
 import os
 import re
+import signal
 import time
 import urllib.request
 from pathlib import Path
@@ -71,8 +72,9 @@ def capture(
         raise ValueError("Profile output must be inside the allowed repository")
     if not 1 <= port <= 65535:
         raise ValueError("Invalid server port")
-    if min(settle_seconds, capture_seconds, timeout_seconds, poll_seconds) <= 0:
-        raise ValueError("Timing parameters must be positive")
+    timings = (settle_seconds, capture_seconds, timeout_seconds, poll_seconds)
+    if any(not math.isfinite(value) or value <= 0 for value in timings):
+        raise ValueError("Timing parameters must be finite and positive")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", prefix):
         raise ValueError("Invalid profile prefix")
     output.mkdir(parents=True, exist_ok=True)
@@ -119,9 +121,9 @@ def capture(
         report["settle_seconds"] = settle_seconds
         report["generation_tokens_during_settle"] = after - before
         request(port, "/health")
-        request(port, "/start_profile", {"profile_prefix": prefix})
-        report["capture_started_unix"] = time.time()
         try:
+            request(port, "/start_profile", {"profile_prefix": prefix})
+            report["capture_started_unix"] = time.time()
             wait_alive(server_pid, capture_seconds, poll_seconds)
         finally:
             request(port, "/stop_profile", {})
@@ -154,6 +156,11 @@ def capture(
                 os.chown(path, owner.st_uid, owner.st_gid)
 
 
+def interrupt_capture(signum, frame) -> None:
+    signal.signal(signum, signal.SIG_IGN)
+    raise InterruptedError(f"Profile controller received signal {signum}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ["repository", "output", "benchmark-log"]:
@@ -164,7 +171,15 @@ def main() -> None:
         parser.add_argument(f"--{name}", type=float, required=True)
     parser.add_argument("--prefix", required=True)
     args = vars(parser.parse_args())
-    print(json.dumps(capture(**args), indent=2))
+    previous = {
+        signum: signal.signal(signum, interrupt_capture)
+        for signum in (signal.SIGINT, signal.SIGTERM)
+    }
+    try:
+        print(json.dumps(capture(**args), indent=2))
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 import gzip
 import json
+import signal
+import sys
 import pytest
 
 import native_steady_profile as profile
@@ -143,3 +145,43 @@ def test_partial_phase_marker_waits_for_the_remaining_log_bytes(environment, mon
     monkeypatch.setattr(profile.time, "sleep", append_after_wait)
     profile.capture(**args)
     assert calls[-2:] == [("/start_profile", 4), ("/stop_profile", 6)]
+
+
+
+def test_sigterm_stops_active_profile_and_records_failure(environment, monkeypatch):
+    args, clock, calls = environment
+    argv = ["native_steady_profile"]
+    for name, value in args.items():
+        argv.extend(["--" + name.replace("_", "-"), str(value)])
+    monkeypatch.setattr(sys, "argv", argv)
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def cancel_during_capture(seconds):
+        clock.sleep(seconds)
+        if clock.value == 4:
+            signal.raise_signal(signal.SIGTERM)
+
+    monkeypatch.setattr(profile.time, "sleep", cancel_during_capture)
+    with pytest.raises(InterruptedError, match="received signal"):
+        profile.main()
+    assert calls[-2:] == [("/start_profile", 3), ("/stop_profile", 4)]
+    saved = json.loads((args["output"] / "profile-control.json").read_text())
+    assert saved["status"] == "failed"
+    assert "InterruptedError" in saved["error"]
+    assert signal.getsignal(signal.SIGTERM) == previous
+
+
+def test_start_timeout_still_attempts_stop(environment, monkeypatch):
+    args, clock, calls = environment
+    original = profile.request
+
+    def request(port, path, body=None):
+        if path == "/start_profile":
+            calls.append((path, clock.value))
+            raise TimeoutError("start response lost")
+        return original(port, path, body)
+
+    monkeypatch.setattr(profile, "request", request)
+    with pytest.raises(TimeoutError, match="start response lost"):
+        profile.capture(**args)
+    assert calls[-2:] == [("/start_profile", 3), ("/stop_profile", 3)]

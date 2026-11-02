@@ -52,6 +52,11 @@ on:
                 required: false
                 type: string
                 default: ""
+            native-steady-profile:
+                description: "Capture 20 seconds after 300 seconds of measured native replay"
+                required: false
+                type: boolean
+                default: false
             native-comparison:
                 description: "Matched reference comparison: native, reference, or direct"
                 required: false
@@ -106,6 +111,11 @@ on:
                 required: false
                 type: string
                 default: ""
+            native-steady-profile:
+                description: "Capture 20 seconds after 300 seconds of measured native replay"
+                required: false
+                type: boolean
+                default: false
             native-comparison:
                 description: "Matched reference comparison: native, reference, or direct"
                 required: false
@@ -452,6 +462,7 @@ jobs:
             attention-path-probe-only: ${{ inputs.attention-path-probe-only }}
             native-vllm-sha: ${{ inputs.native-vllm-sha }}
             native-comparison: ${{ inputs.native-comparison }}
+            native-steady-profile: ${{ inputs.native-steady-profile }}
             scenario-type: agentic-coding
             ref: ${{ inputs.ref }}
 

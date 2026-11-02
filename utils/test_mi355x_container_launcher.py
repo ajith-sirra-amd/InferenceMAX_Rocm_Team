@@ -33,6 +33,7 @@ if sys.argv[1] == "run":
             "INFMAX_HOST_REPO": str(task_dir),
             "DOCKER_CALLS": str(trace),
             "BMK_CONTAINER_NAME": "bmk-server-101-1-test",
+            "NATIVE_STEADY_PROFILE": "0",
             "RUNNER_NAME": "mi355x-amd_test7",
             "EXP_NAME": "kimik3_test",
             "FRAMEWORK": "vllm",
@@ -59,6 +60,20 @@ if sys.argv[1] == "run":
             ["stop", "bmk-server-101-1-test"],
             ["rm", "bmk-server-101-1-test"],
         ], cleanup
+        trace.unlink()
+        env["NATIVE_STEADY_PROFILE"] = "1"
+        profiled = subprocess.run(
+            ["bash", str(ROOT / "runners/launch_mi355x-amd.sh")],
+            env=env, cwd=ROOT, capture_output=True, text=True, timeout=30,
+        )
+        assert profiled.returncode == 17, profiled.stderr
+        calls = [json.loads(line) for line in trace.read_text().splitlines()]
+        run = next(call for call in calls if call[0] == "run")
+        assert "--stop-timeout=210" in run, run
+        assert any(
+            run[i:i + 2] == ["-e", "NATIVE_STEADY_PROFILE"]
+            for i in range(len(run) - 1)
+        ), run
         trace.unlink()
         env.pop("BMK_CONTAINER_NAME")
         missing = subprocess.run(

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 source "$GITHUB_WORKSPACE/upstream/InferenceX/benchmarks/benchmark_lib.sh" --validation-only
-check_env_vars BMK_CONTAINER_NAME
+check_env_vars BMK_CONTAINER_NAME NATIVE_STEADY_PROFILE
 server_name="$BMK_CONTAINER_NAME"
+case "$NATIVE_STEADY_PROFILE" in
+    0) container_stop_timeout=90 ;;
+    1) container_stop_timeout=210 ;;
+    *) echo "NATIVE_STEADY_PROFILE must be 0 or 1" >&2; exit 1 ;;
+esac
 
 if [[ $RUNNER_NAME == *mi355x* ]]; then
     HF_HUB_CACHE_MOUNT="/it-share/models"
@@ -198,7 +203,7 @@ export MODEL_PATH="${HF_HUB_CACHE%/}/${MODEL_NAME}"
 
 export PYTHONDONTWRITEBYTECODE=1
 
-docker run --rm --init --network host --shm-size=512g --name="$server_name" --stop-timeout=90 \
+docker run --rm --init --network host --shm-size=512g --name="$server_name" --stop-timeout="$container_stop_timeout" \
 --ipc=host \
 --ulimit memlock=-1 --ulimit stack=67108864 --pull ${PULL_POLICY:-always} \
 --device=/dev/kfd --device=/dev/dri --group-add "$(getent group video | cut -d: -f3)" --group-add "$(getent group render | cut -d: -f3)" \
@@ -239,6 +244,11 @@ docker run --rm --init --network host --shm-size=512g --name="$server_name" --st
 -e NATIVE_VLLM_SHA \
 -e INFERENCEX_NATIVE_REQUIRE_CAUSAL \
 -e INFERENCEX_NATIVE_COMPARISON \
+-e NATIVE_STEADY_PROFILE \
+-e NATIVE_PROFILE_SETTLE_SECONDS \
+-e NATIVE_PROFILE_CAPTURE_SECONDS \
+-e NATIVE_PROFILE_TIMEOUT_SECONDS \
+-e NATIVE_PROFILE_POLL_SECONDS \
 -e ATOM_USE_FLYDSL_FP8_PREFILL_ATTN \
 -e ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN \
 -e ATOM_USE_FUSED_KV_FP8_OUTPUT \

@@ -5,7 +5,17 @@ source "$(dirname "$0")/../../benchmark_lib.sh"
 wait_for_amd_gpu_clean
 
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
-check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY
+check_env_vars DCP_SIZE EVAL_ONLY ATTENTION_PATH_PROBE_ONLY NATIVE_STEADY_PROFILE
+case "$NATIVE_STEADY_PROFILE" in 0|1) ;; *) echo "NATIVE_STEADY_PROFILE must be 0 or 1" >&2; exit 1 ;; esac
+if [ "$NATIVE_STEADY_PROFILE" = "1" ]; then
+    check_env_vars NATIVE_VLLM_SHA INFERENCEX_NATIVE_COMPARISON
+    check_env_vars NATIVE_PROFILE_SETTLE_SECONDS NATIVE_PROFILE_CAPTURE_SECONDS
+    check_env_vars NATIVE_PROFILE_TIMEOUT_SECONDS NATIVE_PROFILE_POLL_SECONDS
+    if [ "$INFERENCEX_NATIVE_COMPARISON" != "native" ] || [ "$EVAL_ONLY" != "false" ] || [ "$ATTENTION_PATH_PROBE_ONLY" != "false" ] || [ "$DURATION" != "3600" ]; then
+        echo "Steady profiling requires the native full replay without evaluation or probes" >&2
+        exit 1
+    fi
+fi
 case "$ATTENTION_PATH_PROBE_ONLY" in true|false) ;; *) echo "ATTENTION_PATH_PROBE_ONLY must be true or false" >&2; exit 1 ;; esac
 if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
     echo "[NATIVE-QUANT-CONFIG] This experiment requires moonshotai/Kimi-K3" >&2
@@ -160,10 +170,12 @@ export PYTHONHASHSEED=42
 SERVER_LOG="$RESULT_DIR/server.log"
 mkdir -p "$RESULT_DIR"
 SERVER_PID=""
+PROFILE_PID=""
 cleanup_agentic_services() {
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
+    stop_background_process_tree "$PROFILE_PID" "steady profile controller" 125
     stop_background_process_tree "$SERVER_PID" "vLLM server" 60
     exit "$exit_code"
 }
@@ -396,6 +408,10 @@ if [ "$NATIVE_MODE" = "1" ]; then
 elif [ "$ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT" = "1" ] || [ "$ATOM_FP8_ACCURACY_STRESS" = "1" ]; then
     VLLM_CMD+=(--enforce-eager)
 fi
+if [ "$NATIVE_STEADY_PROFILE" = "1" ]; then
+    PROFILE_OUTPUT="$RESULT_DIR/native_steady_profile"
+    VLLM_CMD+=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$PROFILE_OUTPUT\",\"torch_profiler_activities\":[\"CPU\",\"CUDA\"],\"ignore_frontend\":true,\"torch_profiler_with_stack\":false,\"torch_profiler_record_shapes\":false,\"torch_profiler_with_memory\":false,\"torch_profiler_use_gzip\":true,\"torch_profiler_dump_cuda_time_total\":false}")
+fi
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
 
@@ -508,7 +524,24 @@ else
     if [ "$NATIVE_MODE" = "1" ]; then
         printf '%s\n' replay > "$INFERENCEX_NATIVE_PHASE_FILE"
     fi
+    if [ "$NATIVE_STEADY_PROFILE" = "1" ]; then
+        mkdir -p "$PROFILE_OUTPUT"
+        "$VIRTUAL_ENV/bin/python" /outputs/utils/atom_attention/native_steady_profile.py \
+            --repository /outputs --output "$PROFILE_OUTPUT" \
+            --benchmark-log "$RESULT_DIR/benchmark.log" --port "$PORT" \
+            --server-pid "$SERVER_PID" --prefix native-steady \
+            --settle-seconds "$NATIVE_PROFILE_SETTLE_SECONDS" \
+            --capture-seconds "$NATIVE_PROFILE_CAPTURE_SECONDS" \
+            --timeout-seconds "$NATIVE_PROFILE_TIMEOUT_SECONDS" \
+            --poll-seconds "$NATIVE_PROFILE_POLL_SECONDS" \
+            > "$PROFILE_OUTPUT/controller.log" 2>&1 &
+        PROFILE_PID=$!
+    fi
     run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    if [ -n "$PROFILE_PID" ]; then
+        wait "$PROFILE_PID"
+        PROFILE_PID=""
+    fi
     if [ "$NATIVE_MODE" = "1" ]; then
         causal_proof_args=()
         if [ "$INFERENCEX_NATIVE_REQUIRE_CAUSAL" = "1" ]; then
