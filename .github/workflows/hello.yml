@@ -1,22 +1,116 @@
-name: Hello World Workflow
-
-# Defines what events trigger the pipeline
+name: Native FP8 NoPE rotation diagnostic
+run-name: Native FP8 NoPE rotation - ${{ inputs.run-gpu && 'GPU' || 'CPU precheck' }}
 on:
-  push:
-    branches:
-      - chore/sa-agentx-v1.0  # Runs automatically when you push code here
-  workflow_dispatch:          # Adds a manual "Run workflow" button in GitHub Actions UI
-
-# Defines the execution steps
+  workflow_dispatch:
+    inputs:
+      run-gpu:
+        description: Run the captured-chunk GPU diagnostic after static checks
+        type: boolean
+        default: false
+      native-sha:
+        description: Exact native vLLM fork revision
+        type: string
+        default: "492080779e9feea19308092b0aba0840e87c6115"
+      fixture-run-id:
+        description: Existing run containing atom_fp8_failure.pt
+        type: string
+        default: "40678558488"
+permissions:
+  contents: read
+  actions: read
 jobs:
-  say-hello:
-    runs-on: ubuntu-latest    # Uses a standard Linux environment
-    
+  precheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@v4
-
-      - name: Print a greeting message
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Validate diagnostic source
+        env:
+          NATIVE_SHA: ${{ inputs.native-sha }}
+          FIXTURE_RUN_ID: ${{ inputs.fixture-run-id }}
         run: |
-          echo "Hello World!"
-          echo "GitHub Actions is working perfectly on your branch!"
+          [[ "$NATIVE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FIXTURE_RUN_ID" =~ ^[0-9]+$ ]]
+          python3 -m py_compile utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py utils/atom_attention/native_vllm_gpu_validate.py
+          python3 -m pip install ruff
+          python3 -m ruff check --select E9,F utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py
+          sha256sum utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py utils/atom_attention/native_vllm_gpu_validate.py .github/workflows/hello.yml > nope-source.sha256
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: nope-rotation-source-${{ github.run_id }}
+          path: nope-source.sha256
+          if-no-files-found: error
+  diagnose:
+    needs: precheck
+    if: ${{ inputs.run-gpu }}
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 45
+    env:
+      NATIVE_SHA: ${{ inputs.native-sha }}
+      IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Download existing numerical fixture
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: agentic_*
+          merge-multiple: true
+          path: .nope-numerics/${{ github.run_id }}/fixture
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.fixture-run-id }}
+      - name: Test fixed NoPE rotation and quantify each error source
+        shell: bash
+        run: |
+          task_work="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/work"
+          task_fixture="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/fixture"
+          test -f "$task_fixture/atom_fp8_failure.pt"
+          mkdir -p "$task_work"
+          docker run --rm --init --network host --ipc=host --shm-size=8g \
+            --name "native-nope-rotation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --device=/dev/kfd --device=/dev/dri \
+            --group-add "$(getent group video | cut -d: -f3)" \
+            --group-add "$(getent group render | cut -d: -f3)" \
+            -v "$GITHUB_WORKSPACE:/repo:ro" -v "$task_work:/work" \
+            -v "$task_fixture:/replay:ro" \
+            -e NATIVE_SHA -e UV_CACHE_DIR=/work/uv-cache \
+            -e VLLM_ROCM_USE_AITER=1 -e VLLM_ROCM_USE_AITER_LINEAR=1 \
+            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+            -e INFERENCEX_NATIVE_STACK_INTERVAL=0 \
+            --entrypoint bash "$IMAGE" -lc '
+              set -euo pipefail
+              mkdir -p /work/helpers /work/evidence
+              cp /repo/utils/atom_attention/native_vllm_gpu_validate.py /work/helpers/
+              cp -a /repo/utils/atom_attention/native_validation_plugin /work/helpers/
+              python3 /work/helpers/native_vllm_gpu_validate.py --native-sha "$NATIVE_SHA" --prepare-only 2>&1 | tee /work/evidence/setup.log
+              source /work/evidence/native-env.sh
+              export VLLM_PLUGINS=""
+              cd /work
+              python /repo/utils/atom_attention/nope_rotation_diagnostics.py \
+                --fixture /replay/atom_fp8_failure.pt \
+                --output /work/evidence/nope-numerics.json 2>&1 | tee /work/evidence/diagnostic.log
+            '
+      - name: Restore ownership of this diagnostic output
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          task_work="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/work"
+          if [ -d "$task_work" ]; then
+            test ! -L "$task_work"
+            task_workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+            test "$(realpath -e -- "$task_work")" = "$task_workspace_real/.nope-numerics/$GITHUB_RUN_ID/work"
+            docker run --rm --network none --user 0:0 \
+              --mount "type=bind,source=$task_work,target=/repair" \
+              --entrypoint chown "$IMAGE" \
+              --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+          fi
+      - name: Upload all diagnostic evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-nope-rotation-${{ github.run_id }}
+          path: .nope-numerics/${{ github.run_id }}/work/evidence/
+          if-no-files-found: error

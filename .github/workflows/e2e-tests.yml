@@ -1,116 +1,633 @@
-name: Native FP8 NoPE rotation diagnostic
-run-name: Native FP8 NoPE rotation - ${{ inputs.run-gpu && 'GPU' || 'CPU precheck' }}
+name: End-to-End Tests
+run-name: e2e Test - ${{ inputs.test-name || github.event.inputs.test-name || inputs.generate-cli-command || github.event.inputs.generate-cli-command }}
+
 on:
-  workflow_dispatch:
-    inputs:
-      run-gpu:
-        description: Run the captured-chunk GPU diagnostic after static checks
-        type: boolean
-        default: false
-      native-sha:
-        description: Exact native vLLM fork revision
-        type: string
-        default: "492080779e9feea19308092b0aba0840e87c6115"
-      fixture-run-id:
-        description: Existing run containing atom_fp8_failure.pt
-        type: string
-        default: "40678558488"
-permissions:
-  contents: read
-  actions: read
+    workflow_dispatch:
+        inputs:
+            generate-cli-command:
+                description: "Command passed to generate matrix script"
+                required: true
+                type: choice
+                options:
+                # - "test-config  --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-atom-agentic-lmcache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi355x-vllm-agentic-lmcache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys kimik2.5-fp4-mi355x-vllm-agentic-lmcache"
+                # - "test-config --config-files .github/configs/nvidia-master.yaml --config-keys kimik2.5-fp4-b200-vllm-agentic-lmcache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi355x-sglang-agentic-hicache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp4-mi355x-sglang-agentic-hicache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp4-mi355x-sglang-agentic-hicache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi355x-sglang-agentic-hicache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic-hicache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys glm5.1-fp8-mi300x-sglang-agentic-smoke"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic-hicache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys qwen3.5-fp8-mi300x-sglang-agentic-smoke"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi300x-vllm-agentic-lmcache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp8-mi325x-vllm-agentic-lmcache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-vllm-agentic-lmcache"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang"
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys kimik2.7-fp4-mi355x-vllm-agentic-lmcache"               
+                # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm3-fp8-mi355x-vllm-agentic-lmcache"
+                - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp"
+                - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys kimik3-fp4-mi355x-vllm-agentic-mtp-andy"
+                - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys minimaxm3-fp4-mi355x-vllm-agentic-mtp"
+                - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic"
+                - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic-mtp"
+                - "test-config --config-files upstream/InferenceX/configs/amd-master.yaml --config-keys glm5.2-fp4-mi355x-sglang-agentic-mtp-dpa"
+            test-name:
+                description: "Custom run name (shown in the Actions list). Empty = use the config command."
+                required: false
+                type: string
+                default: ""
+            ref:
+                description: "Ref (branch/sha) to checkout for generating configs"
+                required: false
+                type: string
+            native-vllm-sha:
+                description: "Exact fork commit for native GPU diagnostics or Kimi serving validation"
+                required: false
+                type: string
+                default: ""
+            failure-fixture-run-id:
+                description: "Diagnostics only: replay atom_fp8_failure.pt from this run"
+                required: false
+                type: string
+                default: ""
+            after-run-id:
+                description: "Wait for this run to succeed before GPU scheduling; requires exact ref"
+                required: false
+                type: string
+                default: ""
+            runner-diagnostics-only:
+                description: Run isolated FP8 attention and BF16 projection GPU diagnostics
+                required: false
+                type: boolean
+                default: false
+            attention-path-probe-only:
+                description: "Controlled prefix-repetition kernel invocation smoke; skip agentic replay"
+                required: false
+                type: boolean
+                default: false
+            agentic-eval-only:
+                description: "Run agentic recipe GSM8K accuracy evaluation only"
+                required: false
+                type: boolean
+                default: false
+            duration-override:
+                description: "Override matrix.config.duration (seconds). Empty = use matrix value."
+                required: false
+                type: string
+                default: ""
+    workflow_call:
+        inputs:
+            generate-cli-command:
+                description: "Command passed to generate matrix script"
+                required: true
+                type: string
+            test-name:
+                description: "Name for this test run"
+                required: false
+                type: string
+            ref:
+                description: "Ref (branch/sha) to checkout for generating configs"
+                required: false
+                type: string
+            native-vllm-sha:
+                description: "Exact fork commit for native GPU diagnostics or Kimi serving validation"
+                required: false
+                type: string
+                default: ""
+            failure-fixture-run-id:
+                description: "Diagnostics only: replay atom_fp8_failure.pt from this run"
+                required: false
+                type: string
+                default: ""
+            after-run-id:
+                description: "Wait for this run to succeed before GPU scheduling; requires exact ref"
+                required: false
+                type: string
+                default: ""
+            runner-diagnostics-only:
+                description: Run isolated FP8 attention and BF16 projection GPU diagnostics
+                required: false
+                type: boolean
+                default: false
+            attention-path-probe-only:
+                description: "Controlled prefix-repetition kernel invocation smoke; skip agentic replay"
+                required: false
+                type: boolean
+                default: false
+            agentic-eval-only:
+                description: "Run agentic recipe GSM8K accuracy evaluation only"
+                required: false
+                type: boolean
+                default: false
+            duration-override:
+                description: "Override matrix.config.duration (seconds). Empty = use matrix value."
+                required: false
+                type: string
+                default: ""
+
 jobs:
-  precheck:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+    inspect-runner:
+      permissions:
+        contents: read
+        actions: read
+      if: ${{ inputs.runner-diagnostics-only }}
+      runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+      timeout-minutes: 90
+      steps:
+        - name: Restore previous native validation ownership
+          if: ${{ inputs.native-vllm-sha != '' }}
+          shell: bash
+          run: |
+            native_root="$GITHUB_WORKSPACE/.native-fp8-validation"
+            if [ -d "$native_root" ]; then
+              test ! -L "$native_root"
+              workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+              test "$(realpath -e -- "$native_root")" = "$workspace_real/.native-fp8-validation"
+              docker run --rm --network none --user 0:0 \
+                --mount "type=bind,source=$native_root,target=/repair" \
+                --entrypoint chown \
+                vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+                --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+            fi
+        - name: Checkout inspection code
+          uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+          with:
+            ref: ${{ inputs.ref || github.sha }}
+            persist-credentials: false
+        - name: Validate recipe and launcher before kernel execution
+          shell: bash
+          run: |
+            bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+            bash -n runners/launch_mi355x-amd.sh
+            python3 utils/test_mi355x_container_launcher.py
+        - name: Download captured Kimi numerical fixture
+          if: ${{ inputs.failure-fixture-run-id != '' }}
+          uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+          with:
+            pattern: agentic_*
+            merge-multiple: true
+            path: ${{ runner.temp }}/atom-fp8-${{ github.run_id }}
+            github-token: ${{ github.token }}
+            run-id: ${{ inputs.failure-fixture-run-id }}
+        - name: Validate direct FP8 KV projection and backend graph replay
+          if: ${{ inputs.native-vllm-sha == '' }}
+          env:
+            FAILURE_FIXTURE_RUN_ID: ${{ inputs.failure-fixture-run-id }}
+          shell: bash
+          run: |
+            date -u
+            hostname
+            df -h "$GITHUB_WORKSPACE"
+            df -i "$GITHUB_WORKSPACE"
+            docker ps --format '{{.Names}} {{.Status}}'
+            replay_mount=()
+            FAILURE_FIXTURE_PATH=""
+            if [ -n "$FAILURE_FIXTURE_RUN_ID" ]; then
+              fixture_dir="$RUNNER_TEMP/atom-fp8-$GITHUB_RUN_ID"
+              test -f "$fixture_dir/atom_fp8_failure.pt"
+              replay_mount=(-v "$fixture_dir:/replay:ro")
+              FAILURE_FIXTURE_PATH=/replay/atom_fp8_failure.pt
+            fi
+            export FAILURE_FIXTURE_PATH
+            docker run --rm --init --network host --ipc=host --shm-size=4g \
+              "${replay_mount[@]}" -e FAILURE_FIXTURE_PATH \
+              --name "atom-attention-inspect-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+              --device=/dev/kfd --device=/dev/dri \
+              --group-add "$(getent group video | cut -d: -f3)" \
+              --group-add "$(getent group render | cut -d: -f3)" \
+              -v "$GITHUB_WORKSPACE":/repo:ro \
+              -e PYTHONPATH=/repo/upstream/InferenceX/benchmarks/single_node/agentic/atom_attention \
+              -e VLLM_ROCM_USE_AITER=1 -e VLLM_ROCM_USE_AITER_LINEAR=1 \
+              -e ATOM_USE_FLYDSL_FP8_PREFILL_ATTN=1 \
+              -e ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN=1 \
+              -e ATOM_USE_FUSED_KV_FP8_OUTPUT=1 \
+              -e ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT=0 \
+              --entrypoint python3 \
+              vllm/vllm-openai-rocm:nightly-1b2a666391f2a24228a1436b64d547c34cc6b6ce \
+              /repo/utils/atom_attention/direct_kv_diagnostics.py
+        - name: Validate exact native vLLM FP8 kernel source
+          if: ${{ inputs.native-vllm-sha != '' }}
+          env:
+            NATIVE_VLLM_SHA: ${{ inputs.native-vllm-sha }}
+          shell: bash
+          run: |
+            native_work_dir="$GITHUB_WORKSPACE/.native-fp8-validation/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            mkdir -p "$native_work_dir"
+            docker run --rm --init --network host --ipc=host --shm-size=8g \
+              --name "native-fp8-validate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+              --device=/dev/kfd --device=/dev/dri \
+              --group-add "$(getent group video | cut -d: -f3)" \
+              --group-add "$(getent group render | cut -d: -f3)" \
+              -v "$GITHUB_WORKSPACE":/repo:ro \
+              -v "$native_work_dir":/work \
+              -e PYTHONDONTWRITEBYTECODE=1 \
+              --entrypoint python3 \
+              vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+              /repo/utils/atom_attention/native_vllm_gpu_validate.py \
+              --native-sha "$NATIVE_VLLM_SHA"
+        - name: Restore native validation ownership
+          if: ${{ always() && inputs.native-vllm-sha != '' }}
+          shell: bash
+          run: |
+            native_root="$GITHUB_WORKSPACE/.native-fp8-validation"
+            if [ -d "$native_root" ]; then
+              test ! -L "$native_root"
+              workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+              test "$(realpath -e -- "$native_root")" = "$workspace_real/.native-fp8-validation"
+              docker run --rm --network none --user 0:0 \
+                --mount "type=bind,source=$native_root,target=/repair" \
+                --entrypoint chown \
+                vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+                --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+            fi
+        - name: Upload native GPU validation evidence
+          if: ${{ always() && inputs.native-vllm-sha != '' }}
+          uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+          with:
+            name: native-vllm-fp8-kernel-validation-${{ github.run_id }}
+            path: .native-fp8-validation/${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+            if-no-files-found: error
+
+    wait-for-prerequisite:
+        if: ${{ !inputs.runner-diagnostics-only }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        permissions:
+            actions: read
+        steps:
+            - name: Wait for preceding numerical run
+              if: ${{ inputs.after-run-id != '' }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PREREQUISITE_RUN_ID: ${{ inputs.after-run-id }}
+                  SOURCE_REF: ${{ inputs.ref }}
+              run: |
+                  case "$PREREQUISITE_RUN_ID" in ''|*[!0-9]*) echo "Expected numeric prerequisite run ID" >&2; exit 1 ;; esac
+                  PRECEDING_SHA=$(gh run view "$PREREQUISITE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq '.headSha')
+                  test "$PRECEDING_SHA" = "$SOURCE_REF" || { echo "Prerequisite source SHA differs from requested execution ref" >&2; exit 1; }
+                  gh run watch "$PREREQUISITE_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status --interval 30
+                  PRECEDING_RESULT=$(gh run view "$PREREQUISITE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')
+                  test "$PRECEDING_RESULT" = "success"
+
+    get-jobs:
+        needs: wait-for-prerequisite
+        if: ${{ !inputs.runner-diagnostics-only }}
+        runs-on: ubuntu-latest
+        outputs:
+            single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}
+            multi-node-config: ${{ steps.get-jobs.outputs.multi-node-config }}
+            eval-config: ${{ steps.get-jobs.outputs.eval-config }}
+            multi-node-eval-config: ${{ steps.get-jobs.outputs.multi-node-eval-config }}
+            agentic-config: ${{ steps.get-jobs.outputs.agentic-config }}
+            multi-node-agentic-config: ${{ steps.get-jobs.outputs.multi-node-agentic-config }}
+        steps:
+            - name: Checkout code (ref)
+              if: ${{ inputs.ref && inputs.ref != '' }}
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                ref: ${{ inputs.ref }}
+
+            - name: Checkout code (default)
+              if: ${{ !inputs.ref || inputs.ref == '' }}
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                ref: ${{ github.sha }}
+
+            - name: Validate Kimi native recipe and launcher before GPU scheduling
+              run: |
+                  bash -n upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh
+                  bash -n runners/launch_mi355x-amd.sh
+                  python3 utils/test_mi355x_container_launcher.py
+
+
+            - id: get-jobs
+              run: |
+                  pip install pydantic
+                  CONFIG_JSON=$(python3 ${GITHUB_WORKSPACE}/utils/matrix_logic/generate_sweep_configs.py \
+                    ${{ inputs.generate-cli-command || github.event.inputs.generate-cli-command }})
+                  AGENTIC=$(echo "$CONFIG_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps([x for x in d if x.get('scenario-type') == 'agentic-coding' and 'prefill' not in x]))")
+                  MULTI_AGENTIC=$(echo "$CONFIG_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps([x for x in d if x.get('scenario-type') == 'agentic-coding' and 'prefill' in x]))")
+                  SINGLE=$(echo "$CONFIG_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps([x for x in d if 'prefill' not in x and x.get('scenario-type') != 'agentic-coding' and not x.get('eval-only', False)]))")
+                  MULTI=$(echo "$CONFIG_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps([x for x in d if 'prefill' in x and x.get('scenario-type') != 'agentic-coding' and not x.get('eval-only', False)]))")
+                  EVALS=$(echo "$CONFIG_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps([x for x in d if 'prefill' not in x and x.get('scenario-type') != 'agentic-coding' and x.get('run-eval', False)]))")
+                  MULTI_EVAL=$(echo "$CONFIG_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps([x for x in d if 'prefill' in x and x.get('run-eval', False)]))")
+                  echo "agentic-config=$AGENTIC" >> $GITHUB_OUTPUT
+                  echo "multi-node-agentic-config=$MULTI_AGENTIC" >> $GITHUB_OUTPUT
+                  echo "single-node-config=$SINGLE" >> $GITHUB_OUTPUT
+                  echo "multi-node-config=$MULTI" >> $GITHUB_OUTPUT
+                  echo "eval-config=$EVALS" >> $GITHUB_OUTPUT
+                  echo "multi-node-eval-config=$MULTI_EVAL" >> $GITHUB_OUTPUT
+
+    test-sweep-multi-node:
+        needs: get-jobs
+        if: ${{ needs.get-jobs.outputs.multi-node-config != '[]' }}
+        uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+        name: multi-node /
+        strategy:
+            fail-fast: false
+            matrix:
+                config: ${{ fromJson(needs.get-jobs.outputs.multi-node-config) }}
+        secrets: inherit
         with:
-          persist-credentials: false
-      - name: Validate diagnostic source
-        env:
-          NATIVE_SHA: ${{ inputs.native-sha }}
-          FIXTURE_RUN_ID: ${{ inputs.fixture-run-id }}
-        run: |
-          [[ "$NATIVE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$FIXTURE_RUN_ID" =~ ^[0-9]+$ ]]
-          python3 -m py_compile utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py utils/atom_attention/native_vllm_gpu_validate.py
-          python3 -m pip install ruff
-          python3 -m ruff check --select E9,F utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py
-          sha256sum utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py utils/atom_attention/native_vllm_gpu_validate.py .github/workflows/e2e-tests.yml > nope-source.sha256
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            exp-name: ${{ matrix.config.exp-name }}
+            conc-list: ${{ toJson(matrix.config.conc) }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+
+            prefill-num-worker: ${{ matrix.config.prefill.num-worker }}
+            prefill-tp: ${{ matrix.config.prefill.tp }}
+            prefill-ep: ${{ matrix.config.prefill.ep }}
+            prefill-dp-attn: ${{ matrix.config.prefill.dp-attn }}
+            prefill-additional-settings: ${{ toJson(matrix.config.prefill.additional-settings) }}
+
+            decode-num-worker: ${{ matrix.config.decode.num-worker }}
+            decode-tp: ${{ matrix.config.decode.tp }}
+            decode-ep: ${{ matrix.config.decode.ep }}
+            decode-dp-attn: ${{ matrix.config.decode.dp-attn }}
+            decode-additional-settings: ${{ toJson(matrix.config.decode.additional-settings) }}
+            run-eval: false
+            ref: ${{ inputs.ref }}
+
+    test-sweep-multi-node-evals:
+        needs: get-jobs
+        if: ${{ needs.get-jobs.outputs.multi-node-eval-config != '[]' }}
+        uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+        name: multi-node eval /
+        strategy:
+            fail-fast: false
+            matrix:
+                config: ${{ fromJson(needs.get-jobs.outputs.multi-node-eval-config) }}
+        secrets: inherit
         with:
-          name: nope-rotation-source-${{ github.run_id }}
-          path: nope-source.sha256
-          if-no-files-found: error
-  diagnose:
-    needs: precheck
-    if: ${{ inputs.run-gpu }}
-    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
-    timeout-minutes: 45
-    env:
-      NATIVE_SHA: ${{ inputs.native-sha }}
-      IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            exp-name: ${{ matrix.config.exp-name }}
+            conc-list: ${{ toJson(matrix.config.conc) }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+
+            prefill-num-worker: ${{ matrix.config.prefill.num-worker }}
+            prefill-tp: ${{ matrix.config.prefill.tp }}
+            prefill-ep: ${{ matrix.config.prefill.ep }}
+            prefill-dp-attn: ${{ matrix.config.prefill.dp-attn }}
+            prefill-additional-settings: ${{ toJson(matrix.config.prefill.additional-settings) }}
+
+            decode-num-worker: ${{ matrix.config.decode.num-worker }}
+            decode-tp: ${{ matrix.config.decode.tp }}
+            decode-ep: ${{ matrix.config.decode.ep }}
+            decode-dp-attn: ${{ matrix.config.decode.dp-attn }}
+            decode-additional-settings: ${{ toJson(matrix.config.decode.additional-settings) }}
+            run-eval: true
+            eval-only: true
+            eval-conc: ${{ matrix.config.eval-conc }}
+            ref: ${{ inputs.ref }}
+
+    test-sweep-agentic:
+        needs: get-jobs
+        if: ${{ needs.get-jobs.outputs.agentic-config != '[]' }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: agentic /
+        strategy:
+            fail-fast: false
+            matrix:
+                config: ${{ fromJson(needs.get-jobs.outputs.agentic-config) }}
+        secrets: inherit
         with:
-          persist-credentials: false
-      - name: Download existing numerical fixture
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+            exp-name: ${{ matrix.config.exp-name }}
+            runner: ${{ matrix.config.runner }}
+            image: ${{ inputs.native-vllm-sha != '' && 'vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716' || matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            tp: ${{ matrix.config.tp }}
+            ep: ${{ matrix.config.ep }}
+            dp-attn: ${{ matrix.config.dp-attn }}
+            conc: ${{ matrix.config.conc }}
+            offloading: ${{ matrix.config.offloading }}
+            kv-offloading: ${{ matrix.config['kv-offloading'] }}
+            kv-offload-backend: ${{ matrix.config['kv-offload-backend'].name }}
+            total-cpu-dram-gb: ${{ matrix.config.total-cpu-dram-gb }}
+            duration: ${{ inputs.duration-override != '' && inputs.duration-override || matrix.config.duration }}
+            isl: '0'
+            osl: '0'
+            max-model-len: '0'
+            spec-decoding: ${{ matrix.config['spec-decoding'] }}
+            disagg: 'false'
+            run-eval: ${{ inputs.agentic-eval-only }}
+            eval-only: ${{ inputs.agentic-eval-only }}
+            attention-path-probe-only: ${{ inputs.attention-path-probe-only }}
+            native-vllm-sha: ${{ inputs.native-vllm-sha }}
+            scenario-type: agentic-coding
+            ref: ${{ inputs.ref }}
+
+    test-sweep-multi-node-agentic:
+        needs: get-jobs
+        if: ${{ needs.get-jobs.outputs.multi-node-agentic-config != '[]' }}
+        uses: ./.github/workflows/benchmark-multinode-tmpl.yml
+        name: multi-node agentic /
+        strategy:
+            fail-fast: false
+            matrix:
+                config: ${{ fromJson(needs.get-jobs.outputs.multi-node-agentic-config) }}
+        secrets: inherit
         with:
-          pattern: agentic_*
-          merge-multiple: true
-          path: .nope-numerics/${{ github.run_id }}/fixture
-          github-token: ${{ github.token }}
-          run-id: ${{ inputs.fixture-run-id }}
-      - name: Test fixed NoPE rotation and quantify each error source
-        shell: bash
-        run: |
-          task_work="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/work"
-          task_fixture="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/fixture"
-          test -f "$task_fixture/atom_fp8_failure.pt"
-          mkdir -p "$task_work"
-          docker run --rm --init --network host --ipc=host --shm-size=8g \
-            --name "native-nope-rotation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
-            --device=/dev/kfd --device=/dev/dri \
-            --group-add "$(getent group video | cut -d: -f3)" \
-            --group-add "$(getent group render | cut -d: -f3)" \
-            -v "$GITHUB_WORKSPACE:/repo:ro" -v "$task_work:/work" \
-            -v "$task_fixture:/replay:ro" \
-            -e NATIVE_SHA -e UV_CACHE_DIR=/work/uv-cache \
-            -e VLLM_ROCM_USE_AITER=1 -e VLLM_ROCM_USE_AITER_LINEAR=1 \
-            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
-            -e INFERENCEX_NATIVE_STACK_INTERVAL=0 \
-            --entrypoint bash "$IMAGE" -lc '
-              set -euo pipefail
-              mkdir -p /work/helpers /work/evidence
-              cp /repo/utils/atom_attention/native_vllm_gpu_validate.py /work/helpers/
-              cp -a /repo/utils/atom_attention/native_validation_plugin /work/helpers/
-              python3 /work/helpers/native_vllm_gpu_validate.py --native-sha "$NATIVE_SHA" --prepare-only 2>&1 | tee /work/evidence/setup.log
-              source /work/evidence/native-env.sh
-              export VLLM_PLUGINS=""
-              cd /work
-              python /repo/utils/atom_attention/nope_rotation_diagnostics.py \
-                --fixture /replay/atom_fp8_failure.pt \
-                --output /work/evidence/nope-numerics.json 2>&1 | tee /work/evidence/diagnostic.log
-            '
-      - name: Restore ownership of this diagnostic output
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          task_work="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/work"
-          if [ -d "$task_work" ]; then
-            test ! -L "$task_work"
-            task_workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
-            test "$(realpath -e -- "$task_work")" = "$task_workspace_real/.nope-numerics/$GITHUB_RUN_ID/work"
-            docker run --rm --network none --user 0:0 \
-              --mount "type=bind,source=$task_work,target=/repair" \
-              --entrypoint chown "$IMAGE" \
-              --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
-          fi
-      - name: Upload all diagnostic evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+            exp-name: ${{ matrix.config.exp-name }}
+            isl: '0'
+            osl: '0'
+            max-model-len: '0'
+            runner: ${{ matrix.config.runner }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            conc-list: '[${{ matrix.config.conc }}]'
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            prefill-num-worker: ${{ matrix.config.prefill.num-worker }}
+            prefill-tp: ${{ matrix.config.prefill.tp }}
+            prefill-ep: ${{ matrix.config.prefill.ep }}
+            prefill-dp-attn: ${{ matrix.config.prefill.dp-attn }}
+            prefill-additional-settings: ${{ toJson(matrix.config.prefill.additional-settings) }}
+            decode-num-worker: ${{ matrix.config.decode.num-worker }}
+            decode-tp: ${{ matrix.config.decode.tp }}
+            decode-ep: ${{ matrix.config.decode.ep }}
+            decode-dp-attn: ${{ matrix.config.decode.dp-attn }}
+            decode-additional-settings: ${{ toJson(matrix.config.decode.additional-settings) }}
+            conc: ${{ matrix.config.conc }}
+            duration: ${{ inputs.duration-override != '' && inputs.duration-override || matrix.config.duration }}
+            run-eval: false
+            scenario-type: agentic-coding
+            ref: ${{ inputs.ref }}
+
+    test-sweep-single-node:
+        needs: get-jobs
+        if: ${{ needs.get-jobs.outputs.single-node-config != '[]' }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: single-node /
+        strategy:
+            fail-fast: false
+            matrix:
+                config: ${{ fromJson(needs.get-jobs.outputs.single-node-config) }}
+        secrets: inherit
         with:
-          name: native-nope-rotation-${{ github.run_id }}
-          path: .nope-numerics/${{ github.run_id }}/work/evidence/
-          if-no-files-found: error
+            exp-name: ${{ matrix.config.exp-name }}
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            tp: ${{ matrix.config.tp }}
+            ep: ${{ matrix.config.ep }}
+            dp-attn: ${{ matrix.config.dp-attn }}
+            conc: ${{ matrix.config.conc }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            run-eval: false
+            ref: ${{ inputs.ref }}
+
+    test-sweep-evals:
+        needs: get-jobs
+        if: ${{ needs.get-jobs.outputs.eval-config != '[]' }}
+        uses: ./.github/workflows/benchmark-tmpl.yml
+        name: eval /
+        strategy:
+            fail-fast: false
+            matrix:
+                config: ${{ fromJson(needs.get-jobs.outputs.eval-config) }}
+        secrets: inherit
+        with:
+            exp-name: ${{ matrix.config.exp-name }}
+            isl: ${{ matrix.config.isl }}
+            osl: ${{ matrix.config.osl }}
+            max-model-len: ${{ matrix.config.max-model-len }}
+            runner: ${{ matrix.config.runner }}
+            image: ${{ matrix.config.image }}
+            model: ${{ matrix.config.model }}
+            model-prefix: ${{ matrix.config.model-prefix }}
+            framework: ${{ matrix.config.framework }}
+            precision: ${{ matrix.config.precision }}
+            tp: ${{ matrix.config.tp }}
+            ep: ${{ matrix.config.ep }}
+            dp-attn: ${{ matrix.config.dp-attn }}
+            conc: ${{ matrix.config.conc }}
+            spec-decoding: ${{ matrix.config.spec-decoding }}
+            disagg: ${{ matrix.config.disagg }}
+            run-eval: true
+            eval-only: true
+            ref: ${{ inputs.ref }}
+
+    collect-results:
+        needs: [test-sweep-multi-node, test-sweep-single-node, test-sweep-agentic, test-sweep-multi-node-agentic]
+        if: ${{ !inputs.attention-path-probe-only && always() && (needs.test-sweep-multi-node.result != 'skipped' || needs.test-sweep-single-node.result != 'skipped' || needs.test-sweep-agentic.result != 'skipped' || needs.test-sweep-multi-node-agentic.result != 'skipped') }}
+        uses: ./.github/workflows/collect-results.yml
+        secrets: inherit
+        with:
+            result-prefix: "bmk"
+
+    collect-evals:
+        needs: [test-sweep-evals, test-sweep-multi-node-evals]
+        if: ${{ !inputs.attention-path-probe-only && always() && (needs.test-sweep-evals.result != 'skipped' || needs.test-sweep-multi-node-evals.result != 'skipped') }}
+        uses: ./.github/workflows/collect-evals.yml
+        secrets: inherit
+
+    collect-agentic-results:
+        needs: [test-sweep-agentic, test-sweep-multi-node-agentic]
+        if: ${{ !inputs.attention-path-probe-only && always() && (needs.test-sweep-agentic.result != 'skipped' || needs.test-sweep-multi-node-agentic.result != 'skipped') }}
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  token: ${{ secrets.REPO_PAT }}
+                  submodules: true
+
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: '3.11'
+
+            - name: Install dependencies
+              run: pip install pandas matplotlib numpy
+
+            - name: Download agentic artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  pattern: 'agentic_*'
+                  path: results/
+
+            - name: Run aggregation
+              env:
+                  PYTHONPATH: ${GITHUB_WORKSPACE}/upstream/InferenceX/utils/agentic-benchmark/scripts:${GITHUB_WORKSPACE}/upstream/InferenceX/utils/agentic-benchmark/analysis
+              run: |
+                  python ${GITHUB_WORKSPACE}/upstream/InferenceX/utils/agentic-benchmark/scripts/collect_sweep_results.py results/ aggregated/
+
+            - name: Upload aggregated results
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: agentic_aggregated
+                  path: aggregated/
+            
+            - name: Cleanup
+              run: |
+                  rm -rf results
+
+    #calc-success-rate:
+    #    needs: [collect-results, collect-evals, collect-agentic-results]
+    #    if: ${{ always() }}
+    #    runs-on: ubuntu-latest
+    #
+    #    env:
+    #        RESULTS_DIR: "results/"
+    #        STATS_FILENAME: "run_stats"
+    #        GITHUB_TOKEN: ${{ secrets.REPO_PAT }}
+    #
+    #    steps:
+    #        - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    #          with:
+    #              token: ${{ secrets.REPO_PAT }}
+    #              fetch-depth: 0
+    #
+    #        - name: Download results artifacts
+    #          uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+    #          with:
+    #              path: ${{ env.RESULTS_DIR }}
+    #              pattern: results_*
+    #
+    #        - name: Install python dependencies
+    #          run: pip install PyGithub
+    #
+    #        - name: Calculate success rate
+    #          run: python3 utils/calc_success_rate.py $STATS_FILENAME
+    #
+    #        - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+    #          with:
+    #              name: "run-stats"
+    #              path: ${{ env.STATS_FILENAME }}.json
+#
