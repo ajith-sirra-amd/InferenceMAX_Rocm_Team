@@ -204,6 +204,7 @@ for number in (59124, 62447):
         changed = run(["git", "diff", "--cached", "--name-only", BASE], root).stdout.splitlines()
         pyfiles = [p for p in changed if p.endswith(".py")]
         if pyfiles:
+            run([str(ROOT / ".venv/bin/ruff"), "format", *pyfiles], root)
             run([str(ROOT / ".venv/bin/ruff"), "check", "--fix", *pyfiles], root)
             run([str(ROOT / ".venv/bin/ruff"), "format", *pyfiles], root)
         for p in pyfiles:
