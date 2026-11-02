@@ -1,0 +1,357 @@
+{
+  "status": "failed",
+  "cases": [
+    {
+      "balance_mode": "per_head",
+      "layout": "plain",
+      "lazy_rescale": true,
+      "role": "prior_control",
+      "balance_min": 2.6198489665985107,
+      "balance_max": 3.440375566482544,
+      "q_descale": 0.0513392873108387,
+      "q_rope_max_reconstruction_error": 0.012277128174901009,
+      "projection": {
+        "k": {
+          "rms": 0.009338814990608894,
+          "peak": 0.029999868149086173,
+          "clipping": 0.0
+        },
+        "v": {
+          "rms": 0.026469603339755374,
+          "peak": 0.03570842279791435,
+          "clipping": 0.0
+        }
+      },
+      "same_fp8_inputs": {
+        "rms": 0.012686413984864215,
+        "normalized_max_output_error": 0.023586211610971783,
+        "min_cosine": 0.9881956140331828,
+        "lse_max": 0.0005997842133744768,
+        "normalized_max_lse_error": 2.4225081011546043e-05
+      },
+      "vs_historical_bf16": {
+        "rms": 0.024841945359718384,
+        "normalized_max_output_error": 0.056910569105691054,
+        "min_cosine": 0.9869141973909346,
+        "lse_max": 0.208251953125,
+        "normalized_max_lse_error": 0.008409102724309295
+      },
+      "passes_arithmetic_gate": true,
+      "passes_original_gate": false
+    },
+    {
+      "balance_mode": "per_head",
+      "layout": "plain",
+      "lazy_rescale": false,
+      "role": "prior_control",
+      "balance_min": 2.6198489665985107,
+      "balance_max": 3.440375566482544,
+      "q_descale": 0.0513392873108387,
+      "q_rope_max_reconstruction_error": 0.012277128174901009,
+      "projection": {
+        "k": {
+          "rms": 0.009338814990608894,
+          "peak": 0.029999868149086173,
+          "clipping": 0.0
+        },
+        "v": {
+          "rms": 0.026469603339755374,
+          "peak": 0.03570842279791435,
+          "clipping": 0.0
+        }
+      },
+      "same_fp8_inputs": {
+        "rms": 0.0030254881598013217,
+        "normalized_max_output_error": 0.009192797000431126,
+        "min_cosine": 0.9998261328182281,
+        "lse_max": 0.0005978768647416643,
+        "normalized_max_lse_error": 2.41480438469845e-05
+      },
+      "vs_historical_bf16": {
+        "rms": 0.02130177373778581,
+        "normalized_max_output_error": 0.056910569105691054,
+        "min_cosine": 0.998039721833456,
+        "lse_max": 0.208251953125,
+        "normalized_max_lse_error": 0.008409102724309295
+      },
+      "passes_arithmetic_gate": true,
+      "passes_original_gate": false
+    },
+    {
+      "balance_mode": "per_head",
+      "layout": "preshuffled",
+      "lazy_rescale": true,
+      "role": "prior_control",
+      "balance_min": 2.6198489665985107,
+      "balance_max": 3.440375566482544,
+      "q_descale": 0.0513392873108387,
+      "q_rope_max_reconstruction_error": 0.012277128174901009,
+      "projection": {
+        "k": {
+          "rms": 0.009338814990608894,
+          "peak": 0.029999868149086173,
+          "clipping": 0.0
+        },
+        "v": {
+          "rms": 0.026469603339755374,
+          "peak": 0.03570842279791435,
+          "clipping": 0.0
+        }
+      },
+      "same_fp8_inputs": {
+        "rms": 0.012686413984864215,
+        "normalized_max_output_error": 0.023586211610971783,
+        "min_cosine": 0.9881956140331828,
+        "lse_max": 0.0005997842133744768,
+        "normalized_max_lse_error": 2.4225081011546043e-05
+      },
+      "vs_historical_bf16": {
+        "rms": 0.024841945359718384,
+        "normalized_max_output_error": 0.056910569105691054,
+        "min_cosine": 0.9869141973909346,
+        "lse_max": 0.208251953125,
+        "normalized_max_lse_error": 0.008409102724309295
+      },
+      "passes_arithmetic_gate": true,
+      "passes_original_gate": false
+    },
+    {
+      "balance_mode": "per_head",
+      "layout": "preshuffled",
+      "lazy_rescale": false,
+      "role": "prior_control",
+      "balance_min": 2.6198489665985107,
+      "balance_max": 3.440375566482544,
+      "q_descale": 0.0513392873108387,
+      "q_rope_max_reconstruction_error": 0.012277128174901009,
+      "projection": {
+        "k": {
+          "rms": 0.009338814990608894,
+          "peak": 0.029999868149086173,
+          "clipping": 0.0
+        },
+        "v": {
+          "rms": 0.026469603339755374,
+          "peak": 0.03570842279791435,
+          "clipping": 0.0
+        }
+      },
+      "same_fp8_inputs": {
+        "rms": 0.0030254881598013217,
+        "normalized_max_output_error": 0.009192797000431126,
+        "min_cosine": 0.9998261328182281,
+        "lse_max": 0.0005978768647416643,
+        "normalized_max_lse_error": 2.41480438469845e-05
+      },
+      "vs_historical_bf16": {
+        "rms": 0.02130177373778581,
+        "normalized_max_output_error": 0.056910569105691054,
+        "min_cosine": 0.998039721833456,
+        "lse_max": 0.208251953125,
+        "normalized_max_lse_error": 0.008409102724309295
+      },
+      "passes_arithmetic_gate": true,
+      "passes_original_gate": false
+    },
+    {
+      "balance_mode": "binary_scales",
+      "layout": "plain",
+      "lazy_rescale": true,
+      "role": "candidate",
+      "balance_min": 2.0,
+      "balance_max": 4.0,
+      "q_descale": 0.0625,
+      "q_rope_max_reconstruction_error": 3.814697265625e-06,
+      "projection": {
+        "k": {
+          "rms": 0.008298643016968414,
+          "peak": 0.015624003367451067,
+          "clipping": 0.0
+        },
+        "v": {
+          "rms": 0.026469603339755374,
+          "peak": 0.03570842279791435,
+          "clipping": 0.0
+        }
+      },
+      "same_fp8_inputs": {
+        "rms": 0.012684335005031105,
+        "normalized_max_output_error": 0.019987621203274474,
+        "min_cosine": 0.9881588627381847,
+        "lse_max": 0.000594490165429562,
+        "normalized_max_lse_error": 2.4006315400147917e-05
+      },
+      "vs_historical_bf16": {
+        "rms": 0.024841010168454938,
+        "normalized_max_output_error": 0.06504065040650407,
+        "min_cosine": 0.986675478901891,
+        "lse_max": 0.2503547668457031,
+        "normalized_max_lse_error": 0.010109191872320024
+      },
+      "passes_arithmetic_gate": true,
+      "passes_original_gate": false
+    },
+    {
+      "balance_mode": "binary_scales",
+      "layout": "plain",
+      "lazy_rescale": false,
+      "role": "candidate",
+      "balance_min": 2.0,
+      "balance_max": 4.0,
+      "q_descale": 0.0625,
+      "q_rope_max_reconstruction_error": 3.814697265625e-06,
+      "projection": {
+        "k": {
+          "rms": 0.008298643016968414,
+          "peak": 0.015624003367451067,
+          "clipping": 0.0
+        },
+        "v": {
+          "rms": 0.026469603339755374,
+          "peak": 0.03570842279791435,
+          "clipping": 0.0
+        }
+      },
+      "same_fp8_inputs": {
+        "rms": 0.003024455811792137,
+        "normalized_max_output_error": 0.008346031883343806,
+        "min_cosine": 0.9998307161267252,
+        "lse_max": 0.000594490165429562,
+        "normalized_max_lse_error": 2.4006315400147917e-05
+      },
+      "vs_historical_bf16": {
+        "rms": 0.021289271828360445,
+        "normalized_max_output_error": 0.06504065040650407,
+        "min_cosine": 0.997730569313751,
+        "lse_max": 0.2503547668457031,
+        "normalized_max_lse_error": 0.010109191872320024
+      },
+      "passes_arithmetic_gate": true,
+      "passes_original_gate": false
+    },
+    {
+      "balance_mode": "binary_scales",
+      "layout": "preshuffled",
+      "lazy_rescale": true,
+      "role": "candidate",
+      "balance_min": 2.0,
+      "balance_max": 4.0,
+      "q_descale": 0.0625,
+      "q_rope_max_reconstruction_error": 3.814697265625e-06,
+      "projection": {
+        "k": {
+          "rms": 0.008298643016968414,
+          "peak": 0.015624003367451067,
+          "clipping": 0.0
+        },
+        "v": {
+          "rms": 0.026469603339755374,
+          "peak": 0.03570842279791435,
+          "clipping": 0.0
+        }
+      },
+      "same_fp8_inputs": {
+        "rms": 0.012684335005031105,
+        "normalized_max_output_error": 0.019987621203274474,
+        "min_cosine": 0.9881588627381847,
+        "lse_max": 0.000594490165429562,
+        "normalized_max_lse_error": 2.4006315400147917e-05
+      },
+      "vs_historical_bf16": {
+        "rms": 0.024841010168454938,
+        "normalized_max_output_error": 0.06504065040650407,
+        "min_cosine": 0.986675478901891,
+        "lse_max": 0.2503547668457031,
+        "normalized_max_lse_error": 0.010109191872320024
+      },
+      "passes_arithmetic_gate": true,
+      "passes_original_gate": false
+    },
+    {
+      "balance_mode": "binary_scales",
+      "layout": "preshuffled",
+      "lazy_rescale": false,
+      "role": "candidate",
+      "balance_min": 2.0,
+      "balance_max": 4.0,
+      "q_descale": 0.0625,
+      "q_rope_max_reconstruction_error": 3.814697265625e-06,
+      "projection": {
+        "k": {
+          "rms": 0.008298643016968414,
+          "peak": 0.015624003367451067,
+          "clipping": 0.0
+        },
+        "v": {
+          "rms": 0.026469603339755374,
+          "peak": 0.03570842279791435,
+          "clipping": 0.0
+        }
+      },
+      "same_fp8_inputs": {
+        "rms": 0.003024455811792137,
+        "normalized_max_output_error": 0.008346031883343806,
+        "min_cosine": 0.9998307161267252,
+        "lse_max": 0.000594490165429562,
+        "normalized_max_lse_error": 2.4006315400147917e-05
+      },
+      "vs_historical_bf16": {
+        "rms": 0.021289271828360445,
+        "normalized_max_output_error": 0.06504065040650407,
+        "min_cosine": 0.997730569313751,
+        "lse_max": 0.2503547668457031,
+        "normalized_max_lse_error": 0.010109191872320024
+      },
+      "passes_arithmetic_gate": true,
+      "passes_original_gate": false
+    }
+  ],
+  "script_sha256": "6cd45bb78fd09540752882362fac4bcc561307ed58ce4f681c3a0af5ac37702c",
+  "thresholds": {
+    "output_rms": 0.1,
+    "absolute_lse": 0.2
+  },
+  "serving_integrated": false,
+  "fixture_sha256": "a2b93754cfbea963182bb90f9b8dd10b923108c87aa2a810cdf16921bea53794",
+  "queries": 7680,
+  "heads": 12,
+  "kv_rows": 15360,
+  "blas_backend": "_BlasBackend.Cublas",
+  "bf16_arithmetic": {
+    "rms": 0.00166590591149755,
+    "normalized_max_output_error": 0.003656042394790358,
+    "min_cosine": 0.9999966595028438,
+    "lse_max": 8.191103301413705e-06,
+    "normalized_max_lse_error": 3.3075240650504997e-07
+  },
+  "scope": "All captured rows; GPU0; native FP8 weights/projector; existing 256-dim FMHA. Diagnostic calibration uses captured K maxima.",
+  "error": "AssertionError: Binary-scale candidate did not pass all four unchanged numerical gates",
+  "workflow_evidence": {
+    "run_id": 41438279352,
+    "attempt": 1,
+    "job_id": 125253537888,
+    "artifact_id": 13137369089,
+    "workflow_and_execution_sha": "71fc0c544aa9dfd3e889406c0b128d879bd12a06",
+    "native_sha": "492080779e9feea19308092b0aba0840e87c6115",
+    "source_hashes": {
+      "tests/kernels/attention/test_rocm_aiter_mla_prefill_fusions.py": "72b7c413d7b3e7c84f1a784d23422dec2a4af1e1dcc933f7d12e35512653bf28",
+      "vllm/envs.py": "f166a441f4e0806a375902a60fe7e4f3610aa547026191276d562ec4e4951c65",
+      "vllm/models/kimi_k3/nvidia/dspark_mla.py": "dea42ec9154e7576617cfa87bb02c6c1c5235b878b9c738b3837c6dcf85314aa",
+      "vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py": "105565beb3d5defe7918f0422f92d8e388272e9fa8f600c2e6eace416f01da7f",
+      "vllm/v1/attention/backends/mla/rocm_aiter_mla.py": "d7e23a4312325159f9263c06e440ffcf484e351ab8551a9fa900c343b7fb164d",
+      "vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py": "2ee58e35bbb88574e1b98b336cb3800db7b953fcb87d6852b33e82eaad550f6f",
+      "vllm/v1/attention/ops/rocm_aiter_mla_fp8_quant.py": "e18ade190ea928fa174ea680552f8867d236419e1dfb8d951beadd9220407ee7",
+      "vllm/v1/attention/ops/rocm_aiter_mla_prefill.py": "d1919b4433bf0c820712e9a9c589c86e82951f7d35e3b7d675a449688012d574"
+    },
+    "binary_runtime": {
+      "torch": "2.13.0+rocm10.0.0",
+      "hip": "7.15.26333",
+      "triton": "3.8.0+git669b31ac",
+      "temporary_directory": "/tmp",
+      "module_versions": {
+        "torch": "2.13.0+rocm10.0.0",
+        "triton": "3.8.0"
+      }
+    }
+  }
+}

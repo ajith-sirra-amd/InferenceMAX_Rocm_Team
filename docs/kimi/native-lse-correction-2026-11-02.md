@@ -45,3 +45,37 @@ balancing to powers of two. This avoids basis rotation and tests whether
 binary alignment reduces conversion error. Keep residual RoPE columns,
 all four native cases and the original 0.20/0.10 gates. Calibration is still
 diagnostic; no serving integration or performance claim.
+
+## Completed outcome
+
+Binary-scale run [41438279352](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41438279352),
+attempt 1, job 125253537888, source 71fc0c544aa9dfd3e889406c0b128d879bd12a06,
+failed its numerical criterion. Artifact 13137369089. All eight arithmetic
+checks passed; all four candidate BF16-LSE checks failed. Relative output RMS
+remained below 0.10. Maximum LSE was 0.2503547668457031 in both layouts and
+both rescaling modes. Control remained 0.208251953125.
+Binary Q descale was 0.0625, versus 0.0513392873108387 for the control.
+Q RoPE reconstruction improved from 0.01227712817 to 0.000003814697266,
+but overall LSE worsened. No candidate is promoted.
+
+Both runs completed and their complete numerical reports, runtime provenance,
+and native source hashes are archived under results/atom-attention/run41436852207
+and run41438279352. CPU prechecks 41436751469 and 41438169887 passed.
+The initial generic harness failure 41436539974 was a workflow-contract
+KeyError after 20 passing tests. Restoring the original e2e workflow and
+moving the diagnostic to hello.yml fixed it; 41436748919 passed.
+This workflow correction does not modify native FP8 arithmetic.
+
+The evidence supports quantization error on this captured input, not an
+identified layout, LSE-unit, or kernel arithmetic bug. Neither tested correction
+closes the unchanged absolute-LSE <0.20 criterion. This does not prove that no
+future higher-precision design can pass. Further work would be a precision
+design experiment requiring independent inputs and performance validation,
+rather than a demonstrated small implementation fix.
+
+Current PR source remains 492080779e9feea19308092b0aba0840e87c6115.
+The 0.208 control is an experimental residual/per-head path, not the current
+serving implementation. The current PR's earlier BF16 diagnostic remains
+unpassed. No balancing, rotation, residual-column, or binary-scale correction
+from these experiments was added to the PR. Its prior GPU/GSM8K results stand.
+No GPU run remains active from this investigation.
