@@ -37,7 +37,8 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
     export TORCH_BLAS_PREFER_HIPBLASLT=0
     export TORCH_BLAS_PREFER_CUBLASLT=0
     export INFERENCEX_NATIVE_EXPECT_BLAS=cublas
-    export INFERENCEX_NATIVE_STACK_INTERVAL=60
+    # Periodic faulthandler dumps coincided with a worker dying mid-dump.
+    export INFERENCEX_NATIVE_STACK_INTERVAL=0
     unset PYTHONPATH
     for task_atom_env in $(compgen -A variable ATOM_); do
         unset "$task_atom_env"
