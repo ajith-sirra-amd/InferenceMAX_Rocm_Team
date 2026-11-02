@@ -32,3 +32,15 @@ The observer requires FP8 causal/cached FMHA on all eight workers. Reference mod
 Inspect GPU test reports and failures immediately. Complete matched full runs, check all-worker execution, coverage and request/server errors, update the reviewer with concise evidence, complete the checklist, then mark the PR ready for review under the user's authorization. Upstream CI and human review remain merge requirements.
 
 Broader profiling and C56/C64 MTP, C96 without MTP remain backlog after this PR task. Native NUMA changes are postponed.
+
+## User steering: standalone PR run and follow-up GSM8K
+
+The user explicitly prohibited adding the direct FP8 up-projection diff to PR #59124 or its author's branch. No such write occurred; integration code is only in the user's fork benchmark branch. Do not resume the combined benchmark without new authorization.
+
+- Combined run 41444880140: cancelled before the GPU job started.
+- Reference #59124 run 41443951889: continues.
+- Standalone native PR #64288 run 41447686785: queued, exact PR SHA 492080779e9feea19308092b0aba0840e87c6115, November 1 image e0d00e4b, full C48/TP8/DCP8/MTP replay. Native comparison mode keeps BF16 new-token attention.
+- Full native GSM8K run 41447950940: dispatched with a success prerequisite on 41447686785. Workflow SHA 94f5efa4a61aae4f4a09d54e2c30d9b4dd56216d extends the prerequisite wait to 240 minutes; execution source remains 190f103aad8911bff3a31a2ee0cbc12ed9070ce9. Real MTP, eager 512-token stress routing, exact native source and eight-worker execution proof remain required.
+- Standalone vs reference results cannot isolate projection-only gain because causal routing/Q reuse/scale policy also differ. Update the PR with that distinction.
+- The historical 18,244.04135 native throughput is on earlier pinned image edad8b03, not e0d00e4b. The hipBLAS workaround has no isolated performance uplift measurement; both TORCH_BLAS_PREFER_HIPBLASLT=0 and TORCH_BLAS_PREFER_CUBLASLT=0 were tested together.
+- Kimi-K3.1 compatibility is unconfirmed. Native gating is configuration-based (512/128/64/128, gfx950, DCP >1, FP8 E4M3/native per-channel weights), but guessed checkpoint config URLs returned HTTP 401. An optional request for the exact K3.1 checkpoint/config URL is pending; do not claim validation.
