@@ -7,6 +7,8 @@ on:
       - utils/atom_attention/native_validation_plugin/**
       - utils/atom_attention/test_native_validation.py
       - utils/atom_attention/native_steady_profile.py
+      - utils/atom_attention/wait_native_run.py
+      - utils/atom_attention/test_wait_native_run.py
       - upstream/InferenceX/configs/amd-master.yaml
       - utils/atom_attention/test_native_steady_profile.py
       - .github/workflows/native-fp8-harness-checks.yml
@@ -32,7 +34,7 @@ jobs:
         run: |
           python3 -m venv .ci-env
           .ci-env/bin/python -m pip install pytest pyyaml pydantic
-          .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py utils/atom_attention/test_native_steady_profile.py --basetemp=.ci-profile-tests --junitxml=native-harness-checks.xml
+          .ci-env/bin/python -m pytest -q utils/atom_attention/test_native_validation.py utils/atom_attention/test_native_steady_profile.py utils/atom_attention/test_wait_native_run.py --basetemp=.ci-profile-tests --junitxml=native-harness-checks.xml
           .ci-env/bin/python - <<'PY'
           import subprocess
           from pathlib import Path

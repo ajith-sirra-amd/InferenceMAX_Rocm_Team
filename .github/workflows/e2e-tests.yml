@@ -70,6 +70,16 @@ on:
                 required: false
                 type: string
                 default: ""
+            queue-after-run-id:
+                description: "GPU scheduling predecessor, separate from source validation"
+                required: false
+                type: string
+                default: ""
+            queue-after-run-sha:
+                description: "Exact workflow SHA of the scheduling predecessor"
+                required: false
+                type: string
+                default: ""
             after-run-id:
                 description: "Wait for this run to succeed before GPU scheduling; requires exact ref"
                 required: false
@@ -126,6 +136,16 @@ on:
                 default: "native"
             failure-fixture-run-id:
                 description: "Diagnostics only: replay atom_fp8_failure.pt from this run"
+                required: false
+                type: string
+                default: ""
+            queue-after-run-id:
+                description: "GPU scheduling predecessor, separate from source validation"
+                required: false
+                type: string
+                default: ""
+            queue-after-run-sha:
+                description: "Exact workflow SHA of the scheduling predecessor"
                 required: false
                 type: string
                 default: ""
@@ -281,10 +301,24 @@ jobs:
     wait-for-prerequisite:
         if: ${{ !inputs.runner-diagnostics-only }}
         runs-on: ubuntu-latest
-        timeout-minutes: 60
+        timeout-minutes: 240
         permissions:
             actions: read
+            contents: read
         steps:
+            - name: Checkout queue helper
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+            - name: Wait for GPU queue predecessor
+              if: ${{ inputs.queue-after-run-id != '' }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  QUEUE_RUN_ID: ${{ inputs.queue-after-run-id }}
+                  QUEUE_RUN_SHA: ${{ inputs.queue-after-run-sha }}
+              run: |
+                  python3 utils/atom_attention/wait_native_run.py --repo "$GITHUB_REPOSITORY" --run-id "$QUEUE_RUN_ID" --sha "$QUEUE_RUN_SHA" --timeout-seconds 13800 --poll-seconds 30
             - name: Wait for preceding numerical run
               if: ${{ inputs.after-run-id != '' }}
               env:
