@@ -66,3 +66,9 @@ GSM8K run 41447950940 attempt 1 failed before GPU scheduling because its prerequ
 User instruction: **Do not attempt to fix #59124, including the reference benchmark integration, and do not rerun it. Report its observed failure only.** The combined arm remains cancelled. This PR differs by direct FP8 latent-cache/FP8-weight projection into FP8 K/V, eliminating the BF16 expanded K/V materialization and separate cached K/V quantization. #59124 uses FP8 new-token attention; this PR retains BF16. The failed reference is not a valid speedup baseline.
 
 The PR description and existing reviewer comment now include this difference and the completed newer-nightly result. Native source remains unchanged and PR stays draft pending the requested follow-up evaluation.
+
+## User decisions on PR presentation and later work
+
+The PR summary, comparison table and current reviewer comment no longer emphasize unchanged BF16 new-token attention or contrast its precision with #59124. Public claims remain explicitly scoped to cached-context attention and direct FP8 cached-K/V up-projection; the source and full engineering evidence are unchanged.
+
+New-token FP8 is deferred to a later experiment. Prepare a separate future PR only after accuracy validation and a significant measured performance uplift. Do not add it to the current PR, and do not resume or fix the #59124 reference run. Current priority remains full native GSM8K attempt 2, review readiness, then the already-requested steady-state profile and concurrency sweep.
