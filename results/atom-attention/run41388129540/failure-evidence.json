@@ -1,0 +1,242 @@
+{
+    "run_id":  41388129540,
+    "job_id":  125093482424,
+    "attempt":  1,
+    "status":  "failed",
+    "performance_valid":  false,
+    "cause":  "Profiling metric coverage below 98 percent after serving progress stopped",
+    "root_cause":  "Not established; worker stall and earlier BF16 HIPBLAS warnings require isolation",
+    "ttft_coverage_percent":  95.9,
+    "itl_coverage_percent":  96.2,
+    "required_coverage_percent":  98,
+    "configured_duration_seconds":  3600,
+    "aggregate_duration_seconds":  3463.91877,
+    "invalid_reported_tokens_per_second_per_gpu":  18236.327,
+    "illustrative_same_tokens_over_3600_seconds_per_gpu":  17546.98760865,
+    "profiled_records":  3666,
+    "successful_profiled_records":  3657,
+    "profiled_error_records":  9,
+    "bf16_hipblas_warning_count":  104,
+    "server_tracebacks":  0,
+    "server_quota_errors":  0,
+    "last_nonzero_progress":  "2026-11-02T06:04:58Z",
+    "zero_progress":  "2026-11-02T06:05:08Z",
+    "stalled_running_requests":  36,
+    "stalled_kv_fetches":  3,
+    "first_shm_stall_warning":  "2026-11-02T06:05:56Z",
+    "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+    "precompiled_base":  "a1cfd2c1b584c4ac197db9cc9ac84a6d973d39df",
+    "binary_runtime":  {
+                           "torch":  "2.13.0+rocm10.0.0",
+                           "hip":  "7.15.26333",
+                           "triton":  "3.8.0+git669b31ac",
+                           "temporary_directory":  "/tmp",
+                           "module_versions":  {
+                                                   "torch":  "2.13.0+rocm10.0.0",
+                                                   "triton":  "3.8.0"
+                                               }
+                       },
+    "source_hashes":  {
+                          "tests/kernels/attention/test_rocm_aiter_mla_prefill_fusions.py":  "72b7c413d7b3e7c84f1a784d23422dec2a4af1e1dcc933f7d12e35512653bf28",
+                          "vllm/envs.py":  "f166a441f4e0806a375902a60fe7e4f3610aa547026191276d562ec4e4951c65",
+                          "vllm/models/kimi_k3/nvidia/dspark_mla.py":  "dea42ec9154e7576617cfa87bb02c6c1c5235b878b9c738b3837c6dcf85314aa",
+                          "vllm/v1/attention/backends/mla/prefill/aiter_flash_attn.py":  "105565beb3d5defe7918f0422f92d8e388272e9fa8f600c2e6eace416f01da7f",
+                          "vllm/v1/attention/backends/mla/rocm_aiter_mla.py":  "d7e23a4312325159f9263c06e440ffcf484e351ab8551a9fa900c343b7fb164d",
+                          "vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py":  "2ee58e35bbb88574e1b98b336cb3800db7b953fcb87d6852b33e82eaad550f6f",
+                          "vllm/v1/attention/ops/rocm_aiter_mla_fp8_quant.py":  "e18ade190ea928fa174ea680552f8867d236419e1dfb8d951beadd9220407ee7",
+                          "vllm/v1/attention/ops/rocm_aiter_mla_prefill.py":  "d1919b4433bf0c820712e9a9c589c86e82951f7d35e3b7d675a449688012d574"
+                      },
+    "source_hashes_match_static":  true,
+    "native_execution_events":  [
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "projection",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3631,
+                                        "rank":  5
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "projection",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3625,
+                                        "rank":  6
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "projection",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3628,
+                                        "rank":  1
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "projection",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3632,
+                                        "rank":  7
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "projection",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3626,
+                                        "rank":  4
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "projection",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3630,
+                                        "rank":  2
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "cached_fmha",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3625,
+                                        "rank":  6
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "cached_fmha",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3628,
+                                        "rank":  1
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "cached_fmha",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3632,
+                                        "rank":  7
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "cached_fmha",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3626,
+                                        "rank":  4
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "projection",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3627,
+                                        "rank":  0
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "cached_fmha",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3630,
+                                        "rank":  2
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "cached_fmha",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3627,
+                                        "rank":  0
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "cached_fmha",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3631,
+                                        "rank":  5
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "projection",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3629,
+                                        "rank":  3
+                                    },
+                                    {
+                                        "accuracy_stress_routing":  false,
+                                        "dtype":  "torch.float8_e4m3fn",
+                                        "graph_capture":  false,
+                                        "kind":  "cached_fmha",
+                                        "native_sha":  "492080779e9feea19308092b0aba0840e87c6115",
+                                        "nonempty":  true,
+                                        "phase":  "replay",
+                                        "pid":  3629,
+                                        "rank":  3
+                                    }
+                                ],
+    "image":  "vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716",
+    "artifacts":  {
+                      "aggregate":  13120335629,
+                      "raw":  13120695134,
+                      "server":  13120450517
+                  },
+    "next_diagnostic_run":  41400490712,
+    "next_diagnostic_source":  "b46a007c156279a0ad7fe9e14d5f442baf676854",
+    "caveats":  [
+                    "The illustrative 3600-second recalculation is not a validated benchmark result.",
+                    "Aggregate metadata incorrectly reports spec_decoding=none; the archived command confirms DSpark with synthetic acceptance.",
+                    "Aggregate error-dropped count includes warmup overlap; profiled error records are 9/3666.",
+                    "Eight-worker execution does not resolve the stall or the historical BF16 LSE threshold."
+                ]
+}
