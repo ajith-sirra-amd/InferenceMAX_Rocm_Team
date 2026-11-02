@@ -1,0 +1,26 @@
+{
+ "run_id":41411886545,
+ "gpu_job":125166780161,
+ "artifact_id":13125993970,
+ "status":"failed_before_serving",
+ "last_checkpoint_progress":"20/96",
+ "primary_cause":"not yet proven; periodic faulthandler watchdog is leading suspect",
+ "evidence":{
+   "worker_pid":3662,
+   "timer_started_utc":"2026-11-02T08:23:28.550634Z",
+   "first_dump_due_utc":"2026-11-02T08:24:28.550634Z",
+   "dump_file":"results/native_worker_stacks/pid-3662.log",
+   "dump_bytes":1086,
+   "dump_ends_mid_line":"  File ",
+   "engine_shutdown_log_utc":"2026-11-02T08:24:29Z",
+   "remaining_workers_terminated":7,
+   "other_worker_first_dumps":"complete"
+ },
+ "change_for_next_run":{
+   "execution_sha":"b56b28bb1fc7302f8f35095341165ddea89de4fa",
+   "INFERENCEX_NATIVE_STACK_INTERVAL":"0",
+   "TORCH_BLAS_PREFER_HIPBLASLT":"0",
+   "TORCH_BLAS_PREFER_CUBLASLT":"0"
+ },
+ "scope":"Remove newly introduced diagnostic timer; keep native PR arithmetic, image and workload unchanged. Passing next run is required before claiming causal resolution."
+}
