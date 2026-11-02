@@ -33,7 +33,7 @@ that all numerical and performance criteria have passed.
   causal attention remains BF16. Keep this out of an image-only comparison.
 - **Tests:** Eight native GPU cases passed at 332d6c9. Current-head static
   checks and full native GSM8K passed. The subsequent metadata fixes do not
-  alter quantization/kernel arithmetic. Normal-routing full replay is active.
+  alter quantization/kernel arithmetic. Normal-routing full replay failed its coverage gate after a serving stall.
 - **Docs/review:** Refresh the PR's stale GSM8K/static status. Keep the
   environment-variable discussion open as requested. Four matched reviewer
   comparison arms and upstream contributor-gated CI remain outstanding.
@@ -55,7 +55,7 @@ An optional lm-eval Git metadata lookup reported dubious ownership of
 /outputs after evaluation. It did not invalidate the independently checked
 native source or the score; the warning has not been fixed.
 
-## Active current-image reference
+## Failed current-image reference
 
 - Run: [41388129540](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41388129540), attempt 1.
 - GPU job: 125093482424; runner mi355x-amd_pit2_p03_g07.
@@ -68,16 +68,50 @@ native source or the score; the warning has not been fixed.
 - Cached-context FMHA + direct projection FP8; new-token causal attention BF16.
 - Synthetic speculative acceptance matches the historical performance recipe.
 - This is an optimized current-image reference, not a BF16 baseline.
-- Last observed: Launch job script active; no result artifacts yet. This alone
-  is not proof of GPU activity or progress inside the container.
+- Completed with failure at 2026-11-02T06:12:03Z. Serving stopped making
+  progress near 06:05Z, followed by shared-memory broadcast timeouts.
+- TTFT coverage 95.9%, ITL 96.2%; both below the unchanged 98% gate.
+  3,657 valid and 9 error records out of 3,666 profiled requests.
+- Reported 18,236.327 tokens/s/GPU uses only 3,463.91877 seconds of the
+  configured 3,600-second interval. It is an invalid performance result.
+  Using the same token count over 3,600 seconds gives 17,546.988 only as
+  an illustration of the denominator effect, not a validated benchmark.
+- Exact installed native source hashes match static evidence; all eight
+  workers exercised direct FP8 projection and cached FP8 FMHA.
+- 104 hipBLASLt errors were logged in ordinary BF16 F.linear. Serving
+  continued after those errors; their relation to the later stall is unproven.
+  No server traceback or disk-quota error was found.
+- Evidence: ../../results/atom-attention/run41388129540/failure-evidence.json.
 
-Accept only after inspecting aggregated throughput, request errors, server
-logs, exact installed source/image provenance, and FP8 execution on all eight
-workers. Preserve the result before updating the nightly image.
+## BLAS isolation and next diagnostic
+
+[Run 41400490712](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41400490712)
+tested 14 BF16 shapes, three repetitions, on all eight GPUs in fresh processes
+without FP8 imports. BOTH old and November 1 images failed: 13/14 shapes
+produced hipBLASLt errors on each rank (312 warnings per image). All outputs
+were finite; maximum sampled relative RMS was 0.00200604, below 0.02.
+No isolated process timed out. The old-image step's continue-on-error setting
+made GitHub show success; artifact status is authoritative. Native FP8 tests
+were skipped in this diagnostic. A nightly bump alone does not fix the issue.
+
+[Run 41401317715](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41401317715),
+source 2b03ea66409449b4c20ba6ee952572027964e76c, tests the same shapes with
+TORCH_BLAS_PREFER_HIPBLASLT=0 and TORCH_BLAS_PREFER_CUBLASLT=0. It asserts
+PyTorch selected Cublas (the HIP backend on ROCm) and retains all warning and
+numerical gates. Both candidate steps passed; native FP8 tests on the newer
+image are running. This is a runtime workaround experiment, not a proven
+serving-stall fix or a production-code change.
+
+Four reviewer comparison patches passed preparation in
+[run 41401194581](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41401194581):
+AST, Ruff, format and whitespace checks. Artifact 13120734226 records exact
+file hashes. These checks do not validate runtime routing or numerical
+equivalence; direct arms retain new-token-derived K/V scales while reference
+arms use actual-context maxima.
 
 ## Remaining review gates and next runs
 
-1. Finish and inspect the current-image reference.
+1. Resolve the runtime diagnostic and investigate the serving stall; the current-image reference is invalid.
 2. Select and pin a newer compatible ROCm nightly; verify source/wheel/library
    compatibility before consuming GPU time.
 3. Validate kernels, serving synchronization, accuracy and matched performance
