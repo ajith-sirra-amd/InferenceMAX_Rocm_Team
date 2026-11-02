@@ -1,0 +1,32 @@
+name: Report Staging Result
+
+run-name: Report staged run ${{ github.event.client_payload.run-id }} to PR #${{ github.event.client_payload.pr-number }}
+
+on:
+  repository_dispatch:
+    types: [stage-results-started, stage-results-completed]
+
+permissions: {}
+
+concurrency:
+  group: stage-results-callback-${{ github.event.client_payload.pr-number }}
+  cancel-in-progress: false
+
+jobs:
+  comment:
+    name: Comment on source pull request
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Read trusted callback implementation
+      pull-requests: write # Post the staging result as github-actions
+    steps:
+      - name: Checkout trusted callback code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate callback and comment
+        working-directory: inferencex-e2e
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m infx.workflows.stage_results_callback

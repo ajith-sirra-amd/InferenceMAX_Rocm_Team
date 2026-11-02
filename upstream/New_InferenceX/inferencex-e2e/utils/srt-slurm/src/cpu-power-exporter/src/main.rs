@@ -1,0 +1,1609 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Grace CPU power exporter for Prometheus / AIPerf server-metrics.
+//!
+//! Two back-ends are supported and selected via `--source`:
+//!
+//! - `acpi` (default fallback): reads `/sys/class/hwmon/hwmon*/power*_average` and
+//!   exposes `cpu_power_acpi_watts{sensor,type,socket,oem_info,source="acpi"}`.
+//!   Firmware-averaged; available without DCGM.
+//!
+//! - `dcgm`: reads the DCGM CPU-entity power fields via the DCGM C API and
+//!   exposes `cpu_power_dcgm_watts{socket,field_id,source="dcgm"}`, one sample
+//!   per (socket, field). Field 1130 is the ACPI `CPU Power Socket N` rail
+//!   (`cpu_rail`) and 1132 the `SysIO Power Socket N` rail (`soc`); DCGM has no
+//!   field for the `Grace Power Socket N` envelope, so DCGM mode reports about
+//!   half the socket power ACPI mode does. Requires `libdcgm.so` (see `dcgm.rs`).
+//!
+//! - `auto` (default): tries ACPI first — it carries the socket envelope plus
+//!   every rail — and falls back to DCGM only when no ACPI `power_meter` hwmon
+//!   sensors are present or no socket-total channel reads positive. (DCGM reads
+//!   the same hwmon files, so if ACPI is absent DCGM usually is too; the
+//!   fallback covers hosts where sysfs is hidden from this process but a
+//!   privileged nv-hostengine is reachable.)
+//!
+//! Alongside either back-end, optional `cpu_power_nvml_watts` reports one
+//! superchip module reading per Grace socket. Its background poller prevents
+//! NVML stalls from blocking CPU scrapes. See `nvml` for the meter's scope.
+//!
+//! Endpoints:
+//!   GET /metrics  — Prometheus text format
+//!   GET /health   — "ok\n"
+
+mod dcgm;
+mod nvml;
+
+#[cfg(test)]
+mod test_support;
+
+use anyhow::{Context, Result};
+use clap::Parser;
+use std::collections::btree_map::{BTreeMap, Entry};
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
+use std::io::ErrorKind;
+use std::net::{IpAddr, SocketAddr};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::Instant;
+use std::{fs, process};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::signal;
+use tokio::signal::unix::{signal as unix_signal, SignalKind};
+use tokio::task::JoinSet;
+use tokio::time::{timeout, Duration};
+
+/// Channels we surface. Matched against the hwmon OEM string in this order;
+/// the socket ID must follow the phrase directly, so "Grace Power Socket 1"
+/// stays `total` even when the string also mentions CPU power elsewhere.
+///
+/// Mirrors `ACPI_LABEL_PATTERNS` in `src/srtctl/core/power/cpu_rails.py`:
+/// some platforms suffix a rail's OEM string with "in uW" (e.g. "Total Power
+/// in uW socket 0" vs. "Total Power socket 0"), so each variable-form domain
+/// lists both spellings. `total` is the complete CPU-side socket envelope
+/// (Grace's own reading, or a platform's generic "Total Power" rail);
+/// `cpu_rail`/`soc`/`dram` are component rails that must not be summed into
+/// a node's total power. A firmware `Module Power Socket N` meter is left
+/// unclassified. Module power comes from NVML only (see `nvml.rs`), the one
+/// path verified on hardware.
+const OEM_KINDS: [(&str, &[&str]); 4] = [
+    (
+        "total",
+        &[
+            "grace power socket ",
+            "total power socket ",
+            "total power in uw socket ",
+            "total input power socket ",
+            "total input power in uw socket ",
+        ],
+    ),
+    (
+        "cpu_rail",
+        &[
+            "cpu rail power socket ",
+            "cpu rail power in uw socket ",
+            "cpu rail input power socket ",
+            "cpu rail input power in uw socket ",
+            "cpu power socket ",
+        ],
+    ),
+    (
+        "soc",
+        &[
+            "soc rail power socket ",
+            "soc rail power in uw socket ",
+            "soc rail input power socket ",
+            "soc rail input power in uw socket ",
+            "sysio power socket ",
+        ],
+    ),
+    (
+        "dram",
+        &[
+            "dram power socket ",
+            "dram power in uw socket ",
+            "dram input power socket ",
+            "dram input power in uw socket ",
+        ],
+    ),
+];
+
+const READ_TIMEOUT: Duration = Duration::from_secs(5);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
+const ACCEPT_BACKOFF_MIN: Duration = Duration::from_millis(10);
+const ACCEPT_BACKOFF_MAX: Duration = Duration::from_secs(1);
+const MAX_REQUEST_BYTES: usize = 8192;
+/// Backpressure, not a happy-path size: a scrape target sees ~1 request/s.
+const MAX_CONNECTIONS: usize = 64;
+/// Sensor reads can block on firmware, so this delay adds to the read time;
+/// it does not define a fixed sampling period.
+const POLL_INTERVAL: Duration = Duration::from_secs(1);
+/// Withhold stalled NVML readings so energy integration sees a gap instead
+/// of counting the last value indefinitely.
+const MODULE_STALE_AFTER: Duration = Duration::from_secs(3);
+
+#[derive(clap::ValueEnum, Clone, Debug, Default)]
+enum SourceMode {
+    Acpi,
+    Dcgm,
+    #[default]
+    Auto,
+}
+
+/// The release tag (without `v`) when built by the release workflow, else the crate version.
+const VERSION: &str = match option_env!("SRTCTL_RELEASE_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
+#[derive(Parser)]
+#[command(
+    version = VERSION,
+    about = "Grace CPU power exporter for Prometheus / AIPerf server-metrics"
+)]
+struct Args {
+    /// TCP port to listen on.
+    #[arg(long, default_value_t = 9405)]
+    port: u16,
+
+    /// Address to bind.
+    #[arg(long, default_value = "0.0.0.0")]
+    bind: IpAddr,
+
+    /// Root of hwmon sysfs (override for testing).
+    #[arg(long, default_value = "/sys/class/hwmon")]
+    hwmon_root: PathBuf,
+
+    /// Power reading back-end.
+    ///
+    /// `auto` tries ACPI first (socket envelope + every rail) and falls back
+    /// to DCGM (CPU rail + SysIO only) when no ACPI power_meter sensors exist
+    /// or no socket-total channel reads positive.
+    #[arg(long, default_value = "auto")]
+    source: SourceMode,
+}
+
+#[derive(Debug)]
+struct Sensor {
+    path: PathBuf,
+    /// `<hwmon node>/<channel>`: the one label guaranteed distinct per rail,
+    /// so two rails sharing an OEM string are still two Prometheus series.
+    id: String,
+    oem_info: String,
+    kind: &'static str,
+    socket: String,
+    /// Escaped `sensor=..,type=..,socket=..,oem_info=..` rendered once at discovery.
+    labels: String,
+}
+
+/// One `power*_average` file before alias resolution picks a winner.
+struct Candidate {
+    path: PathBuf,
+    node: String,
+    chan: String,
+    oem_info: Option<String>,
+}
+
+#[derive(Clone)]
+enum MetricsState {
+    /// Cached exposition keeps blocking ACPI reads out of scrapes.
+    Acpi(Arc<RwLock<String>>),
+    Dcgm(Arc<Mutex<dcgm::DcgmReader>>),
+}
+
+struct ModuleSnapshot {
+    read_started_at: Instant,
+    body: String,
+}
+
+enum ModuleState {
+    Pending(Instant),
+    Unavailable,
+    Missing,
+    Ready(ModuleSnapshot),
+}
+
+#[derive(Debug, PartialEq)]
+enum ModuleStatus {
+    Pending,
+    Unavailable,
+    NotReady,
+    Missing,
+    Stale,
+    Fresh,
+}
+
+impl ModuleState {
+    fn status(&self, now: Instant) -> ModuleStatus {
+        match self {
+            Self::Pending(started) if now.duration_since(*started) <= MODULE_STALE_AFTER => {
+                ModuleStatus::Pending
+            }
+            Self::Pending(_) => ModuleStatus::NotReady,
+            Self::Unavailable => ModuleStatus::Unavailable,
+            Self::Missing => ModuleStatus::Missing,
+            Self::Ready(snapshot)
+                if now.duration_since(snapshot.read_started_at) <= MODULE_STALE_AFTER =>
+            {
+                ModuleStatus::Fresh
+            }
+            Self::Ready(_) => ModuleStatus::Stale,
+        }
+    }
+}
+
+fn report_module_status(warned: &mut bool, status: ModuleStatus) {
+    match status {
+        ModuleStatus::NotReady | ModuleStatus::Missing | ModuleStatus::Stale if !*warned => {
+            *warned = true;
+            tracing::warn!(
+                ?status,
+                "NVML module power missing or stale; omitting module series"
+            );
+        }
+        ModuleStatus::Fresh if *warned => {
+            *warned = false;
+            tracing::info!("NVML module power recovered");
+        }
+        _ => {}
+    }
+}
+
+#[derive(Clone)]
+struct Metrics {
+    base: MetricsState,
+    module: Arc<RwLock<ModuleState>>,
+}
+
+impl Metrics {
+    /// NVML is never called here. A stalled `nvmlDeviceGetFieldValues` (a GPU
+    /// in reset) must not stall a scrape and lose that interval's CPU power with it.
+    fn render(&self) -> String {
+        let mut body = match &self.base {
+            MetricsState::Acpi(cache) => cache.read().unwrap().clone(),
+            MetricsState::Dcgm(reader) => build_metrics_dcgm(reader),
+        };
+        let module = self.module.read().unwrap();
+        if module.status(Instant::now()) == ModuleStatus::Fresh {
+            if let ModuleState::Ready(snapshot) = &*module {
+                body.push_str(&snapshot.body);
+            }
+        }
+        body
+    }
+}
+
+fn read_text(p: &Path) -> Option<String> {
+    fs::read_to_string(p)
+        .ok()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+}
+
+fn classify_oem(oem: &str) -> (&'static str, String) {
+    let lower = oem.to_lowercase();
+    for (kind, needles) in OEM_KINDS {
+        for needle in needles {
+            let Some((_, rest)) = lower.split_once(needle) else {
+                continue;
+            };
+            let socket: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            if !socket.is_empty() {
+                return (kind, socket);
+            }
+        }
+    }
+    ("other", String::new())
+}
+
+fn escape_label(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+}
+
+/// Channel `*_average` files under one hwmon directory.
+///
+/// A missing `device/` alias is normal. Any other I/O error means rails we
+/// cannot see, so it is reported rather than silently shortening the list.
+fn average_paths(dir: &Path) -> Vec<PathBuf> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Vec::new(),
+        Err(e) => {
+            tracing::warn!(error = %e, dir = %dir.display(), "hwmon directory unreadable; its rails are not exported");
+            return Vec::new();
+        }
+    };
+
+    let mut paths = Vec::new();
+    for entry in entries {
+        match entry {
+            Ok(entry) => {
+                let path = entry.path();
+                let is_average = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("power") && n.ends_with("_average"));
+                if is_average && path.is_file() {
+                    paths.push(path);
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, dir = %dir.display(), "hwmon entry unreadable; a rail may be missing")
+            }
+        }
+    }
+    paths.sort();
+    paths
+}
+
+fn discover_sensors(hwmon_root: &Path) -> Result<Vec<Sensor>> {
+    let entries =
+        fs::read_dir(hwmon_root).with_context(|| format!("list {}", hwmon_root.display()))?;
+    let mut dirs = Vec::new();
+    for entry in entries {
+        let entry = entry.with_context(|| format!("list {}", hwmon_root.display()))?;
+        dirs.push(entry.path());
+    }
+    dirs.sort();
+
+    // `hwmonN/` and `hwmonN/device/` alias the same files, so dedup on the
+    // resolved path; distinct channels are never collapsed. The alias that
+    // carries the channel's metadata wins regardless of scan order.
+    let mut by_identity: BTreeMap<PathBuf, Candidate> = BTreeMap::new();
+
+    for hwmon_dir in dirs {
+        let Some(node) = hwmon_dir.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !node.starts_with("hwmon") {
+            continue;
+        }
+        if ![hwmon_dir.join("name"), hwmon_dir.join("device/name")]
+            .iter()
+            .any(|path| read_text(path).as_deref() == Some("power_meter"))
+        {
+            continue;
+        }
+        let node = node.to_owned();
+
+        for root in [hwmon_dir.clone(), hwmon_dir.join("device")] {
+            for path in average_paths(&root) {
+                let Some(chan) = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .and_then(|s| s.strip_suffix("_average"))
+                    .map(str::to_owned)
+                else {
+                    continue;
+                };
+                let oem_info = read_text(&root.join(format!("{chan}_oem_info")))
+                    .or_else(|| read_text(&root.join(format!("{chan}_label"))));
+                let identity = fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+                let candidate = Candidate {
+                    path,
+                    node: node.clone(),
+                    chan,
+                    oem_info,
+                };
+                match by_identity.entry(identity) {
+                    Entry::Vacant(slot) => {
+                        slot.insert(candidate);
+                    }
+                    Entry::Occupied(mut slot) => {
+                        if slot.get().oem_info.is_none() && candidate.oem_info.is_some() {
+                            slot.insert(candidate);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut candidates: Vec<Candidate> = by_identity.into_values().collect();
+    candidates.sort_by(|a, b| (&a.node, &a.chan).cmp(&(&b.node, &b.chan)));
+
+    Ok(candidates
+        .into_iter()
+        .map(|c| {
+            let id = format!("{}/{}", c.node, c.chan);
+            let oem_info = c.oem_info.unwrap_or(c.chan);
+            let (kind, socket) = classify_oem(&oem_info);
+            let labels = format!(
+                "sensor=\"{}\",type=\"{kind}\",socket=\"{socket}\",oem_info=\"{}\"",
+                escape_label(&id),
+                escape_label(&oem_info),
+            );
+            Sensor {
+                path: c.path,
+                id,
+                oem_info,
+                kind,
+                socket,
+                labels,
+            }
+        })
+        .collect())
+}
+
+fn read_acpi_watts(path: &Path) -> Option<f64> {
+    let raw = read_text(path)?;
+    let microwatts: f64 = raw.parse().ok()?;
+    let watts = microwatts / 1_000_000.0;
+    // 0 from power1_average means the sensor has not produced a reading (not
+    // found / no average yet), never an idle socket: a live Grace socket draws
+    // tens of watts. File it as missing so it can never integrate to 0 J.
+    if watts.is_finite() && watts > 0.0 {
+        Some(watts)
+    } else {
+        None
+    }
+}
+
+fn build_metrics(sensors: &[Sensor]) -> String {
+    let mut out = String::from(
+        "# HELP cpu_power_acpi_watts Grace CPU power rail reading from ACPI hwmon (W).\n\
+         # TYPE cpu_power_acpi_watts gauge\n",
+    );
+    for s in sensors {
+        match read_acpi_watts(&s.path) {
+            Some(watts) => {
+                let _ = writeln!(
+                    out,
+                    "cpu_power_acpi_watts{{{},source=\"acpi\"}} {watts:.6}",
+                    s.labels
+                );
+            }
+            // Every scrape re-reads, so a persistently bad channel would warn
+            // forever; the gap in the series is the signal a consumer acts on.
+            None => {
+                tracing::debug!(path = %s.path.display(), "unreadable channel; skipping sample")
+            }
+        }
+    }
+    out
+}
+
+const DCGM_METRICS_HEADER: &str = "# HELP cpu_power_dcgm_watts Grace CPU power via DCGM CPU-entity fields (W): \
+field_id=1130 is the CPU rail (ACPI 'CPU Power Socket N'), 1132 the SysIO rail; DCGM has no socket-envelope field.\n\
+# TYPE cpu_power_dcgm_watts gauge\n";
+
+fn build_metrics_dcgm(reader: &Arc<Mutex<dcgm::DcgmReader>>) -> String {
+    match reader.lock() {
+        Err(_) => {
+            tracing::error!("DCGM reader mutex poisoned; skipping scrape");
+            DCGM_METRICS_HEADER.to_owned()
+        }
+        Ok(mut r) => match r.read_watts() {
+            Err(e) => {
+                tracing::warn!(error = %e, "DCGM read failed; skipping scrape");
+                DCGM_METRICS_HEADER.to_owned()
+            }
+            Ok(readings) => render_dcgm_metrics(&readings),
+        },
+    }
+}
+
+/// Render DCGM readings as Prometheus text: one `cpu_power_dcgm_watts` sample per
+/// (socket, field) that has a value, labelled with the DCGM `field_id` it came
+/// from. Readings arrive entity-major with field 1130 first, and emission keeps
+/// that order so a legacy collector that ignores `field_id` still meets 1130 first.
+fn render_dcgm_metrics(readings: &[dcgm::PowerReading]) -> String {
+    let mut out = String::from(DCGM_METRICS_HEADER);
+    for r in readings {
+        match r.watts {
+            Some(w) => {
+                let _ = writeln!(
+                    out,
+                    "cpu_power_dcgm_watts{{socket=\"{}\",field_id=\"{}\",source=\"dcgm\"}} {w:.6}",
+                    r.cpu_id, r.field_id,
+                );
+            }
+            None => tracing::debug!(
+                cpu_id = r.cpu_id,
+                field_id = r.field_id,
+                "no DCGM sample for entity/field; skipping"
+            ),
+        }
+    }
+    out
+}
+
+/// Reads until the end of the request headers, so a request split across
+/// segments is not mistaken for a request for `/`.
+///
+/// The timeout bounds the whole header, not each read: a client dribbling one
+/// byte at a time must not hold a connection slot open indefinitely.
+async fn read_request(stream: &mut TcpStream) -> Option<String> {
+    let read_headers = async {
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 1024];
+        loop {
+            let n = stream.read(&mut chunk).await.ok()?;
+            if n == 0 {
+                return None;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+            if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                return String::from_utf8(buf).ok();
+            }
+            if buf.len() > MAX_REQUEST_BYTES {
+                return None;
+            }
+        }
+    };
+    timeout(READ_TIMEOUT, read_headers).await.ok()?
+}
+
+async fn handle_connection(mut stream: TcpStream, metrics: Metrics) {
+    let Some(req) = read_request(&mut stream).await else {
+        return;
+    };
+    let mut request_line = req.split_whitespace();
+    let method = request_line.next().unwrap_or("");
+    // `/metrics?collect[]=x` addresses the same endpoint; the query is not part of it.
+    let path = request_line
+        .next()
+        .unwrap_or("")
+        .split('?')
+        .next()
+        .unwrap_or("");
+
+    let mut extra_headers = "";
+    let (status, content_type, body) = match (method, path) {
+        // /health deliberately touches no sensor: it must still answer while
+        // the collection thread is stuck on a firmware read.
+        ("GET" | "HEAD", "/health") => ("200 OK", "text/plain", "ok\n".to_owned()),
+        ("GET" | "HEAD", "/metrics") => (
+            "200 OK",
+            "text/plain; version=0.0.4; charset=utf-8",
+            metrics.render(),
+        ),
+        ("GET" | "HEAD", _) => ("404 Not Found", "text/plain", "Not Found\n".to_owned()),
+        _ => {
+            extra_headers = "Allow: GET, HEAD\r\n";
+            (
+                "405 Method Not Allowed",
+                "text/plain",
+                "Method Not Allowed\n".to_owned(),
+            )
+        }
+    };
+
+    // HEAD carries exactly the headers its GET would, and no body.
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n{extra_headers}Connection: close\r\n\r\n{}",
+        body.len(),
+        if method == "HEAD" { "" } else { body.as_str() },
+    );
+    match timeout(WRITE_TIMEOUT, stream.write_all(response.as_bytes())).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => tracing::debug!(error = %e, "response write failed"),
+        Err(_) => tracing::debug!("response write timed out"),
+    }
+}
+
+/// Accepts one connection, backing off while the listener keeps erroring.
+///
+/// `select!` drops this future on a shutdown signal, so a backoff sleep can
+/// never delay shutdown.
+async fn accept(listener: &TcpListener, backoff: &mut Duration) -> TcpStream {
+    loop {
+        match listener.accept().await {
+            Ok((stream, _)) => {
+                *backoff = Duration::ZERO;
+                return stream;
+            }
+            Err(e) => {
+                *backoff = (*backoff * 2).clamp(ACCEPT_BACKOFF_MIN, ACCEPT_BACKOFF_MAX);
+                tracing::warn!(error = %e, backoff_ms = backoff.as_millis(), "accept failed");
+                tokio::time::sleep(*backoff).await;
+            }
+        }
+    }
+}
+
+/// What the ACPI leg of the `auto` ladder decided, before DCGM is consulted.
+#[derive(Debug)]
+enum AcpiDecision {
+    /// ACPI is live: serve these sensors; DCGM is never touched.
+    Use(Vec<Sensor>),
+    /// ACPI is unusable for `reason`; the caller logs it at WARN and steps
+    /// down to DCGM. Only produced in `Auto` -- in `Acpi` the same condition
+    /// is an `Err`.
+    FallBack(String),
+    /// `--source dcgm`: ACPI was not consulted at all.
+    Skip,
+}
+
+/// The ACPI leg of source selection, kept free of DCGM so the ladder's order
+/// and the `--source acpi` contract are unit-testable (DCGM needs libdcgm).
+///
+/// ACPI first: it is the only source with the socket envelope. DCGM reads the
+/// same hwmon files (minus the envelope), so it is strictly less informative
+/// and only worth falling back to when sysfs shows nothing usable. Three
+/// conditions make ACPI unusable, each with its own reason: no `power_meter`
+/// sensors at all; sensors but no socket-total channel (rails cannot stand in
+/// for `power_w`); or a total channel that never reads positive (`probe`,
+/// which carries the retry policy). In `Auto` each becomes `FallBack`; in
+/// `Acpi` each is an error, never a silent step down.
+fn decide_acpi(
+    mode: &SourceMode,
+    hwmon_root: &Path,
+    probe: impl Fn(&[Sensor]) -> Option<usize>,
+) -> Result<AcpiDecision> {
+    let acpi_only = match mode {
+        SourceMode::Dcgm => return Ok(AcpiDecision::Skip),
+        SourceMode::Acpi => true,
+        SourceMode::Auto => false,
+    };
+    let fail = |reason: String| -> Result<AcpiDecision> {
+        if acpi_only {
+            anyhow::bail!("{reason}");
+        }
+        Ok(AcpiDecision::FallBack(reason))
+    };
+
+    let sensors = match discover_sensors(hwmon_root) {
+        Ok(sensors) => sensors,
+        Err(e) if acpi_only => return Err(e),
+        Err(e) => return Ok(AcpiDecision::FallBack(format!("{e:#}"))),
+    };
+    if sensors.is_empty() {
+        return fail(format!(
+            "no ACPI power_meter hwmon sensors found under {}",
+            hwmon_root.display()
+        ));
+    }
+    if !sensors.iter().any(|s| s.kind == "total") {
+        let mut domains: Vec<&str> = sensors.iter().map(|s| s.oem_info.as_str()).collect();
+        domains.sort_unstable();
+        domains.dedup();
+        return fail(format!(
+            "no ACPI socket-total power_meter channels under {} (found: {})",
+            hwmon_root.display(),
+            domains.join(", ")
+        ));
+    }
+    match probe(&sensors) {
+        Some(live) => {
+            tracing::info!(
+                live,
+                total = sensors.len(),
+                "ACPI socket totals report non-zero power; using ACPI"
+            );
+            Ok(AcpiDecision::Use(sensors))
+        }
+        None => fail(format!(
+            "no ACPI socket-total power_meter sensor under {} read positive across {} probe(s) ({} sensors discovered)",
+            hwmon_root.display(),
+            ACPI_PROBE_RETRIES + 1,
+            sensors.len()
+        )),
+    }
+}
+
+fn init_metrics_state(args: &Args) -> Result<(MetricsState, BTreeSet<String>)> {
+    let probe =
+        |sensors: &[Sensor]| probe_acpi_live(sensors, ACPI_PROBE_RETRIES, ACPI_PROBE_RETRY_DELAY);
+    match decide_acpi(&args.source, &args.hwmon_root, probe)? {
+        AcpiDecision::Use(sensors) => return init_acpi_state(sensors),
+        AcpiDecision::FallBack(reason) => {
+            tracing::warn!(%reason, "ACPI unusable; falling back to DCGM");
+        }
+        AcpiDecision::Skip => {}
+    }
+
+    match dcgm::DcgmReader::new() {
+        Ok(mut reader) => {
+            tracing::info!(
+                cpu_count = reader.cpu_ids.len(),
+                cpu_ids = ?reader.cpu_ids,
+                fields = ?reader.fields(),
+                "DCGM reader initialised (CPU rail{}; no socket envelope)",
+                if reader.fields().contains(&dcgm::SYSIO_POWER_FIELD_ID) { " + SysIO" } else { " only" }
+            );
+            // Probe: DCGM is live only if some entity returns a positive field
+            // 1130 (the value filed as power_w). An all-None read means the
+            // embedded daemon lacks hardware access (common when running
+            // without root while a system dcgm-exporter holds the DCGM session
+            // as root); a SysIO-only read would publish soc_w with no power_w
+            // for the whole run. DCGM is the last resort in Auto mode, so
+            // either way this is fatal.
+            let probe = reader.read_watts();
+            let any_live = probe
+                .as_ref()
+                .map(|v| dcgm::has_live_cpu_power(v))
+                .unwrap_or(false);
+            if !any_live {
+                let reason = match probe {
+                    Err(ref e) => format!("read error: {e}"),
+                    Ok(_) => "no entity returned a positive CPU power (field 1130) reading".into(),
+                };
+                anyhow::bail!("DCGM yielded no live data: {reason}");
+            }
+            let cpu_sockets = reader.cpu_ids.iter().map(u32::to_string).collect();
+            Ok((
+                MetricsState::Dcgm(Arc::new(Mutex::new(reader))),
+                cpu_sockets,
+            ))
+        }
+        Err(e) => anyhow::bail!("DCGM unavailable: {e}"),
+    }
+}
+
+/// Extra reads after the first all-zero probe before declaring ACPI dead.
+/// hwmon `power1_average` can legitimately read 0 on the first poll after
+/// boot; a false negative here would put a good node on DCGM's half-size
+/// number for the whole run.
+const ACPI_PROBE_RETRIES: u32 = 1;
+const ACPI_PROBE_RETRY_DELAY: Duration = Duration::from_millis(1_000);
+
+/// Read every socket-total sensor up to `1 + retries` times; `Some(n)` with
+/// the count of totals that produced a finite, positive value on the first
+/// pass where any did, `None` when no total read positive on any pass. Only
+/// `total` counts: it is what becomes `power_w`, and a live component rail
+/// next to a dead envelope would otherwise vouch for a socket whose power can
+/// never be published.
+fn probe_acpi_live(sensors: &[Sensor], retries: u32, delay: Duration) -> Option<usize> {
+    for attempt in 0..=retries {
+        let live = sensors
+            .iter()
+            .filter(|s| s.kind == "total" && read_acpi_watts(&s.path).is_some())
+            .count();
+        if live > 0 {
+            return Some(live);
+        }
+        if attempt < retries {
+            tracing::debug!(
+                attempt,
+                "no ACPI socket-total sensor reads positive; retrying probe"
+            );
+            std::thread::sleep(delay);
+        }
+    }
+    None
+}
+
+fn init_acpi_state(sensors: Vec<Sensor>) -> Result<(MetricsState, BTreeSet<String>)> {
+    {
+        let sensors: &'static [Sensor] = Vec::leak(sensors);
+        tracing::info!(count = sensors.len(), "discovered ACPI sensors");
+        for s in sensors {
+            tracing::debug!(
+                sensor = %s.id, kind = s.kind,
+                socket = %s.socket, oem_info = %s.oem_info,
+                path = %s.path.display(), "sensor"
+            );
+        }
+
+        // Seed the cache synchronously so the first scrape after startup is not empty.
+        let initial = build_metrics(sensors);
+        let cache = Arc::new(RwLock::new(initial));
+        let cache_bg = Arc::clone(&cache);
+
+        // Keep blocking firmware reads off the HTTP request path.
+        std::thread::Builder::new()
+            .name("acpi-poller".to_owned())
+            .spawn(move || loop {
+                std::thread::sleep(POLL_INTERVAL);
+                let snapshot = build_metrics(sensors);
+                *cache_bg.write().unwrap() = snapshot;
+            })
+            .context("spawn acpi-poller thread")?;
+
+        let cpu_sockets = sensors
+            .iter()
+            .filter(|s| s.kind != "other")
+            .map(|s| s.socket.clone())
+            .collect();
+        Ok((MetricsState::Acpi(cache), cpu_sockets))
+    }
+}
+
+fn start_module_poller(cpu_sockets: BTreeSet<String>) -> Result<Arc<RwLock<ModuleState>>> {
+    let cache = Arc::new(RwLock::new(ModuleState::Pending(Instant::now())));
+    let cache_bg = Arc::clone(&cache);
+    std::thread::Builder::new()
+        .name("nvml-poller".to_owned())
+        .spawn(move || {
+            let mut reader = match nvml::NvmlModuleReader::new(Path::new("/sys/bus/pci/devices")) {
+                Ok(reader) => reader,
+                Err(e) => {
+                    *cache_bg.write().unwrap() = ModuleState::Unavailable;
+                    tracing::info!(reason = %e, "NVML module power unavailable; module series not exported");
+                    return;
+                }
+            };
+            let sockets = reader.sockets();
+            tracing::info!(
+                gpu_count = reader.gpu_count(),
+                ?sockets,
+                "NVML module reader initialised"
+            );
+            // PCI NUMA IDs match ACPI sockets on the measured GB200 host;
+            // GB300 is unverified.
+            for socket in sockets {
+                if !cpu_sockets.contains(&socket.to_string()) {
+                    tracing::warn!(
+                        socket,
+                        cpu_sockets = ?cpu_sockets,
+                        "NVML module socket has no CPU power socket; its module reading will not be persisted"
+                    );
+                }
+            }
+            loop {
+                let read_started_at = Instant::now();
+                let readings = reader.read();
+                let fresh = if readings.is_empty() {
+                    ModuleState::Missing
+                } else {
+                    ModuleState::Ready(ModuleSnapshot {
+                        read_started_at,
+                        body: nvml::render_module_metrics(&readings),
+                    })
+                };
+                *cache_bg.write().unwrap() = fresh;
+                std::thread::sleep(POLL_INTERVAL);
+            }
+        })
+        .context("spawn nvml-poller thread")?;
+    Ok(cache)
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Without the `env-filter` feature this honours RUST_LOG via `Targets` and
+    // defaults to INFO. With it, the default directive would be ERROR, which
+    // silently drops every line below unless the caller sets RUST_LOG.
+    tracing_subscriber::fmt::init();
+
+    let args = Args::parse();
+    let (base, cpu_sockets) = init_metrics_state(&args)?;
+    let metrics = Metrics {
+        base,
+        module: start_module_poller(cpu_sockets)?,
+    };
+
+    let addr = SocketAddr::new(args.bind, args.port);
+    let listener = TcpListener::bind(addr)
+        .await
+        .with_context(|| format!("bind {addr}"))?;
+    // Consumers (AIPerf discovers its endpoints once at startup) treat this
+    // line as readiness, so it is emitted only after the port is accepting.
+    tracing::info!(%addr, "listening");
+
+    let mut sigterm = unix_signal(SignalKind::terminate())?;
+    let mut conns = JoinSet::new();
+    let mut backoff = Duration::ZERO;
+    let mut module_tick = tokio::time::interval(POLL_INTERVAL);
+    module_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut module_warned = false;
+    loop {
+        let at_capacity = conns.len() >= MAX_CONNECTIONS;
+        tokio::select! {
+            _ = module_tick.tick() => {
+                let status = metrics.module.read().unwrap().status(Instant::now());
+                report_module_status(&mut module_warned, status);
+            }
+            // Reaping stays inside the select! so a signal is honoured while
+            // the exporter is sitting at its connection limit.
+            Some(_) = conns.join_next(), if at_capacity => {}
+            stream = accept(&listener, &mut backoff), if !at_capacity => {
+                conns.spawn(handle_connection(stream, metrics.clone()));
+            }
+            _ = signal::ctrl_c() => {
+                tracing::info!("received SIGINT, shutting down");
+                break;
+            }
+            _ = sigterm.recv() => {
+                tracing::info!("received SIGTERM, shutting down");
+                break;
+            }
+        }
+    }
+
+    // Let in-flight scrapes finish rather than truncating a response mid-write.
+    if timeout(DRAIN_TIMEOUT, async {
+        while conns.join_next().await.is_some() {}
+    })
+    .await
+    .is_err()
+    {
+        // A handler blocked in a sysfs read reaches no await point, so dropping
+        // its task would not bound anything. Exiting does.
+        tracing::warn!("timed out draining in-flight connections; exiting");
+        process::exit(0);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::capture_logs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn module_render_withholds_missing_and_stale_samples_then_recovers() {
+        let cpu = "cpu_power_acpi_watts{socket=\"0\",type=\"total\"} 88.000000\n";
+        let module = Arc::new(RwLock::new(ModuleState::Pending(Instant::now())));
+        let metrics = Metrics {
+            base: MetricsState::Acpi(Arc::new(RwLock::new(cpu.to_owned()))),
+            module: Arc::clone(&module),
+        };
+        let sample = || {
+            nvml::render_module_metrics(&[nvml::ModuleReading {
+                socket: 0,
+                gpus: vec![0, 1],
+                watts: 600.0,
+            }])
+        };
+        assert_eq!(metrics.render(), cpu);
+        for missing in [ModuleState::Unavailable, ModuleState::Missing] {
+            *module.write().unwrap() = missing;
+            assert_eq!(metrics.render(), cpu);
+        }
+        *module.write().unwrap() = ModuleState::Ready(ModuleSnapshot {
+            read_started_at: Instant::now(),
+            body: sample(),
+        });
+        let fresh = metrics.render();
+        assert!(fresh.starts_with(cpu));
+        assert!(fresh.contains(
+            "cpu_power_nvml_watts{type=\"module\",socket=\"0\",gpus=\"0,1\",source=\"nvml\"} 600.000000\n"
+        ));
+        *module.write().unwrap() = ModuleState::Ready(ModuleSnapshot {
+            read_started_at: Instant::now() - Duration::from_secs(4),
+            body: sample(),
+        });
+        assert_eq!(metrics.render(), cpu);
+        *module.write().unwrap() = ModuleState::Ready(ModuleSnapshot {
+            read_started_at: Instant::now(),
+            body: sample(),
+        });
+        assert_eq!(metrics.render(), fresh);
+    }
+
+    #[test]
+    fn module_warnings_wait_for_startup_and_repeat_only_after_recovery() {
+        let start = Instant::now();
+        let pending = ModuleState::Pending(start);
+        let stale = ModuleState::Ready(ModuleSnapshot {
+            read_started_at: start,
+            body: "module sample".to_owned(),
+        });
+        let fresh = ModuleState::Ready(ModuleSnapshot {
+            read_started_at: start + Duration::from_secs(6),
+            body: "new module sample".to_owned(),
+        });
+        let recovered = ModuleState::Ready(ModuleSnapshot {
+            read_started_at: start + Duration::from_secs(12),
+            body: "recovered module sample".to_owned(),
+        });
+        let logs = capture_logs(|| {
+            let mut warned = false;
+            for (state, at) in [
+                (&ModuleState::Unavailable, start),
+                (&pending, start),
+                (&pending, start + Duration::from_secs(3)),
+                (&pending, start + Duration::from_secs(4)),
+                (&pending, start + Duration::from_secs(5)),
+                (&ModuleState::Missing, start + Duration::from_secs(5)),
+                (&stale, start + Duration::from_secs(5)),
+                (&fresh, start + Duration::from_secs(6)),
+                (&fresh, start + Duration::from_secs(7)),
+                (&fresh, start + Duration::from_secs(10)),
+                (&fresh, start + Duration::from_secs(11)),
+                (&recovered, start + Duration::from_secs(12)),
+                (&ModuleState::Missing, start + Duration::from_secs(13)),
+                (&ModuleState::Unavailable, start + Duration::from_secs(14)),
+            ] {
+                report_module_status(&mut warned, state.status(at));
+            }
+        });
+        assert_eq!(logs.matches("WARN").count(), 3, "{logs}");
+        assert_eq!(logs.matches("INFO").count(), 2, "{logs}");
+        assert!(logs.contains("status=NotReady"), "{logs}");
+        assert!(logs.contains("status=Stale"), "{logs}");
+        assert!(logs.contains("status=Missing"), "{logs}");
+        assert!(logs.contains("NVML module power recovered"), "{logs}");
+    }
+
+    #[test]
+    fn dcgm_metrics_carry_field_id_and_keep_1130_first_per_socket() {
+        let readings = vec![
+            dcgm::PowerReading {
+                cpu_id: 0,
+                field_id: 1130,
+                watts: Some(50.149),
+            },
+            dcgm::PowerReading {
+                cpu_id: 0,
+                field_id: 1132,
+                watts: Some(6.125),
+            },
+            dcgm::PowerReading {
+                cpu_id: 1,
+                field_id: 1130,
+                watts: Some(46.765),
+            },
+            dcgm::PowerReading {
+                cpu_id: 1,
+                field_id: 1132,
+                watts: None,
+            }, // non-OK status: dropped
+        ];
+        let body = render_dcgm_metrics(&readings);
+        let samples: Vec<&str> = body.lines().filter(|l| !l.starts_with('#')).collect();
+        assert_eq!(
+            samples,
+            vec![
+                "cpu_power_dcgm_watts{socket=\"0\",field_id=\"1130\",source=\"dcgm\"} 50.149000",
+                "cpu_power_dcgm_watts{socket=\"0\",field_id=\"1132\",source=\"dcgm\"} 6.125000",
+                "cpu_power_dcgm_watts{socket=\"1\",field_id=\"1130\",source=\"dcgm\"} 46.765000",
+            ]
+        );
+        assert!(body.starts_with("# HELP cpu_power_dcgm_watts "));
+        assert!(body.contains("# TYPE cpu_power_dcgm_watts gauge\n"));
+    }
+
+    #[test]
+    fn dcgm_metrics_with_no_readings_is_just_the_header() {
+        let body = render_dcgm_metrics(&[]);
+        assert_eq!(body, DCGM_METRICS_HEADER);
+    }
+
+    #[test]
+    fn acpi_probe_is_dead_when_every_sensor_reads_zero() {
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("Grace Power Socket 0"), "0"),
+                ("power2", Some("CPU Power Socket 0"), "0"),
+            ],
+        );
+        let sensors = discover_sensors(dir.path()).unwrap();
+        assert_eq!(sensors.len(), 2);
+        assert_eq!(probe_acpi_live(&sensors, 1, Duration::from_millis(1)), None);
+    }
+
+    #[test]
+    fn acpi_probe_is_live_when_any_sensor_reads_positive() {
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("Grace Power Socket 0"), "98029000"),
+                ("power2", Some("CPU Power Socket 0"), "0"),
+            ],
+        );
+        let sensors = discover_sensors(dir.path()).unwrap();
+        assert_eq!(probe_acpi_live(&sensors, 0, Duration::ZERO), Some(1));
+    }
+
+    #[test]
+    fn acpi_probe_ignores_live_component_rails_when_every_total_is_zero() {
+        // A live CPU rail must not vouch for ACPI when no socket envelope reads
+        // positive: power_w comes from the total, and 0 there would be filed
+        // as a measurement for the whole run.
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("Grace Power Socket 0"), "0"),
+                ("power2", Some("CPU Power Socket 0"), "50000000"),
+            ],
+        );
+        let sensors = discover_sensors(dir.path()).unwrap();
+        assert_eq!(sensors.len(), 2);
+        assert_eq!(probe_acpi_live(&sensors, 0, Duration::ZERO), None);
+    }
+
+    #[test]
+    fn acpi_probe_counts_only_live_totals() {
+        // Socket 0 healthy, socket 1's envelope stuck at 0 with a live rail: one live total.
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("Grace Power Socket 0"), "100000000"),
+                ("power2", Some("CPU Power Socket 0"), "50000000"),
+                ("power3", Some("Grace Power Socket 1"), "0"),
+                ("power4", Some("CPU Power Socket 1"), "52000000"),
+            ],
+        );
+        let sensors = discover_sensors(dir.path()).unwrap();
+        assert_eq!(probe_acpi_live(&sensors, 0, Duration::ZERO), Some(1));
+    }
+
+    // --- source-selection ladder (decide_acpi) ---------------------------
+    //
+    // These pin the contract: `auto` is ACPI-first and `--source acpi` errors
+    // instead of stepping down. The probe is injected so the tests never
+    // sleep; the real one wraps probe_acpi_live.
+
+    fn live_probe(_: &[Sensor]) -> Option<usize> {
+        Some(1)
+    }
+    fn dead_probe(_: &[Sensor]) -> Option<usize> {
+        None
+    }
+
+    fn healthy_root() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("Grace Power Socket 0"), "98029000"),
+                ("power2", Some("CPU Power Socket 0"), "50000000"),
+            ],
+        );
+        dir
+    }
+
+    #[test]
+    fn auto_uses_acpi_when_a_socket_total_is_live() {
+        let dir = healthy_root();
+        match decide_acpi(&SourceMode::Auto, dir.path(), live_probe).unwrap() {
+            AcpiDecision::Use(sensors) => assert_eq!(sensors.len(), 2),
+            other => panic!("expected Use, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn auto_falls_back_with_the_reason_when_no_total_reads_positive() {
+        let dir = healthy_root();
+        match decide_acpi(&SourceMode::Auto, dir.path(), dead_probe).unwrap() {
+            AcpiDecision::FallBack(reason) => {
+                assert!(
+                    reason.contains("no ACPI socket-total power_meter sensor"),
+                    "{reason}"
+                );
+                assert!(reason.contains("2 sensors discovered"), "{reason}");
+            }
+            other => panic!("expected FallBack, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn auto_falls_back_when_no_power_meter_sensors_exist() {
+        let dir = TempDir::new().unwrap(); // empty hwmon root
+        match decide_acpi(&SourceMode::Auto, dir.path(), live_probe).unwrap() {
+            AcpiDecision::FallBack(reason) => {
+                assert!(
+                    reason.contains("no ACPI power_meter hwmon sensors found"),
+                    "{reason}"
+                )
+            }
+            other => panic!("expected FallBack, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn auto_falls_back_when_sensors_have_no_socket_total_channel() {
+        // Rails alone cannot stand in for power_w (matches the Python
+        // collector, which refuses to construct without a total channel).
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("CPU Power Socket 0"), "50000000"),
+                ("power2", Some("SysIO Power Socket 0"), "6000000"),
+            ],
+        );
+        let probed = std::cell::Cell::new(false);
+        let decision = decide_acpi(&SourceMode::Auto, dir.path(), |_| {
+            probed.set(true);
+            Some(1)
+        })
+        .unwrap();
+        match decision {
+            AcpiDecision::FallBack(reason) => {
+                assert!(
+                    reason.contains("no ACPI socket-total power_meter channels"),
+                    "{reason}"
+                );
+                assert!(reason.contains("CPU Power Socket 0"), "{reason}");
+            }
+            other => panic!("expected FallBack, got {other:?}"),
+        }
+        assert!(
+            !probed.get(),
+            "a rails-only node is rejected before the liveness probe"
+        );
+    }
+
+    #[test]
+    fn auto_falls_back_when_the_hwmon_root_is_unreadable() {
+        let dir = TempDir::new().unwrap();
+        let missing = dir.path().join("does-not-exist");
+        match decide_acpi(&SourceMode::Auto, &missing, live_probe).unwrap() {
+            AcpiDecision::FallBack(reason) => assert!(reason.contains("list "), "{reason}"),
+            other => panic!("expected FallBack, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn explicit_acpi_errors_instead_of_falling_back() {
+        // Every condition that is a FallBack in Auto is an Err in Acpi.
+        let healthy = healthy_root();
+        let err = decide_acpi(&SourceMode::Acpi, healthy.path(), dead_probe).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("no ACPI socket-total power_meter sensor"),
+            "{err:#}"
+        );
+
+        let empty = TempDir::new().unwrap();
+        let err = decide_acpi(&SourceMode::Acpi, empty.path(), live_probe).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("no ACPI power_meter hwmon sensors found"),
+            "{err:#}"
+        );
+
+        let rails_only = TempDir::new().unwrap();
+        write_hwmon(
+            rails_only.path(),
+            "hwmon0",
+            &[("power1", Some("CPU Power Socket 0"), "50000000")],
+        );
+        let err = decide_acpi(&SourceMode::Acpi, rails_only.path(), live_probe).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("no ACPI socket-total power_meter channels"),
+            "{err:#}"
+        );
+
+        let missing = empty.path().join("does-not-exist");
+        assert!(decide_acpi(&SourceMode::Acpi, &missing, live_probe).is_err());
+    }
+
+    #[test]
+    fn explicit_acpi_uses_live_sensors() {
+        let dir = healthy_root();
+        assert!(matches!(
+            decide_acpi(&SourceMode::Acpi, dir.path(), live_probe).unwrap(),
+            AcpiDecision::Use(_)
+        ));
+    }
+
+    #[test]
+    fn explicit_dcgm_never_consults_acpi() {
+        // Even a perfectly healthy ACPI tree is skipped: the probe must not run.
+        let dir = healthy_root();
+        let decision = decide_acpi(&SourceMode::Dcgm, dir.path(), |_| {
+            panic!("ACPI probe must not run under --source dcgm")
+        })
+        .unwrap();
+        assert!(matches!(decision, AcpiDecision::Skip));
+    }
+
+    #[test]
+    fn zero_watts_is_missing_not_a_sample() {
+        // 0 from power1_average means the sensor is not reporting; the rail
+        // is left out of the scrape body rather than published as 0 W.
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("Grace Power Socket 0"), "0"),
+                ("power2", Some("CPU Power Socket 0"), "50000000"),
+            ],
+        );
+        let sensors = discover_sensors(dir.path()).unwrap();
+        let total = sensors.iter().find(|s| s.kind == "total").unwrap();
+        assert_eq!(read_acpi_watts(&total.path), None);
+        let body = build_metrics(&sensors);
+        assert!(
+            !body.contains("type=\"total\""),
+            "zero total must not be published:\n{body}"
+        );
+        assert!(body.contains("type=\"cpu_rail\""));
+    }
+
+    #[test]
+    fn acpi_probe_retries_once_when_the_first_pass_is_zero() {
+        // A sensor that reads 0 on the first poll and a real value on the
+        // second (first hwmon average after boot) must not flip the node to DCGM.
+        let dir = TempDir::new().unwrap();
+        let hwmon = write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[("power1", Some("Grace Power Socket 0"), "0")],
+        );
+        let sensors = discover_sensors(dir.path()).unwrap();
+        let path = hwmon.join("power1_average");
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            fs::write(path, "98029000").unwrap();
+        });
+        let live = probe_acpi_live(&sensors, 1, Duration::from_millis(200));
+        writer.join().unwrap();
+        assert_eq!(live, Some(1));
+    }
+
+    fn write_hwmon(root: &Path, node: &str, sensors: &[(&str, Option<&str>, &str)]) -> PathBuf {
+        let hwmon = root.join(node);
+        fs::create_dir_all(&hwmon).unwrap();
+        fs::write(hwmon.join("name"), "power_meter").unwrap();
+        for (chan, oem, microwatts) in sensors {
+            fs::write(hwmon.join(format!("{chan}_average")), microwatts).unwrap();
+            if let Some(oem) = oem {
+                fs::write(hwmon.join(format!("{chan}_oem_info")), oem).unwrap();
+            }
+        }
+        hwmon
+    }
+
+    #[test]
+    fn discover_sensors_finds_power_meter_channels() {
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("CPU Power Socket 0"), "150000000"),
+                ("power2", Some("Grace Power Socket 1"), "80000000"),
+            ],
+        );
+        let sensors = discover_sensors(dir.path()).unwrap();
+        assert_eq!(sensors.len(), 2);
+        assert_eq!(
+            (sensors[0].kind, sensors[0].socket.as_str()),
+            ("cpu_rail", "0")
+        );
+        assert_eq!(
+            (sensors[1].kind, sensors[1].socket.as_str()),
+            ("total", "1")
+        );
+    }
+
+    #[test]
+    fn alias_dedup_keeps_the_side_that_carries_the_metadata() {
+        let dir = TempDir::new().unwrap();
+        let hwmon = write_hwmon(dir.path(), "hwmon0", &[("power1", None, "100000000")]);
+        // Real Grace nodes publish the reading on the hwmon node and the OEM
+        // string only under device/. The bare hwmon side is scanned first and
+        // must not win, or every rail would be labelled "power1".
+        let device = hwmon.join("device");
+        fs::create_dir_all(&device).unwrap();
+        std::os::unix::fs::symlink(hwmon.join("power1_average"), device.join("power1_average"))
+            .unwrap();
+        fs::write(device.join("power1_oem_info"), "CPU Power Socket 0").unwrap();
+
+        let sensors = discover_sensors(dir.path()).unwrap();
+        assert_eq!(sensors.len(), 1, "an alias is one sensor, not two");
+        assert_eq!(sensors[0].oem_info, "CPU Power Socket 0");
+        assert_eq!(sensors[0].kind, "cpu_rail");
+    }
+
+    #[test]
+    fn discover_sensors_accepts_legacy_registration_without_class_name() {
+        let dir = TempDir::new().unwrap();
+        // Legacy registration exposes attributes only on the parent ACPI device.
+        let device = dir.path().join("hwmon11").join("device");
+        fs::create_dir_all(&device).unwrap();
+        fs::write(device.join("name"), "power_meter").unwrap();
+        fs::write(device.join("power1_average"), "98029000").unwrap();
+        fs::write(device.join("power1_oem_info"), "Grace Power Socket 0").unwrap();
+        let other = dir.path().join("hwmon1").join("device");
+        fs::create_dir_all(&other).unwrap();
+        fs::write(other.join("name"), "nvme").unwrap();
+        fs::write(other.join("power1_average"), "1000000").unwrap();
+
+        let sensors = discover_sensors(dir.path()).unwrap();
+        assert_eq!(sensors.len(), 1);
+        assert_eq!(sensors[0].oem_info, "Grace Power Socket 0");
+        assert_eq!(read_acpi_watts(&sensors[0].path), Some(98.029));
+        assert_eq!(
+            (sensors[0].kind, sensors[0].socket.as_str()),
+            ("total", "0")
+        );
+    }
+
+    #[test]
+    fn distinct_rails_get_distinct_series_without_usable_metadata() {
+        let dir = TempDir::new().unwrap();
+        // Duplicated OEM text on one node and no metadata at all on another:
+        // both collapse to one Prometheus series unless `sensor` disambiguates.
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("CPU Power"), "100000000"),
+                ("power2", Some("CPU Power"), "110000000"),
+            ],
+        );
+        write_hwmon(dir.path(), "hwmon1", &[("power1", None, "120000000")]);
+
+        let output = build_metrics(&discover_sensors(dir.path()).unwrap());
+        let series: Vec<&str> = output
+            .lines()
+            .filter(|line| line.starts_with("cpu_power_acpi_watts{"))
+            .collect();
+        assert_eq!(series.len(), 3, "{output}");
+        let identities: std::collections::HashSet<&str> = series
+            .iter()
+            .map(|line| line.split_once(' ').unwrap().0)
+            .collect();
+        assert_eq!(identities.len(), 3, "duplicate label sets: {output}");
+    }
+
+    #[test]
+    fn classify_oem_requires_a_socket_id_adjacent_to_the_rail_name() {
+        assert_eq!(classify_oem("CPU Power Socket 0"), ("cpu_rail", "0".into()));
+        // Rail name wins by adjacency, not by scan order.
+        assert_eq!(
+            classify_oem("Grace Power Socket 1 CPU Power"),
+            ("total", "1".into())
+        );
+        // No numeric socket ID -> unclassified, so no unescaped text reaches a label.
+        assert_eq!(
+            classify_oem("CPU Power Socket \"x"),
+            ("other", String::new())
+        );
+        assert_eq!(classify_oem("Module Socket A"), ("other", String::new()));
+    }
+
+    #[test]
+    fn classify_oem_accounts_for_platform_naming_variants() {
+        // Generic "Total Power" rail: the total-envelope label on platforms
+        // that don't say "Grace".
+        assert_eq!(classify_oem("Total Power socket 0"), ("total", "0".into()));
+        // Some platforms suffix the rail name with "in uW".
+        assert_eq!(
+            classify_oem("Total Power in uW socket 0"),
+            ("total", "0".into())
+        );
+        assert_eq!(
+            classify_oem("CPU Rail Power in uW socket 1"),
+            ("cpu_rail", "1".into())
+        );
+        assert_eq!(
+            classify_oem("SoC Rail Power in uW socket 1"),
+            ("soc", "1".into())
+        );
+        assert_eq!(classify_oem("SysIO Power Socket 1"), ("soc", "1".into()));
+        assert_eq!(classify_oem("DRAM Power socket 0"), ("dram", "0".into()));
+        assert_eq!(
+            classify_oem("DRAM Power in uW socket 0"),
+            ("dram", "0".into())
+        );
+        assert_eq!(
+            classify_oem("Total Input Power in uW socket 0"),
+            ("total", "0".into())
+        );
+        assert_eq!(
+            classify_oem("CPU Rail Input Power in uW socket 1"),
+            ("cpu_rail", "1".into())
+        );
+        assert_eq!(
+            classify_oem("SoC Rail Input Power in uW socket 1"),
+            ("soc", "1".into())
+        );
+        assert_eq!(
+            classify_oem("DRAM Input Power in uW socket 0"),
+            ("dram", "0".into())
+        );
+        assert_eq!(
+            classify_oem("CPU Rail Output Power in uW socket 0"),
+            ("other", String::new())
+        );
+        assert_eq!(
+            classify_oem("Module Power Socket 1"),
+            ("other", String::new())
+        );
+    }
+
+    #[test]
+    fn build_metrics_formats_and_escapes_prometheus_text() {
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[
+                ("power1", Some("CPU Power Socket 0"), "150000000"),
+                ("power2", Some("Odd \"rail\""), "not-a-number"),
+            ],
+        );
+        let sensors = discover_sensors(dir.path()).unwrap();
+        let output = build_metrics(&sensors);
+        assert!(output.contains("# TYPE cpu_power_acpi_watts gauge"));
+        assert!(output.contains(
+            "cpu_power_acpi_watts{sensor=\"hwmon0/power1\",type=\"cpu_rail\",socket=\"0\",oem_info=\"CPU Power Socket 0\",source=\"acpi\"} 150.000000\n"
+        ), "{output}");
+        assert!(
+            !output.contains("not-a-number"),
+            "unparseable channel must be skipped"
+        );
+        assert!(sensors
+            .iter()
+            .any(|s| s.labels.contains(r#"oem_info="Odd \"rail\"""#)));
+    }
+
+    #[test]
+    fn discover_sensors_reports_an_unreadable_root() {
+        let dir = TempDir::new().unwrap();
+        assert!(discover_sensors(&dir.path().join("absent")).is_err());
+    }
+
+    async fn request(addr: SocketAddr, head: &str) -> String {
+        let mut client = TcpStream::connect(addr).await.unwrap();
+        // Split across writes: a correct reader waits for the header terminator.
+        client.write_all(head.as_bytes()).await.unwrap();
+        client.write_all(b"Host: localhost\r\n\r\n").await.unwrap();
+        let mut resp = String::new();
+        client.read_to_string(&mut resp).await.unwrap();
+        resp
+    }
+
+    #[tokio::test]
+    async fn serves_metrics_health_and_rejects_unsupported_methods() {
+        let dir = TempDir::new().unwrap();
+        write_hwmon(
+            dir.path(),
+            "hwmon0",
+            &[("power1", Some("CPU Power Socket 0"), "150000000")],
+        );
+        let sensors: &'static [Sensor] = Vec::leak(discover_sensors(dir.path()).unwrap());
+        let metrics = Metrics {
+            base: MetricsState::Acpi(Arc::new(RwLock::new(build_metrics(sensors)))),
+            module: Arc::new(RwLock::new(ModuleState::Unavailable)),
+        };
+
+        let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0)))
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                handle_connection(stream, metrics.clone()).await;
+            }
+        });
+
+        for (head, expected) in [
+            ("GET /health HTTP/1.1\r\n", "200 OK"),
+            // A query string addresses the same endpoint.
+            ("GET /metrics?collect%5B%5D=x HTTP/1.1\r\n", "200 OK"),
+            ("GET /nope HTTP/1.1\r\n", "404 Not Found"),
+            ("POST /metrics HTTP/1.1\r\n", "405 Method Not Allowed"),
+        ] {
+            let resp = request(addr, head).await;
+            assert!(
+                resp.starts_with(&format!("HTTP/1.1 {expected}")),
+                "{head}: {resp}"
+            );
+        }
+
+        let get = request(addr, "GET /metrics HTTP/1.1\r\n").await;
+        let head = request(addr, "HEAD /metrics HTTP/1.1\r\n").await;
+        let body = "cpu_power_acpi_watts{sensor=\"hwmon0/power1\"";
+        assert!(get.contains(body), "{get}");
+        assert!(!head.contains(body), "HEAD must carry no body: {head}");
+        // Same Content-Length as the GET it mirrors.
+        let length = |resp: &str| {
+            resp.lines()
+                .find(|l| l.starts_with("Content-Length:"))
+                .unwrap()
+                .to_owned()
+        };
+        assert_eq!(length(&get), length(&head));
+
+        let rejected = request(addr, "POST /metrics HTTP/1.1\r\n").await;
+        assert!(rejected.contains("Allow: GET, HEAD"), "{rejected}");
+    }
+}

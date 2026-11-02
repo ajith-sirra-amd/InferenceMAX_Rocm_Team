@@ -1,0 +1,813 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+Post-process stage mixin for SweepOrchestrator.
+
+Handles:
+- Releasing idle nodes back to Slurm before post-processing (opt-in)
+- Benchmark result extraction
+- S3 upload of the whole log directory
+- AI-powered failure analysis using Claude Code CLI
+
+AI analysis uses Claude Code in headless mode (-p flag) with OpenRouter for authentication.
+See: https://openrouter.ai/docs/guides/claude-code-integration
+"""
+
+import json
+import logging
+import os
+import shlex
+import shutil
+import subprocess
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from srtctl.benchmarks.base import SCRIPTS_DIR
+from srtctl.core.config import load_cluster_config
+from srtctl.core.git_state import GIT_STATE_FILENAME
+from srtctl.core.lockfile import collect_worker_fingerprints, generate_reproduction_report, write_lockfile
+from srtctl.core.schema import DEFAULT_S3_ARCHIVE, DEFAULT_S3_EXCLUDE, AIAnalysisConfig, S3Config
+from srtctl.core.slurm import AllocationShrink, get_batch_host, shrink_job_allocation, start_srun_process
+
+if TYPE_CHECKING:
+    from srtctl.core.runtime import RuntimeContext
+    from srtctl.core.schema import SrtConfig
+    from srtctl.core.status import StatusReporter
+
+logger = logging.getLogger(__name__)
+
+POSTPROCESS_UPLOAD_FAILED_EXIT = 11
+
+# Written to the log directory by release_idle_nodes(), so the release ships with the uploaded logs.
+ALLOCATION_RELEASE_FILENAME = "allocation-release.json"
+
+# Runs inside the upload container (plain python:3.11, srtctl is not installed there), so it
+# is stdlib plus an optional ``zstandard``. argv: <root> <out_dir> <json list of glob patterns>.
+# Packs every matching file under root into one archive, arcnames relative to root, and prints
+# the archive path as the last stdout line (nothing when no file matched). zstd level 3 turned
+# a 253 MB log directory into 4 MB; xz is the fallback when the zstandard wheel is unavailable.
+ARCHIVE_SCRIPT = r"""
+import glob, json, os, sys, tarfile
+root, out_dir, patterns = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+files = sorted({p for pat in patterns for p in glob.glob(os.path.join(root, pat), recursive=True) if os.path.isfile(p)})
+if not files:
+    print("archive: no file matched " + ", ".join(patterns), file=sys.stderr)
+    sys.exit(0)
+try:
+    import zstandard
+    out = os.path.join(out_dir, "bundle.tar.zst")
+    with open(out, "wb") as fh, zstandard.ZstdCompressor(level=3, threads=-1).stream_writer(fh) as zst, tarfile.open(fileobj=zst, mode="w|") as tar:
+        for f in files:
+            tar.add(f, arcname=os.path.relpath(f, root))
+except ImportError:
+    out = os.path.join(out_dir, "bundle.tar.xz")
+    with tarfile.open(out, "w:xz") as tar:
+        for f in files:
+            tar.add(f, arcname=os.path.relpath(f, root))
+raw = sum(os.path.getsize(f) for f in files)
+print("archive: %d files, %.1f MB raw -> %.1f MB %s" % (len(files), raw / 1048576, os.path.getsize(out) / 1048576, os.path.basename(out)), file=sys.stderr)
+print(out)
+"""
+
+
+def _has_power_samples(log_dir: Path) -> bool:
+    """True when some power leg (GPU scraper, CPU scraper, or host CPU collector) wrote a ``samples.csv``.
+
+    Distinguishes "telemetry was off" from "telemetry ran but the energy report
+    could not be built", so the latter can be logged where someone will see it.
+    """
+    return any(log_dir.rglob("samples.csv"))
+
+
+def s3_sync_exclude_pattern(archive_pattern: str) -> str:
+    """Translate a Python glob used for the archive into the AWS CLI exclude that covers it.
+
+    AWS ``--exclude`` has no ``**`` but its ``*`` already matches across directories, so
+    collapsing ``**`` to ``*`` yields a pattern at least as broad as the glob.
+    """
+    return archive_pattern.replace("**", "*")
+
+
+def _skipped_shrink(retained: str, reason: str) -> AllocationShrink:
+    """An ``AllocationShrink`` for a release that was never attempted."""
+    return AllocationShrink(
+        requested=False,
+        succeeded=False,
+        retained=retained,
+        released=(),
+        verified=False,
+        reason=reason,
+        duration_s=0.0,
+    )
+
+
+class PostProcessStageMixin:
+    """Mixin for post-process stage after benchmark completion.
+
+    Handles AI-powered failure analysis using Claude Code CLI.
+    Configuration is loaded from srtslurm.yaml (cluster config).
+
+    Requires:
+        self.config: SrtConfig
+        self.runtime: RuntimeContext
+    """
+
+    # Type hints for mixin dependencies
+    config: "SrtConfig"
+    runtime: "RuntimeContext"
+
+    # Node the allocation was shrunk to by release_idle_nodes(); None while the job keeps every node.
+    _retained_node: str | None = None
+
+    def _get_ai_analysis_config(self) -> AIAnalysisConfig | None:
+        """Load AI analysis config from cluster config (reporting.ai_analysis).
+
+        Returns:
+            AIAnalysisConfig if configured, None otherwise
+        """
+        cluster_config = load_cluster_config()
+        if not cluster_config:
+            return None
+
+        reporting = cluster_config.get("reporting")
+        if not reporting:
+            return None
+
+        ai_config_dict = reporting.get("ai_analysis")
+        if not ai_config_dict:
+            return None
+
+        try:
+            schema = AIAnalysisConfig.Schema()
+            return schema.load(ai_config_dict)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Failed to parse reporting.ai_analysis config: %s", e)
+            return None
+
+    def _get_s3_config(self) -> S3Config | None:
+        """Load S3 config from cluster config (under reporting.s3).
+
+        Returns:
+            S3Config if configured, None otherwise
+        """
+        cluster_config = load_cluster_config()
+        if not cluster_config:
+            return None
+
+        reporting = cluster_config.get("reporting")
+        if not reporting:
+            return None
+
+        s3_dict = reporting.get("s3")
+        if not s3_dict:
+            return None
+
+        try:
+            schema = S3Config.Schema()
+            return schema.load(s3_dict)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Failed to parse reporting.s3 config: %s", e)
+            return None
+
+    def _resolve_secret(self, config_value: str | None, env_var: str) -> str | None:
+        """Resolve a secret from config or environment variable.
+
+        Args:
+            config_value: Value from config (may be None)
+            env_var: Environment variable name to check as fallback
+
+        Returns:
+            Resolved secret value, or None if not found
+        """
+        if config_value:
+            return config_value
+        return os.environ.get(env_var)
+
+    def _copy_config_to_logs(self) -> None:
+        """Copy job artifacts into the log directory so they're included in S3 uploads.
+
+        At submit time, config.yaml, sbatch_script.sh, and {job_id}.json are saved
+        to outputs/{job_id}/, but S3 syncs outputs/{job_id}/logs/. This copies them
+        into logs/ so they get uploaded alongside benchmark results and worker logs.
+
+        Override/zip submissions also write a resolved runtime config next to the
+        source as config_{suffix}.yaml (or config_resolved.yaml). Glob all
+        config*.yaml files so the actually-executed resolved config is uploaded
+        too, not just the unresolved source config.yaml.
+        """
+        output_dir = self.runtime.log_dir.parent
+        config_files = sorted(p.name for p in output_dir.glob("config*.yaml"))
+        files_to_copy = [*config_files, "sbatch_script.sh", f"{self.runtime.job_id}.json", GIT_STATE_FILENAME]
+        for name in files_to_copy:
+            src = output_dir / name
+            if not src.exists():
+                continue
+            dst = self.runtime.log_dir / name
+            try:
+                shutil.copy2(src, dst)
+                logger.info("Copied %s to log directory", name)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Failed to copy %s to log directory: %s", name, e)
+
+    def release_idle_nodes(self, received_signal: str | None = None) -> AllocationShrink | None:
+        """Shrink the job to its batch host so the other nodes return to Slurm before post-processing.
+
+        Opt-in through ``release_nodes_before_postprocess`` in srtslurm.yaml; returns
+        None without touching Slurm when it is off. ``run_postprocess`` calls it
+        after the lockfile and energy report are written (they read the job's
+        ``SLURM_*`` environment, which a release rewrites) and before the S3
+        upload; every worker, frontend and service step has stopped by then, and
+        Slurm kills any step still running on a released node. On success the S3
+        upload and AI analysis run on the retained node (``_postprocess_node``);
+        on a refusal (``disable_job_shrink``, arbitrary distribution) or a skip
+        they run on the head node as before. A job shutting down on a signal
+        (``received_signal``: walltime or scancel) is skipped, since Slurm refuses
+        to resize a job that is already ending. The outcome is written to
+        ``allocation-release.json`` in the log directory. Never raises.
+        """
+        if not self.runtime.release_nodes_before_postprocess:
+            return None
+
+        job_id = self.runtime.job_id
+        batch_host: str | None = None
+        try:
+            if received_signal is not None:
+                shrink = _skipped_shrink(
+                    "", f"job is ending on {received_signal}; Slurm refuses to resize a job that is finishing"
+                )
+            elif self.runtime.nodes.het:
+                shrink = _skipped_shrink("", "heterogeneous job: Slurm cannot shrink a het allocation to one node")
+            elif not job_id:
+                shrink = _skipped_shrink("", "no Slurm job id")
+            elif (batch_host := get_batch_host()) is None:
+                shrink = _skipped_shrink("", "batch host unknown (SLURMD_NODENAME and SLURM_NODELIST unset)")
+            else:
+                logger.info("Releasing every node except batch host %s before post-processing", batch_host)
+                shrink = shrink_job_allocation(job_id, batch_host)
+        except Exception as e:  # noqa: BLE001 - cleanup path, never fatal
+            shrink = _skipped_shrink("", f"node release failed: {e}")
+        except BaseException:
+            # The signal handler's SystemExit (walltime or scancel while scontrol runs). The
+            # controller may already have shrunk the job, so record the attempt before exiting.
+            self._write_release_evidence(
+                AllocationShrink(
+                    requested=batch_host is not None,
+                    succeeded=False,
+                    retained=batch_host or "",
+                    released=(),
+                    verified=False,
+                    reason="interrupted by a shutdown signal during the release; Slurm may already have shrunk the job",
+                    duration_s=0.0,
+                ),
+                job_id,
+            )
+            raise
+
+        if shrink.succeeded:
+            self._retained_node = shrink.retained
+            logger.info(
+                "Released %d node(s) to Slurm in %.1fs (%s); post-processing runs on %s",
+                len(shrink.released),
+                shrink.duration_s,
+                ", ".join(shrink.released),
+                shrink.retained,
+            )
+            if not shrink.verified:
+                logger.warning("Node release not verified: %s", shrink.reason)
+        elif shrink.requested:
+            logger.warning("Node release failed, keeping the full allocation: %s", shrink.reason)
+        else:
+            logger.info("Node release skipped: %s", shrink.reason)
+
+        self._write_release_evidence(shrink, job_id)
+        return shrink
+
+    def _write_release_evidence(self, shrink: AllocationShrink, job_id: str) -> None:
+        """Write ``allocation-release.json`` into the log directory so the outcome ships with the upload."""
+        record = {
+            **shrink.to_dict(),
+            "job_id": job_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            (self.runtime.log_dir / ALLOCATION_RELEASE_FILENAME).write_text(json.dumps(record, indent=2) + "\n")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Failed to write %s: %s", ALLOCATION_RELEASE_FILENAME, e)
+
+    def _postprocess_node(self) -> tuple[str, int | None]:
+        """Node and het group for the post-processing sruns (S3 upload, AI analysis).
+
+        The node kept by ``release_idle_nodes`` once the job has shrunk (a shrunk
+        job is never het), otherwise the head node in its het component.
+        """
+        if self._retained_node is not None:
+            return self._retained_node, None
+        head = self.runtime.nodes.head
+        return head, self.runtime.nodes.het_group_for(head)
+
+    def run_postprocess(
+        self,
+        exit_code: int,
+        reporter: "StatusReporter | None" = None,
+        received_signal: str | None = None,
+    ) -> None:
+        """Run post-processing after benchmark completion.
+
+        Handles:
+        1. Copy config YAML into log directory (for S3 upload)
+        2. Rollup generation (benchmark-specific normalization)
+        3. Benchmark result extraction (reads rollup or falls back to raw)
+        4. Release of the idle nodes to Slurm (``release_idle_nodes``, opt-in),
+           after the lockfile and energy report so they record the allocation
+           the run used
+        5. S3 upload of the whole log directory (if S3 configured)
+        6. Eager push of ``logs_url`` to the status API right after the S3 sync
+           completes, so downstream consumers can fetch results from S3 even
+           if later stages below fail or hang.
+        7. Stash ``logs_url`` on self so the caller's final
+           ``report_completed`` PUT in do_sweep can reassert the pointer.
+        8. AI-powered failure analysis (only on failures, if enabled).
+
+        Benchmark results themselves are NOT pushed to the status API — S3 is
+        the source of truth for artifacts. The collector only stores pointers.
+
+        Args:
+            exit_code: Exit code from the benchmark run
+            reporter: Optional StatusReporter for eager mid-run pushes. When
+                provided, ``logs_url`` is PUT as soon as it's known (step 6);
+                when None, only the stash path is used.
+            received_signal: Signal that started the shutdown (``ProcessRegistry.received_signal``),
+                or None; a signalled job skips the node release.
+        """
+        # Copy config into log directory so it's included in S3 upload
+        self._copy_config_to_logs()
+
+        # Generate rollup first (benchmark-specific normalization). This writes
+        # benchmark-rollup.json into the log dir; consumers pull it from S3.
+        self._generate_rollup()
+
+        # Extract benchmark results for the lockfile path only. The dict is
+        # intentionally NOT forwarded to the status API (see docstring).
+        _benchmark_results = self._extract_benchmark_results()
+
+        # Write lockfile with verification
+        # TODO: include benchmark results once rollup format is standardized across
+        # sa-bench, trace-replay, and mooncake-router (currently only sa-bench has
+        # a structured rollup with runs[].throughput_toks etc.)
+        verification = getattr(self, "_identity_verification", None)
+        write_lockfile(
+            self.runtime.log_dir.parent,
+            self.config,
+            self.runtime.log_dir,
+            verification=verification,
+        )
+
+        # Compare against previous lockfile if this was a lockfile re-run
+        self._compare_against_previous_lock()
+
+        # Best-effort CPU/GPU energy-per-token report. Must land before the S3
+        # sync so it ships with the rest of the log directory.
+        self._build_power_energy_report()
+
+        # Everything above reads the job's SLURM_* environment, which a release
+        # rewrites; the upload and AI analysis below run on the retained node.
+        self.release_idle_nodes(received_signal)
+
+        # Upload the log directory to S3 (if configured)
+        s3_url = self._run_postprocess_container()
+
+        # Eager push of logs_url to the status API. Fires BEFORE AI analysis so
+        # a hanging/crashing analyzer does not strand the artifact pointer.
+        if reporter is not None and s3_url:
+            reporter.report_artifacts(logs_url=s3_url)
+
+        # Stash so the final StatusReporter.report_completed PUT (in do_sweep)
+        # reasserts logs_url idempotently across every configured endpoint.
+        self._last_logs_url = s3_url
+
+        # AI analysis only on failures
+        if exit_code != 0:
+            ai_config = self._get_ai_analysis_config()
+            if ai_config and ai_config.enabled:
+                logger.info("Running AI-powered failure analysis...")
+                self._run_ai_analysis(ai_config)
+
+    def _build_power_energy_report(self) -> None:
+        """Best-effort CPU/GPU trapezoidal energy report, written next to the samples.
+
+        Quietly skipped (DEBUG only) whenever it does not apply: telemetry
+        disabled (no power CSVs), a benchmark type without sa-bench/aiperf
+        timing artifacts (e.g. lm-eval, gpqa), or a serve-only run with no
+        formal benchmark window. Runs after ``finalize_power_telemetry`` /
+        ``finalize_cpu_power_telemetry`` in ``do_sweep.py``'s cleanup block,
+        so the CPU/GPU ``samples.csv`` files are already durable by the time
+        this executes.
+        """
+        try:
+            from srtctl.analysis.power_energy_report import PowerReportError, build_reports, report_to_dict
+        except ImportError as e:
+            logger.warning("Power energy report unavailable (import failed): %s", e)
+            return
+
+        try:
+            reports = build_reports(self.runtime.log_dir)
+        except PowerReportError as e:
+            # Telemetry off (no power CSVs) is the routine case and stays quiet.
+            # But a run that *did* collect power and still gets no report --
+            # benchmark died before aiperf wrote its summary, window narrower
+            # than the sample spacing, ambiguous CSVs -- must say why in the
+            # sweep log, or the missing file is only diagnosable by re-running
+            # the report offline.
+            if _has_power_samples(self.runtime.log_dir):
+                logger.info("Power energy report skipped (power samples present): %s", e)
+            else:
+                logger.debug("Power energy report skipped: %s", e)
+            return
+        except Exception as e:  # noqa: BLE001 - post-processing must never fail the benchmark
+            logger.warning("Power energy report failed: %s", e)
+            return
+
+        output_path = self.runtime.log_dir / "power_energy_report.json"
+        output_path.write_text(json.dumps([report_to_dict(report) for report in reports], indent=2) + "\n")
+        total_joules = sum(report.combined_total_joules for report in reports)
+        logger.info(
+            "Power energy report: %d concurrency point(s), %.1f J combined total -> %s",
+            len(reports),
+            total_joules,
+            output_path,
+        )
+
+    def start_incremental_power_report(self) -> None:
+        """Start per-case energy emission for the duration of the benchmark.
+
+        Strictly additive to ``_build_power_energy_report``: this writes each
+        case's result as soon as that case completes, so a job killed mid-sweep
+        keeps the results it already earned. Every failure is absorbed -- power
+        post-processing must never affect the sweep or its exit code.
+        """
+        try:
+            from srtctl.analysis.incremental_power import IncrementalPowerEmitter, IncrementalPowerWatcher
+
+            emitter = IncrementalPowerEmitter(self.runtime.log_dir)
+            watcher = IncrementalPowerWatcher(emitter)
+            watcher.start()
+            self._incremental_power_watcher = watcher
+            logger.info("Incremental power report started (index: %s)", emitter.index_path)
+        except Exception as e:  # noqa: BLE001 - never fatal
+            logger.warning("Incremental power report unavailable: %s", e)
+
+    def finalize_incremental_power_report(self) -> None:
+        """Stop the watcher and run a final pass against the now-closed sample files."""
+        watcher = getattr(self, "_incremental_power_watcher", None)
+        if watcher is None:
+            return
+        try:
+            watcher.stop_and_finalize()
+        except Exception as e:  # noqa: BLE001 - never fatal
+            logger.warning("Incremental power report finalization failed: %s", e)
+
+    def _generate_rollup(self) -> None:
+        """Run benchmark-specific rollup script to generate benchmark-rollup.json.
+
+        Each benchmark type can have a rollup.py script that normalizes its output
+        into a standardized format for historical tracking.
+        """
+        benchmark_type = self.config.benchmark.type
+        rollup_script = SCRIPTS_DIR / benchmark_type / "rollup.py"
+
+        if not rollup_script.exists():
+            logger.debug("No rollup script for %s", benchmark_type)
+            return
+
+        try:
+            result = subprocess.run(
+                ["python3", str(rollup_script), str(self.runtime.log_dir)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.warning("Rollup failed: %s", result.stderr)
+            elif result.stdout:
+                logger.info(result.stdout.strip())
+        except subprocess.TimeoutExpired:
+            logger.warning("Rollup script timed out")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Rollup error: %s", e)
+
+    def _extract_benchmark_results(self) -> dict[str, Any] | None:
+        """Read benchmark-rollup.json if it exists, otherwise fall back to raw output.
+
+        Returns:
+            Dictionary with benchmark results, or None if not found
+        """
+        # Try to read the standardized rollup first
+        rollup_file = self.runtime.log_dir / "benchmark-rollup.json"
+        if rollup_file.exists():
+            try:
+                return json.loads(rollup_file.read_text())
+            except json.JSONDecodeError as e:
+                logger.warning("Failed to parse rollup: %s", e)
+
+        # Fallback to raw output for legacy/failed rollups
+        benchmark_out = self.runtime.log_dir / "benchmark.out"
+        if benchmark_out.exists():
+            return {"benchmark_type": "unknown", "raw_output": benchmark_out.read_text(errors="replace")}
+
+        return None
+
+    def _compare_against_previous_lock(self) -> None:
+        """If this run was from a lockfile, compare against previous run."""
+        try:
+            lock_data = getattr(self.config, "_lock_data", None)
+            if not lock_data:
+                return
+
+            new_fps = collect_worker_fingerprints(self.runtime.log_dir)
+            if not new_fps:
+                return
+
+            # TODO: pass benchmark results once rollup format is standardized
+            summary_lines, report_lines, _issues = generate_reproduction_report(
+                lock_data,
+                new_fps,
+            )
+
+            # Log summary to sweep log
+            if summary_lines:
+                logger.info("")
+                logger.info("=" * 60)
+                logger.info("Comparison against previous lockfile run")
+                logger.info("=" * 60)
+                for line in summary_lines:
+                    logger.info(line)
+                logger.info("=" * 60)
+
+            # Write full report to file
+            if report_lines:
+                report_path = self.runtime.log_dir / "reproduction-report.txt"
+                report_path.write_text("\n".join(report_lines) + "\n")
+                logger.info(f"Reproduction report: {report_path}")
+
+        except Exception as e:  # noqa: BLE001
+            logger.debug("Lockfile comparison skipped: %s", e)
+
+    def _run_postprocess_container(self) -> str | None:
+        """Upload the log directory to S3 from a small container on the post-processing node.
+
+        Ships the run identity (config, lockfile, job JSON, sbatch script, git
+        state), every orchestrator, worker, frontend and service log, the
+        benchmark results and the tachometer parquet as
+        loose objects, plus one compressed archive of the patterns in
+        ``reporting.s3.archive``; the patterns in ``reporting.s3.exclude`` are
+        skipped (see ``DEFAULT_S3_EXCLUDE`` for why). Returns the S3 URL of the
+        log directory, or None when S3 is not configured or the upload failed.
+        """
+        s3_config = self._get_s3_config()
+        if not s3_config:
+            logger.debug("S3 not configured, skipping upload")
+            return None
+
+        # S3 path: {prefix}/{YYYY-MM-DD}/{job_id}/
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        s3_prefix = f"{s3_config.prefix or 'srtslurm'}/{date_str}/{self.runtime.job_id}"
+        s3_url = f"s3://{s3_config.bucket}/{s3_prefix}/"
+
+        # Build endpoint flag if custom endpoint provided
+        endpoint_flag = f"--endpoint-url {s3_config.endpoint_url}" if s3_config.endpoint_url else ""
+
+        exclude = list(DEFAULT_S3_EXCLUDE if s3_config.exclude is None else s3_config.exclude)
+        archive = list(DEFAULT_S3_ARCHIVE if s3_config.archive is None else s3_config.archive)
+        logger.info(
+            "S3 upload policy: %d exclude pattern(s), archive of %s",
+            len(exclude),
+            ", ".join(archive) if archive else "nothing",
+        )
+        script = self._build_postprocess_script(s3_url, endpoint_flag, exclude=exclude, archive=archive)
+
+        # Build env for AWS credentials
+        env: dict[str, str] = {}
+        access_key = self._resolve_secret(s3_config.access_key_id, "AWS_ACCESS_KEY_ID")
+        secret_key = self._resolve_secret(s3_config.secret_access_key, "AWS_SECRET_ACCESS_KEY")
+        if access_key:
+            env["AWS_ACCESS_KEY_ID"] = access_key
+        if secret_key:
+            env["AWS_SECRET_ACCESS_KEY"] = secret_key
+        if s3_config.region:
+            env["AWS_DEFAULT_REGION"] = s3_config.region
+
+        node, het_group = self._postprocess_node()
+        try:
+            logger.info("Uploading the log directory to %s...", s3_url)
+            proc = start_srun_process(
+                command=["bash", "-c", script],
+                nodelist=[node],
+                output=str(self.runtime.log_dir / "postprocess.log"),
+                container_image="python:3.11",
+                reuse_container=self.runtime.reuse_container,
+                container_prepare_timeout_seconds=self.runtime.container_prepare_timeout_seconds,
+                container_mounts={self.runtime.log_dir: Path("/logs")},
+                env_to_set=env,
+                het_group=het_group,
+            )
+            proc.wait(timeout=600)  # 10 min for the awscli install plus a full sync
+
+            if proc.returncode == 0:
+                logger.info("Upload complete: %s", s3_url)
+                return s3_url
+            logger.warning("S3 upload failed (exit code: %s)", proc.returncode)
+            return None
+
+        except subprocess.TimeoutExpired:
+            logger.warning("S3 upload container timed out")
+            proc.kill()
+            return None
+        except Exception as e:  # noqa: BLE001
+            logger.warning("S3 upload container failed: %s", e)
+            return None
+
+    def _build_postprocess_script(
+        self,
+        s3_url: str,
+        endpoint_flag: str,
+        *,
+        exclude: list[str] | None = None,
+        archive: list[str] | None = None,
+    ) -> str:
+        """Bash for the upload container.
+
+        Installs awscli (and zstandard, best effort), records the destination and
+        policy in ``postprocess-status.json``, packs the ``archive`` patterns into
+        one ``bundle.tar.zst`` under ``/tmp`` (the log directory on the cluster is
+        left untouched), syncs ``/logs`` minus ``exclude`` and minus the archived
+        files, then uploads the archive next to them.
+        """
+        exclude = list(DEFAULT_S3_EXCLUDE if exclude is None else exclude)
+        archive = list(DEFAULT_S3_ARCHIVE if archive is None else archive)
+        sync_excludes = exclude + [s3_sync_exclude_pattern(p) for p in archive]
+        exclude_flags = " ".join(f"--exclude {shlex.quote(p)}" for p in sync_excludes)
+        status_json = json.dumps({"s3_url": s3_url, "exclude": exclude, "archive": archive})
+
+        archive_step = ""
+        if archive:
+            archive_step = f"""
+echo "Packing {len(archive)} archive pattern(s) into one compressed bundle..."
+archive_path=$(python3 - /logs /tmp {shlex.quote(json.dumps(archive))} <<'PY'
+{ARCHIVE_SCRIPT}
+PY
+)
+"""
+
+        return f"""
+set -u
+set -o pipefail
+
+echo "Installing awscli..."
+if ! pip install awscli; then
+  echo "Failed to install awscli"
+  exit {POSTPROCESS_UPLOAD_FAILED_EXIT}
+fi
+pip install zstandard || echo "zstandard unavailable; the archive falls back to .tar.xz"
+
+cat > /logs/postprocess-status.json <<'EOF'
+{status_json}
+EOF
+archive_path=""
+{archive_step}
+echo "Uploading the log directory to S3 ({len(sync_excludes)} exclude pattern(s))..."
+if ! aws s3 sync /logs {s3_url} {endpoint_flag} {exclude_flags}; then
+  echo "Upload failed"
+  exit {POSTPROCESS_UPLOAD_FAILED_EXIT}
+fi
+if [ -n "$archive_path" ] && [ -s "$archive_path" ]; then
+  if ! aws s3 cp "$archive_path" {s3_url}$(basename "$archive_path") {endpoint_flag}; then
+    echo "Archive upload failed"
+    exit {POSTPROCESS_UPLOAD_FAILED_EXIT}
+  fi
+fi
+
+echo "Upload complete: {s3_url}"
+echo ""
+echo "Uploaded objects:"
+aws s3 ls --recursive {s3_url} {endpoint_flag} | wc -l
+echo "objects total"
+"""
+
+    def _run_ai_analysis(self, config: AIAnalysisConfig) -> None:
+        """Run AI analysis using Claude Code CLI via OpenRouter.
+
+        Uses OpenRouter for authentication which works well in headless environments.
+        Installs claude CLI and gh CLI in a python container before running analysis.
+        See: https://openrouter.ai/docs/guides/claude-code-integration
+
+        Args:
+            config: AI analysis configuration
+        """
+        # Resolve secrets
+        openrouter_key = self._resolve_secret(config.openrouter_api_key, "OPENROUTER_API_KEY")
+        gh_token = self._resolve_secret(config.gh_token, "GH_TOKEN")
+
+        if not openrouter_key:
+            logger.error("AI analysis requires OPENROUTER_API_KEY (set in srtslurm.yaml or environment)")
+            return
+
+        if not gh_token:
+            logger.warning("GH_TOKEN not set - GitHub PR search will not work")
+
+        # Build the prompt - escape for shell
+        log_dir = str(self.runtime.log_dir)
+        prompt = config.get_prompt(log_dir)
+        escaped_prompt = shlex.quote(prompt)
+
+        logger.info("Log directory: %s", log_dir)
+        logger.info("Repos to search: %s", ", ".join(config.repos_to_search))
+
+        # Build environment variables for OpenRouter integration
+        # See: https://openrouter.ai/docs/guides/claude-code-integration
+        env_to_set = {
+            "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+            "ANTHROPIC_AUTH_TOKEN": openrouter_key,
+            "ANTHROPIC_API_KEY": "",  # Must be explicitly empty to route through OpenRouter
+        }
+        if gh_token:
+            env_to_set["GH_TOKEN"] = gh_token
+
+        # Build the analysis script that installs tools and runs claude
+        # Uses curl to install claude CLI and gh CLI without requiring apt/root
+        script = f"""
+set -e
+
+echo "Installing uv..."
+pip install uv
+
+echo "Installing Claude Code CLI..."
+curl -fsSL https://claude.ai/install.sh | bash
+export PATH="$HOME/.claude/bin:$PATH"
+
+echo "Installing GitHub CLI..."
+GH_VERSION=$(curl -s https://api.github.com/repos/cli/cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/v//')
+curl -fsSL "https://github.com/cli/cli/releases/download/v${{GH_VERSION}}/gh_${{GH_VERSION}}_linux_amd64.tar.gz" | tar xz -C /tmp
+export PATH="/tmp/gh_${{GH_VERSION}}_linux_amd64/bin:$PATH"
+
+echo "Dependencies installed. Running AI analysis..."
+
+# Run claude with explicit tool permissions
+cd /logs
+claude -p {escaped_prompt} \\
+    --allowedTools "Read,Bash(gh *),Bash(ls *),Bash(cat *),Bash(grep *),Write(**/ai_analysis.md)"
+
+echo "AI analysis complete."
+"""
+
+        analysis_log = self.runtime.log_dir / "ai_analysis.log"
+        logger.info("Starting Claude Code analysis (log: %s)", analysis_log)
+
+        node, het_group = self._postprocess_node()
+        try:
+            proc = start_srun_process(
+                command=["bash", "-c", script],
+                nodelist=[node],
+                output=str(analysis_log),
+                container_image="python:3.11",
+                reuse_container=self.runtime.reuse_container,
+                container_prepare_timeout_seconds=self.runtime.container_prepare_timeout_seconds,
+                container_mounts={self.runtime.log_dir: Path("/logs")},
+                env_to_set=env_to_set,
+                het_group=het_group,
+            )
+
+            # Wait for completion with timeout (15 minutes for install + analysis)
+            timeout = 900
+            start_time = time.time()
+
+            while proc.poll() is None:
+                if time.time() - start_time > timeout:
+                    logger.warning("AI analysis timed out after %d seconds", timeout)
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                    return
+                time.sleep(5)
+
+            exit_code = proc.returncode or 0
+
+            if exit_code != 0:
+                logger.warning("AI analysis exited with code %d", exit_code)
+            else:
+                logger.info("AI analysis completed successfully")
+
+            # Check if analysis file was created
+            analysis_file = self.runtime.log_dir / "ai_analysis.md"
+            if analysis_file.exists():
+                logger.info("Analysis report written to: %s", analysis_file)
+            else:
+                logger.warning("AI analysis did not produce ai_analysis.md")
+
+        except Exception as e:  # noqa: BLE001
+            logger.error("Failed to run AI analysis: %s", e)

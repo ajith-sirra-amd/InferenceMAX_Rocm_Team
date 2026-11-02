@@ -1,0 +1,366 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# SA-Bench: Throughput/latency benchmark
+# Expects: endpoint isl osl concurrencies req_rate model_name is_disaggregated total_gpus prefill_gpus decode_gpus
+
+set -e
+
+# Ensure benchmark dependencies are available.
+# A non-baked image gets a temporary venv. `bake-image --sa-bench` creates the
+# persistent venv named in deps.sh instead, and this script activates it without
+# requiring PATH changes in the recipe.
+SA_BENCH_RUNTIME_VENV="/tmp/sa-bench-venv"
+# SA_BENCH_DEPS / SA_BENCH_IMPORTS live in deps.sh so that `srtctl bake-image`
+# can preinstall exactly this list into a container image.
+# shellcheck source=deps.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/deps.sh"
+
+ensure_sa_bench_deps() {
+    if [ -x "$SA_BENCH_BAKED_VENV/bin/python" ]; then
+        # shellcheck disable=SC1091
+        source "$SA_BENCH_BAKED_VENV/bin/activate"
+        python3 -c "import ${SA_BENCH_IMPORTS}"
+        echo "Using baked sa-bench venv at $SA_BENCH_BAKED_VENV"
+        return
+    fi
+
+    # Quick check: if all deps import fine in current Python, skip venv entirely
+    if python3 -c "import ${SA_BENCH_IMPORTS}" 2>/dev/null; then
+        echo "All sa-bench deps already available — skipping venv setup"
+        return
+    fi
+
+    echo "Missing sa-bench deps — installing into venv at $SA_BENCH_RUNTIME_VENV ..."
+    if [ ! -d "$SA_BENCH_RUNTIME_VENV" ]; then
+        python3 -m venv --system-site-packages "$SA_BENCH_RUNTIME_VENV"
+    fi
+    # shellcheck disable=SC1091
+    source "$SA_BENCH_RUNTIME_VENV/bin/activate"
+    pip install "${SA_BENCH_DEPS[@]}"
+    echo "sa-bench deps ready"
+}
+
+ensure_sa_bench_deps
+
+#
+# Optional profiling (via worker profiling endpoints):
+#   PROFILE_TYPE: "nsys" or "torch" to enable profiling (or "none" to disable)
+#   PROFILE_OUTPUT_DIR: Directory inside the container to save profiler output (e.g., /logs/profiles)
+#   WORKER_PORT: Default port to use when an endpoint is provided as IP only (defaults to 9090)
+#
+# Worker targets (prefer *_ENDPOINTS; *_IPS is supported for backward-compat):
+#   PROFILE_PREFILL_ENDPOINTS: Comma-separated list of prefill worker endpoints (ip:port or ip)
+#   PROFILE_DECODE_ENDPOINTS: Comma-separated list of decode worker endpoints (ip:port or ip)
+#   PROFILE_AGG_ENDPOINTS: Comma-separated list of aggregated worker endpoints (ip:port or ip)
+#   PROFILE_PREFILL_IPS / PROFILE_DECODE_IPS / PROFILE_AGG_IPS: Comma-separated IPs (uses WORKER_PORT)
+#
+# Step ranges (stop_step is exclusive; num_steps = stop_step - start_step):
+#   PROFILE_PREFILL_START_STEP / PROFILE_PREFILL_STOP_STEP
+#   PROFILE_DECODE_START_STEP / PROFILE_DECODE_STOP_STEP
+#   PROFILE_AGG_START_STEP / PROFILE_AGG_STOP_STEP
+
+ENDPOINT=$1
+ISL=$2
+OSL=$3
+CONCURRENCIES=$4
+REQ_RATE=${5:-inf}
+MODEL_PATH=${6:-/model/}
+MODEL_NAME=${7:-"model"}
+IS_DISAGGREGATED=${8:-false}
+TOTAL_GPUS=${9:-0}
+PREFILL_GPUS=${10:-0}
+DECODE_GPUS=${11:-0}
+RANDOM_RANGE_RATIO=${12:-0.8}
+NUM_PROMPTS_MULT=${13:-10}
+NUM_WARMUP_MULT=${14:-2}
+CUSTOM_TOKENIZER=${15:-}
+USE_CHAT_TEMPLATE=${16:-true}
+DATASET_NAME=${17:-random}
+DATASET_PATH=${18:-}
+REUSE_HTTP_CONNECTIONS=${19:-false}
+DATASET_CACHE_DIR=${20:-}
+SA_BENCH_API_ENDPOINT=${21:-/v1/completions}
+
+# The dynamo adapter picks the request body from the API path, so it serves both endpoints.
+BENCHMARK_HTTP_ARGS=(--backend "dynamo" --endpoint "$SA_BENCH_API_ENDPOINT")
+
+# Build optional custom tokenizer args
+CUSTOM_TOKENIZER_ARGS=()
+if [ -n "$CUSTOM_TOKENIZER" ]; then
+    CUSTOM_TOKENIZER_ARGS=(--custom-tokenizer "$CUSTOM_TOKENIZER")
+fi
+
+# Build optional chat template args
+CHAT_TEMPLATE_ARGS=()
+if [ "$USE_CHAT_TEMPLATE" = "true" ]; then
+    CHAT_TEMPLATE_ARGS=(--use-chat-template)
+    if [ -z "$CUSTOM_TOKENIZER" ]; then
+        echo "[sa-bench] notice: use_chat_template=true but no custom_tokenizer set."
+        echo "[sa-bench]   Models without a jinja chat_template (e.g. DeepSeek-V4)"
+        echo "[sa-bench]   will fail fast in benchmark_serving.py with guidance."
+        echo "[sa-bench]   For vLLM DSV4, set:"
+        echo "[sa-bench]     benchmark.custom_tokenizer:"
+        echo "[sa-bench]       sa_bench_tokenizers.vllm_deepseek_v4.VLLMDeepseekV4Tokenizer"
+        echo "[sa-bench]   For SGLang DSV4, set:"
+        echo "[sa-bench]     benchmark.custom_tokenizer:"
+        echo "[sa-bench]       sa_bench_tokenizers.sglang_deepseek_v4.SGLangDeepseekV4Tokenizer"
+        echo "[sa-bench]   Or set benchmark.use_chat_template: false to skip it."
+    fi
+fi
+
+# Reuse one HTTP connection pool within each benchmark_serving.py process.
+# Warmup and formal runs are separate processes and therefore use separate pools.
+HTTP_CONNECTION_ARGS=()
+if [ "$REUSE_HTTP_CONNECTIONS" = "true" ]; then
+    HTTP_CONNECTION_ARGS=(--reuse-http-connections)
+    HTTP_CONNECTION_MODE="pooled"
+else
+    HTTP_CONNECTION_MODE="per_request"
+fi
+
+# Build dataset args
+DATASET_ARGS=(--dataset-name "$DATASET_NAME")
+if [ -n "$DATASET_PATH" ]; then
+    DATASET_ARGS+=(--dataset-path "$DATASET_PATH")
+fi
+
+# Random-length args only apply to random dataset
+RANDOM_LEN_ARGS=()
+if [ "$DATASET_NAME" = "random" ]; then
+    RANDOM_LEN_ARGS=(
+        --random-input-len "$ISL"
+        --random-output-len "$OSL"
+        --random-range-ratio "${RANDOM_RANGE_RATIO}"
+        # 0 delegates worker selection to benchmark_serving.py; override via RANDOM_NUM_WORKERS.
+        --random-num-workers "${RANDOM_NUM_WORKERS:-0}"
+    )
+fi
+
+# Dataset cache: reuse pre-generated random prompts across runs (random only).
+# Falls back to the SA_BENCH_DATASET_CACHE_DIR env var when no arg is given.
+DATASET_CACHE_DIR="${DATASET_CACHE_DIR:-${SA_BENCH_DATASET_CACHE_DIR:-}}"
+CACHE_ARGS=()
+if [ "$DATASET_NAME" = "random" ] && [ -n "$DATASET_CACHE_DIR" ]; then
+    CACHE_ARGS=(--dataset-cache-dir "$DATASET_CACHE_DIR")
+fi
+
+# Optional SGLang /slow_down (set by srtctl for SA-Bench when YAML provides slow_down_* and frontend is sglang):
+#   SA_BENCH_SLOW_DOWN_URLS: comma-separated http://host:port base URLs (decode workers)
+#   SA_BENCH_SLOW_DOWN_SLEEP_TIME / SA_BENCH_SLOW_DOWN_WAIT_TIME
+SLOW_DOWN_ARGS=()
+if [ -n "${SA_BENCH_SLOW_DOWN_URLS:-}" ]; then
+    IFS=',' read -r -a _sd_urls <<< "${SA_BENCH_SLOW_DOWN_URLS}"
+    for u in "${_sd_urls[@]}"; do
+        u="$(echo "$u" | xargs)"
+        if [ -n "$u" ]; then
+            SLOW_DOWN_ARGS+=(--slow-down-server "$u")
+        fi
+    done
+fi
+if [ ${#SLOW_DOWN_ARGS[@]} -gt 0 ]; then
+    SLOW_DOWN_EXTRA=(
+        --slow-down-sleep-time "${SA_BENCH_SLOW_DOWN_SLEEP_TIME:-1}"
+        --slow-down-wait-time "${SA_BENCH_SLOW_DOWN_WAIT_TIME:-60}"
+    )
+else
+    SLOW_DOWN_EXTRA=()
+fi
+
+# Parse endpoint into host:port
+HOST=$(echo "$ENDPOINT" | sed 's|http://||' | cut -d: -f1)
+PORT=$(echo "$ENDPOINT" | sed 's|http://||' | cut -d: -f2 | cut -d/ -f1)
+
+WORK_DIR="$(dirname "$0")"
+
+echo "SA-Bench Config: endpoint=${ENDPOINT}; isl=${ISL}; osl=${OSL}; concurrencies=${CONCURRENCIES}; req_rate=${REQ_RATE}; model=${MODEL_NAME}; dataset=${DATASET_NAME}; dataset_path=${DATASET_PATH}; dataset_cache_dir=${DATASET_CACHE_DIR:-<off>}; http_connection_mode=${HTTP_CONNECTION_MODE}; api_path=${SA_BENCH_API_ENDPOINT}"
+
+# Parse concurrency list
+IFS='x' read -r -a CONCURRENCY_LIST <<< "$CONCURRENCIES"
+
+# Prompt counts the benchmark loop below asks for, warmup runs included and
+# duplicates collapsed. Kept next to the loop it mirrors so both change together.
+dataset_prompt_counts() {
+    local counts=() seen=" " concurrency candidates n
+    for concurrency in "${CONCURRENCY_LIST[@]}"; do
+        candidates=()
+        if [ "$NUM_WARMUP_MULT" -gt 0 ]; then
+            candidates+=($((concurrency * NUM_WARMUP_MULT)))
+        fi
+        candidates+=($((concurrency * NUM_PROMPTS_MULT)))
+        for n in "${candidates[@]}"; do
+            case "$seen" in
+                *" $n "*) continue ;;
+            esac
+            seen="${seen}${n} "
+            counts+=("$n")
+        done
+    done
+    echo "${counts[@]}"
+}
+
+# Prewarm mode (srtctl cache-inputs): build every dataset the run would build
+# and exit. No endpoint, no profiling, no results — only the prompt cache.
+# The dataset-shaping args below must match those in the benchmark loop, or the
+# real run gets a cache miss and regenerates.
+prewarm_dataset_cache() {
+    if [ "$DATASET_NAME" != "random" ]; then
+        echo "[sa-bench] prewarm: nothing to build for dataset '${DATASET_NAME}' (random only)" >&2
+        return 1
+    fi
+    if [ -z "$DATASET_CACHE_DIR" ]; then
+        echo "[sa-bench] prewarm: no dataset cache dir configured" >&2
+        return 1
+    fi
+
+    local counts index total
+    read -r -a counts <<< "$(dataset_prompt_counts)"
+    total=${#counts[@]}
+    echo "[sa-bench] prewarm: ${total} dataset(s) for concurrencies ${CONCURRENCIES} -> ${DATASET_CACHE_DIR}"
+
+    index=0
+    for n in "${counts[@]}"; do
+        index=$((index + 1))
+        echo "[sa-bench] prewarm ${index}/${total}: num_prompts=${n}"
+        python3 -u "${WORK_DIR}/benchmark_serving.py" \
+            --model "${MODEL_NAME}" --tokenizer "${MODEL_PATH}" \
+            "${BENCHMARK_HTTP_ARGS[@]}" \
+            "${DATASET_ARGS[@]}" \
+            --num-prompts "$n" \
+            "${RANDOM_LEN_ARGS[@]}" \
+            "${CACHE_ARGS[@]}" \
+            --trust-remote-code \
+            "${CHAT_TEMPLATE_ARGS[@]}" \
+            "${CUSTOM_TOKENIZER_ARGS[@]}" \
+            --prewarm-dataset-cache || return $?
+    done
+
+    echo "[sa-bench] prewarm: all ${total} dataset(s) ready in ${DATASET_CACHE_DIR}"
+}
+
+if [ "${SA_BENCH_PREWARM_ONLY:-0}" = "1" ] || [ "${SA_BENCH_PREWARM_ONLY:-0}" = "true" ]; then
+    prewarm_dataset_cache || exit $?
+    exit 0
+fi
+
+# Profiling shared helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/profiling.sh
+source "${SCRIPT_DIR}/../lib/profiling.sh"
+profiling_init_from_env
+
+# Stage markers written into the live worker logs (see lib/stage_banner.sh)
+# shellcheck source=../lib/stage_banner.sh
+source "${SCRIPT_DIR}/../lib/stage_banner.sh"
+
+cleanup() { stop_all_profiling; }
+trap cleanup EXIT
+
+# Quick curl to verify endpoint is working
+echo "Verifying endpoint (${SA_BENCH_API_ENDPOINT})..."
+if [[ "$SA_BENCH_API_ENDPOINT" == *"chat/completions"* ]]; then
+    curl -s "${ENDPOINT}${SA_BENCH_API_ENDPOINT}" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"model\": \"${MODEL_NAME}\",
+            \"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}],
+            \"stream\": false,
+            \"max_completion_tokens\": 10
+        }" | head -c 200
+else
+    curl -s "${ENDPOINT}${SA_BENCH_API_ENDPOINT}" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"model\": \"${MODEL_NAME}\",
+            \"prompt\": \"Hello\",
+            \"stream\": false,
+            \"max_tokens\": 10
+        }" | head -c 200
+fi
+echo ""
+
+ulimit -n 65536 2>/dev/null || true  # May fail in containers without CAP_SYS_RESOURCE
+
+# Benchmark
+if [ "$DATASET_NAME" = "custom" ]; then
+    dataset_label=$(basename "${DATASET_PATH%.*}")
+    result_dir="/logs/sa-bench_custom_${dataset_label}"
+else
+    result_dir="/logs/sa-bench_isl_${ISL}_osl_${OSL}"
+fi
+mkdir -p "$result_dir"
+
+# Start profiling before benchmark
+start_all_profiling
+
+for concurrency in "${CONCURRENCY_LIST[@]}"; do
+
+    if [ "$NUM_WARMUP_MULT" -gt 0 ]; then
+        num_warmup_prompts=$((concurrency * NUM_WARMUP_MULT))
+        stage_banner "cc=${concurrency} warmup begin"
+        python3 -u "${WORK_DIR}/benchmark_serving.py" \
+            --model "${MODEL_NAME}" --tokenizer "${MODEL_PATH}" \
+            --host "$HOST" --port "$PORT" \
+            "${BENCHMARK_HTTP_ARGS[@]}" \
+            --disable-tqdm \
+            "${DATASET_ARGS[@]}" \
+            --num-prompts "$num_warmup_prompts" \
+            "${RANDOM_LEN_ARGS[@]}" \
+            "${CACHE_ARGS[@]}" \
+            --ignore-eos \
+            --request-rate 250 \
+            --percentile-metrics ttft,tpot,itl,e2el \
+            --max-concurrency "$concurrency" \
+            --trust-remote-code \
+            "${HTTP_CONNECTION_ARGS[@]}" \
+            "${CHAT_TEMPLATE_ARGS[@]}" \
+            "${CUSTOM_TOKENIZER_ARGS[@]}"
+        stage_banner "cc=${concurrency} warmup end"
+    fi
+
+    num_prompts=$((concurrency * NUM_PROMPTS_MULT))
+
+    # Generate result filename based on mode
+    if [ "$IS_DISAGGREGATED" = "true" ]; then
+        result_filename="results_concurrency_${concurrency}_gpus_${TOTAL_GPUS}_ctx_${PREFILL_GPUS}_gen_${DECODE_GPUS}.json"
+    else
+        result_filename="results_concurrency_${concurrency}_gpus_${TOTAL_GPUS}.json"
+    fi
+
+    echo "Running benchmark with concurrency: $concurrency"
+    echo "$(date '+%Y-%m-%d %H:%M:%S')"
+    stage_banner "cc=${concurrency} benchmark begin"
+
+    set -x
+    python3 -u "${WORK_DIR}/benchmark_serving.py" \
+        --model "${MODEL_NAME}" --tokenizer "${MODEL_PATH}" \
+        --host "$HOST" --port "$PORT" \
+        "${BENCHMARK_HTTP_ARGS[@]}" \
+        --disable-tqdm \
+        "${DATASET_ARGS[@]}" \
+        --num-prompts "$num_prompts" \
+        "${RANDOM_LEN_ARGS[@]}" \
+        "${CACHE_ARGS[@]}" \
+        --ignore-eos \
+        --request-rate "${REQ_RATE}" \
+        --percentile-metrics ttft,tpot,itl,e2el \
+        --max-concurrency "$concurrency" \
+        --trust-remote-code \
+        "${HTTP_CONNECTION_ARGS[@]}" \
+        "${CHAT_TEMPLATE_ARGS[@]}" \
+        "${CUSTOM_TOKENIZER_ARGS[@]}" \
+        "${SLOW_DOWN_ARGS[@]}" \
+        "${SLOW_DOWN_EXTRA[@]}" \
+        --save-result --result-dir "$result_dir" --result-filename "$result_filename"
+    set +x
+    stage_banner "cc=${concurrency} benchmark end"
+
+    echo "$(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Completed benchmark with concurrency: $concurrency"
+    echo "-----------------------------------------"
+done
+
+stop_all_profiling
+
+echo "SA-Bench complete. Results in $result_dir"

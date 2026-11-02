@@ -1,0 +1,246 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+Frontend stage mixin for SweepOrchestrator.
+
+Handles frontend/router and nginx startup.
+"""
+
+import logging
+import threading
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from srtctl.core.processes import ManagedProcess
+from srtctl.core.slurm import get_hostname_ip, start_srun_process
+from srtctl.frontends import get_frontend
+from srtctl.ports import FRONTEND_INTERNAL_PORT, FRONTEND_PUBLIC_PORT
+
+if TYPE_CHECKING:
+    from srtctl.core.processes import ProcessRegistry
+    from srtctl.core.runtime import RuntimeContext
+    from srtctl.core.schema import SrtConfig
+    from srtctl.core.topology import Process
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FrontendTopology:
+    """Describes where nginx and frontends should run.
+
+    Topology rules:
+    - Single node OR multiple_frontends disabled: 1 frontend on head, no nginx
+    - 2+ nodes AND multiple_frontends enabled: nginx on head, frontends on other nodes
+    """
+
+    nginx_node: str | None  # Node running nginx, or None if no nginx
+    frontend_nodes: list[str]  # Nodes running frontends
+    frontend_port: int  # Port frontends listen on
+    public_port: int  # Public-facing port (nginx or direct frontend)
+
+    @property
+    def uses_nginx(self) -> bool:
+        """Whether this topology uses nginx."""
+        return self.nginx_node is not None
+
+
+class FrontendStageMixin:
+    """Mixin for frontend/nginx startup stage.
+
+    Requires:
+        self.config: SrtConfig
+        self.runtime: RuntimeContext
+        self.backend: Backend
+        self.backend_processes: list[Process]
+    """
+
+    # Type hints for mixin dependencies
+    config: "SrtConfig"
+    runtime: "RuntimeContext"
+
+    @property
+    def backend(self) -> Any:
+        """Access the backend config (implements Backend)."""
+        return self.config.backend
+
+    @property
+    def backend_processes(self) -> list["Process"]:
+        """Compute physical process topology from endpoints (cached)."""
+        raise NotImplementedError
+
+    def _compute_frontend_topology(self) -> FrontendTopology:
+        """Determine where nginx and frontends should run.
+
+        Topology rules:
+        - Single node OR multiple_frontends disabled: 1 frontend on head, no nginx
+        - 2+ nodes AND multiple_frontends enabled: nginx on head, frontends on other nodes
+
+        Returns:
+            FrontendTopology describing where to run nginx and frontends.
+        """
+        nodes = self.runtime.nodes.worker
+        head = self.runtime.nodes.head
+        fe_config = self.config.frontend
+
+        # Single node or multiple frontends disabled: single frontend, no nginx.
+        # The orchestrator node honors frontend.placement.node (default "head" ->
+        # unchanged; "first_decode" -> first GEN worker-leader node).
+        if len(nodes) == 1 or not fe_config.enable_multiple_frontends:
+            placement = fe_config.placement.location
+            if placement == "head":
+                orchestrator_node = head
+            else:
+                from srtctl.core.topology import placed_node
+
+                orchestrator_node = placed_node(self.backend_processes, placement, head, kind="frontend.placement.node")
+            return FrontendTopology(
+                nginx_node=None,
+                frontend_nodes=[orchestrator_node],
+                frontend_port=FRONTEND_PUBLIC_PORT,
+                public_port=FRONTEND_PUBLIC_PORT,
+            )
+
+        # Multiple nodes with multiple frontends enabled:
+        # nginx on head, frontends on other nodes
+        other_nodes = [n for n in nodes if n != head]
+
+        # Limit number of frontends based on config (num_additional_frontends is extra beyond first)
+        max_frontends = min(
+            fe_config.num_additional_frontends + 1,
+            len(other_nodes),
+        )
+        frontend_nodes = other_nodes[:max_frontends]
+
+        logger.info(
+            "Frontend topology: nginx on %s, %d frontends on %s",
+            head,
+            len(frontend_nodes),
+            frontend_nodes,
+        )
+
+        return FrontendTopology(
+            nginx_node=head,
+            frontend_nodes=frontend_nodes,
+            frontend_port=FRONTEND_INTERNAL_PORT,
+            public_port=FRONTEND_PUBLIC_PORT,
+        )
+
+    def _start_nginx(self, topology: FrontendTopology) -> ManagedProcess:
+        """Start nginx load balancer on the designated node."""
+        assert topology.nginx_node is not None
+        logger.info("Starting nginx on %s", topology.nginx_node)
+
+        nginx_log = self.runtime.log_dir / f"{topology.nginx_node}_nginx.out"
+
+        # Generate nginx config from template
+        nginx_config = self._generate_nginx_config(topology)
+        nginx_config_path = self.runtime.log_dir / "nginx.conf"
+        nginx_config_path.write_text(nginx_config)
+        logger.debug("Nginx config written to %s", nginx_config_path)
+
+        # Install nginx and run it (daemon off keeps nginx in foreground so srun can manage it)
+        # Use container path (/logs) since log_dir is mounted there
+        container_config_path = "/logs/nginx.conf"
+        # Optional ulimit: use_bash_wrapper=False bypasses default_bash_preamble;
+        # some clusters reject raising nofile inside the nginx container.
+        fe = self.config.frontend
+        inner = (
+            f"ulimit -n 1048576 && nginx -c {container_config_path} -g 'daemon off;'"
+            if fe.nginx_raise_ulimit
+            else f"nginx -c {container_config_path} -g 'daemon off;'"
+        )
+        cmd = ["bash", "-c", inner]
+
+        proc = start_srun_process(
+            command=cmd,
+            nodelist=[topology.nginx_node],
+            output=str(nginx_log),
+            container_image=self.config.frontend.nginx_container,
+            reuse_container=self.runtime.reuse_container,
+            container_prepare_timeout_seconds=self.runtime.container_prepare_timeout_seconds,
+            container_mounts=self.runtime.container_mounts,
+            use_bash_wrapper=False,  # Already wrapped in bash -c
+            srun_options={
+                "container-remap-root": "",
+            },
+            het_group=self.runtime.nodes.het_group_for(topology.nginx_node),
+            step_name="nginx",
+        )
+
+        return ManagedProcess(
+            name="nginx",
+            popen=proc,
+            log_file=nginx_log,
+            node=topology.nginx_node,
+            critical=True,
+            step_name="nginx",
+        )
+
+    def _generate_nginx_config(self, topology: FrontendTopology) -> str:
+        """Generate nginx configuration from template."""
+        from jinja2 import Environment, FileSystemLoader
+
+        template_dir = Path(__file__).parent.parent.parent / "templates"
+        env = Environment(loader=FileSystemLoader(str(template_dir)))
+        template = env.get_template("nginx.conf.j2")
+
+        # Get IPs for frontend nodes
+        frontend_hosts = [get_hostname_ip(node) for node in topology.frontend_nodes]
+
+        return template.render(
+            frontend_hosts=frontend_hosts,
+            backend_port=topology.frontend_port,
+            listen_port=topology.public_port,
+            nginx_raise_ulimit=self.config.frontend.nginx_raise_ulimit,
+            nginx_session_affinity=self.config.frontend.nginx_session_affinity,
+            nginx_session_affinity_header=self.config.frontend.nginx_session_affinity_header,
+            nginx_keepalive_timeout=self.config.frontend.nginx_keepalive_timeout,
+        )
+
+    def start_frontend(
+        self, registry: "ProcessRegistry", stop_event: "threading.Event | None" = None
+    ) -> list[ManagedProcess]:
+        """Start the frontend layer (nginx + frontends if applicable).
+
+        Args:
+            registry: Process registry.
+            stop_event: Optional event to abort readiness waits a frontend performs
+                while starting (e.g. trtllm_serve waiting for workers).
+
+        Returns:
+            List of ManagedProcess instances for all frontend processes.
+        """
+        if self.config.frontend.type == "none":
+            logger.info("frontend.type none: no frontend layer (services-only job)")
+            return []
+        logger.info("Starting frontend layer")
+        if self.config.frontend.type == "dynamo" and self.config.observability.enabled:
+            trace_path = (self.config.frontend.env or {}).get("DYN_REQUEST_TRACE_FILE_PATH")
+            logger.info(
+                "Observability enabled: Dynamo request tracing is on (DYN_REQUEST_TRACE=1; request-end gzip JSONL: %s)",
+                trace_path or "configured trace path",
+            )
+        topology = self._compute_frontend_topology()
+        processes: list[ManagedProcess] = []
+
+        # Start nginx if topology requires it
+        if topology.uses_nginx:
+            nginx_proc = self._start_nginx(topology)
+            processes.append(nginx_proc)
+
+        # Get frontend implementation based on config type
+        frontend_impl = get_frontend(self.config.frontend.type)
+        frontend_procs = frontend_impl.start_frontends(
+            topology=topology,
+            runtime=self.runtime,
+            config=self.config,
+            backend=self.backend,
+            backend_processes=self.backend_processes,
+            stop_event=stop_event,
+        )
+
+        processes.extend(frontend_procs)
+        return processes

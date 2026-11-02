@@ -1,0 +1,1036 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+Main orchestration script for benchmark sweeps.
+
+This script is called from within the sbatch job and coordinates:
+1. Starting head node infrastructure (NATS, etcd)
+2. Starting backend workers (prefill/decode/agg)
+3. Starting frontends and nginx
+4. Running benchmarks
+5. Cleanup
+"""
+
+import argparse
+import functools
+import json
+import logging
+import os
+import shlex
+import subprocess
+import sys
+import textwrap
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+from srtctl.backends.base import WorkerMode
+from srtctl.backends.vllm import VLLMBackend
+from srtctl.cli.mixins import (
+    BenchmarkStageMixin,
+    FrontendStageMixin,
+    PostProcessStageMixin,
+    ServiceStageMixin,
+    TelemetryStageMixin,
+    WorkerStageMixin,
+)
+from srtctl.core.config import load_config
+from srtctl.core.health import wait_for_port
+from srtctl.core.lockfile import write_lockfile
+from srtctl.core.processes import (
+    ProcessRegistry,
+    setup_signal_handlers,
+    start_process_monitor,
+)
+from srtctl.core.resource_snapshot import record_resource_snapshot
+from srtctl.core.runtime import RuntimeContext
+from srtctl.core.schema import SrtConfig, container_creation_env
+from srtctl.core.slurm import get_slurm_job_id, resolve_container_name, start_srun_process
+from srtctl.core.status import JobStage, JobStatus, LogStreamer, StatusReporter, tachometer_outbox
+from srtctl.core.supervisor import WORKER_RESTARTS_FILENAME
+from srtctl.core.topology import Endpoint, NodePortAllocator, Process, allocate_endpoints_het
+from srtctl.logging_utils import setup_logging
+from srtctl.ports import (
+    FRONTEND_PUBLIC_PORT,
+    SIDECAR_GRPC_PORTS,
+)
+from srtctl.services.implicit import uses_discovery_plane
+
+logger = logging.getLogger(__name__)
+
+# Workflow metadata forwarded into the post-benchmark or eval-only process.
+POST_EVAL_PASSTHROUGH_ENV = (
+    "RUN_EVAL",
+    "EVAL_ONLY",
+    "IS_MULTINODE",
+    "FRAMEWORK",
+    "PRECISION",
+    "MODEL_PREFIX",
+    "RUNNER_TYPE",
+    "RESULT_FILENAME",
+    "SPEC_DECODING",
+    "ISL",
+    "OSL",
+    "MODEL",
+    "MODEL_PATH",
+    "MAX_MODEL_LEN",
+    "EVAL_MAX_MODEL_LEN",
+    "PREFILL_TP",
+    "PREFILL_EP",
+    "PREFILL_DP_ATTN",
+    "PREFILL_NUM_WORKERS",
+    "DECODE_TP",
+    "DECODE_EP",
+    "DECODE_DP_ATTN",
+    "DECODE_NUM_WORKERS",
+)
+
+
+@dataclass
+class SweepOrchestrator(
+    WorkerStageMixin,
+    FrontendStageMixin,
+    TelemetryStageMixin,
+    ServiceStageMixin,
+    BenchmarkStageMixin,
+    PostProcessStageMixin,
+):
+    """Main orchestrator for benchmark sweeps.
+
+    Usage:
+        config = load_config(config_path)  # Returns typed SrtConfig
+        runtime = RuntimeContext.from_config(config, job_id)
+        orchestrator = SweepOrchestrator(config, runtime)
+        exit_code = orchestrator.run()
+    """
+
+    config: SrtConfig
+    runtime: RuntimeContext
+    serve_only: bool = False
+
+    @property
+    def backend(self):
+        """Access the backend config (implements Backend)."""
+        return self.config.backend
+
+    @functools.cached_property
+    def endpoints(self) -> list[Endpoint]:
+        """Compute endpoint allocation topology (cached).
+
+        This is the single source of truth for endpoint assignments. Under
+        SLURM heterogeneous jobs, prefill and decode workers are allocated
+        from their own component nodelists so neither side bleeds into the
+        other's topology segment.
+        """
+        r = self.config.topology
+        if self.runtime.nodes.het:
+            if self.config.role_backends:
+                raise ValueError("Role engine overrides do not support Slurm heterogeneous allocations")
+            return allocate_endpoints_het(
+                num_prefill=r.num_prefill,
+                gpus_per_prefill=r.gpus_per_prefill,
+                prefill_nodes=self.runtime.nodes.prefill_group,
+                num_decode=r.num_decode,
+                gpus_per_decode=r.gpus_per_decode,
+                decode_nodes=self.runtime.nodes.decode_group,
+                gpus_per_node=r.gpus_per_node,
+                pack_multinode_workers=self.backend.type == "trtllm",
+                gpu_indices_by_mode=r.gpu_indices_by_mode,
+            )
+        return self.config.allocate_worker_endpoints(self.runtime.nodes.worker)
+
+    @functools.cached_property
+    def backend_processes(self) -> list[Process]:
+        """Compute physical process topology from endpoints (cached).
+
+        Port defaults come from ``srtctl.ports`` and are allocated
+        deterministically within a job.
+        """
+        allocator = NodePortAllocator(bases={SIDECAR_GRPC_PORTS.name: self.config.dynamo.sidecar_port})
+        return self.config.worker_processes(self.endpoints, port_allocator=allocator)
+
+    def start_head_infrastructure(self, registry: ProcessRegistry) -> None:
+        """Start the discovery plane (etcd, NATS) as services.
+
+        They are implied by ``frontend.type: dynamo`` and placed on the infra node
+        (a dedicated node when a declared etcd or nats service asks for it). A recipe may declare them to change
+        the container or point at an external instance. See docs/services.md.
+        """
+        self.start_services("infra", registry)
+
+    def _write_mooncake_store_config(self) -> None:
+        """vLLM's and TRT-LLM's Mooncake connectors read their config from a JSON file, not env.
+
+        Written into log_dir (mounted at /logs in every worker) before workers
+        start, pointing at the Mooncake master on the infra node.
+        """
+        backend = self.config.backend
+        served_model_name = backend.get_served_model_name(self.runtime.model_path.name)
+        for filename, store_cfg in backend.mooncake_store_configs(
+            self.runtime.infra_node_ip, served_model_name
+        ).items():
+            store_cfg_path = self.runtime.log_dir / filename
+            store_cfg_path.write_text(json.dumps(store_cfg, indent=2))
+            logger.info("Wrote mooncake_store_config to %s: %s", store_cfg_path, store_cfg)
+        if not isinstance(backend, VLLMBackend) or backend.mooncake_kv_store is None:
+            return
+        if not backend.mooncake_kv_store.device_names_by_gpu:
+            return
+        # Render only GPU subsets actually launched, rather than all 2**N subsets.
+        written: set[str] = set()
+        for process in self.backend_processes:
+            local_config = backend.build_mooncake_process_config(
+                process, self.runtime.infra_node_ip, self.runtime.gpus_per_node
+            )
+            if local_config is not None:
+                filename, payload = local_config
+                if filename not in written:
+                    (self.runtime.log_dir / filename).write_text(json.dumps(payload, indent=2))
+                    logger.info("Wrote process-local Mooncake config %s: %s", filename, payload)
+                    written.add(filename)
+
+    def _print_connection_info(self) -> None:
+        """Print connections using the same image, role options and root mode as launches."""
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("Connection Commands")
+        logger.info("=" * 60)
+        if self.config.frontend.type != "none":
+            logger.info("Frontend URL: http://%s:%d", self._public_api_node(), FRONTEND_PUBLIC_PORT)
+
+        targets: list[tuple[str, WorkerMode | None]] = [(self.runtime.nodes.head, None)]
+        targets.extend((process.node, process.endpoint_mode) for process in self.backend_processes)
+        seen: set[tuple[str, str, str | None]] = set()
+        for node, mode in targets:
+            image = self._worker_container_image(mode) if mode else str(self.runtime.container_image)
+            options = self._worker_srun_options(mode) if mode else self.runtime.srun_options
+            resolved = resolve_container_name(
+                image,
+                reuse_container=self.runtime.reuse_container,
+                srun_options=options,
+                srun_export_env=container_creation_env(self.config),
+                job_id=str(self.runtime.job_id),
+            )
+            key = (node, image, resolved.name)
+            if key in seen:
+                continue
+            seen.add(key)
+            args = [f"--container-image={image}"]
+            if resolved.name:
+                args.append(f"--container-name={resolved.name}")
+            if self.runtime.container_mounts:
+                mounts = ",".join(f"{src}:{dst}" for src, dst in self.runtime.container_mounts.items())
+                args.append(f"--container-mounts={mounts}")
+            logger.info("")
+            logger.info("To connect to %s (%s):", f"{mode} worker" if mode else "head node", node)
+            logger.info(
+                "  srun %s --jobid %s -w %s --overlap --pty bash",
+                shlex.join(args),
+                self.runtime.job_id,
+                node,
+            )
+        logger.info("=" * 60)
+        logger.info("")
+
+    def _get_hf_home(self) -> str | None:
+        """Get HF_HOME from backend environment config."""
+        for mode in ("prefill", "decode", "agg"):
+            env = self.config.backend.get_environment_for_mode(mode)
+            if "HF_HOME" in env:
+                return env["HF_HOME"]
+        return None
+
+    def _get_hf_env(self) -> dict[str, str]:
+        """Collect HF-related environment variables from backend config.
+
+        Merges environment from all modes (prefill/decode/agg), keeping
+        only HuggingFace-relevant keys (HF_*, HUGGING_FACE_*) so the
+        pre-download srun runs with the same auth/endpoint context as workers.
+        """
+        hf_env: dict[str, str] = {}
+        for mode in ("prefill", "decode", "agg"):
+            for key, val in self.config.backend.get_environment_for_mode(mode).items():
+                if key.startswith(("HF_", "HUGGING_FACE_")):
+                    hf_env[key] = val
+        return hf_env
+
+    def _clean_stale_hf_locks(self) -> None:
+        """Clean stale HuggingFace download lock files from shared cache.
+
+        When multiple workers share a HF cache on a networked filesystem,
+        stale .lock files from crashed jobs block all future downloads with
+        "Lock acquisition failed". This removes locks older than 30 minutes
+        (no legitimate download takes that long).
+        """
+        hf_home = self._get_hf_home()
+        if not hf_home:
+            return
+
+        cache_dir = Path(hf_home)
+        if not cache_dir.is_dir():
+            return
+
+        import time
+
+        threshold = time.time() - 30 * 60  # 30 minutes ago
+        removed = 0
+        for lock_file in cache_dir.rglob("*.lock"):
+            try:
+                if lock_file.stat().st_mtime < threshold:
+                    lock_file.unlink()
+                    removed += 1
+            except OSError:
+                pass  # Permission denied or already deleted
+
+        if removed > 0:
+            logger.info("Cleaned %d stale .lock files from HF cache: %s", removed, hf_home)
+
+    def _host_setup_nodes(self) -> list[str]:
+        """Nodes targeted by host_setup, deduped and stable in allocation order."""
+        nodes = list(self.runtime.nodes.compute)
+        if self.config.host_setup.nodes == "all":
+            nodes = [self.runtime.nodes.head, self.runtime.nodes.infra, *nodes]
+        return list(dict.fromkeys(nodes))
+
+    def _run_host_commands(self, commands: list[str], *, phase: str) -> list[str]:
+        """Run commands on each node's bare host, one srun per node, in parallel.
+
+        Passing container_image=None keeps these on the host: the orchestrator
+        already runs outside the container, so this is the only launch path that
+        can touch node state the container cannot reach (GPU clocks, modules).
+
+        Returns the nodes that failed; the caller decides whether that is fatal.
+        """
+        nodes = self._host_setup_nodes()
+        script = " && ".join(commands)
+        timeout = self.config.host_setup.timeout_seconds
+        logger.info("host_setup (%s): running on %d node(s): %s", phase, len(nodes), script)
+
+        procs = []
+        for node in nodes:
+            log = self.runtime.log_dir / f"host_{phase}_{node}.out"
+            proc = start_srun_process(
+                command=["bash", "-c", script],
+                nodelist=[node],
+                output=str(log),
+                container_image=None,  # bare host, not the job container
+                het_group=self.runtime.nodes.het_group_for(node),
+            )
+            procs.append((node, proc, log))
+
+        failures = []
+        for node, proc, log in procs:
+            try:
+                returncode = proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # A sudo that prompts for a password hangs here rather than failing,
+                # so kill it instead of stalling the whole allocation.
+                proc.kill()
+                proc.wait()
+                logger.error(
+                    "host_setup (%s) timed out after %ds on %s (see %s); a command that prompts for input will do this",
+                    phase,
+                    timeout,
+                    node,
+                    log,
+                )
+                failures.append(node)
+                continue
+            if returncode != 0:
+                logger.error("host_setup (%s) failed with exit %d on %s (see %s)", phase, returncode, node, log)
+                failures.append(node)
+        return failures
+
+    def _run_host_setup(self) -> None:
+        """Prepare each node's bare host before any worker starts."""
+        setup = self.config.host_setup
+        if not setup.enabled:
+            return
+        # Marks that the job reached this stage, which is what arms teardown --
+        # including for a teardown-only block, where there is nothing to run here.
+        self._host_setup_ran = True
+        if not setup.commands:
+            return
+        failures = self._run_host_commands(setup.commands, phase="setup")
+        if not failures:
+            logger.info("host_setup complete on %d node(s)", len(self._host_setup_nodes()))
+            return
+        if setup.ignore_failure:
+            logger.warning("host_setup failed on %s (ignore_failure: true, continuing)", ", ".join(failures))
+            return
+        raise RuntimeError(f"host_setup failed on: {', '.join(failures)}")
+
+    # One probe per branch; the first that proves synchronisation prints its
+    # evidence and wins, so clock_sync_<node>.out records *which* source
+    # vouched (and, for chrony/ntp, the offset it reported). Every probe is
+    # read-only and unprivileged on stock images: timedatectl reads the kernel
+    # maxerror over D-Bus, chronyc/ntpq ask their daemon. The last
+    # branch reads that same kernel value directly through adjtimex(2), for
+    # hosts whose clock is disciplined but expose no daemon to ask: no systemd
+    # PID 1 or D-Bus (container-rooted Slurm nodes), no chrony/ntp CLI. Each
+    # probe's stderr is kept and printed on the failure path, so the .out says
+    # why nothing vouched ("Failed to connect to bus", "command not found", ...).
+    #
+    # The kernel probe is plain Python shipped inside the bash one-liner, so it
+    # must stay free of single quotes.
+    CLOCK_SYNC_ADJTIMEX_PROBE = textwrap.dedent(
+        """\
+        import ctypes
+        import sys
+
+        # Match systemd ntp_synced(): STA_UNSYNC can stay set when chrony disables RTC sync.
+        MAXERROR_LIMIT_US = 16_000_000
+
+
+        class timex(ctypes.Structure):  # struct timex, LP64 layout (adjtimex(2))
+            _fields_ = [
+                ("modes", ctypes.c_uint),
+                ("offset", ctypes.c_long),
+                ("freq", ctypes.c_long),
+                ("maxerror", ctypes.c_long),
+                ("esterror", ctypes.c_long),
+                ("status", ctypes.c_int),
+                ("constant", ctypes.c_long),
+                ("precision", ctypes.c_long),
+                ("tolerance", ctypes.c_long),
+                ("time", ctypes.c_long * 2),
+                ("tick", ctypes.c_long),
+                ("ppsfreq", ctypes.c_long),
+                ("jitter", ctypes.c_long),
+                ("shift", ctypes.c_int),
+                ("stabil", ctypes.c_long),
+                ("jitcnt", ctypes.c_long),
+                ("calcnt", ctypes.c_long),
+                ("errcnt", ctypes.c_long),
+                ("stbcnt", ctypes.c_long),
+                ("tai", ctypes.c_int),
+                ("pad", ctypes.c_int * 11),
+            ]
+
+
+        tx = timex()  # modes == 0: read-only query
+        state = ctypes.CDLL(None, use_errno=True).adjtimex(ctypes.byref(tx))
+        if state < 0:
+            sys.exit("adjtimex failed: errno %d" % ctypes.get_errno())
+        if tx.maxerror >= MAXERROR_LIMIT_US:
+            sys.exit("kernel clock unsynchronised: state %d status 0x%x maxerror %dus" % (state, tx.status, tx.maxerror))
+        print("maxerror %dus status 0x%x" % (tx.maxerror, tx.status))
+        """
+    )
+    CLOCK_SYNC_SCRIPT = (
+        'timedatectl=$(timedatectl show -p NTPSynchronized --value 2>&1); if grep -qx yes <<<"$timedatectl"; then '
+        'echo "$(hostname): timedatectl NTPSynchronized=yes"; exit 0; fi; '
+        "if chronyc=$(chronyc -n tracking 2>&1) && grep -Eq '^Leap status *: *Normal' <<<\"$chronyc\"; then "
+        'echo "$(hostname): chronyc Leap status Normal"; '
+        "grep -E '^(Reference ID|System time|Last offset)' <<<\"$chronyc\"; exit 0; fi; "
+        "if ntpq=$(ntpq -pn 2>&1) && grep -q '^[*]' <<<\"$ntpq\"; then "
+        'echo "$(hostname): ntpq has a selected peer"; grep \'^[*]\' <<<"$ntpq"; exit 0; fi; '
+        f"if adjtimex=$(python3 -c '{CLOCK_SYNC_ADJTIMEX_PROBE}' 2>&1); then "
+        'echo "$(hostname): kernel adjtimex maxerror below 16s ($adjtimex)"; exit 0; fi; '
+        '{ echo "$(hostname): system clock is not NTP-synchronised"; '
+        'echo "timedatectl: $timedatectl"; echo "chronyc: $chronyc"; echo "ntpq: $ntpq"; echo "adjtimex: $adjtimex"; } >&2; '
+        "exit 1"
+    )
+    CLOCK_SYNC_TIMEOUT_SECONDS = 30
+
+    @staticmethod
+    def _clock_sync_evidence(log: Path) -> str:
+        """First line the probe printed (which daemon vouched), formatted for the OK log line."""
+        try:
+            first = log.read_text().splitlines()[0].strip()
+        except (OSError, IndexError):
+            return ""
+        # The probe prefixes with "<hostname>: "; the log line already names the node.
+        return f" ({first.split(': ', 1)[-1]})" if first else ""
+
+    def _clock_sync_nodes(self) -> list[str]:
+        """Every node whose clock feeds a power artifact: collector host, benchmark client, workers."""
+        nodes = [
+            self.runtime.nodes.head,
+            self.runtime.nodes.bench,
+            self.runtime.nodes.infra,
+            *self.runtime.nodes.compute,
+        ]
+        return list(dict.fromkeys(nodes))
+
+    def _check_clock_sync(self) -> None:
+        """Refuse to start servers for a power run on nodes whose clocks are not NTP-synchronised.
+
+        DCGM power publication compares collector sample timestamps with the
+        benchmark child's window boundaries by raw float, so it holds only
+        when the hosts involved share a synchronised wall clock. This does not
+        measure skew -- it asks each node's own time daemon whether it is
+        locked -- but it catches the gross case (chrony down, misconfigured
+        image) before GPU time is spent.
+
+        Under ``telemetry.required`` a failure aborts the job here. Otherwise
+        the failing nodes are kept in ``_clock_sync_failures`` and handed to
+        the power session when it starts, so the manifest records
+        ``clock_sync_unverified`` and ``publication_valid: false`` instead of
+        silently claiming an alignment nobody checked.
+        """
+        self._clock_sync_failures: list[str] = []
+        telemetry = self.config.telemetry
+        if not (telemetry.enabled and telemetry.dcgm_exporter is not None and telemetry.clock_sync_check):
+            return
+        if os.environ.get("EVAL_ONLY", "false").lower() == "true":
+            return
+
+        nodes = self._clock_sync_nodes()
+        logger.info("clock_sync_check: probing NTP synchronisation on %d node(s)", len(nodes))
+        procs = []
+        for node in nodes:
+            log = self.runtime.log_dir / f"clock_sync_{node}.out"
+            proc = start_srun_process(
+                command=["bash", "-c", self.CLOCK_SYNC_SCRIPT],
+                nodelist=[node],
+                output=str(log),
+                container_image=None,  # bare host: the time daemon lives outside the container
+                het_group=self.runtime.nodes.het_group_for(node),
+            )
+            procs.append((node, proc, log))
+
+        failures = []
+        for node, proc, log in procs:
+            try:
+                returncode = proc.wait(timeout=self.CLOCK_SYNC_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                logger.error("clock_sync_check timed out on %s (see %s)", node, log)
+                failures.append(node)
+                continue
+            if returncode != 0:
+                logger.error("clock_sync_check failed on %s (see %s)", node, log)
+                failures.append(node)
+                continue
+            logger.info("clock_sync_check: %s OK%s", node, self._clock_sync_evidence(log))
+
+        if not failures:
+            logger.info("clock_sync_check: all %d node(s) report NTP-synchronised clocks", len(nodes))
+            return
+        message = (
+            f"clock_sync_check: {', '.join(failures)} did not report an NTP-synchronised clock; "
+            "power sample and measurement-window timestamps would not be comparable"
+        )
+        if telemetry.required:
+            raise RuntimeError(message)
+        self._clock_sync_failures = failures
+        logger.warning("%s (telemetry.required is false; continuing, artifacts will be marked unpublishable)", message)
+
+    def _run_host_teardown(self) -> None:
+        """Undo host_setup after workers stop.
+
+        Runs on the way out of every job, successful or not: state set by
+        host_setup (locked clocks, loaded modules) outlives the allocation and
+        would otherwise be inherited by whoever gets the node next. Never raises
+        -- a failed teardown must not overwrite the job's real exit code.
+        """
+        setup = self.config.host_setup
+        if not setup.teardown or not getattr(self, "_host_setup_ran", False):
+            return
+        try:
+            failures = self._run_host_commands(setup.teardown, phase="teardown")
+        except Exception:
+            # Cleanup path: a teardown failure must never mask the job's result.
+            logger.exception("host_setup teardown raised; node state may need manual cleanup")
+            return
+        if failures:
+            logger.error(
+                "host_setup teardown failed on %s; those nodes may be left in a modified state",
+                ", ".join(failures),
+            )
+
+    def _stage_model(self) -> None:
+        """Copy the model from shared storage to node-local storage on every
+        worker node before workers start (model.stage_dir). One srun per node,
+        idempotent (manifest match => skip). Fails the job if any node fails."""
+        staged = self.runtime.staged_model_path
+        if staged is None:
+            return
+        worker_nodes = list(dict.fromkeys(self.runtime.nodes.worker))
+        src, dest = "/model", str(staged)
+        logger.info("Staging model /model -> %s on %d node(s)", dest, len(worker_nodes))
+        procs = []
+        for node in worker_nodes:
+            log = self.runtime.log_dir / f"stage_model_{node}.out"
+            proc = start_srun_process(
+                command=["bash", "/srtctl-runtime/stage_model.sh", src, dest],
+                nodelist=[node],
+                output=str(log),
+                container_image=str(self.runtime.container_image),
+                container_mounts=self.runtime.container_mounts,
+                reuse_container=self.runtime.reuse_container,
+                container_prepare_timeout_seconds=self.runtime.container_prepare_timeout_seconds,
+                het_group=self.runtime.nodes.het_group_for(node),
+            )
+            procs.append((node, proc, log))
+        failures = []
+        for node, proc, log in procs:
+            if proc.wait() != 0:
+                failures.append((node, log))
+        if failures:
+            raise RuntimeError("Model staging failed on: " + ", ".join(f"{n} (see {log})" for n, log in failures))
+        logger.info("Model staging complete on %d node(s)", len(worker_nodes))
+
+    def _ensure_model_cached(self) -> None:
+        """Pre-download HuggingFace model on a single node before starting workers.
+
+        srt-slurm launches multiple workers that each independently call
+        dynamo's fetch_model(). Without pre-caching, all workers race to
+        download the same model on the shared filesystem, causing lock
+        contention and "Lock acquisition failed" errors.
+
+        This method runs huggingface-cli download on ONE compute node
+        (synchronously, blocking) so the model is fully cached before
+        any worker starts. Subsequent worker startups find the model
+        in cache and skip downloading entirely - no locks created.
+        """
+        if not self.runtime.is_hf_model:
+            return
+
+        if self.runtime.hf_snapshot_path:
+            logger.info(
+                "Using pinned HF snapshot %s; skipping unversioned model pre-download", self.runtime.hf_snapshot_path
+            )
+            return
+
+        hf_home = self._get_hf_home()
+        if not hf_home:
+            logger.warning(
+                "HF model '%s' specified but HF_HOME is not set in backend environment config. "
+                "Workers will use the default HuggingFace cache (~/.cache/huggingface) which may not "
+                "be shared across nodes. Set HF_HOME in roles.<role>.env to use "
+                "a shared cache directory (e.g., HF_HOME: /lustre/fsw/.../common/cache).",
+                self.runtime.model_path,
+            )
+            return
+
+        model_id = str(self.runtime.model_path)
+
+        # Check if model is already fully cached using huggingface_hub API.
+        # snapshot_download with local_files_only=True succeeds only if every
+        # file in the model repo is already present in the local cache.
+        # Note: HF_HOME stores models in $HF_HOME/hub/, so we pass cache_dir=$HF_HOME/hub
+        # to match the actual storage location used by workers.
+        try:
+            from huggingface_hub import snapshot_download  # type: ignore[import-untyped]
+
+            snapshot_download(model_id, cache_dir=str(Path(hf_home) / "hub"), local_files_only=True)
+            logger.info("Model '%s' already cached at %s, skipping pre-download", model_id, hf_home)
+            return
+        except ImportError:
+            logger.debug("huggingface_hub not installed on host, will use container to check/download")
+        except Exception:  # noqa: BLE001
+            logger.debug("Model '%s' not fully cached, will pre-download", model_id)
+
+        download_node = (self.runtime.nodes.compute or (self.runtime.nodes.head,))[0]
+
+        logger.info("Ensuring model '%s' is cached on %s (cache: %s)", model_id, download_node, hf_home)
+
+        # The srun command uses HF_HOME (not --cache-dir) to match the exact
+        # cache path workers use ($HF_HOME/hub/models--*/).
+        # It first checks with HF_HUB_OFFLINE=1 (fast, no network). Only if
+        # that fails does it actually download.
+        # Uses 'hf download' (new CLI) with 'huggingface-cli download' as fallback.
+        import shlex
+
+        q_hf_home = shlex.quote(hf_home)
+        q_model_id = shlex.quote(model_id)
+        download_cmd = [
+            "bash",
+            "-c",
+            (
+                f"export HF_HOME={q_hf_home}; "
+                f"find {q_hf_home} -name '*.lock' -mmin +30 -delete 2>/dev/null; "
+                f"DL_CMD='hf download'; "
+                f"command -v hf >/dev/null 2>&1 || DL_CMD='huggingface-cli download'; "
+                f"if HF_HUB_OFFLINE=1 $DL_CMD {q_model_id} --quiet 2>/dev/null; then "
+                f"echo 'Model already cached'; "
+                f"else "
+                f"echo 'Downloading model...'; "
+                f"$DL_CMD {q_model_id} --quiet; "
+                f"fi"
+            ),
+        ]
+
+        download_log = self.runtime.log_dir / "model_download.out"
+
+        # Pass all HF-related env vars (HF_TOKEN, HF_ENDPOINT, etc.) so the
+        # pre-download runs with the same auth/endpoint context as workers.
+        hf_env = self._get_hf_env()
+
+        try:
+            proc = start_srun_process(
+                command=download_cmd,
+                nodelist=[download_node],
+                output=str(download_log),
+                container_image=str(self.runtime.container_image),
+                container_mounts=self.runtime.container_mounts,
+                reuse_container=self.runtime.reuse_container,
+                container_prepare_timeout_seconds=self.runtime.container_prepare_timeout_seconds,
+                env_to_set=hf_env,
+                use_bash_wrapper=False,  # command is already bash -c
+                het_group=self.runtime.nodes.het_group_for(download_node),
+            )
+
+            timeout_sec = 60 * 60  # 1 hour; large models can take a while
+            try:
+                rc = proc.wait(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                logger.warning(
+                    "Model pre-download timed out after %d seconds, killing (workers will retry at startup). Log: %s",
+                    timeout_sec,
+                    download_log,
+                )
+                proc.kill()
+                proc.wait()
+                return
+
+            if rc != 0:
+                logger.warning(
+                    "Model pre-download exited with code %d (workers will retry at startup). Log: %s",
+                    rc,
+                    download_log,
+                )
+            else:
+                logger.info("Model pre-download complete")
+        except Exception:
+            logger.warning("Model pre-download failed (workers will retry at startup)", exc_info=True)
+
+    def _run_post_eval(self, stop_event: threading.Event) -> int:
+        """Run lm-eval after the main benchmark completes (or directly in eval-only mode)."""
+        from srtctl.benchmarks import get_runner
+
+        # The eval harness uses a local HTTP endpoint, so run it beside the
+        # resolved public endpoint (router, nginx or direct worker).
+        eval_node = self._public_api_node()
+
+        # In eval-only mode the benchmark health check was skipped, so do the
+        # full model-ready wait here.  In post-benchmark mode a quick port
+        # check is sufficient since the server already served traffic.
+        if os.environ.get("EVAL_ONLY", "false").lower() == "true":
+            logger.info("EVAL_ONLY: Waiting for server health before eval...")
+            if not self._wait_for_service_ready(stop_event):
+                logger.error("Server did not become healthy for eval")
+                return 1
+        else:
+            if not wait_for_port(eval_node, FRONTEND_PUBLIC_PORT, timeout=30):
+                logger.error("Server health check failed before eval - skipping")
+                return 1
+
+        eval_log = self.runtime.log_dir / "eval.out"
+        if self.config.post_eval.command is not None:
+            # Recipe-provided dispatch (post_eval.command), with the same placeholders
+            # the lm-eval runner fills in itself.
+            placeholders = {
+                "{endpoint}": f"http://localhost:{self.runtime.frontend_port}",
+                "{infmax_workspace}": "/infmax-workspace",
+            }
+            cmd = list(self.config.post_eval.command)
+            for token, value in placeholders.items():
+                cmd = [part.replace(token, value) for part in cmd]
+        else:
+            try:
+                runner = get_runner("lm-eval")
+            except ValueError as e:
+                logger.error("lm-eval runner not available: %s", e)
+                return 1
+            cmd = runner.build_command(self.config, self.runtime)
+
+        logger.info("Eval node: %s", eval_node)
+        logger.info("Eval command: %s", " ".join(cmd))
+        logger.info("Eval log: %s", eval_log)
+
+        # Pass through eval-related env vars. InferenceX writes multi-node
+        # metadata from these variables in append_lm_eval_summary(). The recipe
+        # extends this list with post_eval.passthrough_env.
+        env_to_set = {}
+        for var in [
+            *self.config.post_eval.passthrough_env,
+            *POST_EVAL_PASSTHROUGH_ENV,
+        ]:
+            val = os.environ.get(var)
+            if val:
+                env_to_set[var] = val
+
+        # Set MODEL_NAME to the served model name so lm-eval uses the correct
+        # name for API requests. Without this, benchmark_lib.sh falls back to
+        # $MODEL (the HuggingFace ID) which the server doesn't recognize.
+        env_to_set["MODEL_NAME"] = self.config.served_model_name
+        logger.info("Eval MODEL_NAME: %s", env_to_set["MODEL_NAME"])
+
+        # Use EVAL_CONC from workflow (median chosen by InferenceX mark_eval_entries),
+        # falling back to max of benchmark concurrency list.
+        eval_conc = os.environ.get("EVAL_CONC")
+        if eval_conc:
+            env_to_set["EVAL_CONC"] = eval_conc
+            logger.info("Eval concurrency (from workflow): %s", eval_conc)
+        else:
+            conc_list = self.config.benchmark.get_concurrency_list()
+            if conc_list:
+                env_to_set["EVAL_CONC"] = str(max(conc_list))
+                logger.info("Eval concurrency (max of %s): %s", conc_list, env_to_set["EVAL_CONC"])
+
+        proc = start_srun_process(
+            command=cmd,
+            step_name="eval",
+            nodelist=[eval_node],
+            output=str(eval_log),
+            container_image=str(self.runtime.container_image),
+            container_mounts=self.runtime.container_mounts,
+            reuse_container=self.runtime.reuse_container,
+            container_prepare_timeout_seconds=self.runtime.container_prepare_timeout_seconds,
+            env_to_set=env_to_set,
+            srun_options=self.runtime.srun_options,
+            het_group=self.runtime.nodes.het_group_for(eval_node),
+        )
+
+        while proc.poll() is None:
+            if stop_event.is_set():
+                logger.info("Stop requested, terminating eval")
+                proc.terminate()
+                return 1
+            time.sleep(1)
+
+        return proc.returncode or 0
+
+    def run(self) -> int:
+        """Run the complete sweep."""
+        logger.info("Sweep Orchestrator")
+        logger.info("Job ID: %s", self.runtime.job_id)
+        logger.info("Run name: %s", self.runtime.run_name)
+        logger.info("Config: %s", self.config.name)
+        logger.info("Infra node: %s", self.runtime.nodes.infra)
+        logger.info("Head node: %s", self.runtime.nodes.head)
+        logger.info("Worker nodes: %s", ", ".join(self.runtime.nodes.worker) or "(none: no engine roles)")
+        for pool, nodes in self.runtime.nodes.pools.items():
+            logger.info("Pool %s: %s", pool, ", ".join(nodes))
+        if self.config.profiling.enabled:
+            logger.info("Profiling: %s", self.config.profiling.type)
+
+        resource_snapshot = record_resource_snapshot(self.config, self.runtime)
+
+        # Create status reporter (fire-and-forget, no-op if not configured)
+        reporter = StatusReporter.from_config(self.config.reporting, self.runtime.job_id)
+        reporter.report_started(self.config, self.runtime, resource_snapshot=resource_snapshot)
+
+        # Write initial lockfile with config + SLURM/resource context (worker fingerprints added after run)
+        write_lockfile(self.runtime.log_dir.parent, self.config, self.runtime.log_dir)
+
+        registry = ProcessRegistry(job_id=self.runtime.job_id)
+        stop_event = threading.Event()
+        setup_signal_handlers(stop_event, registry)
+        # The supervisor relaunches workers whose role has a restart policy; it
+        # runs inside the monitor tick, ahead of the critical-failure check.
+        supervisor = self.build_worker_supervisor(registry, stop_event)
+        start_process_monitor(stop_event, registry, reconcile=supervisor.reconcile)
+
+        exit_code = 1
+
+        # Live log/metric streaming to the status API (reporting.status.logging-stream-interval)
+        outbox_dir = tachometer_outbox(self.runtime.log_dir) if self.config.observability.tachometer_enabled else None
+        log_streamer = LogStreamer.from_config(self.config.reporting, reporter, self.runtime.log_dir, outbox_dir)
+        if log_streamer is not None:
+            log_streamer.start()
+
+        try:
+            # Stage 0: Bare-host node setup (GPU clocks, kernel modules). Runs
+            # before anything containerized so workers see the prepared node.
+            self._run_host_setup()
+
+            # Stage 0b: power runs compare clocks across nodes; refuse to spend
+            # GPU time if any node is not NTP-synchronised.
+            self._check_clock_sync()
+
+            # Stage 1: the discovery plane (etcd, NATS) as services. Implied by the
+            # dynamo frontend; static/direct frontends imply nothing here.
+            if uses_discovery_plane(self.config):
+                reporter.report(JobStatus.STARTING, JobStage.HEAD_INFRASTRUCTURE, "Starting head infrastructure")
+                self.start_head_infrastructure(registry)
+            else:
+                logger.info("No discovery plane for frontend.type=%s", self.config.frontend.type)
+
+            # Stage 1b: services workers depend on: the Mooncake master (implied by
+            # engine.mooncake_kv_store), standalone Mooncake stores, anything with
+            # start: before_workers. The stage registers each process as it
+            # launches. See docs/services.md.
+            self._write_mooncake_store_config()
+            self.start_services("before_workers", registry)
+
+            # Pre-worker: Ensure HF model is cached before starting workers.
+            # 1. Clean stale lock files from previous crashed downloads
+            # 2. Download model on a single node (blocks until complete)
+            # This prevents lock contention when multiple workers start.
+            if self.runtime.is_hf_model:
+                self._clean_stale_hf_locks()
+                self._ensure_model_cached()
+
+            # Pre-worker: stage the model to node-local storage (if configured).
+            if self.runtime.staged_model_path is not None:
+                self._stage_model()
+
+            # Stage 2: Workers
+            reporter.report(JobStatus.WORKERS, JobStage.WORKERS, "Starting workers")
+            worker_procs = self.start_all_workers()
+            registry.add_processes(worker_procs)
+            self.track_workers(supervisor, worker_procs)
+
+            # Stage 3: Frontend
+            reporter.report(JobStatus.FRONTEND, JobStage.FRONTEND, "Starting frontend")
+            frontend_procs = self.start_frontend(registry, stop_event)
+            for proc in frontend_procs:
+                registry.add_process(proc)
+
+            # Stage 3b: sidecar services (start: after_frontend, the default),
+            # once workers and the frontend are healthy and before telemetry.
+            self.start_services("after_frontend", registry)
+
+            if self.config.telemetry.enabled:
+                if os.environ.get("EVAL_ONLY", "false").lower() == "true":
+                    # Eval-only runs skip the benchmark stage, so every expected
+                    # measurement window would be missing and required telemetry
+                    # would fail an otherwise successful evaluation.
+                    logger.info("EVAL_ONLY=true: skipping dcgm-power telemetry (no benchmark to measure)")
+                else:
+                    self.start_power_telemetry(registry)
+                    self.start_cpu_power_telemetry(registry)
+                    self.start_cpu_power_host_telemetry(registry)
+                    self.start_incremental_power_report()
+
+            # Tachometer capture aligns with the load window: benchmark runs
+            # start it inside run_benchmark once the server is healthy and
+            # stop it gracefully when the client exits (see
+            # BenchmarkStageMixin.run_benchmark). Only runs WITHOUT a discrete
+            # load window — serve-only, manual, eval-only — keep the
+            # whole-session capture, started here.
+            eval_only = os.environ.get("EVAL_ONLY", "false").lower() == "true"
+            if self.serve_only or eval_only or self.config.benchmark.type == "manual":
+                tachometer_procs = self.start_tachometer()
+                for proc in tachometer_procs:
+                    registry.add_process(proc)
+
+            self._print_connection_info()
+
+            if self.serve_only:
+                exit_code = self.run_benchmark(registry, stop_event, reporter)
+            elif os.environ.get("EVAL_ONLY", "false").lower() == "true":
+                reporter.report(JobStatus.BENCHMARK, JobStage.BENCHMARK, "Running eval-only evaluation")
+                logger.info("EVAL_ONLY=true: Skipping benchmark stage and running lm-eval evaluation...")
+                exit_code = self._run_post_eval(stop_event)
+                if exit_code != 0:
+                    logger.error("Eval-only evaluation failed with exit code %d", exit_code)
+                else:
+                    logger.info("Eval-only evaluation completed successfully")
+            elif self.power_telemetry_blocks_benchmark():
+                logger.error("Required power telemetry failed startup - skipping the formal benchmark")
+                reporter.report(JobStatus.FAILED, JobStage.BENCHMARK, "Required power telemetry failed startup")
+                exit_code = 1
+            else:
+                # Stage 4: Benchmark (status reported AFTER health check passes)
+                exit_code = self.run_benchmark(registry, stop_event, reporter)
+
+                # Stage 5: Post-benchmark eval (optional, non-fatal)
+                if os.environ.get("RUN_EVAL", "false").lower() == "true" and exit_code == 0:
+                    reporter.report(JobStatus.BENCHMARK, JobStage.BENCHMARK, "Running post-benchmark evaluation")
+                    logger.info("RUN_EVAL=true: Running post-benchmark lm-eval evaluation...")
+                    eval_exit = self._run_post_eval(stop_event)
+                    if eval_exit != 0:
+                        logger.warning("Eval failed with exit code %d (benchmark result is still valid)", eval_exit)
+                    else:
+                        logger.info("Post-benchmark eval completed successfully")
+
+        except Exception as e:
+            logger.exception("Error during sweep")
+            reporter.report(JobStatus.FAILED, JobStage.CLEANUP, str(e))
+            exit_code = 1
+
+        finally:
+            logger.info("Cleanup")
+            # NOTE: finalize before registry.cleanup() so samples and manifest are durable.
+            exit_code = self.finalize_power_telemetry(exit_code, interrupted=stop_event.is_set())
+            exit_code = self.finalize_cpu_power_telemetry(exit_code, interrupted=stop_event.is_set())
+            exit_code = self.finalize_cpu_power_host_telemetry(exit_code, interrupted=stop_event.is_set())
+            stop_event.set()
+            registry.cleanup()
+            # After cleanup so the GPUs are idle before node state is reverted.
+            self._run_host_teardown()
+            if exit_code != 0:
+                registry.print_failure_details()
+            if restart_summary := supervisor.summary_line():
+                logger.warning("%s; details in %s", restart_summary, self.runtime.log_dir / WORKER_RESTARTS_FILENAME)
+            # Deliberately AFTER _run_host_teardown(): the final pass plus its
+            # thread-join can take up to DEFAULT_JOIN_TIMEOUT_SECONDS, and on
+            # the SLURM walltime-kill path this feature exists to survive
+            # there's a fixed grace clock running -- node-state reversion must
+            # not wait behind it. Its own ordering requirement (run after
+            # finalize_power_telemetry / finalize_cpu_power_telemetry so it
+            # reads closed, durable CSVs) is still satisfied since both of
+            # those already ran above. Never rebinds exit_code: incremental
+            # power emission is best-effort.
+            self.finalize_incremental_power_report()
+            # Post-process first: generate rollup, upload logs to S3, eagerly
+            # push logs_url to the status API. Runs before report_completed so
+            # the final PUT can reassert the artifact pointer.
+            self.run_postprocess(exit_code, reporter=reporter, received_signal=registry.received_signal)
+            if log_streamer is not None:
+                log_streamer.stop()
+            reporter.report_completed(
+                exit_code,
+                logs_url=getattr(self, "_last_logs_url", None),
+            )
+
+        return exit_code
+
+
+def main():
+    """Main entry point."""
+    from dataclasses import replace
+
+    parser = argparse.ArgumentParser(description="Run benchmark sweep")
+    parser.add_argument("config", type=str, help="Path to YAML configuration file")
+    parser.add_argument(
+        "--serve-only",
+        action="store_true",
+        help="Keep the inference endpoint running without launching a benchmark.",
+    )
+    args = parser.parse_args()
+
+    setup_logging()
+
+    try:
+        config_path = Path(args.config)
+        if not config_path.exists():
+            logger.error("Config file not found: %s", config_path)
+            sys.exit(1)
+
+        config = load_config(config_path)
+
+        # Check for setup_script override from CLI (passed via env var)
+        setup_script_override = os.environ.get("SRTCTL_SETUP_SCRIPT")
+        if setup_script_override:
+            logger.info("Setup script override: %s", setup_script_override)
+            config = replace(config, setup_script=setup_script_override)
+
+        job_id = get_slurm_job_id()
+        if not job_id:
+            logger.error("Not running in SLURM (SLURM_JOB_ID not set)")
+            sys.exit(1)
+
+        # Type narrowing: job_id is str after the check above
+        assert job_id is not None
+        runtime = RuntimeContext.from_config(config, job_id)
+        orchestrator = SweepOrchestrator(config=config, runtime=runtime, serve_only=args.serve_only)
+        exit_code = orchestrator.run()
+
+        sys.exit(exit_code)
+
+    except Exception:
+        logger.exception("Fatal error")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

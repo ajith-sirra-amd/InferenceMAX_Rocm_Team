@@ -1,0 +1,271 @@
+# Contributing to InferenceX
+
+Thanks for contributing! PRs are welcome. This page covers the review process every PR goes through before it can be merged.
+
+## Documentation language
+
+Maintain contributor-facing docs in English. Only READMEs retain Chinese translations: keep existing `README_zh.md` files synchronized with their English READMEs and preserve their language switchers. Do not add or recreate Chinese versions of other docs.
+
+PR titles must still include both English and Simplified Chinese, using `<English title> / <中文标题>`. The existing bilingual requirements for issue titles, PR and issue descriptions, and human-authored PR comments remain unchanged; see [AGENTS.md](AGENTS.md).
+
+## PR descriptions
+
+Lead with a short explanation of the problem, the resulting behavior, and why the change matters. A reviewer should understand the PR at a high level without expanding any sections. Keep material risks, breaking changes, and unresolved failures visible alongside the summary. Include related issue links only when relevant.
+
+Put AI disclosure, change-type lists, author checklists, and other administrative boilerplate after the summary in clearly named `<details><summary>…</summary>` blocks. Omit the `open` attribute so they are collapsed by default, and leave blank lines around the Markdown inside each block. Keep required checklist items intact; collapsing them changes presentation, not review or merge requirements.
+
+Report validation only from actual integration or end-to-end runs: keep the outcome concise and link the run when available. Put supporting validation evidence, verbose check output, and logs in a collapsed `Validation details` block, while keeping material failures and regressions visible. Substantive benchmark comparisons that explain the change, including the specialized Klaud reports, remain visible; they are not administrative boilerplate. Omit routine local-check inventories (unit-test counts, mocked checks, lint/format, schema checks, matrix generation, and changelog-byte checks), empty sections, and pending-validation boilerplate. Continue running the appropriate checks; this rule governs what belongs in the PR description and comments. If no integration or end-to-end run was performed, omit the validation section.
+
+Every PR description must include an **AI model disclosure** section inside a collapsed-by-default `<details><summary>AI model disclosure</summary>` block. Name the exact model/version used to prepare the PR and each model's role, including delegated agents. Tool names such as Claude Code, Cursor, or Perplexity Computer alone are insufficient. Use the identifier exposed by the runtime; never guess an unavailable identifier. If the runtime does not expose the exact model, explicitly state that it could not be verified. Human-only PRs must state `No AI used`. Update the disclosure when later edits use another model.
+
+## PR review flow
+
+1. Open your PR and get it through PR validation. `run-sweep.yml` sweeps run only for same-repository PRs that change `inferencex-e2e/perf-changelog.yaml` (the matrix comes from the appended entries) and carry exactly one primary label, normally `full-sweep-fail-fast`. Labels, modifiers, canary, fail-fast, and the maintainer-approved fork path are described in [PR sweep labels](.github/workflows/README.md#pr-sweep-labels). Let the benchmark sweep run and get a green full sweep, including evals, on a commit in your PR.
+
+   **Fork PRs:** external contributors cannot apply labels. Once the PR is open, ready for review, and free of merge conflicts, a maintainer applies the labels, which approves only the current head SHA. After each push, the maintainer must remove and re-add the primary label.
+2. For changes owned by a non-admin CODEOWNER other than `@SemiAnalysisAI/core`, ask one eligible [CODEOWNER](.github/CODEOWNERS) to review and post the **PR Review Checklist** sign-off (see below) in their approval comment.
+3. Ping a core maintainer on Slack for final approval, after obtaining the checklist sign-off when required.
+4. An authorized maintainer posts `/use <run_id>` (see below) and the PR is merged via the reuse path.
+
+**Performance changelog:** A PR that changes what any benchmark runs **MUST** append one new entry covering the affected config keys to the physical end of `inferencex-e2e/perf-changelog.yaml`; `python -m infx.matrix.changed --base origin/main` (run from `inferencex-e2e/`) lists them. A PR that changes no benchmark point adds none. Historical entries **MUST NOT** be edited.
+
+For full config retirement, list the deleted config keys with `retired: true`. The planner verifies that every selected key existed in the base revision and is absent from the current master configs, retains the entry in changelog metadata, and schedules no benchmarks or evals for it. Retirement entries cannot use scenario filters, `append-only`, or eval-selection fields or modifiers; partial scenario retirement uses a regular entry for the surviving config.
+
+A PR whose new entries are all retirements has no result artifacts to reuse. After review and required checks, merge it directly rather than through `merge_with_reuse`; no `/use` is required. Merge Ingest validates the retirement plan and uploads its changelog metadata, but skips reuse lookup and database dispatch. Mixed retirement and active entries still require normal sweep reuse. Do not re-append retirement entries for ingest recovery; they have no results to recover.
+
+## Draft-model precision
+
+The rule is simple: **serve the draft as it ships.** A speculative-decoding
+submission must run the draft head or draft model that ships with the checkpoint
+it serves, at the precision it ships in, through the pinned upstream framework's
+default handling of that checkpoint. This applies to embedded MTP/NextN/EAGLE heads
+and standalone draft models, including DSpark, on every hardware vendor and framework.
+
+"As it ships" does not mean BF16 and does not mean "the unquantized release". It
+means the default: what the checkpoint's authors published for that checkpoint, and
+what the pinned upstream image does with it out of the box. The baseline is the
+same checkpoint loaded by the same pinned image with no draft-related settings from
+the submission. A submission is compliant when its effective draft precision matches
+that baseline. It is not compliant when it makes the draft cheaper than that baseline.
+
+Allowed (this is the baseline, not an exception):
+
+- The draft head or draft weights embedded in, or released alongside, the served
+  checkpoint, in the precision they are stored in. If the served FP8 checkpoint ships
+  an FP8 MTP head, the FP8 head is the correct draft. Example: the Qwen FP8 checkpoints
+  store their MTP weights in FP8, so the embedded FP8 head is compliant, and swapping in
+  the BF16 release's head or forcing an unquantized-draft override is the violation,
+  not the fix.
+- Load-time handling that the pinned upstream framework applies by default to that
+  checkpoint, including dtype conversions. Example: the pinned SGLang image loads the
+  DeepSeek V4.1 DSpark `wo_a` projections, stored as FP8, as BF16, matching DeepSeek's
+  reference implementation. That conversion is the shipped path. A local patch that
+  keeps them FP8 changes the draft computation and is the violation.
+- The framework's default draft KV-cache dtype for that checkpoint, and an
+  upstream-supported KV-cache dtype applied consistently to target and draft (for
+  example FP8 draft KV inherited from an FP8 target).
+- Genuine upstream optimizations that ship in the pinned image and are used in
+  production by accuracy-sensitive customers: fused or lower-precision kernels that
+  upstream enables by default for that model, scheduling, and anything else that runs
+  the same draft computation faster without lowering the precision of its weights or
+  activations below what ships.
+
+Forbidden (submission-side precision hacking of the draft):
+
+- Enabling `SGLANG_NVFP4_CKPT_FP8_NEXTN_MOE` (`=1` or any other enabling
+  value recognized by the pinned implementation) is explicitly prohibited going
+  forward, including inherited environment, launcher, container, or image defaults.
+  The baseline allowances above do not exempt this flag. Reviewers must verify
+  that it is disabled in the effective recipe; an unset value or `=0` is acceptable
+  only when the pinned implementation confirms it is disabled. Historical runs
+  are not precedent or an exception for submissions under review, including
+  image-only bumps and re-enabled recipes. This rule does not retroactively
+  invalidate runs that predate it.
+- Online or offline quantization of draft weights, activations, or computation below
+  the shipped precision, whether through a flag, environment variable, config file, or
+  conversion step. This includes `--speculative-draft-model-quantization quark_mxfp4`
+  applied to a BF16 MTP head, `SGLANG_GLM_NEXTN_MOE_PTPC=1`, and an ATOM
+  `--online_quant_config` whose `exclude_layer` patterns do not cover the entire draft
+  head.
+- Dtype overrides aimed at the draft that lower its precision below the framework's default for that checkpoint.
+- Substituting a precision-converted or differently quantized draft checkpoint, or a
+  draft head taken from a different release than the served target.
+- Patching the pinned image so that it loads or computes the draft at a different
+  precision than it does by default, in either direction. The engine-patch rule
+  already forbids this; a waiver does not exempt draft precision.
+- Reducing draft FLOPs in ways the checkpoint's authors did not ship, such as pruning draft layers or experts.
+
+A quantized target/verifier remains allowed under the existing eval requirements.
+Target quantization is fine as long as it does not also quantize the draft below what
+ships; check inherited quantization and `exclude_layer` coverage rather than assuming.
+
+Matching an upstream recipe, passing evals, a claimed unchanged acceptance length
+(AL), or a newly measured AL curve does not exempt a submission that lowers draft
+precision. Synthetic AgentX acceptance is not evidence either way. Draft-precision
+changes shift the accuracy hit onto acceptance rate, which the target-model evals do
+not measure.
+
+Reviewers must check the effective draft precision against the shipped baseline, not
+just the launch flags. Inspect checkpoint metadata and quantization exclusions,
+environment variables, framework defaults in the pinned image, and any inherited
+target-model quantization. Do not infer draft precision from the target checkpoint's
+name or precision label.
+
+For speculative-decoding changes, the CODEOWNER's additional detail section must
+identify the draft checkpoint/revision (or embedded head), the precision it ships in,
+how the pinned upstream image handles it by default, and its effective serving
+precision, so the reviewer can confirm the last two match. If evidence is missing
+or inaccessible, record the uncertainty and missing evidence instead of claiming
+verification. Check 13 reports WARN and requests human review; this does not
+establish compliance or grant an exception. A demonstrated precision violation or
+prohibited enablement still FAILs, even if another affected variant is unverified.
+An unchecked draft-precision item explained this way does not independently fail
+the checklist-format check. See the [review checklist](inferencex-e2e/docs/PR_REVIEW_CHECKLIST.md) and
+[verifier Check 13](.github/codeowner-signoff-verify-prompt.md#check-13--draft-runs-as-shipped).
+
+This follows the same principle as
+[MLPerf Inference Rules, Appendix C: Speculative Decoding](https://github.com/mlcommons/inference_policies/blob/ff7edba545fded369e7e7e3d5a2f0bab4a95eece/inference_rules.adoc#appendix-c-speculative-decoding),
+which requires the reference MTP head "at the same precision as provided" and
+prohibits reference-head weight quantization and other acceptance-rate manipulation.
+InferenceX does not adopt that revision's workload-specific quantized-edge exception,
+its allowed-model list, or its speculative-decoding configuration and acceptance
+methodology.
+
+## The PR Review Checklist (CODEOWNER sign-off)
+
+Automated CODEOWNER verification is advisory for now. The workflow checks submitted and edited checklists and associates one verdict comment with each sign-off resource without publishing commit statuses. GitHub's separate Core-team and CODEOWNER approval requirements remain in effect unless bypassed by an authorized maintainer.
+
+Sign-off is required only when a changed file has a CODEOWNER other than a repository admin or `@SemiAnalysisAI/core`. Ownership comes from the current tip of the PR target branch, resolved once and pinned to the same SHA for CODEOWNERS validation and content reads, using the last matching rule; renames check both old and new paths. The PR head and its potentially stale recorded base SHA do not supply ownership rules. A matching core owner does not exempt another owner on the same file. Individual admins must have both repository `permission: admin` and `role_name: admin`; other teams and email owners require sign-off. Missing ownership data or failed permission lookups cannot grant an exemption. Changes without a qualifying owner skip verification.
+
+One eligible CODEOWNER reviewer fills in the latest [PR_REVIEW_CHECKLIST.md](inferencex-e2e/docs/PR_REVIEW_CHECKLIST.md) template in their approval comment.
+
+**Only one eligible CODEOWNER reviewer needs to post the checklist for each PR.** Check for an existing checklist before posting; additional reviewers do not need to post their own copies. For corrections or missing evidence, the original reviewer must **edit their existing checklist comment** instead of adding a new one. Create a replacement only if the original comment was deleted.
+
+A friendly reminder. Please follow the latest checklist template **correctly**:
+
+- Always copy the template from the **current** [inferencex-e2e/docs/PR_REVIEW_CHECKLIST.md](inferencex-e2e/docs/PR_REVIEW_CHECKLIST.md) on `main`. The checklist evolves, and a sign-off made from a stale copy will be flagged as missing items.
+- Keep the template's opening phrase intact:
+
+  > As a PR reviewer and CODEOWNER, I have reviewed this and have:
+
+  Our CI verification workflow, [`codeowner-signoff-verify.yml`](https://github.com/SemiAnalysisAI/InferenceX/blob/main/.github/workflows/codeowner-signoff-verify.yml), triggers on exactly this phrase. It must open the comment, so a comment that only quotes or mentions it does not start verification. **If your approval comment does not start with that phrase, the workflow will not verify the checklist.**
+- Keep the template's `<details>` block so the checklist items render collapsed. The opening phrase, additional detail section, and signature stay outside it and remain visible.
+- The sign-off can be posted as a regular conversation comment, a review summary, or an inline review comment. All three trigger verification.
+- Submit a new checklist when the PR is open and ready. Editing that checklist triggers verification again. Pushes, reopening, and leaving draft do not trigger verification. If a review event was missed during a merge conflict, retry after resolving it using manual dispatch.
+- Starting Claude requires an eligible human actor with repository write access.
+- Fill in the "Additional detail section" with the links the checklist asks for (validation/eval workflow runs, the corresponding [vLLM recipe](https://github.com/vllm-project/recipes) / [SGLang cookbook](https://github.com/sgl-project/sglang/tree/main/docs/cookbook) PR, and any exception reasoning). Submit new SGLang cookbook PRs to `sgl-project/sglang`, under `docs/cookbook/`, which supplies the published site. The cookbook copy in `sgl-project/sgl-docs` is not the current deployment source; `sgl-project/sgl-cookbook` is archived.
+
+Once the sign-off is posted, CI independently re-verifies the review checklist claims, including CODEOWNER status, a green sweep and evals on a commit in the PR, the linked recipe, the reuse command, use of the latest checklist template, upstream [vLLM](https://hub.docker.com/u/vllm)/[SGLang](https://hub.docker.com/u/lmsysorg) images, no architecture-changing benchmark hacks, chat-template usage for speculative decoding, and unchanged draft-model/head weights and precision. While it runs, the bot adds a 👀 reaction to a sign-off posted as a conversation or inline comment and removes it when the verdict is published; review summaries cannot take reactions. It creates one verdict comment for that sign-off resource, including the SHA actually assessed. Editing the same checklist updates only its associated verdict. A replacement or additional checklist receives a separate verdict, and verdicts associated with older sign-offs remain unchanged. Failing criteria stay visible; passing and N/A criteria appear together in a collapsed section. Checkmarks are not taken on trust, so please only check items you have actually verified.
+
+The verdict records only the commit actually assessed; it does not carry approval forward to later commits. To request a new assessment after correcting the existing checklist as needed, an authorized collaborator dispatches `codeowner-signoff-verify.yml` with `pr-number` and its `comment_url` (both must identify the same PR). Manual reassessment updates the verdict associated with that sign-off resource.
+
+## Reusing your PR's green sweep at merge with `/use`
+
+A full benchmark sweep is expensive GPU time, and the runners are shared by every open PR, so an approved PR's sweep runs only once, for PR validation. `main` never reruns it after merge; the reuse path publishes that PR sweep instead:
+
+- After your PR has an eligible green full sweep, an authorized maintainer (`OWNER`/`MEMBER`/`COLLABORATOR`) comments `/use <run_id>` on the PR to select that run. Keep the command and run ID on the same line. The pinned run may come from any PR; if its commit is not part of this PR, reuse is still accepted but flagged as a warning.
+- External PRs sweep through `trusted-external-sweep.yml`, which dispatches `e2e-tests.yml`; pin that run explicitly with `/use <run_id>`, because automatic selection and `merge_with_reuse` only find `run-sweep.yml` runs.
+- `/reuse-sweep-run <run_id>` remains supported with identical behavior. Bare `/reuse-sweep-run` selects automatically; bare `/use` is rejected.
+- The merge-to-`main` run then validates and ingests the PR sweep's artifacts; `main` never re-runs the sweep itself.
+- **Reuse is mandatory.** A green sweep alone is not enough. The reuse command must be on record (the sign-off verification checks for it), otherwise the `main` run fails and the PR's results are never ingested.
+- Retirement-only changes are the no-results exception described above: merge directly after review and required checks, without `/use`. Empty or mixed changelogs do not qualify.
+- Reuse does not require retaining a primary label, but it is rejected while the PR carries `evals-only` or `agentx-fast`, and `merge_with_reuse` refuses a PR with more than one primary label. The bot reacts to the command with 👍 when accepted or 👎 when rejected, with details in the Actions run summary, and posts a warning comment when the pinned run's commit is outside the PR; source artifacts are revalidated at merge.
+- A missing authorized reuse command produces a Check 4 **WARN**, not a rejection. The warning stays visible in the sign-off verdict; posting an authorized command is still required to reuse artifacts.
+- From the repository root, `uv run --project inferencex-e2e --extra workflows python -m infx.workflows.merge_with_reuse <pr-number>` is the supported merge path. It posts the command, syncs the branch with `main`, waits for checks, and squash-merges. See the [workflows README](.github/workflows/README.md#reusing-an-approved-pr-full-sweep) for eligibility details.
+
+## Adding points to the latest curve with `append-only`
+
+When a PR only adds generated points to an existing curve, mark every new changelog
+entry with `append-only: true`. Additions may introduce new concurrency values or new
+recipe variants, such as another tensor-parallelism value. Sweep setup compares the
+generated matrices at the base and head revisions, runs only the newly added points,
+and emits metadata that lets InferenceX-app extend the most recent matching curve
+instead of presenting the partial run as a separate curve.
+
+This mode is intentionally narrow, but it is not based on a file allowlist. Supporting
+code, benchmark scripts, launchers, and other files may change when their behavioral
+effect is exclusive to the newly appended points named by the changelog. No changed
+benchmark path may execute for or alter an existing point. Every selected config and
+scenario must already exist, and every point generated at the base revision must
+remain present with the same recipe. The head may contain any additional generated
+recipes or points inside that scope, including new topology or other recipe dimensions;
+the sweep schedules the generated set difference. Additions must use the same non-null
+image and belong to an existing dashboard visual series. Each generated recipe carries
+a deterministic fingerprint so two distinct recipes at the same concurrency remain
+distinct database points without splitting the visual curve. Removing or modifying an
+existing point, or changing shared logic that can affect one, is rejected. Append-only
+entries cannot set the `all-evals`, `evals-only`, or `eval-min-prefill-ep` entry fields,
+share a sweep with regular entries, or run with the `all-evals`/`evals-only` modifiers.
+The matrix validator enforces the additive generated-matrix invariant; the human
+and AI reviewers must inspect the complete diff and verify behavioral isolation. The
+mechanical comparison renders each config revision with its own generator, validation
+code, and runner metadata. Launcher and benchmark-script changes still rely on
+complete-diff review because matrix equality alone cannot prove their runtime
+control-flow isolation.
+
+```yaml
+- config-keys:
+    - dsv4-fp4-b300-vllm-mtp
+  description:
+    - "Add TP8 at concurrency 12 and 16 to the existing curve"
+  pr-link: https://github.com/SemiAnalysisAI/InferenceX/pull/XXX
+  append-only: true
+```
+
+## AMD cluster: never leave root-owned files in runner workspaces
+
+Multi-node benchmarks on the AMD MI355X TW cluster submit Slurm jobs whose containers often run as **root**. If those containers write files (typically `benchmark_logs/logs/slurm_job-*`) into the GitHub Actions runner workspace and the job is **cancelled** before teardown runs, the root-owned directories are stranded. The runner user cannot delete them, so `actions/checkout` fails with:
+
+```
+Error: File was unable to be removed
+Error: EACCES: permission denied, rmdir '.../benchmark_logs/logs/slurm_job-<id>'
+```
+
+**This bricks every subsequent job on that runner** until someone with `sudo` on the shared `/it-share` storage manually removes the files. Because all AMD MI355X sweeps share the same runner pool, a single stranded root-owned directory blocks the entire queue for everyone.
+
+**Rules for benchmark scripts and Slurm containers:**
+
+1. **Never write as root into the runner workspace.** If your container must run as root, write outputs to a separate scratch directory outside `_work/` (e.g. `/tmp` or a dedicated staging path).
+2. **If root writes are unavoidable**, add a cleanup trap or teardown step that `chown`s or `rm`s all root-owned files under the workspace **before** the job exits, including on cancellation (`trap cleanup EXIT`).
+3. **Test your teardown path.** Cancel a running benchmark mid-flight and verify no root-owned files remain in the workspace.
+
+If you find a stranded root-owned file blocking runners, the recovery procedure is documented in [`.claude/commands/clean-amd-mi355-runner-root-files.md`](.claude/commands/clean-amd-mi355-runner-root-files.md): SSH into the hop host with `sudo`, scan the `_work` directories, and delete the offending files.
+
+## Test quality
+
+**The one rule: a test must exercise the real implementation with concrete inputs and assert on what it computes, returns, writes, or raises. A test that inspects the code, the repo, or a config file instead of running behavior is not a test and must be deleted.** These rules are mandatory for every test added, modified, or reviewed in this repository. When in doubt, delete the test.
+
+### Forbidden: tests about the code rather than its behavior
+
+Never write, and always delete on sight, a test that does any of the following:
+
+1. **Reads source text and asserts on it.** Opening a `.sh`, `.py`, `.yml`, `.yaml`, `.cjs`, or `.md` file and asserting that a string, flag, regex, command, or line is present or absent, counting occurrences, or checking line order. This includes launchers, workflow files, skill files, and docs. Grepping is not testing.
+2. **Parses source structure.** Using `ast.parse`, `inspect.getsource`, `inspect.signature`, `hasattr`, `callable`, `__doc__`, or import-succeeds checks to assert that a function, class, constant, argument, or flag exists or has a given shape.
+3. **Git-greps the repo.** Asserting which files contain a literal, how many files match, or that a pin appears in exactly N places.
+4. **Pins checked-in config or data.** Asserting the contents of a recipe, master config, `runners.yaml`, `platform_config.json`, a registry dict, an enum, an image tag, a SHA, a port number, or the current count of recipes, SKUs, backends, or models. Validate config through the real validation code with controlled inputs instead.
+5. **Is tautological.** Asserting a constant equals its own literal; asserting a dict or fixture equals what the test just built; asserting only that a mock was called with the arguments the test itself passed; or computing the expected value with the same helper, formula, or algorithm the test is supposed to check.
+6. **Reimplements the code under test.** Any parser, filter, jq/YAML expression, argparse tree, formula, or state machine copied into the test file so the test can run against the copy. This also covers "mirror" parsers and "reference specs" cross-checked against a second in-test implementation.
+7. **Tests the test infrastructure.** Tests of fixtures, conftest helpers, in-test expression evaluators, or "this test has teeth" self-checks.
+8. **Is smoke-only.** Module imports, `--help` exits 0, or "does not raise" with no assertion on output.
+9. **Duplicates a covered path.** Several tests that reach the same branch with trivially different inputs. Keep one, or use `pytest.mark.parametrize` / `subTest`. A second test is justified only by a distinct branch, error path, or boundary.
+
+### Required: what every kept test looks like
+
+- Feeds small, controlled inputs into the real function, CLI, or script and asserts on the computed output, written artifact, exit code, or raised error.
+- Uses expected values worked out independently by hand, never derived by calling the implementation or its helpers.
+- Covers a specific branch, boundary, malformed input, or failure path that no other test already covers.
+- Mocks only external collaborators (network, GitHub, Slurm, clocks, GPUs), never the behavior under test. Shell scripts are tested by running them with stubbed binaries on `PATH` and checking what they produced, not by reading their text.
+- Would fail on a plausible regression in observable behavior, and would not fail on a harmless refactor, a rename, or the addition of a valid recipe or SKU.
+
+### Before adding or approving a test, answer all four
+
+1. Which line of the real implementation does this run, and what bug in it would make the assertion fail?
+2. Would this test still pass if the code were rewritten with identical behavior? If not, it is testing structure and must go.
+3. Would this test fail because someone added a recipe, bumped an image tag, or reworded a comment? If yes, it is pinning config or source and must go.
+4. Does an existing test already reach this branch? If yes, extend it or drop the new one.
+
+Deleting a test that fails these questions needs no replacement. Do not preserve test counts. In timing tests, synchronize on observable readiness, bound waits and cleanup, and keep process termination and artifact writes real when those are the contract. See [Randy Coulman's Tautological Tests](https://randycoulman.com/blog/2016/12/20/tautological-tests/) for the distinction between independent expectations and assertions that repeat the implementation.
+
+## After merging
+
+**PR authors are responsible for ensuring that after merging, all GitHub Action jobs fully pass.** A lot of the time, failures are just flakes and simply re-running the failed jobs will fix it. [See GitHub's docs on re-running failed jobs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs#re-running-failed-jobs-in-a-workflow).

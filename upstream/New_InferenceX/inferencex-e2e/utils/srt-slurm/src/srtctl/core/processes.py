@@ -1,0 +1,635 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+Process registry for managing and monitoring spawned processes.
+
+This module provides lifecycle management for srun processes, including:
+- Process registration and tracking
+- Health monitoring via background thread
+- Graceful cleanup on exit or failure
+"""
+
+import logging
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from srtctl.core.topology import Process
+
+logger = logging.getLogger(__name__)
+
+# Routers and frontends drain in-flight requests on SIGTERM; more than the default 10s, less than an engine.
+FRONTEND_TERMINATE_TIMEOUT_SECONDS = 20.0
+
+# Bytes read per step while scanning a worker log for fatal markers.
+_LOG_SCAN_CHUNK_BYTES = 65536
+
+
+@dataclass(frozen=True)
+class TerminationOutcome:
+    """How local process termination completed."""
+
+    reaped: bool
+    force_killed: bool
+
+
+def terminate_and_reap(
+    popen: subprocess.Popen, *, terminate_timeout: float = 10.0, kill_timeout: float = 5.0
+) -> TerminationOutcome:
+    """Terminate, then kill, while preserving whether SIGKILL was required."""
+    if popen.poll() is not None:
+        return TerminationOutcome(reaped=True, force_killed=False)
+    popen.terminate()
+    try:
+        popen.wait(timeout=terminate_timeout)
+        return TerminationOutcome(reaped=True, force_killed=False)
+    except subprocess.TimeoutExpired:
+        logger.warning("Process did not terminate, killing...")
+    popen.kill()
+    try:
+        popen.wait(timeout=kill_timeout)
+        return TerminationOutcome(reaped=True, force_killed=True)
+    except subprocess.TimeoutExpired:
+        logger.error("Process was not reaped after SIGKILL")
+        return TerminationOutcome(reaped=False, force_killed=True)
+
+
+@dataclass
+class ManagedProcess:
+    """A process managed by the registry.
+
+    Attributes:
+        name: Human-readable process name (e.g., "prefill_0", "decode_1")
+        popen: The subprocess.Popen object
+        log_file: Path to the process log file
+        node: Node hostname where the process runs
+        critical: If True, failure triggers full cleanup
+        terminate_timeout: Seconds to wait after SIGTERM before SIGKILL on
+            cleanup. Processes that flush state on SIGTERM (tachometer
+            compacting parquet) need more than the default.
+        step_name: The Slurm step name this srun was launched with
+            (``start_srun_process(step_name=...)``). When set, ``terminate()``
+            delivers SIGTERM to the task with ``scancel --signal=TERM --full``
+            on that step, because SIGTERM to the srun process itself only
+            aborts the step and the task is SIGKILLed without warning.
+        fatal_log_patterns: Regular expressions that mark the process failed when
+            a new line of ``log_file`` matches one while ``popen`` is still
+            running. A launcher such as ``trtllm-llmapi-launch`` keeps its srun
+            step alive after the engine it started has died (the follower ranks
+            block in ``MPICommExecutor`` with no timeout), so the step's exit code
+            never arrives; the launcher's ``Rank<N> Task exit code: <n>`` line is
+            the only signal. Empty for processes whose exit code is the whole story.
+    """
+
+    name: str
+    popen: subprocess.Popen
+    log_file: Path | None = None
+    node: str | None = None
+    critical: bool = True
+    terminate_timeout: float = 10.0
+    step_name: str | None = None
+    # Cleanup stops tier 0 first and waits for it before moving on: workers and
+    # frontends (0) deregister from the Mooncake master (1) and etcd/NATS (2)
+    # while those are still up, instead of hanging on a plane that is gone.
+    shutdown_tier: int = 0
+    # False for wrappers that finalize a profiler before signalling its application.
+    signal_full: bool = True
+    fatal_log_patterns: tuple[str, ...] = ()
+    # Owned by a WorkerSupervisor with a restart policy: an exit is the
+    # supervisor's to handle (relaunch), so ``check_failures`` leaves it alone
+    # until the supervisor gives up and clears the flag.
+    supervised: bool = False
+    worker_assignments: tuple[Process, ...] = ()
+    _stopped_via_step: bool = field(default=False, init=False, repr=False)
+    _stop_deadline: float | None = field(default=None, init=False, repr=False)
+    _stop_escalations: int = field(default=0, init=False, repr=False)
+    # Log-watch state: bytes already scanned, the partial line after the last newline,
+    # and the compiled patterns (built on first use).
+    _log_offset: int = field(default=0, init=False, repr=False)
+    _log_tail: bytes = field(default=b"", init=False, repr=False)
+    _fatal_regexes: list[re.Pattern[str]] | None = field(default=None, init=False, repr=False)
+
+    @property
+    def is_running(self) -> bool:
+        """Check if process is still running."""
+        return self.popen.poll() is None
+
+    @property
+    def exit_code(self) -> int | None:
+        """Get exit code if process has exited, None otherwise."""
+        return self.popen.poll()
+
+    def scan_log_for_fatal_marker(self) -> tuple[str, str] | None:
+        """``(pattern, line)`` for the first new log line matching ``fatal_log_patterns``, else None.
+
+        Reads only the bytes appended since the previous call, bounded by the size
+        seen at the start of this call so a chatty log cannot stall the monitor
+        (the same shape as ``LogOutputStreamer``), and judges whole lines only: a
+        line split across two polls is matched once its newline has arrived.
+        Invalid UTF-8 is replaced, never raised. A log that does not exist yet
+        (srun has not opened it) is not a failure.
+        """
+        if not self.fatal_log_patterns or self.log_file is None:
+            return None
+        if self._fatal_regexes is None:
+            self._fatal_regexes = [re.compile(pattern) for pattern in self.fatal_log_patterns]
+        try:
+            with self.log_file.open("rb") as log:
+                size = os.fstat(log.fileno()).st_size
+                if size < self._log_offset:  # truncated or replaced: start over
+                    self._log_offset, self._log_tail = 0, b""
+                log.seek(self._log_offset)
+                remaining = size - self._log_offset
+                while remaining > 0:
+                    chunk = log.read(min(remaining, _LOG_SCAN_CHUNK_BYTES))
+                    if not chunk:
+                        break
+                    self._log_offset += len(chunk)
+                    remaining -= len(chunk)
+                    lines = (self._log_tail + chunk).split(b"\n")
+                    # Keep at most one chunk of an unterminated line (progress bars never end one).
+                    self._log_tail = lines.pop()[-_LOG_SCAN_CHUNK_BYTES:]
+                    for raw in lines:
+                        line = raw.decode("utf-8", errors="replace").rstrip("\r")
+                        for regex in self._fatal_regexes:
+                            if regex.search(line):
+                                return regex.pattern, line
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            logger.warning("Could not scan %s for fatal log markers: %s", self.log_file, exc)
+        return None
+
+    def terminate(self, timeout: float | None = None) -> None:
+        """Terminate the process gracefully (SIGTERM, then SIGKILL after ``timeout`` or ``terminate_timeout``).
+
+        With a ``step_name`` the SIGTERM goes to the Slurm step's task via
+        ``scancel --signal``; the srun process is only SIGTERMed as a fallback.
+        """
+        if not self.is_running:
+            return
+
+        wait = self.terminate_timeout if timeout is None else timeout
+        if self.step_name and signal_step(self.step_name, "TERM", full=self.signal_full):
+            try:
+                self.popen.wait(timeout=wait)
+                return
+            except subprocess.TimeoutExpired:
+                logger.warning(
+                    "Step %s (%s) did not exit %.0fs after SIGTERM; terminating srun", self.step_name, self.name, wait
+                )
+        outcome = terminate_and_reap(self.popen, terminate_timeout=wait, kill_timeout=5)
+        if not outcome.reaped:
+            logger.error("Process %s was not reaped after SIGKILL", self.name)
+
+    def request_stop(self, step_ids: dict[str, str] | None = None) -> None:
+        """Deliver SIGTERM without waiting (phase one of a group shutdown); ``await_stop`` finishes it.
+
+        ``step_ids`` is one ``squeue --steps`` listing shared by the whole group so
+        a job with dozens of workers does not query Slurm dozens of times.
+        """
+        if not self.is_running:
+            return
+        self._stopped_via_step = bool(self.step_name) and signal_step(
+            self.step_name or "", "TERM", step_ids=step_ids, full=self.signal_full
+        )
+        if not self._stopped_via_step:
+            self.popen.terminate()
+        self._stop_deadline = time.monotonic() + self.terminate_timeout
+        self._stop_escalations = 0
+
+    def advance_stop(self) -> bool:
+        """Non-blocking ``await_stop``: escalate once the current deadline passes; True once the process is gone.
+
+        Past the SIGTERM deadline a step-signalled process gets SIGTERM on its srun
+        (which aborts the step), anything else SIGKILL; each escalation allows 5s
+        more. For callers that must not block, such as a process-monitor tick.
+        """
+        if not self.is_running:
+            return True
+        now = time.monotonic()
+        if self._stop_deadline is None or now < self._stop_deadline:
+            return False
+        if self._stop_escalations == 0 and self._stopped_via_step:
+            logger.warning(
+                "Step %s (%s) did not exit %.0fs after SIGTERM; terminating srun",
+                self.step_name,
+                self.name,
+                self.terminate_timeout,
+            )
+            self.popen.terminate()
+        else:
+            first_kill = self._stop_escalations == (1 if self._stopped_via_step else 0)
+            if first_kill:
+                logger.warning("Process %s did not exit after SIGTERM, killing...", self.name)
+            else:
+                logger.error("Process %s was not reaped after SIGKILL", self.name)
+            self.popen.kill()
+        self._stop_escalations += 1
+        self._stop_deadline = now + 5.0
+        return False
+
+    def await_stop(self) -> None:
+        """Wait out this process's own deadline after ``request_stop``, then escalate to SIGKILL."""
+        if not self.is_running:
+            return
+        deadline = self._stop_deadline if self._stop_deadline is not None else time.monotonic()
+        try:
+            self.popen.wait(timeout=max(0.0, deadline - time.monotonic()))
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        if self._stopped_via_step:
+            logger.warning(
+                "Step %s (%s) did not exit %.0fs after SIGTERM; terminating srun",
+                self.step_name,
+                self.name,
+                self.terminate_timeout,
+            )
+            outcome = terminate_and_reap(self.popen, terminate_timeout=5, kill_timeout=5)
+        else:
+            logger.warning("Process %s did not exit %.0fs after SIGTERM, killing...", self.name, self.terminate_timeout)
+            self.popen.kill()
+            try:
+                self.popen.wait(timeout=5)
+                outcome = TerminationOutcome(reaped=True, force_killed=True)
+            except subprocess.TimeoutExpired:
+                outcome = TerminationOutcome(reaped=False, force_killed=True)
+        if not outcome.reaped:
+            logger.error("Process %s was not reaped after SIGKILL", self.name)
+
+
+# Type alias for named process collections
+NamedProcesses = dict[str, ManagedProcess]
+
+
+def list_step_ids(job_id: str | None = None, *, unique_names: set[str] | None = None) -> dict[str, str] | None:
+    """``{step name: <job>.<step>}`` for the running steps of this job; None when Slurm cannot be asked."""
+    job_id = job_id or os.environ.get("SLURM_JOB_ID") or os.environ.get("SLURM_JOBID")
+    if not job_id or shutil.which("squeue") is None:
+        return None
+    try:
+        result = subprocess.run(
+            ["squeue", "--steps", f"--jobs={job_id}", "--noheader", "--format=%i %j"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("squeue --steps failed: %s", exc)
+        return None
+    if result.returncode != 0:
+        logger.warning("squeue --steps exited %d: %s", result.returncode, result.stderr.strip())
+        return None
+    steps: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            if unique_names is not None and parts[1] in unique_names and parts[1] in steps:
+                logger.warning("Ambiguous Slurm step name %s", parts[1])
+                return None
+            steps.setdefault(parts[1], parts[0])
+    return steps
+
+
+def find_step_id(step_name: str, job_id: str | None = None) -> str | None:
+    """The ``<job>.<step>`` id of the running step named ``step_name`` in this job, or None."""
+    steps = list_step_ids(job_id)
+    return steps.get(step_name) if steps else None
+
+
+def signal_step(
+    step_name: str, sig: str = "TERM", *, step_ids: dict[str, str] | None = None, full: bool = True
+) -> bool:
+    """Signal the Slurm step named ``step_name``; True when delivered.
+
+    ``srun`` turns a SIGTERM aimed at itself into a step abort that SIGKILLs the
+    task, so a process that must flush on SIGTERM (tachometer compacting its
+    parquet, an engine shutting down cleanly) has to be signalled through Slurm:
+    ``scancel --signal=<sig> --full <job>.<step>``. ``step_ids`` is a listing from
+    ``list_step_ids`` to reuse instead of querying again. With ``full=False``,
+    only the tasks receive the signal; profiler wrappers use that to finalize
+    reports before stopping applications in a separate session.
+    """
+    if shutil.which("scancel") is None:
+        return False  # not under Slurm (tests, the mock): the caller signals srun directly
+    step_id = step_ids.get(step_name) if step_ids is not None else find_step_id(step_name)
+    if step_id is None:
+        logger.warning("No running step named %s found; falling back to signalling srun", step_name)
+        return False
+    try:
+        result = subprocess.run(
+            ["scancel", f"--signal={sig}", *(["--full"] if full else []), step_id],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("scancel --signal=%s %s failed: %s", sig, step_id, exc)
+        return False
+    if result.returncode != 0:
+        logger.warning("scancel --signal=%s %s exited %d: %s", sig, step_id, result.returncode, result.stderr.strip())
+        return False
+    logger.info("Sent SIG%s to step %s (%s)", sig, step_id, step_name)
+    return True
+
+
+class ProcessRegistry:
+    """Registry for managing multiple processes with health monitoring.
+
+    Features:
+    - Tracks all spawned processes by name
+    - Background thread monitors for unexpected exits
+    - Graceful cleanup on signal or failure
+    - Detailed failure reporting with log tails
+
+    Usage:
+        registry = ProcessRegistry(job_id="12345")
+        registry.add_process(managed_proc)
+        # ... run workload ...
+        if registry.check_failures():
+            registry.cleanup()
+    """
+
+    def __init__(self, job_id: str):
+        """Initialize the registry.
+
+        Args:
+            job_id: SLURM job ID for logging
+        """
+        self.job_id = job_id
+        self._processes: dict[str, ManagedProcess] = {}
+        self._lock = threading.Lock()
+        self._failed_processes: list[str] = []
+        # name -> the log line that failed a process whose step was still running
+        self._failure_reasons: dict[str, str] = {}
+        # Name of the signal (SIGTERM, SIGINT) whose handler started the shutdown; None when
+        # the run ended on its own or on a process failure. Set by setup_signal_handlers().
+        self.received_signal: str | None = None
+
+    def add_process(self, process: ManagedProcess) -> None:
+        """Add a process to the registry.
+
+        Args:
+            process: ManagedProcess to track
+        """
+        with self._lock:
+            if process.name in self._processes:
+                logger.warning("Replacing existing process '%s' in registry", process.name)
+            self._processes[process.name] = process
+            logger.debug("Registered process: %s (pid=%d)", process.name, process.popen.pid)
+
+    def add_processes(self, processes: NamedProcesses) -> None:
+        """Add multiple processes to the registry.
+
+        Args:
+            processes: Dict mapping names to ManagedProcess objects
+        """
+        for name, proc in processes.items():
+            # Ensure the name matches
+            if proc.name != name:
+                proc = ManagedProcess(
+                    name=name,
+                    popen=proc.popen,
+                    log_file=proc.log_file,
+                    node=proc.node,
+                    critical=proc.critical,
+                    terminate_timeout=proc.terminate_timeout,
+                    step_name=proc.step_name,
+                    shutdown_tier=proc.shutdown_tier,
+                    signal_full=proc.signal_full,
+                    fatal_log_patterns=proc.fatal_log_patterns,
+                    worker_assignments=proc.worker_assignments,
+                )
+            self.add_process(proc)
+
+    def check_failures(self) -> bool:
+        """Check if any critical process has failed.
+
+        A critical process has failed when its srun has exited non-zero, or when
+        it is still running but its log has printed one of its
+        ``fatal_log_patterns`` (the engine behind a launcher died while the step
+        stayed up; see ``ManagedProcess.fatal_log_patterns``).
+
+        Returns:
+            True if any critical process has failed
+        """
+        with self._lock:
+            for name, proc in self._processes.items():
+                if proc.supervised:
+                    continue  # a WorkerSupervisor decides whether this exit is a relaunch or a failure
+                if not proc.critical or name in self._failed_processes:
+                    continue
+                if not proc.is_running:
+                    exit_code = proc.exit_code
+                    if exit_code != 0:
+                        self._failed_processes.append(name)
+                        logger.error(
+                            "Critical process '%s' exited with code %d",
+                            name,
+                            exit_code,
+                        )
+                    continue
+                marker = proc.scan_log_for_fatal_marker()
+                if marker is not None:
+                    pattern, line = marker
+                    self._failed_processes.append(name)
+                    self._failure_reasons[name] = line
+                    logger.error(
+                        "Critical process '%s' reported a fatal condition in its log while its step is still "
+                        "running (matched /%s/): %s",
+                        name,
+                        pattern,
+                        line,
+                    )
+
+            return len(self._failed_processes) > 0
+
+    def record_failure(self, name: str, reason: str | None = None) -> None:
+        """Mark ``name`` failed from outside ``check_failures`` (a supervisor that gave up on a fatal marker)."""
+        with self._lock:
+            if name not in self._failed_processes:
+                self._failed_processes.append(name)
+            if reason is not None:
+                self._failure_reasons[name] = reason
+
+    @property
+    def has_failures(self) -> bool:
+        """Whether ``check_failures`` has recorded a critical failure, without scanning again.
+
+        Use this after a stop: a fresh scan would also count the processes that
+        cleanup itself just terminated.
+        """
+        with self._lock:
+            return len(self._failed_processes) > 0
+
+    def cleanup(self) -> None:
+        """Stop every registered process: SIGTERM to a whole tier at once, wait, escalate, next tier.
+
+        Within a tier the signal goes out in reverse registration order without
+        waiting in between, so a job with many workers finishes cleanup in about
+        one ``terminate_timeout`` rather than one per process. Tiers run lowest
+        first (workers and frontends, then the Mooncake master, then etcd/NATS),
+        and a tier is fully stopped before the next is signalled, so nothing is
+        left deregistering from a plane that has already gone away.
+        """
+        with self._lock:
+            running = [proc for proc in self._processes.values() if proc.is_running]
+            logger.info("Cleaning up %d processes (%d running)...", len(self._processes), len(running))
+            step_ids = list_step_ids() if any(proc.step_name for proc in running) else None
+            for tier in sorted({proc.shutdown_tier for proc in running}):
+                group = [proc for proc in running if proc.shutdown_tier == tier and proc.is_running]
+                for proc in reversed(group):
+                    logger.debug("Stopping process: %s", proc.name)
+                    try:
+                        proc.request_stop(step_ids)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("Failed to signal %s: %s", proc.name, e)
+                for proc in group:
+                    try:
+                        proc.await_stop()
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("Failed to stop %s: %s", proc.name, e)
+
+    def print_failure_details(self, tail_lines: int = 50) -> None:
+        """Print detailed failure information including log tails.
+
+        Args:
+            tail_lines: Number of lines to show from each failed process log
+        """
+        if not self._failed_processes:
+            return
+
+        logger.error("=" * 60)
+        logger.error("FAILURE DETAILS")
+        logger.error("=" * 60)
+
+        with self._lock:
+            for name in self._failed_processes:
+                proc = self._processes.get(name)
+                if not proc:
+                    continue
+
+                logger.error("\n--- Process: %s ---", name)
+                logger.error("Exit code: %s", proc.exit_code)
+                reason = self._failure_reasons.get(name)
+                if reason is not None:
+                    logger.error("Fatal log line (step still running when detected): %s", reason)
+                logger.error("Node: %s", proc.node or "unknown")
+                logger.error("Log file: %s", proc.log_file or "none")
+
+                # Tail the log file if available
+                if proc.log_file and proc.log_file.exists():
+                    try:
+                        # Invalid UTF-8 must not hide worker failure diagnostics.
+                        lines = proc.log_file.read_text(errors="replace").splitlines()
+                        if lines:
+                            logger.error("\nLast %d lines of log:", tail_lines)
+                            for line in lines[-tail_lines:]:
+                                logger.error("  %s", line)
+                    except Exception as e:  # noqa: BLE001
+                        logger.error("Could not read log file: %s", e)
+
+        logger.error("=" * 60)
+
+    def get_process(self, name: str) -> ManagedProcess | None:
+        """Get a process by name."""
+        with self._lock:
+            return self._processes.get(name)
+
+    def pop_process(self, name: str) -> ManagedProcess | None:
+        """Remove and return a process by name (None when absent). Does not stop it."""
+        with self._lock:
+            return self._processes.pop(name, None)
+
+    def get_all_processes(self) -> dict[str, ManagedProcess]:
+        """Get a copy of all registered processes."""
+        with self._lock:
+            return dict(self._processes)
+
+    @property
+    def process_count(self) -> int:
+        """Get the number of registered processes."""
+        with self._lock:
+            return len(self._processes)
+
+
+def setup_signal_handlers(
+    stop_event: threading.Event,
+    registry: ProcessRegistry,
+) -> None:
+    """Setup signal handlers for graceful shutdown.
+
+    The handler records the signal on ``registry.received_signal`` so the
+    cleanup path can tell a walltime or scancel shutdown from a process failure.
+
+    Args:
+        stop_event: Event to signal shutdown
+        registry: ProcessRegistry to cleanup on signal
+    """
+
+    def signal_handler(signum, frame):
+        sig_name = signal.Signals(signum).name
+        logger.warning("Received signal %s, initiating cleanup...", sig_name)
+        registry.received_signal = sig_name
+        stop_event.set()
+        registry.cleanup()
+        sys.exit(1)
+
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+
+def start_process_monitor(
+    stop_event: threading.Event,
+    registry: ProcessRegistry,
+    poll_interval: float = 2.0,
+    reconcile: Callable[[], None] | None = None,
+) -> threading.Thread:
+    """Start a background thread that monitors for process failures.
+
+    Args:
+        stop_event: Event that signals the monitor to stop
+        registry: ProcessRegistry to monitor
+        poll_interval: Seconds between checks
+        reconcile: Called at the top of every tick, before the failure check, so
+            a supervisor can relaunch an exited worker (or hand it back to the
+            registry) before the check sees it. A raising reconcile is logged
+            and the monitor keeps going; it must never take the job down.
+
+    Returns:
+        The monitoring thread (already started)
+    """
+
+    def monitor_loop():
+        while not stop_event.is_set():
+            if reconcile is not None:
+                try:
+                    reconcile()
+                except Exception:
+                    logger.exception("Worker supervisor reconcile failed; continuing")
+            if registry.check_failures():
+                logger.error("Critical process failure detected!")
+                stop_event.set()
+                registry.cleanup()
+                sys.exit(1)
+            time.sleep(poll_interval)
+
+    thread = threading.Thread(
+        target=monitor_loop,
+        daemon=True,
+        name="ProcessMonitor",
+    )
+    thread.start()
+    return thread

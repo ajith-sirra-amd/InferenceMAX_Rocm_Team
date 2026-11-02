@@ -1,0 +1,1083 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Tests for post-processing: benchmark extraction, S3 upload, and AI analysis."""
+
+import json
+import logging
+from unittest.mock import MagicMock, patch
+
+from srtctl.core.schema import (
+    DEFAULT_AI_ANALYSIS_PROMPT,
+    AIAnalysisConfig,
+    ReportingConfig,
+    ReportingStatusConfig,
+    S3Config,
+)
+
+
+class TestAIAnalysisConfig:
+    """Tests for AIAnalysisConfig dataclass."""
+
+    def test_default_values(self):
+        """Test default configuration values."""
+        config = AIAnalysisConfig()
+
+        assert config.enabled is False
+        assert config.openrouter_api_key is None
+        assert config.gh_token is None
+        assert config.repos_to_search == ["sgl-project/sglang", "ai-dynamo/dynamo"]
+        assert config.pr_search_days == 14
+        assert config.prompt is None
+
+    def test_custom_values(self):
+        """Test custom configuration values."""
+        config = AIAnalysisConfig(
+            enabled=True,
+            openrouter_api_key="sk-or-test-key",
+            gh_token="ghp_test_token",
+            repos_to_search=["my-org/my-repo"],
+            pr_search_days=7,
+            prompt="Custom prompt: {log_dir}",
+        )
+
+        assert config.enabled is True
+        assert config.openrouter_api_key == "sk-or-test-key"
+        assert config.gh_token == "ghp_test_token"
+        assert config.repos_to_search == ["my-org/my-repo"]
+        assert config.pr_search_days == 7
+        assert config.prompt == "Custom prompt: {log_dir}"
+
+    def test_get_prompt_with_default(self):
+        """Test get_prompt uses default template when prompt is None."""
+        config = AIAnalysisConfig()
+        prompt = config.get_prompt("/path/to/logs")
+
+        assert "/path/to/logs" in prompt
+        assert "sgl-project/sglang, ai-dynamo/dynamo" in prompt
+        assert "14" in prompt  # pr_search_days
+
+    def test_get_prompt_with_custom_template(self):
+        """Test get_prompt uses custom template."""
+        config = AIAnalysisConfig(
+            prompt="Analyze logs in {log_dir}, search {repos} for last {pr_days} days",
+            repos_to_search=["my-repo"],
+            pr_search_days=7,
+        )
+        prompt = config.get_prompt("/my/logs")
+
+        assert prompt == "Analyze logs in /my/logs, search my-repo for last 7 days"
+
+    def test_get_prompt_variable_substitution(self):
+        """Test all template variables are substituted."""
+        config = AIAnalysisConfig(
+            repos_to_search=["repo1", "repo2", "repo3"],
+            pr_search_days=30,
+        )
+        prompt = config.get_prompt("/test/dir")
+
+        assert "/test/dir" in prompt
+        assert "repo1, repo2, repo3" in prompt
+        assert "30" in prompt
+
+
+class TestDefaultPrompt:
+    """Tests for the default AI analysis prompt."""
+
+    def test_default_prompt_has_placeholders(self):
+        """Test default prompt has all required placeholders."""
+        assert "{log_dir}" in DEFAULT_AI_ANALYSIS_PROMPT
+        assert "{repos}" in DEFAULT_AI_ANALYSIS_PROMPT
+        assert "{pr_days}" in DEFAULT_AI_ANALYSIS_PROMPT
+
+    def test_default_prompt_mentions_gh_cli(self):
+        """Test default prompt tells Claude about gh CLI."""
+        assert "gh" in DEFAULT_AI_ANALYSIS_PROMPT.lower()
+        assert "github" in DEFAULT_AI_ANALYSIS_PROMPT.lower() or "PR" in DEFAULT_AI_ANALYSIS_PROMPT
+
+    def test_default_prompt_mentions_output_file(self):
+        """Test default prompt tells Claude to write ai_analysis.md."""
+        assert "ai_analysis.md" in DEFAULT_AI_ANALYSIS_PROMPT
+
+
+class TestClusterConfigIntegration:
+    """Tests for reporting config in cluster config."""
+
+    def test_cluster_config_with_reporting(self):
+        """Test ClusterConfig can include ReportingConfig with all sub-configs."""
+        from srtctl.core.schema import ClusterConfig
+
+        cluster_config = ClusterConfig(
+            default_account="test-account",
+            reporting=ReportingConfig(
+                status=ReportingStatusConfig(endpoint="https://dashboard.example.com"),
+                ai_analysis=AIAnalysisConfig(
+                    enabled=True,
+                    openrouter_api_key="sk-or-test",
+                ),
+                s3=S3Config(
+                    bucket="test-bucket",
+                    prefix="logs",
+                    region="us-west-2",
+                ),
+            ),
+        )
+
+        assert cluster_config.reporting is not None
+        assert cluster_config.reporting.status is not None
+        assert cluster_config.reporting.status.endpoint == "https://dashboard.example.com"
+        assert cluster_config.reporting.ai_analysis is not None
+        assert cluster_config.reporting.ai_analysis.enabled is True
+        assert cluster_config.reporting.ai_analysis.openrouter_api_key == "sk-or-test"
+        assert cluster_config.reporting.s3 is not None
+        assert cluster_config.reporting.s3.bucket == "test-bucket"
+
+    def test_cluster_config_without_reporting(self):
+        """Test ClusterConfig works without ReportingConfig."""
+        from srtctl.core.schema import ClusterConfig
+
+        cluster_config = ClusterConfig(
+            default_account="test-account",
+        )
+
+        assert cluster_config.reporting is None
+
+
+class TestPostProcessStageMixin:
+    """Tests for PostProcessStageMixin."""
+
+    def _create_mixin_with_mocks(self, tmp_path=None):
+        """Create a mixin instance with all post-processing methods mocked."""
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        mixin = PostProcessStageMixin()
+
+        # Mock runtime and config for lockfile writing
+        if tmp_path is None:
+            import tempfile
+            from pathlib import Path
+
+            tmp_path = Path(tempfile.mkdtemp())
+        log_dir = tmp_path / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        mixin.runtime = MagicMock()
+        mixin.runtime.log_dir = log_dir
+        mixin.config = MagicMock()
+
+        mixin._copy_config_to_logs = MagicMock()
+        mixin._generate_rollup = MagicMock()
+        mixin._extract_benchmark_results = MagicMock(return_value=None)
+        mixin._run_postprocess_container = MagicMock(return_value=None)
+        mixin._get_ai_analysis_config = MagicMock(return_value=None)
+        mixin._run_ai_analysis = MagicMock()
+        return mixin
+
+    def test_resolve_secret_from_config(self):
+        """Test secret resolution prefers config value."""
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        mixin = PostProcessStageMixin()
+        result = mixin._resolve_secret("config-value", "ENV_VAR")
+
+        assert result == "config-value"
+
+    def test_resolve_secret_from_env(self, monkeypatch):
+        """Test secret resolution falls back to environment variable."""
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        monkeypatch.setenv("TEST_SECRET", "env-value")
+
+        mixin = PostProcessStageMixin()
+        result = mixin._resolve_secret(None, "TEST_SECRET")
+
+        assert result == "env-value"
+
+    def test_resolve_secret_returns_none_when_not_found(self, monkeypatch):
+        """Test secret resolution returns None when not found anywhere."""
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        # Ensure env var is not set
+        monkeypatch.delenv("NONEXISTENT_VAR", raising=False)
+
+        mixin = PostProcessStageMixin()
+        result = mixin._resolve_secret(None, "NONEXISTENT_VAR")
+
+        assert result is None
+
+    def test_run_postprocess_always_runs_extraction_and_upload(self):
+        """Test run_postprocess always runs benchmark extraction and S3 upload."""
+        mixin = self._create_mixin_with_mocks()
+
+        mixin.run_postprocess(0)  # success exit code
+
+        mixin._extract_benchmark_results.assert_called_once()
+        mixin._run_postprocess_container.assert_called_once()
+        # logs_url is stashed on self for do_sweep's final report_completed PUT
+        assert mixin._last_logs_url is None  # no S3 configured in this mock
+
+    def test_run_postprocess_eagerly_pushes_logs_url_to_reporter(self):
+        """When a reporter is passed and S3 sync produces a URL, push eagerly."""
+        mixin = self._create_mixin_with_mocks()
+        s3_url = "s3://bucket/prefix/12345/"
+        mixin._run_postprocess_container = MagicMock(return_value=s3_url)
+        reporter = MagicMock()
+
+        mixin.run_postprocess(0, reporter=reporter)
+
+        reporter.report_artifacts.assert_called_once_with(logs_url=s3_url)
+        assert mixin._last_logs_url == s3_url
+
+    def test_run_postprocess_skips_eager_push_when_no_s3_url(self):
+        """No S3 URL means no eager report_artifacts call."""
+        mixin = self._create_mixin_with_mocks()
+        reporter = MagicMock()
+
+        mixin.run_postprocess(0, reporter=reporter)
+
+        reporter.report_artifacts.assert_not_called()
+        assert mixin._last_logs_url is None
+
+    def test_run_postprocess_skips_eager_push_without_reporter(self):
+        """Without a reporter, stash happens but no PUT is attempted."""
+        mixin = self._create_mixin_with_mocks()
+        s3_url = "s3://bucket/prefix/12345/"
+        mixin._run_postprocess_container = MagicMock(return_value=s3_url)
+
+        # Should not raise even though no reporter is provided
+        mixin.run_postprocess(0)
+
+        assert mixin._last_logs_url == s3_url
+
+    def test_run_postprocess_skips_ai_on_success(self):
+        """Test run_postprocess skips AI analysis when exit_code is 0."""
+        mixin = self._create_mixin_with_mocks()
+
+        mixin.run_postprocess(0)
+
+        mixin._get_ai_analysis_config.assert_not_called()
+        mixin._run_ai_analysis.assert_not_called()
+
+    def test_run_postprocess_skips_ai_when_not_configured(self):
+        """Test run_postprocess skips AI analysis when not configured."""
+        mixin = self._create_mixin_with_mocks()
+        mixin._get_ai_analysis_config.return_value = None
+
+        mixin.run_postprocess(1)
+
+        mixin._get_ai_analysis_config.assert_called_once()
+        mixin._run_ai_analysis.assert_not_called()
+
+    def test_run_postprocess_skips_ai_when_disabled(self):
+        """Test run_postprocess skips AI analysis when disabled."""
+        mixin = self._create_mixin_with_mocks()
+        mixin._get_ai_analysis_config.return_value = AIAnalysisConfig(enabled=False)
+
+        mixin.run_postprocess(1)
+
+        mixin._get_ai_analysis_config.assert_called_once()
+        mixin._run_ai_analysis.assert_not_called()
+
+    def test_run_postprocess_calls_ai_analysis_when_enabled(self):
+        """Test run_postprocess calls _run_ai_analysis when enabled and failed."""
+        mixin = self._create_mixin_with_mocks()
+        config = AIAnalysisConfig(enabled=True, openrouter_api_key="sk-or-test")
+        mixin._get_ai_analysis_config.return_value = config
+
+        mixin.run_postprocess(1)
+
+        mixin._run_ai_analysis.assert_called_once_with(config)
+
+
+class TestAIAnalysisConfigSchema:
+    """Tests for AIAnalysisConfig marshmallow schema."""
+
+    def test_schema_load_minimal(self):
+        """Test loading minimal config from dict."""
+        schema = AIAnalysisConfig.Schema()
+        config = schema.load({"enabled": True})
+
+        assert config.enabled is True
+        assert config.repos_to_search == ["sgl-project/sglang", "ai-dynamo/dynamo"]
+
+    def test_schema_load_full(self):
+        """Test loading full config from dict."""
+        schema = AIAnalysisConfig.Schema()
+        config = schema.load(
+            {
+                "enabled": True,
+                "openrouter_api_key": "sk-or-test",
+                "gh_token": "ghp_test",
+                "repos_to_search": ["my/repo"],
+                "pr_search_days": 7,
+                "prompt": "Custom prompt",
+            }
+        )
+
+        assert config.enabled is True
+        assert config.openrouter_api_key == "sk-or-test"
+        assert config.gh_token == "ghp_test"
+        assert config.repos_to_search == ["my/repo"]
+        assert config.pr_search_days == 7
+        assert config.prompt == "Custom prompt"
+
+    def test_schema_dump(self):
+        """Test dumping config to dict."""
+        config = AIAnalysisConfig(
+            enabled=True,
+            openrouter_api_key="sk-or-test",
+        )
+        schema = AIAnalysisConfig.Schema()
+        data = schema.dump(config)
+
+        assert data["enabled"] is True
+        assert data["openrouter_api_key"] == "sk-or-test"
+        assert data["pr_search_days"] == 14  # default
+
+
+class TestS3Config:
+    """Tests for S3Config dataclass."""
+
+    def test_required_bucket(self):
+        """Test S3Config requires bucket."""
+        config = S3Config(bucket="my-bucket")
+        assert config.bucket == "my-bucket"
+        assert config.prefix is None
+        assert config.region is None
+        # None means "use the defaults"; an explicit [] means "nothing".
+        assert config.exclude is None
+        assert config.archive is None
+
+    def test_schema_load_upload_policy(self):
+        config = S3Config.Schema().load({"bucket": "b", "exclude": [], "archive": ["*.out"]})
+        assert config.exclude == []
+        assert config.archive == ["*.out"]
+
+    def test_default_excludes_are_scoped_to_the_aiperf_artifact_roots(self):
+        """A same-named file from another benchmark type (a custom runner's inputs.json) must not be dropped."""
+        from srtctl.core.schema import DEFAULT_S3_EXCLUDE
+
+        assert DEFAULT_S3_EXCLUDE
+        for pattern in DEFAULT_S3_EXCLUDE:
+            assert pattern.startswith(("artifacts/*/", "sa-bench_*/*/")), pattern
+        for name in ("server_metrics_export.jsonl", "gpu_telemetry_export.jsonl", "inputs.json"):
+            assert f"artifacts/*/{name}" in DEFAULT_S3_EXCLUDE
+            assert f"sa-bench_*/*/{name}" in DEFAULT_S3_EXCLUDE
+
+    def test_full_config(self):
+        """Test S3Config with all fields."""
+        config = S3Config(
+            bucket="my-bucket",
+            prefix="logs/benchmark",
+            region="us-west-2",
+            access_key_id="AKIA...",
+            secret_access_key="secret...",
+        )
+        assert config.bucket == "my-bucket"
+        assert config.prefix == "logs/benchmark"
+        assert config.region == "us-west-2"
+        assert config.access_key_id == "AKIA..."
+        assert config.secret_access_key == "secret..."
+
+    def test_schema_load(self):
+        """Test loading S3Config from dict."""
+        schema = S3Config.Schema()
+        config = schema.load(
+            {
+                "bucket": "test-bucket",
+                "prefix": "prefix",
+                "region": "eu-west-1",
+            }
+        )
+        assert config.bucket == "test-bucket"
+        assert config.prefix == "prefix"
+        assert config.region == "eu-west-1"
+
+
+class TestReportingConfig:
+    """Tests for ReportingConfig dataclass."""
+
+    def test_default_values(self):
+        """Test default configuration values."""
+        config = ReportingConfig()
+        assert config.status is None
+        assert config.ai_analysis is None
+        assert config.s3 is None
+
+    def test_full_config(self):
+        """Test ReportingConfig with all sub-configs."""
+        config = ReportingConfig(
+            status=ReportingStatusConfig(endpoint="https://api.example.com"),
+            ai_analysis=AIAnalysisConfig(enabled=True),
+            s3=S3Config(bucket="logs-bucket"),
+        )
+        assert config.status is not None
+        assert config.status.endpoint == "https://api.example.com"
+        assert config.ai_analysis is not None
+        assert config.ai_analysis.enabled is True
+        assert config.s3 is not None
+        assert config.s3.bucket == "logs-bucket"
+
+    def test_schema_load(self):
+        """Test loading ReportingConfig from nested dict."""
+        schema = ReportingConfig.Schema()
+        config = schema.load(
+            {
+                "status": {"endpoint": "https://dashboard.example.com"},
+                "ai_analysis": {"enabled": True, "pr_search_days": 7},
+                "s3": {"bucket": "my-bucket", "prefix": "logs"},
+            }
+        )
+        assert config.status.endpoint == "https://dashboard.example.com"
+        assert config.ai_analysis.enabled is True
+        assert config.ai_analysis.pr_search_days == 7
+        assert config.s3.bucket == "my-bucket"
+        assert config.s3.prefix == "logs"
+
+
+class TestReportingStatusConfig:
+    """Tests for ReportingStatusConfig dataclass."""
+
+    def test_required_endpoint(self):
+        """Test ReportingStatusConfig requires endpoint."""
+        config = ReportingStatusConfig(endpoint="https://api.example.com")
+        assert config.endpoint == "https://api.example.com"
+
+    def test_schema_load(self):
+        """Test loading ReportingStatusConfig from dict."""
+        schema = ReportingStatusConfig.Schema()
+        config = schema.load({"endpoint": "https://dashboard.example.com"})
+        assert config.endpoint == "https://dashboard.example.com"
+
+
+class TestRollupFaultTolerance:
+    """Tests for rollup generation fault tolerance.
+
+    These tests verify that failures in rollup generation never crash the benchmark.
+    """
+
+    def _create_mixin_with_runtime(self, tmp_path, benchmark_type="sa-bench"):
+        """Create a mixin instance with real runtime and config mocks."""
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        mixin = PostProcessStageMixin()
+
+        # Mock config
+        mixin.config = MagicMock()
+        mixin.config.benchmark.type = benchmark_type
+
+        # Mock runtime with real tmp_path for log_dir
+        mixin.runtime = MagicMock()
+        mixin.runtime.log_dir = tmp_path
+        mixin.runtime.job_id = "12345"
+
+        return mixin
+
+    def test_generate_rollup_no_script_does_not_raise(self, tmp_path):
+        """Test _generate_rollup returns silently when no rollup script exists."""
+        mixin = self._create_mixin_with_runtime(tmp_path, benchmark_type="nonexistent-benchmark")
+
+        # Should not raise - just returns silently
+        mixin._generate_rollup()
+
+    def test_generate_rollup_script_failure_does_not_raise(self, tmp_path):
+        """Test _generate_rollup handles script failures gracefully."""
+        mixin = self._create_mixin_with_runtime(tmp_path, benchmark_type="sa-bench")
+
+        # No sa-bench results exist, so rollup.py will fail
+        # But it should not raise
+        mixin._generate_rollup()
+
+    def test_generate_rollup_timeout_does_not_raise(self, tmp_path):
+        """Test _generate_rollup handles timeout gracefully."""
+        import subprocess
+
+        mixin = self._create_mixin_with_runtime(tmp_path, benchmark_type="sa-bench")
+
+        # Mock subprocess.run to raise TimeoutExpired
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="test", timeout=30)
+
+            # Should not raise
+            mixin._generate_rollup()
+
+    def test_generate_rollup_exception_does_not_raise(self, tmp_path):
+        """Test _generate_rollup handles unexpected exceptions gracefully."""
+        mixin = self._create_mixin_with_runtime(tmp_path, benchmark_type="sa-bench")
+
+        # Mock subprocess.run to raise generic exception
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = Exception("Unexpected error")
+
+            # Should not raise
+            mixin._generate_rollup()
+
+    def test_extract_results_fallback_to_raw_output(self, tmp_path):
+        """Test _extract_benchmark_results falls back to benchmark.out when no rollup."""
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        # Create benchmark.out but no rollup.json
+        benchmark_out = tmp_path / "benchmark.out"
+        benchmark_out.write_text("Raw benchmark output here")
+
+        result = mixin._extract_benchmark_results()
+
+        assert result is not None
+        assert result["benchmark_type"] == "unknown"
+        assert result["raw_output"] == "Raw benchmark output here"
+
+    def test_extract_results_corrupted_rollup_fallback(self, tmp_path):
+        """Test _extract_benchmark_results falls back when rollup.json is corrupted."""
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        # Create corrupted rollup.json
+        rollup = tmp_path / "benchmark-rollup.json"
+        rollup.write_text("not valid json {{{")
+
+        # Create backup benchmark.out
+        benchmark_out = tmp_path / "benchmark.out"
+        benchmark_out.write_text("Fallback output")
+
+        result = mixin._extract_benchmark_results()
+
+        assert result is not None
+        assert result["benchmark_type"] == "unknown"
+        assert result["raw_output"] == "Fallback output"
+
+    def test_extract_results_no_files_returns_none(self, tmp_path):
+        """Test _extract_benchmark_results returns None when no files exist."""
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        result = mixin._extract_benchmark_results()
+
+        assert result is None
+
+    def test_extract_results_valid_rollup(self, tmp_path):
+        """Test _extract_benchmark_results reads valid rollup.json."""
+        import json
+
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        # Create valid rollup.json
+        rollup_data = {
+            "benchmark_type": "sa-bench",
+            "timestamp": "2026-01-27T00:00:00Z",
+            "config": {"model": "test-model", "isl": 100, "osl": 100},
+            "runs": [{"concurrency": 4, "throughput_toks": 100.0}],
+        }
+        rollup = tmp_path / "benchmark-rollup.json"
+        rollup.write_text(json.dumps(rollup_data))
+
+        result = mixin._extract_benchmark_results()
+
+        assert result is not None
+        assert result["benchmark_type"] == "sa-bench"
+        assert result["config"]["model"] == "test-model"
+        assert len(result["runs"]) == 1
+
+    def test_run_postprocess_completes_with_rollup_failure(self, tmp_path):
+        """Test run_postprocess completes even when rollup fails entirely."""
+        mixin = self._create_mixin_with_runtime(tmp_path, benchmark_type="sa-bench")
+
+        # Mock all the other methods to isolate rollup behavior
+        mixin._run_postprocess_container = MagicMock(return_value=None)
+        mixin._get_ai_analysis_config = MagicMock(return_value=None)
+
+        # Mock _generate_rollup to raise (simulating worst case)
+        # But actually, _generate_rollup should never raise - let's verify that
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = Exception("Catastrophic failure")
+
+            # Should complete without raising
+            mixin.run_postprocess(exit_code=0)
+
+        # S3 upload still attempted even when rollup fails
+        mixin._run_postprocess_container.assert_called_once()
+        # And logs_url is still stashed (None here because S3 returned None)
+        assert mixin._last_logs_url is None
+
+
+class TestS3UploadFaultTolerance:
+    """Tests for S3 upload fault tolerance.
+
+    These tests verify that failures in S3 upload never crash the benchmark.
+    """
+
+    def _create_mixin_with_runtime(self, tmp_path):
+        """Create a mixin instance with runtime mocks."""
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        mixin = PostProcessStageMixin()
+
+        # Mock config
+        mixin.config = MagicMock()
+        mixin.config.benchmark.type = "sa-bench"
+
+        # Mock runtime
+        mixin.runtime = MagicMock()
+        mixin.runtime.log_dir = tmp_path
+        mixin.runtime.job_id = "12345"
+        mixin.runtime.nodes.head = "node001"
+
+        return mixin
+
+    def test_no_s3_config_returns_none(self, tmp_path):
+        """Test _run_postprocess_container returns None when S3 not configured."""
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        # Mock _get_s3_config to return None
+        mixin._get_s3_config = MagicMock(return_value=None)
+
+        result = mixin._run_postprocess_container()
+
+        assert result is None
+
+    def test_srun_failure_does_not_raise(self, tmp_path):
+        """Test _run_postprocess_container handles srun failure gracefully."""
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        # Mock S3 config
+        mixin._get_s3_config = MagicMock(return_value=S3Config(bucket="test-bucket"))
+
+        # Mock start_srun_process to raise
+        with patch("srtctl.cli.mixins.postprocess_stage.start_srun_process") as mock_srun:
+            mock_srun.side_effect = Exception("SLURM is down")
+
+            result = mixin._run_postprocess_container()
+
+        assert result is None
+
+    def test_srun_timeout_does_not_raise(self, tmp_path):
+        """Test _run_postprocess_container handles timeout gracefully."""
+        import subprocess
+
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        # Mock S3 config
+        mixin._get_s3_config = MagicMock(return_value=S3Config(bucket="test-bucket"))
+
+        # Mock start_srun_process to return a process that times out
+        mock_proc = MagicMock()
+        mock_proc.wait.side_effect = subprocess.TimeoutExpired(cmd="test", timeout=600)
+        mock_proc.kill = MagicMock()
+
+        with patch("srtctl.cli.mixins.postprocess_stage.start_srun_process") as mock_srun:
+            mock_srun.return_value = mock_proc
+
+            result = mixin._run_postprocess_container()
+
+        assert result is None
+        mock_proc.kill.assert_called_once()
+
+    def test_upload_script_carries_the_policy(self, tmp_path):
+        """The container script excludes the defaults, archives aiperf's per-request file, and is valid bash."""
+        import shlex
+        import subprocess
+
+        from srtctl.core.schema import DEFAULT_S3_ARCHIVE, DEFAULT_S3_EXCLUDE
+
+        mixin = self._create_mixin_with_runtime(tmp_path)
+        mixin._get_s3_config = MagicMock(
+            return_value=S3Config(bucket="test-bucket", endpoint_url="https://minio.example")
+        )
+        mock_proc = MagicMock()
+        mock_proc.wait.return_value = 0
+        mock_proc.returncode = 0
+        with patch("srtctl.cli.mixins.postprocess_stage.start_srun_process") as mock_srun:
+            mock_srun.return_value = mock_proc
+            result = mixin._run_postprocess_container()
+
+        assert result is not None and result.startswith("s3://test-bucket/srtslurm/") and result.endswith("/12345/")
+        script = mock_srun.call_args.kwargs["command"][2]
+        for pattern in DEFAULT_S3_EXCLUDE:
+            assert f"--exclude {shlex.quote(pattern)}" in script, pattern
+        # The archived files are kept out of the plain sync, with ** collapsed to the AWS wildcard.
+        assert "--exclude 'artifacts/*/profile_export.jsonl'" in script
+        assert "--exclude 'sa-bench_*/*/profile_export.jsonl'" in script
+        assert shlex.quote(__import__("json").dumps(list(DEFAULT_S3_ARCHIVE))) in script
+        assert 'aws s3 cp "$archive_path"' in script
+        assert "--endpoint-url https://minio.example" in script
+        assert '"s3_url": "s3://test-bucket/' in script and '"exclude": [' in script
+        assert subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True, check=False).returncode == 0
+
+    def test_upload_script_with_policy_disabled(self, tmp_path):
+        """exclude: [] and archive: [] ship the whole directory as-is, like before."""
+        import subprocess
+
+        mixin = self._create_mixin_with_runtime(tmp_path)
+        script = mixin._build_postprocess_script("s3://b/p/1/", "", exclude=[], archive=[])
+        assert "--exclude" not in script
+        assert "Packing" not in script and "aws s3 cp" in script  # the cp branch stays but archive_path is empty
+        assert "aws s3 sync /logs s3://b/p/1/" in script
+        assert subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True, check=False).returncode == 0
+
+    def test_srun_nonzero_exit_does_not_raise(self, tmp_path):
+        """Test _run_postprocess_container handles non-zero exit gracefully."""
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        # Mock S3 config
+        mixin._get_s3_config = MagicMock(return_value=S3Config(bucket="test-bucket"))
+
+        # Mock start_srun_process to return a process that fails
+        mock_proc = MagicMock()
+        mock_proc.wait.return_value = None
+        mock_proc.returncode = 1  # Non-zero exit
+
+        with patch("srtctl.cli.mixins.postprocess_stage.start_srun_process") as mock_srun:
+            mock_srun.return_value = mock_proc
+
+            s3_url = mixin._run_postprocess_container()
+
+        # Should return None for s3_url on failure
+        assert s3_url is None
+
+    def test_postprocess_script_only_uploads(self, tmp_path):
+        """The upload container ships the log directory as is; no log parser runs in it."""
+        mixin = self._create_mixin_with_runtime(tmp_path)
+        script = mixin._build_postprocess_script("s3://test-bucket/run/", "")
+
+        assert "aws s3 sync /logs s3://test-bucket/run/" in script
+        assert "srtlog" not in script
+        assert '"s3_url": "s3://test-bucket/run/"' in script
+
+    def test_run_postprocess_completes_with_s3_failure(self, tmp_path):
+        """Test run_postprocess completes even when S3 upload fails entirely."""
+        mixin = self._create_mixin_with_runtime(tmp_path)
+
+        # Mock _generate_rollup
+        mixin._generate_rollup = MagicMock()
+
+        # Mock _run_postprocess_container to simulate S3 failure
+        mixin._run_postprocess_container = MagicMock(return_value=None)
+
+        # Mock AI config
+        mixin._get_ai_analysis_config = MagicMock(return_value=None)
+
+        reporter = MagicMock()
+
+        # Should complete without raising
+        mixin.run_postprocess(exit_code=0, reporter=reporter)
+
+        # No S3 URL => no eager artifact push, and logs_url stash is None so the
+        # final report_completed PUT sends exit_code only.
+        reporter.report_artifacts.assert_not_called()
+        assert mixin._last_logs_url is None
+
+
+class TestCopyConfigToLogs:
+    """Tests for copying config YAML to log directory."""
+
+    def _create_mixin_with_runtime(self, tmp_path):
+        """Create a mixin instance with runtime pointing to tmp_path/logs."""
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        log_dir = tmp_path / "logs"
+        log_dir.mkdir()
+
+        mixin = PostProcessStageMixin()
+        mixin.runtime = MagicMock()
+        mixin.runtime.log_dir = log_dir
+        mixin.runtime.job_id = "12345"
+        return mixin, log_dir
+
+    def test_copies_config_yaml(self, tmp_path):
+        """Test config.yaml is copied from output dir to log dir."""
+        mixin, log_dir = self._create_mixin_with_runtime(tmp_path)
+
+        config_src = tmp_path / "config.yaml"
+        config_src.write_text("name: test-config\n")
+
+        mixin._copy_config_to_logs()
+
+        assert (log_dir / "config.yaml").exists()
+        assert (log_dir / "config.yaml").read_text() == "name: test-config\n"
+
+    def test_copies_resolved_override_config(self, tmp_path):
+        """Test resolved override/zip configs (config_{suffix}.yaml) are copied too.
+
+        Override/zip submissions write the unresolved source as config.yaml and the
+        actually-executed resolved variant as config_{suffix}.yaml. Both must reach
+        the log dir so the resolved config is uploaded to S3, not just the source.
+        """
+        mixin, log_dir = self._create_mixin_with_runtime(tmp_path)
+
+        (tmp_path / "config.yaml").write_text("base:\n  name: test\n")
+        (tmp_path / "config_tp_0.yaml").write_text("name: test\ntensor_parallel_size: 4\n")
+        (tmp_path / "config_resolved.yaml").write_text("name: test\nresolved: true\n")
+
+        mixin._copy_config_to_logs()
+
+        assert (log_dir / "config.yaml").exists()
+        assert (log_dir / "config_tp_0.yaml").exists()
+        assert (log_dir / "config_tp_0.yaml").read_text() == "name: test\ntensor_parallel_size: 4\n"
+        assert (log_dir / "config_resolved.yaml").exists()
+
+    def test_copies_sbatch_script(self, tmp_path):
+        """Test sbatch_script.sh is also copied."""
+        mixin, log_dir = self._create_mixin_with_runtime(tmp_path)
+
+        script_src = tmp_path / "sbatch_script.sh"
+        script_src.write_text("#!/bin/bash\necho hello\n")
+
+        mixin._copy_config_to_logs()
+
+        assert (log_dir / "sbatch_script.sh").exists()
+
+    def test_no_config_does_not_raise(self, tmp_path):
+        """Test graceful handling when config.yaml doesn't exist."""
+        mixin, log_dir = self._create_mixin_with_runtime(tmp_path)
+
+        mixin._copy_config_to_logs()
+
+        assert not (log_dir / "config.yaml").exists()
+
+    def test_copies_job_id_json(self, tmp_path):
+        """Test {job_id}.json is copied from output dir to log dir."""
+        mixin, log_dir = self._create_mixin_with_runtime(tmp_path)
+
+        json_src = tmp_path / "12345.json"
+        json_src.write_text('{"job_id": "12345"}\n')
+
+        mixin._copy_config_to_logs()
+
+        assert (log_dir / "12345.json").exists()
+        assert (log_dir / "12345.json").read_text() == '{"job_id": "12345"}\n'
+
+    def test_copies_git_state_txt(self, tmp_path):
+        """Test git_state.txt is copied from output dir to log dir."""
+        from srtctl.core.git_state import GIT_STATE_FILENAME
+
+        mixin, log_dir = self._create_mixin_with_runtime(tmp_path)
+
+        git_state_src = tmp_path / GIT_STATE_FILENAME
+        git_state_src.write_text("# srtctl git state snapshot\n")
+
+        mixin._copy_config_to_logs()
+
+        assert (log_dir / GIT_STATE_FILENAME).exists()
+        assert (log_dir / GIT_STATE_FILENAME).read_text() == "# srtctl git state snapshot\n"
+
+    def test_copy_failure_does_not_raise(self, tmp_path):
+        """Test graceful handling when copy fails."""
+        mixin, log_dir = self._create_mixin_with_runtime(tmp_path)
+
+        config_src = tmp_path / "config.yaml"
+        config_src.write_text("name: test\n")
+
+        log_dir.chmod(0o444)
+        try:
+            mixin._copy_config_to_logs()  # Should not raise
+        finally:
+            log_dir.chmod(0o755)
+
+
+class TestBuildPowerEnergyReport:
+    """Tests for the best-effort power_energy_report.json step in run_postprocess."""
+
+    def _create_mixin(self, log_dir):
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        mixin = PostProcessStageMixin()
+        mixin.config = MagicMock()
+        mixin.runtime = MagicMock()
+        mixin.runtime.log_dir = log_dir
+        return mixin
+
+    def test_skips_quietly_when_no_power_telemetry_present(self, tmp_path, caplog):
+        """No benchmark.out / no samples.csv (telemetry disabled) must not raise or write anything."""
+        mixin = self._create_mixin(tmp_path)
+
+        with caplog.at_level(logging.DEBUG, logger="srtctl.cli.mixins.postprocess_stage"):
+            mixin._build_power_energy_report()  # should not raise
+
+        assert not (tmp_path / "power_energy_report.json").exists()
+        skipped = [r for r in caplog.records if "Power energy report skipped" in r.getMessage()]
+        assert [r.levelno for r in skipped] == [logging.DEBUG]
+
+    def test_says_why_at_info_when_power_was_collected_but_no_report_could_be_built(self, tmp_path, caplog):
+        """A run with power CSVs and no report is a finding, not a non-event: the sweep log must carry the reason.
+
+        Here the benchmark died before aiperf wrote profile_export_aiperf.json
+        (as run 3090377 did), so the report has no profiling window.
+        """
+        log_dir = tmp_path
+        (log_dir / "benchmark.out").write_text(
+            "17:59:31.680 NOTICE   Phase profiling (profiling) started (runner.py:593)\n"
+        )
+        conc_dir = log_dir / "agentic" / "conc_4" / "aiperf_artifacts"
+        conc_dir.mkdir(parents=True)
+        (conc_dir / "profile_export.jsonl").write_text(
+            json.dumps(
+                {
+                    "metadata": {
+                        "benchmark_phase": "profiling",
+                        "request_start_ns": 10_000_000_000,
+                        "request_end_ns": 20_000_000_000,
+                    }
+                }
+            )
+            + "\n"
+        )
+        # ...but no profile_export_aiperf.json: aiperf never reached its summary step.
+        cpu_csv = log_dir / "power" / "cpu" / "samples.csv"
+        cpu_csv.parent.mkdir(parents=True)
+        cpu_csv.write_text("schema_version,timestamp_unix,hostname,source,sensor,socket_id,power_w,total_power_w\n")
+        mixin = self._create_mixin(log_dir)
+
+        with caplog.at_level(logging.DEBUG, logger="srtctl.cli.mixins.postprocess_stage"):
+            mixin._build_power_energy_report()
+
+        assert not (log_dir / "power_energy_report.json").exists()
+        skipped = [r for r in caplog.records if "Power energy report skipped" in r.getMessage()]
+        assert len(skipped) == 1
+        assert skipped[0].levelno == logging.INFO
+        assert "power samples present" in skipped[0].getMessage()
+        assert "profile_export_aiperf.json" in skipped[0].getMessage()
+
+    def test_writes_report_json_for_a_valid_run(self, tmp_path):
+        import csv
+        import json
+
+        log_dir = tmp_path
+        (log_dir / "benchmark.out").write_text(
+            "17:59:31.680 NOTICE   Phase profiling (profiling) started (runner.py:593)\n"
+            "19:00:01.681 NOTICE   Phase profiling (profiling) complete (runner.py:1162)\n"
+        )
+        conc_dir = log_dir / "agentic" / "conc_4" / "aiperf_artifacts"
+        conc_dir.mkdir(parents=True)
+        with (conc_dir / "profile_export.jsonl").open("w") as handle:
+            handle.write(
+                json.dumps(
+                    {
+                        "metadata": {
+                            "benchmark_phase": "profiling",
+                            "request_start_ns": 10_000_000_000,
+                            "request_end_ns": 20_000_000_000,
+                        }
+                    }
+                )
+                + "\n"
+            )
+        (conc_dir / "profile_export_aiperf.json").write_text(
+            json.dumps({"total_osl": {"avg": 5.0}, "total_isl": {"avg": 2.0}})
+        )
+
+        cpu_csv = log_dir / "power" / "cpu" / "samples.csv"
+        cpu_csv.parent.mkdir(parents=True)
+        with cpu_csv.open("w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                [
+                    "schema_version",
+                    "timestamp_unix",
+                    "hostname",
+                    "source",
+                    "sensor",
+                    "socket_id",
+                    "power_w",
+                    "total_power_w",
+                ]
+            )
+            writer.writerow([2, 9.0, "node-a", "acpi", "CPU0:cpuPowerUsageW", 0, 40.0, 40.0])
+            writer.writerow([2, 15.0, "node-a", "acpi", "CPU0:cpuPowerUsageW", 0, 44.0, 44.0])
+            writer.writerow([2, 21.0, "node-a", "acpi", "CPU0:cpuPowerUsageW", 0, 42.0, 42.0])
+
+        mixin = self._create_mixin(log_dir)
+
+        mixin._build_power_energy_report()
+
+        output_path = log_dir / "power_energy_report.json"
+        assert output_path.exists()
+        payload = json.loads(output_path.read_text())
+        assert len(payload) == 1
+        assert payload[0]["concurrency"] == 4
+        assert payload[0]["cpu_total_joules"] > 0.0
+
+    def test_run_postprocess_calls_power_energy_report(self, tmp_path):
+        """Verify run_postprocess wires this step in, without depending on real telemetry data."""
+        from srtctl.cli.mixins.postprocess_stage import PostProcessStageMixin
+
+        mixin = PostProcessStageMixin()
+        log_dir = tmp_path / "logs"
+        log_dir.mkdir()
+        mixin.runtime = MagicMock()
+        mixin.runtime.log_dir = log_dir
+        mixin.runtime.job_id = "12345"
+        mixin.config = MagicMock()
+
+        mixin._copy_config_to_logs = MagicMock()
+        mixin._generate_rollup = MagicMock()
+        mixin._extract_benchmark_results = MagicMock(return_value=None)
+        mixin._run_postprocess_container = MagicMock(return_value=(None, None))
+        mixin._get_ai_analysis_config = MagicMock(return_value=None)
+        mixin._build_power_energy_report = MagicMock()
+
+        mixin.run_postprocess(0)
+
+        mixin._build_power_energy_report.assert_called_once()
+
+
+class TestArchiveScript:
+    """The inline archive builder that runs inside the upload container."""
+
+    @staticmethod
+    def _tree(root):
+        files = {
+            "artifacts/run_c32/profile_export.jsonl": "a" * 5000,
+            "artifacts/run_c32/server_metrics_export.jsonl": "m" * 5000,
+            "artifacts/run_c128/profile_export.jsonl": "b" * 5000,
+            "sa-bench_isl_128/conc_4/aiperf_artifacts/profile_export.jsonl": "c" * 5000,
+            "unrelated/profile_export.jsonl": "d" * 5000,  # outside the configured archive roots
+            "sweep_1.log": "log",
+        }
+        for rel, body in files.items():
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(body)
+
+    def _run(self, root, out_dir, patterns):
+        import json
+        import subprocess
+        import sys
+
+        from srtctl.cli.mixins.postprocess_stage import ARCHIVE_SCRIPT
+
+        return subprocess.run(
+            [sys.executable, "-", str(root), str(out_dir), json.dumps(patterns)],
+            input=ARCHIVE_SCRIPT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_packs_only_the_matching_files_with_relative_names(self, tmp_path):
+        import tarfile
+
+        from srtctl.core.schema import DEFAULT_S3_ARCHIVE
+
+        root, out_dir = tmp_path / "logs", tmp_path / "out"
+        self._tree(root)
+        out_dir.mkdir()
+        result = self._run(root, out_dir, list(DEFAULT_S3_ARCHIVE))
+        assert result.returncode == 0, result.stderr
+        archive = result.stdout.strip().splitlines()[-1]
+        assert archive.startswith(str(out_dir / "bundle.tar."))
+        assert "3 files" in result.stderr
+        with tarfile.open(archive) as tar:
+            names = sorted(tar.getnames())
+        assert names == [
+            "artifacts/run_c128/profile_export.jsonl",
+            "artifacts/run_c32/profile_export.jsonl",
+            "sa-bench_isl_128/conc_4/aiperf_artifacts/profile_export.jsonl",
+        ]
+        # The log directory itself is untouched: the archive lives in out_dir only.
+        assert not list(root.glob("bundle.tar.*"))
+
+    def test_no_match_writes_nothing_and_exits_zero(self, tmp_path):
+        root, out_dir = tmp_path / "logs", tmp_path / "out"
+        self._tree(root)
+        out_dir.mkdir()
+        result = self._run(root, out_dir, ["nothing/**/here.jsonl"])
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""
+        assert "no file matched" in result.stderr
+        assert list(out_dir.iterdir()) == []

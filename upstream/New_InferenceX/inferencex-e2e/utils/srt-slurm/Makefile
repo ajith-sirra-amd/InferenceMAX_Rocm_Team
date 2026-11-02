@@ -1,0 +1,320 @@
+.PHONY: lint test test-cov ci check setup cleanup examples docs schema-docs schema-docs-check snapshots snapshots-check tachometer-scraper tachometer-scraper-download cpu-power-exporter cpu-power-exporter-download cpu-power-exporter-setup
+
+NATS_VERSION ?= v2.10.28
+ETCD_VERSION ?= v3.5.21
+PROCESS_EXPORTER_VERSION ?= 0.8.7
+OTEL_COLLECTOR_VERSION ?= 0.146.1
+LOGS_DIR ?= logs
+ARCH ?= $(shell uname -m)
+TACHOMETER_RELEASE ?= latest
+CPU_POWER_EXPORTER_RELEASE ?= latest
+
+default: check
+
+# === CI targets ===
+lint:
+	uv run ruff check src/srtctl/
+	uv run ruff format src/srtctl/
+	uv run ty check src/srtctl/
+
+test:
+	uv run pytest tests/ -v
+
+test-cov:
+	uv run pytest tests/ --cov=srtctl --cov-report=term-missing --cov-report=html
+
+# Regenerate docs/schema-reference.md from the code
+schema-docs:
+	uv run srtctl schema-docs
+
+# Fail if docs/schema-reference.md is stale (also enforced by CI and tests/test_schema_docs.py)
+schema-docs-check:
+	uv run srtctl schema-docs --check
+
+docs:
+	uvx --with mkdocs-material mkdocs build --strict
+
+snapshots:
+	uv run python tests/launch_snapshots.py
+
+snapshots-check:
+	uv run python tests/launch_snapshots.py --check
+
+# Run lint + tests in one command
+check: lint schema-docs-check test
+
+tachometer-scraper:
+	cargo build --release --locked --bin tachometer-scraper
+	install -Dm755 target/release/tachometer-scraper bin/tachometer-scraper
+
+tachometer-scraper-download:
+	@set -eu; \
+	case "$(ARCH)" in \
+		x86_64)  asset="tachometer-scraper-x86_64-unknown-linux-gnu"; file_pattern="x86-64" ;; \
+		aarch64) asset="tachometer-scraper-aarch64-unknown-linux-gnu"; file_pattern="aarch64" ;; \
+		*) echo "Unsupported architecture: $(ARCH)"; exit 1 ;; \
+	esac; \
+	if [ -f bin/tachometer-scraper ] && file bin/tachometer-scraper | grep -q "$$file_pattern"; then \
+		echo "Tachometer scraper already installed at bin/tachometer-scraper ($(ARCH))"; \
+		exit 0; \
+	fi; \
+	if [ "$(TACHOMETER_RELEASE)" = "latest" ]; then \
+		base_url="https://github.com/NVIDIA/srt-slurm/releases/latest/download"; \
+	else \
+		base_url="https://github.com/NVIDIA/srt-slurm/releases/download/$(TACHOMETER_RELEASE)"; \
+	fi; \
+	tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	echo "Downloading $$asset from srt-slurm $(TACHOMETER_RELEASE)"; \
+	curl --fail --location --retry 3 --retry-delay 2 "$$base_url/$$asset" --output "$$tmp_dir/$$asset"; \
+	curl --fail --location --retry 3 --retry-delay 2 "$$base_url/$$asset.sha256" --output "$$tmp_dir/$$asset.sha256"; \
+	(cd "$$tmp_dir" && sha256sum --check "$$asset.sha256"); \
+	install -Dm755 "$$tmp_dir/$$asset" bin/tachometer-scraper; \
+	echo "Installed Tachometer scraper at bin/tachometer-scraper"
+
+examples:
+	@find examples -type f -name '*.yaml' -print | sort
+
+cpu-power-exporter:
+	cargo build --release --locked --bin cpu-power-exporter
+	install -Dm755 target/release/cpu-power-exporter bin/cpu-power-exporter
+	@# A locally built binary is not a release. Leaving the marker behind would
+	@# tell a later pinned download that the tag is already installed.
+	rm -f bin/.cpu-power-exporter.release
+
+cpu-power-exporter-download:
+	@set -eu; \
+	case "$(ARCH)" in \
+		x86_64)  asset="cpu-power-exporter-x86_64-unknown-linux-musl"; file_pattern="x86-64" ;; \
+		aarch64) asset="cpu-power-exporter-aarch64-unknown-linux-gnu"; file_pattern="aarch64" ;; \
+		*) echo "Unsupported architecture: $(ARCH)"; exit 1 ;; \
+	esac; \
+	marker=bin/.cpu-power-exporter.release; \
+	installed=$$(cat "$$marker" 2>/dev/null || echo ""); \
+	if [ -f bin/cpu-power-exporter ]; then \
+		if ! command -v file >/dev/null 2>&1; then \
+			echo "Cannot check the architecture of bin/cpu-power-exporter: file(1) is not installed"; \
+			echo "Downloading the $(ARCH) asset rather than trusting or deleting it"; \
+		elif ! file bin/cpu-power-exporter | grep -q "$$file_pattern"; then \
+			echo "Removing bin/cpu-power-exporter: not a $(ARCH) binary"; \
+			rm -f bin/cpu-power-exporter "$$marker"; \
+		elif [ "$(CPU_POWER_EXPORTER_RELEASE)" = "latest" ] || [ "$$installed" = "$(CPU_POWER_EXPORTER_RELEASE)" ]; then \
+			echo "cpu-power-exporter $$installed already installed at bin/cpu-power-exporter ($(ARCH))"; \
+			exit 0; \
+		fi; \
+	fi; \
+	if [ "$(CPU_POWER_EXPORTER_RELEASE)" = "latest" ]; then \
+		base_url="https://github.com/NVIDIA/srt-slurm/releases/latest/download"; \
+	else \
+		base_url="https://github.com/NVIDIA/srt-slurm/releases/download/$(CPU_POWER_EXPORTER_RELEASE)"; \
+		rm -f bin/cpu-power-exporter "$$marker"; \
+	fi; \
+	tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	echo "Downloading $$asset from srt-slurm $(CPU_POWER_EXPORTER_RELEASE)"; \
+	curl --fail --location --retry 3 --retry-delay 2 "$$base_url/$$asset" --output "$$tmp_dir/$$asset"; \
+	curl --fail --location --retry 3 --retry-delay 2 "$$base_url/$$asset.sha256" --output "$$tmp_dir/$$asset.sha256"; \
+	(cd "$$tmp_dir" && sha256sum --check "$$asset.sha256"); \
+	install -Dm755 "$$tmp_dir/$$asset" bin/cpu-power-exporter; \
+	printf '%s' "$(CPU_POWER_EXPORTER_RELEASE)" > "$$marker"; \
+	echo "Installed cpu-power-exporter $(CPU_POWER_EXPORTER_RELEASE) at bin/cpu-power-exporter"
+
+cpu-power-exporter-setup:
+	@set -eu; \
+	if [ "$(CPU_POWER_EXPORTER_RELEASE)" = "latest" ]; then \
+		$(MAKE) --no-print-directory cpu-power-exporter-download || \
+		  echo "Warning: cpu-power-exporter download failed (optional for non-CPU-power recipes)"; \
+	else \
+		$(MAKE) --no-print-directory cpu-power-exporter-download; \
+	fi
+
+.PHONY: otel-collector-download
+otel-collector-download:
+	@set -eu; \
+	case "$(ARCH)" in \
+		x86_64) arch_short=amd64; file_pattern=x86-64 ;; \
+		aarch64) arch_short=arm64; file_pattern=aarch64 ;; \
+		*) echo "Unsupported architecture: $(ARCH)"; exit 1 ;; \
+	esac; \
+	marker=configs/.otelcol-contrib.release; \
+	if [ -x configs/otelcol-contrib ] && \
+	   [ "$$(cat "$$marker" 2>/dev/null || true)" = "$(OTEL_COLLECTOR_VERSION)" ] && \
+	   file configs/otelcol-contrib | grep -q "$$file_pattern"; then \
+		echo "OTel Collector $(OTEL_COLLECTOR_VERSION) already installed ($(ARCH))"; exit 0; \
+	fi; \
+	asset="otelcol-contrib_$(OTEL_COLLECTOR_VERSION)_linux_$$arch_short.tar.gz"; \
+	base_url="https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v$(OTEL_COLLECTOR_VERSION)"; \
+	tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	curl --fail --location --retry 3 "$$base_url/$$asset" --output "$$tmp_dir/$$asset"; \
+	curl --fail --location --retry 3 "$$base_url/opentelemetry-collector-releases_otelcol-contrib_checksums.txt" --output "$$tmp_dir/checksums.txt"; \
+	awk -v asset="$$asset" '$$2 == asset {print}' "$$tmp_dir/checksums.txt" > "$$tmp_dir/selected.sha256"; \
+	(cd "$$tmp_dir" && sha256sum --check selected.sha256); \
+	tar -xzf "$$tmp_dir/$$asset" -C "$$tmp_dir" otelcol-contrib; \
+	install -Dm755 "$$tmp_dir/otelcol-contrib" configs/otelcol-contrib; \
+	printf '%s' "$(OTEL_COLLECTOR_VERSION)" > "$$marker"
+
+setup: tachometer-scraper-download cpu-power-exporter-setup otel-collector-download
+	@echo "📦 Setting up configs and logs directories..."
+	@mkdir -p logs
+	@echo "🖥️  Using architecture: $(ARCH)"
+	@case "$(ARCH)" in \
+		x86_64)  ARCH_SHORT="amd64"; ARCH_FILE_PATTERN="x86-64" ;; \
+		aarch64) ARCH_SHORT="arm64"; ARCH_FILE_PATTERN="aarch64" ;; \
+		*) echo "❌ Unsupported architecture: $(ARCH)"; exit 1 ;; \
+	esac; \
+	echo ""; \
+	echo "--- NATS $(NATS_VERSION) ---"; \
+	if [ -f configs/nats-server ] && file configs/nats-server | grep -q "$$ARCH_FILE_PATTERN"; then \
+		echo "✅ NATS already installed at configs/nats-server ($(ARCH))"; \
+	else \
+		echo "⬇️  Downloading NATS ($(NATS_VERSION)) for $$ARCH_SHORT..."; \
+		NATS_DEB="nats-server-$(NATS_VERSION)-$$ARCH_SHORT.deb"; \
+		NATS_URL="https://github.com/nats-io/nats-server/releases/download/$(NATS_VERSION)/$$NATS_DEB"; \
+		if ! wget -q --show-progress --tries=3 --waitretry=5 "$$NATS_URL" -O "configs/$$NATS_DEB"; then \
+			rm -f "configs/$$NATS_DEB"; \
+			echo "❌ Failed to download NATS from $$NATS_URL"; \
+			exit 1; \
+		fi; \
+		echo "📁 Extracting NATS binary..."; \
+		TMP_DIR=$$(mktemp -d); \
+		dpkg-deb -x "configs/$$NATS_DEB" "$$TMP_DIR"; \
+		if [ -f "$$TMP_DIR/usr/local/bin/nats-server" ]; then \
+			cp "$$TMP_DIR/usr/local/bin/nats-server" configs/; \
+		elif [ -f "$$TMP_DIR/usr/bin/nats-server" ]; then \
+			cp "$$TMP_DIR/usr/bin/nats-server" configs/; \
+		else \
+			echo "❌ Could not find nats-server binary inside the .deb package"; \
+			ls -R "$$TMP_DIR" | head -n 50; \
+			exit 1; \
+		fi; \
+		chmod +x configs/nats-server; \
+		rm -rf "$$TMP_DIR" "configs/$$NATS_DEB"; \
+		echo "✅ NATS installed to configs/nats-server"; \
+	fi; \
+	echo ""; \
+	echo "--- ETCD $(ETCD_VERSION) ---"; \
+	if [ -f configs/etcd ] && [ -f configs/etcdctl ] && file configs/etcd | grep -q "$$ARCH_FILE_PATTERN"; then \
+		echo "✅ ETCD already installed at configs/etcd ($(ARCH))"; \
+	else \
+		echo "⬇️  Downloading ETCD ($(ETCD_VERSION)) for $$ARCH_SHORT..."; \
+		ETCD_TAR="etcd-$(ETCD_VERSION)-linux-$$ARCH_SHORT.tar.gz"; \
+		ETCD_URL="https://github.com/etcd-io/etcd/releases/download/$(ETCD_VERSION)/$$ETCD_TAR"; \
+		if ! wget -q --show-progress --tries=3 --waitretry=5 "$$ETCD_URL" -O "configs/$$ETCD_TAR"; then \
+			rm -f "configs/$$ETCD_TAR"; \
+			echo "❌ Failed to download ETCD from $$ETCD_URL"; \
+			exit 1; \
+		fi; \
+		echo "📁 Extracting ETCD binaries..."; \
+		tar -xzf "configs/$$ETCD_TAR" --strip-components=1 -C configs etcd-$(ETCD_VERSION)-linux-$$ARCH_SHORT/etcd etcd-$(ETCD_VERSION)-linux-$$ARCH_SHORT/etcdctl; \
+		chmod +x configs/etcd configs/etcdctl; \
+		rm "configs/$$ETCD_TAR"; \
+		echo "✅ ETCD installed to configs/etcd"; \
+	fi; \
+	echo ""; \
+	echo "--- process-exporter $(PROCESS_EXPORTER_VERSION) (Tachometer per-process/thread telemetry) ---"; \
+	if [ -f configs/process-exporter ] && file configs/process-exporter | grep -q "$$ARCH_FILE_PATTERN"; then \
+		echo "✅ process-exporter already installed at configs/process-exporter ($(ARCH))"; \
+	else \
+		echo "⬇️  Downloading process-exporter ($(PROCESS_EXPORTER_VERSION)) for $$ARCH_SHORT..."; \
+		PE_NAME="process-exporter-$(PROCESS_EXPORTER_VERSION).linux-$$ARCH_SHORT"; \
+		PE_TAR="$$PE_NAME.tar.gz"; \
+		PE_URL="https://github.com/ncabatoff/process-exporter/releases/download/v$(PROCESS_EXPORTER_VERSION)/$$PE_TAR"; \
+		if ! wget -q --show-progress --tries=3 --waitretry=5 "$$PE_URL" -O "configs/$$PE_TAR"; then \
+			rm -f "configs/$$PE_TAR"; \
+			echo "❌ Failed to download process-exporter from $$PE_URL"; \
+			exit 1; \
+		fi; \
+		echo "📁 Extracting process-exporter binary..."; \
+		tar -xzf "configs/$$PE_TAR" --strip-components=1 -C configs "$$PE_NAME/process-exporter"; \
+		chmod +x configs/process-exporter; \
+		rm "configs/$$PE_TAR"; \
+		echo "✅ process-exporter installed to configs/process-exporter"; \
+	fi; \
+	echo ""; \
+	echo "--- uv (compute node arch: $(ARCH)) ---"; \
+	if [ -f bin/uv ] && file bin/uv | grep -q "$$ARCH_FILE_PATTERN"; then \
+		echo "✅ uv already installed at bin/uv ($(ARCH))"; \
+	else \
+		echo "⬇️  Downloading uv for $(ARCH)..."; \
+		mkdir -p bin; \
+		UV_URL="https://github.com/astral-sh/uv/releases/latest/download/uv-$(ARCH)-unknown-linux-gnu.tar.gz"; \
+		curl -LsSf "$$UV_URL" | tar -xz --strip-components=1 -C bin; \
+		chmod +x bin/uv bin/uvx 2>/dev/null; \
+		echo "✅ uv installed to bin/uv ($$(file bin/uv | grep -o 'ARM aarch64\|x86-64'))"; \
+	fi; \
+	echo ""; \
+	echo "--- srtslurm.yaml ---"; \
+	if [ -f srtslurm.yaml ]; then \
+		echo "✅ srtslurm.yaml already exists"; \
+	else \
+		echo "Creating srtslurm.yaml with your cluster settings..."; \
+		echo ""; \
+		SRTCTL_ROOT=$$(pwd); \
+		echo "📍 Auto-detected srtctl root: $$SRTCTL_ROOT"; \
+		echo ""; \
+		read -p "Enter SLURM account [restricted]: " account; \
+		account=$${account:-restricted}; \
+		read -p "Enter SLURM partition [batch]: " partition; \
+		partition=$${partition:-batch}; \
+		read -p "Enter GPUs per node [4]: " gpus_per_node; \
+		gpus_per_node=$${gpus_per_node:-4}; \
+		read -p "Enter time limit [4:00:00]: " time_limit; \
+		time_limit=$${time_limit:-4:00:00}; \
+		echo ""; \
+		echo "# SRT SLURM Configuration" > srtslurm.yaml; \
+		echo "# This file provides cluster-specific defaults and settings for srtctl" >> srtslurm.yaml; \
+		echo "" >> srtslurm.yaml; \
+		echo "# Default SLURM settings" >> srtslurm.yaml; \
+		echo "default_account: \"$$account\"" >> srtslurm.yaml; \
+		echo "default_partition: \"$$partition\"" >> srtslurm.yaml; \
+		echo "default_time_limit: \"$$time_limit\"" >> srtslurm.yaml; \
+		echo "" >> srtslurm.yaml; \
+		echo "# Resource defaults" >> srtslurm.yaml; \
+		echo "gpus_per_node: $$gpus_per_node" >> srtslurm.yaml; \
+		echo "network_interface: \"\"" >> srtslurm.yaml; \
+		echo "" >> srtslurm.yaml; \
+		echo "# Path to srtctl repo root (where scripts/templates/ lives)" >> srtslurm.yaml; \
+		echo "# Auto-detected from current directory" >> srtslurm.yaml; \
+		echo "srtctl_root: \"$$SRTCTL_ROOT\"" >> srtslurm.yaml; \
+		echo "✅ Created srtslurm.yaml"; \
+		echo "   You can edit it anytime to add model_paths, containers, etc."; \
+	fi
+
+cleanup:
+	@echo "🧹 Scanning logs directory for runs without benchmark results..."
+	@EMPTY_DIRS=""; \
+	if [ ! -d "$(LOGS_DIR)" ]; then \
+		echo "❌ Logs directory $(LOGS_DIR) does not exist"; \
+		exit 1; \
+	fi; \
+	for dir in $(LOGS_DIR)/*/; do \
+		if [ -d "$$dir" ]; then \
+			run_name=$$(basename "$$dir"); \
+			has_subdirs=$$(find "$$dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l); \
+			if [ "$$has_subdirs" -eq 0 ]; then \
+				EMPTY_DIRS="$$EMPTY_DIRS$$dir\n"; \
+			fi; \
+		fi; \
+	done; \
+	if [ -z "$$EMPTY_DIRS" ]; then \
+		echo "✅ No empty run directories found!"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "Found the following run directories without benchmark results:"; \
+	echo ""; \
+	echo "$$EMPTY_DIRS" | grep -v '^$$'; \
+	echo ""; \
+	read -p "❗ Delete these directories? [y/N]: " confirm; \
+	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+		echo "$$EMPTY_DIRS" | grep -v '^$$' | while read -r dir; do \
+			if [ -n "$$dir" ]; then \
+				echo "🗑️  Removing $$dir"; \
+				rm -rf "$$dir"; \
+			fi; \
+		done; \
+		echo "✅ Cleanup complete!"; \
+	else \
+		echo "❌ Cleanup cancelled."; \
+	fi

@@ -1,0 +1,382 @@
+name: SpeedBench AL Collection
+
+on: # zizmor: ignore[concurrency-limits]
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Self-hosted GPU runner label (B300)"
+        required: false
+        type: string
+        default: 'b300'
+      model:
+        description: "HF model id (basename must be a models.entries key of the cluster in configs/runners.yaml for pre-staged local weights)"
+        required: false
+        type: string
+        default: 'deepseek-ai/DeepSeek-V4-Pro'
+      model-prefix:
+        description: "Model prefix; drives the exp name, collector script, and artifact names"
+        required: false
+        type: string
+        default: 'dsv4'
+      framework:
+        description: "Serving framework; selects the <model-prefix>_fp4_b300_<framework>[_<collector-variant>].sh collector"
+        required: false
+        type: choice
+        options: [vllm, sglang]
+        default: 'vllm'
+      collector-variant:
+        description: "Collector variant suffix; non-empty selects <model-prefix>_fp4_b300_<framework>_<collector-variant>.sh (e.g. probabilistic_sample_method_block_rejection_sample_method)"
+        required: false
+        type: string
+        default: ''
+      image:
+        description: "Container image (vLLM >= 0.30 for vLLM collectors)"
+        required: false
+        type: string
+        default: 'vllm/vllm-openai:v0.30.0'
+      mtp-list:
+        description: "Space-separated MTP levels (num_speculative_tokens)"
+        required: false
+        type: string
+        default: '1 2 3 4 5 6 7 8'
+      thinking-modes:
+        description: "Space-separated thinking modes to collect"
+        required: false
+        type: string
+        default: 'off on'
+      category:
+        description: "SPEED-Bench category"
+        required: false
+        type: string
+        default: 'coding'
+      output-len:
+        description: "Per-request output length"
+        required: false
+        type: string
+        default: '4096'
+      thinking-kwargs:
+        description: "chat_template_kwargs JSON for thinking-on cells (match golden config)"
+        required: false
+        type: string
+        default: '{"thinking": true, "reasoning_effort": "high"}'
+      salloc-time:
+        description: "Slurm allocation minutes (16 server starts ~ several hours)"
+        required: false
+        type: string
+        default: '480'
+      open-pr:
+        description: "Open a PR writing the matrix to infx/golden_al_distribution/<golden-curve>.yaml (default off: artifact-only)"
+        required: false
+        type: boolean
+        default: false
+      golden-curve:
+        description: "Golden curve file stem that open-pr writes, e.g. dsv4_mtp or kimik3_dspark (required with open-pr)"
+        required: false
+        type: string
+        default: ''
+      ref:
+        description: "Git ref (branch/sha) to checkout"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}/inferencex-e2e
+  INFERENCEX_E2E_ROOT: ${{ github.workspace }}
+  DRAFT_SAMPLE_METHOD: greedy
+  PORT: '8888'
+  INFMAX_CONTAINER_WORKSPACE: '/workspace'
+  ENROOT_IMPORT_TIME_LIMIT: '120'
+  IS_MULTINODE: 'false'
+  EVAL_ONLY: 'false'
+  RUN_EVAL: 'false'
+  IS_AGENTIC: '0'
+  HF_TOKEN: ${{ secrets.INFERENCEX_OFFICIAL_RO_HF_TOKEN }}
+  HF_HUB_CACHE: '/mnt/hf_hub_cache/'
+  MODEL: ${{ inputs.model }}
+  MODEL_PREFIX: ${{ inputs.model-prefix }}
+  PRECISION: fp4
+  FRAMEWORK: ${{ inputs.framework }}
+  EXP_NAME: ${{ inputs.model-prefix }}_speedbench
+  IMAGE: ${{ inputs.image }}
+  TP: '8'
+  EP_SIZE: '1'
+  DP_ATTENTION: 'false'
+  SPEC_DECODING: mtp
+  SALLOC_TIME_LIMIT: ${{ inputs.salloc-time }}
+  MTP_LIST: ${{ inputs.mtp-list }}
+  THINKING_MODES: ${{ inputs.thinking-modes }}
+  CATEGORY: ${{ inputs.category }}
+  SPEEDBENCH_OUTPUT_LEN: ${{ inputs.output-len }}
+  CHAT_TEMPLATE_KWARGS_ON: ${{ inputs.thinking-kwargs }}
+  OUT_YAML: /workspace/speedbench-reference-al.yaml
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONPYCACHEPREFIX: /tmp/inferencex-pycache
+
+jobs:
+  setup:
+    name: setup
+    runs-on: ubuntu-latest
+    outputs:
+      priority: ${{ steps.score.outputs.priority }}
+      queue-token: ${{ steps.score.outputs.queue-token }}
+    steps:
+      - name: Validate golden curve target
+        if: ${{ inputs.open-pr }}
+        env:
+          GOLDEN_CURVE: ${{ inputs.golden-curve }}
+        run: |
+          if [[ ! "$GOLDEN_CURVE" =~ ^[a-z0-9_.-]+$ ]]; then
+            echo "::error::open-pr needs golden-curve, a curve file stem such as dsv4_mtp (got '$GOLDEN_CURVE')." >&2
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { clean: true, persist-credentials: false }
+      - name: Checkout the measured revision's launcher
+        if: ${{ inputs.ref && inputs.ref != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          path: .measured
+          sparse-checkout: inferencex-e2e/infx/launch
+          persist-credentials: false
+      - name: Require the Python launcher
+        if: ${{ inputs.ref && inputs.ref != '' }}
+        run: python3 -P -m infx.workflows.require_launcher .measured
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - id: score
+        env:
+          RUNNER: ${{ inputs.runner }}
+          MODEL_PREFIX: ${{ inputs.model-prefix }}
+        run: |
+          entry=$(jq -cn \
+            --arg runner "$RUNNER" \
+            --arg model_prefix "$MODEL_PREFIX" \
+            --arg framework "$FRAMEWORK" \
+            '[{
+              runner: $runner,
+              framework: $framework,
+              "model-prefix": $model_prefix,
+              precision: "fp4",
+              "spec-decoding": "mtp"
+            }]')
+          scored=$(printf '%s' "$entry" |
+            uv run --no-project --exclude-newer PT12H --python 3.12 --with pyyaml \
+              python -m infx.workflows.ci_priority \
+              --queue-namespace "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}")
+          echo "priority=$(jq -r '.[0].priority' <<<"$scored")" >> "$GITHUB_OUTPUT"
+          echo "queue-token=$(jq -r '.[0]["queue-token"]' <<<"$scored")" >> "$GITHUB_OUTPUT"
+
+  collect-al:
+    needs: setup
+    runs-on: >- # zizmor: ignore[self-hosted-runner] GPU Slurm runners by design; workflow_dispatch only
+      ${{ fromJSON(
+        vars.PRIORITY_SCHEDULER_ENABLED == 'true' &&
+        (
+          vars.NODE_SLOT_SCHEDULER_ENABLED == 'true' &&
+          format(
+            '["self-hosted",{0},{1},{2},{3}]',
+            toJSON(inputs.runner),
+            '"nodes:1"',
+            toJSON(format(
+              'ci-job-{0}-{1}',
+              needs.setup.outputs.priority,
+              needs.setup.outputs.queue-token
+            )),
+            toJSON(format('ci-attempt-{0}', github.run_attempt))
+          ) ||
+          format(
+            '["self-hosted",{0},{1},{2}]',
+            toJSON(inputs.runner),
+            toJSON(format(
+              'ci-job-{0}-{1}',
+              needs.setup.outputs.priority,
+              needs.setup.outputs.queue-token
+            )),
+            toJSON(format('ci-attempt-{0}', github.run_attempt))
+          )
+        ) ||
+        format('[{0}]', toJSON(inputs.runner))
+      ) }}
+    timeout-minutes: 600
+    name: "p${{ needs.setup.outputs.priority }} | SpeedBench AL matrix | ${{ inputs.category }} | mtp=[${{ inputs.mtp-list }}] | thinking=[${{ inputs.thinking-modes }}]"
+    steps:
+      - name: Resource cleanup (pre-run)
+        run: &resource-cleanup |
+          if command -v squeue >/dev/null 2>&1; then
+            for job_name in "${RUNNER_NAME}" "inferencex-${RUNNER_NAME}"; do
+              echo "[Slurm] Cleaning up jobs with name: ${job_name} ..."
+              scancel --name="${job_name}" || true
+              while [ -n "$(squeue --name="${job_name}" --noheader --format='%i')" ]; do
+                squeue --name="${job_name}"
+                sleep 5
+              done
+            done
+          fi
+
+          rm -rf "${GITHUB_WORKSPACE}/speedbench_results" \
+            "${GITHUB_WORKSPACE}/inferencex-e2e/speedbench_results" 2>/dev/null || true
+
+      - id: checkout
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: &checkout-inputs
+          fetch-depth: 1
+          ref: ${{ inputs.ref || github.sha }}
+          clean: true
+          submodules: true
+          persist-credentials: false
+
+      - name: Wipe workspace after failed checkout
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+      - name: Retry checkout
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: *checkout-inputs
+
+      - name: Cleanup stale outputs (pre-run)
+        run: |
+          if [[ -f inferencex-e2e/configs/runners.yaml ]]; then cd inferencex-e2e; fi
+          rm -f speedbench-reference-al.yaml || true
+          rm -rf speed_bench_data || true
+
+      - name: Resolve AL collector
+        env:
+          COLLECTOR_VARIANT: ${{ inputs.collector-variant }}
+        run: |
+          if [[ -f inferencex-e2e/configs/runners.yaml ]]; then cd inferencex-e2e; fi
+          collector_dir=benchmarks/single_node/speedbench
+          collector="${MODEL_PREFIX}_fp4_b300_${FRAMEWORK}"
+          if [[ -n "$COLLECTOR_VARIANT" ]]; then
+            collector+="_${COLLECTOR_VARIANT}"
+          fi
+          if [[ "$collector" == */* || "$collector" == *$'\n'* || ! -f "$collector_dir/$collector.sh" ]]; then
+            echo "::error::No SPEED-Bench collector $collector_dir/$collector.sh at this ref. Available collectors are listed below." >&2
+            ls "$collector_dir" >&2
+            exit 1
+          fi
+          echo "BENCH_SCRIPT_OVERRIDE=$collector_dir/$collector.sh" >> "$GITHUB_ENV"
+
+      - name: Checkout launch tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .launch-tooling
+          sparse-checkout: inferencex-e2e
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: false
+
+      - name: Prepare launcher Python
+        env:
+          UV_CACHE_DIR: ${{ github.workspace }}/../.infx-uv-cache
+          UV_PYTHON_INSTALL_DIR: ${{ github.workspace }}/../.infx-uv-python
+        run: |
+          launch_venv="$RUNNER_TEMP/infx-launch-venv"
+          uv venv --quiet --python 3.12 "$launch_venv"
+          uv pip install --quiet --exclude-newer PT12H --python "$launch_venv/bin/python" \
+            -r "$GITHUB_WORKSPACE/.launch-tooling/inferencex-e2e/pyproject.toml"
+          echo "INFERENCEX_LAUNCH_PYTHON=$launch_venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Launcher cleanup (pre-run)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/.launch-tooling/inferencex-e2e
+        run: &launcher-cleanup |
+          "$INFERENCEX_LAUNCH_PYTHON" -P -m infx.launch cleanup
+
+      - name: Collect AL matrix
+        env:
+          RUNNER_NAME: ${{ runner.name }}
+        run: |
+          if [[ -f inferencex-e2e/configs/runners.yaml ]]; then cd inferencex-e2e; fi
+          export GITHUB_WORKSPACE="$PWD"
+          echo "INFERENCEX_E2E_ROOT=$PWD" >> "$GITHUB_ENV"
+          set -eo pipefail
+          export GPU_COUNT="$TP"
+          source benchmarks/runtime_settings.sh
+          "$INFERENCEX_LAUNCH_PYTHON" -m infx.launch run
+
+          if [ ! -f "speedbench-reference-al.yaml" ]; then
+            echo "AL collection failed: speedbench-reference-al.yaml not produced." >&2
+            exit 1
+          fi
+          echo "### SpeedBench AL matrix" >> "$GITHUB_STEP_SUMMARY"
+          echo '```yaml' >> "$GITHUB_STEP_SUMMARY"
+          cat speedbench-reference-al.yaml >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload AL matrix artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: speedbench-reference-al-${{ inputs.model-prefix }}
+          path: ${{ env.INFERENCEX_E2E_ROOT }}/speedbench-reference-al.yaml
+          if-no-files-found: warn
+
+      - name: Open PR updating golden AL curve
+        if: ${{ inputs.open-pr && success() }}
+        env:
+          GH_TOKEN: ${{ secrets.SPEEDBENCH_PAT }} # zizmor: ignore[secrets-outside-env]
+          GOLDEN_CURVE: ${{ inputs.golden-curve }}
+        run: |
+          if [[ -f inferencex-e2e/configs/runners.yaml ]]; then cd inferencex-e2e; fi
+          set -eo pipefail
+          source benchmarks/check_env.sh
+          check_env_vars GOLDEN_CURVE INFERENCEX_LAUNCH_PYTHON BENCH_SCRIPT_OVERRIDE
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curve_file="infx/golden_al_distribution/${GOLDEN_CURVE}.yaml"
+          {
+            echo "# Source GitHub Actions run: ${run_url}"
+            cat speedbench-reference-al.yaml
+          } > "$curve_file"
+          PYTHONPATH="$PWD" "$INFERENCEX_LAUNCH_PYTHON" -P -m infx.golden_al_distribution show "$GOLDEN_CURVE"
+
+          BRANCH="speedbench-al/${MODEL_PREFIX}-auto-${GITHUB_RUN_ID}"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git checkout -b "$BRANCH"
+          git add "$curve_file"
+          if git diff --cached --quiet; then
+            echo "No change in ${curve_file}; skipping PR."
+            exit 0
+          fi
+          git commit -m "Update golden AL curve ${GOLDEN_CURVE} for ${MODEL} (auto, run ${GITHUB_RUN_ID})"
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push -u origin "$BRANCH"
+          gh pr create \
+            --title "Update golden AL curve ${GOLDEN_CURVE} (auto)" \
+            --body "Auto-generated by the SpeedBench AL Collection workflow (${run_url}). Curve: \`${curve_file}\`, collector: \`${BENCH_SCRIPT_OVERRIDE}\`, model: \`${MODEL}\`, category: \`${CATEGORY}\`, MTP: \`${MTP_LIST}\`, thinking: \`${THINKING_MODES}\`, output_len: \`${SPEEDBENCH_OUTPUT_LEN}\`. Review the measured values against the checklist in infx/golden_al_distribution/README.md before merging. A new curve also needs its row in that README's curve table." \
+            --base main \
+            --head "$BRANCH"
+
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: speedbench_server_logs-${{ inputs.model-prefix }}
+          path: ${{ env.INFERENCEX_E2E_ROOT }}/speedbench_results/server_*.log
+          if-no-files-found: ignore
+
+      - name: Upload detailed benchmark results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: speedbench_detailed_results-${{ inputs.model-prefix }}
+          path: ${{ env.INFERENCEX_E2E_ROOT }}/speedbench_results/speedbench_*
+          if-no-files-found: ignore
+
+      - name: Resource cleanup (post-run)
+        if: always()
+        run: *resource-cleanup
+
+      - name: Launcher cleanup (post-run)
+        if: ${{ always() && env.INFERENCEX_LAUNCH_PYTHON != '' }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/.launch-tooling/inferencex-e2e
+        run: *launcher-cleanup

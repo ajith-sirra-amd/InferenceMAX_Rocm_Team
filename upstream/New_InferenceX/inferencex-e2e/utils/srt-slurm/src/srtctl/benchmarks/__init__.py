@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Benchmark runners for srtctl."""
+
+# Import runners to trigger registration
+from srtctl.benchmarks import (
+    agentperf,
+    custom,
+    gpqa,
+    gsm8k,
+    lm_eval,
+    longbenchv2,
+    mmlu,
+    mooncake_router,
+    router,
+    sa_bench,
+    sglang_bench,
+    trace_replay,
+)
+from srtctl.benchmarks.base import (
+    SHARED_BENCHMARK_FIELDS,
+    BenchmarkRunner,
+    PrewarmPlan,
+    benchmark_config_fields,
+    get_runner,
+    get_runner_class,
+    list_benchmarks,
+    register_benchmark,
+)
+
+__all__ = [
+    "SHARED_BENCHMARK_FIELDS",
+    "BenchmarkRunner",
+    "PrewarmPlan",
+    # Runners
+    "agentperf",
+    "benchmark_config_fields",
+    "custom",
+    "get_runner",
+    "get_runner_class",
+    "gpqa",
+    "gsm8k",
+    "list_benchmarks",
+    "lm_eval",
+    "longbenchv2",
+    "mmlu",
+    "mooncake_router",
+    "register_benchmark",
+    "router",
+    "sa_bench",
+    "sglang_bench",
+    "trace_replay",
+]

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "description": "Unofficial IPAT source snapshot for team execution integration",
+  "imported_at_utc": "2026-11-02T09:20:26.835933+00:00",
+  "source_checkout": "/scratch/InferenceX",
+  "source_ref": "refs/heads/main",
+  "destination": "upstream/New_InferenceX",
+  "team_branch": "IPAT",
+  "team_base_commit": "f7ec2c87926fcabd15714a743247e3aca09612cd",
+  "repositories": [
+    {
+      "path": ".",
+      "repository": "https://github.com/SemiAnalysisAI/InferenceX.git",
+      "commit": "c5e8b9b3e9b90511fa5c7774d83e4663ca4db553",
+      "tree": "d3ccf6562d292f80b6e2847aa28264034d802a2d"
+    },
+    {
+      "path": "inferencex-e2e/utils/srt-slurm",
+      "repository": "https://github.com/NVIDIA/srt-slurm.git",
+      "commit": "59920ea16a13017a990e449d034a495c0b05bc57",
+      "tree": "5199183b6d7a2e8bb5e509ded88687d729298ad8"
+    }
+  ],
+  "copy_method": "Tracked files with submodules materialized at their pinned commits; Git metadata excluded",
+  "verification": {
+    "files": 1845,
+    "content_and_executable_modes_match": true,
+    "file_manifest_sha256": "80a0d7007e6b76f7d83722511dfa26b3171b8f9f23897985fdf9630d190ce977"
+  }
+}

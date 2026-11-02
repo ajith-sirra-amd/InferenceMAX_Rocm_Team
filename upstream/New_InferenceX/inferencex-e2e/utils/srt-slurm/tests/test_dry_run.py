@@ -1,0 +1,1497 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Tests for dry-run config details display (mounts, env vars)."""
+
+import os
+import re
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+import yaml
+from rich.console import Console
+
+from srtctl.cli import submit
+from srtctl.cli.submit import show_config_details
+from srtctl.core.schema import SrtConfig
+
+# Minimal valid config (2.0 layout) that all tests build on
+BASE_CONFIG = {
+    "schema": 2,
+    "name": "test-job",
+    "model": {
+        "path": "/models/test-model",
+        "container": "test-container.sqsh",
+        "precision": "fp8",
+    },
+    "resources": {
+        "gpu_type": "h100",
+        "gpus_per_node": 8,
+    },
+    "roles": {
+        "prefill": {"nodes": 1, "workers": 1},
+        "decode": {"nodes": 1, "workers": 1},
+    },
+    "benchmark": {"type": "manual"},
+}
+
+
+@pytest.fixture(autouse=True)
+def _no_local_cluster_config(tmp_path, monkeypatch):
+    # A developer's srtslurm.yaml in the repo root would add default_mounts rows whose
+    # long paths make rich truncate the cells these tests assert on.
+    monkeypatch.setenv("SRTSLURM_CONFIG", str(tmp_path / "absent-srtslurm.yaml"))
+
+
+def _make_config(overrides: dict | None = None) -> SrtConfig:
+    """Build an SrtConfig from BASE_CONFIG with optional overrides merged in.
+
+    Top-level mappings merge one level deep. ``roles`` merges per role so a test
+    can add ``env``/``args`` to the base prefill/decode roles; a role set to
+    ``None`` is dropped (agg-only layouts).
+    """
+    data = {**BASE_CONFIG}
+    if overrides:
+        for key, value in overrides.items():
+            if key == "roles":
+                roles = {**data["roles"]}
+                for role, spec in value.items():
+                    if spec is None:
+                        roles.pop(role, None)
+                    else:
+                        roles[role] = {**roles.get(role, {}), **spec}
+                data["roles"] = roles
+            elif isinstance(value, dict) and key in data and isinstance(data[key], dict):
+                data[key] = {**data[key], **value}
+            else:
+                data[key] = value
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(data, f)
+        tmp_path = Path(f.name)
+    return SrtConfig.from_yaml(tmp_path)
+
+
+def test_cluster_gpu_visibility_is_visible(tmp_path, monkeypatch, capsys):
+    cluster_config = tmp_path / "srtslurm.yaml"
+    cluster_config.write_text(yaml.safe_dump({"visible_devices_env": "ROCR_VISIBLE_DEVICES"}))
+    monkeypatch.setenv("SRTSLURM_CONFIG", str(cluster_config))
+    show_config_details(_make_config())
+    assert "GPU subset visibility variable: ROCR_VISIBLE_DEVICES" in capsys.readouterr().out
+
+
+# "release ... post-process" on one logical line, or the srtslurm.yaml key itself.
+_NODE_RELEASE_LINE = re.compile(r"releas\w*[^\n]{0,160}post-?process|release_nodes_before_postprocess")
+
+
+@pytest.mark.parametrize(("release", "shown"), [(True, True), (False, False), (None, False)])
+def test_node_release_before_postprocess_is_visible_only_when_on(tmp_path, monkeypatch, capsys, release, shown):
+    cluster = {} if release is None else {"release_nodes_before_postprocess": release}
+    cluster_config = tmp_path / "srtslurm.yaml"
+    cluster_config.write_text(yaml.safe_dump(cluster))
+    monkeypatch.setenv("SRTSLURM_CONFIG", str(cluster_config))
+    show_config_details(_make_config())
+    output = capsys.readouterr().out.lower()
+    assert bool(_NODE_RELEASE_LINE.search(output)) is shown, output
+
+
+def test_pinned_hf_snapshot_is_visible_and_validated(capsys):
+    revision = "a" * 40
+    snapshot = f"/hf/hub/models--org--name/snapshots/{revision}"
+    overrides = {
+        "model": {"path": "hf:org/name", "hf_snapshot_path": snapshot},
+        "engine": {"type": "trtllm"},
+        "identity": {"model": {"revision": revision}},
+    }
+    config = _make_config(overrides)
+    show_config_details(config)
+    assert snapshot in " ".join(capsys.readouterr().out.split())
+    assert config.model.hf_snapshot_path == snapshot
+
+    overrides["identity"] = {"model": {"revision": "b" * 40}}
+    with pytest.raises(ValueError, match="model.hf_snapshot_path must end with identity.model.revision"):
+        _make_config(overrides)
+
+
+def test_role_restart_policy_and_limits_are_visible(capsys):
+    config = _make_config(
+        {"roles": {"decode": {"restart": {"policy": "on-failure", "max_restarts": 2, "backoff_seconds": 4}}}}
+    )
+    show_config_details(config)
+    output = " ".join(capsys.readouterr().out.split())
+    assert "decode: restart=on-failure, max_restarts=2, backoff_seconds=4, max_backoff_seconds=300" in output
+    assert "prefill: restart=" not in output
+
+
+def test_default_restart_policy_keeps_dry_run_unchanged(capsys):
+    show_config_details(_make_config())
+    assert "restart=" not in capsys.readouterr().out
+
+
+def test_container_reuse_is_visible_when_enabled(capsys):
+    config = _make_config({"reuse_container": True})
+    assert config.reuse_container is True
+    show_config_details(config)
+    output = " ".join(capsys.readouterr().out.split())
+    assert "reuse_container: true" in output
+    assert "--container-name" in output
+    assert ":no_exec" in output
+    assert "preparation timeout follows health_check" in output
+
+
+@pytest.mark.parametrize("overrides", [{}, {"reuse_container": False}])
+def test_container_reuse_defaults_to_disabled(capsys, overrides):
+    config = _make_config(overrides)
+    assert config.reuse_container is False
+    show_config_details(config)
+    output = capsys.readouterr().out
+    assert "reuse_container" not in output
+    assert "--container-name" not in output
+
+
+def test_container_reuse_rejects_invalid_values():
+    from marshmallow import ValidationError
+
+    with pytest.raises(ValidationError, match="reuse_container"):
+        _make_config({"reuse_container": "sometimes"})
+
+
+@pytest.mark.parametrize(
+    ("default", "override", "expected"),
+    [(True, None, True), (True, False, False), (False, True, True), (False, None, False)],
+)
+def test_container_reuse_cluster_default_and_recipe_override(
+    tmp_path, monkeypatch, capsys, default, override, expected
+):
+    from srtctl.core.config import load_config
+    from srtctl.core.schema import ClusterConfig
+
+    cluster = tmp_path / "srtslurm.yaml"
+    cluster.write_text(yaml.safe_dump({"default_reuse_container": default}))
+    monkeypatch.setenv("SRTSLURM_CONFIG", str(cluster))
+    assert ClusterConfig.Schema().load({"default_reuse_container": default}).default_reuse_container is default
+    recipe = {**BASE_CONFIG}
+    if override is not None:
+        recipe["reuse_container"] = override
+    path = tmp_path / "recipe.yaml"
+    path.write_text(yaml.safe_dump(recipe))
+    config = load_config(path)
+    assert config.reuse_container is expected
+    show_config_details(config)
+    assert ("reuse_container: true" in capsys.readouterr().out) is expected
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_dynamo_lifecycle_collector_visible_independently_of_observability(capsys, enabled):
+    show_config_details(_make_config({"observability": {"enabled": enabled}}))
+    output = " ".join(capsys.readouterr().out.split())
+    assert "otel-collector" in output
+    assert "Dynamo lifecycle tracing (independent of observability.enabled)" in output
+    assert "otel-collector.yaml" in output
+    assert "<host-native>" in output
+
+
+def test_role_engines_images_and_environments_are_visible(capsys):
+    data = yaml.safe_load(Path("examples/vllm/vllm-router-disagg.yaml").read_text())
+    engine = data.pop("engine")
+    data["roles"]["prefill"]["engine"] = {**engine, "set_visible_devices": True}
+    data["roles"]["decode"]["engine"] = engine
+    data["roles"]["prefill"]["container"] = "prefill-image"
+    data["roles"]["prefill"]["env"] = {"PREFILL_ONLY": "1"}
+    data["roles"]["decode"]["env"] = {"DECODE_ONLY": "1"}
+    data["model"]["container"] = "decode-image"
+    config = SrtConfig.Schema().load(data)
+    show_config_details(config)
+    output = capsys.readouterr().out
+    assert "prefill: engine=vllm, container=prefill-image" in output
+    assert "decode: engine=vllm, container=decode-image" in output
+    assert "PREFILL_ONLY" in output
+    assert "DECODE_ONLY" in output
+
+
+def test_trtllm_local_numa_example_is_visible(capsys):
+    recipe = Path(__file__).resolve().parents[1] / "examples/trtllm/trtllm-serve-agg-numa-local.yaml"
+    config = SrtConfig.from_yaml(recipe)
+    assert config.backend.numa_cpu_bind is True
+    assert config.backend.numa_memory_bind == "local"
+    show_config_details(config)
+    output = " ".join(capsys.readouterr().out.split())
+    assert "strict GPU-local memory binding" in output
+    assert "--bind-memory" in output
+    assert "numactl --cpunodebind=<node>" in output
+    assert "agg: TLLM_NUMA_AWARE_WORKER_AFFINITY=0 (effective)" in output
+
+
+def test_trtllm_preferred_numa_example_is_visible(capsys):
+    recipe = Path(__file__).resolve().parents[1] / "examples/trtllm/trtllm-serve-agg-numa-preferred.yaml"
+    config = SrtConfig.from_yaml(recipe)
+    assert config.backend.numa_cpu_bind is True
+    assert config.backend.numa_memory_bind == "preferred"
+    assert config.backend.get_environment_for_mode("agg")["TLLM_NUMA_AWARE_WORKER_AFFINITY"] == "0"
+    show_config_details(config)
+    output = " ".join(capsys.readouterr().out.split())
+    assert "--prefer-memory" in output
+    assert "numactl --cpunodebind=<node>" in output
+    assert "agg: TLLM_NUMA_AWARE_WORKER_AFFINITY=0 (effective)" in output
+
+
+def test_trtllm_cpu_only_numa_binding_is_visible(capsys):
+    config = _make_config({"engine": {"type": "trtllm", "numa_cpu_bind": True, "numa_memory_bind": False}})
+    show_config_details(config)
+    output = " ".join(capsys.readouterr().out.split())
+    assert "GPU-local CPU affinity" in output
+    assert "numactl --cpunodebind=<node>" in output
+    assert "prefill: TLLM_NUMA_AWARE_WORKER_AFFINITY=0 (effective)" in output
+    assert "decode: TLLM_NUMA_AWARE_WORKER_AFFINITY=0 (effective)" in output
+    assert "--bind-memory" not in output
+    assert "--prefer-memory" not in output
+
+
+@pytest.mark.parametrize(
+    ("role_env", "global_env", "prefill_affinity", "decode_affinity"),
+    [
+        ({}, {}, "0", "0"),
+        ({"TLLM_NUMA_AWARE_WORKER_AFFINITY": "1"}, {}, "1", "0"),
+        (
+            {"TLLM_NUMA_AWARE_WORKER_AFFINITY": "1"},
+            {"TLLM_NUMA_AWARE_WORKER_AFFINITY": "0"},
+            "0",
+            "0",
+        ),
+        (
+            {"TLLM_NUMA_AWARE_WORKER_AFFINITY": "0"},
+            {"TLLM_NUMA_AWARE_WORKER_AFFINITY": "1"},
+            "1",
+            "1",
+        ),
+    ],
+)
+def test_trtllm_numa_effective_worker_affinity_is_visible(
+    capsys, role_env, global_env, prefill_affinity, decode_affinity
+):
+    config = _make_config(
+        {
+            "engine": {"type": "trtllm", "numa_cpu_bind": True, "numa_memory_bind": "preferred"},
+            "roles": {"prefill": {"env": role_env}},
+            "environment": global_env,
+        }
+    )
+    show_config_details(config)
+    output = " ".join(capsys.readouterr().out.split())
+    assert f"prefill: TLLM_NUMA_AWARE_WORKER_AFFINITY={prefill_affinity} (effective)" in output
+    assert f"decode: TLLM_NUMA_AWARE_WORKER_AFFINITY={decode_affinity} (effective)" in output
+
+
+@pytest.mark.parametrize("prefill_cpu_bind", [False, True])
+def test_trtllm_numa_role_engines_are_visible(capsys, prefill_cpu_bind):
+    config = _make_config(
+        {
+            "frontend": {"type": "trtllm_serve", "enable_multiple_frontends": False},
+            "roles": {
+                "prefill": {
+                    "engine": {
+                        "type": "trtllm",
+                        "numa_cpu_bind": prefill_cpu_bind,
+                        "numa_memory_bind": "local" if prefill_cpu_bind else False,
+                    }
+                },
+                "decode": {"engine": {"type": "trtllm", "numa_cpu_bind": True, "numa_memory_bind": "preferred"}},
+            },
+        }
+    )
+    show_config_details(config)
+    output = " ".join(capsys.readouterr().out.split())
+    assert ("TRT-LLM NUMA (prefill): GPU-local CPU affinity" in output) is prefill_cpu_bind
+    assert ("--bind-memory" in output) is prefill_cpu_bind
+    assert "TRT-LLM NUMA (decode): GPU-local CPU affinity" in output
+    assert "--prefer-memory" in output
+    assert ("prefill: TLLM_NUMA_AWARE_WORKER_AFFINITY=0 (effective)" in output) is prefill_cpu_bind
+    assert "decode: TLLM_NUMA_AWARE_WORKER_AFFINITY=0 (effective)" in output
+
+
+class TestDryRunDynamoMetrics:
+    @pytest.mark.parametrize(
+        ("settings", "expected", "excluded"),
+        [
+            ({}, "--publish-metrics", "--publish-events-and-metrics"),
+            ({"publish_events_and_metrics": None}, "--publish-metrics", "--publish-events-and-metrics"),
+            ({"publish_events_and_metrics": False}, "--publish-metrics", "--publish-events-and-metrics"),
+            (
+                {"publish_metrics": True, "publish_events_and_metrics": False},
+                "--publish-metrics",
+                "--publish-events-and-metrics",
+            ),
+            ({"publish_metrics": False}, "No publication flag", "--publish-metrics"),
+            (
+                {"publish_metrics": False, "publish_events_and_metrics": True},
+                "--publish-events-and-metrics",
+                "--publish-metrics",
+            ),
+        ],
+    )
+    def test_selected_flag_is_visible(self, capsys, settings, expected, excluded):
+        config = _make_config({"engine": {"type": "trtllm", **settings}, "frontend": {"type": "dynamo"}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "Dynamo TRT-LLM Metrics" in output
+        assert expected in output
+        assert excluded not in output
+
+    @pytest.mark.parametrize("frontend", ["trtllm_serve", "dynamo"])
+    def test_unrelated_workers_have_no_dynamo_trtllm_publication_panel(self, capsys, frontend):
+        engine = "trtllm" if frontend == "trtllm_serve" else "sglang"
+        config = _make_config({"engine": engine, "frontend": {"type": frontend, "enable_multiple_frontends": False}})
+        show_config_details(config)
+        assert "Dynamo TRT-LLM Metrics" not in capsys.readouterr().out
+
+    def test_legacy_flag_excludes_metrics_only_flag(self, capsys):
+        config = _make_config(
+            {"engine": {"type": "trtllm", "publish_events_and_metrics": True}, "frontend": {"type": "dynamo"}}
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "--publish-metrics" not in output
+        assert "--publish-events-and-metrics" in output
+
+    @pytest.mark.parametrize("enabled", [False, True])
+    def test_explicit_combined_false_uses_metrics_with_observability(self, capsys, enabled):
+        config = _make_config(
+            {
+                "engine": {"type": "trtllm", "publish_events_and_metrics": False},
+                "frontend": {"type": "dynamo"},
+                "observability": {"enabled": enabled},
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "--publish-metrics" in output
+        assert "--publish-events-and-metrics" not in output
+
+    def test_sidecar_has_no_dynamo_trtllm_publication_panel(self, capsys):
+        config = _make_config(
+            {
+                "engine": "trtllm",
+                "frontend": {"type": "dynamo"},
+                "dynamo": {"sidecar": True},
+                "roles": {
+                    "prefill": None,
+                    "decode": None,
+                    "agg": {"nodes": 1, "workers": 1, "args": {"max_seq_len": 8192}},
+                },
+            }
+        )
+        show_config_details(config)
+        assert "Dynamo TRT-LLM Metrics" not in capsys.readouterr().out
+
+
+class TestDryRunTrtllmEngineStatistics:
+    """The engine-yaml statistics keys srtctl defaults at load time are shown for
+    every TRT-LLM backend, so a run that expects the iteration-level trtllm_*
+    gauges can see before submitting that enable_iter_perf_stats is off."""
+
+    def test_dynamo_shows_iteration_stats_off_per_mode(self, capsys):
+        config = _make_config({"engine": "trtllm", "frontend": {"type": "dynamo"}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "TRT-LLM Engine Statistics" in output
+        assert "prefill: enable_iter_perf_stats=false, return_perf_metrics=unset" in output
+        assert "decode: enable_iter_perf_stats=false, return_perf_metrics=unset" in output
+
+    def test_trtllm_serve_shows_both_defaults(self, capsys):
+        config = _make_config(
+            {"engine": "trtllm", "frontend": {"type": "trtllm_serve", "enable_multiple_frontends": False}}
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "TRT-LLM Engine Statistics" in output
+        assert "prefill: enable_iter_perf_stats=false, return_perf_metrics=true" in output
+        assert "decode: enable_iter_perf_stats=false, return_perf_metrics=true" in output
+
+    def test_observability_shows_iteration_stats_on(self, capsys):
+        config = _make_config({"engine": "trtllm", "frontend": {"type": "dynamo"}, "observability": {"enabled": True}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "prefill: enable_iter_perf_stats=true, return_perf_metrics=true" in output
+
+    def test_aggregated_layout_shows_the_agg_section(self, capsys):
+        # ResourceConfig.is_disaggregated is `prefill_nodes is not None or
+        # decode_nodes is not None`, so the agg layout must drop both roles.
+        config = _make_config(
+            {
+                "engine": "trtllm",
+                "frontend": {"type": "dynamo"},
+                "dynamo": {"sidecar": True},
+                "roles": {
+                    "prefill": None,
+                    "decode": None,
+                    "agg": {"nodes": 1, "workers": 1, "args": {"max_seq_len": 8192}},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "TRT-LLM Engine Statistics" in output
+        assert "agg: enable_iter_perf_stats=false" in output
+        assert "prefill: enable_iter_perf_stats" not in output
+
+    def test_non_trtllm_backend_has_no_engine_statistics_panel(self, capsys):
+        config = _make_config({"engine": "sglang", "frontend": {"type": "dynamo"}})
+        show_config_details(config)
+        assert "TRT-LLM Engine Statistics" not in capsys.readouterr().out
+
+
+class TestDryRunMounts:
+    """Test that container mounts from all sources appear in dry-run output."""
+
+    def test_builtin_mounts_always_shown(self, capsys):
+        config = _make_config()
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "/model" in output
+        assert "/logs" in output
+
+    def test_hf_snapshot_mount_shows_preserved_cache_layout(self, tmp_path, monkeypatch, capsys):
+        cache_root = tmp_path / "models--Inferact--Qwen"
+        (cache_root / "blobs").mkdir(parents=True)
+        snapshot = cache_root / "snapshots" / "revision"
+        snapshot.mkdir(parents=True)
+        monkeypatch.setattr(submit, "console", Console(width=200))
+
+        show_config_details(_make_config({"model": {"path": str(snapshot)}}))
+
+        output = capsys.readouterr().out
+        assert str(cache_root) in output
+        assert "/srtctl-model-cache" in output
+        assert str(snapshot) not in output
+
+    def test_extra_mount_from_recipe(self, capsys):
+        config = _make_config({"extra_mount": ["/data/custom:/custom", "/shared/cache:/cache"]})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "/data/custom" in output
+        assert "/custom" in output
+        assert "/shared/cache" in output
+        assert "/cache" in output
+        assert "recipe" in output
+
+    def test_extra_mount_expands_env_and_user_in_dry_run(self, capsys):
+        with patch.dict(os.environ, {"SRT_EXTRA_ROOT": "/expanded/extra", "HOME": "/home/tester"}):
+            config = _make_config({"extra_mount": ["$SRT_EXTRA_ROOT:/extra", "~/cache:/cache"]})
+            show_config_details(config)
+        output = capsys.readouterr().out
+        assert "/expanded/extra" in output
+        assert "/home/tester/cache" in output
+        assert "$SRT_EXTRA_ROOT" not in output
+        assert "~/cache" not in output
+
+    def test_cluster_mounts_from_srtslurm_yaml(self, capsys):
+        cluster_mounts = {"/shared/datasets": "/datasets", "/shared/models": "/models"}
+        with patch("srtctl.cli.submit.get_srtslurm_setting", return_value=cluster_mounts):
+            config = _make_config()
+            show_config_details(config)
+        output = capsys.readouterr().out
+        assert "/shared/datasets" in output
+        assert "/datasets" in output
+        assert "srtslurm.yaml" in output
+
+    def test_mounts_from_both_cluster_and_recipe(self, capsys):
+        """Mounts from srtslurm.yaml AND recipe extra_mount should both appear."""
+        cluster_mounts = {"/cluster/data": "/data"}
+
+        def mock_setting(key, default=None):
+            if key == "default_mounts":
+                return cluster_mounts
+            return default
+
+        with patch("srtctl.cli.submit.get_srtslurm_setting", side_effect=mock_setting):
+            config = _make_config({"extra_mount": ["/recipe/models:/models"]})
+            show_config_details(config)
+        output = capsys.readouterr().out
+        assert "/cluster/data" in output
+        assert "srtslurm.yaml" in output
+        assert "/recipe/models" in output
+        assert "recipe" in output
+
+    def test_no_extra_mounts_only_builtins(self, capsys):
+        config = _make_config()
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "/model" in output
+        assert "recipe" not in output
+
+
+class TestDryRunEnvironment:
+    """Test that environment variables from all levels appear in dry-run output."""
+
+    def test_global_environment(self, capsys):
+        config = _make_config({"environment": {"NCCL_SOCKET_IFNAME": "eth0", "MY_VAR": "hello"}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "NCCL_SOCKET_IFNAME" in output
+        assert "eth0" in output
+        assert "MY_VAR" in output
+        assert "global" in output
+
+    def test_backend_prefill_decode_environment(self, capsys):
+        config = _make_config(
+            {
+                "engine": "sglang",
+                "roles": {
+                    "prefill": {
+                        "env": {
+                            "TORCH_DISTRIBUTED_DEFAULT_TIMEOUT": "1800",
+                            "PYTHONUNBUFFERED": "1",
+                        },
+                    },
+                    "decode": {
+                        "env": {
+                            "SGLANG_ENABLE_FLASHINFER_GEMM": "1",
+                        },
+                    },
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "TORCH_DISTRIBUTED_DEFAULT_TIMEOUT" in output
+        assert "1800" in output
+        assert "prefill" in output
+        assert "SGLANG_ENABLE_FLASHINFER_GEMM" in output
+        assert "decode" in output
+
+    def test_global_and_backend_env_together(self, capsys):
+        """Global environment AND backend per-mode env should both appear."""
+        config = _make_config(
+            {
+                "environment": {"GLOBAL_VAR": "global_val"},
+                "engine": "sglang",
+                "roles": {"prefill": {"env": {"PREFILL_VAR": "prefill_val"}}},
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "GLOBAL_VAR" in output
+        assert "global" in output
+        assert "PREFILL_VAR" in output
+        assert "prefill" in output
+
+    def test_no_environment_shows_message(self, capsys):
+        config = _make_config()
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "No custom environment variables configured" in output
+
+    def test_trtllm_backend_environment(self, capsys):
+        config = _make_config(
+            {
+                "engine": "trtllm",
+                "roles": {
+                    "prefill": {
+                        "env": {
+                            "TRTLLM_ENABLE_PDL": "1",
+                            "NCCL_GRAPH_MIXING_SUPPORT": "0",
+                        },
+                    },
+                    "decode": {
+                        "env": {
+                            "TRTLLM_SERVER_DISABLE_GC": "1",
+                        },
+                    },
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "TRTLLM_ENABLE_PDL" in output
+        assert "prefill" in output
+        assert "TRTLLM_SERVER_DISABLE_GC" in output
+        assert "decode" in output
+
+    def test_custom_benchmark_environment(self, capsys):
+        config = _make_config(
+            {
+                "benchmark": {
+                    "type": "custom",
+                    "command": "python /bench/run.py",
+                    "env": {"BENCH_FOO": "bar"},
+                }
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "BENCH_FOO" in output
+        assert "benchmark" in output
+
+
+class TestDryRunSrunOptions:
+    """Test that srun options appear in dry-run output."""
+
+    def test_srun_options_shown(self, capsys):
+        config = _make_config({"srun_options": {"export": "ALL", "cpu-bind": "none"}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "--export=ALL" in output
+        assert "--cpu-bind=none" in output
+
+    def test_role_srun_options_shown(self, capsys):
+        config = _make_config(
+            {
+                "srun_options": {"mem": "0"},
+                "roles": {
+                    "prefill": {"nodes": 1, "workers": 1, "gpus": 2, "srun_options": {"mem": "1000M"}},
+                    "decode": {"nodes": "colocate", "workers": 1, "gpus": 6, "srun_options": {"mem": "3000M"}},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "srun options: --mem=0" in output
+        assert "prefill worker srun options (override recipe): --mem=1000M" in output
+        assert "decode worker srun options (override recipe): --mem=3000M" in output
+
+    def test_no_srun_options_no_output(self, capsys):
+        config = _make_config()
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "srun options" not in output
+
+
+class TestDryRunExecutionExtensions:
+    """Test custom benchmark and telemetry details display."""
+
+    def test_nsys_profiling_details_shown(self, capsys):
+        config = _make_config(
+            {
+                "profiling": {
+                    "type": "nsys",
+                    "nsys_trace": "cuda-sw,nvtx",
+                    "trace_fork_before_exec": True,
+                    "capture_range_end": "repeat:1:async",
+                    "nsys_library_paths": ["/host/lib64", "/host/lib"],
+                    "prefill": {"start_step": 1, "stop_step": 3, "worker_index": 0, "worker_rank": 0},
+                    "decode": {"start_step": 2, "stop_step": 4, "capture_scope": "all"},
+                }
+            }
+        )
+
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "cuda-sw,nvtx" in output
+        assert "repeat:1:async" in output
+        assert "/host/lib64:/host/lib" in output
+        assert "all physical processes" in output
+        assert "Execution Extensions" in output
+        assert "profiling" in output
+
+    def test_inline_worker_selection_translation_shown(self, capsys):
+        config = _make_config(
+            {
+                "frontend": {
+                    "type": "dynamo",
+                    "worker_selection": {
+                        "prefill": "max-kv-overlap",
+                        "decode": "default",
+                        "instances": [
+                            {
+                                "name": "max-kv-overlap",
+                                "type": "dynamo-two-tier-cost-fn",
+                            }
+                        ],
+                    },
+                }
+            }
+        )
+
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "router_policy_config" in output
+        assert "/logs/router_policy_config.yaml" in output
+        assert "(auto)" in output
+        assert "worker_selection" in output
+        assert "max-kv-overlap" in output
+
+    def test_custom_benchmark_details_shown(self, capsys):
+        config = _make_config(
+            {
+                "benchmark": {
+                    "type": "custom",
+                    "command": "python /bench/run.py",
+                    "container_image": "nvcr.io/nvidia/python:3.11",
+                }
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "Execution Extensions" in output
+        assert "container_image" in output
+        assert "nvcr.io/nvidia/python:3.11" in output
+        assert "profiling" not in output
+
+    def test_observability_tachometer_details_shown(self, capsys):
+        config = _make_config(
+            {
+                "observability": {
+                    "enabled": True,
+                    "tachometer": {"enabled": True},
+                }
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "observability" in output
+        assert "tachometer" in output
+        assert "binary_path" in output
+        assert "tachometer-scraper" in output
+        assert "storage_subdir" in output
+
+    def test_tachometer_details_shown_without_explicit_block(self, capsys):
+        """observability.enabled alone implies Tachometer; dry-run must say so."""
+        config = _make_config({"observability": {"enabled": True}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "tachometer" in output
+        assert "enabled" in output
+        assert "storage_subdir" in output
+        # Built-in exporters are part of the default and must be visible.
+        assert "dcgm_exporter" in output
+        assert "node_exporter" in output
+        assert "process_exporter" in output
+        assert ":9401" in output
+        assert ":9101" in output
+        assert ":9256" in output
+        # The process exporter is host-native by default; dry-run must say so
+        # (and name the binary make setup installs) rather than print an image.
+        # Rich wraps the cell, so the two halves are asserted separately.
+        assert "host binary" in output
+        assert "configs/process-exporter" in output
+
+    def test_dcgm_power_telemetry_details_shown(self, capsys):
+        config = _make_config(
+            {
+                "benchmark": {"type": "sa-bench", "isl": 8192, "osl": 1024, "concurrencies": [4]},
+                "telemetry": {
+                    "enabled": True,
+                    "collect_interval_ms": 1000,
+                    "storage_subdir": "power",
+                    "required": True,
+                    "dcgm_exporter": {"container_image": "dcgm-exporter", "port": 9401},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "dcgm-power" in output
+        assert "required" in output
+        assert "<log_dir>/power" in output
+        assert "dcgm-exporter (port 9401)" in output
+
+    def test_cpu_power_exporter_details_shown(self, capsys):
+        config = _make_config(
+            {
+                "benchmark": {"type": "sa-bench", "isl": 8192, "osl": 1024, "concurrencies": [4]},
+                "telemetry": {
+                    "enabled": True,
+                    "collect_interval_ms": 1000,
+                    "storage_subdir": "power",
+                    "required": True,
+                    "dcgm_exporter": {"container_image": "dcgm-exporter", "port": 9401},
+                    "cpu_power_exporter": {"port": 9405},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "cpu_power_exporter" in output
+        assert "9405" in output
+
+    def test_cpu_power_exporter_details_hidden_when_telemetry_disabled(self, capsys):
+        """A cpu_power_exporter block that will never actually launch must not be displayed."""
+        config = _make_config(
+            {
+                "benchmark": {"type": "sa-bench", "isl": 8192, "osl": 1024, "concurrencies": [4]},
+                "telemetry": {
+                    "enabled": False,
+                    "cpu_power_exporter": {"port": 9405},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "cpu_power_exporter" not in output
+
+    def test_cpu_power_host_collector_details_shown(self, capsys):
+        config = _make_config(
+            {
+                "benchmark": {"type": "sa-bench", "isl": 8192, "osl": 1024, "concurrencies": [4]},
+                "telemetry": {
+                    "enabled": True,
+                    "dcgm_exporter": {"container_image": "dcgm-exporter", "port": 9401},
+                    "cpu_power": {"enabled": True, "source": "acpi", "required": True},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "cpu_power" in output
+        assert "host collector" in output
+        assert "<log_dir>/cpu_power" in output
+        assert "required" in output
+
+    def test_cpu_power_host_collector_details_hidden_when_disabled(self, capsys):
+        config = _make_config(
+            {
+                "benchmark": {"type": "sa-bench", "isl": 8192, "osl": 1024, "concurrencies": [4]},
+                "telemetry": {
+                    "enabled": True,
+                    "dcgm_exporter": {"container_image": "dcgm-exporter", "port": 9401},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "host collector" not in output
+
+    def test_mooncake_kv_store_details_shown(self, capsys):
+        """mooncake_kv_store should appear in env vars and execution extensions."""
+        mooncake_env = {"MOONCAKE_PROTOCOL": "rdma", "MOONCAKE_GLOBAL_SEGMENT_SIZE": "4gb"}
+        config = _make_config(
+            {
+                "engine": "sglang",
+                "roles": {
+                    "prefill": {"args": {"disaggregation-transfer-backend": "mooncake"}, "env": mooncake_env},
+                    "decode": {"args": {"disaggregation-transfer-backend": "mooncake"}, "env": mooncake_env},
+                },
+                "services": [
+                    {
+                        "name": "mooncake-master",
+                        "type": "mooncake-master",
+                        "container": "nvcr.io/nvidia/mooncake:latest",
+                    }
+                ],
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        # Env table shows mooncake-scoped env vars
+        assert "mooncake" in output
+        assert "MOONCAKE_PROTOCOL" in output
+        assert "rdma" in output
+        assert "MOONCAKE_GLOBAL_SEGMENT_SIZE" in output
+        # Execution extensions shows master + container
+        assert "nvcr.io/nvidia/mooncake:latest" in output
+        assert "master_port" in output
+
+    def test_mooncake_kv_store_no_container_shows_default(self, capsys):
+        """mooncake_kv_store without explicit container falls back to job container label."""
+        mooncake_env = {"MOONCAKE_PROTOCOL": "tcp"}
+        config = _make_config(
+            {
+                "engine": "sglang",
+                "roles": {
+                    "prefill": {"args": {"disaggregation-transfer-backend": "mooncake"}, "env": mooncake_env},
+                    "decode": {"args": {"disaggregation-transfer-backend": "mooncake"}, "env": mooncake_env},
+                },
+                "services": [{"name": "mooncake-master", "type": "mooncake-master"}],
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "<job container>" in output
+        assert "MOONCAKE_PROTOCOL" in output
+
+    def test_vllm_mooncake_kv_store_dry_run(self, capsys):
+        """vLLM mooncake_kv_store renders the shared master port (8700)."""
+        from srtctl.ports import MOONCAKE_MASTER_PORT
+
+        kv_cfg = '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both"}'
+        mooncake_env = {"MOONCAKE_PROTOCOL": "rdma"}
+        config = _make_config(
+            {
+                "engine": "vllm",
+                "roles": {
+                    "prefill": {"args": {"kv-transfer-config": kv_cfg}, "env": mooncake_env},
+                    "decode": {"args": {"kv-transfer-config": kv_cfg}, "env": mooncake_env},
+                },
+                "services": [
+                    {
+                        "name": "mooncake-master",
+                        "type": "mooncake-master",
+                        "container": "inferactinc/public:mk-int-20260507",
+                        "args": ["--nof_eviction_high_watermark_ratio=0.9"],
+                    }
+                ],
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "mooncake" in output
+        assert "MOONCAKE_PROTOCOL" in output
+        # Rich truncates long values with an ellipsis; assert on the stable prefix.
+        assert "inferactinc/public:mk-int-202605" in output
+        # Shared with the SGLang launch — same port pair.
+        assert str(MOONCAKE_MASTER_PORT) in output
+        assert "master_extra_args" in output
+        assert "nof_eviction" in output
+
+    def test_vllm_mooncake_store_config_in_dry_run(self, capsys):
+        """vLLM store_config + MOONCAKE_CONFIG_PATH appear in the dry-run extensions panel."""
+        kv_cfg = '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both"}'
+        mooncake_env = {"MOONCAKE_PROTOCOL": "rdma"}
+        config = _make_config(
+            {
+                "engine": "vllm",
+                "roles": {
+                    "prefill": {"args": {"kv-transfer-config": kv_cfg}, "env": mooncake_env},
+                    "decode": {"args": {"kv-transfer-config": kv_cfg}, "env": mooncake_env},
+                },
+                "services": [
+                    {
+                        "name": "mooncake-master",
+                        "type": "mooncake-master",
+                        "options": {
+                            "store_config": {
+                                "metadata_server": "P2PHANDSHAKE",
+                                "global_segment_size": "100GB",
+                                "local_buffer_size": "4GB",
+                                "protocol": "rdma",
+                                "device_name": "",
+                            },
+                        },
+                    }
+                ],
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "MOONCAKE_CONFIG_PATH" in output
+        assert "/logs/mooncake_store_config.json" in output
+        assert "P2PHANDSHAKE" in output
+        assert "100GB" in output
+
+    def test_trtllm_mooncake_role_configs_in_dry_run(self, capsys):
+        """Each TRT-LLM role using the mooncake-store connector shows its client config and path."""
+        connector = {"kv_connector_config": {"connector": "mooncake-store"}}
+        config = _make_config(
+            {
+                "engine": "trtllm",
+                "roles": {
+                    "prefill": {"args": connector},
+                    "decode": {"args": connector, "mooncake_store_config": {"global_segment_size": "16GiB"}},
+                },
+                "services": [
+                    {
+                        "name": "mooncake-master",
+                        "type": "mooncake-master",
+                        "options": {"store_config": {"global_segment_size": "8GiB"}},
+                    }
+                ],
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "MOONCAKE_CONFIG_PATH" in output
+        assert "store_config (prefill)" in output
+        assert "store_config (decode)" in output
+        assert '"capacity"' in output
+        assert "16GiB" in output
+        # model_key defaults to the served model name, unknown before the model is staged
+        # (the table wraps the placeholder, so match its start).
+        assert '"model_key": "<model' in output
+
+    def test_vllm_process_local_mooncake_map_in_dry_run(self, capsys):
+        config = _make_config(
+            {
+                "engine": {
+                    "type": "vllm",
+                    "mooncake_kv_store": {
+                        "device_names_by_gpu": [f"mlx5_{i}" for i in range(8)],
+                        "store_config": {"global_segment_size": "150GB"},
+                    },
+                },
+                "roles": {
+                    "prefill": {
+                        "args": {"kv-transfer-config": '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both"}'}
+                    },
+                    "decode": {
+                        "args": {"kv-transfer-config": '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both"}'}
+                    },
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "device_names_by_gpu" in output
+        assert "mlx5_7" in output
+        assert "mooncake_store_config_gpu" in output
+        assert "process config" in output
+
+
+class TestDryRunServices:
+    """services: command, env, source, and readiness must be visible before submitting."""
+
+    def test_service_file_readiness_is_shown(self, capsys):
+        config = _make_config(
+            {
+                "services": [
+                    {"name": "donor", "command": ["/bin/true"], "readiness": {"file": {"path": "donor_{index}.ready"}}}
+                ]
+            }
+        )
+        show_config_details(config)
+        assert "file /logs/donor_{index}.ready exists" in capsys.readouterr().out
+
+    def test_service_command_env_and_readiness_shown(self, capsys):
+        config = _make_config(
+            {
+                "services": [
+                    {
+                        "name": "thunderagent-router",
+                        "command": ["python3", "-m", "dynamo.thunderagent_router", "--endpoint", "dyn://ns.comp.ep"],
+                        "env": {"ROUTER_LOG_LEVEL": "debug"},
+                        "readiness": {"port": 9100},
+                    }
+                ]
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "Services:" in output
+        assert "thunderagent-router" in output
+        assert "dynamo.thunderagent_router" in output
+        assert "ROUTER_LOG_LEVEL" in output
+        assert "debug" in output
+        assert "tcp/9100" in output
+        assert "placement=head" in output
+
+    def test_source_and_build_command_shown(self, capsys):
+        config = _make_config(
+            {
+                "services": [
+                    {
+                        "name": "thunderagent-router",
+                        "command": ["python3", "-m", "dynamo.thunderagent_router"],
+                        "source": {"git": "https://github.com/ai-dynamo/dynamo", "rev": "refs/pull/14000/head"},
+                        "build_command": ["bash", "-lc", "maturin develop --uv && pip install -e ."],
+                    }
+                ]
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "https://github.com/ai-dynamo/dynamo" in output
+        assert "refs/pull/14000/head" in output
+        assert "maturin develop" in output
+
+    def test_mooncake_store_shows_type_defaults(self, capsys):
+        config = _make_config(
+            {
+                "engine": "sglang",
+                "roles": {
+                    "prefill": {"args": {"disaggregation-transfer-backend": "mooncake"}},
+                    "decode": {"args": {"disaggregation-transfer-backend": "mooncake"}},
+                },
+                "services": [
+                    {"name": "mooncake-master", "type": "mooncake-master", "container": "mooncake.sqsh"},
+                    {
+                        "name": "store",
+                        "type": "mooncake-store",
+                        "placement": {"node": "workers"},
+                        "env": {"MOONCAKE_GLOBAL_SEGMENT_SIZE": "100gb"},
+                    },
+                ],
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "mooncake.mooncake_store_service" in output
+        assert "type=mooncake-store" in output
+        assert "start=before_workers" in output
+        assert "critical=true" in output
+        assert "100gb" in output
+
+    def test_no_services_omits_the_panel(self, capsys):
+        # No discovery plane (static frontend), no tachometer: nothing declared, nothing implied.
+        config = _make_config(
+            {"frontend": {"type": "sglang-router"}, "observability": {"tachometer": {"enabled": False}}}
+        )
+        show_config_details(config)
+        assert "Services:" not in capsys.readouterr().out
+
+    def test_implicit_services_are_listed_and_marked(self, capsys):
+        config = _make_config({"frontend": {"type": "dynamo"}, "dynamo": {"request_plane": "nats"}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "Services:" in output
+        assert "etcd" in output and "nats" in output
+        assert "implied by: frontend.type dynamo" in output
+        assert "implied by: dynamo.request_plane nats" in output
+        assert "/configs/etcd" in output
+        assert "dcgm-exporter" in output and "node-exporter" in output
+        assert "implied by: observability.tachometer default exporters" in output
+
+    def test_external_service_is_shown_as_not_launched(self, capsys):
+        config = _make_config(
+            {
+                "frontend": {"type": "dynamo"},
+                "services": [{"name": "etcd", "type": "etcd", "external": "http://etcd.shared:2379"}],
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "external: http://etcd.shared:2379 (not launched)" in output
+        assert "implied by: frontend.type dynamo" not in output.split("nats")[0]
+
+
+class TestDryRunPostEval:
+    def test_post_eval_dispatch_shown(self, capsys):
+        config = _make_config(
+            {"post_eval": {"passthrough_env": ["EVAL_FRAMEWORK", "EVAL_SUITE"], "command": ["bash", "run.sh"]}}
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "Post-eval dispatch:" in output
+        assert "bash run.sh" in output
+        assert "EVAL_FRAMEWORK, EVAL_SUITE" in output
+
+    def test_default_post_eval_is_silent(self, capsys):
+        show_config_details(_make_config())
+        assert "Post-eval dispatch" not in capsys.readouterr().out
+
+
+class TestDryRunDynamoSource:
+    """dynamo.source: the repo, ref, and whether it is pinned must be visible before submitting."""
+
+    def test_git_source_shown_unpinned_and_pinned(self, capsys):
+        base = {"frontend": {"type": "dynamo"}}
+        config = _make_config({**base, "dynamo": {"source": {"rev": "refs/pull/14000/head"}}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "https://github.com/ai-dynamo/dynamo.git @ refs/pull/14000/head" in output
+        assert "resolved from rev at submit" in output
+
+        sha = "2ecbdfdf192c69c02c6d21e931d20d3b4a0bb64a"
+        config = _make_config({**base, "dynamo": {"source": {"rev": "v1.4.2", "sha": sha}}})
+        show_config_details(config)
+        assert f"dynamo source sha: {sha}" in capsys.readouterr().out
+
+    def test_pypi_source_shown(self, capsys):
+        config = _make_config({"frontend": {"type": "dynamo"}, "dynamo": {"source": {"pypi": "1.4.2"}}})
+        show_config_details(config)
+        assert "PyPI ai-dynamo==1.4.2" in capsys.readouterr().out
+
+
+class TestDryRunHetJobs:
+    """Het structure panel appears only when het is enabled."""
+
+    def test_het_panel_rendered_when_enabled(self, capsys):
+        config = _make_config(
+            {
+                "resources": {"gpu_type": "gb200", "gpus_per_node": 4, "het_jobs": True},
+                "roles": {"prefill": {"nodes": 12, "workers": 12}, "decode": {"nodes": 10, "workers": 10}},
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "Heterogeneous Job" in output
+        assert "prefill" in output
+        assert "decode" in output
+
+    def test_het_panel_hidden_when_disabled(self, capsys):
+        """No het panel when het_jobs is unset (recipe default)."""
+        config = _make_config()
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "Heterogeneous Job" not in output
+
+    def test_het_panel_shows_infra_folded_into_prefill(self, capsys):
+        config = _make_config(
+            {
+                "resources": {"gpu_type": "gb200", "gpus_per_node": 4, "het_jobs": True},
+                "roles": {"prefill": {"nodes": 12, "workers": 12}, "decode": {"nodes": 10, "workers": 10}},
+                "services": [{"name": "etcd", "type": "etcd", "placement": {"node": "dedicated"}}],
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "Heterogeneous Job" in output
+        assert "first node" in output  # infra note on the prefill row
+
+
+class TestDryRunRemapRoot:
+    """ENROOT_REMAP_ROOT is surfaced only when dynamo will be installed."""
+
+    def test_remap_root_shown_for_dynamo_install(self, capsys):
+        config = _make_config({"frontend": {"type": "dynamo"}, "dynamo": {"install": True}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "ENROOT_REMAP_ROOT" in output
+
+    def test_remap_root_absent_for_sglang_frontend(self, capsys):
+        config = _make_config({"frontend": {"type": "sglang-router"}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "ENROOT_REMAP_ROOT" not in output
+
+    def test_remap_root_absent_when_install_false(self, capsys):
+        config = _make_config({"frontend": {"type": "dynamo"}, "dynamo": {"install": False}})
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "ENROOT_REMAP_ROOT" not in output
+
+
+class TestDryRunVllmOrchestrationWarnings:
+    """Dry-run warns when recipes set topology-managed vLLM flags."""
+
+    def test_orchestration_flags_emit_warnings(self, capsys):
+        config = _make_config(
+            {
+                "resources": {"gpu_type": "b200", "gpus_per_node": 8},
+                "frontend": {"type": "vllm", "enable_multiple_frontends": False},
+                "engine": "vllm",
+                "roles": {
+                    "prefill": None,
+                    "decode": None,
+                    "agg": {
+                        "nodes": 2,
+                        "workers": 1,
+                        "args": {
+                            "tensor-parallel-size": 8,
+                            "headless": True,
+                            "master-addr": "10.9.9.9",
+                            "master-port": 26300,
+                        },
+                    },
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "WARNING:" in output
+        assert "roles.agg.args.headless" in output
+        assert "roles.agg.args.master-addr" in output
+        assert "roles.agg.args.master-port" not in output
+
+    def test_clean_recipe_has_no_orchestration_warnings(self, capsys):
+        config = _make_config(
+            {
+                "resources": {"gpu_type": "b200", "gpus_per_node": 8},
+                "frontend": {"type": "vllm", "enable_multiple_frontends": False},
+                "engine": "vllm",
+                "roles": {
+                    "prefill": None,
+                    "decode": None,
+                    "agg": {"nodes": 2, "workers": 1, "args": {"tensor-parallel-size": 8}},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "roles.agg.args.headless" not in output
+        assert "derives this from the job topology" not in output
+
+    def test_dynamo_recipe_has_no_direct_vllm_orchestration_warning(self, capsys):
+        config = _make_config(
+            {
+                "resources": {"gpu_type": "b200", "gpus_per_node": 8},
+                "frontend": {"type": "dynamo"},
+                "engine": "vllm",
+                "roles": {
+                    "prefill": None,
+                    "decode": None,
+                    "agg": {"nodes": 2, "workers": 1, "args": {"master-addr": "10.9.9.9"}},
+                },
+            }
+        )
+        show_config_details(config)
+        output = capsys.readouterr().out
+        assert "roles.agg.args.master-addr" not in output
+        assert "configured value is ignored" not in output
+
+
+class TestInfmaxWorkspaceMount:
+    """INFMAX_WORKSPACE comes from the environment, not the recipe.
+
+    That is precisely why dry-run has to show it: nothing in the config file mentions
+    it, so a reader comparing recipe against dry-run sees what looks like a complete
+    picture and is wrong. Recipes whose benchmark command lives under
+    /infmax-workspace fail with exit 127 after the workers have loaded when it is
+    missing -- observed on ablation arms 2751879-82, where diffing the working run's
+    --container-mounts against the failed arm's showed this single missing entry.
+    """
+
+    AGENTIC = {
+        "benchmark": {"type": "custom", "command": "bash /infmax-workspace/benchmarks/multi_node/agentic_srt.sh"}
+    }
+
+    def test_mount_is_shown_when_the_variable_is_set(self, capsys):
+        config = _make_config(self.AGENTIC)
+        with patch.dict(os.environ, {"INFMAX_WORKSPACE": "/lustre/checkouts/InferenceX-abc"}):
+            show_config_details(config)
+        output = capsys.readouterr().out
+        assert "/lustre/checkouts/InferenceX-abc" in output
+        assert "/infmax-workspace" in output
+
+    def test_absence_is_flagged_when_the_benchmark_needs_it(self, capsys):
+        """The failure this prevents is expensive and silent: the table listed every
+        other mount, so the missing row read as 'no such mount exists' rather than
+        'not set in this environment'."""
+        config = _make_config(self.AGENTIC)
+        env = {k: v for k, v in os.environ.items() if k != "INFMAX_WORKSPACE"}
+        with patch.dict(os.environ, env, clear=True):
+            show_config_details(config)
+        output = capsys.readouterr().out
+        assert "MISSING" in output
+        assert "127" in output, "the dry-run must name the failure mode, not just the gap"
+
+    def test_no_warning_when_the_benchmark_does_not_use_it(self, capsys):
+        """Most recipes never touch /infmax-workspace; they must not be nagged."""
+        config = _make_config()
+        env = {k: v for k, v in os.environ.items() if k != "INFMAX_WORKSPACE"}
+        with patch.dict(os.environ, env, clear=True):
+            show_config_details(config)
+        output = capsys.readouterr().out
+        assert "MISSING" not in output
+
+
+@pytest.mark.parametrize("nsys, expected", [({}, "enabled"), ({"enabled": False}, "disabled")])
+@pytest.mark.parametrize(
+    "backend, gate",
+    [
+        ("trtllm", "TLLM_LLMAPI_ENABLE_NVTX=1"),
+        ("sglang", "SGLANG_ENABLE_NVTX_SCHEDULER=1"),
+        ("vllm", "VLLM_NVTX_SCOPES_FOR_PROFILING=1; VLLM_WORKER_MULTIPROC_METHOD=spawn"),
+    ],
+)
+def test_observability_nsys_details(capsys, monkeypatch, nsys, expected, backend, gate):
+    # At 80 columns the folded NAME=value cell splits names across lines.
+    monkeypatch.setattr(submit, "console", Console(width=200))
+    cfg = _make_config(
+        {"observability": {"enabled": True, "nsys": nsys}, "frontend": {"type": "dynamo"}, "engine": backend}
+    )
+    show_config_details(cfg)
+    output = capsys.readouterr().out
+    assert "nsys" in output and expected in output
+    if expected == "enabled":
+        for text in (
+            "NVTX (no CUDA tracing)",
+            "nsys CPU sampling",
+            "system-wide (every target)",
+            "Dynamo frontends",
+            "measured_workload",
+            "after warmup",
+            "1800s",
+            "DYN_ENABLE_RUST_NVTX",
+            "DYN_NVTX=1",
+            "nsys worker env",
+            gate,
+        ):
+            assert text in output
+        for other in ("TLLM_LLMAPI_ENABLE_NVTX", "SGLANG_ENABLE_NVTX_SCHEDULER", "VLLM_NVTX_SCOPES_FOR_PROFILING"):
+            assert (other in output) == gate.startswith(other)
+    else:
+        assert "nsys targets" not in output
+
+
+def test_explicit_profiling_explains_observability_precedence(capsys):
+    cfg = _make_config(
+        {
+            "observability": {"enabled": True},
+            "profiling": {
+                "type": "nsys-time",
+                "delay_secs": 1,
+                "duration_secs": 2,
+            },
+        }
+    )
+    show_config_details(cfg)
+    output = capsys.readouterr().out
+    assert "superseded by profiling" in output
+    assert "nsys targets" not in output
+
+
+class TestRoleGpuIndices:
+    """``roles.<role>.gpu_indices`` is validated at load and visible in the dry run."""
+
+    AGG_ONLY = {"prefill": None, "decode": None}
+
+    def _agg(self, **agg):
+        return _make_config(
+            {
+                "resources": {"gpu_type": "gb300", "gpus_per_node": 4},
+                "engine": {"type": "trtllm", "served_model_name": "test"},
+                "roles": {**self.AGG_ONLY, "agg": {"nodes": 1, "workers": 1, **agg}},
+            }
+        )
+
+    def test_mask_follows_the_named_gpus(self) -> None:
+        config = self._agg(gpus=2, gpu_indices=[0, 2])
+        assert config.topology.gpu_indices_by_mode == {"agg": (frozenset({0, 2}),)}
+        endpoints = config.allocate_worker_endpoints(["node0"])
+        assert endpoints[0].gpu_indices == frozenset({0, 2})
+        from srtctl.core.worker_backends import worker_processes
+
+        assert [p.cuda_visible_devices for p in worker_processes(config, endpoints)] == ["0,2"]
+
+    def test_visible_in_dry_run(self, capsys) -> None:
+        show_config_details(self._agg(gpus=2, gpu_indices=[0, 2]))
+        output = " ".join(capsys.readouterr().out.split())
+        assert "agg: gpu_indices=0,2 (CUDA_VISIBLE_DEVICES per worker; 1 worker(s) per node)" in output
+
+    @pytest.mark.parametrize(
+        ("agg", "message"),
+        [
+            ({"gpus": 2, "gpu_indices": [0, 0]}, "distinct GPU indices"),
+            ({"gpus": 2, "gpu_indices": [0, 4]}, "must lie in 0..3"),
+            ({"gpu_indices": [0, 2]}, "needs an explicit gpus"),
+            ({"gpus": 2, "gpu_indices": [0, 1, 2]}, "lists 3 GPUs per worker but gpus: is 2"),
+            ({"gpus": 4, "gpu_indices": [0, 1, 2, 3]}, "only applies to a partial-node worker"),
+            ({"nodes": 1, "workers": 2, "gpus": 2, "gpu_indices": [0, 2]}, "needs nodes: 2; got nodes: 1"),
+            ({"nodes": 1, "workers": 2, "gpus": 2, "gpu_indices": [[0, 2], [2, 3]]}, "no GPU in two slots"),
+            ({"nodes": 1, "workers": 2, "gpus": 2, "gpu_indices": [[0, 2], [1]]}, "lists 1 and 2 GPUs per worker"),
+            # A mixed form fails marshmallow's union field before the recipe validator runs.
+            ({"nodes": 1, "workers": 2, "gpus": 2, "gpu_indices": [0, [1, 3]]}, "Not a valid"),
+        ],
+    )
+    def test_rejected_at_load(self, agg, message) -> None:
+        from marshmallow import ValidationError
+
+        with pytest.raises(ValidationError, match=message):
+            self._agg(**agg)
+
+    def test_prefill_set_rejects_colocated_decode(self) -> None:
+        from marshmallow import ValidationError
+
+        with pytest.raises(ValidationError, match="cannot share them"):
+            _make_config(
+                {
+                    "resources": {"gpu_type": "gb300", "gpus_per_node": 4},
+                    "engine": {"type": "trtllm", "served_model_name": "test"},
+                    "roles": {
+                        "prefill": {"nodes": 1, "workers": 1, "gpus": 2, "gpu_indices": [0, 2]},
+                        "decode": {"nodes": "colocate", "workers": 1, "gpus": 2},
+                    },
+                }
+            )
+
+    def test_two_slots_per_node(self, capsys) -> None:
+        config = _make_config(
+            {
+                "resources": {"gpu_type": "gb300", "gpus_per_node": 4},
+                "engine": {"type": "trtllm", "served_model_name": "test"},
+                "roles": {
+                    **self.AGG_ONLY,
+                    "agg": {"nodes": 2, "workers": 4, "gpus": 2, "gpu_indices": [[0, 2], [1, 3]]},
+                },
+            }
+        )
+        endpoints = config.allocate_worker_endpoints(["node0", "node1"])
+        assert [(e.nodes[0], sorted(e.gpu_indices)) for e in endpoints] == [
+            ("node0", [0, 2]),
+            ("node0", [1, 3]),
+            ("node1", [0, 2]),
+            ("node1", [1, 3]),
+        ]
+        show_config_details(config)
+        output = " ".join(capsys.readouterr().out.split())
+        assert "agg: gpu_indices=0,2 | 1,3 (CUDA_VISIBLE_DEVICES per worker; 2 worker(s) per node)" in output
