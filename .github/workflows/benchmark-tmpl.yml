@@ -284,6 +284,7 @@ jobs:
           path: |
             results/server.log
             results/native_setup.log
+            results/native_worker_stacks/*.log
             results/*native_fp8_execution_proof.json
             .native-fp8-validation/*/evidence/native-validation.json
             results/path_probe*.json
