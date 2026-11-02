@@ -28,3 +28,20 @@ No case is skipped or tolerance widened. One captured chunk is not serving,
 model, or performance validation. Calibration uses captured K maxima;
 transforms are unfused diagnostics. Integration requires broader numerical
 coverage, graph replay, model accuracy and measured performance.
+
+## Rotation result and binary-scale follow-up
+
+Run 41436852207, attempt 1, job 125248773573, source
+ ef9ebefa7fc46bc33966c3d4fae3802b88eb6b30 completed with numerical failure.
+Artifact 13137092722; 8 arithmetic checks passed, 4/4 candidate BF16 gates failed.
+Unrotated LSE 0.208251953125; fixed rotation 0.22992515563964844.
+Unquantized rotation identity error 3.55e-15. FP8 weight conversion alone
+produced LSE 0.05301 vs BF16. Control Q-only 0.15362; K-only 0.13156;
+combined input rounding 0.20829. These maxima are not additive.
+Rotation is not promoted. Current PR SHA and passing GSM8K are unchanged.
+
+Next test: retain the original native weights; align Q descale and per-head
+balancing to powers of two. This avoids basis rotation and tests whether
+binary alignment reduces conversion error. Keep residual RoPE columns,
+all four native cases and the original 0.20/0.10 gates. Calibration is still
+diagnostic; no serving integration or performance claim.
