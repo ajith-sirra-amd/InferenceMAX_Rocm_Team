@@ -153,7 +153,7 @@ jobs:
               docker run --rm --network none --user 0:0 \
                 --mount "type=bind,source=$native_root,target=/repair" \
                 --entrypoint chown \
-                vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+                vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f \
                 --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
             fi
         - name: Checkout inspection code
@@ -229,7 +229,7 @@ jobs:
               -v "$native_work_dir":/work \
               -e PYTHONDONTWRITEBYTECODE=1 \
               --entrypoint python3 \
-              vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+              vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f \
               /repo/utils/atom_attention/native_vllm_gpu_validate.py \
               --native-sha "$NATIVE_VLLM_SHA"
         - name: Restore native validation ownership
@@ -244,7 +244,7 @@ jobs:
               docker run --rm --network none --user 0:0 \
                 --mount "type=bind,source=$native_root,target=/repair" \
                 --entrypoint chown \
-                vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716 \
+                vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f \
                 --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
             fi
         - name: Upload native GPU validation evidence
@@ -418,7 +418,7 @@ jobs:
         with:
             exp-name: ${{ matrix.config.exp-name }}
             runner: ${{ matrix.config.runner }}
-            image: ${{ inputs.native-vllm-sha != '' && 'vllm/vllm-openai-rocm:nightly-rocm100-edad8b03c5285a1c12e7e4f83c1af709b319a01b@sha256:009169c114af5b15e25eddc808afb3c1fc3f12c94e746472b16f39fcf39cd716' || matrix.config.image }}
+            image: ${{ inputs.native-vllm-sha != '' && 'vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f' || matrix.config.image }}
             model: ${{ matrix.config.model }}
             model-prefix: ${{ matrix.config.model-prefix }}
             framework: ${{ matrix.config.framework }}
