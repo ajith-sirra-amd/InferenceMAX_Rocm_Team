@@ -1,0 +1,35 @@
+name: Native FP8 source and nightly review
+on:
+  push:
+    branches:
+      - checks/pr64288-review-20261102
+    paths:
+      - .github/workflows/native-fp8-source-review.yml
+      - utils/atom_attention/pr_source_image_review.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.6"
+      - name: Prepare isolated Python
+        run: uv venv --python 3.12
+      - name: Inspect source applicability and image metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .venv/bin/python utils/atom_attention/pr_source_image_review.py
+      - name: Upload review evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-fp8-source-image-review
+          path: pr-review-evidence/
+          if-no-files-found: error
