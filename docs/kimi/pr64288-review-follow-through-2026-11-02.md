@@ -1,5 +1,7 @@
 # PR #64288 review follow-through ? 2026-11-02
 
+> **Status correction, 2026-11-02 17:13 UTC:** PR head is now `2c01e1ce21a262f6108861a831eae5a7d2a2ca8e` after merging `main`. Completed GPU/GSM8K/performance/static results below apply to `492080779e9feea19308092b0aba0840e87c6115`; post-merge validation remains outstanding. Latest GSM8K strict accuracy rounds to **96.7400% (1276/1319)**. See [the factual audit](pr64288-factual-audit-2026-11-02.md). Earlier status entries below are historical.
+
 [??](pr64288-review-follow-through-2026-11-02_zh.md)
 
 ## Current source and scope
