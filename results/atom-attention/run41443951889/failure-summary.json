@@ -360,6 +360,15 @@
     "No preceding ERROR/Traceback/BLAS exception found in the inspected server log.",
     "Client errors were already present during warm-up; empty-content responses and later engine death need separate investigation.",
     "Native projection events absent; reference causal and cached FP8 plus BF16 expanded K/V observed on eight workers.",
-    "Do not use this run's aggregate throughput as a comparison baseline."
-  ]
+    "Do not use this run's aggregate throughput as a comparison baseline.",
+    "The successful native control also had 437/531 empty-content warmup errors. The harness adds one-token warmup requests; the reference's 434/531 warmup errors do not independently establish a numerical defect."
+  ],
+  "warmup_control": {
+    "run": 41413372088,
+    "status": "successful native performance run",
+    "warmup_records": 531,
+    "warmup_empty_content_errors": 437,
+    "measured_records": 3834,
+    "measured_errors": 11
+  }
 }

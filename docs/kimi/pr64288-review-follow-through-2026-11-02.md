@@ -52,3 +52,5 @@ Run 41443951889 failed. The first watchdog report at 13:33:13 UTC was DCP KV all
 Client errors were already present during warm-up: 434/531 records. Measurement produced 63 records, 52 errors, and only 1440.19 recorded seconds. The failed-request threshold aborted the replay after the engine died. This is not a valid performance baseline. Reference FP8 causal/cached attention and BF16 expanded K/V were observed on all eight workers; no direct projection events occurred.
 
 Full raw evidence remains in run artifacts 13146026833 and 13146571024; a structured failure summary is at results/atom-attention/run41443951889/failure-summary.json. Our standalone PR run continues and GSM8K remains gated behind its success. The cancelled combined arm stays cancelled.
+
+Warm-up control: successful native run 41413372088 had 437/531 empty-content warm-up errors, versus 434/531 for the failed reference. The harness uses extra one-token warm-up requests; these counts alone do not establish a numerical defect. The reference's measured-phase failure and collective timeout remain the actionable evidence.

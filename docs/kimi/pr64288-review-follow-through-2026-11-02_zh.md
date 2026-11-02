@@ -35,3 +35,5 @@ PR 版本保持为 `492080779e9feea19308092b0aba0840e87c6115`。直接使用 FP8
 已验证的 BLAS 配置为 TORCH_BLAS_PREFER_HIPBLASLT=0 与 TORCH_BLAS_PREFER_CUBLASLT=0 的组合；尚未分别隔离测试，也未证明该配置本身带来性能提升。它属于运行配置，不属于 FMHA PR 的修复。
 
 后续待办为稳态 profiling、C56/C64 加 MTP 和 C96 不加 MTP。原生 NUMA 改动暂缓。Kimi-K3.1 尚未验证，需确切 checkpoint/config。当前排队版本不加入“只写 Q8、消除未使用新 token K8/V8 缓冲区”的后续优化。
+
+热身期对照：成功的原生运行 41413372088 同样有 437/531 个空内容热身错误（参考运行为 434/531）。脚本包含单 token 热身请求，该计数不能单独证明量化数值错误。测量阶段失败和 collective 超时仍是需要调查的问题。
