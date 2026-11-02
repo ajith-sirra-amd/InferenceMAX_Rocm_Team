@@ -98,8 +98,8 @@ were skipped in this diagnostic. A nightly bump alone does not fix the issue.
 source 2b03ea66409449b4c20ba6ee952572027964e76c, tests the same shapes with
 TORCH_BLAS_PREFER_HIPBLASLT=0 and TORCH_BLAS_PREFER_CUBLASLT=0. It asserts
 PyTorch selected Cublas (the HIP backend on ROCm) and retains all warning and
-numerical gates. Both candidate steps passed; native FP8 tests on the newer
-image are running. This is a runtime workaround experiment, not a proven
+numerical gates. Both candidates passed 112/112 cases with no warnings/timeouts; the unchanged
+current-head native FP8 tests on the newer image passed 8/8, zero failures/skips. This is a runtime workaround experiment, not a proven
 serving-stall fix or a production-code change.
 
 Four reviewer comparison patches passed preparation in
@@ -124,3 +124,21 @@ arms use actual-context maxima.
    upstream CI remain required; fork checks are separate evidence.
 6. After PR validation: steady-state profiling, C56/C64 with MTP and C96 without
    MTP. Native NUMA work remains postponed.
+
+## Full runtime-workaround replay dispatched
+
+[Run 41402358706](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41402358706):
+C48, TP8/DCP8, MTP synthetic acceptance, 3600 seconds, normal graphs/routing.
+Same current image and native PR SHA as the failed replay. Execution SHA
+2693f50611a445f3f0f2ad91f69b16350f6629c3 sets explicit hipBLAS selection
+and records worker stacks every 60 seconds in native_worker_stacks.
+Actual BLAS selection is checked when each worker emits FP8 execution proof.
+No native serving arithmetic or offload patch is applied. Stack sampling
+makes this an instrumented stability diagnostic, not an uninstrumented
+performance baseline. Coverage remains 98%.
+
+Prerequisite harness run 41402131374: 20 tests passed, none failed/skipped.
+BLAS/current-head native GPU evidence is archived at
+../../results/atom-attention/run41401317715/stack-evidence.json.
+Follow this replay to completion and inspect the evidence before declaring
+the full serving stall fixed or dispatching the matched newer-image replay.
