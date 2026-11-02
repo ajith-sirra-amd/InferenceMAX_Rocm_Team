@@ -1,5 +1,5 @@
-name: Native FP8 channel-balance diagnostic
-run-name: Native FP8 channel balance - ${{ inputs.run-gpu && 'GPU' || 'CPU precheck' }}
+name: Native FP8 NoPE rotation diagnostic
+run-name: Native FP8 NoPE rotation - ${{ inputs.run-gpu && 'GPU' || 'CPU precheck' }}
 on:
   workflow_dispatch:
     inputs:
@@ -33,14 +33,14 @@ jobs:
         run: |
           [[ "$NATIVE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$FIXTURE_RUN_ID" =~ ^[0-9]+$ ]]
-          python3 -m py_compile utils/atom_attention/channel_balance_diagnostics.py utils/atom_attention/native_vllm_gpu_validate.py
+          python3 -m py_compile utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py utils/atom_attention/native_vllm_gpu_validate.py
           python3 -m pip install ruff
-          python3 -m ruff check --select E9,F utils/atom_attention/channel_balance_diagnostics.py
-          sha256sum utils/atom_attention/channel_balance_diagnostics.py utils/atom_attention/native_vllm_gpu_validate.py .github/workflows/e2e-tests.yml > channel-source.sha256
+          python3 -m ruff check --select E9,F utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py
+          sha256sum utils/atom_attention/nope_rotation_diagnostics.py utils/atom_attention/channel_balance_diagnostics.py utils/atom_attention/native_vllm_gpu_validate.py .github/workflows/e2e-tests.yml > nope-source.sha256
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: channel-balance-source-${{ github.run_id }}
-          path: channel-source.sha256
+          name: nope-rotation-source-${{ github.run_id }}
+          path: nope-source.sha256
           if-no-files-found: error
   diagnose:
     needs: precheck
@@ -59,18 +59,18 @@ jobs:
         with:
           pattern: agentic_*
           merge-multiple: true
-          path: .channel-numerics/${{ github.run_id }}/fixture
+          path: .nope-numerics/${{ github.run_id }}/fixture
           github-token: ${{ github.token }}
           run-id: ${{ inputs.fixture-run-id }}
-      - name: Test channel balancing with native FP8 projection
+      - name: Test fixed NoPE rotation and quantify each error source
         shell: bash
         run: |
-          task_work="$GITHUB_WORKSPACE/.channel-numerics/$GITHUB_RUN_ID/work"
-          task_fixture="$GITHUB_WORKSPACE/.channel-numerics/$GITHUB_RUN_ID/fixture"
+          task_work="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/work"
+          task_fixture="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/fixture"
           test -f "$task_fixture/atom_fp8_failure.pt"
           mkdir -p "$task_work"
           docker run --rm --init --network host --ipc=host --shm-size=8g \
-            --name "native-channel-balance-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --name "native-nope-rotation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
             --device=/dev/kfd --device=/dev/dri \
             --group-add "$(getent group video | cut -d: -f3)" \
             --group-add "$(getent group render | cut -d: -f3)" \
@@ -89,19 +89,19 @@ jobs:
               source /work/evidence/native-env.sh
               export VLLM_PLUGINS=""
               cd /work
-              python /repo/utils/atom_attention/channel_balance_diagnostics.py \
+              python /repo/utils/atom_attention/nope_rotation_diagnostics.py \
                 --fixture /replay/atom_fp8_failure.pt \
-                --output /work/evidence/channel-numerics.json 2>&1 | tee /work/evidence/diagnostic.log
+                --output /work/evidence/nope-numerics.json 2>&1 | tee /work/evidence/diagnostic.log
             '
       - name: Restore ownership of this diagnostic output
         if: ${{ always() }}
         shell: bash
         run: |
-          task_work="$GITHUB_WORKSPACE/.channel-numerics/$GITHUB_RUN_ID/work"
+          task_work="$GITHUB_WORKSPACE/.nope-numerics/$GITHUB_RUN_ID/work"
           if [ -d "$task_work" ]; then
             test ! -L "$task_work"
             task_workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
-            test "$(realpath -e -- "$task_work")" = "$task_workspace_real/.channel-numerics/$GITHUB_RUN_ID/work"
+            test "$(realpath -e -- "$task_work")" = "$task_workspace_real/.nope-numerics/$GITHUB_RUN_ID/work"
             docker run --rm --network none --user 0:0 \
               --mount "type=bind,source=$task_work,target=/repair" \
               --entrypoint chown "$IMAGE" \
@@ -111,6 +111,6 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-channel-balance-${{ github.run_id }}
-          path: .channel-numerics/${{ github.run_id }}/work/evidence/
+          name: native-nope-rotation-${{ github.run_id }}
+          path: .nope-numerics/${{ github.run_id }}/work/evidence/
           if-no-files-found: error
