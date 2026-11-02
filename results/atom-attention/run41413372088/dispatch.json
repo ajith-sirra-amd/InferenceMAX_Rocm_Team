@@ -1,0 +1,15 @@
+{
+ "run_id":41413372088,
+ "gpu_job":125171486390,
+ "workflow_sha":"3307b42d65b9d848ff9eb7425b0f62f1429a160e",
+ "execution_sha":"b56b28bb1fc7302f8f35095341165ddea89de4fa",
+ "native_pr_sha":"492080779e9feea19308092b0aba0840e87c6115",
+ "prerequisite_run":41413276030,
+ "harness_tests":{"passed":20,"failed":0,"skipped":0},
+ "configuration":"C48, TP8/DCP8, MTP, 3600 seconds, current image, normal graphs/routing",
+ "change_from_previous_attempt":"Disable periodic faulthandler watchdog; retain explicit hipBLAS settings and actual-backend check.",
+ "reason":"Worker exit immediately followed its first watchdog dump, which was truncated mid-line.",
+ "status":"in_progress",
+ "required_checks":["startup completes without timer","full replay coverage >=98%","inspect request/server errors","all-eight-worker native FP8 execution","exact source/image provenance"],
+ "scope":"Startup hypothesis and serving validation; no fix or throughput result claimed at dispatch."
+}
