@@ -45,7 +45,7 @@ The user explicitly prohibited adding the direct FP8 up-projection diff to PR #5
 - The historical 18,244.04135 native throughput is on earlier pinned image edad8b03, not e0d00e4b. The hipBLAS workaround has no isolated performance uplift measurement; both TORCH_BLAS_PREFER_HIPBLASLT=0 and TORCH_BLAS_PREFER_CUBLASLT=0 were tested together.
 - Kimi-K3.1 compatibility is unconfirmed. Native gating is configuration-based (512/128/64/128, gfx950, DCP >1, FP8 E4M3/native per-channel weights), but guessed checkpoint config URLs returned HTTP 401. An optional request for the exact K3.1 checkpoint/config URL is pending; do not claim validation.
 
-## Reference failure inspected at 13:46 UTC
+## Reference failure evidence
 
 Run 41443951889 failed. The first watchdog report at 13:33:13 UTC was DCP KV all-gather in dcp.py:1649: PG 3, sequence 232455, 4,755,456 input elements and 38,043,648 output elements, after 600 seconds. A second timed-out group was logits all-gather: PG 2, sequence 2668, 1,064,960 input elements and 8,519,680 output elements. All eight ranks reported matching sequence/sizes within each group. No preceding server ERROR/Traceback/BLAS exception was found. Root cause remains unestablished; these traces do not assign fault to reference attention, integration, hardware or BLAS.
 
