@@ -1,0 +1,52 @@
+name: Stop registered reservation containers
+on:
+  push:
+    branches: [checks/pr64288-focused-review-20261104]
+    paths:
+      - .github/workflows/pr64288-reservation-cleanup.yml
+      - utils/atom_attention/stop_reserved_run_containers.py
+  workflow_dispatch:
+    inputs:
+      run-ids:
+        description: Explicit JSON array of assistant-managed run IDs
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  code-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Check cleanup scope
+        run: |
+          python3 - <<'PY'
+          import ast, pathlib, runpy
+          path = pathlib.Path("utils/atom_attention/stop_reserved_run_containers.py")
+          ast.parse(path.read_text())
+          selected = runpy.run_path(str(path))["selected"]
+          ids = {41849935255}
+          assert selected("pr64288-review-41849935255", ids)
+          assert selected("bmk-server-41849935255-1-mi355x-amd_pit2_p03_g07", ids)
+          assert not selected("pr64288-review-12345", ids)
+          assert not selected("unrelated-server", ids)
+          assert not selected("pr64288-review-41849935255-unrelated", ids)
+          print("Only exact registered run container names are selected")
+          PY
+  stop-containers:
+    if: github.event_name == 'workflow_dispatch'
+    needs: code-checks
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Stop registered containers inside this repository
+        env:
+          RESERVATION_RUN_IDS: ${{ inputs.run-ids }}
+        run: python3 utils/atom_attention/stop_reserved_run_containers.py
