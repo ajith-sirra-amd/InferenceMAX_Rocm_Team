@@ -14,6 +14,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "IPAT"
                 # - "test-config  --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-atom-agentic-lmcache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
@@ -81,7 +82,7 @@ jobs:
     ipat:
         if: ${{ inputs.ipat-request != '' }}
         runs-on: ${{ fromJSON(inputs.ipat-request).labels }}
-        timeout-minutes: 240
+        timeout-minutes: 480
         permissions:
             contents: read
         concurrency:
@@ -105,7 +106,13 @@ jobs:
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
               with:
                   name: ipat-${{ fromJSON(inputs.ipat-request).id }}
-                  path: ${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence
+                  path: |
+                      ${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence
+                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/**/client-env
+                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/cache
+                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/hf
+                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/home
+                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/tmp
                   if-no-files-found: error
                   retention-days: 30
     get-jobs:

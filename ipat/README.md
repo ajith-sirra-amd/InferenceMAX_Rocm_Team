@@ -1,0 +1,33 @@
+# IPAT runner
+
+`e2e-tests.yml` accepts an optional `ipat-request` JSON input on branch `IPAT`.
+It runs a single frozen request on the selected MI355X runner, in a dedicated
+checkout. Existing sweep dispatches keep their original path.
+
+`runner.py` records host capabilities and the resolved image/model metadata,
+then runs independent baseline and profiling containers. `container.py` runs
+the server and recorded client, scrapes serving metrics, and collects a bounded
+Torch or rocprofv3 server trace. Torch profiling requires compatible vLLM/SGLang
+endpoints; rocprofv3 attachment is checked against the installed version.
+Missing GPU coverage fails the profiling pass. Baseline metrics and profiling
+measurements are kept separate.
+
+IPAT prepares and saves the request through its chat tools. The request includes
+argument arrays, environment, exact client package versions, model-cache paths,
+timeouts, and the profiling window. No shell is used to interpret commands.
+Model caches are mounted read-only; generated files stay under `evidence/`
+inside this team checkout. Cleanup targets only the run's own Docker container.
+An occupied GPU container causes the request to fail rather than interrupt it.
+
+The `ipat-<request-id>` Actions artifact contains the request, effective recipe,
+manifests, image identity, model metadata hashes, logs, raw client output,
+serving metrics, native traces, `report.md`, and a browsing `index.html`.
+Package environments and caches remain in the checkout but are excluded from
+the artifact. Reports explicitly identify missing quality, HBM counters,
+roofline and full tensor-flow evidence.
+
+Local checks (set `TMPDIR` to a directory inside one of the two repositories):
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=ipat python3 -m unittest ipat/test_runner.py
+```
