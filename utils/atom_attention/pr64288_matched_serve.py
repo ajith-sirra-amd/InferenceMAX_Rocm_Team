@@ -176,10 +176,23 @@ def bench(arm, case, env, log, proc):
         with bench_log.open("w") as out:
             client = subprocess.Popen([str(x) for x in command], cwd=ROOT, env=env,
                 stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
-            deadline = time.monotonic() + 1200
+            # The 192-request 32K baseline was still making progress at 20 min.
+            # Keep the workload unchanged and bound it to one hour; the workflow
+            # and reservation watchdog provide independent overall cutoffs.
+            deadline = time.monotonic() + 3600
+            next_report = 0
             while client.poll() is None:
                 if time.monotonic() > deadline:
-                    raise TimeoutError("Benchmark deadline exceeded")
+                    raise TimeoutError(f"Benchmark deadline exceeded: {arm}/{name}")
+                if proc.poll() is not None:
+                    raise RuntimeError(f"Server exited during benchmark: {arm}/{name}")
+                if time.monotonic() >= next_report:
+                    print("SERVING_PROGRESS", json.dumps({
+                        "arm": arm, "case": name,
+                        "remaining_seconds": round(deadline - time.monotonic()),
+                        "server_tail": log.read_text(errors="replace")[-2200:],
+                    }), flush=True)
+                    next_report = time.monotonic() + 60
                 if not phase_path.exists() and "Starting main benchmark run..." in bench_log.read_text(errors="replace"):
                     phase_path.write_text(phase)
                 try:

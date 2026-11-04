@@ -85,11 +85,11 @@ jobs:
       - name: Stop only the superseded validation container if still present
         shell: bash
         run: |
-          previous_container=pr64288-review-41845437912
+          previous_container=pr64288-review-41849935255
           if docker ps --format '{{.Names}}' | grep -Fxq "$previous_container"; then
             docker stop --time 60 "$previous_container"
           fi
-      - name: Run pinned-main checks with cache-aligned short queries
+      - name: Run NIAH first and serving with bounded long-context deadline
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"

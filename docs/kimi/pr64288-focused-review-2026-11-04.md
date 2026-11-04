@@ -458,3 +458,27 @@ Replacement [41849935255](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_T
 harness `313da481`, passed hosted checks and entered GPU validation. The attention
 candidate remains `a03796b8`. Final replay inputs still pin CPU-validated harness
 `6b4f3553`; no full C48 OFF/ON runs have been dispatched.
+
+## Baseline long-context timeout inspected
+
+Run [41849935255](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41849935255)
+failed in upstream-base `long_cached_c48` at the harness's 1200-second deadline.
+Artifact `13340680470` shows ongoing request/token progress through termination;
+there was no preceding BLAS, out-of-memory, or disk-quota error in the server log.
+The candidate serving arms, NIAH and GSM8K had not started. This is not a candidate
+accuracy failure and is not a completed long-context performance measurement.
+
+The same run passed all 12 kernel tests and eight numerical/graph cases with
+zero projection clipping. Four upstream-base serving cases completed: 32/32
+short-context, 32/32 short-query, 64/64 cached C8 and 192/192 cached C48.
+The corrected short-query case used **256 query tokens and 24576 cached tokens**
+in BF16 context attention on all eight ranks.
+
+The replacement retains all requests, model settings, native source and accuracy
+criteria. It raises the per-case benchmark deadline to 3600 seconds, reports
+progress once per minute and detects server exit immediately. NIAH is collected
+before longer benchmarks within each applicable arm; full GSM8K remains required.
+
+Runner reservation ends **2026-11-05 00:02:52 UTC / 05:32:52 IST**. Registered
+GPU jobs are stopped and their exact run containers cleaned up beginning ten
+minutes before that deadline. No new nine-hour period is started on continuation.

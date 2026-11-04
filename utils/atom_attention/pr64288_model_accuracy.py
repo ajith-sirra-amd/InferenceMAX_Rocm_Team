@@ -172,12 +172,15 @@ def gsm8k(arm, env, log, proc):
 def exercise(arm, env, log, proc):
     results = {"bench": []}
     destination = serving.EVIDENCE / arm / "matched-results.json"
+    # Collect the reviewer's long-context accuracy evidence before the longer
+    # serving cases. All cases and the full GSM8K split remain required.
+    if arm != "candidate_off":
+        results["niah"] = niah(arm, env, log, proc)
+        destination.write_text(json.dumps(results, indent=2))
     for case in serving.CASES:
         results["bench"].append(serving.bench(arm, case, env, log, proc))
         destination.write_text(json.dumps(results, indent=2))
     if arm != "candidate_off":
-        results["niah"] = niah(arm, env, log, proc)
-        destination.write_text(json.dumps(results, indent=2))
         results["gsm8k"] = gsm8k(arm, env, log, proc)
         destination.write_text(json.dumps(results, indent=2))
     return results
