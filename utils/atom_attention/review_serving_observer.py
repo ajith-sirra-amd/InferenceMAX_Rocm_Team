@@ -1,5 +1,6 @@
 """Observe real serving calls without changing dispatch, scales, or tensor values."""
 import functools
+from contextvars import ContextVar
 import hashlib
 import json
 import os
@@ -28,13 +29,14 @@ def register():
     enabled = os.environ["VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN"] == "1"
     phase_file = Path(os.environ["REVIEW_PHASE_FILE"])
     emitted = set()
+    active_phase = ContextVar("review_serving_phase", default=None)
 
     def record(kind, **details):
-        if not phase_file.is_file() or torch.cuda.is_current_stream_capturing():
+        phase = active_phase.get()
+        if phase is None:
             return
-        phase = phase_file.read_text().strip()
         key = (phase, kind, details.get("selected"))
-        if key in emitted:
+        if key in emitted or torch.cuda.is_current_stream_capturing():
             return
         print(MARKER + json.dumps({
             "phase": phase, "kind": kind, "rank": dist.get_rank(),
@@ -48,11 +50,21 @@ def register():
 
     @functools.wraps(forward)
     def observed_forward(self, q, *args, **kwargs):
-        result = forward(self, q, *args, **kwargs)
-        if q.numel():
-            record("prefill", dtype=str(q.dtype), query_rows=q.shape[0],
-                   native_enabled=getattr(self, "_use_flydsl_fp8_prefill", False))
-        return result
+        # Read phase once at the common prefill entry in every arm. Nested
+        # projection/attention observers only consult the in-memory context.
+        try:
+            phase = phase_file.read_text().strip()
+        except FileNotFoundError:
+            phase = None
+        token = active_phase.set(phase)
+        try:
+            result = forward(self, q, *args, **kwargs)
+            if q.numel():
+                record("prefill", dtype=str(q.dtype), query_rows=q.shape[0],
+                       native_enabled=getattr(self, "_use_flydsl_fp8_prefill", False))
+            return result
+        finally:
+            active_phase.reset(token)
 
     AiterMLAImpl.forward_mha = observed_forward
     # The upstream-base arm does not contain the native integration module.

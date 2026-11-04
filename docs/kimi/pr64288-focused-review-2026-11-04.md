@@ -296,3 +296,13 @@ remain required before promoting the change.
 
 The [branch cleanup record](branch-cleanup-2026-11-04.md) lists 12 removed
 redundant branch names and their retained commit histories. IPAT is unchanged.
+
+## Rendered docs and next accuracy harness
+
+[Strict MkDocs rendering](https://github.com/ajith-sirra-amd/vllm/actions/runs/41833618568) passed for candidate `cbf7d1dc`; artifact `13324986495` contains the rendered feature page and build log.
+
+The matched short serving suite is running as [41833244777](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41833244777), source `cc85d391`. Its observer reads a phase file in each wrapped operation, so its timings include instrumentation overhead. The next harness reads the phase once at the common prefill entry across all arms. Neither observer changes routing or tensors. Final AgentX measurements remain separate.
+
+Prepared (not dispatched): normal-routing, live-MTP full GSM8K (1319 examples) and 12 cached retrieval cases at 16K/32K, depths 10/50/90 percent, with 1024 new query tokens. Base and candidate use identical prompts. GSM8K reports actual execution coverage; retrieval requires native FP8 projection and FMHA proof on every rank in the ON arm. No accuracy results claimed yet.
+
+Upstream main observed at `69d27bf8002a4634de1699c95fb0aeb22fb86ca5` is 19 commits ahead of the pinned base. There are no file overlaps with the attention patch, but graph-capture configuration changed. The existing comparison is explicitly to upstream base `44d9f92e`, not today's main. Any base update must precede the final source freeze and full OFF/ON run.

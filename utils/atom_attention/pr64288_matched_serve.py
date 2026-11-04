@@ -122,7 +122,7 @@ def execution_proof(log, phase, enabled, require_fp8):
         for kind in ("fp8_projection", "fp8_fmha"):
             if {e["rank"] for e in fp8 if e["kind"] == kind} != set(range(8)):
                 raise RuntimeError("Missing " + kind + " evidence from one or more ranks")
-    if enabled and not require_fp8:
+    if enabled and require_fp8 is False:
         if fp8:
             raise RuntimeError("Below-cutoff case unexpectedly executed FP8")
         if {e["rank"] for e in events if e["kind"] == "bf16_projection"} != set(range(8)):
@@ -187,7 +187,7 @@ def bench(arm, case, env, log, proc):
     return summary
 
 
-def main(report):
+def main(report, *, arms=None, exercise=None):
     recipe = RECIPE.read_text()
     quant = json.loads(re.search(r"--quantization-config '([^']+)'", recipe).group(1))
     dspark_root = Path("/models/models--Inferact--Kimi-K3-DSpark")
@@ -251,10 +251,10 @@ def main(report):
     report["command"] = list(map(str, command))
     report["settings"] = {"tp": 8, "dcp": 8, "mtp": True, "synthetic_acceptance": False,
                           "ccd_pinning": True, "cpu_kv_offload": False, "normal_routing": True}
-    for arm, revision, flag in (
-        ("upstream_base", BASE, "0"), ("candidate_off", CANDIDATE, "0"),
-        ("candidate_on", CANDIDATE, "1"),
-    ):
+    if arms is None:
+        arms = (("upstream_base", BASE, "0"), ("candidate_off", CANDIDATE, "0"),
+                ("candidate_on", CANDIDATE, "1"))
+    for arm, revision, flag in arms:
         directory = EVIDENCE / arm
         directory.mkdir()
         git("diff", "--exit-code")
@@ -281,10 +281,13 @@ def main(report):
                     stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
                 wait_ready(proc, log)
                 pin_workers(recipe, directory, env)
-                report["arms"][arm] = []
-                for case in CASES:
-                    report["arms"][arm].append(bench(arm, case, env, log, proc))
-                    (EVIDENCE / "serving-validation.json").write_text(json.dumps(report, indent=2))
+                if exercise is None:
+                    report["arms"][arm] = []
+                    for case in CASES:
+                        report["arms"][arm].append(bench(arm, case, env, log, proc))
+                        (EVIDENCE / "serving-validation.json").write_text(json.dumps(report, indent=2))
+                else:
+                    report["arms"][arm] = exercise(arm, env, log, proc)
         finally:
             stop(proc)
             git("diff", "--exit-code")
