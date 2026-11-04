@@ -60,6 +60,22 @@ def preflight(request, output):
                 row["error"] = str(error)
         facts["paths"][directory] = row
     facts["tools"] = {name: shutil.which(name) for name in ("docker", "rocprofv3", "rocprof-compute", "amd-smi", "srun")}
+    inventory = request.get("model_inventory")
+    if inventory:
+        cache = Path(inventory["cache"]).resolve()
+        facts["model_inventory"] = {}
+        for relative in inventory["paths"]:
+            path = (cache / relative).resolve()
+            if not path.is_relative_to(cache): raise ValueError("Model inventory must stay in its cache")
+            row = {"path": str(path), "exists": path.is_dir()}
+            if path.is_dir():
+                row["entries"] = [{"name": p.name, "is_file": p.is_file(), "bytes": p.stat().st_size if p.is_file() else None} for p in sorted(path.iterdir())][:2000]
+                for file in path.glob("*.json"):
+                    if file.stat().st_size < 4_000_000:
+                        dest = output / "model-metadata" / relative / file.name
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(file, dest)
+            facts["model_inventory"][relative] = row
     write_json(output / "manifest.json", facts)
     print(json.dumps(facts, indent=2))
     return facts
@@ -109,6 +125,11 @@ def resolve_models(recipe, cache):
         path = path.resolve()
         if not path.is_relative_to(cache.resolve()) or not (path / "config.json").is_file():
             raise ValueError(f"No readable model config inside the selected cache: {model} ({relative})")
+        indices = list(path.glob("*.index.json"))
+        indexed = {name for index in indices for name in json.loads(index.read_text()).get("weight_map", {}).values()}
+        weights = indexed or {p.name for pattern in ("*.safetensors", "*.bin", "*.pt", "*.pth", "*.gguf") for p in path.glob(pattern)}
+        if not weights or any(not (path / weight).is_file() for weight in weights):
+            raise ValueError(f"Model cache is missing weights or indexed shards: {model} ({relative})")
         target = "/model-cache/" + str(path.relative_to(cache.resolve()))
         for key in ("server_argv", "client_argv"):
             recipe[key] = [arg.replace("/model-cache/" + relative, target) for arg in recipe[key]]
@@ -116,7 +137,7 @@ def resolve_models(recipe, cache):
         for file in sorted(path.glob("*.json")):
             metadata[file.name] = hashlib.sha256(file.read_bytes()).hexdigest()
         facts[model] = {"path": str(path), "snapshot": path.name if path.parent.name == "snapshots" else None,
-                        "metadata_sha256": metadata, "weights_hashed": False}
+                        "metadata_sha256": metadata, "weight_files": len(weights), "weights_hashed": False}
     return facts
 
 

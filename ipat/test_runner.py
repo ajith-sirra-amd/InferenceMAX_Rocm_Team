@@ -59,6 +59,7 @@ class RunnerTests(unittest.TestCase):
     def test_models_resolve_existing_snapshot_without_writes(self):
         cache = self.root / "models"; snapshot = cache / "models--org--Model/snapshots/revision"
         snapshot.mkdir(parents=True); (snapshot / "config.json").write_text('{}')
+        (snapshot / "model.safetensors").write_bytes(b'test')
         ref = cache / "models--org--Model/refs/main"; ref.parent.mkdir(); ref.write_text('revision')
         recipe = dict(RECIPE, model_paths={"org/Model": "models--org--Model"},
                       server_argv=["vllm", "serve", "/model-cache/models--org--Model"], client_argv=["agentx"])
@@ -66,6 +67,8 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(facts["org/Model"]["snapshot"], "revision")
         self.assertEqual(recipe["server_argv"][2], "/model-cache/models--org--Model/snapshots/revision")
         self.assertEqual(ref.read_text(), "revision")
+        (snapshot / "model.safetensors").unlink()
+        with self.assertRaisesRegex(ValueError, "missing weights"): resolve_models(recipe, cache)
         recipe["model_paths"] = {"org/Model": "../escape"}
         with self.assertRaises(ValueError): resolve_models(recipe, cache)
 
