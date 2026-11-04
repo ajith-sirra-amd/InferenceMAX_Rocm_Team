@@ -125,8 +125,12 @@ def execution_proof(log, phase, enabled, require_fp8):
     if enabled and require_fp8 is False:
         if fp8:
             raise RuntimeError("Below-cutoff case unexpectedly executed FP8")
-        if {e["rank"] for e in events if e["kind"] == "bf16_projection"} != set(range(8)):
-            raise RuntimeError("Missing BF16 fallback projection evidence")
+        fallback = [e for e in events if e["kind"] == "context_attention"]
+        if {e["rank"] for e in fallback} != set(range(8)):
+            raise RuntimeError("Missing BF16 context-attention evidence")
+        if any(e[key] != "torch.bfloat16" for e in fallback
+               for key in ("dtype", "k_dtype", "v_dtype")):
+            raise RuntimeError("Below-cutoff context attention did not use BF16 Q/K/V")
     return events
 
 

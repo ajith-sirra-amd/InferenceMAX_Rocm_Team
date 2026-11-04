@@ -54,7 +54,14 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-      - name: Run pinned-main checks with scoped installer Git trust
+      - name: Stop only the superseded validation container if still present
+        shell: bash
+        run: |
+          previous_container=pr64288-review-41838441209
+          if docker ps --format '{{.Names}}' | grep -Fxq "$previous_container"; then
+            docker stop --time 60 "$previous_container"
+          fi
+      - name: Run pinned-main checks with BF16 fallback execution evidence
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"

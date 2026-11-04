@@ -1,5 +1,32 @@
 # PR64288 focused review work - 2026-11-04
 
+## Follow-through correction (2026-11-04 13:42 UTC)
+
+The active run `41838441209` uses harness `780b2d0f`. Static inspection found
+an observer defect that would reject the candidate's below-cutoff serving cases:
+`forward_mha` enters `compute_context` only if some chunk qualifies for FP8, so
+below-cutoff calls do not reach the native `project` wrapper. Requiring that
+wrapper's `bf16_projection` event is therefore incorrect for those calls.
+
+The corrected observer records the real
+`AiterFlashAttnPrefillBackend.run_prefill_context_chunk` call in every arm.
+Below-cutoff checks require BF16 Q/K/V and execution on all eight ranks, while
+still rejecting any FP8 projection or FMHA. Local syntax and evidence-parser
+checks passed, including rejection of missing ranks, unexpected FP8 and wrong
+dtypes. GPU validation remains required. Production source, routing, scales,
+model tasks and numerical thresholds are unchanged.
+
+A replacement run is being prepared before the existing run reaches its known
+late harness failure. Any superseded evidence retains its original run/revision.
+The replacement workflow cleans up only the named superseded test container.
+
+Duplicate-work audit: upstream #63935 removes `context_row_indices` in a separate
+ROCm commit on top of #64548. Do not propose another context-row fix while that
+overlap is open. Searches of DSpark pointer/synchronization terms found the
+already merged pointer-rebinding fix #58814, but no equivalent pinned-host
+pointer transfer change. The latter still needs model-entry validation; it is
+separate from the FP8 attention PR.
+
 ## Latest state (2026-11-04, supersedes earlier progress notes)
 
 The published attention PR remains at `e2393d702a3736dffdfbfc7eb25abbabe484a1df`.

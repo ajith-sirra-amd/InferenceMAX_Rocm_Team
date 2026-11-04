@@ -67,6 +67,22 @@ def register():
             active_phase.reset(token)
 
     AiterMLAImpl.forward_mha = observed_forward
+    from vllm.v1.attention.backends.mla.prefill.aiter_flash_attn import (
+        AiterFlashAttnPrefillBackend,
+    )
+    context_attention = AiterFlashAttnPrefillBackend.run_prefill_context_chunk
+
+    @functools.wraps(context_attention)
+    def observed_context_attention(self, chunk, q, k, v, *args, **kwargs):
+        result = context_attention(self, chunk, q, k, v, *args, **kwargs)
+        if q.numel() and k.numel():
+            record("context_attention", dtype=str(q.dtype), k_dtype=str(k.dtype),
+                   v_dtype=str(v.dtype), query_rows=q.shape[0],
+                   context_rows=k.shape[0], max_query_len=chunk.max_query_len,
+                   max_context_len=chunk.max_seq_len)
+        return result
+
+    AiterFlashAttnPrefillBackend.run_prefill_context_chunk = observed_context_attention
     # The upstream-base arm does not contain the native integration module.
     native_path = source / "vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py"
     if native_path.is_file():
