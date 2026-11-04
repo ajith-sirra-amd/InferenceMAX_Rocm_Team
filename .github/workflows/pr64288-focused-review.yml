@@ -5,6 +5,7 @@ on:
     paths: [.github/workflows/pr64288-focused-review.yml]
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: pr64288-focused-review
   cancel-in-progress: false
