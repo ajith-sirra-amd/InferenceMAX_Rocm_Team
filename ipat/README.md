@@ -16,6 +16,11 @@ A preflight request may include `image_check: {"image": "<local pinned image>"}`
 and an optional `environment` inside it. This checks small FP32/FP16/BF16 matrix
 multiplies on every GPU and records the loaded ROCm libraries before model loading.
 It uses the same isolated output and owned-container cleanup as normal runs.
+Set `temporary_memory_filesystem: true` inside `image_check` to test the compiler
+temporary mount used by execution. Normal runs use a 64 GiB maximum tmpfs at
+the existing repository-mounted `/output/tmp` path because the runner's NFS
+rejects colons in COMGR intermediate filenames. Persistent evidence and caches
+remain in the checkout. BF16 GPU math is checked before client/model startup.
 
 IPAT prepares and saves the request through its chat tools. The request includes
 argument arrays, environment, exact client package versions, model-cache paths,

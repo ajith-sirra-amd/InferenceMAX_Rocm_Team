@@ -44,6 +44,14 @@ def probe(output):
         facts["devices"] = [{"index": i, "name": torch.cuda.get_device_name(i),
                              "bytes": torch.cuda.get_device_properties(i).total_memory}
                             for i in range(torch.cuda.device_count())]
+        facts["gpu_math"] = []
+        for device in range(torch.cuda.device_count()):
+            x = torch.ones((16, 16), dtype=torch.bfloat16, device=f"cuda:{device}")
+            y = torch.mm(x, x)
+            torch.cuda.synchronize(device)
+            if not bool(torch.all(y == 16).item()):
+                raise RuntimeError(f"GPU {device} BF16 matrix multiply produced incorrect output")
+            facts["gpu_math"].append({"device": device, "bf16_matmul": "passed"})
     except Exception as error:
         facts["gpu_error"] = str(error)
     for tool, args in (("rocprofv3", ["--help"]), ("rocprofv3", ["--version"]),
@@ -225,6 +233,8 @@ def run(recipe, output, pass_name):
         return result
     env = dict(os.environ, **recipe["environment"])
     try:
+        if capabilities.get("gpu_error"):
+            raise RuntimeError("GPU capability check failed: " + capabilities["gpu_error"])
         expected = recipe["physical_chips"]
         devices = capabilities.get("devices", [])
         if len(devices) != expected or any("MI355" not in d["name"].upper() for d in devices):

@@ -86,6 +86,13 @@ def preflight(request, output):
         write_json(output / "manifest.json", facts)
         for part in ("home", "tmp", "cache", "hf"):
             (output / part).mkdir(exist_ok=True)
+        test_path = output / "tmp/ipat-name:check"
+        try:
+            test_path.write_text("compiler filename check\n")
+            test_path.unlink()
+            facts["host_temporary_filename_check"] = {"status": "passed"}
+        except OSError as error:
+            facts["host_temporary_filename_check"] = {"status": "failed", "error": str(error)}
         command = ["docker", "run", "--rm", "--init", "--name", "ipat-" + request["id"],
                    "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
                    "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1",
@@ -94,6 +101,8 @@ def preflight(request, output):
                    "--workdir", "/output", "--env", "HOME=/output/home", "--env", "TMPDIR=/output/tmp",
                    "--env", "XDG_CACHE_HOME=/output/cache", "--env", "HF_HOME=/output/hf",
                    "--env", "PYTHONDONTWRITEBYTECODE=1"]
+        if settings.get("temporary_memory_filesystem"):
+            command += ["--tmpfs", "/output/tmp:rw,exec,size=64g"]
         for key, value in settings.get("environment", {}).items():
             if key in ("HOME", "TMPDIR", "XDG_CACHE_HOME", "HF_HOME", "HF_TOKEN"):
                 raise ValueError("Image diagnostic cannot override output or credential paths")
@@ -280,7 +289,12 @@ def execute(request, output):
         common = ["docker", "run", "--rm", "--init", "--name", name, "--label", "ipat.run=" + request["id"],
                   "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
                   "--cap-add", "SYS_PTRACE", "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1", "--ulimit", "stack=67108864", *mounts,
+                  # COMGR filenames contain colons, rejected by this host's NFS.
+                  # Mount temporary storage at the existing repository output path.
+                  "--tmpfs", "/output/tmp:rw,exec,size=64g",
                   "--workdir", "/output", "--env", "HF_TOKEN"]
+        manifest["temporary_storage"] = {"path": "/output/tmp", "kind": "tmpfs", "limit_gib": 64,
+                                         "reason": "COMGR intermediate filenames require POSIX filename support"}
         for key, value in env.items(): common += ["--env", f"{key}={value}"]
         passes = request.get("passes", ["baseline", "profile"])
         if not passes or any(p not in ("baseline", "profile") for p in passes) or len(set(passes)) != len(passes):

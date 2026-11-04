@@ -13,6 +13,13 @@ def emit(key, value):
 
 
 emit("torch", {"version": torch.__version__, "hip": torch.version.hip})
+test_path = Path(os.environ['TMPDIR']) / 'ipat-name:check'
+try:
+    test_path.write_text('compiler filename check\n')
+    test_path.unlink()
+    emit('temporary_filename_check', {'status': 'passed'})
+except OSError as error:
+    emit('temporary_filename_check', {'status': 'failed', 'error': str(error)})
 emit("environment", {key: value for key, value in os.environ.items()
                      if key.startswith(("ROCM", "HIP", "HSA", "ROCBLAS", "HIPBLAS", "TORCH_"))
                      or key in ("LD_LIBRARY_PATH", "LD_PRELOAD")})

@@ -103,6 +103,16 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["error"], "dataset unavailable")
 
+    def test_gpu_math_failure_stops_before_client_setup_or_model_start(self):
+        capabilities = {"devices": [{"name": "AMD Instinct MI355X"}] * 8,
+                        "gpu_error": "HIPBLAS_STATUS_INTERNAL_ERROR"}
+        with patch("container.probe", return_value=capabilities), patch("container.checked") as setup, patch("container.subprocess.Popen") as popen:
+            result = run(dict(RECIPE, port=8000), self.root / "pass", "baseline")
+        setup.assert_not_called()
+        popen.assert_not_called()
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("HIPBLAS_STATUS_INTERNAL_ERROR", result["error"])
+
 
 if __name__ == "__main__":
     unittest.main()
