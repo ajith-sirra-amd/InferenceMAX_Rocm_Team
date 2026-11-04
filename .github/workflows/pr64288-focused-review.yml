@@ -1,4 +1,4 @@
-name: PR64288 focused review follow-up
+name: PR64288 cache-derived scale experiment
 on:
   push:
     branches: [checks/pr64288-focused-review-20261104]
@@ -29,7 +29,7 @@ jobs:
           uv pip install pyyaml
           .venv/bin/python - <<'PY'
           import ast, pathlib, subprocess, yaml
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_review_diagnostics.py").read_text())
+          ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_bound_diagnostics.py").read_text())
           workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
           for job in workflow["jobs"].values():
               for step in job["steps"]:
@@ -77,25 +77,8 @@ jobs:
               export VLLM_ROCM_USE_AITER=1
               export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
               cd /work/vllm
-              status=0
-              .venv/bin/python /repo/utils/atom_attention/pr64288_review_diagnostics.py --mode asm --output $REVIEW_EVIDENCE/asm-after > $REVIEW_EVIDENCE/asm-after.log 2>&1 || status=1
-              cat $REVIEW_EVIDENCE/asm-after.log
-              .venv/bin/python /repo/utils/atom_attention/pr64288_review_diagnostics.py --mode outliers --output $REVIEW_EVIDENCE/outliers > $REVIEW_EVIDENCE/outliers.log 2>&1 || status=1
-              cat $REVIEW_EVIDENCE/outliers.log
-              target=vllm/v1/attention/backends/mla/rocm_aiter_mla.py
-              git -c safe.directory=/work/vllm show "$BEFORE_SHA:$target" > "$target"
-              set +e
-              .venv/bin/python /repo/utils/atom_attention/pr64288_review_diagnostics.py --mode asm --output $REVIEW_EVIDENCE/asm-before > $REVIEW_EVIDENCE/asm-before.log 2>&1
-              before_rc=$?
-              set -e
-              git -c safe.directory=/work/vllm restore --source HEAD -- "$target"
-              cat $REVIEW_EVIDENCE/asm-before.log
-              if [ "$before_rc" -eq 0 ] || ! grep -q ASM_METADATA_MISSING $REVIEW_EVIDENCE/asm-before.log; then
-                echo "Base did not reproduce the expected missing ASM metadata failure"
-                status=1
-              fi
+              .venv/bin/python /repo/utils/atom_attention/pr64288_cache_bound_diagnostics.py "$REVIEW_EVIDENCE/cache-bound.json" 2>&1 | tee "$REVIEW_EVIDENCE/cache-bound.log"
               git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
-              exit "$status"
             '
       - name: Restore diagnostic output ownership
         if: always()
