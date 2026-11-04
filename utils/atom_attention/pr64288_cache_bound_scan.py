@@ -75,7 +75,7 @@ def run(report):
     weight = (torch.randn(heads * 256, 512, device="cuda") * 32).to(torch.float8_e4m3fn)
     scales = torch.linspace(0.0002, 0.0008, heads * 256, device="cuda")
     params = ProjectionWeight(shuffle_weight(weight, (16, 16)), scales, True)
-    cache_scale = torch.tensor([0.125], device="cuda", dtype=torch.float32)
+    cache_scale = torch.tensor([0.137], device="cuda", dtype=torch.float32)
     for rows in (0, 1, 386, 8192, 32768):
         raw = torch.randn(rows + 37, 576, device="cuda")
         cache = raw.to(torch.float8_e4m3fn)

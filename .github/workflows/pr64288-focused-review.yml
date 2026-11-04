@@ -1,4 +1,4 @@
-name: PR64288 cache-derived scale experiment
+name: PR64288 GPU cache-bound scan experiment
 on:
   push:
     branches: [checks/pr64288-focused-review-20261104]
@@ -29,6 +29,7 @@ jobs:
           uv pip install pyyaml
           .venv/bin/python - <<'PY'
           import ast, pathlib, subprocess, yaml
+          ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_bound_scan.py").read_text())
           ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_bound_diagnostics.py").read_text())
           workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
           for job in workflow["jobs"].values():
@@ -77,7 +78,7 @@ jobs:
               export VLLM_ROCM_USE_AITER=1
               export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
               cd /work/vllm
-              .venv/bin/python /repo/utils/atom_attention/pr64288_cache_bound_diagnostics.py "$REVIEW_EVIDENCE/cache-bound.json" 2>&1 | tee "$REVIEW_EVIDENCE/cache-bound.log"
+              .venv/bin/python /repo/utils/atom_attention/pr64288_cache_bound_scan.py "$REVIEW_EVIDENCE/cache-bound-scan.json" 2>&1 | tee "$REVIEW_EVIDENCE/cache-bound-scan.log"
               git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
             '
       - name: Restore diagnostic output ownership
