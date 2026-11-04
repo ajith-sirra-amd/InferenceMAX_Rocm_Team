@@ -101,6 +101,11 @@ jobs:
                   IPAT_OUTPUT: ${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence
                   HF_TOKEN: ${{ secrets.HF_TOKEN }}
               run: python3 ipat/runner.py --output "$IPAT_OUTPUT"
+            - name: Stop only this IPAT container
+              if: always()
+              env:
+                  IPAT_CONTAINER: ipat-${{ fromJSON(inputs.ipat-request).id }}
+              run: docker rm --force "$IPAT_CONTAINER" 2>/dev/null || true
             - name: Preserve IPAT evidence
               if: always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

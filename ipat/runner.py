@@ -77,11 +77,12 @@ def validate_recipe(recipe):
         raise ValueError("This runner supports one host with up to eight GPUs")
     if recipe.get("image_policy") not in ("pull", "local") or not isinstance(recipe.get("image"), str):
         raise ValueError("Specify an image and an explicit pull/local image policy")
-    if not isinstance(recipe.get("environment"), dict) or any(not isinstance(v, str) for v in recipe["environment"].values()):
-        raise ValueError("Environment values must be strings")
     reserved = {"HOME", "TMPDIR", "HF_HOME", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "XDG_CACHE_HOME", "PIP_CACHE_DIR"}
-    if reserved.intersection(recipe["environment"]):
-        raise ValueError("Cache paths and credentials are supplied by the runner")
+    for env in (recipe.get("environment"), recipe.get("client_environment", {})):
+        if not isinstance(env, dict) or any(not isinstance(v, str) for v in env.values()):
+            raise ValueError("Environment values must be strings")
+        if reserved.intersection(env):
+            raise ValueError("Cache paths and credentials are supplied by the runner")
     if not isinstance(recipe.get("client_packages"), list) or any(not re.fullmatch(r"[A-Za-z0-9_.-]+==[A-Za-z0-9_.+-]+", p) for p in recipe["client_packages"]):
         raise ValueError("Client packages require exact package==version pins")
     profile = recipe.get("profile", {})

@@ -264,8 +264,9 @@ def run(recipe, output, pass_name):
         manifest["server_ready_at"] = now()
         manifest["client_started_at"] = now()
         write(output / "pass.json", manifest)
+        client_env = dict(env, **recipe.get("client_environment", {}))
         with (output / "client.log").open("w") as log:
-            client = subprocess.Popen(client_argv, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+            client = subprocess.Popen(client_argv, stdout=log, stderr=subprocess.STDOUT, env=client_env, start_new_session=True)
         if pass_name == "profile":
             profile_thread = threading.Thread(target=profile, args=(recipe, client, output, url, manifest["profile"], finished), daemon=True)
             profile_thread.start()
