@@ -110,3 +110,7 @@ server log 13302627213. GPU job 126419769821 completed successfully at 06:59:17 
 Next review work: preserve uncached ASM routing, separate the synchronization
 changes, and complete the remaining performance/accuracy requests. No additional
 GPU run was dispatched as part of this pair.
+
+## Final PR-head check
+
+The final API check found PR head 9857e13fe609befc603ad008f6e4ae2fe85726aa, a merge of main with parents 8a55b8eac (the tested revision) and upstream 44d9f92e05f45ef45ec11d762011a2179be9d9cc. The four minor review fixes remain in its history. These GPU results apply only to 8a55b8eac; do not label the newer merged head validated. Recheck that merge and the remaining review requirements before preparing further matched validation.
