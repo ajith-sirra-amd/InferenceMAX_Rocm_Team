@@ -446,3 +446,15 @@ requires actual context-attention evidence with query length below 512 and cache
 context at least 8192. Native dispatch and numerical tolerances are unchanged.
 The separate DSpark run 41847793266 passed its hosted shell checks, then its queued
 GPU job was cancelled to prioritize this replacement; GPU evidence is pending.
+
+Recovered artifact `13334581337` now confirms the old short-query case actually
+used **1152 query tokens and 15360 context tokens** on all eight ranks. The updated
+validator rejects that real captured case. Twelve kernel and eight numerical/
+graph cases passed again, with zero clipping and independently matched source
+hashes. The two completed baseline benchmarks each served 32/32 requests; no
+candidate serving/model-accuracy result was reached before cancellation.
+
+Replacement [41849935255](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41849935255),
+harness `313da481`, passed hosted checks and entered GPU validation. The attention
+candidate remains `a03796b8`. Final replay inputs still pin CPU-validated harness
+`6b4f3553`; no full C48 OFF/ON runs have been dispatched.

@@ -5,7 +5,7 @@
 - Published PR: `e2393d702a3736dffdfbfc7eb25abbabe484a1df`.
 - Validation candidate: `a03796b8e3bfe536e22f9db741109dbf80170079`.
 - Pinned upstream main: `69d27bf8002a4634de1699c95fb0aeb22fb86ca5`.
-- Active serving/accuracy run: [41845437912](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41845437912), harness `ef7d23a7`.
+- Active serving/accuracy run: [41849935255](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41849935255), harness `313da481`.
 - Final replay harness checked at `6b4f3553391063b1060d39cf16b154e7d26585b3`:
   [41845902237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41845902237), 49 tests passed, no failures/skips; launcher checks passed.
 - Recovered GPU evidence: [41838441209](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41838441209), artifact `13329885256`.
@@ -107,3 +107,21 @@ pin that checked harness. No full replays have been dispatched.
 A requested 128-token suffix does not by itself prove a query below 512 after
 hybrid prefix-cache matching. Inspect the actual per-rank query/context evidence
 before accepting the short-query case. Do not change routing to force a pass.
+
+## Confirmed cutoff correction and replacement
+
+Recovered artifact `13334581337` from cancelled run 41845437912 confirms that
+`short_query_c8` executed query/context lengths **1152/15360** on the upstream
+base. The validator now rejects that captured case. Both completed baseline
+benchmarks had 32/32 successful requests; 12 kernel and eight numerical/graph
+cases passed, with zero clipping and five independently matched source hashes.
+Candidate serving and model accuracy were not reached.
+
+Replacement run [41849935255](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41849935255)
+uses harness `313da481`. Its hosted code checks passed, including acceptance of
+a 256-token query and rejection of 1152/4224-token queries for the short-query
+region. GPU validation is in progress. The candidate remains `a03796b8`.
+
+DSpark run 41847793266 passed shell checks but its queued GPU job was cancelled
+to prioritize the replacement. Requeue that existing baseline job after the
+replacement validation; do not treat it as GPU evidence.
