@@ -12,6 +12,11 @@ endpoints; rocprofv3 attachment is checked against the installed version.
 Missing GPU coverage fails the profiling pass. Baseline metrics and profiling
 measurements are kept separate.
 
+A preflight request may include `image_check: {"image": "<local pinned image>"}`
+and an optional `environment` inside it. This checks small FP32/FP16/BF16 matrix
+multiplies on every GPU and records the loaded ROCm libraries before model loading.
+It uses the same isolated output and owned-container cleanup as normal runs.
+
 IPAT prepares and saves the request through its chat tools. The request includes
 argument arrays, environment, exact client package versions, model-cache paths,
 timeouts, and the profiling window. No shell is used to interpret commands.

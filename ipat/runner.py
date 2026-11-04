@@ -76,9 +76,43 @@ def preflight(request, output):
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copyfile(file, dest)
             facts["model_inventory"][relative] = row
+    if request.get("image_check"):
+        assert_gpu_idle()
+        settings = request["image_check"]
+        image = json.loads(subprocess.check_output(["docker", "image", "inspect", settings["image"]], text=True))[0]
+        facts["image"] = {"requested": settings["image"], "id": image["Id"],
+                          "repo_digests": image.get("RepoDigests", []),
+                          "entrypoint": image["Config"].get("Entrypoint"), "cmd": image["Config"].get("Cmd")}
+        write_json(output / "manifest.json", facts)
+        for part in ("home", "tmp", "cache", "hf"):
+            (output / part).mkdir(exist_ok=True)
+        command = ["docker", "run", "--rm", "--init", "--name", "ipat-" + request["id"],
+                   "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
+                   "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1",
+                   "--mount", f"type=bind,src={output.resolve()},dst=/output",
+                   "--mount", f"type=bind,src={Path(__file__).resolve().parent},dst=/ipat,readonly",
+                   "--workdir", "/output", "--env", "HOME=/output/home", "--env", "TMPDIR=/output/tmp",
+                   "--env", "XDG_CACHE_HOME=/output/cache", "--env", "HF_HOME=/output/hf",
+                   "--env", "PYTHONDONTWRITEBYTECODE=1"]
+        for key, value in settings.get("environment", {}).items():
+            if key in ("HOME", "TMPDIR", "XDG_CACHE_HOME", "HF_HOME", "HF_TOKEN"):
+                raise ValueError("Image diagnostic cannot override output or credential paths")
+            command += ["--env", f"{key}={value}"]
+        command += ["--entrypoint", "python3", image["Id"], "/ipat/check_image.py"]
+        facts["image_check"] = capture(command, output / "image-check.log", timeout=600)
+        if facts["image_check"].get("returncode") != 0:
+            facts["status"] = "failed"
     write_json(output / "manifest.json", facts)
     print(json.dumps(facts, indent=2))
     return facts
+
+
+def assert_gpu_idle():
+    active = subprocess.check_output(["docker", "ps", "-q"], text=True).split()
+    if active:
+        containers = json.loads(subprocess.check_output(["docker", "inspect", *active], text=True))
+        busy = [c["Name"] for c in containers if any(d.get("PathOnHost") == "/dev/kfd" for d in (c["HostConfig"].get("Devices") or [])) or c["HostConfig"].get("Privileged")]
+        if busy: raise RuntimeError("GPU containers already occupy this host: " + ", ".join(busy))
 
 
 def validate_recipe(recipe):
@@ -222,11 +256,7 @@ def execute(request, output):
     save()
     try:
         preflight(request, output / "preflight")
-        active = subprocess.check_output(["docker", "ps", "-q"], text=True).split()
-        if active:
-            containers = json.loads(subprocess.check_output(["docker", "inspect", *active], text=True))
-            busy = [c["Name"] for c in containers if any(d.get("PathOnHost") == "/dev/kfd" for d in (c["HostConfig"].get("Devices") or [])) or c["HostConfig"].get("Privileged")]
-            if busy: raise RuntimeError("GPU containers already occupy this host: " + ", ".join(busy))
+        assert_gpu_idle()
         if recipe["image_policy"] == "pull":
             result = capture(["docker", "pull", recipe["image"]], output / "image-pull.log", timeout=1800)
             if result.get("returncode") != 0: raise RuntimeError("Image pull failed; see image-pull.log")
@@ -295,7 +325,8 @@ def main():
         raise ValueError("IPAT request needs a unique hexadecimal ID")
     write_json(args.output / "request.json", request)
     if request.get("mode") == "preflight":
-        preflight(request, args.output)
+        result = preflight(request, args.output)
+        raise SystemExit(0 if result["status"] == "completed" else 1)
     elif request.get("mode") == "recover":
         recover(request, args.output)
     elif request.get("mode") == "run":
