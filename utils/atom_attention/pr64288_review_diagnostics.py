@@ -44,11 +44,12 @@ def asm_prefill(output):
     )
     config.cache_config.cache_dtype = "fp8"
     rendezvous = output / "dist-init"
-    init_distributed_environment(
-        world_size=1, rank=0, local_rank=0,
-        distributed_init_method=rendezvous.as_uri(), backend="nccl",
-    )
-    ensure_model_parallel_initialized(1, 1)
+    with set_current_vllm_config(config):
+        init_distributed_environment(
+            world_size=1, rank=0, local_rank=0,
+            distributed_init_method=rendezvous.as_uri(), backend="nccl",
+        )
+        ensure_model_parallel_initialized(1, 1)
     init_workspace_manager(device)
     try:
         with set_current_vllm_config(config), set_default_torch_dtype(torch.bfloat16):
@@ -147,6 +148,7 @@ def outliers(output):
         all_rows_active=True,
     )
     observations = []
+    failures = []
     for shuffled in (False, True):
         params = ProjectionWeight(
             shuffle_weight(weight, (16, 16)) if shuffled else weight,
@@ -198,16 +200,32 @@ def outliers(output):
                     "max_lse_absolute_error": (lse.double()-reference_lse).abs().max().item(),
                 }
                 if method.startswith("cached_amax"):
-                    assert clipped == [0, 0], row
-                    torch.testing.assert_close(actual.double(), reference, atol=2e-3, rtol=2e-3)
-                    torch.testing.assert_close(lse.double(), reference_lse, atol=1e-3, rtol=0)
+                    try:
+                        assert clipped == [0, 0], row
+                        torch.testing.assert_close(actual.double(), reference, atol=2e-3, rtol=2e-3)
+                        torch.testing.assert_close(lse.double(), reference_lse, atol=1e-3, rtol=0)
+                    except AssertionError as error:
+                        row["accuracy_gate"] = "failed"
+                        row["error"] = str(error)
+                        failures.append(row)
+                    else:
+                        row["accuracy_gate"] = "passed"
+                row["projection_max_absolute_error"] = [
+                    (value.float() * descale - expected).abs().max().item()
+                    for value, descale, expected in zip(
+                        kv8[:2], kv8[2:], (expected_k, expected_v)
+                    )
+                ]
                 observations.append(row)
                 print("OUTLIER_REVIEW_RESULT", json.dumps(row), flush=True)
     report = {
         "scope": "constructed outliers; cached-amax uses two projections and is not a performance candidate",
         "observations": observations,
+        "failed_cases": len(failures),
     }
     (output / "outliers.json").write_text(json.dumps(report, indent=2))
+    if failures:
+        raise AssertionError(f"{len(failures)} cached-amax cases failed unchanged accuracy gates")
 
 
 if __name__ == "__main__":
