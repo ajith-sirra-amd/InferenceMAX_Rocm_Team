@@ -1,5 +1,23 @@
 # PR64288 focused review work - 2026-11-04
 
+## Concurrent worker evidence correction (2026-11-04 14:11 UTC)
+
+[41840577273](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41840577273)
+failed while parsing the first upstream-base benchmark's execution log. The
+benchmark completed 32/32 requests with zero failures. Several workers emitted
+complete JSON records on the same line, and `json.loads` rejected the trailing
+records with `Extra data`. This is a harness failure before candidate serving;
+it is not evidence of an FP8 kernel, numerical or model-accuracy failure.
+
+The parser now decodes each marker-delimited JSON object, and the observer emits
+each record with one `os.write` call. The unchanged per-rank/dtype/routing checks
+remain. Local validation of the actual failing log recovered all 16 events and
+all eight ranks; malformed JSON is still rejected. A captured fixture now runs
+in the workflow's CPU checks before GPU scheduling. The same 12 kernel tests and
+eight numerical cases passed again before this parsing failure. Artifact:
+`13329734661`. The candidate remains `a03796b8`; no production code or numerical
+threshold changed.
+
 ## Active validation and recovered evidence (2026-11-04 13:50 UTC)
 
 Replacement [41840577273](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41840577273)

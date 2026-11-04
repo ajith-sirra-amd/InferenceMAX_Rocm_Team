@@ -38,12 +38,13 @@ def register():
         key = (phase, kind, details.get("selected"))
         if key in emitted or torch.cuda.is_current_stream_capturing():
             return
-        print(MARKER + json.dumps({
+        message = MARKER + json.dumps({
             "phase": phase, "kind": kind, "rank": dist.get_rank(),
             "pid": os.getpid(), "native_sha": manifest["native_sha"],
             "flag_enabled": enabled, "forced_routing": False,
             "graph_capture": False, **details,
-        }, sort_keys=True), flush=True)
+        }, sort_keys=True) + "\n"
+        os.write(1, message.encode("utf-8"))
         emitted.add(key)
 
     forward = AiterMLAImpl.forward_mha

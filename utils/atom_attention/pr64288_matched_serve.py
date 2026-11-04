@@ -106,11 +106,11 @@ def pin_workers(recipe, directory, env):
 
 def execution_proof(log, phase, enabled, require_fp8):
     events = []
-    for line in log.read_text(errors="replace").splitlines():
-        if MARKER in line:
-            event = json.loads(line.split(MARKER, 1)[1])
-            if event["phase"] == phase:
-                events.append(event)
+    decoder = json.JSONDecoder()
+    for payload in log.read_text(errors="replace").split(MARKER)[1:]:
+        event, _ = decoder.raw_decode(payload.lstrip())
+        if event["phase"] == phase:
+            events.append(event)
     if any(e["forced_routing"] or e["graph_capture"] for e in events):
         raise RuntimeError("Invalid execution evidence")
     if {e["rank"] for e in events if e["kind"] == "prefill"} != set(range(8)):
