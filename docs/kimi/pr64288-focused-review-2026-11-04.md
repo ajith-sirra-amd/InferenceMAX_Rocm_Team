@@ -3,8 +3,11 @@
 ## Latest state (2026-11-04, supersedes earlier progress notes)
 
 The published attention PR remains at `e2393d702a3736dffdfbfc7eb25abbabe484a1df`.
-The new cache-derived-scale candidate is
-`cbf7d1dc1c83bdf6e19dafe849c5fee42943f2ce`, preserved on the existing validation
+The cache-derived-scale candidate is now
+`a03796b8e3bfe536e22f9db741109dbf80170079`, based on pinned upstream main
+`69d27bf8002a4634de1699c95fb0aeb22fb86ca5`. It preserves the eight patch files
+from `cbf7d1dc1c83bdf6e19dafe849c5fee42943f2ce` unchanged, with no conflicts.
+It remains on the existing validation
 branch `checks/pr64288-asm-static-20261104` and not yet promoted to the PR.
 It removes the new-token K/V scale estimate and uses cached latent/weight norm
 bounds plus cached RoPE range. This scale choice is new work, not established ATOM
@@ -306,3 +309,15 @@ The matched short serving suite is running as [41833244777](https://github.com/a
 Prepared (not dispatched): normal-routing, live-MTP full GSM8K (1319 examples) and 12 cached retrieval cases at 16K/32K, depths 10/50/90 percent, with 1024 new query tokens. Base and candidate use identical prompts. GSM8K reports actual execution coverage; retrieval requires native FP8 projection and FMHA proof on every rank in the ON arm. No accuracy results claimed yet.
 
 Upstream main observed at `69d27bf8002a4634de1699c95fb0aeb22fb86ca5` is 19 commits ahead of the pinned base. There are no file overlaps with the attention patch, but graph-capture configuration changed. The existing comparison is explicitly to upstream base `44d9f92e`, not today's main. Any base update must precede the final source freeze and full OFF/ON run.
+
+## Pinned-main validation (latest)
+
+[41836553476](https://github.com/ajith-sirra-amd/vllm/actions/runs/41836553476) passed static checks and strict rendered documentation at `a03796b8`. Artifacts: static `13327540790`; rendered docs `13325893159`. Existing kernel/numerical results at `cbf7d1dc` are not relabeled as new-base GPU evidence.
+
+[41833244777](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41833244777) failed after successful base-server startup because the harness had not enabled the development cache-reset endpoint (HTTP 404). Artifact `13325156973`. [41835490009](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41835490009) then passed reset but failed in benchmark-tokenizer loading because its client lacked `--trust-remote-code`. Artifact `13327026177`. Both ran only upstream-base startup; neither produced measured requests or candidate evidence.
+
+Both harness defects are corrected. The client now exercises the real argument parser, custom tokenizer and dataset generation before loading model weights.
+
+[41837515977](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41837515977), harness `d3ada68b`, is dispatched: refresh exact pinned-main binaries, early client checks, 12 native kernel tests and numerical cases, then matched base/OFF/ON serving. NIAH and full GSM8K follow the base/ON short checks within each server launch. All arms use TP8/DCP8, CCD pinning, normal routing and live MTP. No full AgentX performance runs have been dispatched.
+
+The published PR still points to `e2393d70`. Promotion, current-base GPU/model evidence, separate sync model-entry validation, final matched C48+MTP performance and final reviewer updates remain pending.
