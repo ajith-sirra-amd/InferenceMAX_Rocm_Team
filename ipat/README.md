@@ -21,6 +21,9 @@ temporary mount used by execution. Normal runs use a 64 GiB maximum tmpfs at
 the existing repository-mounted `/output/tmp` path because the runner's NFS
 rejects colons in COMGR intermediate filenames. Persistent evidence and caches
 remain in the checkout. BF16 GPU math is checked before client/model startup.
+The container root is read-only. Compiler caches are redirected under `/output`;
+AITER uses its existing fallback to the repository-scoped home directory when
+the installed package is read-only. This enforces the repository-only write scope.
 
 IPAT prepares and saves the request through its chat tools. The request includes
 argument arrays, environment, exact client package versions, model-cache paths,

@@ -93,13 +93,14 @@ def preflight(request, output):
             facts["host_temporary_filename_check"] = {"status": "passed"}
         except OSError as error:
             facts["host_temporary_filename_check"] = {"status": "failed", "error": str(error)}
-        command = ["docker", "run", "--rm", "--init", "--name", "ipat-" + request["id"],
+        command = ["docker", "run", "--rm", "--init", "--read-only", "--name", "ipat-" + request["id"],
                    "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
                    "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1",
                    "--mount", f"type=bind,src={output.resolve()},dst=/output",
                    "--mount", f"type=bind,src={Path(__file__).resolve().parent},dst=/ipat,readonly",
                    "--workdir", "/output", "--env", "HOME=/output/home", "--env", "TMPDIR=/output/tmp",
                    "--env", "XDG_CACHE_HOME=/output/cache", "--env", "HF_HOME=/output/hf",
+                   "--env", "CCACHE_DIR=/output/cache/ccache", "--env", "SCCACHE_DIR=/output/cache/sccache",
                    "--env", "PYTHONDONTWRITEBYTECODE=1"]
         if settings.get("temporary_memory_filesystem"):
             command += ["--tmpfs", "/output/tmp:rw,exec,size=64g"]
@@ -285,8 +286,9 @@ def execute(request, output):
         for part in ("home", "tmp", "cache", "hf"):
             (output / part).mkdir(exist_ok=True)
         env = {"HOME": "/output/home", "TMPDIR": "/output/tmp", "XDG_CACHE_HOME": "/output/cache",
-               "PIP_CACHE_DIR": "/output/cache/pip", "HF_HOME": "/output/hf", "PYTHONDONTWRITEBYTECODE": "1"}
-        common = ["docker", "run", "--rm", "--init", "--name", name, "--label", "ipat.run=" + request["id"],
+               "PIP_CACHE_DIR": "/output/cache/pip", "HF_HOME": "/output/hf", "PYTHONDONTWRITEBYTECODE": "1",
+               "CCACHE_DIR": "/output/cache/ccache", "SCCACHE_DIR": "/output/cache/sccache"}
+        common = ["docker", "run", "--rm", "--init", "--read-only", "--name", name, "--label", "ipat.run=" + request["id"],
                   "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
                   "--cap-add", "SYS_PTRACE", "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1", "--ulimit", "stack=67108864", *mounts,
                   # COMGR filenames contain colons, rejected by this host's NFS.
@@ -295,6 +297,8 @@ def execute(request, output):
                   "--workdir", "/output", "--env", "HF_TOKEN"]
         manifest["temporary_storage"] = {"path": "/output/tmp", "kind": "tmpfs", "limit_gib": 64,
                                          "reason": "COMGR intermediate filenames require POSIX filename support"}
+        manifest["write_scope"] = {"container_root": "read_only", "output": str(output.resolve()),
+                                   "cache_environment": env}
         for key, value in env.items(): common += ["--env", f"{key}={value}"]
         passes = request.get("passes", ["baseline", "profile"])
         if not passes or any(p not in ("baseline", "profile") for p in passes) or len(set(passes)) != len(passes):

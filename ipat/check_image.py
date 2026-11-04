@@ -23,6 +23,14 @@ except OSError as error:
 emit("environment", {key: value for key, value in os.environ.items()
                      if key.startswith(("ROCM", "HIP", "HSA", "ROCBLAS", "HIPBLAS", "TORCH_"))
                      or key in ("LD_LIBRARY_PATH", "LD_PRELOAD")})
+try:
+    from aiter.jit.core import get_user_jit_dir
+    jit = Path(get_user_jit_dir()).resolve()
+    emit('aiter_jit_directory', str(jit))
+    if not jit.is_relative_to('/output'):
+        raise RuntimeError('AITER JIT output is outside the mounted repository output')
+except ImportError:
+    emit('aiter_jit_directory', 'not installed')
 results = []
 for device in range(torch.cuda.device_count()):
     row = {"device": device, "properties": str(torch.cuda.get_device_properties(device))}
