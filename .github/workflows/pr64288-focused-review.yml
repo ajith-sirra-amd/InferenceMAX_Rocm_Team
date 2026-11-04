@@ -1,0 +1,115 @@
+name: PR64288 focused review validation
+on:
+  push:
+    branches: [checks/pr64288-focused-review-20261104]
+    paths: [.github/workflows/pr64288-focused-review.yml]
+permissions:
+  contents: read
+concurrency:
+  group: pr64288-focused-review
+  cancel-in-progress: false
+env:
+  IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
+  NATIVE_SHA: e2393d702a3736dffdfbfc7eb25abbabe484a1df
+  BEFORE_SHA: 9857e13fe609befc603ad008f6e4ae2fe85726aa
+jobs:
+  code-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.6"
+      - name: Check diagnostic syntax and workflow shell
+        run: |
+          uv venv --python 3.12
+          uv pip install pyyaml
+          .venv/bin/python - <<'PY'
+          import ast, pathlib, subprocess, yaml
+          ast.parse(pathlib.Path("utils/atom_attention/pr64288_review_diagnostics.py").read_text())
+          workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
+          for job in workflow["jobs"].values():
+              for step in job["steps"]:
+                  if "run" in step:
+                      subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
+          PY
+      - name: Require exact candidate static checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run watch 41819725072 --repo ajith-sirra-amd/vllm --exit-status --interval 30
+          test "$(gh run view 41819725072 --repo ajith-sirra-amd/vllm --json conclusion --jq .conclusion)" = success
+  gpu:
+    needs: code-checks
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Focused kernel, ASM routing and cached outlier checks
+        shell: bash
+        run: |
+          task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/$GITHUB_RUN_ID"
+          mkdir -p "$task_work"
+          docker run --rm --init --network host --ipc=host --shm-size=8g \
+            --name "pr64288-review-$GITHUB_RUN_ID" \
+            --device=/dev/kfd --device=/dev/dri \
+            -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
+            -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA -e BEFORE_SHA \
+            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+            --entrypoint bash "$IMAGE" -lc '
+              set -euo pipefail
+              uv venv --system-site-packages /work/.bootstrap
+              /work/.bootstrap/bin/python /repo/utils/atom_attention/native_vllm_gpu_validate.py --native-sha "$NATIVE_SHA"
+              export PYTHONPATH=/work/vllm
+              export VLLM_PLUGINS=""
+              export VLLM_ROCM_USE_AITER=1
+              export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
+              cd /work/vllm
+              status=0
+              .venv/bin/python /repo/utils/atom_attention/pr64288_review_diagnostics.py --mode asm --output /work/evidence/asm-after > /work/evidence/asm-after.log 2>&1 || status=1
+              cat /work/evidence/asm-after.log
+              .venv/bin/python /repo/utils/atom_attention/pr64288_review_diagnostics.py --mode outliers --output /work/evidence/outliers > /work/evidence/outliers.log 2>&1 || status=1
+              cat /work/evidence/outliers.log
+              target=vllm/v1/attention/backends/mla/rocm_aiter_mla.py
+              git show "$BEFORE_SHA:$target" > "$target"
+              set +e
+              .venv/bin/python /repo/utils/atom_attention/pr64288_review_diagnostics.py --mode asm --output /work/evidence/asm-before > /work/evidence/asm-before.log 2>&1
+              before_rc=$?
+              set -e
+              git restore --source HEAD -- "$target"
+              cat /work/evidence/asm-before.log
+              if [ "$before_rc" -eq 0 ] || ! grep -q ASM_METADATA_MISSING /work/evidence/asm-before.log; then
+                echo "Base did not reproduce the expected missing ASM metadata failure"
+                status=1
+              fi
+              git diff --exit-code -- vllm tests
+              exit "$status"
+            '
+      - name: Restore diagnostic output ownership
+        if: always()
+        shell: bash
+        run: |
+          task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/$GITHUB_RUN_ID"
+          if [ -d "$task_work" ]; then
+            test ! -L "$task_work"
+            workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+            test "$(realpath -e -- "$task_work")" = "$workspace_real/.native-review-diagnostics/$GITHUB_RUN_ID"
+            docker run --rm --network none --user 0:0 \
+              --mount "type=bind,source=$task_work,target=/repair" \
+              --entrypoint chown "$IMAGE" \
+              --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+          fi
+      - name: Upload focused evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pr64288-focused-review
+          path: .native-review-diagnostics/${{ github.run_id }}/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
