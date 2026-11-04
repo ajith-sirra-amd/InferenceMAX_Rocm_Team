@@ -115,9 +115,13 @@ def log_text(events):
     return "\n".join("Worker NATIVE_FP8_EXECUTION " + json.dumps(e) for e in events)
 
 
-def test_eight_workers_execute_every_required_operation(events):
+@pytest.mark.parametrize("joined", [False, True])
+def test_eight_workers_execute_every_required_operation(events, joined):
+    text = log_text(events)
+    if joined:
+        text = text.replace("\n", "")
     result = validate_execution_log(
-        log_text(events), 8, SHA, require_causal=True, phase="eval",
+        text, 8, SHA, require_causal=True, phase="eval",
     )
     assert result["accuracy_stress_routing"] is True
     assert [worker["rank"] for worker in result["workers"]] == list(range(8))
@@ -185,17 +189,30 @@ def control_events():
     } for rank in range(8)]
 
 
-def test_flag_off_requires_live_disabled_workers():
+@pytest.mark.parametrize("joined", [False, True])
+def test_flag_off_requires_live_disabled_workers(joined):
     events = control_events()
+    text = log_text(events)
+    if joined:
+        text = text.replace("\n", "")
     proof = validate_execution_log(
-        log_text(events), 8, SHA, require_causal=False, phase="replay", flag_off=True,
+        text, 8, SHA, require_causal=False, phase="replay", flag_off=True,
     )
     assert proof["flag_off_control"] is True
     assert [w["rank"] for w in proof["workers"]] == list(range(8))
     assert proof["workers"][0]["kinds"] == ["flag_off"]
     with pytest.raises(ValueError, match="Invalid flag-off"):
         validate_execution_log(
-            log_text(events), 8, SHA, require_causal=False, phase="replay",
+            text, 8, SHA, require_causal=False, phase="replay",
+        )
+
+
+@pytest.mark.parametrize("malformed", ['{"rank":', 'not-json'])
+def test_malformed_record_is_not_ignored(malformed):
+    text = log_text(control_events()) + "NATIVE_FP8_EXECUTION " + malformed
+    with pytest.raises(json.JSONDecodeError):
+        validate_execution_log(
+            text, 8, SHA, require_causal=False, phase="replay", flag_off=True,
         )
 
 

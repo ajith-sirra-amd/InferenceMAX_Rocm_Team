@@ -1,5 +1,20 @@
 # PR64288 focused review work - 2026-11-04
 
+## Active retry and final-replay parser hardening (2026-11-04 14:16 UTC)
+
+[41845437912](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41845437912)
+is running with harness `ef7d23a7660d4b6a76f9c6ba59530374aadb8a64`.
+Its CPU checks passed, including parsing the captured joined-worker fixture;
+GPU validation began at 14:14:07 UTC. Candidate and base are unchanged.
+
+The final AgentX observer had the same line-based JSON parsing assumption.
+A local eight-worker reproducer failed before the fix with `Extra data`.
+The final observer now also decodes each marker-delimited object and emits
+one write per record. Added CPU cases cover joined ON/OFF records and rejected
+malformed records. This changes execution evidence handling only, not attention
+or the workload. The active serving run uses its own already corrected observer
+and is not restarted for this final-replay harness change.
+
 ## Concurrent worker evidence correction (2026-11-04 14:11 UTC)
 
 [41840577273](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41840577273)

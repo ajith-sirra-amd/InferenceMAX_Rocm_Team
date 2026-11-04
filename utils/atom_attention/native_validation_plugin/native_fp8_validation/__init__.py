@@ -25,10 +25,9 @@ def validate_execution_log(text, workers, native_sha, *, require_causal, phase,
     if flag_off:
         required = {"flag_off"}
     by_rank = {}
-    for line in text.splitlines():
-        if MARKER not in line:
-            continue
-        event = json.loads(line.split(MARKER, 1)[1])
+    decoder = json.JSONDecoder()
+    for payload in text.split(MARKER)[1:]:
+        event, _ = decoder.raw_decode(payload.lstrip())
         if flag_off and event.get("kind") != "flag_off":
             raise ValueError("Flag-off control unexpectedly executed native FP8")
         if event.get("phase") != phase:
@@ -149,7 +148,7 @@ def register():
         }
         if kind == "flag_off":
             event["fp8_flag_enabled"] = False
-        print(MARKER + json.dumps(event, sort_keys=True), flush=True)
+        os.write(1, (MARKER + json.dumps(event, sort_keys=True) + "\n").encode("utf-8"))
         emitted.add(kind)
 
     project = native.project
