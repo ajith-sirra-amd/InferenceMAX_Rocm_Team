@@ -5,7 +5,7 @@
 - Published PR: `e2393d702a3736dffdfbfc7eb25abbabe484a1df`.
 - Validation candidate: `a03796b8e3bfe536e22f9db741109dbf80170079`.
 - Pinned upstream main: `69d27bf8002a4634de1699c95fb0aeb22fb86ca5`.
-- Active serving/accuracy run: [41849935255](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41849935255), harness `313da481`.
+- Active serving/accuracy run: [41861899047](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41861899047), harness `130ba3ff`.
 - Final replay harness checked at `6b4f3553391063b1060d39cf16b154e7d26585b3`:
   [41845902237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41845902237), 49 tests passed, no failures/skips; launcher checks passed.
 - Recovered GPU evidence: [41838441209](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41838441209), artifact `13329885256`.
@@ -44,6 +44,11 @@
 | GSM8K model evaluation | Active run includes all 1,319 examples for main and candidate ON with live MTP. Actual routing coverage must be reported separately. |
 | Existing related PR comparison | #59124's reference replay failed; do not repair or add the direct-projection implementation to it. No measured comparison is claimed. |
 | Enablement environment variable | Leave open pending the author's decision with Seungrok. |
+
+Six inline cleanup/scope threads are resolved after checking published head
+`e2393d70`: unused arguments, signature inspection, prototype wording, repeated
+environment lookup and both synchronization edits. The cache-scale and final ASM
+validation threads remain open; the environment decision remains open by request.
 
 ## Testing and validation
 
@@ -118,9 +123,18 @@ cases passed, with zero clipping and five independently matched source hashes.
 Candidate serving and model accuracy were not reached.
 
 Replacement run [41849935255](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41849935255)
-uses harness `313da481`. Its hosted code checks passed, including acceptance of
+used harness `313da481`. Its hosted code checks passed, including acceptance of
 a 256-token query and rejection of 1152/4224-token queries for the short-query
-region. GPU validation is in progress. The candidate remains `a03796b8`.
+region. The subsequent artifact confirmed query/context dimensions of 256/24576
+on all eight ranks and four completed upstream-base serving cases. The final
+long-context case hit its 1200-second harness timeout while requests were still
+progressing. Candidate serving, NIAH and GSM8K were not reached.
+
+Replacement 41861899047 keeps the candidate `a03796b8`, request counts and
+acceptance criteria unchanged. It uses a bounded 3600-second benchmark deadline,
+one-minute progress output and NIAH before benchmarks within each applicable arm.
+The reservation's hard cutoff remains 2026-11-05 00:02:52 UTC, with GPU cleanup
+starting ten minutes earlier. Poll the active run every 120 seconds.
 
 DSpark run 41847793266 passed shell checks but its queued GPU job was cancelled
 to prioritize the replacement. Requeue that existing baseline job after the

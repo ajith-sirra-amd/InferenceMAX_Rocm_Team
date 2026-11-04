@@ -482,3 +482,16 @@ before longer benchmarks within each applicable arm; full GSM8K remains required
 Runner reservation ends **2026-11-05 00:02:52 UTC / 05:32:52 IST**. Registered
 GPU jobs are stopped and their exact run containers cleaned up beginning ten
 minutes before that deadline. No new nine-hour period is started on continuation.
+
+Replacement [41861899047](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41861899047),
+harness `130ba3ff`, passed hosted checks and entered GPU validation at 15:50:57 UTC.
+As of 16:22 UTC the validation step is still running without a reported failed
+step. No candidate serving or model-accuracy pass is claimed before inspecting
+the artifacts. The status API initially lagged the completed hosted-job log and
+caught up at 16:16 UTC.
+
+Six inline threads were resolved after verifying their fixes in published head
+`e2393d70`: unused quantizer branches, signature introspection, prototype wording,
+repeated environment lookup, and both unrelated synchronization edits. The
+cache-scale concern, final ASM validation and enablement-env discussion remain
+open. Main/OFF/ON serving and normal-routing model accuracy are still required.
