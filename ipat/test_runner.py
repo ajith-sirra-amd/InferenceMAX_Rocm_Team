@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 from container import benchmark_metrics, trace_summary, run
-from runner import validate_recipe, resolve_models
+from runner import validate_recipe, resolve_models, cleanup
 
 
 RECIPE = {"model": "Model", "framework": "vllm", "image": "image:pin", "image_policy": "local",
@@ -78,6 +78,18 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("Server exited before readiness", result["error"])
         self.assertEqual(popen.call_count, 1)
         self.assertTrue((self.root / "pass/pass.json").is_file())
+
+    def test_post_cleanup_targets_only_the_recorded_container_and_output(self):
+        (self.root / "request.json").write_text(json.dumps({"id": "a" * 32}))
+        (self.root / "manifest.json").write_text(json.dumps({"image": {"id": "sha256:example"}}))
+        with patch("runner.subprocess.run") as command:
+            cleanup(self.root)
+        self.assertEqual(command.call_args_list[0].args[0], ["docker", "rm", "--force", "ipat-" + "a" * 32])
+        self.assertIn(f"type=bind,src={self.root.resolve()},dst=/output", command.call_args_list[1].args[0])
+        self.assertNotIn("--device", command.call_args_list[1].args[0])
+        (self.root / "request.json").write_text(json.dumps({"id": "invalid"}))
+        with patch("runner.subprocess.run") as command, self.assertRaises(ValueError): cleanup(self.root)
+        command.assert_not_called()
 
 
 if __name__ == "__main__":
