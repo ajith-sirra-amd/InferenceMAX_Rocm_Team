@@ -1,5 +1,7 @@
 name: Analyze native Kimi steady profile
 on:
+  push:
+    branches: [checks/native-profile-analysis-run-20261104]
   workflow_dispatch:
     inputs:
       profile-run-id:
@@ -19,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      PROFILE_RUN_ID: ${{ inputs.profile-run-id }}
-      NATIVE_SHA: ${{ inputs.native-sha }}
+      PROFILE_RUN_ID: ${{ inputs.profile-run-id || '41478604149' }}
+      NATIVE_SHA: ${{ inputs.native-sha || '492080779e9feea19308092b0aba0840e87c6115' }}
       GH_TOKEN: ${{ github.token }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
@@ -45,9 +47,9 @@ jobs:
       - name: Download worker traces
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: native-steady-profile-${{ inputs.profile-run-id }}
+          name: native-steady-profile-${{ inputs.profile-run-id || '41478604149' }}
           path: profile-input
-          run-id: ${{ inputs.profile-run-id }}
+          run-id: ${{ inputs.profile-run-id || '41478604149' }}
           github-token: ${{ github.token }}
       - name: Download execution proof
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -55,7 +57,7 @@ jobs:
           pattern: agentic_*
           merge-multiple: true
           path: profile-evidence
-          run-id: ${{ inputs.profile-run-id }}
+          run-id: ${{ inputs.profile-run-id || '41478604149' }}
           github-token: ${{ github.token }}
       - name: Analyze GPU kernels and overlap
         run: |
@@ -68,6 +70,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-profile-analysis-${{ inputs.profile-run-id }}
+          name: native-profile-analysis-${{ inputs.profile-run-id || '41478604149' }}
           path: profile-analysis/
           if-no-files-found: error
