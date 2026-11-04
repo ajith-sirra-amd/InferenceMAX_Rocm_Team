@@ -1,0 +1,91 @@
+name: DSpark baseline public-entry synchronization check
+on:
+  push:
+    branches: [checks/pr64288-focused-review-20261104]
+    paths: [.github/workflows/pr64288-dspark-baseline-sync.yml]
+permissions:
+  contents: read
+  actions: read
+env:
+  IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
+  BASE_SHA: 69d27bf8002a4634de1699c95fb0aeb22fb86ca5
+jobs:
+  code-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.6"
+      - name: Check diagnostic workflow shell
+        run: |
+          uv venv --python 3.12
+          uv pip install pyyaml
+          .venv/bin/python - <<'PY'
+          import pathlib, subprocess, yaml
+          path = pathlib.Path(".github/workflows/pr64288-dspark-baseline-sync.yml")
+          workflow = yaml.safe_load(path.read_text())
+          for job in workflow["jobs"].values():
+              for step in job["steps"]:
+                  if "run" in step:
+                      subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
+          PY
+  baseline-sync:
+    needs: code-checks
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 40
+    concurrency:
+      group: pr64288-focused-review
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Check the public DSpark path on unmodified pinned main
+        shell: bash
+        run: |
+          set -euo pipefail
+          task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
+          test -d "$task_work/vllm/.venv"
+          docker run --rm --init --network host --ipc=host --shm-size=8g \
+            --name "pr64288-dspark-baseline-$GITHUB_RUN_ID" \
+            --device=/dev/kfd --device=/dev/dri \
+            -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
+            -e PYTHONDONTWRITEBYTECODE=1 -e BASE_SHA -e REVIEW_RUN_ID="$GITHUB_RUN_ID" \
+            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+            --entrypoint bash "$IMAGE" -lc '
+              set -euo pipefail
+              evidence="/work/review-reruns/$REVIEW_RUN_ID"
+              mkdir -p "$evidence"
+              cd /work/vllm
+              git -c safe.directory=/work/vllm diff --exit-code
+              git -c safe.directory=/work/vllm fetch --depth=1 origin "$BASE_SHA"
+              git -c safe.directory=/work/vllm checkout --detach "$BASE_SHA"
+              test "$(git -c safe.directory=/work/vllm rev-parse HEAD)" = "$BASE_SHA"
+              export XDG_CACHE_HOME=/work/cache HF_HOME=/work/cache/huggingface
+              export TRITON_CACHE_DIR=/work/cache/triton
+              export CUDA_VISIBLE_DEVICES=0 ROCR_VISIBLE_DEVICES=0
+              export PYTHONPATH=/work/vllm PYTHONUNBUFFERED=1 VLLM_PLUGINS=""
+              export VLLM_ROCM_USE_AITER=1 VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=0
+              export VLLM_GPU_SYNC_CHECK=error
+              export PATH="/work/vllm/.venv/bin:$PATH"
+              git -c safe.directory=/work/vllm rev-parse HEAD > "$evidence/source-sha.txt"
+              sha256sum vllm/models/kimi_k3/nvidia/dspark_mla.py \
+                tests/models/kimi_k3/test_prefix_cache.py > "$evidence/source-hashes.txt"
+              .venv/bin/python -m pytest -v -s \
+                "tests/models/kimi_k3/test_prefix_cache.py::test_turns_reuse_prefix_and_match_recompute[plain-partial-dspark]" \
+                --junitxml="$evidence/dspark-public-entry.xml" \
+                2>&1 | tee "$evidence/dspark-public-entry.log"
+              git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
+            '
+      - name: Preserve baseline diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dspark-baseline-public-entry
+          path: .native-review-diagnostics/41820076564/review-reruns/${{ github.run_id }}/
+          if-no-files-found: error
