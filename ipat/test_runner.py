@@ -94,6 +94,15 @@ class RunnerTests(unittest.TestCase):
         with patch("runner.subprocess.run") as command, self.assertRaises(ValueError): cleanup(self.root)
         command.assert_not_called()
 
+    def test_failed_dataset_preparation_does_not_start_the_gpu_server(self):
+        capabilities = {"devices": [{"name": "AMD Instinct MI355X"}] * 8}
+        recipe = dict(RECIPE, port=8000, client_packages=[], client_setup=[["hf", "download", "dataset"]])
+        with patch("container.probe", return_value=capabilities), patch("container.checked", side_effect=RuntimeError("dataset unavailable")), patch("container.subprocess.Popen") as popen:
+            result = run(recipe, self.root / "pass", "baseline")
+        popen.assert_not_called()
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error"], "dataset unavailable")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
 import threading
@@ -245,12 +246,31 @@ def run(recipe, output, pass_name):
         client_argv = expand(recipe["client_argv"])
         if recipe["client_packages"]:
             venv = output / "client-env"
-            checked(["python3", "-m", "venv", str(venv)], output / "client-setup.log", env)
-            checked([str(venv / "bin/python"), "-m", "pip", "install", *recipe["client_packages"]], output / "client-install.log", env)
+            if recipe.get("client_python"):
+                uv = shutil.which("uv")
+                if not uv:
+                    installer = output / "uv-install.sh"
+                    with urlopen("https://astral.sh/uv/install.sh", timeout=90) as response:
+                        installer.write_bytes(response.read())
+                    install_env = dict(env, UV_INSTALL_DIR=str(output / "client-tools"), UV_NO_MODIFY_PATH="1")
+                    checked(["sh", str(installer)], output / "uv-install.log", install_env)
+                    uv = str(output / "client-tools/uv")
+                checked([uv, "--version"], output / "uv-version.txt", env)
+                checked([uv, "venv", "--python", recipe["client_python"], str(venv)], output / "client-setup.log", env)
+                checked([uv, "pip", "install", "--python", str(venv / "bin/python"), *recipe["client_packages"]], output / "client-install.log", env)
+                checked([uv, "pip", "freeze", "--python", str(venv / "bin/python")], output / "client-packages.txt", env)
+            else:
+                checked(["python3", "-m", "venv", str(venv)], output / "client-setup.log", env)
+                checked([str(venv / "bin/python"), "-m", "pip", "install", *recipe["client_packages"]], output / "client-install.log", env)
+                checked([str(venv / "bin/python"), "-m", "pip", "freeze"], output / "client-packages.txt", env)
             client_argv[0] = str(venv / "bin" / Path(client_argv[0]).name)
-            checked([str(venv / "bin/python"), "-m", "pip", "freeze"], output / "client-packages.txt", env)
+            checked([str(venv / "bin/python"), "--version"], output / "client-python.txt", env)
             if Path(client_argv[0]).name == "agentx":
                 checked([client_argv[0], "profile", "--help"], output / "client-help.txt", env)
+        setup_env = dict(env, **recipe.get("client_environment", {}))
+        if recipe["client_packages"]: setup_env["PATH"] = str(venv / "bin") + ":" + env.get("PATH", "")
+        for index, setup in enumerate(recipe.get("client_setup", [])):
+            checked(expand(setup), output / f"client-prepare-{index}.log", setup_env, timeout=3600)
         manifest["client_argv"] = client_argv
         write(output / "pass.json", manifest)
         with (output / "server.log").open("w") as log:

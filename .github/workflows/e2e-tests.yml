@@ -115,6 +115,7 @@ jobs:
                   path: |
                       ${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence
                       !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/**/client-env
+                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/**/client-tools
                       !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/cache
                       !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/hf
                       !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/home

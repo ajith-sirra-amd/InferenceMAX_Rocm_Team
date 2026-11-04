@@ -101,6 +101,11 @@ def validate_recipe(recipe):
             raise ValueError("Cache paths and credentials are supplied by the runner")
     if not isinstance(recipe.get("client_packages"), list) or any(not re.fullmatch(r"[A-Za-z0-9_.-]+==[A-Za-z0-9_.+-]+", p) for p in recipe["client_packages"]):
         raise ValueError("Client packages require exact package==version pins")
+    if recipe.get("client_python") and not re.fullmatch(r"3\.[0-9]+(?:\.[0-9]+)?", recipe["client_python"]):
+        raise ValueError("Specify the client's Python 3 version")
+    setup = recipe.get("client_setup", [])
+    if not isinstance(setup, list) or any(not isinstance(argv, list) or not argv or any(not isinstance(arg, str) or "\0" in arg for arg in argv) for argv in setup):
+        raise ValueError("client_setup must contain argument arrays")
     profile = recipe.get("profile", {})
     if profile.get("kind") not in ("torch", "rocprof"):
         raise ValueError("Choose torch or rocprof profiling")
