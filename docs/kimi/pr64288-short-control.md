@@ -25,3 +25,5 @@ The enabled arm retains positive projection and cached-FMHA proof.
 
 This is a short diagnostic, not canonical performance or long-run stability evidence.
 The historical C56 stall appeared about 50 minutes into measurement, beyond this run.
+
+Observed behavior: AIPerf automatically skips profiling metric coverage validation for measurements below 900 seconds (run 41775886780). A five-minute diagnostic must not be labeled coverage-validated, even when the workflow succeeds.
