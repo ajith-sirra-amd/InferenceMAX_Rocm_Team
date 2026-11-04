@@ -3,7 +3,7 @@
 ## Source and execution
 
 - Attention PR: https://github.com/vllm-project/vllm/pull/64288
-- Published PR head remains `9857e13fe609befc603ad008f6e4ae2fe85726aa`.
+- Published PR head is now `e2393d702a3736dffdfbfc7eb25abbabe484a1df`.
 - Review candidate: `e2393d702a3736dffdfbfc7eb25abbabe484a1df`, branch
   `checks/pr64288-asm-sync-review-20261104` in the vLLM fork.
 - Separate synchronization candidate: `c894899149c43bae0873ec8e3b8b76213d267f8f`,
@@ -80,3 +80,60 @@ any integration. No such scale change is in the PR or review candidate.
 
 Seungrok's environment-variable discussion remains open. New-token FP8,
 native NUMA changes and further concurrency sweeps remain deferred.
+
+## Completed focused results
+
+The small fixes are published in PR64288 at `e2393d70`.
+The current head passed all eight existing native FP8 kernel cases in
+[41820076564](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41820076564),
+artifact `13316522295`. That workflow failed in additional diagnostics, not
+in those eight kernel cases.
+
+The corrected real-layer ASM regression in
+[41821548931](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41821548931),
+artifact `13317306322`, failed before the fix with `ASM_METADATA_MISSING`
+and passed after it. The log records the ASM kernel load; maximum absolute
+error versus the existing reference was 0.0215493441.
+
+The initial ASM diagnostic needed its configuration context set before
+distributed initialization. A reuse attempt,
+[41821244716](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41821244716),
+then failed on Git's ownership check before running tests. Git trust was
+restricted to the known `/work/vllm` checkout for each command; the next
+attempt completed all diagnostics. Neither issue changed production code.
+
+Constructed outliers gave identical results in both weight layouts:
+
+| Cached multiplier | Current-scale output error | Cached-amax output error | Cached-amax projection error | Cached-amax strict gate |
+| ---: | ---: | ---: | ---: | --- |
+| 1 | 0.00097656 | 0.00097656 | 0 | pass |
+| 2 | 0.00184940 | 0.00380253 | 0 | fail |
+| 8 | 0.02530534 | 0.00186784 | 0 | pass |
+| 32 | 0.20291615 | 0.00020885 | 0 | pass |
+
+Cached-amax removed clipping in every constructed case. Its two failed
+cases (one per layout) remain failed against the unchanged additional
+`atol=2e-3, rtol=2e-3` output check. This is not a serving scale fix.
+
+For the multiplier-2 case, AITER rounds unnormalized softmax probabilities
+to FP8 before P*V, while the denominator sums the unrounded probabilities.
+The relevant probability is 0.9732996356757996, which rounds to 1 in E4M3.
+The resulting BF16 output is predicted as 0.1328125 versus the high-precision
+0.12900997184323335: error 0.00380252815676665, matching the measured error.
+Source: AITER v0.1.27
+`aiter/ops/flydsl/kernels/fmha_gfx950/flash_attn_fp8_gfx950.py`
+(`_softmax_part`) and `op_gemm.py` (`cast_p_fp8_direct`).
+This explains that case's inherited FMHA approximation; it does not excuse
+clipping from the integration's cached-scale estimate.
+
+An isolated cache-derived norm-bound experiment is running in
+[41822676794](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41822676794).
+It tests actual plain/shuffled projection against an independent FP64 oracle
+with the existing projection gates (relative RMS <0.04, normalized peak <0.07)
+and zero clipping. Its Torch intermediates are diagnostic; no scale change
+or performance claim has been added to the PR.
+
+Current-head upstream DCO passed. The
+[contributor-authorization gate](https://github.com/vllm-project/vllm/actions/runs/41822182813/job/126547776319)
+failed before pre-commit execution; the account has zero merged PRs and none
+of the required authorization labels. No label was requested or added.
