@@ -5,9 +5,9 @@
 - Published PR: `e2393d702a3736dffdfbfc7eb25abbabe484a1df`.
 - Validation candidate: `a03796b8e3bfe536e22f9db741109dbf80170079`.
 - Pinned upstream main: `69d27bf8002a4634de1699c95fb0aeb22fb86ca5`.
-- Active serving/accuracy run: [41840577273](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41840577273), harness `64bf0998`.
-- Final replay harness checked at `dfea3045471efc0033c4f832a1eb8936e9162ac4`:
-  [41841997094](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41841997094), 45 tests passed, no failures/skips; launcher checks passed.
+- Active serving/accuracy run: [41845437912](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41845437912), harness `ef7d23a7`.
+- Final replay harness checked at `6b4f3553391063b1060d39cf16b154e7d26585b3`:
+  [41845902237](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41845902237), 49 tests passed, no failures/skips; launcher checks passed.
 - Recovered GPU evidence: [41838441209](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41838441209), artifact `13329885256`.
   Twelve kernel tests and eight numerical/graph-replay cases passed at the candidate.
   Zero clipping; five installed source hashes independently match the candidate.
@@ -90,3 +90,20 @@ review questions or external CI as completed.
 
 New-token FP8, NUMA, concurrency sweeps and steady-state profiling remain after
 the current review-validation work. IPAT stays untouched.
+
+## Harness follow-through at 14:25 UTC
+
+The previous serving run 41840577273 completed its first upstream-base benchmark
+with 32/32 successful requests, then failed while parsing joined worker JSON
+records. It did not reach candidate serving or model accuracy. The captured log
+reproduced the defect; the corrected parser recovers all 16 records across eight
+ranks and still rejects malformed JSON. Worker events now use one write each.
+The replacement run 41845437912 is active; do not count it as a validation pass.
+
+The same parser correction is in the final replay observer. CPU artifact inspection
+for 41845902237 confirmed 49 passed, zero failed/skipped. Prepared OFF/ON inputs
+pin that checked harness. No full replays have been dispatched.
+
+A requested 128-token suffix does not by itself prove a query below 512 after
+hybrid prefix-cache matching. Inspect the actual per-rank query/context evidence
+before accepting the short-query case. Do not change routing to force a pass.

@@ -405,3 +405,28 @@ Both harness defects are corrected. The client now exercises the real argument p
 [41837515977](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41837515977), harness `d3ada68b`, is dispatched: refresh exact pinned-main binaries, early client checks, 12 native kernel tests and numerical cases, then matched base/OFF/ON serving. NIAH and full GSM8K follow the base/ON short checks within each server launch. All arms use TP8/DCP8, CCD pinning, normal routing and live MTP. No full AgentX performance runs have been dispatched.
 
 The published PR still points to `e2393d70`. Promotion, current-base GPU/model evidence, separate sync model-entry validation, final matched C48+MTP performance and final reviewer updates remain pending.
+
+## Current serving run and evidence-parser correction
+
+The active run is [41845437912](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41845437912),
+harness `ef7d23a7`, attention candidate `a03796b8`, upstream base `69d27bf8`.
+It passed hosted code checks and entered GPU validation at 14:14:07 UTC.
+As of 14:25 UTC it is still running; no serving or model-accuracy pass is claimed.
+
+The prior run 41840577273 passed all 12 kernel cases and eight numerical/graph
+cases, then completed 32/32 requests in the first upstream-base benchmark. Its
+observer failed on multiple worker JSON records joined onto one line. Candidate
+serving and GSM8K had not begun. Artifact `13329734661` preserves the failure.
+The captured log now recovers 16 records across eight workers; malformed records
+are rejected. Event emission uses a single write per record.
+
+Final replay harness `6b4f3553` includes the same parser correction. The
+[CPU check](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41845902237)
+was inspected: **49 passed, zero failed/skipped**, including joined ON/OFF
+worker records and malformed-record rejection. Prepared final OFF/ON inputs
+pin this checked source. These are harness checks, not performance results.
+
+The short-query workload's requested suffix length must be checked against
+actual hybrid-cache reuse before claiming below-cutoff coverage. The native
+routing and acceptance thresholds remain unchanged. Separate DSpark model-entry
+synchronization validation is prepared, not yet dispatched.
