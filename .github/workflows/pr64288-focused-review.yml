@@ -6,9 +6,6 @@ on:
 permissions:
   contents: read
   actions: read
-concurrency:
-  group: pr64288-focused-review
-  cancel-in-progress: false
 env:
   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
   NATIVE_SHA: a03796b8e3bfe536e22f9db741109dbf80170079
@@ -44,6 +41,23 @@ jobs:
           assert len(events) == 16
           assert {e["rank"] for e in events if e["kind"] == "context_attention"} == set(range(8))
           print("Captured concurrent-worker log: all 16 events recovered across 8 ranks")
+          # Exercise the real validator on valid and invalid cutoff regions.
+          import tempfile
+          with tempfile.TemporaryDirectory() as temporary:
+              fixture = pathlib.Path(temporary, "cutoff.log")
+              for query, expected_pass in ((256, True), (1152, False), (4224, False)):
+                  adjusted = [dict(e, phase="short_query_c8") for e in events]
+                  for event in adjusted:
+                      if event["kind"] == "context_attention":
+                          event.update(max_query_len=query, max_context_len=24576)
+                  fixture.write_text("".join("PR64288_SERVING " + json.dumps(e) + "\n" for e in adjusted))
+                  try:
+                      scope["execution_proof"](fixture, "short_query_c8", False, False)
+                  except RuntimeError as error:
+                      assert not expected_pass and "intended cutoff region" in str(error)
+                  else:
+                      assert expected_pass
+          print("Actual query cutoff: accept 256, reject 1152 and 4224")
           workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
           for job in workflow["jobs"].values():
               for step in job["steps"]:
@@ -58,6 +72,9 @@ jobs:
           test "$(gh run view 41836553476 --repo ajith-sirra-amd/vllm --json conclusion --jq .conclusion)" = success
   gpu:
     needs: code-checks
+    concurrency:
+      group: pr64288-focused-review
+      cancel-in-progress: false
     runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
     timeout-minutes: 360
     steps:
@@ -68,11 +85,11 @@ jobs:
       - name: Stop only the superseded validation container if still present
         shell: bash
         run: |
-          previous_container=pr64288-review-41838441209
+          previous_container=pr64288-review-41845437912
           if docker ps --format '{{.Names}}' | grep -Fxq "$previous_container"; then
             docker stop --time 60 "$previous_container"
           fi
-      - name: Run pinned-main checks with concurrent-worker evidence parsing
+      - name: Run pinned-main checks with cache-aligned short queries
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"

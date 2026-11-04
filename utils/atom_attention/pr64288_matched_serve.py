@@ -31,7 +31,9 @@ SOURCE_PATHS = [
 # not AgentX performance results or model accuracy measurements.
 CASES = [
     ("short_context_c8", 8, 4096, 1024, 32, False),
-    ("short_query_c8", 8, 16384, 128, 32, False),
+    # 2 * 12288 cached tokens plus a 128-token shared tail. The observed TP8
+    # hybrid-cache alignment is 12288; the remaining query is 256 tokens.
+    ("short_query_c8", 8, 24704, 128, 32, False),
     ("cached_c8", 8, 16384, 1024, 64, True),
     ("cached_c48", 48, 16384, 1024, 192, True),
     ("long_cached_c48", 48, 32768, 2048, 192, True),
@@ -122,7 +124,7 @@ def execution_proof(log, phase, enabled, require_fp8):
         for kind in ("fp8_projection", "fp8_fmha"):
             if {e["rank"] for e in fp8 if e["kind"] == kind} != set(range(8)):
                 raise RuntimeError("Missing " + kind + " evidence from one or more ranks")
-    if enabled and require_fp8 is False:
+    if require_fp8 is False:
         if fp8:
             raise RuntimeError("Below-cutoff case unexpectedly executed FP8")
         fallback = [e for e in events if e["kind"] == "context_attention"]
@@ -131,6 +133,13 @@ def execution_proof(log, phase, enabled, require_fp8):
         if any(e[key] != "torch.bfloat16" for e in fallback
                for key in ("dtype", "k_dtype", "v_dtype")):
             raise RuntimeError("Below-cutoff context attention did not use BF16 Q/K/V")
+        if phase == "short_query_c8" and any(
+            e["max_query_len"] >= 512 or e["max_context_len"] < 8192
+            for e in fallback
+        ):
+            raise RuntimeError("Short-query workload did not reach the intended cutoff region")
+        if phase == "short_context_c8" and any(e["max_context_len"] >= 8192 for e in fallback):
+            raise RuntimeError("Short-context workload did not reach the intended cutoff region")
     return events
 
 

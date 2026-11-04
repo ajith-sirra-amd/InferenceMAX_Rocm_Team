@@ -430,3 +430,19 @@ The short-query workload's requested suffix length must be checked against
 actual hybrid-cache reuse before claiming below-cutoff coverage. The native
 routing and acceptance thresholds remain unchanged. Separate DSpark model-entry
 synchronization validation is prepared, not yet dispatched.
+
+## Hybrid-cache alignment correction
+
+Run 41845437912 was cancelled at 14:38 UTC to correct the short-query workload,
+before counting its results as complete validation. The same-config server log
+from 41840577273 reports 1536-token attention blocks and a 12288-token KV-cache
+LCM. A 16384-token shared prefix with 128 new tokens therefore does not establish
+a query below 512: unaligned tokens must be recomputed.
+
+The replacement uses a 24704-token shared prefix and 128 new tokens, targeting
+24576 cached tokens and a 256-token query. The preflight checks all 32 generated
+prompts for a sufficiently long common prefix after tokenization. Every arm then
+requires actual context-attention evidence with query length below 512 and cached
+context at least 8192. Native dispatch and numerical tolerances are unchanged.
+The separate DSpark run 41847793266 passed its hosted shell checks, then its queued
+GPU job was cancelled to prioritize this replacement; GPU evidence is pending.
