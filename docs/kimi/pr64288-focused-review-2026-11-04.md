@@ -1,5 +1,29 @@
 # PR64288 focused review work - 2026-11-04
 
+## Active validation and recovered evidence (2026-11-04 13:50 UTC)
+
+Replacement [41840577273](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41840577273)
+is running with harness `64bf09987dcb638ac1a01ecd01675b3f68026a72` and unchanged
+candidate `a03796b8e3bfe536e22f9db741109dbf80170079` / base `69d27bf8`.
+Its code checks passed. The known superseded container cleanup passed before GPU
+validation began. The agent is polling this run every 120 seconds and inspecting
+results, with no final AgentX replay dispatched yet.
+
+Superseded [41838441209](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41838441209)
+was cancelled to correct the below-cutoff observer before its known late failure.
+Artifact `13329885256` preserves **12 passed, zero failed/skipped kernel tests** and
+**eight passed numerical/changed-input graph cases** on the updated base. Five
+installed source hashes were independently compared to GitHub's exact candidate
+files and matched. The binaries resolve to the exact base `69d27bf8`, with
+Torch 2.13.0+rocm10.0.0.
+
+Zero clipping in all eight numerical cases; worst FP8-input absolute LSE error
+2.3652865e-6. The separate pre-quantization-input LSE difference reached
+0.0030322206. Existing tolerances were retained. These completed checks remain
+valid evidence within the cancelled workflow; they are not serving/model-accuracy
+results or an overall workflow pass. The upstream-base server had only started
+initialization when cancellation cleanup completed.
+
 ## Follow-through correction (2026-11-04 13:42 UTC)
 
 The active run `41838441209` uses harness `780b2d0f`. Static inspection found
