@@ -1,5 +1,44 @@
 # PR64288 focused review work - 2026-11-04
 
+## Latest state (2026-11-04, supersedes earlier progress notes)
+
+The published attention PR remains at `e2393d702a3736dffdfbfc7eb25abbabe484a1df`.
+The new cache-derived-scale candidate is
+`cbf7d1dc1c83bdf6e19dafe849c5fee42943f2ce`, preserved on the existing validation
+branch `checks/pr64288-asm-static-20261104` and not yet promoted to the PR.
+It removes the new-token K/V scale estimate and uses cached latent/weight norm
+bounds plus cached RoPE range. This scale choice is new work, not established ATOM
+behavior; direct FP8 projection and FP8 FMHA remain.
+
+- [Static checks](https://github.com/ajith-sirra-amd/vllm/actions/runs/41830057231):
+  passed Ruff, applicable pre-commit, mypy and test wiring.
+- [Exact source verification](https://github.com/ajith-sirra-amd/vllm/actions/runs/41830721435):
+  passed against the formatted candidate.
+- [Native GPU validation](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41830939760),
+  artifact `13322757860`: 12 pytest cases passed with zero failures/skips, plus
+  eight eager/changed-input-graph numerical combinations. Zero clipping;
+  original projection/output/LSE tolerances retained. Worst FP8-input absolute
+  LSE error was 2.3653e-6. Pre-quantization-input LSE difference, separately
+  reported, reached 0.00303222. This is not model accuracy evidence.
+- [Separate metadata diagnostic](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41832449595),
+  artifact `13323516239`: exact context indices preserved. DSpark's isolated
+  pointer-transfer primitive raised a synchronization error before the fix and
+  passed after it. The context-index copies passed sync-debug in both versions;
+  their profiler events are diagnostic only. DSpark model-entry validation remains.
+  The preceding attempt `41831874569` failed before GPU execution because its
+  workflow token lacked `actions: read`; the rerun grants read-only access.
+
+Next: short matched upstream-base/candidate-OFF/candidate-ON serving checks at
+multiple concurrencies and both sides of routing cutoffs; then normal-routing
+GSM8K and long-context accuracy, remaining documentation/review checks, and final
+source freeze. Full C48 + MTP OFF/ON runs remain last. The established C48 workload
+is retained (the earlier C448 text was treated as a typo and C48 stated to the user).
+No current-candidate serving or model-accuracy result has yet been established.
+
+All active runs are watched at 120-second intervals. IPAT remains untouched.
+Earlier sections below record historical stages, not the latest candidate state.
+
+
 ## Source and execution
 
 - Attention PR: https://github.com/vllm-project/vllm/pull/64288

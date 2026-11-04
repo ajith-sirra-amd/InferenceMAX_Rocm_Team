@@ -1,4 +1,4 @@
-name: MLA metadata synchronization diagnostic
+name: PR64288 matched short serving validation
 on:
   push:
     branches: [checks/pr64288-focused-review-20261104]
@@ -12,7 +12,8 @@ concurrency:
 env:
   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
   NATIVE_SHA: cbf7d1dc1c83bdf6e19dafe849c5fee42943f2ce
-  BEFORE_SHA: 9857e13fe609befc603ad008f6e4ae2fe85726aa
+  BASE_SHA: 44d9f92e05f45ef45ec11d762011a2179be9d9cc
+  REVIEW_PORT: '18988'
 jobs:
   code-checks:
     runs-on: ubuntu-latest
@@ -30,7 +31,8 @@ jobs:
           uv pip install pyyaml
           .venv/bin/python - <<'PY'
           import ast, pathlib, subprocess, yaml
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_metadata_sync_diagnostic.py").read_text())
+          for path in ("pr64288_matched_serve.py", "review_serving_observer.py"):
+              ast.parse(pathlib.Path("utils/atom_attention", path).read_text())
           workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
           for job in workflow["jobs"].values():
               for step in job["steps"]:
@@ -46,13 +48,13 @@ jobs:
   gpu:
     needs: code-checks
     runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
-    timeout-minutes: 45
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
           clean: false
-      - name: Diagnose metadata copies and inspect cached model locations
+      - name: Run matched base OFF ON short serving checks
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
@@ -63,7 +65,7 @@ jobs:
             --device=/dev/kfd --device=/dev/dri \
             -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
             --mount type=bind,source=/share_nfs/models,target=/models,readonly \
-            -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA -e BEFORE_SHA -e REVIEW_RUN_ID="$GITHUB_RUN_ID" \
+            -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA -e BASE_SHA -e REVIEW_PORT -e REVIEW_RUN_ID="$GITHUB_RUN_ID" \
             -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
             --entrypoint bash "$IMAGE" -lc '
               set -euo pipefail
@@ -82,8 +84,13 @@ jobs:
               export VLLM_ROCM_USE_AITER=1
               export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
               cd /work/vllm
-              git -c safe.directory=/work/vllm fetch --depth=2 origin c894899149c43bae0873ec8e3b8b76213d267f8f
-              .venv/bin/python /repo/utils/atom_attention/pr64288_metadata_sync_diagnostic.py 2>&1 | tee "$REVIEW_EVIDENCE/metadata-sync-diagnostic.log"
+              observer="/work/review-observers/$REVIEW_RUN_ID"
+              mkdir -p "$observer"
+              cp /repo/utils/atom_attention/review_serving_observer.py "$observer/review_serving_observer.py"
+              cp /repo/utils/atom_attention/review_serving_observer.toml "$observer/pyproject.toml"
+              uv pip install --python /work/vllm/.venv/bin/python --no-deps "$observer"
+              export PYTHONUNBUFFERED=1
+              .venv/bin/python /repo/utils/atom_attention/pr64288_matched_serve.py 2>&1 | tee "$REVIEW_EVIDENCE/serving-driver.log"
               git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
             '
       - name: Restore diagnostic output ownership
