@@ -6,25 +6,31 @@ from pathlib import Path
 import re
 
 MARKER = "NATIVE_FP8_EXECUTION "
-KINDS = {"projection", "reference_projection", "cached_fmha", "causal_fmha"}
+KINDS = {"projection", "reference_projection", "cached_fmha", "causal_fmha", "flag_off"}
 _REGISTERED = False
 
 
 def validate_execution_log(text, workers, native_sha, *, require_causal, phase,
-                           reference_projection=False):
+                           reference_projection=False, flag_off=False):
     if workers <= 0 or not re.fullmatch(r"[0-9a-f]{40}", native_sha):
         raise ValueError("Expected positive worker count and exact native revision")
     if phase not in {"eval", "replay"}:
         raise ValueError("Expected eval or replay execution phase")
+    if flag_off and (require_causal or reference_projection or phase != "replay"):
+        raise ValueError("Flag-off proof requires normal native replay")
     stress_modes = set()
     required = {"reference_projection" if reference_projection else "projection", "cached_fmha"}
     if require_causal:
         required.add("causal_fmha")
+    if flag_off:
+        required = {"flag_off"}
     by_rank = {}
     for line in text.splitlines():
         if MARKER not in line:
             continue
         event = json.loads(line.split(MARKER, 1)[1])
+        if flag_off and event.get("kind") != "flag_off":
+            raise ValueError("Flag-off control unexpectedly executed native FP8")
         if event.get("phase") != phase:
             continue
         if event.get("native_sha") != native_sha:
@@ -40,7 +46,10 @@ def validate_execution_log(text, workers, native_sha, *, require_causal, phase,
             raise ValueError("Unrecognized native FP8 execution event")
         if reference_projection and kind == "projection":
             raise ValueError("Reference arm unexpectedly used direct FP8 projection")
-        expected_dtype = "torch.bfloat16" if kind == "reference_projection" else "torch.float8_e4m3fn"
+        if kind == "flag_off":
+            if not flag_off or event.get("fp8_flag_enabled") is not False:
+                raise ValueError("Invalid flag-off configuration evidence")
+        expected_dtype = "torch.bfloat16" if kind in {"reference_projection", "flag_off"} else "torch.float8_e4m3fn"
         if event.get("dtype") != expected_dtype or event.get("nonempty") is not True:
             raise ValueError("Execution evidence is not nonempty OCP FP8")
         if event.get("graph_capture") is not False:
@@ -60,6 +69,7 @@ def validate_execution_log(text, workers, native_sha, *, require_causal, phase,
         raise ValueError("A worker did not execute every required native FP8 operation")
     return {
         "native_sha": native_sha,
+        "flag_off_control": flag_off,
         "phase": phase,
         "accuracy_stress_routing": next(iter(stress_modes)),
         "workers": [
@@ -100,6 +110,13 @@ def register():
     stress = os.environ["INFERENCEX_NATIVE_ACCURACY_STRESS"]
     if stress not in {"0", "1"}:
         raise ValueError("Native accuracy stress must be explicitly 0 or 1")
+    flag_off = os.getenv("INFERENCEX_NATIVE_FP8_ENABLED", "1") == "0"
+    if flag_off and (
+        stress != "0"
+        or os.getenv("INFERENCEX_NATIVE_COMPARISON") != "native"
+        or os.getenv("VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN") != "0"
+    ):
+        raise ValueError("Flag-off observer requires native flag-off normal routing")
     if stress == "1":
         native.use_fp8_context = lambda query, context: query > 0 and context > 0
     phase_file = Path(os.environ["INFERENCEX_NATIVE_PHASE_FILE"])
@@ -112,7 +129,7 @@ def register():
             return
         if torch.cuda.is_current_stream_capturing():
             return
-        dtype = torch.bfloat16 if kind == "reference_projection" else torch.float8_e4m3fn
+        dtype = torch.bfloat16 if kind in {"reference_projection", "flag_off"} else torch.float8_e4m3fn
         if not all(t.dtype == dtype and t.numel() for t in tensors):
             raise RuntimeError("Native FP8 execution observer received other dtypes")
         actual_blas = str(torch.backends.cuda.preferred_blas_library())
@@ -130,6 +147,8 @@ def register():
             "graph_capture": False,
             "accuracy_stress_routing": stress == "1",
         }
+        if kind == "flag_off":
+            event["fp8_flag_enabled"] = False
         print(MARKER + json.dumps(event, sort_keys=True), flush=True)
         emitted.add(kind)
 
@@ -137,6 +156,8 @@ def register():
 
     @functools.wraps(project)
     def observed_project(*args, **kwargs):
+        if flag_off:
+            raise RuntimeError("Flag-off control called native FP8 projection")
         if reference_arm:
             raise RuntimeError("Reference arm unexpectedly called direct FP8 projection")
         result = project(*args, **kwargs)
@@ -148,10 +169,26 @@ def register():
 
     @functools.wraps(attention)
     def observed_attention(q, k, v, *args, **kwargs):
+        if flag_off:
+            raise RuntimeError("Flag-off control called native FlyDSL FP8 attention")
         result = attention(q, k, v, *args, **kwargs)
         record("causal_fmha" if kwargs.get("causal") else "cached_fmha", (q, k, v))
         return result
 
+    # Observe the same prefill entry in both arms; never change its routing.
+    from vllm.v1.attention.backends.mla.rocm_aiter_mla import AiterMLAImpl
+    forward_mha = AiterMLAImpl.forward_mha
+
+    @functools.wraps(forward_mha)
+    def observed_forward_mha(self, q, *args, **kwargs):
+        if flag_off and self._use_flydsl_fp8_prefill:
+            raise RuntimeError("Flag-off control has enabled native FP8 routing")
+        result = forward_mha(self, q, *args, **kwargs)
+        if flag_off:
+            record("flag_off", (q,))
+        return result
+
+    AiterMLAImpl.forward_mha = observed_forward_mha
     native.project = observed_project
     flydsl.flydsl_flash_attn_fp8_func = observed_attention
     if os.getenv("INFERENCEX_NATIVE_COMPARISON") in {"reference", "direct"}:

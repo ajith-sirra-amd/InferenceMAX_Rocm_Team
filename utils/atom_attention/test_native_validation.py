@@ -174,3 +174,67 @@ def test_reference_projection_requires_bf16_expansion_and_no_direct_calls(events
             log_text(baseline), 8, SHA, require_causal=True, phase="eval",
             reference_projection=True,
         )
+
+
+def control_events():
+    return [{
+        "native_sha": SHA, "phase": "replay", "rank": rank, "pid": 2000 + rank,
+        "kind": "flag_off", "dtype": "torch.bfloat16", "nonempty": True,
+        "graph_capture": False, "accuracy_stress_routing": False,
+        "fp8_flag_enabled": False,
+    } for rank in range(8)]
+
+
+def test_flag_off_requires_live_disabled_workers():
+    events = control_events()
+    proof = validate_execution_log(
+        log_text(events), 8, SHA, require_causal=False, phase="replay", flag_off=True,
+    )
+    assert proof["flag_off_control"] is True
+    assert [w["rank"] for w in proof["workers"]] == list(range(8))
+    assert proof["workers"][0]["kinds"] == ["flag_off"]
+    with pytest.raises(ValueError, match="Invalid flag-off"):
+        validate_execution_log(
+            log_text(events), 8, SHA, require_causal=False, phase="replay",
+        )
+
+
+@pytest.mark.parametrize("failure", [
+    "missing_worker", "enabled", "fp8_call", "startup_fp8_call", "capture", "restart",
+    "wrong_sha", "stress",
+])
+def test_flag_off_rejects_incomplete_or_contaminated_control(failure):
+    events = control_events()
+    if failure == "missing_worker":
+        events.pop()
+    elif failure == "enabled":
+        events[0]["fp8_flag_enabled"] = True
+    elif failure in {"fp8_call", "startup_fp8_call"}:
+        event = dict(events[0], kind="projection", dtype="torch.float8_e4m3fn")
+        if failure == "startup_fp8_call":
+            event["phase"] = "startup"
+        events.append(event)
+    elif failure == "capture":
+        events[0]["graph_capture"] = True
+    elif failure == "restart":
+        events.append(dict(events[0], pid=9999))
+    elif failure == "wrong_sha":
+        events[0]["native_sha"] = "b" * 40
+    else:
+        events[0]["accuracy_stress_routing"] = True
+    with pytest.raises(ValueError):
+        validate_execution_log(
+            log_text(events), 8, SHA, require_causal=False, phase="replay",
+            flag_off=True,
+        )
+
+
+@pytest.mark.parametrize("options", [
+    {"require_causal": True, "phase": "replay"},
+    {"require_causal": False, "phase": "eval"},
+    {"require_causal": False, "phase": "replay", "reference_projection": True},
+])
+def test_flag_off_rejects_other_experiment_modes(options):
+    with pytest.raises(ValueError, match="normal native replay"):
+        validate_execution_log(log_text(control_events()), 8, SHA,
+                               flag_off=True, **options)

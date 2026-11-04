@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--phase", required=True, choices=("eval", "replay"))
     parser.add_argument("--require-causal", action="store_true")
     parser.add_argument("--reference-projection", action="store_true")
+    parser.add_argument("--flag-off", action="store_true")
     args = parser.parse_args()
     proof = validate_execution_log(
         args.server_log.read_text(errors="replace"),
@@ -24,9 +25,11 @@ def main():
         require_causal=args.require_causal,
         phase=args.phase,
         reference_projection=args.reference_projection,
+        flag_off=args.flag_off,
     )
     args.output.write_text(json.dumps(proof, indent=2) + "\n")
-    print("NATIVE_FP8_EXECUTION_PROOF_PASS", json.dumps(proof), flush=True)
+    label = "NATIVE_FP8_FLAG_OFF_PROOF_PASS" if args.flag_off else "NATIVE_FP8_EXECUTION_PROOF_PASS"
+    print(label, json.dumps(proof), flush=True)
 
 
 if __name__ == "__main__":

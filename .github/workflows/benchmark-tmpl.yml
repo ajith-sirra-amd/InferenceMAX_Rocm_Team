@@ -74,6 +74,11 @@ on:
         type: boolean
         required: false
         default: false
+      native-fp8-enabled:
+        description: "Native PR flag: 1 enabled, 0 same-source control (replay only)"
+        type: string
+        required: false
+        default: "1"
       native-comparison:
         description: "Matched reference comparison: native, reference, or direct"
         type: string
@@ -146,6 +151,7 @@ env:
   NATIVE_PROFILE_TIMEOUT_SECONDS: '7200'
   NATIVE_PROFILE_POLL_SECONDS: '5'
   INFERENCEX_NATIVE_REQUIRE_CAUSAL: ${{ inputs.native-comparison != 'native' && '1' || '0' }}
+  INFERENCEX_NATIVE_FP8_ENABLED: ${{ inputs.native-fp8-enabled }}
   INFERENCEX_NATIVE_COMPARISON: ${{ inputs.native-comparison }}
   ATOM_USE_FLYDSL_FP8_PREFILL_ATTN: '1'
   ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN: '1'

@@ -22,14 +22,16 @@ if [ "$MODEL" != "moonshotai/Kimi-K3" ]; then
     exit 1
 fi
 
-if [ "$DURATION" = "600" ]; then
+if [ "$DURATION" = "300" ] || [ "$DURATION" = "600" ]; then
     export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 elif [ "$DURATION" = "3600" ]; then
     export AIPERF_WARMUP_REQUESTS_PER_LANE=10
 else
-    echo "[ATOM-FP8-CONFIG] Expected duration 600 (smoke) or 3600 (full)" >&2
+    echo "[ATOM-FP8-CONFIG] Expected duration 300/600 (short diagnostic) or 3600 (full)" >&2
     exit 1
 fi
+
+echo "[NATIVE-REPLAY-CONFIG] duration_seconds=$DURATION warmup_requests_per_lane=$AIPERF_WARMUP_REQUESTS_PER_LANE"
 
 NATIVE_MODE=0
 if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
@@ -48,6 +50,15 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
         native|reference|direct) ;;
         *) echo "Invalid native comparison mode" >&2; exit 1 ;;
     esac
+    export INFERENCEX_NATIVE_FP8_ENABLED="${INFERENCEX_NATIVE_FP8_ENABLED:-1}"
+    case "$INFERENCEX_NATIVE_FP8_ENABLED" in
+        0|1) ;;
+        *) echo "INFERENCEX_NATIVE_FP8_ENABLED must be 0 or 1" >&2; exit 1 ;;
+    esac
+    if [ "$INFERENCEX_NATIVE_FP8_ENABLED" = "0" ] && { [ "$INFERENCEX_NATIVE_COMPARISON" != "native" ] || [ "$EVAL_ONLY" != "false" ] || [ "$NATIVE_STEADY_PROFILE" != "0" ]; }; then
+        echo "Flag-off control requires native replay without evaluation or profiling" >&2
+        exit 1
+    fi
     export TORCH_BLAS_PREFER_HIPBLASLT=0
     export TORCH_BLAS_PREFER_CUBLASLT=0
     export INFERENCEX_NATIVE_EXPECT_BLAS=cublas
@@ -66,10 +77,14 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
         --native-sha "$NATIVE_VLLM_SHA" --prepare-only \
         --work-dir "$native_work_dir" 2>&1 | tee "$RESULT_DIR/native_setup.log"
     source "$native_work_dir/evidence/native-env.sh"
+    export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN="$INFERENCEX_NATIVE_FP8_ENABLED"
     if [ "$INFERENCEX_NATIVE_COMPARISON" = "reference" ]; then
         export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=0
     fi
     native_comparison_proof_args=()
+    if [ "$INFERENCEX_NATIVE_FP8_ENABLED" = "0" ]; then
+        native_comparison_proof_args=(--flag-off)
+    fi
     if [ "$INFERENCEX_NATIVE_COMPARISON" = "reference" ]; then
         native_comparison_proof_args=(--reference-projection)
     fi
@@ -83,7 +98,7 @@ if [ -n "${NATIVE_VLLM_SHA:-}" ]; then
         echo "Stale native execution-phase marker exists" >&2
         exit 1
     fi
-    echo "[NATIVE-FP8-CONFIG] sha=$NATIVE_VLLM_SHA stress=$INFERENCEX_NATIVE_ACCURACY_STRESS require_causal=$INFERENCEX_NATIVE_REQUIRE_CAUSAL"
+    echo "[NATIVE-FP8-CONFIG] sha=$NATIVE_VLLM_SHA stress=$INFERENCEX_NATIVE_ACCURACY_STRESS require_causal=$INFERENCEX_NATIVE_REQUIRE_CAUSAL fp8_enabled=$INFERENCEX_NATIVE_FP8_ENABLED"
 else
     check_env_vars ATOM_USE_FLYDSL_FP8_PREFILL_ATTN ATOM_USE_FUSED_KV_FP8_OUTPUT
     check_env_vars ATOM_VALIDATE_FUSED_KV_FP8_OUTPUT ATOM_USE_FLYDSL_FP8_CAUSAL_ATTN

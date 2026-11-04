@@ -60,6 +60,11 @@ on:
                 required: false
                 type: boolean
                 default: false
+            native-fp8-enabled:
+                description: "Native PR flag: 1 enabled, 0 same-source control (replay only)"
+                required: false
+                type: string
+                default: "1"
             native-comparison:
                 description: "Matched reference comparison: native, reference, or direct"
                 required: false
@@ -129,6 +134,11 @@ on:
                 required: false
                 type: boolean
                 default: false
+            native-fp8-enabled:
+                description: "Native PR flag: 1 enabled, 0 same-source control (replay only)"
+                required: false
+                type: string
+                default: "1"
             native-comparison:
                 description: "Matched reference comparison: native, reference, or direct"
                 required: false
@@ -498,6 +508,7 @@ jobs:
             eval-only: ${{ inputs.agentic-eval-only }}
             attention-path-probe-only: ${{ inputs.attention-path-probe-only }}
             native-vllm-sha: ${{ inputs.native-vllm-sha }}
+            native-fp8-enabled: ${{ inputs.native-fp8-enabled }}
             native-comparison: ${{ inputs.native-comparison }}
             native-steady-profile: ${{ inputs.native-steady-profile }}
             scenario-type: agentic-coding
