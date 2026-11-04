@@ -1,4 +1,4 @@
-name: PR64288 native cached-scale GPU validation
+name: MLA metadata synchronization diagnostic
 on:
   push:
     branches: [checks/pr64288-focused-review-20261104]
@@ -29,20 +29,19 @@ jobs:
           uv pip install pyyaml
           .venv/bin/python - <<'PY'
           import ast, pathlib, subprocess, yaml
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_native_cache_numerical.py").read_text())
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_native_cache_validate.py").read_text())
+          ast.parse(pathlib.Path("utils/atom_attention/pr64288_metadata_sync_diagnostic.py").read_text())
           workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
           for job in workflow["jobs"].values():
               for step in job["steps"]:
                   if "run" in step:
                       subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
           PY
-      - name: Require exact candidate static checks
+      - name: Require completed native GPU validation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run watch 41830721435 --repo ajith-sirra-amd/vllm --exit-status --interval 120
-          test "$(gh run view 41830721435 --repo ajith-sirra-amd/vllm --json conclusion --jq .conclusion)" = success
+          gh run watch 41830939760 --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --exit-status --interval 120
+          test "$(gh run view 41830939760 --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --json conclusion --jq .conclusion)" = success
   gpu:
     needs: code-checks
     runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
@@ -52,15 +51,17 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-      - name: Run native regression cases and long-context kernel numerics
+      - name: Diagnose metadata copies and inspect cached model locations
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
           test -d "$task_work/vllm/.venv"
+          test -d /share_nfs/models
           docker run --rm --init --network host --ipc=host --shm-size=8g \
             --name "pr64288-review-$GITHUB_RUN_ID" \
             --device=/dev/kfd --device=/dev/dri \
             -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
+            --mount type=bind,source=/share_nfs/models,target=/models,readonly \
             -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA -e BEFORE_SHA -e REVIEW_RUN_ID="$GITHUB_RUN_ID" \
             -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
             --entrypoint bash "$IMAGE" -lc '
@@ -80,7 +81,8 @@ jobs:
               export VLLM_ROCM_USE_AITER=1
               export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
               cd /work/vllm
-              .venv/bin/python /repo/utils/atom_attention/pr64288_native_cache_validate.py 2>&1 | tee "$REVIEW_EVIDENCE/native-cache-scale-validation.log"
+              git -c safe.directory=/work/vllm fetch --depth=2 origin c894899149c43bae0873ec8e3b8b76213d267f8f
+              .venv/bin/python /repo/utils/atom_attention/pr64288_metadata_sync_diagnostic.py 2>&1 | tee "$REVIEW_EVIDENCE/metadata-sync-diagnostic.log"
               git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
             '
       - name: Restore diagnostic output ownership
