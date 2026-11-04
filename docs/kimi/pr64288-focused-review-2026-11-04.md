@@ -13,7 +13,7 @@
   passed. Artifact `13316801035` verified the exact candidate source, Ruff,
   formatting, applicable pre-commit hooks and retained quantizer calls.
 - [Focused GPU validation](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41820076564):
-  dispatched; result pending when this note was written.
+  eight existing cases passed; additional diagnostics failed as detailed below.
 - Execution harness: `63e4ed42d83ac11b3b940cabe1c87880b0dded65`.
 - Pinned container remains `e0d00e4b`, digest
   `sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f`.
@@ -126,7 +126,7 @@ Source: AITER v0.1.27
 This explains that case's inherited FMHA approximation; it does not excuse
 clipping from the integration's cached-scale estimate.
 
-An isolated cache-derived norm-bound experiment is running in
+An isolated cache-derived norm-bound experiment passed in
 [41822676794](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41822676794).
 It tests actual plain/shuffled projection against an independent FP64 oracle
 with the existing projection gates (relative RMS <0.04, normalized peak <0.07)
@@ -137,3 +137,40 @@ Current-head upstream DCO passed. The
 [contributor-authorization gate](https://github.com/vllm-project/vllm/actions/runs/41822182813/job/126547776319)
 failed before pre-commit execution; the account has zero merged PRs and none
 of the required authorization labels. No label was requested or added.
+
+## Cache-derived scale prototype results
+
+The norm-bound diagnostic in run 41822676794 passed all six cases
+(cached multipliers 1/8/32, plain and preshuffled weights), with zero clipping.
+Worst relative RMS was 3.4176%, below the unchanged 4% limit; normalized peak
+errors remained below the unchanged 7% limit. Both storage layouts matched.
+The bound was about 3.7-7.55 times the actual maximum, which motivates model
+accuracy checks before integration.
+
+The [GPU cache scan](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41823896651)
+passed for 0, 1, 386, 8192 and 32768 selected rows. Artifact: 13318372088.
+GPU scales matched the Torch oracle (rtol=1e-6, atol=1e-8), including graph
+replay after modifying cache values and the nonbinary cache scale.
+
+| Selected cached rows | Scan (us) | Projection alone (us) | Scan + projection (us) | Added projection-stage cost |
+| ---: | ---: | ---: | ---: | ---: |
+| 386 | 4.406 | 8.765 | 13.091 | 49.35% |
+| 8192 | 5.387 | 29.863 | 35.861 | 20.08% |
+| 32768 | 9.718 | 87.137 | 98.273 | 12.78% |
+
+These are one-GPU synthetic CUDA-graph measurements, not serving performance
+or evidence of uplift. The scale rule in the attention PR is unchanged.
+
+The next isolated experiment compares the current Q/K/V preparation plus
+projection against Q-only quantization, cache scanning and direct projection.
+It reuses the current Q kernel arithmetic, checks bitwise Q agreement and
+changed-input graph replay, and tests an index beyond the signed int32 byte
+offset range. The scan now explicitly converts row indices to int64 before
+multiplying by the cache stride. No prototype is promoted to the attention PR.
+
+## Current-head external checks
+
+DCO and independent fork static checks passed. Upstream pre-commit did not
+execute because of the contributor-authorization gate. Read the Docs also
+reports failure; its cause still needs inspection. These checks are not
+reported as passing, and authorization labels have not been requested.

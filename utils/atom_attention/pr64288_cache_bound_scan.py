@@ -18,7 +18,7 @@ def _cache_bound_partials(Cache, Indices, Partial, ROWS: tl.constexpr,
     block = tl.program_id(0)
     rows = block * BLOCK_ROWS + tl.arange(0, BLOCK_ROWS)
     cols = tl.arange(0, BLOCK_COLS)
-    indices = tl.load(Indices + rows, rows < ROWS, other=0)
+    indices = tl.load(Indices + rows, rows < ROWS, other=0).to(tl.int64)
     x = tl.load(
         Cache + indices[:, None] * 576 + cols[None, :],
         (rows[:, None] < ROWS) & (cols[None, :] < 576), other=0.0,

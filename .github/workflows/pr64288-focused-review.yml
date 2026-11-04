@@ -1,4 +1,4 @@
-name: PR64288 GPU cache-bound scan validation
+name: PR64288 cached-scale preparation comparison
 on:
   push:
     branches: [checks/pr64288-focused-review-20261104]
@@ -31,6 +31,7 @@ jobs:
           import ast, pathlib, subprocess, yaml
           ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_bound_scan.py").read_text())
           ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_bound_diagnostics.py").read_text())
+          ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_preparation_comparison.py").read_text())
           workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
           for job in workflow["jobs"].values():
               for step in job["steps"]:
@@ -52,7 +53,7 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-      - name: Focused kernel, ASM routing and cached outlier checks
+      - name: Compare full preparation cost and validate large cache offsets
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
@@ -78,7 +79,7 @@ jobs:
               export VLLM_ROCM_USE_AITER=1
               export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
               cd /work/vllm
-              .venv/bin/python /repo/utils/atom_attention/pr64288_cache_bound_scan.py "$REVIEW_EVIDENCE/cache-bound-scan.json" 2>&1 | tee "$REVIEW_EVIDENCE/cache-bound-scan.log"
+              .venv/bin/python /repo/utils/atom_attention/pr64288_cache_preparation_comparison.py "$REVIEW_EVIDENCE/cache-preparation-comparison.json" 2>&1 | tee "$REVIEW_EVIDENCE/cache-preparation-comparison.log"
               git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
             '
       - name: Restore diagnostic output ownership
