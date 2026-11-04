@@ -4,6 +4,11 @@ run-name: e2e Test - ${{ inputs.test-name || github.event.inputs.test-name || in
 on:
     workflow_dispatch:
         inputs:
+            ipat-request:
+                description: "Frozen IPAT request JSON; bypasses the sweep when supplied"
+                required: false
+                type: string
+                default: ""
             generate-cli-command:
                 description: "Command passed to generate matrix script"
                 required: true
@@ -73,7 +78,38 @@ on:
                 default: ""
 
 jobs:
+    ipat:
+        if: ${{ inputs.ipat-request != '' }}
+        runs-on: ${{ fromJSON(inputs.ipat-request).labels }}
+        timeout-minutes: 240
+        permissions:
+            contents: read
+        concurrency:
+            group: ipat-${{ join(fromJSON(inputs.ipat-request).labels, '-') }}
+            cancel-in-progress: false
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: ipat-${{ github.run_id }}-${{ github.run_attempt }}
+                  persist-credentials: false
+            - name: Run frozen IPAT request
+              working-directory: ipat-${{ github.run_id }}-${{ github.run_attempt }}
+              env:
+                  IPAT_REQUEST: ${{ inputs.ipat-request }}
+                  IPAT_OUTPUT: ${{ runner.temp }}/ipat/${{ github.run_id }}-${{ github.run_attempt }}
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: python3 ipat/runner.py --output "$IPAT_OUTPUT"
+            - name: Preserve IPAT evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: ipat-${{ fromJSON(inputs.ipat-request).id }}
+                  path: ${{ runner.temp }}/ipat/${{ github.run_id }}-${{ github.run_attempt }}
+                  if-no-files-found: error
+                  retention-days: 30
     get-jobs:
+        if: ${{ !inputs.ipat-request }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}
