@@ -137,6 +137,7 @@ def resolve_models(recipe, cache):
         for file in sorted(path.glob("*.json")):
             metadata[file.name] = hashlib.sha256(file.read_bytes()).hexdigest()
         facts[model] = {"path": str(path), "snapshot": path.name if path.parent.name == "snapshots" else None,
+                        "local_revision_marker": (path / ".hf-revision").read_text().strip() if (path / ".hf-revision").is_file() else None,
                         "metadata_sha256": metadata, "weight_files": len(weights), "weights_hashed": False}
     return facts
 

@@ -249,6 +249,8 @@ def run(recipe, output, pass_name):
             checked([str(venv / "bin/python"), "-m", "pip", "install", *recipe["client_packages"]], output / "client-install.log", env)
             client_argv[0] = str(venv / "bin" / Path(client_argv[0]).name)
             checked([str(venv / "bin/python"), "-m", "pip", "freeze"], output / "client-packages.txt", env)
+            if Path(client_argv[0]).name == "agentx":
+                checked([client_argv[0], "profile", "--help"], output / "client-help.txt", env)
         manifest["client_argv"] = client_argv
         write(output / "pass.json", manifest)
         with (output / "server.log").open("w") as log:
@@ -300,7 +302,8 @@ def run(recipe, output, pass_name):
             summary["device_coverage_complete"] = len(summary["devices"]) == recipe["physical_chips"] and "unknown" not in summary["devices"]
             write(output / "trace-summary.json", summary)
             if manifest["profile"].get("status") != "collected" or not summary["kernel_count"] or not summary["device_coverage_complete"] or summary["errors"]:
-                manifest.update(status="failed", error="Profiling did not verify GPU kernel coverage on every expected device; see profile.json and trace-summary.json")
+                manifest["status"] = "failed"
+                manifest.setdefault("error", "Profiling did not verify GPU kernel coverage on every expected device; see profile.json and trace-summary.json")
         manifest["ended_at"] = now()
         write(output / "pass.json", manifest)
     return manifest
