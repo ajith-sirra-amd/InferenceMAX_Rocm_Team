@@ -12,6 +12,39 @@ import socket
 import subprocess
 
 
+REPOSITORY = Path(__file__).resolve().parents[1]
+SHARED_DATA_ROOT = Path('/share_nfs/ajith/IPAT')
+
+
+def validate_output(output):
+    output = output.resolve()
+    if output.is_relative_to(SHARED_DATA_ROOT.resolve()):
+        if not SHARED_DATA_ROOT.parent.is_dir():
+            raise ValueError('Shared storage /share_nfs/ajith is unavailable; no checkout fallback')
+    elif not output.is_relative_to(REPOSITORY):
+        raise ValueError('IPAT output must stay in the team checkout or /share_nfs/ajith/IPAT')
+    return output
+
+
+def runtime_storage(output):
+    """Separate regenerable files from retained logs, metrics and traces."""
+    output = validate_output(output)
+    work = output / 'work'
+    for part in ('home', 'tmp', 'cache', 'hf'):
+        path = work / part
+        if not path.resolve().is_relative_to(output):
+            raise ValueError('Runtime storage must stay inside this run directory')
+        path.mkdir(parents=True, exist_ok=True)
+    env = {'HOME': '/work/home', 'TMPDIR': '/work/tmp', 'XDG_CACHE_HOME': '/work/cache',
+           'PIP_CACHE_DIR': '/work/cache/pip', 'HF_HOME': '/work/hf',
+           'CCACHE_DIR': '/work/cache/ccache', 'SCCACHE_DIR': '/work/cache/sccache',
+           'IPAT_WORK_DIR': '/work', 'PYTHONDONTWRITEBYTECODE': '1'}
+    args = ['--mount', f'type=bind,src={output},dst=/output',
+            '--mount', f'type=bind,src={work},dst=/work']
+    for key, value in env.items(): args += ['--env', f'{key}={value}']
+    return work, args, env
+
+
 def write_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n")
@@ -84,9 +117,9 @@ def preflight(request, output):
                           "repo_digests": image.get("RepoDigests", []),
                           "entrypoint": image["Config"].get("Entrypoint"), "cmd": image["Config"].get("Cmd")}
         write_json(output / "manifest.json", facts)
-        for part in ("home", "tmp", "cache", "hf"):
-            (output / part).mkdir(exist_ok=True)
-        test_path = output / "tmp/ipat-name:check"
+        work, storage_args, storage_env = runtime_storage(output)
+        facts['storage'] = {'evidence': str(output.resolve()), 'work': str(work)}
+        test_path = work / "tmp/ipat-name:check"
         try:
             test_path.write_text("compiler filename check\n")
             test_path.unlink()
@@ -96,16 +129,13 @@ def preflight(request, output):
         command = ["docker", "run", "--rm", "--init", "--read-only", "--name", "ipat-" + request["id"],
                    "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
                    "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1",
-                   "--mount", f"type=bind,src={output.resolve()},dst=/output",
+                   *storage_args,
                    "--mount", f"type=bind,src={Path(__file__).resolve().parent},dst=/ipat,readonly",
-                   "--workdir", "/output", "--env", "HOME=/output/home", "--env", "TMPDIR=/output/tmp",
-                   "--env", "XDG_CACHE_HOME=/output/cache", "--env", "HF_HOME=/output/hf",
-                   "--env", "CCACHE_DIR=/output/cache/ccache", "--env", "SCCACHE_DIR=/output/cache/sccache",
-                   "--env", "PYTHONDONTWRITEBYTECODE=1"]
+                   "--workdir", "/work"]
         if settings.get("temporary_memory_filesystem"):
-            command += ["--tmpfs", "/output/tmp:rw,exec,size=64g"]
+            command += ["--tmpfs", "/work/tmp:rw,exec,size=64g"]
         for key, value in settings.get("environment", {}).items():
-            if key in ("HOME", "TMPDIR", "XDG_CACHE_HOME", "HF_HOME", "HF_TOKEN"):
+            if key in storage_env or key in ('HF_TOKEN', 'HUGGING_FACE_HUB_TOKEN'):
                 raise ValueError("Image diagnostic cannot override output or credential paths")
             command += ["--env", f"{key}={value}"]
         command += ["--entrypoint", "python3", image["Id"], "/ipat/check_image.py"]
@@ -137,7 +167,8 @@ def validate_recipe(recipe):
         raise ValueError("This runner supports one host with up to eight GPUs")
     if recipe.get("image_policy") not in ("pull", "local") or not isinstance(recipe.get("image"), str):
         raise ValueError("Specify an image and an explicit pull/local image policy")
-    reserved = {"HOME", "TMPDIR", "HF_HOME", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "XDG_CACHE_HOME", "PIP_CACHE_DIR"}
+    reserved = {"HOME", "TMPDIR", "HF_HOME", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "XDG_CACHE_HOME", "PIP_CACHE_DIR",
+                "CCACHE_DIR", "SCCACHE_DIR", "IPAT_WORK_DIR"}
     for env in (recipe.get("environment"), recipe.get("client_environment", {})):
         if not isinstance(env, dict) or any(not isinstance(v, str) for v in env.values()):
             raise ValueError("Environment values must be strings")
@@ -217,7 +248,7 @@ def report(output, manifest):
 def ownership_command(output, image):
     # Match artifact exclusions: generated environments and caches can be large
     # and transferring their ownership can exceed the runner user's NFS quota.
-    excluded = ["/output/" + name for name in ("cache", "hf", "home", "tmp")]
+    excluded = ["/output/" + name for name in ("work", "cache", "hf", "home", "tmp")]
     prune = []
     for path in excluded:
         if prune: prune += ["-o"]
@@ -243,27 +274,30 @@ def cleanup(output):
 
 
 def recover(request, output):
-    """Recover only a previous IPAT checkout's evidence after interrupted cleanup."""
+    """Recover an identified shared-storage run or a legacy checkout's evidence."""
     previous = request["previous"]
     run_id, attempt = str(previous["workflow_run_id"]), str(previous["attempt"])
     if not run_id.isdigit() or not attempt.isdigit(): raise ValueError("Invalid previous workflow identity")
-    repo = Path(__file__).resolve().parents[1]
-    old = repo.parent / f"ipat-{run_id}-{attempt}"
-    origin = subprocess.check_output(["git", "-C", str(old), "config", "--get", "remote.origin.url"], text=True).strip()
-    if origin.removesuffix(".git") != "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team":
-        raise ValueError("Recovery target must be a team repository checkout")
-    prior_request = json.loads((old / "evidence/request.json").read_text())
+    old = SHARED_DATA_ROOT / 'runs' / f'{run_id}-{attempt}'
+    if not old.is_dir():
+        checkout = REPOSITORY.parent / f"ipat-{run_id}-{attempt}"
+        origin = subprocess.check_output(["git", "-C", str(checkout), "config", "--get", "remote.origin.url"], text=True).strip()
+        if origin.removesuffix(".git") != "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team":
+            raise ValueError("Recovery target must be a team repository checkout")
+        old = checkout / 'evidence'
+    else:
+        validate_output(old)
+    prior_request = json.loads((old / "request.json").read_text())
     if prior_request["id"] != previous["id"]: raise ValueError("Recovery request identity differs")
-    cleanup(old / "evidence")
-    shutil.copytree(old / "evidence", output / "recovered", ignore=shutil.ignore_patterns("client-env", "cache", "hf", "home", "tmp"))
+    cleanup(old)
+    shutil.copytree(old, output / "recovered", ignore=shutil.ignore_patterns("work", "client-env", "client-tools", "cache", "hf", "home", "tmp"))
     write_json(output / "manifest.json", {"status": "recovered", "previous": previous})
 
 
 def execute(request, output):
     recipe = validate_recipe(request["recipe"])
-    repo = Path(__file__).resolve().parents[1]
-    if not output.resolve().is_relative_to(repo):
-        raise ValueError("Run output must be inside the InferenceMAX_Rocm_Team checkout")
+    repo = REPOSITORY
+    output = validate_output(output)
     output.mkdir(parents=True, exist_ok=True)
     name = "ipat-" + request["id"]
     manifest = {"id": request["id"], "kind": "run", "status": "preparing", "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -293,27 +327,23 @@ def execute(request, output):
         if not model_cache.is_absolute() or not model_cache.is_dir():
             raise ValueError("The selected model_cache directory does not exist on this runner")
         manifest["models"] = resolve_models(recipe, model_cache)
-        mounts = ["--mount", f"type=bind,src={output.resolve()},dst=/output",
+        work, storage_args, env = runtime_storage(output)
+        mounts = [*storage_args,
                   "--mount", f"type=bind,src={repo / 'ipat'},dst=/ipat,readonly",
                   "--mount", f"type=bind,src={model_cache},dst=/model-cache,readonly"]
         write_json(output / "recipe.json", recipe)
-        for part in ("home", "tmp", "cache", "hf"):
-            (output / part).mkdir(exist_ok=True)
-        env = {"HOME": "/output/home", "TMPDIR": "/output/tmp", "XDG_CACHE_HOME": "/output/cache",
-               "PIP_CACHE_DIR": "/output/cache/pip", "HF_HOME": "/output/hf", "PYTHONDONTWRITEBYTECODE": "1",
-               "CCACHE_DIR": "/output/cache/ccache", "SCCACHE_DIR": "/output/cache/sccache"}
         common = ["docker", "run", "--rm", "--init", "--read-only", "--name", name, "--label", "ipat.run=" + request["id"],
                   "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
                   "--cap-add", "SYS_PTRACE", "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1", "--ulimit", "stack=67108864", *mounts,
                   # COMGR filenames contain colons, rejected by this host's NFS.
-                  # Mount temporary storage at the existing repository output path.
-                  "--tmpfs", "/output/tmp:rw,exec,size=64g",
-                  "--workdir", "/output", "--env", "HF_TOKEN"]
-        manifest["temporary_storage"] = {"path": "/output/tmp", "kind": "tmpfs", "limit_gib": 64,
+                  # Retain the compiler temporary mount within this run's work area.
+                  "--tmpfs", "/work/tmp:rw,exec,size=64g",
+                  "--workdir", "/work", "--env", "HF_TOKEN"]
+        manifest['storage'] = {'evidence': str(output), 'work': str(work)}
+        manifest["temporary_storage"] = {"path": "/work/tmp", "kind": "tmpfs", "limit_gib": 64,
                                          "reason": "COMGR intermediate filenames require POSIX filename support"}
         manifest["write_scope"] = {"container_root": "read_only", "output": str(output.resolve()),
                                    "cache_environment": env}
-        for key, value in env.items(): common += ["--env", f"{key}={value}"]
         passes = request.get("passes", ["baseline", "profile"])
         if not passes or any(p not in ("baseline", "profile") for p in passes) or len(set(passes)) != len(passes):
             raise ValueError("Use baseline, profile, or baseline then profile once each")
@@ -346,8 +376,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cleanup", action="store_true")
     args = parser.parse_args()
-    if not args.output.resolve().is_relative_to(Path(__file__).resolve().parents[1]):
-        raise ValueError("IPAT output must stay inside the team repository checkout")
+    args.output = validate_output(args.output)
     if args.cleanup:
         cleanup(args.output)
         return

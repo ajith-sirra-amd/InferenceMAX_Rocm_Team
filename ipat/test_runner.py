@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 from container import benchmark_metrics, trace_summary, run
-from runner import validate_recipe, resolve_models, cleanup, ownership_command
+from runner import validate_recipe, resolve_models, cleanup, ownership_command, validate_output, runtime_storage, recover
 
 
 RECIPE = {"model": "Model", "framework": "vllm", "image": "image:pin", "image_policy": "local",
@@ -29,6 +29,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(validate_recipe(copy.deepcopy(RECIPE))["concurrency"], 48)
         for changes in ({"physical_chips": 16}, {"concurrency": True}, {"server_argv": "vllm serve Model"},
                         {"environment": {"HF_TOKEN": "do-not-export"}}, {"client_packages": ["agentx-harness"]},
+                        {"environment": {"IPAT_WORK_DIR": "/elsewhere"}}, {"client_environment": {"CCACHE_DIR": "/elsewhere"}},
                         {"profile": {"kind": "torch", "seconds": 9999, "delay_seconds": 0}}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate_recipe(dict(RECIPE, **changes))
@@ -106,7 +107,7 @@ class RunnerTests(unittest.TestCase):
 
     def test_ownership_walk_preserves_evidence_without_traversing_caches(self):
         files = ["baseline/server.log", "baseline/client/records.jsonl", "profile/traces/rank.json.gz",
-                 "cache/compiler.bin", "hf/dataset.parquet", "home/.cache/dataset.dat", "tmp/compiler.o",
+                 "work/cache/compiler.bin", "cache/compiler.bin", "hf/dataset.parquet", "home/.cache/dataset.dat", "tmp/compiler.o",
                  "baseline/client-env/bin/python", "profile/client-tools/uv"]
         for name in files:
             path = self.root / name
@@ -122,6 +123,72 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(set(files[3:]).intersection(selected))
         self.assertIn("model-link", selected)
         self.assertNotIn("model-link/dataset.parquet", selected)
+
+    def test_storage_accepts_only_checkout_or_available_shared_root(self):
+        repo = self.root / 'repo'; repo.mkdir()
+        shared = self.root / 'share/ajith/IPAT'
+        with patch('runner.REPOSITORY', repo), patch('runner.SHARED_DATA_ROOT', shared):
+            self.assertEqual(validate_output(repo / 'output'), repo / 'output')
+            with self.assertRaisesRegex(ValueError, 'unavailable'):
+                validate_output(shared / 'runs/123-1')
+            self.assertFalse(shared.parent.exists())
+            shared.parent.mkdir(parents=True)
+            self.assertEqual(validate_output(shared / 'runs/123-1'), shared / 'runs/123-1')
+            with self.assertRaises(ValueError): validate_output(self.root / 'outside')
+            shared.mkdir()
+            (shared / 'escape').symlink_to(self.root, target_is_directory=True)
+            with self.assertRaises(ValueError): validate_output(shared / 'escape/output')
+
+    def test_runtime_files_are_separate_from_retained_evidence(self):
+        output = self.root / 'runs/123-1'
+        with patch('runner.REPOSITORY', self.root):
+            work, args, env = runtime_storage(output)
+            self.assertEqual(work, output / 'work')
+            self.assertEqual(env['IPAT_WORK_DIR'], '/work')
+            self.assertEqual(env['XDG_CACHE_HOME'], '/work/cache')
+            self.assertEqual(env['TMPDIR'], '/work/tmp')
+            self.assertIn(f'type=bind,src={output},dst=/output', args)
+            self.assertIn(f'type=bind,src={work},dst=/work', args)
+            self.assertEqual({p.name for p in output.iterdir()}, {'work'})
+            (work / 'cache').rmdir()
+            (work / 'cache').symlink_to(self.root, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'inside this run'):
+                runtime_storage(output)
+
+    def test_client_install_uses_work_directory_and_retains_manifest(self):
+        output, work = self.root / 'evidence/baseline', self.root / 'runtime'
+        process = MagicMock(); process.poll.return_value = 1
+        capabilities = {'devices': [{'name': 'AMD Instinct MI355X'}] * 8}
+        with patch.dict('os.environ', {'IPAT_WORK_DIR': str(work)}), \
+             patch('container.probe', return_value=capabilities), \
+             patch('container.shutil.which', return_value='/bin/uv'), \
+             patch('container.checked') as checked, \
+             patch('container.subprocess.Popen', return_value=process):
+            result = run(dict(RECIPE, port=8000, client_python='3.11'), output, 'baseline')
+        venv_calls = [c.args[0] for c in checked.call_args_list if 'venv' in c.args[0]]
+        self.assertEqual(venv_calls[0][-1], str(work / 'baseline/client-env'))
+        self.assertTrue((output / 'pass.json').is_file())
+        self.assertFalse((output / 'client-env').exists())
+        self.assertEqual(result['status'], 'failed')
+
+    def test_shared_recovery_checks_identity_and_excludes_runtime_files(self):
+        shared = self.root / 'share/ajith/IPAT'
+        old = shared / 'runs/123-1'; old.mkdir(parents=True)
+        (old / 'request.json').write_text(json.dumps({'id': 'a' * 32}))
+        (old / 'server.log').write_text('retained')
+        (old / 'work').mkdir(); (old / 'work/cache.bin').write_text('regenerable')
+        request = {'previous': {'workflow_run_id': 123, 'attempt': 1, 'id': 'a' * 32}}
+        output = self.root / 'recovery'
+        with patch('runner.SHARED_DATA_ROOT', shared), patch('runner.cleanup') as cleanup_run:
+            recover(request, output)
+            cleanup_run.assert_called_once_with(old)
+            self.assertEqual((output / 'recovered/server.log').read_text(), 'retained')
+            self.assertFalse((output / 'recovered/work').exists())
+            cleanup_run.reset_mock()
+            request['previous']['id'] = 'b' * 32
+            with self.assertRaisesRegex(ValueError, 'identity differs'):
+                recover(request, self.root / 'bad-recovery')
+            cleanup_run.assert_not_called()
 
     def test_gpu_math_failure_stops_before_client_setup_or_model_start(self):
         capabilities = {"devices": [{"name": "AMD Instinct MI355X"}] * 8,

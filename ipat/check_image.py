@@ -27,8 +27,8 @@ try:
     from aiter.jit.core import get_user_jit_dir
     jit = Path(get_user_jit_dir()).resolve()
     emit('aiter_jit_directory', str(jit))
-    if not jit.is_relative_to('/output'):
-        raise RuntimeError('AITER JIT output is outside the mounted repository output')
+    if not jit.is_relative_to('/work'):
+        raise RuntimeError('AITER JIT output is outside the mounted runtime storage')
 except ImportError:
     emit('aiter_jit_directory', 'not installed')
 results = []

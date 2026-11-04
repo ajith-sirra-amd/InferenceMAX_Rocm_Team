@@ -255,16 +255,18 @@ def run(recipe, output, pass_name):
         # Fail on missing client dependencies before paying the model startup cost.
         client_argv = expand(recipe["client_argv"])
         if recipe["client_packages"]:
-            venv = output / "client-env"
+            work = Path(os.environ.get('IPAT_WORK_DIR', str(output / 'work'))) / pass_name
+            work.mkdir(parents=True, exist_ok=True)
+            venv = work / "client-env"
             if recipe.get("client_python"):
                 uv = shutil.which("uv")
                 if not uv:
                     installer = output / "uv-install.sh"
                     with urlopen("https://astral.sh/uv/install.sh", timeout=90) as response:
                         installer.write_bytes(response.read())
-                    install_env = dict(env, UV_INSTALL_DIR=str(output / "client-tools"), UV_NO_MODIFY_PATH="1")
+                    install_env = dict(env, UV_INSTALL_DIR=str(work / "client-tools"), UV_NO_MODIFY_PATH="1")
                     checked(["sh", str(installer)], output / "uv-install.log", install_env)
-                    uv = str(output / "client-tools/uv")
+                    uv = str(work / "client-tools/uv")
                 checked([uv, "--version"], output / "uv-version.txt", env)
                 checked([uv, "venv", "--python", recipe["client_python"], str(venv)], output / "client-setup.log", env)
                 checked([uv, "pip", "install", "--python", str(venv / "bin/python"), *recipe["client_packages"]], output / "client-install.log", env)

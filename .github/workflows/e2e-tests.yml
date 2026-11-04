@@ -85,6 +85,8 @@ jobs:
         timeout-minutes: 480
         permissions:
             contents: read
+        env:
+            IPAT_OUTPUT: /share_nfs/ajith/IPAT/runs/${{ github.run_id }}-${{ github.run_attempt }}
         concurrency:
             group: ipat-${{ join(fromJSON(inputs.ipat-request).labels, '-') }}
             cancel-in-progress: false
@@ -98,14 +100,11 @@ jobs:
               working-directory: ipat-${{ github.run_id }}-${{ github.run_attempt }}
               env:
                   IPAT_REQUEST: ${{ inputs.ipat-request }}
-                  IPAT_OUTPUT: ${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence
                   HF_TOKEN: ${{ secrets.HF_TOKEN }}
               run: python3 ipat/runner.py --output "$IPAT_OUTPUT"
             - name: Stop owned container and restore evidence ownership
               if: always()
               working-directory: ipat-${{ github.run_id }}-${{ github.run_attempt }}
-              env:
-                  IPAT_OUTPUT: ${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence
               run: python3 ipat/runner.py --cleanup --output "$IPAT_OUTPUT"
             - name: Preserve IPAT evidence
               if: always()
@@ -113,13 +112,14 @@ jobs:
               with:
                   name: ipat-${{ fromJSON(inputs.ipat-request).id }}
                   path: |
-                      ${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence
-                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/**/client-env
-                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/**/client-tools
-                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/cache
-                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/hf
-                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/home
-                      !${{ github.workspace }}/ipat-${{ github.run_id }}-${{ github.run_attempt }}/evidence/tmp
+                      ${{ env.IPAT_OUTPUT }}
+                      !${{ env.IPAT_OUTPUT }}/work
+                      !${{ env.IPAT_OUTPUT }}/**/client-env
+                      !${{ env.IPAT_OUTPUT }}/**/client-tools
+                      !${{ env.IPAT_OUTPUT }}/cache
+                      !${{ env.IPAT_OUTPUT }}/hf
+                      !${{ env.IPAT_OUTPUT }}/home
+                      !${{ env.IPAT_OUTPUT }}/tmp
                   if-no-files-found: error
                   retention-days: 30
     get-jobs:
