@@ -1,4 +1,4 @@
-name: PR64288 fused cached-scale numerical validation
+name: PR64288 native cached-scale GPU validation
 on:
   push:
     branches: [checks/pr64288-focused-review-20261104]
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 env:
   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
-  NATIVE_SHA: e2393d702a3736dffdfbfc7eb25abbabe484a1df
+  NATIVE_SHA: cbf7d1dc1c83bdf6e19dafe849c5fee42943f2ce
   BEFORE_SHA: 9857e13fe609befc603ad008f6e4ae2fe85726aa
 jobs:
   code-checks:
@@ -29,11 +29,8 @@ jobs:
           uv pip install pyyaml
           .venv/bin/python - <<'PY'
           import ast, pathlib, subprocess, yaml
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_bound_scan.py").read_text())
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_bound_diagnostics.py").read_text())
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_cache_preparation_comparison.py").read_text())
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_fused_cache_preparation.py").read_text())
-          ast.parse(pathlib.Path("utils/atom_attention/pr64288_fused_cache_numerical.py").read_text())
+          ast.parse(pathlib.Path("utils/atom_attention/pr64288_native_cache_numerical.py").read_text())
+          ast.parse(pathlib.Path("utils/atom_attention/pr64288_native_cache_validate.py").read_text())
           workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
           for job in workflow["jobs"].values():
               for step in job["steps"]:
@@ -44,8 +41,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run watch 41819725072 --repo ajith-sirra-amd/vllm --exit-status --interval 30
-          test "$(gh run view 41819725072 --repo ajith-sirra-amd/vllm --json conclusion --jq .conclusion)" = success
+          gh run watch 41830721435 --repo ajith-sirra-amd/vllm --exit-status --interval 120
+          test "$(gh run view 41830721435 --repo ajith-sirra-amd/vllm --json conclusion --jq .conclusion)" = success
   gpu:
     needs: code-checks
     runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
@@ -55,7 +52,7 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-      - name: Validate cached-scale projection and actual FMHA numerics
+      - name: Run native regression cases and long-context kernel numerics
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
@@ -70,9 +67,11 @@ jobs:
               set -euo pipefail
               export REVIEW_EVIDENCE="/work/review-reruns/$REVIEW_RUN_ID"
               mkdir -p "$REVIEW_EVIDENCE"
+              git -c safe.directory=/work/vllm -C /work/vllm diff --exit-code
+              git -c safe.directory=/work/vllm -C /work/vllm fetch --depth=1 origin "$NATIVE_SHA"
+              git -c safe.directory=/work/vllm -C /work/vllm checkout --detach "$NATIVE_SHA"
               test "$(git -c safe.directory=/work/vllm -C /work/vllm rev-parse HEAD)" = "$NATIVE_SHA"
-              git -c safe.directory=/work/vllm -C /work/vllm diff --exit-code -- vllm tests
-              cp /work/evidence/native-validation.json "$REVIEW_EVIDENCE/prior-kernel-validation-run41820076564.json"
+              git -c safe.directory=/work/vllm -C /work/vllm diff --exit-code
               export XDG_CACHE_HOME=/work/cache
               export HF_HOME=/work/cache/huggingface
               export TRITON_CACHE_DIR=/work/cache/triton
@@ -81,7 +80,7 @@ jobs:
               export VLLM_ROCM_USE_AITER=1
               export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
               cd /work/vllm
-              .venv/bin/python /repo/utils/atom_attention/pr64288_fused_cache_numerical.py "$REVIEW_EVIDENCE/fused-cache-numerical.json" 2>&1 | tee "$REVIEW_EVIDENCE/fused-cache-numerical.log"
+              .venv/bin/python /repo/utils/atom_attention/pr64288_native_cache_validate.py 2>&1 | tee "$REVIEW_EVIDENCE/native-cache-scale-validation.log"
               git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
             '
       - name: Restore diagnostic output ownership
