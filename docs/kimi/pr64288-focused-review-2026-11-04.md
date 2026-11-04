@@ -202,3 +202,31 @@ its scale reduction into Q's quantization launch. This keeps the same norm-bound
 math and Q arithmetic while reducing launch overhead. Require unchanged Q,
 cached-scale oracle agreement and replay after changing Q, cache, indices and
 cache scale before drawing any performance conclusion.
+
+## Fused preparation results
+
+[Run 41825671539](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41825671539)
+passed; artifact 13318951976. Q and Q scales were bitwise identical to the current
+quantizer. Cached scales matched the oracle, including graph replay after changing
+Q, cache values, row indices and cache scale.
+
+| Cached rows | Query rows | Current preparation + projection (us) | Fused preparation + projection (us) | Time change |
+| ---: | ---: | ---: | ---: | ---: |
+| 8192 | 512 | 37.831 | 37.160 | -1.78% |
+| 8192 | 2048 | 43.647 | 39.154 | -10.29% |
+| 8192 | 8192 | 70.766 | 53.058 | -25.02% |
+| 32768 | 512 | 95.423 | 99.368 | 4.13% |
+| 32768 | 2048 | 100.703 | 100.499 | -0.20% |
+| 32768 | 8192 | 132.161 | 110.817 | -16.15% |
+
+The two fused preparation launches improve the tested larger-query cases.
+The 512-query/32K-cache case still costs 4.1% more for this component.
+These are synthetic single-chunk component timings, not serving throughput.
+Multiple-chunk amortization and actual-model behavior remain unvalidated.
+
+Next run checks the fused preparation with real projection and FMHA, plain and
+preshuffled weights, and changed-input graph replay at 20/386 and 512/8192
+query/cache rows. Existing projection limits (4% RMS, 7% normalized peak), zero
+clipping, FP8-input attention output (atol=2e-3, rtol=2e-3) and absolute LSE
+(atol=1e-3, rtol=0) are retained. Pre-quantization output/LSE differences are
+reported separately and do not substitute for model accuracy.
