@@ -170,17 +170,24 @@ def gsm8k(arm, env, log, proc):
 
 
 def exercise(arm, env, log, proc):
-    return {"niah": niah(arm, env, log, proc), "gsm8k": gsm8k(arm, env, log, proc)}
+    results = {"bench": []}
+    destination = serving.EVIDENCE / arm / "matched-results.json"
+    for case in serving.CASES:
+        results["bench"].append(serving.bench(arm, case, env, log, proc))
+        destination.write_text(json.dumps(results, indent=2))
+    if arm != "candidate_off":
+        results["niah"] = niah(arm, env, log, proc)
+        destination.write_text(json.dumps(results, indent=2))
+        results["gsm8k"] = gsm8k(arm, env, log, proc)
+        destination.write_text(json.dumps(results, indent=2))
+    return results
 
 
 if __name__ == "__main__":
     report = {"status": "running", "arms": {}, "candidate": serving.CANDIDATE,
               "base": serving.BASE, "scope": "Normal-routing model accuracy; live MTP"}
     try:
-        serving.main(report,
-            arms=(("upstream_base", serving.BASE, "0"),
-                  ("candidate_on", serving.CANDIDATE, "1")),
-            exercise=exercise)
+        serving.main(report, exercise=exercise)
         base, candidate = report["arms"]["upstream_base"], report["arms"]["candidate_on"]
         if [x["prompt_sha256"] for x in base["niah"]] != [x["prompt_sha256"] for x in candidate["niah"]]:
             raise RuntimeError("NIAH arms received different prompts")

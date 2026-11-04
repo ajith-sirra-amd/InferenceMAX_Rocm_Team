@@ -1,4 +1,4 @@
-name: PR64288 matched short serving validation
+name: PR64288 pinned-main serving and model accuracy
 on:
   push:
     branches: [checks/pr64288-focused-review-20261104]
@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: false
 env:
   IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
-  NATIVE_SHA: cbf7d1dc1c83bdf6e19dafe849c5fee42943f2ce
-  BASE_SHA: 44d9f92e05f45ef45ec11d762011a2179be9d9cc
+  NATIVE_SHA: a03796b8e3bfe536e22f9db741109dbf80170079
+  BASE_SHA: 69d27bf8002a4634de1699c95fb0aeb22fb86ca5
   REVIEW_PORT: '18988'
 jobs:
   code-checks:
@@ -31,7 +31,7 @@ jobs:
           uv pip install pyyaml
           .venv/bin/python - <<'PY'
           import ast, pathlib, subprocess, yaml
-          for path in ("pr64288_matched_serve.py", "review_serving_observer.py"):
+          for path in ("pr64288_matched_serve.py", "review_serving_observer.py", "pr64288_model_accuracy.py", "pr64288_refresh_binaries.py", "pr64288_bench_client_preflight.py"):
               ast.parse(pathlib.Path("utils/atom_attention", path).read_text())
           workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-focused-review.yml").read_text())
           for job in workflow["jobs"].values():
@@ -39,22 +39,22 @@ jobs:
                   if "run" in step:
                       subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
           PY
-      - name: Require completed native GPU validation
+      - name: Require pinned-main static and rendered docs validation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run watch 41830939760 --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --exit-status --interval 120
-          test "$(gh run view 41830939760 --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --json conclusion --jq .conclusion)" = success
+          gh run watch 41836553476 --repo ajith-sirra-amd/vllm --exit-status --interval 120
+          test "$(gh run view 41836553476 --repo ajith-sirra-amd/vllm --json conclusion --jq .conclusion)" = success
   gpu:
     needs: code-checks
     runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
           clean: false
-      - name: Run matched base OFF ON checks with cache reset enabled
+      - name: Run matched normal-routing GSM8K and long-context retrieval
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
@@ -84,13 +84,21 @@ jobs:
               export VLLM_ROCM_USE_AITER=1
               export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
               cd /work/vllm
+              .venv/bin/python /repo/utils/atom_attention/pr64288_refresh_binaries.py
+              .venv/bin/python /repo/utils/atom_attention/pr64288_bench_client_preflight.py
+              .venv/bin/python /repo/utils/atom_attention/pr64288_native_cache_validate.py 2>&1 | tee "$REVIEW_EVIDENCE/native-cache-scale-validation.log"
               observer="/work/review-observers/$REVIEW_RUN_ID"
               mkdir -p "$observer"
               cp /repo/utils/atom_attention/review_serving_observer.py "$observer/review_serving_observer.py"
               cp /repo/utils/atom_attention/review_serving_observer.toml "$observer/pyproject.toml"
               uv pip install --python /work/vllm/.venv/bin/python --no-deps "$observer"
               export PYTHONUNBUFFERED=1
-              .venv/bin/python /repo/utils/atom_attention/pr64288_matched_serve.py 2>&1 | tee "$REVIEW_EVIDENCE/serving-driver.log"
+              export REVIEW_EVAL_ROOT="/work/review-evaluation/$REVIEW_RUN_ID"
+              mkdir -p "$REVIEW_EVAL_ROOT/patches"
+              uv venv --system-site-packages --python /work/vllm/.venv/bin/python "$REVIEW_EVAL_ROOT/.venv"
+              uv pip install --python "$REVIEW_EVAL_ROOT/.venv/bin/python" "lm-eval[api] @ git+https://github.com/EleutherAI/lm-evaluation-harness.git@b315ef3b05176acc9732bb7fdec116abe1ecc476"
+              cp /repo/upstream/InferenceX/infx/evals/patches/lm_eval_sitecustomize.py "$REVIEW_EVAL_ROOT/patches/sitecustomize.py"
+              .venv/bin/python /repo/utils/atom_attention/pr64288_model_accuracy.py 2>&1 | tee "$REVIEW_EVIDENCE/model-accuracy-driver.log"
               git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
             '
       - name: Restore diagnostic output ownership

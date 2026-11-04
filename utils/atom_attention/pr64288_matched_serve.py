@@ -130,18 +130,13 @@ def execution_proof(log, phase, enabled, require_fp8):
     return events
 
 
-def bench(arm, case, env, log, proc):
+def bench_command(arm, case):
     name, conc, prefix, suffix, prompts, expected_fp8 = case
     directory = EVIDENCE / arm
-    phase = name
-    phase_path = Path(env["REVIEW_PHASE_FILE"])
-    phase_path.unlink(missing_ok=True)
-    if request("/reset_prefix_cache", method="POST") != {"success": True}:
-        raise RuntimeError("Prefix cache reset did not succeed")
-    command = [
+    return [
         ROOT / ".venv/bin/vllm", "bench", "serve", "--backend", "vllm",
         "--base-url", URL, "--endpoint", "/v1/completions",
-        "--model", "moonshotai/Kimi-K3", "--tokenizer", MODEL,
+        "--model", "moonshotai/Kimi-K3", "--tokenizer", MODEL, "--trust-remote-code",
         "--dataset-name", "random", "--random-prefix-len", str(prefix),
         "--random-input-len", str(suffix), "--random-output-len", "128",
         "--random-range-ratio", "0", "--num-prompts", str(prompts),
@@ -150,6 +145,18 @@ def bench(arm, case, env, log, proc):
         "--save-result", "--save-detailed", "--result-dir", directory,
         "--result-filename", name + ".json", "--disable-tqdm",
     ]
+
+
+def bench(arm, case, env, log, proc):
+    name, conc, prefix, suffix, prompts, expected_fp8 = case
+    directory = EVIDENCE / arm
+    phase = name
+    phase_path = Path(env["REVIEW_PHASE_FILE"])
+    phase_path.unlink(missing_ok=True)
+    if request("/reset_prefix_cache", method="POST") != {"success": True}:
+        raise RuntimeError("Prefix cache reset did not succeed")
+    command = bench_command(arm, case)
+
     bench_log = directory / (name + ".log")
     client = None
     try:
