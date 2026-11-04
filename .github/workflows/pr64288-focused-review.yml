@@ -54,7 +54,7 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-      - name: Run matched normal-routing GSM8K and long-context retrieval
+      - name: Run pinned-main checks with scoped installer Git trust
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"

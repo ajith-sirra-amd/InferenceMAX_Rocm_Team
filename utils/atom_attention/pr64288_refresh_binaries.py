@@ -40,6 +40,12 @@ try:
                VLLM_PRECOMPILED_WHEEL_LOCATION=wheel,
                GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="safe.directory",
                GIT_CONFIG_VALUE_0=str(root))
+    git_bin = evidence / "installer-bin"
+    git_bin.mkdir()
+    git_wrapper = git_bin / "git"
+    git_wrapper.write_text('#!/bin/sh\nexec /usr/bin/git -c safe.directory=/work/vllm "$@"\n')
+    git_wrapper.chmod(0o755)
+    env["PATH"] = str(git_bin) + ":" + env["PATH"]
     command = ["uv", "pip", "install", "--python", str(root / ".venv/bin/python"),
                "--no-build-isolation", "--no-deps", "--force-reinstall", "--editable", "."]
     subprocess.run(command, cwd=root, env=env, check=True)
@@ -47,6 +53,9 @@ try:
     record["binary_hashes"] = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                                for p in (root / "vllm").glob("*.so")}
     record["status"] = "passed"
+except Exception as error:
+    record.update(status="failed", error=str(error))
+    raise
 finally:
     (evidence / "native-base-binaries.json").write_text(json.dumps(record, indent=2))
     print("NATIVE_BASE_BINARIES", json.dumps(record), flush=True)
