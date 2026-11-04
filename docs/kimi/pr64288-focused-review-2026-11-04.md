@@ -5,7 +5,7 @@
 - Attention PR: https://github.com/vllm-project/vllm/pull/64288
 - Published PR head is now `e2393d702a3736dffdfbfc7eb25abbabe484a1df`.
 - Review candidate: `e2393d702a3736dffdfbfc7eb25abbabe484a1df`, branch
-  `checks/pr64288-asm-sync-review-20261104` in the vLLM fork.
+  `perf/rocm-fp8-kv-proj-fmha` in the vLLM fork.
 - Separate synchronization candidate: `c894899149c43bae0873ec8e3b8b76213d267f8f`,
   branch `fix/mla-metadata-async-copy-20261104`. No separate upstream PR opened yet.
 - Both use base `44d9f92e05f45ef45ec11d762011a2179be9d9cc`.
@@ -230,3 +230,30 @@ query/cache rows. Existing projection limits (4% RMS, 7% normalized peak), zero
 clipping, FP8-input attention output (atol=2e-3, rtol=2e-3) and absolute LSE
 (atol=1e-3, rtol=0) are retained. Pre-quantization output/LSE differences are
 reported separately and do not substitute for model accuracy.
+
+## Fused preparation, projection and FMHA numerics
+
+[Run 41826332832](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41826332832)
+passed all eight combinations of 20/386 and 512/8192 query/cache rows,
+plain/preshuffled weights, and eager/changed-input graph replay.
+Artifact: 13319318023.
+
+- Zero projection clipping; worst relative projection RMS 2.818% (limit 4%),
+  normalized peak 5.230% (limit 7%).
+- Largest attention output absolute error against the FP8-input FP64 oracle:
+  0.000564187; original atol=0.002, rtol=0.002 retained.
+- Largest absolute LSE error against that oracle: 0.000002366;
+  original atol=0.001, rtol=0 retained.
+- Against pre-quantization inputs, worst output RMS difference was 4.141%,
+  and the largest absolute LSE difference was 0.003032221. These are reported
+  separately; passing the FP8-input oracle does not establish model accuracy.
+- The historical 0.935 BF16-LSE diagnostic and earlier constructed probability
+  rounding failures are not reclassified as passing by this experiment.
+
+The fused preparation remains in the harness only; the published attention
+PR still uses its original scale rule. Native integration, regression coverage,
+multi-chunk behavior, normal-routing model accuracy and serving comparisons
+remain required before promoting the change.
+
+The [branch cleanup record](branch-cleanup-2026-11-04.md) lists 12 removed
+redundant branch names and their retained commit histories. IPAT is unchanged.

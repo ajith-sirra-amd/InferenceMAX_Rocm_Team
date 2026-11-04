@@ -1,6 +1,7 @@
 # Temporary branch cleanup - 2026-11-04
 
-Status: planned; deletion results will be recorded after verification.
+Status: completed and verified. Removed 12 redundant remote branches: 3 in
+`ajith-sirra-amd/vllm` and 9 in `ajith-sirra-amd/InferenceMAX_Rocm_Team`.
 
 The user requested removal of unnecessary branches. Each selected branch head
 is reachable from a branch that is being retained. No unique commit history is
@@ -25,3 +26,7 @@ validation branch, IPAT and branches with independent work are retained.
 To restore a deleted name, create `refs/heads/<selected branch>` in the named
 repository at its recorded original head. The retained branch keeps that commit
 reachable. No workflow runs or artifacts are deleted.
+
+IPAT was verified unchanged at `59b6f861c8d97ab17556df6c79774599c94330a2`.
+The FP8 PR stayed at `e2393d702a3736dffdfbfc7eb25abbabe484a1df`, and the
+separate synchronization fix stayed at `c894899149c43bae0873ec8e3b8b76213d267f8f`.
