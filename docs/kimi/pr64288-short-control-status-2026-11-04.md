@@ -14,7 +14,7 @@
 - Pinned e0d00e4b image retained. Current source merge base 3b6eeb060621eba88deb74a146039291a1afbc42 has matching Torch 2.13.0+rocm10.0.0 and Triton 3.8.0+git669b31ac metadata.
 - The native installer still checks the actual binary runtime and source hashes before serving.
 - Preserve quantization configuration, CCD binding, BLAS settings and chunk size.
-- Status when recorded: launcher running; no GPU result yet.
+- Completed successfully; see the result and coverage limitation below.
 - Flag-off proof checks all eight workers and rejects native FP8 projection/FlyDSL FMHA calls. This control retains other existing vLLM routing, including eligible ASM; it is not an all-BF16 arm.
 - If successful, run the same source/config with the flag enabled. Do not compare this updated source directly to historical 492080779 as an isolated flag experiment.
 - A five-minute pass cannot clear the historical C56 stall at approximately 50 minutes.
@@ -45,7 +45,33 @@ The analysis establishes that FMHA remains the largest individual kernel in this
 
 ## Next priorities
 
-1. Complete the C56 short control; inspect result coverage, server errors and disabled-path proof.
-2. On success, repeat with the same current source and FP8 flag enabled.
+1. C56 short control completed; source/path proof verified, but coverage validation was automatically skipped.
+2. Follow the matching FP8-enabled short diagnostic, run 41783313151, through completion.
 3. Address remaining review requests: preserve uncached ASM, separate unrelated synchronization fixes, test cached outliers and long-context accuracy, and run matched bench-serve comparisons.
 4. Use the captured profile to prioritize further kernel/communication experiments after correctness and review work.
+
+
+## Completed short-control result and matched follow-up
+
+Run 41775886780: GPU job completed successfully at 05:38:58 UTC.
+Artifacts: aggregate 13298423058; raw/provenance 13299180749; server log 13299365403.
+
+- Total throughput: 11,103.89603 tokens/sec/GPU, including input and output.
+- Output throughput: 59.92731 tokens/sec/GPU.
+- Reported accounting interval: 326.78755 seconds; configured sending window: 300 seconds.
+- Warmup: 115 requests, 1001.62 seconds. Overall GPU job approximately 45 minutes.
+- Measured records: 251 valid, one empty-response error; three cutoff cancellations.
+- Client drain/credit timeout at cutoff, including a forced phase-completion message.
+- No collective timeout, BLAS, OOM, illegal-memory or disk-quota error detected in the full server log.
+- Exact current source, matching binary runtime and flag-off proof for all eight workers confirmed.
+
+Correction to the earlier planned coverage claim: no threshold was changed, but the
+AIPerf scenario automatically bypasses profiling metric coverage validation for
+durations below 900 seconds. The log explicitly reports this skip. Do not label
+the control as coverage-validated or canonical performance, and do not replace
+the PR's established results with it.
+
+The matching FP8-enabled diagnostic has been dispatched:
+https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41783313151
+Same harness fcd87b661 and native PR 8a55b8eac; only native-fp8-enabled changes to 1.
+Result pending.
