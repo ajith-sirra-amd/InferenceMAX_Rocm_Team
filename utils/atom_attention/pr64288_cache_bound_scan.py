@@ -21,7 +21,7 @@ def _cache_bound_partials(Cache, Indices, Partial, ROWS: tl.constexpr,
     indices = tl.load(Indices + rows, rows < ROWS, other=0)
     x = tl.load(
         Cache + indices[:, None] * 576 + cols[None, :],
-        (rows[:, None] < ROWS) & (cols[None, :] < 576), other=0,
+        (rows[:, None] < ROWS) & (cols[None, :] < 576), other=0.0,
     ).to(tl.float32)
     norm_sq = tl.sum(tl.where(cols[None, :] < 512, x * x, 0), 1)
     rope = tl.max(tl.where(cols[None, :] >= 512, tl.abs(x), 0), 1)

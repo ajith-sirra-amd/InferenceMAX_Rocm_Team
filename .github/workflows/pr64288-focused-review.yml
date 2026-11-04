@@ -1,4 +1,4 @@
-name: PR64288 GPU cache-bound scan experiment
+name: PR64288 GPU cache-bound scan validation
 on:
   push:
     branches: [checks/pr64288-focused-review-20261104]
