@@ -136,7 +136,8 @@ def bench(arm, case, env, log, proc):
     phase = name
     phase_path = Path(env["REVIEW_PHASE_FILE"])
     phase_path.unlink(missing_ok=True)
-    request("/reset_prefix_cache", method="POST")
+    if request("/reset_prefix_cache", method="POST") != {"success": True}:
+        raise RuntimeError("Prefix cache reset did not succeed")
     command = [
         ROOT / ".venv/bin/vllm", "bench", "serve", "--backend", "vllm",
         "--base-url", URL, "--endpoint", "/v1/completions",
@@ -217,6 +218,7 @@ def main(report, *, arms=None, exercise=None):
         "PATH": str(ROOT / ".venv/bin") + ":" + env["PATH"],
         "PYTHONPATH": str(ROOT), "VLLM_PLUGINS": "pr64288_serving_observer",
         "VLLM_ROCM_USE_AITER": "1", "VLLM_ROCM_USE_AITER_LINEAR": "1",
+        "VLLM_SERVER_DEV_MODE": "1",
         "VLLM_ROCM_USE_AITER_MOE_SITUV2": "1", "AITER_BF16_FP8_MOE_BOUND": "0",
         "AITER_FLYDSL_STAGE2_FP8": "1", "VLLM_ROCM_QUICK_REDUCE_QUANTIZATION": "INT4",
         "VLLM_ROCM_QUICK_REDUCE_MIN_SIZE_BYTES_MB": "16",

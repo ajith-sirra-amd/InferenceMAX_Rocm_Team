@@ -54,7 +54,7 @@ jobs:
         with:
           persist-credentials: false
           clean: false
-      - name: Run matched base OFF ON short serving checks
+      - name: Run matched base OFF ON checks with cache reset enabled
         shell: bash
         run: |
           task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"

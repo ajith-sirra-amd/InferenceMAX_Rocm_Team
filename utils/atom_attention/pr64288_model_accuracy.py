@@ -71,7 +71,7 @@ def niah(arm, env, log, proc):
                 if len(prefix) <= 8192:
                     raise RuntimeError("Retrieval context does not exceed the native cutoff")
                 phase.unlink(missing_ok=True)
-                serving.request("/reset_prefix_cache", method="POST")
+                assert serving.request("/reset_prefix_cache", method="POST") == {"success": True}
                 completion(prefix, 1)
                 name = f"niah-{length}-{int(depth*100)}-{repeat}"
                 phase.write_text(name)
@@ -100,7 +100,7 @@ def niah(arm, env, log, proc):
 def gsm8k(arm, env, log, proc):
     directory = serving.EVIDENCE / arm
     phase = Path(env["REVIEW_PHASE_FILE"])
-    serving.request("/reset_prefix_cache", method="POST")
+    assert serving.request("/reset_prefix_cache", method="POST") == {"success": True}
     phase.write_text("gsm8k")
     eval_root = Path(os.environ["REVIEW_EVAL_ROOT"])
     eval_python = eval_root / ".venv/bin/python"
