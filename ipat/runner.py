@@ -143,6 +143,37 @@ def report(output, manifest):
         '<li><a href="baseline/">Unprofiled baseline</a></li><li><a href="profile/">Profile and native traces</a></li></ul>')
 
 
+def cleanup(output):
+    """Independent post-step: cancellation may terminate the main Python process."""
+    path = output / "request.json"
+    if not path.exists(): return
+    request = json.loads(path.read_text())
+    if not re.fullmatch(r"[0-9a-f]{32}", request.get("id", "")): raise ValueError("Invalid cleanup identity")
+    subprocess.run(["docker", "rm", "--force", "ipat-" + request["id"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+    manifest = output / "manifest.json"
+    image = json.loads(manifest.read_text()).get("image", {}).get("id") if manifest.exists() else None
+    if image:
+        subprocess.run(["docker", "run", "--rm", "--mount", f"type=bind,src={output.resolve()},dst=/output",
+                        "--entrypoint", "chown", image, "-R", f"{os.getuid()}:{os.getgid()}", "/output"], timeout=120, check=True)
+
+
+def recover(request, output):
+    """Recover only a previous IPAT checkout's evidence after interrupted cleanup."""
+    previous = request["previous"]
+    run_id, attempt = str(previous["workflow_run_id"]), str(previous["attempt"])
+    if not run_id.isdigit() or not attempt.isdigit(): raise ValueError("Invalid previous workflow identity")
+    repo = Path(__file__).resolve().parents[1]
+    old = repo.parent / f"ipat-{run_id}-{attempt}"
+    origin = subprocess.check_output(["git", "-C", str(old), "config", "--get", "remote.origin.url"], text=True).strip()
+    if origin.removesuffix(".git") != "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team":
+        raise ValueError("Recovery target must be a team repository checkout")
+    prior_request = json.loads((old / "evidence/request.json").read_text())
+    if prior_request["id"] != previous["id"]: raise ValueError("Recovery request identity differs")
+    cleanup(old / "evidence")
+    shutil.copytree(old / "evidence", output / "recovered", ignore=shutil.ignore_patterns("client-env", "cache", "hf", "home", "tmp"))
+    write_json(output / "manifest.json", {"status": "recovered", "previous": previous})
+
+
 def execute(request, output):
     recipe = validate_recipe(request["recipe"])
     repo = Path(__file__).resolve().parents[1]
@@ -225,15 +256,21 @@ def execute(request, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--cleanup", action="store_true")
     args = parser.parse_args()
     if not args.output.resolve().is_relative_to(Path(__file__).resolve().parents[1]):
         raise ValueError("IPAT output must stay inside the team repository checkout")
+    if args.cleanup:
+        cleanup(args.output)
+        return
     request = json.loads(os.environ["IPAT_REQUEST"])
     if not re.fullmatch(r"[0-9a-f]{32}", request.get("id", "")):
         raise ValueError("IPAT request needs a unique hexadecimal ID")
     write_json(args.output / "request.json", request)
     if request.get("mode") == "preflight":
         preflight(request, args.output)
+    elif request.get("mode") == "recover":
+        recover(request, args.output)
     elif request.get("mode") == "run":
         result = execute(request, args.output)
         raise SystemExit(0 if result["status"] == "completed" else 1)
