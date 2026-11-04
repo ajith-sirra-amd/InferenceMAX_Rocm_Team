@@ -171,6 +171,34 @@ multiplying by the cache stride. No prototype is promoted to the attention PR.
 ## Current-head external checks
 
 DCO and independent fork static checks passed. Upstream pre-commit did not
-execute because of the contributor-authorization gate. Read the Docs also
-reports failure; its cause still needs inspection. These checks are not
+execute because of the contributor-authorization gate. Read the Docs build 35640024 also
+stopped in docs/pre_run_check.sh because the same authorization check failed,
+before installing dependencies or rendering documentation. These checks are not
 reported as passing, and authorization labels have not been requested.
+
+## Complete preparation comparison
+
+[Run 41824901365](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41824901365)
+passed; artifact 13319470276. All six cases produced bitwise-identical Q and
+Q scales, including changed-input graph replay. The selected row at byte offset
+2,147,484,096 also passed, exercising the int64 address calculation.
+
+| Cached rows | Query rows | Current preparation + projection (us) | Q-only + scan + projection (us) | Time change |
+| ---: | ---: | ---: | ---: | ---: |
+| 8192 | 512 | 38.160 | 41.411 | 8.52% |
+| 8192 | 2048 | 43.634 | 44.042 | 0.93% |
+| 8192 | 8192 | 70.839 | 59.066 | -16.62% |
+| 32768 | 512 | 95.352 | 103.565 | 8.61% |
+| 32768 | 2048 | 100.691 | 106.351 | 5.62% |
+| 32768 | 8192 | 132.386 | 121.073 | -8.55% |
+
+Medians of three rotated-order graph timing samples are shown. One GPU,
+12 heads, one cached chunk, synthetic inputs; no FMHA or serving measurement.
+Replacing K/V quantization repays scan cost at 8K query tokens, but the 512-token
+cases regress by about 8.5%. The prototype remains outside the attention PR.
+
+Next, test fusing the cache partial scan into Q's partial-maximum launch and
+its scale reduction into Q's quantization launch. This keeps the same norm-bound
+math and Q arithmetic while reducing launch overhead. Require unchanged Q,
+cached-scale oracle agreement and replay after changing Q, cache, indices and
+cache scale before drawing any performance conclusion.
