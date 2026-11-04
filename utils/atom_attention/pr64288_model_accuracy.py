@@ -97,11 +97,26 @@ def niah(arm, env, log, proc):
     return output
 
 
+
+def acceptance_snapshot(path):
+    with urllib.request.urlopen(serving.URL + "/metrics", timeout=15) as response:
+        text = response.read().decode()
+    path.write_text(text)
+    values = {}
+    for suffix in ("drafts", "draft_tokens", "accepted_tokens"):
+        name = "vllm:spec_decode_num_" + suffix + "_total"
+        matches = re.findall(r"^" + re.escape(name) + r"(?:\{[^\n]*\})?\s+([0-9.eE+-]+)", text, re.MULTILINE)
+        if not matches:
+            raise RuntimeError("Missing MTP counter: " + name)
+        values[suffix] = sum(map(float, matches))
+    return values
+
 def gsm8k(arm, env, log, proc):
     directory = serving.EVIDENCE / arm
     phase = Path(env["REVIEW_PHASE_FILE"])
     assert serving.request("/reset_prefix_cache", method="POST") == {"success": True}
     phase.write_text("gsm8k")
+    acceptance_before = acceptance_snapshot(directory / "gsm8k-metrics-before.txt")
     eval_root = Path(os.environ["REVIEW_EVAL_ROOT"])
     eval_python = eval_root / ".venv/bin/python"
     eval_env = dict(env, VLLM_PLUGINS="", OPENAI_API_KEY="EMPTY",
@@ -127,6 +142,10 @@ def gsm8k(arm, env, log, proc):
     if len(results) != 1:
         raise RuntimeError("Expected exactly one GSM8K result")
     raw = json.loads(results[0].read_text())
+    acceptance_after = acceptance_snapshot(directory / "gsm8k-metrics-after.txt")
+    acceptance_delta = {k: acceptance_after[k] - acceptance_before[k] for k in acceptance_before}
+    if acceptance_delta["accepted_tokens"] <= 0:
+        raise RuntimeError("No accepted draft tokens during GSM8K")
     scores = raw["results"]["gsm8k"]
     samples = raw.get("n-samples", {}).get("gsm8k", {})
     if samples.get("effective") != 1319:
@@ -143,7 +162,7 @@ def gsm8k(arm, env, log, proc):
         "repository_threshold": minimum, "threshold_passed": strict >= minimum,
         "normal_routing": True, "execution": proof,
         "task_sha256": hashlib.sha256(TASK.read_bytes()).hexdigest(),
-        "lm_eval_revision": LM_EVAL_REV,
+        "lm_eval_revision": LM_EVAL_REV, "mtp_counters": acceptance_delta,
     }
     (directory / "gsm8k-summary.json").write_text(json.dumps(summary, indent=2))
     print("GSM8K_RESULT", json.dumps(summary), flush=True)
