@@ -66,8 +66,8 @@ jobs:
               set -euo pipefail
               export REVIEW_EVIDENCE="/work/review-reruns/$REVIEW_RUN_ID"
               mkdir -p "$REVIEW_EVIDENCE"
-              test "$(git -C /work/vllm rev-parse HEAD)" = "$NATIVE_SHA"
-              git -C /work/vllm diff --exit-code -- vllm tests
+              test "$(git -c safe.directory=/work/vllm -C /work/vllm rev-parse HEAD)" = "$NATIVE_SHA"
+              git -c safe.directory=/work/vllm -C /work/vllm diff --exit-code -- vllm tests
               cp /work/evidence/native-validation.json "$REVIEW_EVIDENCE/prior-kernel-validation-run41820076564.json"
               export XDG_CACHE_HOME=/work/cache
               export HF_HOME=/work/cache/huggingface
@@ -83,18 +83,18 @@ jobs:
               .venv/bin/python /repo/utils/atom_attention/pr64288_review_diagnostics.py --mode outliers --output $REVIEW_EVIDENCE/outliers > $REVIEW_EVIDENCE/outliers.log 2>&1 || status=1
               cat $REVIEW_EVIDENCE/outliers.log
               target=vllm/v1/attention/backends/mla/rocm_aiter_mla.py
-              git show "$BEFORE_SHA:$target" > "$target"
+              git -c safe.directory=/work/vllm show "$BEFORE_SHA:$target" > "$target"
               set +e
               .venv/bin/python /repo/utils/atom_attention/pr64288_review_diagnostics.py --mode asm --output $REVIEW_EVIDENCE/asm-before > $REVIEW_EVIDENCE/asm-before.log 2>&1
               before_rc=$?
               set -e
-              git restore --source HEAD -- "$target"
+              git -c safe.directory=/work/vllm restore --source HEAD -- "$target"
               cat $REVIEW_EVIDENCE/asm-before.log
               if [ "$before_rc" -eq 0 ] || ! grep -q ASM_METADATA_MISSING $REVIEW_EVIDENCE/asm-before.log; then
                 echo "Base did not reproduce the expected missing ASM metadata failure"
                 status=1
               fi
-              git diff --exit-code -- vllm tests
+              git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
               exit "$status"
             '
       - name: Restore diagnostic output ownership
