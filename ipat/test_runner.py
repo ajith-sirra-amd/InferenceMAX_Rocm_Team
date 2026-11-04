@@ -2,12 +2,13 @@ import copy
 import gzip
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 
 from container import benchmark_metrics, trace_summary, run
-from runner import validate_recipe, resolve_models, cleanup
+from runner import validate_recipe, resolve_models, cleanup, ownership_command
 
 
 RECIPE = {"model": "Model", "framework": "vllm", "image": "image:pin", "image_policy": "local",
@@ -102,6 +103,25 @@ class RunnerTests(unittest.TestCase):
         popen.assert_not_called()
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["error"], "dataset unavailable")
+
+    def test_ownership_walk_preserves_evidence_without_traversing_caches(self):
+        files = ["baseline/server.log", "baseline/client/records.jsonl", "profile/traces/rank.json.gz",
+                 "cache/compiler.bin", "hf/dataset.parquet", "home/.cache/dataset.dat", "tmp/compiler.o",
+                 "baseline/client-env/bin/python", "profile/client-tools/uv"]
+        for name in files:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        (self.root / "model-link").symlink_to(self.root / "hf", target_is_directory=True)
+        argv = ownership_command(self.root, "image")
+        walk = argv[argv.index("/output"):argv.index("-exec")]
+        walk = [arg.replace("/output", str(self.root)) for arg in walk]
+        paths = subprocess.check_output(["find", *walk, "-print"], text=True).splitlines()
+        selected = {str(Path(path).relative_to(self.root)) for path in paths}
+        self.assertTrue(set(files[:3]).issubset(selected))
+        self.assertFalse(set(files[3:]).intersection(selected))
+        self.assertIn("model-link", selected)
+        self.assertNotIn("model-link/dataset.parquet", selected)
 
     def test_gpu_math_failure_stops_before_client_setup_or_model_start(self):
         capabilities = {"devices": [{"name": "AMD Instinct MI355X"}] * 8,

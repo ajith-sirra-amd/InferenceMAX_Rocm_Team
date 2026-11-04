@@ -214,6 +214,21 @@ def report(output, manifest):
         '<li><a href="baseline/">Unprofiled baseline</a></li><li><a href="profile/">Profile and native traces</a></li></ul>')
 
 
+def ownership_command(output, image):
+    # Match artifact exclusions: generated environments and caches can be large
+    # and transferring their ownership can exceed the runner user's NFS quota.
+    excluded = ["/output/" + name for name in ("cache", "hf", "home", "tmp")]
+    prune = []
+    for path in excluded:
+        if prune: prune += ["-o"]
+        prune += ["-path", path]
+    prune += ["-o", "-name", "client-env", "-o", "-name", "client-tools"]
+    return ["docker", "run", "--rm", "--read-only", "--network", "none",
+            "--mount", f"type=bind,src={output.resolve()},dst=/output",
+            "--entrypoint", "find", image, "/output", "(", *prune, ")", "-prune",
+            "-o", "-exec", "chown", "-h", f"{os.getuid()}:{os.getgid()}", "{}", "+"]
+
+
 def cleanup(output):
     """Independent post-step: cancellation may terminate the main Python process."""
     path = output / "request.json"
@@ -224,8 +239,7 @@ def cleanup(output):
     manifest = output / "manifest.json"
     image = json.loads(manifest.read_text()).get("image", {}).get("id") if manifest.exists() else None
     if image:
-        subprocess.run(["docker", "run", "--rm", "--mount", f"type=bind,src={output.resolve()},dst=/output",
-                        "--entrypoint", "chown", image, "-R", f"{os.getuid()}:{os.getgid()}", "/output"], timeout=120, check=True)
+        subprocess.run(ownership_command(output, image), timeout=120, check=True)
 
 
 def recover(request, output):
@@ -320,8 +334,7 @@ def execute(request, output):
     finally:
         subprocess.run(["docker", "stop", "--time", "90", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if image_id:
-            result = capture(["docker", "run", "--rm", "--mount", f"type=bind,src={output.resolve()},dst=/output",
-                              "--entrypoint", "chown", image_id, "-R", f"{os.getuid()}:{os.getgid()}", "/output"], output / "ownership.log")
+            result = capture(ownership_command(output, image_id), output / "ownership.log", timeout=120)
             if result.get("returncode") != 0: manifest["ownership_error"] = result
         manifest["ended_at"] = dt.datetime.now(dt.timezone.utc).isoformat(); save()
         report(output, manifest)

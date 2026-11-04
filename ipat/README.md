@@ -36,7 +36,8 @@ The `ipat-<request-id>` Actions artifact contains the request, effective recipe,
 manifests, image identity, model metadata hashes, logs, raw client output,
 serving metrics, native traces, `report.md`, and a browsing `index.html`.
 Package environments and caches remain in the checkout but are excluded from
-the artifact. Reports explicitly identify missing quality, HBM counters,
+the artifact and ownership repair, avoiding NFS quota charges for generated caches.
+Reports explicitly identify missing quality, HBM counters,
 roofline and full tensor-flow evidence.
 
 Local checks (set `TMPDIR` to a directory inside one of the two repositories):
