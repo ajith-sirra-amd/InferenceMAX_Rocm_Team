@@ -1,0 +1,121 @@
+name: PR64288 serving standalone validation
+on:
+  push:
+    branches: [checks/pr64288-green-evidence-20261105]
+    paths: [.github/workflows/pr64288-green-serving.yml]
+permissions:
+  contents: read
+  actions: read
+env:
+  IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
+  NATIVE_SHA: a03796b8e3bfe536e22f9db741109dbf80170079
+  BASE_SHA: 69d27bf8002a4634de1699c95fb0aeb22fb86ca5
+  REVIEW_PORT: '18988'
+  REVIEW_SCOPE: serving
+  GPU_STOP_UTC: '2026-11-05T13:42:35Z'
+jobs:
+  code-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.6"
+      - name: Check validation scripts and routing-evidence fixtures
+        run: |
+          uv venv --python 3.12
+          uv pip install pyyaml
+          .venv/bin/python utils/atom_attention/pr64288_green_preflight.py
+      - name: Require candidate static and rendered documentation validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh run view 41836553476 --repo ajith-sirra-amd/vllm --json conclusion --jq .conclusion)" = success
+  predecessor:
+    needs: code-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Wait for the matched ON performance run before using GPUs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import datetime, json, os, subprocess, time
+          cutoff = datetime.datetime.fromisoformat(os.environ["GPU_STOP_UTC"].replace("Z", "+00:00"))
+          while datetime.datetime.now(datetime.timezone.utc) < cutoff:
+              run = json.loads(subprocess.check_output([
+                  "gh", "api", "repos/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41967738227"
+              ]))
+              assert run["head_sha"] == "6b4f3553391063b1060d39cf16b154e7d26585b3"
+              print("Predecessor:", run["id"], run["status"], run["conclusion"], flush=True)
+              if run["status"] == "completed":
+                  assert run["conclusion"] == "success", "Predecessor did not pass"
+                  break
+              time.sleep(60)
+          else:
+              raise RuntimeError("GPU reservation cutoff reached")
+          PY
+  gpu:
+    needs: predecessor
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Run fresh serving validation within the reservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(hostname -s)" = pit2-p03-g40
+          task_work="$GITHUB_WORKSPACE/.pr64288-green/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$task_work"
+          task_seconds=$(( $(date -u -d "$GPU_STOP_UTC" +%s) - $(date -u +%s) ))
+          test "$task_seconds" -gt 900
+          if [ "$task_seconds" -gt 14400 ]; then task_seconds=14400; fi
+          mkdir -p "$task_work/evidence"
+          test -d /share_nfs/models
+          timeout --signal=TERM --kill-after=90 "$task_seconds" \
+            docker run --rm --init --network host --ipc=host --shm-size=8g \
+              --name "pr64288-green-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+              --device=/dev/kfd --device=/dev/dri \
+              -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
+              --mount type=bind,source=/share_nfs/models,target=/models,readonly \
+              -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA -e BASE_SHA -e REVIEW_PORT -e REVIEW_SCOPE \
+              -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+              --entrypoint bash "$IMAGE" /repo/utils/atom_attention/pr64288_green_validation.sh
+      - name: Stop only this run's container
+        if: always()
+        shell: bash
+        run: |
+          container="pr64288-green-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if docker ps --format '{{.Names}}' | grep -Fxq "$container"; then
+            docker stop --time 60 "$container"
+          fi
+      - name: Restore evidence ownership
+        if: always()
+        shell: bash
+        run: |
+          task_evidence="$GITHUB_WORKSPACE/.pr64288-green/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/evidence"
+          if [ -d "$task_evidence" ]; then
+            test ! -L "$task_evidence"
+            workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+            test "$(realpath -e -- "$task_evidence")" = "$workspace_real/.pr64288-green/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/evidence"
+            docker run --rm --network none --user 0:0 \
+              --mount "type=bind,source=$task_evidence,target=/repair" \
+              --entrypoint chown "$IMAGE" \
+              --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+          fi
+      - name: Upload serving validation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pr64288-serving-validation
+          path: .pr64288-green/${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
