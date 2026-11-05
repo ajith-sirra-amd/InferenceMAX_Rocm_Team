@@ -99,7 +99,9 @@ The oldest in flight is 213 seconds; the slowest completed request is 444.5
 seconds. These are progress observations, not an accuracy pass. Keep this
 progressing attempt unchanged and inspect the final evidence.
 
-The new reservation end time has been requested and is pending. Continue the
-already-running validation under the renewed authorization; establish the
-cutoff before scheduling the later multi-hour OFF/ON sequence. Current local
-checkout writes are denied; the source and workflow have not been changed.
+The scheduler confirms exclusive allocation 12214 (agenticx), owned by
+ajith.sirra@amd.com, for eight GPUs on pit2-p03-g40. It runs from
+2026-11-05 01:52:35 UTC through 13:52:35 UTC (19:22:35 India time), with a
+12-hour limit. Start scoped cleanup by 13:42:35 UTC. This resolves the pending
+reservation question without needing a reply. Current local checkout writes
+are denied; the source and workflow have not been changed.
