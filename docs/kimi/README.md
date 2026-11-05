@@ -2,15 +2,17 @@
 
 **English** | [Chinese](README_zh.md)
 
-- Current baseline: run39239112271, Moonshot Kimi-K3, 15,476.47 total tokens/sec/GPU, 20,951,355 KV tokens.
-- Capacity reference: run39601846940, AMD Quark Kimi-K3, 23,098,919 KV tokens.
-- Start with the current overhead audit. Older handoffs describe historical configurations.
+- Historical original baseline: run39239112271, Moonshot Kimi-K3, 15,476.47 total tokens/sec/GPU, 20,951,355 KV tokens.
+- Historical capacity reference: run39601846940, AMD Quark Kimi-K3, 23,098,919 KV tokens.
+- Start with the [November 5 code audit](pr64288-regression-code-audit-2026-11-05.md) and [overhead reduction plan](pr64288-overhead-reduction-plan-2026-11-05.md). Older handoffs describe historical configurations.
 - Code and raw evidence remain at their original paths.
 
 | Document | Topic |
 |---|---|
+| [FP8 overhead reduction plan](pr64288-overhead-reduction-plan-2026-11-05.md) | Established techniques, prioritized modifications and validation gates |
+| [November 5 code and regression audit](pr64288-regression-code-audit-2026-11-05.md) | Tested ON/OFF paths, current evidence and upstream changes |
 | [ATOM comparison and next candidates](atom-vllm-opportunities-2026-10-28.md) | Verified differences, baseline controls and proposed experiments |
-| [Current overhead audit](kimi-prefill-overhead-audit.md) | Problem, exact precision flow, measured costs and next-run gate |
+| [Historical prototype overhead audit](kimi-prefill-overhead-audit.md) | Problem, exact precision flow, measured costs and next-run gate |
 | [Baseline evidence](atom-attention-BASELINES.md) | Verified checkpoints, throughput and capacity |
 | [ATOM attention](atom-flydsl-attention.md) | Adapter, kernel smoke and constraints |
 | [KV flow](kimi-kv-optimized-flow.md) | Latent expansion, precisions and communication |
