@@ -63,6 +63,12 @@ jobs:
               for step in job["steps"]:
                   if "run" in step:
                       subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
+                  if "--entrypoint bash" in step["run"]:
+                      import shlex
+                      argv = shlex.split(step["run"])
+                      index = argv.index("-lc")
+                      assert len(argv[index + 1:]) == 1, "Container script split across arguments"
+                      assert "pr64288_gsm8k_retry.py" in argv[index + 1]
           PY
       - name: Require pinned-main static and rendered docs validation
         env:
@@ -142,7 +148,7 @@ jobs:
               uv pip install --python "$REVIEW_EVAL_ROOT/.venv/bin/python" "lm-eval[api] @ git+https://github.com/EleutherAI/lm-evaluation-harness.git@b315ef3b05176acc9732bb7fdec116abe1ecc476"
               cp /repo/upstream/InferenceX/infx/evals/patches/lm_eval_sitecustomize.py "$REVIEW_EVAL_ROOT/patches/sitecustomize.py"
               cp /repo/utils/atom_attention/pr64288_http_trace.py "$REVIEW_EVAL_ROOT/patches/pr64288_http_trace.py"
-              echo 'import pr64288_http_trace' >> "$REVIEW_EVAL_ROOT/patches/sitecustomize.py"
+              echo "import pr64288_http_trace" >> "$REVIEW_EVAL_ROOT/patches/sitecustomize.py"
               .venv/bin/python /repo/utils/atom_attention/pr64288_gsm8k_retry.py 2>&1 | tee "$REVIEW_EVIDENCE/model-accuracy-driver.log"
               git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
             '
@@ -168,6 +174,27 @@ jobs:
               --entrypoint chown "$IMAGE" \
               --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
           fi
+      - name: Require complete GSM8K evidence
+        shell: bash
+        run: |
+          evidence="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564/review-reruns/$GITHUB_RUN_ID"
+          python3 - "$evidence" <<'PY'
+          import json, os, pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          report = json.loads((root / "gsm8k-retry.json").read_text())
+          score = report["arms"]["candidate_on"]["gsm8k"]
+          assert report["status"] == "passed"
+          assert report["candidate"] == os.environ["NATIVE_SHA"]
+          assert report["base"] == os.environ["BASE_SHA"]
+          assert score["n"] == 1319 and score["threshold_passed"]
+          assert score["mtp_counters"]["accepted_tokens"] > 0
+          events = [json.loads(line) for line in (root / "candidate_on/gsm8k-request-events.jsonl").read_text().splitlines()]
+          started = {e["id"] for e in events if e["event"] == "request_started"}
+          completed = {e["id"] for e in events if e["event"] == "request_completed"}
+          assert len(started) == 1319 and completed == started
+          assert not any(e["event"] in ("request_failed", "response_failed") for e in events)
+          print("Verified full GSM8K:", score["n"], "strict:", score["strict"], "flexible:", score["flexible"])
+          PY
       - name: Upload focused evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
