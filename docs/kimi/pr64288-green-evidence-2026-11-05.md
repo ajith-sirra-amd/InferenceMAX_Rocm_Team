@@ -204,3 +204,23 @@ Static/docs harness ea6bc5839134953ab9dc43e69aff725868f53175 on checks/pr64288-i
 PR description and related-PR comment6473674684 now state that59124 merged after the validated baseline and current-main integration/revalidation remains pending. No current-main gain is claimed.
 
 Keep GPU cutoff13:42:35UTC (19:12:35IST), reservation12214 ends13:52:35UTC. User explicitly requires GMU0.90 and preserving load-formatauto. Next: finish serving; inspect memory audit; validate backend coexistence for integration candidate; publish only after applicable checks. Profiling and C56/C96 remain later.
+
+
+## Memory audit inventory fix and integration static results, 10:33 UTC
+
+Replaced queued memory run42008641826 before any GPU job began (now cancelled). Audit traversal previously skipped callable torch.nn.Module instances, missing model weights/buffers, and omitted the global workspace manager. Corrected in harnessf8f707ea2aea2d633aea7506915717dd833eacff:
+- Traverse real torch.nn.Module instances plus vLLM object dictionaries, with explicit depth-limit accounting.
+- Include current_workspace_manager as a separate root; deduplicate aliased storages.
+- Label peak counters since last allocator reset correctly.
+- Record true CPU-offload/synthetic-acceptance/GMU/load-format settings even if the audit fails.
+CPU validation with a real Sequential/Linear model and shared buffer found exactly three unique storages (weight48bytes, bias12bytes, shared workspace64bytes), without initializing CUDA.
+
+Replacement audit42010811107 passed code checks and waits on serving42006336780. Sourcea037, base69d27, recipe and GPU cutoff unchanged.
+
+Integration static/docs run42010320935 on fork passed for54f39769. Inspected artifact13406900964: exact8-file scope, applicable pre-commit/Ruff/mypy/CI tethering passed. Inspected rendered-docs artifact13406259759: strict build completed, source matches54f39769. This is CPU/static evidence only.
+
+Exact matching ROCm100 wheel metadata for integration baseee85faa1280c3f9ef877c7b17d1a3ef113133e57 returns HTTP404 at10:32UTC. Do not silently use69d27 compiled binaries with the new source. Current pinned serving and memory runs remain valid and unchanged. Recheck matching wheel availability before any integration GPU dispatch.
+
+Audited all workflow hyperlinks in the PR body and author comments at10:30UTC: all11 referenced runs currently have conclusion success. The short related-PR note now mentions the merge without linking the failed historical reference run.
+
+Potential later memory experiment (not dispatched): full recipe captures every even graph size2..480 with max-num-seqs96. C48 plus4draft tokens schedules at most240 decode tokens for48 live requests; a bounded graph-capture-size reduction may reclaim memory while retaining GMU0.90. First inspect audit evidence and fallback behavior; do not change current comparisons or claim a saving without measurement.
