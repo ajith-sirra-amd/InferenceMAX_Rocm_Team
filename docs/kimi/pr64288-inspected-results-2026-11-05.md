@@ -84,3 +84,22 @@ reported MkDocs/source error. Candidate independent rendered docs passed in
 41836553476; that does not replace upstream CI authorization.
 Evidence: https://app.readthedocs.org/api/v2/build/35640024/.
 Do not request labels or bypass the upstream gate as an agent.
+
+## Live runner observation at 03:06 UTC
+
+The retry is executing on physical host `pit2-p03-g40`. GitHub still displays
+runner name `mi355x-amd_pit2_p03_g07`; do not use that stale label to identify
+the server. Verified SSH access is through local alias `pit-login`, then the
+login host's existing verified connection to `pit2-p03-g40`.
+
+Container `pr64288-review-41954676681` is alive. The request trace at
+`/work/review-reruns/41954676681/candidate_on/gsm8k-request-events.jsonl`
+records 497 completed requests, 48 in flight and no request/response failures.
+The oldest in flight is 213 seconds; the slowest completed request is 444.5
+seconds. These are progress observations, not an accuracy pass. Keep this
+progressing attempt unchanged and inspect the final evidence.
+
+The new reservation end time has been requested and is pending. Continue the
+already-running validation under the renewed authorization; establish the
+cutoff before scheduling the later multi-hour OFF/ON sequence. Current local
+checkout writes are denied; the source and workflow have not been changed.
