@@ -121,3 +121,46 @@ The configured **3600-second measured interval started 08:02:51.848 UTC**, expec
 For comparison only of setup timing, the inspected OFF benchmark log records warmup 04:24:38.350-04:45:55.066 UTC (**1276.72 seconds**). Do not treat warmup duration as the reported throughput benchmark. ON had a KDA Triton JIT warning and one-minute pauses with subsequent progress; a read-only GPU check showed all eight GPUs busy. No ERROR/Traceback recurrence was observed through measurement startup. CPU-offload stale-pin warnings are separate from the earlier NFS file-handle exception; the scheduler reports releasing those pins.
 
 The live benchmark command preserves agentic trace timing (`--trace-idle-gap-cap-seconds 300`), C48, seed 42, 393 traces, 10 warmup requests per lane, synthetic DSpark acceptance and the 3600-second duration. Total input throughput includes cached prompt tokens; performance interpretation must retain that definition. Do not infer kernel speedup from total-token throughput alone.
+
+## Current inspected status, 2026-11-05 09:49 UTC
+
+- Full OFF and ON workflows are green at a03796b8. Matched total throughput is **18266.89472 -> 19000.97537 tokens/s/GPU (+4.01864%)**; output-only **126.61731 -> 132.29955 (+4.48773%)**. One pair only; variability unmeasured; total includes cached prompt tokens.
+- ON final artifacts inspected: 13402275321 (normalized), 13401956368 (raw/proof), 13402420033 (server). 3984 measured successes; 7 InvalidInferenceResultError empty-content responses and 1 ClientOSError (request-body write on closing transport). Seven cutoff cancellations; cancellation-return grace expired. TTFT/ITL present on 3984/3984 successes. Zero server ERROR/Traceback matches. Final proof verifies nonempty FP8 projection and cached FMHA on ranks 0-7, normal routing, exact source a03796b8.
+- NIAH 41968261654 green. Artifact 13403891073 inspected: main and candidate 12/12, matching case IDs/prompt hashes, 16K/32K contexts at depths 10/50/90%, two repeats, live MTP. Every candidate case has FP8 projection/FMHA on all eight ranks.
+- Kernel/numerical/ASM 41968261662 green. Artifact 13403681986 inspected: JUnit exactly 12 passed, no skips/errors/failures; all 8 unchanged numerical/graph cases passed with zero projection clipping. Real-layer uncached ASM regression passed (12 heads, 128 tokens, max absolute error 0.0215493441).
+- Serving 41968261826 in progress, GPU job 127151749910. Container pr64288-green-41968261826-2. At 09:47 UTC main arm was starting. Follow through; no replacement performance result yet.
+- Updated primary reviewer comment 6473435649 and ASM/cache-scale replies 4466935267/4466935928 with inspected green evidence. Explicitly retain candidate-versus-published-head distinction. Published head still e2393d70; serving comparison and publication assessment pending.
+- Optional four-line runtime-count optimization 768a5da2 remains isolated on perf/fp8-cache-runtime-counts-20261105, not the PR candidate. Static workflow 41993124155 green, artifacts not yet inspected. No GPU validation dispatched for this optimization.
+
+## Cache-capacity investigation and correction
+
+The user specifically challenged the historical **22M+ -> 19.8M** change. Do not confuse it with ON/OFF or NIAH/performance comparisons.
+
+| Run | Source / compiled base | Reported capacity | Cache budget |
+| --- | --- | ---: | ---: |
+| Prototype 40695099743 | image 1b2a66639 + prototype | 22,695,620 | 53.81 GiB initial |
+| Earlier native 41447686785 | 492080779 / a1cfd2c1 | 22,524,219 | 53.39 GiB |
+| Current OFF 41964736019 | a03796b8 / 69d27bf8 | 19,834,746 | 2024 blocks, 48.36 GiB logical / 48.42 GiB physical |
+| Current ON 41967738227 attempt 2 | a03796b8 / 69d27bf8 | 19,834,746 | same 2024 blocks |
+| NIAH candidate | a03796b8 / 69d27bf8 | 5,021,999 | 2069 blocks, 49.44 GiB logical |
+
+**Verified identical container digest** for earlier native, current OFF and current ON:
+vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f.
+Their installed vLLM sources/binaries differ. The model weights per worker remain approximately 184.49 vs184.48 GiB. Old and new recorded startup free memory agree (e.g. rank0 273.53/287.98 GiB). Same TP8/DCP8/C48 and FP8 stored KV.
+
+Capacity is int(max_model_len * num_blocks / sum(per-request group blocks)). Arithmetic reproduces:
+- old native: int(1048576 * 2234 / 104) = 22524219;
+- current full: int(1048576 * 2024 / 107) = 19834746;
+- current NIAH: int(65536 * 2069 / 27) = 5021999.
+
+For full attention the per-request requirement is ceil(1048576 / 8 / 1536)=86 blocks (NIAH:6). Three KDA groups account for18 old versus21 current. Upstream **#63297**, e3eec515, enables prefill checkpoint blocks on the gluon KDA backend; old log has gluon without checkpoint enabled, new log explicitly prints KDA prefill checkpoint enabled. New KDA file is byte-identical to pinned upstream 69d27bf8. The extra checkpoint changes the per-request denominator from104 to107; it is not our attention flag.
+
+Upstream **#56492** introduced extensible cache sizing from actual post-warmup memory, now used in the current runs. The earlier native run used the older pre-allocation profiling path. The new allocator keeps measured transient headroom (2.51 GiB in both ON and OFF) and selects the minimum rank block budget. Current FP8 flag does not modify cached latent storage or native weight quantization, so equal ON/OFF capacity is consistent. Temporary expanded K/V savings did not increase the observed startup block budget. Do not assert that every byte of the historical delta is causally isolated: a matched startup-only old/new allocator ablation has not been run.
+
+Important older-log detail: after final graph capture the earlier native run itself advised **46.18 GiB** KV to fit requested utilization, while it actually allocated **53.39 GiB**. Logged actual usage:188.98 GiB weights/non-Torch,16.82 GiB peak activation,7.06 GiB graphs. New final physical allocation is48.42 GiB. The old/new reported available-memory lines are from different sizing stages; initial67.90 GiB current is not the final cache allocation.
+
+Upstream #65418 raises the ROCm margin floor to3 GiB, but the formula applies it to physical headroom and only the smaller budget binds; **do not attribute3 GiB of the loss to that margin without checking which constraint binds**.
+
+User asked why vLLM was reinstalled. Explained: PR source installation tests unmerged code; rebasing to newer upstream was a separate choice for reviewer current-main comparison/merge-conflict resolution, and matching binaries avoid source/extension mismatch. Updating upstream is not inherently required by the FP8 optimization. Acknowledged this should have been explicit before comparing historical results. Need keep runtime revisions explicit in PR and future reports.
+
+Reservation remains unchanged: stop GPU work by13:42:35 UTC.
