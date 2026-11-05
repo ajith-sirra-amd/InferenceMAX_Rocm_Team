@@ -1,0 +1,51 @@
+name: PR64288 code audit
+on:
+  push:
+    branches:
+      - investigate/pr64288-regression-20261105
+permissions:
+  contents: read
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ajith-sirra-amd/vllm
+          ref: 9840536e6d53ea1552be8c2da5950d29b7377924
+          path: vllm-source
+          fetch-depth: 1
+      - name: Fetch parent
+        working-directory: vllm-source
+        run: git fetch --no-tags --depth=1 origin a03796b8e3bfe536e22f9db741109dbf80170079
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.5"
+      - name: Prepare CPU lint environment
+        working-directory: vllm-source
+        run: |
+          uv venv --python 3.12
+          uv pip install --python .venv/bin/python ruff==0.14.0
+      - name: Audit moved operations
+        run: |
+          set -euo pipefail
+          vllm-source/.venv/bin/python utils/atom_attention/pr64288_fallback_static_audit.py vllm-source | tee fallback-audit.json
+      - name: Lint candidate
+        working-directory: vllm-source
+        run: |
+          .venv/bin/python -m ruff check vllm/model_executor/layers/attention/mla_attention.py vllm/v1/attention/backends/mla/rocm_aiter_mla.py vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py
+      - name: Check formatting
+        working-directory: vllm-source
+        run: |
+          set -euo pipefail
+          .venv/bin/python -m ruff format --diff vllm/model_executor/layers/attention/mla_attention.py vllm/v1/attention/backends/mla/rocm_aiter_mla.py vllm/v1/attention/ops/rocm_aiter_mla_fp8_prefill.py | tee ../formatting.diff
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr64288-code-audit
+          path: |
+            fallback-audit.json
+            formatting.diff
+          if-no-files-found: error
