@@ -35,3 +35,19 @@ Retry 41952495827 stopped before model launch because the runner host has no gh 
 Replacement 41953335199 uses the pinned GitHub artifact action and scopes ownership cleanup to its own evidence directory. Harness revision 1af4b30f1e70d2270c71c365b0eb3438a509a4e7. It retains the 1800-second request and 7200-second evaluation timeouts, full dataset, prompts, C48, live MTP, source and scoring. Observational HTTP tracing records request identity, payload, timings, usage and primary failures. No inference source changes were made for the retry.
 
 The user confirmed a new reservation and later reported clearing the GPUs. No inference about the cause of the earlier timeout is drawn from that report.
+
+## Superseding retry audit
+
+Run 41953335199 ended with GitHub success, but artifact 13381852933 contains
+only three setup files. GSM8K did not execute. A single-quoted echo inside the
+single-quoted container command split its script into two shell arguments.
+The bad command reproduced that split; the corrected command passes one
+complete script containing the evaluation invocation. A separate failing
+GSM8K evidence-audit status records that the successful workflow is invalid.
+
+Replacement run 41954472581 uses harness 1484593279c55e86827b1b3e31b7f8c55e7ae706.
+Hosted preflight now validates the complete shell argument, and a post-run
+check requires a passed 1319-example score, exact candidate/base revisions,
+nonzero live MTP acceptance, and 1319 matching HTTP starts/completions with
+zero request errors. The 30-minute HTTP timeout remains unchanged.
+No score or performance result from either November 5 setup retry is claimed.
