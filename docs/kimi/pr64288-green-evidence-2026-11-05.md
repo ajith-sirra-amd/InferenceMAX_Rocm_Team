@@ -79,3 +79,15 @@ Execution proof records candidate a03796b8, normal routing, replay phase, and **
 ON run **41967738227**, GPU job **127076572077**, started automatically. At 05:52:20 UTC its container `bmk-server-41967738227-1-mi355x-amd_pit2_p03_g07` was cloning/checking out the same candidate. New runtime directory: `/outputs/.native-fp8-validation/serve.jnGneVEQ/vllm`.
 
 The user asked whether OFF equals ON and whether FP8 has no benefit. Answered candidly: current OFF 18266.89 and historical ON 18276.23 differ by only **0.05%**, but use different source revisions. **No current end-to-end benefit has been demonstrated.** Await matched ON at a03796b8; if similar, report no measurable C48+MTP benefit and do not present the PR as a demonstrated speedup. Profiling becomes the next investigation into any lost kernel savings, after the authorized review validation.
+
+## OFF routing audit and ON startup, 06:05 UTC
+
+The OFF raw server log has exactly eight NATIVE_FP8_EXECUTION events: one flag_off event per rank, flag disabled, BF16 incoming query, no graph capture or accuracy-stress routing, candidate a03796b8. The observer is installed in OFF mode and raises if the native direct projection, FlyDSL FP8 FMHA, or enabled native forward is invoked. Its final NATIVE_FP8_FLAG_OFF_PROOF_PASS covers all eight ranks. This is stronger than merely finding no FP8 log messages.
+
+**OFF does not disable all FP8 attention.** The existing upstream ASM prefill uses FP8 Q/K/V and BF16 output when there is no cached context. With cached context, that ASM path is bypassed; the ordinary AITER backend uses BF16 for both cached-context attention and its new-token causal portion. The PR flag changes eligible cached-context projection/FMHA only. Sources at candidate a03796b8: rocm_aiter_mla.py lines 2840-2848, 3009-3021 and 3027-3050; prefill/aiter_flash_attn.py lines 103-158; mla_attention.py lines 3239-3315. Do not infer kernel input precision solely from the dtype logged at entry to forward_mha.
+
+ON actual server environment verified native flag=1, candidate a03796b8, normal routing, native validation plugin and both BLAS selection flags=0. Its shell serve command exactly matches OFF. At 06:04:48 UTC the container is initializing, no server error matches or native execution events yet; benchmark has not started. Confirm projection and cached_fmha events on all ranks once requests run.
+
+The primary PR comment, body and ASM reply were updated at 05:58 UTC to remove failed enclosing workflows from passing-validation claims. Explicit unresolved/historical failure references remain labeled as failures. The published head remains e2393d70.
+
+The merge-conflict bot reported the published head at 04:35 UTC. Candidate a03796b8 already merges pinned main 69d27bf8. Current upstream main a2bcb565 is 77 commits ahead of that pin; the compare API shows no changes to the candidate's eight feature files in those commits. Check mergeability after any authorized candidate publication; do not change the frozen revision during the matched runs.
