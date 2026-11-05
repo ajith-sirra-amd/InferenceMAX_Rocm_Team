@@ -60,3 +60,22 @@ The raw profile separately contains 531 warmup records, of which 440 carry the s
 All five workflows remain in progress/waiting. Their replacement validation GPU jobs have not yet started.
 
 The complete hyperlink audit found four failed/cancelled enclosing workflows supporting component-pass claims; the three fresh workflows cover their kernel/numerical/ASM, NIAH and serving scope. All eight non-run GitHub links returned HTTP 200. Every currently cited successful run has unexpired artifacts. Historical total throughput values were rechecked against archived JSON: 15476.46881, 16915.72154, 17406.08912, 18244.04135 and 18276.23099 tokens/s/GPU. Their raw error-accounting fields include warmup classifications; measured failure counts require phase-aware accounting.
+
+## Completed OFF control and matched ON startup
+
+[OFF run 41964736019](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41964736019) completed successfully. Inspected artifacts:
+- 13391229164: normalized benchmark JSON.
+- 13391229174: raw records, commands, source manifest and execution proof.
+- 13391578130: server log.
+
+Normalized total throughput: **18266.89472 input-plus-output tokens/s/GPU**; output-only: **126.61731 tokens/s/GPU**. Aggregator duration: **3628.05955 seconds**. AIPerf separately reports **3624.56 seconds**; preserve the metric-specific time basis.
+
+Measured records: **3835 successes + 6 empty-content response errors**. All six are InvalidInferenceResultError with the same no-content message. TTFT and inter-token-latency metrics are present for all **3835/3835** successful requests. Raw records contain 531 warmup entries (440 with no-content classification), excluded from measured error counts.
+
+**Cutoff limitation:** the client cancelled **12 in-flight requests** at the configured end, then exhausted its 10-second cancellation-return grace period and forced phase completion. The client log includes that ERROR and later terminates its records-manager process after shutdown grace. The enclosing workflow passed. Do not describe this run as having no errors or perfectly clean shutdown. No ERROR/Traceback/hipError/hipBLAS error matches were found in the server log.
+
+Execution proof records candidate a03796b8, normal routing, replay phase, and **flag_off on all eight ranks**. The native manifest pins binaries to base 69d27bf8 and the expected Torch/Triton/ROCm stack. The job log records both TORCH_BLAS_PREFER flags=0 and **[pin-ccd] pinned 1050 threads**. The CCD map itself was not included in the raw artifact; it was inspected live earlier.
+
+ON run **41967738227**, GPU job **127076572077**, started automatically. At 05:52:20 UTC its container `bmk-server-41967738227-1-mi355x-amd_pit2_p03_g07` was cloning/checking out the same candidate. New runtime directory: `/outputs/.native-fp8-validation/serve.jnGneVEQ/vllm`.
+
+The user asked whether OFF equals ON and whether FP8 has no benefit. Answered candidly: current OFF 18266.89 and historical ON 18276.23 differ by only **0.05%**, but use different source revisions. **No current end-to-end benefit has been demonstrated.** Await matched ON at a03796b8; if similar, report no measurable C48+MTP benefit and do not present the PR as a demonstrated speedup. Profiling becomes the next investigation into any lost kernel savings, after the authorized review validation.
