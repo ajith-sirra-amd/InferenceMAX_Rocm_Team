@@ -224,7 +224,7 @@ def bench(arm, case, env, log, proc):
     return summary
 
 
-def main(report, *, arms=None, exercise=None):
+def main(report, *, arms=None, exercise=None, command_transform=None, env_transform=None):
     recipe = RECIPE.read_text()
     quant = json.loads(re.search(r"--quantization-config '([^']+)'", recipe).group(1))
     dspark_root = Path("/models/models--Inferact--Kimi-K3-DSpark")
@@ -286,6 +286,10 @@ def main(report, *, arms=None, exercise=None):
             "cudagraph_capture_sizes": list(range(2, 481, 2)),
         }),
     ]
+    if command_transform is not None:
+        command = command_transform(command)
+    if env_transform is not None:
+        env = env_transform(env)
     report["command"] = list(map(str, command))
     report["settings"] = {"tp": 8, "dcp": 8, "mtp": True, "synthetic_acceptance": False,
                           "ccd_pinning": True, "cpu_kv_offload": False, "normal_routing": True}
