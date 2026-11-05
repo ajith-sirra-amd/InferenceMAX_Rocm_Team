@@ -1,0 +1,178 @@
+name: PR64288 candidate GSM8K request diagnosis
+on:
+  push:
+    branches: [checks/pr64288-gsm8k-retry-20261105]
+    paths: [.github/workflows/pr64288-gsm8k-retry.yml]
+permissions:
+  contents: read
+  actions: read
+env:
+  IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
+  NATIVE_SHA: a03796b8e3bfe536e22f9db741109dbf80170079
+  BASE_SHA: 69d27bf8002a4634de1699c95fb0aeb22fb86ca5
+  REVIEW_PORT: '18988'
+jobs:
+  code-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.6"
+      - name: Check diagnostic syntax and workflow shell
+        run: |
+          uv venv --python 3.12
+          uv pip install pyyaml
+          .venv/bin/python - <<'PY'
+          import ast, json, pathlib, subprocess, yaml
+          for path in ("pr64288_matched_serve.py", "review_serving_observer.py", "pr64288_model_accuracy.py", "pr64288_refresh_binaries.py", "pr64288_bench_client_preflight.py", "pr64288_eval_monitor.py", "pr64288_http_trace.py", "pr64288_gsm8k_retry.py"):
+              ast.parse(pathlib.Path("utils/atom_attention", path).read_text())
+          source = pathlib.Path("utils/atom_attention/pr64288_matched_serve.py")
+          function = next(n for n in ast.parse(source.read_text()).body
+                          if isinstance(n, ast.FunctionDef) and n.name == "execution_proof")
+          scope = {"json": json, "MARKER": "PR64288_SERVING "}
+          exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), "exec"), scope)
+          events = scope["execution_proof"](
+              pathlib.Path("utils/atom_attention/fixtures/pr64288-concurrent-worker-events.log"),
+              "short_context_c8", False, False)
+          assert len(events) == 16
+          assert {e["rank"] for e in events if e["kind"] == "context_attention"} == set(range(8))
+          print("Captured concurrent-worker log: all 16 events recovered across 8 ranks")
+          # Exercise the real validator on valid and invalid cutoff regions.
+          import tempfile
+          with tempfile.TemporaryDirectory() as temporary:
+              fixture = pathlib.Path(temporary, "cutoff.log")
+              for query, expected_pass in ((256, True), (1152, False), (4224, False)):
+                  adjusted = [dict(e, phase="short_query_c8") for e in events]
+                  for event in adjusted:
+                      if event["kind"] == "context_attention":
+                          event.update(max_query_len=query, max_context_len=24576)
+                  fixture.write_text("".join("PR64288_SERVING " + json.dumps(e) + "\n" for e in adjusted))
+                  try:
+                      scope["execution_proof"](fixture, "short_query_c8", False, False)
+                  except RuntimeError as error:
+                      assert not expected_pass and "intended cutoff region" in str(error)
+                  else:
+                      assert expected_pass
+          print("Actual query cutoff: accept 256, reject 1152 and 4224")
+          workflow = yaml.safe_load(pathlib.Path(".github/workflows/pr64288-gsm8k-retry.yml").read_text())
+          for job in workflow["jobs"].values():
+              for step in job["steps"]:
+                  if "run" in step:
+                      subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
+          PY
+      - name: Require pinned-main static and rendered docs validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run watch 41836553476 --repo ajith-sirra-amd/vllm --exit-status --interval 120
+          test "$(gh run view 41836553476 --repo ajith-sirra-amd/vllm --json conclusion --jq .conclusion)" = success
+  gpu:
+    needs: code-checks
+    concurrency:
+      group: pr64288-focused-review
+      cancel-in-progress: false
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Stop only the superseded validation container if still present
+        shell: bash
+        run: |
+          previous_container=pr64288-review-41849935255
+          if docker ps --format '{{.Names}}' | grep -Fxq "$previous_container"; then
+            docker stop --time 60 "$previous_container"
+          fi
+      - name: Recover completed baseline evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prior="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564/review-prior/$GITHUB_RUN_ID"
+          mkdir -p "$prior"
+          gh run download 41861899047 --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --name pr64288-focused-review --dir "$prior"
+          test -s "$prior/upstream_base/gsm8k-summary.json"
+      - name: Diagnose candidate GSM8K requests with unchanged timeout
+        shell: bash
+        run: |
+          task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
+          test -d "$task_work/vllm/.venv"
+          test -d /share_nfs/models
+          docker run --rm --init --network host --ipc=host --shm-size=8g \
+            --name "pr64288-review-$GITHUB_RUN_ID" \
+            --device=/dev/kfd --device=/dev/dri \
+            -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
+            --mount type=bind,source=/share_nfs/models,target=/models,readonly \
+            -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA -e BASE_SHA -e REVIEW_PORT -e REVIEW_RUN_ID="$GITHUB_RUN_ID" \
+            -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+            --entrypoint bash "$IMAGE" -lc '
+              set -euo pipefail
+              export REVIEW_EVIDENCE="/work/review-reruns/$REVIEW_RUN_ID"
+              mkdir -p "$REVIEW_EVIDENCE"
+              git -c safe.directory=/work/vllm -C /work/vllm diff --exit-code
+              git -c safe.directory=/work/vllm -C /work/vllm fetch --depth=1 origin "$NATIVE_SHA"
+              git -c safe.directory=/work/vllm -C /work/vllm checkout --detach "$NATIVE_SHA"
+              test "$(git -c safe.directory=/work/vllm -C /work/vllm rev-parse HEAD)" = "$NATIVE_SHA"
+              git -c safe.directory=/work/vllm -C /work/vllm diff --exit-code
+              export XDG_CACHE_HOME=/work/cache
+              export HF_HOME=/work/cache/huggingface
+              export TRITON_CACHE_DIR=/work/cache/triton
+              export PYTHONPATH=/work/vllm
+              export VLLM_PLUGINS=""
+              export VLLM_ROCM_USE_AITER=1
+              export VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=1
+              cd /work/vllm
+              .venv/bin/python /repo/utils/atom_attention/pr64288_refresh_binaries.py
+              .venv/bin/python /repo/utils/atom_attention/pr64288_bench_client_preflight.py
+              export REVIEW_PRIOR_EVIDENCE="/work/review-prior/$REVIEW_RUN_ID"
+              observer="/work/review-observers/$REVIEW_RUN_ID"
+              mkdir -p "$observer"
+              cp /repo/utils/atom_attention/review_serving_observer.py "$observer/review_serving_observer.py"
+              cp /repo/utils/atom_attention/review_serving_observer.toml "$observer/pyproject.toml"
+              uv pip install --python /work/vllm/.venv/bin/python --no-deps "$observer"
+              export PYTHONUNBUFFERED=1
+              export REVIEW_EVAL_ROOT="/work/review-evaluation/$REVIEW_RUN_ID"
+              mkdir -p "$REVIEW_EVAL_ROOT/patches"
+              uv venv --system-site-packages --python /work/vllm/.venv/bin/python "$REVIEW_EVAL_ROOT/.venv"
+              uv pip install --python "$REVIEW_EVAL_ROOT/.venv/bin/python" "lm-eval[api] @ git+https://github.com/EleutherAI/lm-evaluation-harness.git@b315ef3b05176acc9732bb7fdec116abe1ecc476"
+              cp /repo/upstream/InferenceX/infx/evals/patches/lm_eval_sitecustomize.py "$REVIEW_EVAL_ROOT/patches/sitecustomize.py"
+              cp /repo/utils/atom_attention/pr64288_http_trace.py "$REVIEW_EVAL_ROOT/patches/pr64288_http_trace.py"
+              echo 'import pr64288_http_trace' >> "$REVIEW_EVAL_ROOT/patches/sitecustomize.py"
+              .venv/bin/python /repo/utils/atom_attention/pr64288_gsm8k_retry.py 2>&1 | tee "$REVIEW_EVIDENCE/model-accuracy-driver.log"
+              git -c safe.directory=/work/vllm diff --exit-code -- vllm tests
+            '
+      - name: Stop this run's container
+        if: always()
+        shell: bash
+        run: |
+          container="pr64288-review-$GITHUB_RUN_ID"
+          if docker ps --format '{{.Names}}' | grep -Fxq "$container"; then
+            docker stop --time 60 "$container"
+          fi
+      - name: Restore diagnostic output ownership
+        if: always()
+        shell: bash
+        run: |
+          task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
+          if [ -d "$task_work" ]; then
+            test ! -L "$task_work"
+            workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+            test "$(realpath -e -- "$task_work")" = "$workspace_real/.native-review-diagnostics/41820076564"
+            docker run --rm --network none --user 0:0 \
+              --mount "type=bind,source=$task_work,target=/repair" \
+              --entrypoint chown "$IMAGE" \
+              --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+          fi
+      - name: Upload focused evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pr64288-gsm8k-retry
+          path: .native-review-diagnostics/41820076564/review-reruns/${{ github.run_id }}/
+          include-hidden-files: true
+          if-no-files-found: error

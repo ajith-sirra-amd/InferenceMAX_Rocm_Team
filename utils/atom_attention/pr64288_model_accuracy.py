@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from pr64288_eval_monitor import run_evaluation
 import urllib.request
 
 import pr64288_matched_serve as serving
@@ -121,6 +122,7 @@ def gsm8k(arm, env, log, proc):
     eval_python = eval_root / ".venv/bin/python"
     eval_env = dict(env, VLLM_PLUGINS="", OPENAI_API_KEY="EMPTY",
                     PYTHONPATH=str(eval_root / "patches"))
+    eval_env["REVIEW_GSM8K_TRACE"] = str(directory / "gsm8k-request-events.jsonl")
     output = directory / "gsm8k"
     args = [
         eval_python, "-m", "lm_eval", "--model", "local-chat-completions",
@@ -133,11 +135,8 @@ def gsm8k(arm, env, log, proc):
         "--gen_kwargs", "max_tokens=16384,temperature=0,top_p=1",
     ]
     (directory / "gsm8k-command.json").write_text(json.dumps(list(map(str, args)), indent=2))
-    with (directory / "gsm8k.log").open("w") as out:
-        result = subprocess.run(list(map(str, args)), env=eval_env,
-            cwd=directory, stdout=out, stderr=subprocess.STDOUT, timeout=7200)
-    if result.returncode:
-        raise RuntimeError("GSM8K command failed: " + (directory / "gsm8k.log").read_text()[-8000:])
+    run_evaluation(args, env=eval_env, directory=directory, server=proc,
+                   server_log=log, stop=serving.stop, arm=arm)
     results = list(output.rglob("results_*.json"))
     if len(results) != 1:
         raise RuntimeError("Expected exactly one GSM8K result")
