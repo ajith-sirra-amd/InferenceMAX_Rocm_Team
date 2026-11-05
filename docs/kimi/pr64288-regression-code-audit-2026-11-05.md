@@ -130,8 +130,8 @@ Our cached-data bound uses latent row norms, native weight row norms and RoPE ma
 
 ## Concrete candidate and next decision
 
-Prepared isolated fork candidate:
-[9840536e6d53ea1552be8c2da5950d29b7377924](https://github.com/ajith-sirra-amd/vllm/commit/9840536e6d53ea1552be8c2da5950d29b7377924),
+Prepared isolated fork candidate (formatting follow-up included):
+[436f9022967b26f4cb19f712063a63defe6a6cff](https://github.com/ajith-sirra-amd/vllm/commit/436f9022967b26f4cb19f712063a63defe6a6cff),
 branch `perf/fp8-native-chunk-fallback-20261105`, parent a037.
 
 - Extract the existing native DCP gather/linear/packing body into a reusable per-chunk helper.

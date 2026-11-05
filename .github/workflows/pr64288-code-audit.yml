@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - investigate/pr64288-regression-20261105
+    paths:
+      - .github/workflows/pr64288-code-audit.yml
+      - utils/atom_attention/pr64288_fallback_static_audit.py
 permissions:
   contents: read
 jobs:
@@ -14,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ajith-sirra-amd/vllm
-          ref: 9840536e6d53ea1552be8c2da5950d29b7377924
+          ref: 436f9022967b26f4cb19f712063a63defe6a6cff
           path: vllm-source
           fetch-depth: 1
       - name: Fetch parent
