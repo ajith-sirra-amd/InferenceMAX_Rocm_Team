@@ -63,7 +63,7 @@ jobs:
               for step in job["steps"]:
                   if "run" in step:
                       subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
-                  if "--entrypoint bash" in step["run"]:
+                  if step.get("name") == "Diagnose candidate GSM8K requests with unchanged timeout":
                       import shlex
                       argv = shlex.split(step["run"])
                       index = argv.index("-lc")
