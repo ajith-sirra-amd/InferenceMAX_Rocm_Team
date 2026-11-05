@@ -164,3 +164,20 @@ Upstream #65418 raises the ROCm margin floor to3 GiB, but the formula applies it
 User asked why vLLM was reinstalled. Explained: PR source installation tests unmerged code; rebasing to newer upstream was a separate choice for reviewer current-main comparison/merge-conflict resolution, and matching binaries avoid source/extension mismatch. Updating upstream is not inherently required by the FP8 optimization. Acknowledged this should have been explicit before comparing historical results. Need keep runtime revisions explicit in PR and future reports.
 
 Reservation remains unchanged: stop GPU work by13:42:35 UTC.
+
+## Serving setup failure and compiler-cache isolation, 09:56 UTC
+
+Serving run41968261826 attempt2 failed during **unmodified upstream main** startup. Worker TP5 reported Inductor/Triton compilation failure for triton_poi_fused__to_copy_mul_sigmoid_slice_tanh_0 at09:52:09 UTC; the first exception is OSError [Errno116] Stale file handle while CompiledKernel reads compiled binary bytes. No serving cases had completed. Evidence persisted in artifact13403514638. The failed container was stopped by exact name; no other container was touched.
+
+This repeated the class of NFS compiler-cache failure seen in the ON replay. Changed **only the validation harness** in commit49552a38912be4551bfb9986b54a005c9661c745:
+- New optional REVIEW_COMPILER_CACHE_ROOT is set to /tmp/pr64288-compiler-cache for the serving workflow.
+- Each arm gets separate local TRITON_CACHE_DIR, TORCHINDUCTOR_CACHE_DIR and VLLM_CACHE_ROOT, with filesystem type and paths saved in compiler-cache.json. NFS is rejected.
+- Startup polling now fails promptly upon this exact fatal exception, rather than waiting for the API server's health timeout.
+- Python AST checks verified unchanged CASES, bench, bench_command and execution_proof.
+- Native candidatea037, binary/base69d27, containerdigest, model config, prompts, concurrencies and tolerances remain unchanged.
+
+Replacement serving run **42006336780** started automatically from the harness push. Current container name will be pr64288-green-42006336780-1. Monitor that run; old serving monitors are obsolete. Do not cite failed41968261826 as passing validation. Cutoff remains13:42:35 UTC.
+
+User has repeatedly asked about the historical cache decline and runtime reinstall. Responded with the original document's timeline: prototype vLLM1b2a66639 at17406TPS/22695620tokens; earlier native492080779+a1cfd2c1 at18276TPS/22524219tokens; currenta037+69d27 at18267OFF/19001ON and19834746tokens. Same e0d00e4b image digest for the two native generations, different installed runtime. The historical 17,406-to19,001 difference must not be attributed only to this PR. Current matched OFF/ON is the observed4.02% flag comparison.
+
+All five inspected files (cache utils/interface, extensible allocator, gpu_worker, AMD KDA) are byte-identical between candidatea037 and upstream69d27. This attributes the cache-policy code changes to upstream, but does not isolate every byte of memory difference with a GPU allocator ablation.
