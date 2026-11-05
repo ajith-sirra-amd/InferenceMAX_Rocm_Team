@@ -321,3 +321,23 @@ No steady-state improvement established. Keep768a5da2 isolated, do not publish i
 Graph-cap42032344547 started GPU job127271019241 before its minimum-headroom gate closed. Containerpr64288-green-42032344547-1. It uses publisheda037/69d27, capture cap240, max-num-seqs96, full1M context and CPU offload at GMU0.90/loadauto. At13:22UTC environment setup was in progress. Step capped900seconds. This is the final GPU experiment in the reservation; stop by13:42:35UTC.
 
 All earlier three workflows (serving, fixed-GMU memory, runtime-count diagnostic) completed successfully. PR description contains serving and baseline-memory evidence; experimental768 code is not published. Use graphCapMonitorCommand/graphCapWatchCode to follow the final experiment and inspect its artifact before claiming a capacity change.
+
+## Reservation work stopped; final status, 13:37 UTC
+
+Cancelled graph-cap experiment42032344547 at13:35UTC while checkpoint prefetch was still delaying model load. A rank reported330.46seconds of prefetch; no load-model snapshot or final capacity result was available. Host inspection at13:34 showed abundant available RAM (~3072945284kB), negligible memory pressure, /dev/shm1%used, and I/O pressure avg60~31%. This supports an I/O delay observation, not a kernel failure or disk-quota diagnosis. The remaining900-second step budget could not reasonably cover loading, warmup and CPU-offload initialization. No timeout or acceptance gate was weakened.
+
+GitHub cancellation accepted and the exact containerpr64288-green-42032344547-1 was explicitly stopped. At13:36:42UTC, remote Docker reported no running containers and ps reported no VLLM worker processes. All four workflows are terminal:
+- Serving42006336780: success; artifact13415946292 inspected.
+- Fixed-GMU memory42010811107: success; artifact13418055772 inspected.
+- Runtime-count diagnostic42028735939: success; artifact13417907202 inspected.
+- Graph-cap42032344547: cancelled during startup; no capacity/performance/accuracy result. It is not cited as passing PR evidence.
+
+All13 workflow links in PR64288 description and author comments were rechecked at13:36UTC: completed/success. PR heada03796b8 remains open, not draft, and unmergeable against current main. Description and reviewer replies include measured serving regressions and the passing baseline-memory audit. Runtime-count candidate768a5da2 remains isolated; no steady-state speedup was demonstrated.
+
+Remaining work, in order:
+1. Profile/diagnose the cached-serving regressions on the observed Q/context shapes (512/16896 and1024/33792), then validate any change with matched measurements.
+2. Finish current-main integration54f39769 with matching ROCm binaries and GPU checks; upstream CI authorization and env-interface discussion remain unresolved. Do not request prohibited CI labels.
+3. Retry the isolated graph-cap240 startup experiment in a new reserved GPU window; follow with serving/accuracy validation before adopting the configuration. GMU0.90 and loadauto remain fixed.
+4. Broader steady-state agentic profiling and C56/C64+MTP, C96 without MTP sweeps remain later.
+
+No polling cell remains active and no GPU job is queued. Reservation cutoff13:42:35UTC was respected. Do not dispatch more server work in this reservation or rerun these workflows after their cutoff. Future GPU work requires an authorized reservation window and updated explicit cutoff. Local independent code review can proceed.
