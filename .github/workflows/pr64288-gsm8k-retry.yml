@@ -90,13 +90,12 @@ jobs:
             docker stop --time 60 "$previous_container"
           fi
       - name: Recover completed baseline evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          prior="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564/review-prior/$GITHUB_RUN_ID"
-          mkdir -p "$prior"
-          gh run download 41861899047 --repo ajith-sirra-amd/InferenceMAX_Rocm_Team --name pr64288-focused-review --dir "$prior"
-          test -s "$prior/upstream_base/gsm8k-summary.json"
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: pr64288-focused-review
+          run-id: 41861899047
+          github-token: ${{ github.token }}
+          path: .pr64288-prior/${{ github.run_id }}
       - name: Diagnose candidate GSM8K requests with unchanged timeout
         shell: bash
         run: |
@@ -129,7 +128,8 @@ jobs:
               cd /work/vllm
               .venv/bin/python /repo/utils/atom_attention/pr64288_refresh_binaries.py
               .venv/bin/python /repo/utils/atom_attention/pr64288_bench_client_preflight.py
-              export REVIEW_PRIOR_EVIDENCE="/work/review-prior/$REVIEW_RUN_ID"
+              export REVIEW_PRIOR_EVIDENCE="/repo/.pr64288-prior/$REVIEW_RUN_ID"
+              test -s "$REVIEW_PRIOR_EVIDENCE/upstream_base/gsm8k-summary.json"
               observer="/work/review-observers/$REVIEW_RUN_ID"
               mkdir -p "$observer"
               cp /repo/utils/atom_attention/review_serving_observer.py "$observer/review_serving_observer.py"
@@ -158,11 +158,11 @@ jobs:
         if: always()
         shell: bash
         run: |
-          task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564"
+          task_work="$GITHUB_WORKSPACE/.native-review-diagnostics/41820076564/review-reruns/$GITHUB_RUN_ID"
           if [ -d "$task_work" ]; then
             test ! -L "$task_work"
             workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
-            test "$(realpath -e -- "$task_work")" = "$workspace_real/.native-review-diagnostics/41820076564"
+            test "$(realpath -e -- "$task_work")" = "$workspace_real/.native-review-diagnostics/41820076564/review-reruns/$GITHUB_RUN_ID"
             docker run --rm --network none --user 0:0 \
               --mount "type=bind,source=$task_work,target=/repair" \
               --entrypoint chown "$IMAGE" \
