@@ -267,3 +267,17 @@ Periodic DSpark counts (including warmup, not exact measured-only counters) yiel
 ON Triton cache had8 variants each of _q_and_cache_partials/_q_quant_and_cache_reduce after cached_c8,15 after cached_c48,17 during the long case. This motivates isolated runtime-count candidate768a5da2 but does not measure compilation overhead or establish causality. GPU validation remains pending.
 
 Memory42010811107 still waits for serving; no memory GPU job has begun. Integration54f39769 has inspected passing static/docs evidence, but no GPU validation. Exact ee85 ROCm100 wheel still404 at12:33UTC; nightly stilla2bcb5657 (pre59124). Do not pair incompatible sources/binaries or transfer results to unvalidated integration. PR head remainsa037. GPU cutoff13:42:35UTC, GMU0.90, load-formatauto unchanged.
+
+## Serving completed and PR updated, 12:50 UTC
+
+Serving42006336780 completed successfully. Inspected artifact13415946292: all1536 requests completed (512 each for pinned base69d27, candidatea037 OFF, candidatea037 ON), all12 setup kernel tests passed, identical serve commands, expected source manifests, no server ERROR/Traceback matches, and genuine non-capture FP8 projection/FMHA on ranks0-7 in all3 eligible ON cases. Both below-cutoff cases retained BF16.
+
+Final long_cached_c48 ON duration1305.905344s, output18.819128 tokens/s for the whole server; OFF19.617601, base19.138105. ON vs OFF output throughput: cached_c8 -7.21%, cached_c48 -4.59%, long_cached_c48 -4.07%. One pass per arm; variability unmeasured. Cause remains unproven. This is different from the full agentic replay (+4.02% total), which uses CPU offload/synthetic acceptance.
+
+Updated PR64288 description, primary validation comment6473435649 and ASM/cache-scale replies4466935267/4466935928. Description now contains all5 throughput rows plus mean/P99 TTFT and mean TPOT, prominently discloses serving regressions, and distinguishes execution success from performance improvement. Tagged seungrokj/frida-andersson in the updated primary comment as previously authorized. Rechecked all12 workflow links used in the body/primary comment: completed/success. Current-main integration and upstream CI remain pending; published head remainsa037.
+
+Memory42010811107 now has active GPU job127253927549, containerpr64288-green-42010811107-1. At12:49UTC it is installing the exact vLLM environment before model startup. Use memoryMonitorCommand, not the obsolete serving container monitor.
+
+Queued isolated runtime-count diagnostic42028735939 behind memory success. Harness545886933c95499c50efe81d2ff4fe09d59543ce on checks/pr64288-runtime-counts-20261105; native768a5da2 vs parenta037, same compiled base69d27. Hosted code checks passed. Runs unchanged12 kernel tests,8 numerical/graph cases and ASM regression, then a single-GPU parent/candidate exact-output comparison across21 cache-size cases (empty/tail/power-of-two boundaries) and exploratory timings. New script utils/atom_attention/pr64288_runtime_counts_diagnostic.py; wrapper pr64288_runtime_counts_validation.sh; workflow pr64288-green-runtime-counts.yml. GPU step capped900seconds and requires1200seconds of reservation headroom to start. No model serving run and no PR-head update for this optional candidate. Timing is exploratory, not a serving claim.
+
+The serving watcher stopped normally when its container disappeared after successful cleanup. No watcher is currently active. Resume two-minute monitoring of memory, then runtime-count diagnostic. Cutoff13:42:35UTC remains binding.
