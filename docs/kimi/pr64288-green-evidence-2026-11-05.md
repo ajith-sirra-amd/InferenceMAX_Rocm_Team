@@ -305,3 +305,19 @@ Runtime-count diagnostic42028735939 started its GPU job at roughly13:15UTC on768
 Serving artifact first observed rank0 FP8 shapes: cached_c8 and cached_c48 use query512/context16896; long_cached_c48 uses query1024/context33792. Proof also records BF16 fallback chunks (context7680). These are first-seen examples, not execution-frequency distributions. They are useful for a future targeted pipeline profile; do not claim the entire cases executed exclusively in FP8.
 
 Stop GPU work by13:42:35UTC. Current-main integration still needs matching binaries and GPU validation; published PR heada037 remains unmergeable against the newly advanced main. Serving regressions remain unresolved, despite successful accuracy/execution checks.
+
+## Runtime-count diagnostic verified; final memory experiment running, 13:23 UTC
+
+Runtime-count workflow42028735939 is green. Inspected artifact13417907202: native768a5da2/compiled69d27,12kernel tests,8numerical/graph cases, ASM regression (max absolute0.0215493441),21boundary cases exactly match parenta037. First-call totals across the diagnostic shapes: parent5688.47ms, candidate1948.45ms; includes compilation/allocation and both preparation helpers. This is not pure compilation time or serving throughput.
+
+Exploratory median steady prepare times in ms:
+- Q512/cache8192: parent0.044680, candidate0.044617 (-0.14% time).
+- Q8192/cache16384:0.044496 ->0.045431 (+2.10% time).
+- Q8192/cache32768:0.044345 ->0.044489 (+0.32% time).
+- Q8192/cache131072:0.045409 ->0.047564 (+4.74% time).
+
+No steady-state improvement established. Keep768a5da2 isolated, do not publish it as the PR head or claim it fixes the serving regressions. Numerical acceptance remained unchanged. A future targeted profile should use the observed512/16896 and1024/33792 query/context shapes and compare the full native-OFF/ON pipeline.
+
+Graph-cap42032344547 started GPU job127271019241 before its minimum-headroom gate closed. Containerpr64288-green-42032344547-1. It uses publisheda037/69d27, capture cap240, max-num-seqs96, full1M context and CPU offload at GMU0.90/loadauto. At13:22UTC environment setup was in progress. Step capped900seconds. This is the final GPU experiment in the reservation; stop by13:42:35UTC.
+
+All earlier three workflows (serving, fixed-GMU memory, runtime-count diagnostic) completed successfully. PR description contains serving and baseline-memory evidence; experimental768 code is not published. Use graphCapMonitorCommand/graphCapWatchCode to follow the final experiment and inspect its artifact before claiming a capacity change.
