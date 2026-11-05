@@ -291,3 +291,17 @@ The snapshot workspace_storages heuristic matches any occurrence of metadata/buf
 Queued startup-only C48 graph-cap experiment42032344547, harness6cfc07b7451b8aec2c7104aa9a590426acef4eee on checks/pr64288-memory-graphcap-20261105. It waits for runtime-count diagnostic42028735939 at harness545886. Native source remains publisheda037 and compiled base69d27. Only compilation capture cap480->240 and associated even sizes2..240 change. Max-num-seqs96, max-context1M, CPU offload, synthetic MTP, GMU0.90/loadauto retained. C48 with4draft tokens needs at most48*5=240 verify tokens. CPU AST test compared old/new command transforms: every other command argument and compilation field identical. This measures startup capacity only, not serving performance or accuracy. Step cap900seconds, minimum1200seconds headroom; stop by13:42:35UTC.
 
 Exact integration-baseee85 ROCm100 wheel remained404 at12:55UTC. No new human review comments then.
+
+## Memory audit verified and kernel diagnostic running, 13:17 UTC
+
+Memory42010811107 completed successfully; inspected artifact13418055772. Both arms have24snapshots (3phases x8ranks), untruncated traversal and zero depth-limit hits. Identical serve commands, GMU0.90/loadauto, exacta037/69d27 provenance and no server ERROR/Traceback matches. Both report19834746KV tokens and7.24GiB graph memory.
+
+Every rank at every phase has ON-minus-base allocated and peak-since-reset memory of exactly12288bytes, reserved difference0, and free-device-memory difference-10485760bytes. This is a startup measurement, not steady-state serving allocation. It shows no GiB-scale retained-weight difference or startup-memory saving from the flag. Workspace labels in this audit remain heuristic/alias-contaminated; counters and graph/cache logs are the reliable evidence.
+
+PR description now links this passing fixed-GMU audit in its existing no-capacity-gain statement. Primary serving update remains unchanged; no unvalidated experimental code was published to the PR.
+
+Runtime-count diagnostic42028735939 started its GPU job at roughly13:15UTC on768a5da2. Native parenta037, compiled base69d27, step cap900seconds. Monitor runtimeMonitorCommand and runtimeWatchCode. Graph-cap experiment42032344547 has passing hosted code checks and waits for runtime diagnostic success. Its GPU job requires>1200seconds reservation headroom and caps execution900seconds. If insufficient time remains, do not bypass the cutoff.
+
+Serving artifact first observed rank0 FP8 shapes: cached_c8 and cached_c48 use query512/context16896; long_cached_c48 uses query1024/context33792. Proof also records BF16 fallback chunks (context7680). These are first-seen examples, not execution-frequency distributions. They are useful for a future targeted pipeline profile; do not claim the entire cases executed exclusively in FP8.
+
+Stop GPU work by13:42:35UTC. Current-main integration still needs matching binaries and GPU validation; published PR heada037 remains unmergeable against the newly advanced main. Serving regressions remain unresolved, despite successful accuracy/execution checks.
