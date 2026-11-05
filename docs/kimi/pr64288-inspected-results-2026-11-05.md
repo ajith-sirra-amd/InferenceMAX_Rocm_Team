@@ -51,3 +51,25 @@ check requires a passed 1319-example score, exact candidate/base revisions,
 nonzero live MTP acceptance, and 1319 matching HTTP starts/completions with
 zero request errors. The 30-minute HTTP timeout remains unchanged.
 No score or performance result from either November 5 setup retry is claimed.
+
+## Current attempt
+
+Run 41954472581 failed in hosted preflight because its new argument audit
+indexed the run field of action-only steps. No GPU job executed. The selector
+was corrected and exercised against action-only, preflight and container steps.
+
+Active replacement: 41954676681, workflow revision
+5f4d3674c2af1288042daa812e0d116ca844f86a, GPU job 127006701542.
+Hosted checks and baseline-artifact recovery passed. The diagnostic step is
+running. The candidate remains a03796b8; no accuracy pass is claimed yet.
+
+After inspecting a complete candidate result, the prepared final replay uses
+tag pr64288-final-replay-20261104, immutable harness
+6b4f3553391063b1060d39cf16b154e7d26585b3, whose CPU tests passed in 41877883215.
+Use e2e-tests.yml with the kimik3-fp4-mi355x-vllm-agentic-mtp config, C48,
+native-vllm-sha=a03796b8e3bfe536e22f9db741109dbf80170079,
+native-comparison=native, duration-override=3600. Run native-fp8-enabled=0,
+then 1, without profiling. This selects the pinned e0d00e4b image digest and
+binaries for the exact 69d27bf8 base. Preserve CPU offload, CCD placement,
+quantization targets, BLAS settings and synthetic speculative acceptance.
+Do not label those replay results as live-MTP accuracy evaluations.
