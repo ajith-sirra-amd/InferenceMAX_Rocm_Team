@@ -12,6 +12,7 @@ env:
   BASE_SHA: 69d27bf8002a4634de1699c95fb0aeb22fb86ca5
   REVIEW_PORT: '18988'
   REVIEW_SCOPE: serving
+  REVIEW_COMPILER_CACHE_ROOT: /tmp/pr64288-compiler-cache
   GPU_STOP_UTC: '2026-11-05T13:42:35Z'
 jobs:
   code-checks:
@@ -86,7 +87,7 @@ jobs:
               --device=/dev/kfd --device=/dev/dri \
               -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
               --mount type=bind,source=/share_nfs/models,target=/models,readonly \
-              -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA -e BASE_SHA -e REVIEW_PORT -e REVIEW_SCOPE \
+              -e PYTHONDONTWRITEBYTECODE=1 -e NATIVE_SHA -e BASE_SHA -e REVIEW_PORT -e REVIEW_SCOPE -e REVIEW_COMPILER_CACHE_ROOT \
               -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
               --entrypoint bash "$IMAGE" /repo/utils/atom_attention/pr64288_green_validation.sh
       - name: Stop only this run's container

@@ -78,6 +78,9 @@ def wait_ready(proc, log):
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             raise RuntimeError("Server exited during startup: " + log.read_text(errors="replace")[-10000:])
+        startup_log = log.read_text(errors="replace")
+        if "OSError: [Errno 116] Stale file handle" in startup_log:
+            raise RuntimeError("Compiler cache read failed during startup: " + startup_log[-10000:])
         try:
             request("/health")
             return
@@ -308,6 +311,21 @@ def main(report, *, arms=None, exercise=None):
                    REVIEW_SOURCE_SHA=revision,
                    VLLM_ROCM_USE_AITER_FLYDSL_FP8_PREFILL_ATTN=flag)
         (directory / "command.json").write_text(json.dumps(report["command"], indent=2))
+        compiler_root = os.environ.get("REVIEW_COMPILER_CACHE_ROOT")
+        if compiler_root:
+            cache = Path(compiler_root) / arm
+            cache.mkdir(parents=True)
+            filesystem = run(["stat", "-f", "-c", "%T", cache], capture=True).stdout.strip()
+            if "nfs" in filesystem.lower():
+                raise RuntimeError("Compiler cache must use container-local storage")
+            cache_env = {
+                "TRITON_CACHE_DIR": str(cache / "triton"),
+                "TORCHINDUCTOR_CACHE_DIR": str(cache / "inductor"),
+                "VLLM_CACHE_ROOT": str(cache / "vllm"),
+            }
+            env.update(cache_env)
+            (directory / "compiler-cache.json").write_text(json.dumps(
+                {"filesystem": filesystem, "environment": cache_env}, indent=2))
         log = directory / "server.log"
         proc = None
         try:
