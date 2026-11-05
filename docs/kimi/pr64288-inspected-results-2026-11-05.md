@@ -105,3 +105,49 @@ ajith.sirra@amd.com, for eight GPUs on pit2-p03-g40. It runs from
 12-hour limit. Start scoped cleanup by 13:42:35 UTC. This resolves the pending
 reservation question without needing a reply. Current local checkout writes
 are denied; the source and workflow have not been changed.
+## Completed candidate retry and final replay dispatch
+
+Run 41954676681 passed. GPU job 127006701542 completed at 03:53:31 UTC.
+Artifact 13386927365 (pr64288-gsm8k-retry) contains the full result, samples,
+request trace and source manifest. Candidate a03796b8e3bfe536e22f9db741109dbf80170079
+and base 69d27bf8002a4634de1699c95fb0aeb22fb86ca5 remain unchanged.
+
+| Full GSM8K | Main, run 41861899047 | Candidate, run 41954676681 |
+| --- | ---: | ---: |
+| Examples | 1319 | 1319 |
+| Strict exact match | 1270/1319 (96.28506444%) | 1270/1319 (96.28506444%) |
+| Flexible extraction | 1269/1319 (96.20924943%) | 1269/1319 (96.20924943%) |
+
+All 1319 candidate HTTP starts have matching completions, all statuses are 200,
+and no request/response failure was recorded. Live MTP accepted 112527 draft
+tokens. The aggregate strict delta is 0.0 percentage points. Question, prompt
+and target hashes match across both arms. Twenty answers became correct and
+20 became incorrect; 1053 response texts differ. Equal aggregate scores do not
+establish token-for-token equivalence.
+
+The long request (ID/doc 984) completed after 1218.759 seconds with stop finish
+reason, 1473 generated tokens and 1340 reported reasoning tokens. It was wrong
+under the benchmark in both arms. The unchanged 1800-second request timeout
+and 16384-token generation limit were retained. This run did not reproduce the
+prior HTTP timeout; the earlier timeout's cause is not established.
+
+GSM8K recorded ordinary prefill on all eight ranks but no cached FP8
+projection/FMHA events. Its enabled flag is not proof of that kernel coverage.
+The retained NIAH files were independently inspected: main and candidate each
+pass 12/12 identical prompts, and each candidate case records FP8 projection
+and FP8 FMHA on all eight ranks (96 events of each kind across 12 cases).
+
+Before the next dispatch, the validation container was gone and rocm-smi
+reported no KFD GPU processes. Full C48+MTP FP8 OFF run 41964736019 is now
+active, using immutable harness 6b4f3553391063b1060d39cf16b154e7d26585b3 and
+candidate a03796b8, duration 3600, native-comparison=native, with no profiling.
+The workflow's queue gate names the completed GSM8K run and its exact workflow
+SHA 5f4d3674c2af1288042daa812e0d116ca844f86a. Inspect OFF evidence, then dispatch
+the matched ON arm. Keep the published PR update pending final performance
+inspection; published head remains e2393d70.
+
+For completed GitHub job logs, gh run view --log tries to write a cache outside
+the allowed local workspace and fails here. Use gh api actions/jobs/ID/logs
+and inspect its response in memory. Live trace reads work through docker exec;
+host reads of the current root-owned trace fail until the scoped ownership
+cleanup completes. Do not repair permissions on unrelated runtime directories.
