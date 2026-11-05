@@ -48,3 +48,15 @@ Each standalone run creates a fresh environment under its own repository-mounted
 ## PR update procedure
 
 Inspect each replacement artifact before citing it. Replace failed/cancelled component-pass links in the PR body and authored comments, including the ASM and cached-scale replies. Keep evidence tied to the tested source. Promote the validated candidate without force only after assessment; then revise the body/checklist and tag the relevant reviewer concisely. Audit all links again after publication.
+
+## 04:59 UTC live observation
+
+OFF completed warmup and began its 3600-second measured interval at approximately 04:45:55 UTC. At 13:45 into measurement the reporter showed **1054 successful measured requests and one error**. Do not describe this as an error-free replay.
+
+The measured failure is request `2fcd44b3-3c05-4dc5-abc4-d73c159d5bf9`, conversation `279424d0e53192cde462be8d39c23b52b977`, turn 2, 60329 input tokens. It started 04:55:58.959 UTC and completed after 11.8315 seconds. AIPerf reports `InvalidInferenceResultError`: no response with actual content. It was not cancelled. No ERROR/Traceback matches were found in the inspected server log. The cause is not established. The native FP8 flag is OFF.
+
+The raw profile separately contains 531 warmup records, of which 440 carry the same empty-content classification. The warmup uses max_tokens=1, and the warmup progress reporter printed errors=0. Keep raw warmup classifications separate from measured errors; do not use that reported zero as proof that every warmup response contained text.
+
+All five workflows remain in progress/waiting. Their replacement validation GPU jobs have not yet started.
+
+The complete hyperlink audit found four failed/cancelled enclosing workflows supporting component-pass claims; the three fresh workflows cover their kernel/numerical/ASM, NIAH and serving scope. All eight non-run GitHub links returned HTTP 200. Every currently cited successful run has unexpired artifacts. Historical total throughput values were rechecked against archived JSON: 15476.46881, 16915.72154, 17406.08912, 18244.04135 and 18276.23099 tokens/s/GPU. Their raw error-accounting fields include warmup classifications; measured failure counts require phase-aware accounting.
