@@ -224,3 +224,24 @@ Exact matching ROCm100 wheel metadata for integration baseee85faa1280c3f9ef877c7
 Audited all workflow hyperlinks in the PR body and author comments at10:30UTC: all11 referenced runs currently have conclusion success. The short related-PR note now mentions the merge without linking the failed historical reference run.
 
 Potential later memory experiment (not dispatched): full recipe captures every even graph size2..480 with max-num-seqs96. C48 plus4draft tokens schedules at most240 decode tokens for48 live requests; a bounded graph-capture-size reduction may reclaim memory while retaining GMU0.90. First inspect audit evidence and fallback behavior; do not change current comparisons or claim a saving without measurement.
+
+
+## Serving main completed; OFF controls in progress, 11:17 UTC
+
+Serving42006336780 remains active. Main69d27 completed all5 cases,512/512 requests, with prefill/context execution proof on ranks0-7 and zero server ERROR/Traceback matches. Main shutdown emitted a shared_memory resource-tracker warning; no request failure was observed.
+
+| Case | Main duration (s) | OFF duration (s), if completed | Requests per arm |
+| --- | ---: | ---: | ---: |
+| short_context_c8 | 190.690330 | 195.536790 | 32 |
+| short_query_c8 | 126.133210 | 133.309624 | 32 |
+| cached_c8 | 351.133431 | 343.685766 | 64 |
+| cached_c48 | 769.919844 | pending | 192 |
+| long_cached_c48 | 1284.139677 | pending | 192 |
+
+OFF at publisheda037 started its server around10:57UTC and is now beginning cached_c48. Its first3 cases total128/128 successful requests. Both below-cutoff proofs explicitly show BF16 Q/K/V context attention on all8 ranks; short-query proof has max_query_len<512 and cached context>=8192. Full OFF/ON comparison and enclosing workflow pass are still pending. Do not link this active workflow as passing PR evidence yet.
+
+Live OFF server PID10627 was checked: native attention flag0; sourcea037; both BLAS preference flags0; its Triton cache is separate under/tmp/pr64288-compiler-cache/candidate_off. Runtime source and test cases unchanged. Current-case HTTP200 log counts mark started streaming responses, not completed requests; use result JSON completed counts for final success claims.
+
+At11:09UTC integration-baseee85 exact wheel metadata still returned404. The public ROCm100 nightly alias points toa2bcb5657a881a002e79d0adab3c6b5e39436121, which predates59124. Do not use it as matching binaries for integration54f39769. No new human reviewer comments were found in checks through11:12UTC.
+
+Replacement memory audit42010811107 atf8f707ea remains waiting behind serving. GPU cutoff13:42:35UTC unchanged. After serving, inspect artifacts and update PR replies, then follow the memory audit. Any graph-size experiment remains separate, conditional on evidence and available reservation time; preserve existing performance recipe until validated.
