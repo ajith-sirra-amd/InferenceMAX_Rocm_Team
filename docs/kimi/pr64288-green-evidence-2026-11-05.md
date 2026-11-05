@@ -91,3 +91,13 @@ ON actual server environment verified native flag=1, candidate a03796b8, normal 
 The primary PR comment, body and ASM reply were updated at 05:58 UTC to remove failed enclosing workflows from passing-validation claims. Explicit unresolved/historical failure references remain labeled as failures. The published head remains e2393d70.
 
 The merge-conflict bot reported the published head at 04:35 UTC. Candidate a03796b8 already merges pinned main 69d27bf8. Current upstream main a2bcb565 is 77 commits ahead of that pin; the compare API shows no changes to the candidate's eight feature files in those commits. Check mergeability after any authorized candidate publication; do not change the frozen revision during the matched runs.
+
+## ON attempt 1 startup failure; identical retry active
+
+At 06:06:01 UTC, Triton failed while reading compiled `_dcp_a2a_unpack_combine_kernel` code during decode warmup: `OSError: [Errno 116] Stale file handle`. The cache was `/outputs/.native-fp8-validation/serve.jnGneVEQ/cache/triton`, backed by `/home` on `10.12.62.2:/amd-home` (NFS4). No native FP8 projection/FMHA events occurred. The matching 24 DCP cache files were all readable during follow-up inspection; transient NFS access or concurrent cache replacement is plausible, but the underlying cause is not proven.
+
+The failed server was sent SIGTERM. When shutdown remained stuck, only its named benchmark container was stopped; GitHub uploaded the server log successfully and completed cleanup. Inspected server-log artifact: **13393465085**, five stale-file-handle text matches, zero native execution events. This attempt produced no performance result.
+
+The same ON workflow's failed jobs were rerun without source, image, workload, routing or test changes. **Attempt 2 started 07:27:11 UTC**, GPU job **127111065570**. Container: `bmk-server-41967738227-2-mi355x-amd_pit2_p03_g07`; fresh runtime: `/outputs/.native-fp8-validation/serve.57QiqL2e/vllm`. At 07:30:35 UTC candidate installation completed and startup continued. Keep proof monitors pointed to attempt 2; the attempt-1 container/runtime no longer exist.
+
+All three replacement validation workflows stopped at their predecessor gate when ON attempt 1 failed. Their failed jobs were also rerun: kernels, NIAH and serving are now on **attempt 2**, waiting for ON success. Their kernel/test acceptance remains unchanged. Reservation cutoff remains **13:42:35 UTC**, not extended by retries. If the stale-cache error repeats, isolate compiler caches before another retry rather than repeating indefinitely.
