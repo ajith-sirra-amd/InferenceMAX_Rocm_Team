@@ -132,13 +132,13 @@ Our cached-data bound uses latent row norms, native weight row norms and RoPE ma
 
 Prepared isolated fork candidate (formatting follow-up included):
 [436f9022967b26f4cb19f712063a63defe6a6cff](https://github.com/ajith-sirra-amd/vllm/commit/436f9022967b26f4cb19f712063a63defe6a6cff),
-branch `perf/fp8-native-chunk-fallback-20261105`, parent a037.
+branch `perf/fp8-native-chunk-fallback-20261105`, based on a037.
 
 - Extract the existing native DCP gather/linear/packing body into a reusable per-chunk helper.
 - Route small chunks in mixed forwards through that helper, before FP8-byte gathering.
 - Keep eligible FP8 projection, quantization, thresholds and attention unchanged.
 - Keep the main PR head unchanged. This is a routing ablation, with no measured performance claim.
-- CPU structural and lint validation is prepared in `.github/workflows/pr64288-code-audit.yml`; GPU execution, graph replay and accuracy remain pending.
+- CPU syntax, AST operation-equivalence, Ruff lint and formatting [passed in 42043465344](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/42043465344). The inspected log confirms unchanged native gather/projection/packing, attention/merge and eligible FP8 operations; quantization source is byte-identical. These checks do not establish GPU execution, numerical accuracy or performance; those remain pending.
 
 Recommended solution direction is **select the fastest validated full pipeline by workload shape**, retaining native fallback. The current two max-length thresholds ignore total rows, request count, raggedness and split-K overhead. Do not hardcode new thresholds from one noisy serving pass.
 
@@ -150,3 +150,4 @@ Next GPU sequence, only after a new reservation:
 5. Only after identifying the limiting stage, implement the appropriate kernel/dispatch change. Validate GSM8K, cached-path NIAH and the full C48+MTP replay. Broader concurrency sweeps follow the PR gates.
 
 There is no validated fix that guarantees higher throughput across every configuration yet. A defensible result is better eligible-case throughput with measured native fallback for cases that do not amortize the FP8 overhead.
+
