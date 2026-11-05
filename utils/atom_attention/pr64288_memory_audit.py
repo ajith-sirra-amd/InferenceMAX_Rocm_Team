@@ -6,15 +6,13 @@ from pathlib import Path
 import types
 
 
-def snapshot(worker, phase):
+def tensor_inventory(roots, device_type="cuda"):
     import torch
 
-    runner = worker.model_runner
-    device = worker.device
-    free, total = torch.cuda.mem_get_info(device)
     seen = set()
     storages = {}
-    pending = [(runner, "runner", 0)]
+    pending = [(value, name, 0) for name, value in roots]
+    depth_limited = 0
     scanned = 0
     while pending and scanned < 100000:
         value, name, depth = pending.pop()
@@ -23,7 +21,7 @@ def snapshot(worker, phase):
         seen.add(id(value))
         scanned += 1
         if isinstance(value, torch.Tensor):
-            if value.device.type == "cuda" and value.numel():
+            if value.device.type == device_type and value.numel():
                 storage = value.untyped_storage()
                 key = (str(value.device), storage.data_ptr())
                 item = {"path": name, "storage_bytes": storage.nbytes(),
@@ -31,21 +29,41 @@ def snapshot(worker, phase):
                 if key not in storages:
                     storages[key] = item
             continue
-        if depth >= 18 or isinstance(value, (str, bytes, int, float, bool, type(None), types.ModuleType, type)):
+        if isinstance(value, (str, bytes, int, float, bool, type(None), types.ModuleType, type)):
+            continue
+        if depth >= 32:
+            depth_limited += 1
             continue
         if isinstance(value, dict):
             items = value.items()
         elif isinstance(value, (list, tuple)):
             items = enumerate(value)
-        elif callable(value):
-            continue
-        elif hasattr(value, "__dict__") and type(value).__module__.startswith(("vllm.", "torch.nn.")):
+        elif isinstance(value, torch.nn.Module) or (
+            hasattr(value, "__dict__") and type(value).__module__.startswith("vllm.")
+        ):
             items = vars(value).items()
         else:
             continue
         for key, child in items:
             pending.append((child, name + "." + str(key), depth + 1))
     rows = sorted(storages.values(), key=lambda item: item["storage_bytes"], reverse=True)
+    return rows, {"objects_scanned": scanned, "scan_truncated": bool(pending),
+                  "depth_limited_objects": depth_limited}
+
+
+def snapshot(worker, phase):
+    import torch
+    from vllm.v1.worker.workspace import (
+        current_workspace_manager, is_workspace_manager_initialized,
+    )
+
+    runner = worker.model_runner
+    device = worker.device
+    free, total = torch.cuda.mem_get_info(device)
+    roots = [("runner", runner)]
+    if is_workspace_manager_initialized():
+        roots.append(("workspace_manager", current_workspace_manager()))
+    rows, traversal = tensor_inventory(roots)
     workspaces = [row for row in rows if any(word in row["path"].lower()
                   for word in ("workspace", "buffer", "metadata", "scratch"))]
     rank = int(worker.rank)
@@ -54,8 +72,8 @@ def snapshot(worker, phase):
         "free_bytes": free, "total_bytes": total,
         "torch_allocated_bytes": torch.cuda.memory_allocated(device),
         "torch_reserved_bytes": torch.cuda.memory_reserved(device),
-        "cumulative_torch_peak_bytes": torch.cuda.max_memory_allocated(device),
-        "objects_scanned": scanned, "scan_truncated": bool(pending),
+        "torch_peak_since_last_reset_bytes": torch.cuda.max_memory_allocated(device),
+        **traversal,
         "largest_storages": rows[:80], "workspace_storages": workspaces[:100],
         "scope": "Read-only tensor metadata and allocator counters. KV tensor storage can be virtual; storage sizes are not summed as physical residency.",
     }
@@ -128,11 +146,14 @@ def main():
                                    ("candidate_on", serving.CANDIDATE, "1")),
                      exercise=exercise, command_transform=command_transform,
                      env_transform=env_transform)
-        report["settings"].update(cpu_kv_offload=True, synthetic_acceptance=True)
     except Exception as error:
         report.update(status="failed", error=str(error))
         raise
     finally:
+        report.setdefault("settings", {}).update(
+            cpu_kv_offload=True, synthetic_acceptance=True,
+            gpu_memory_utilization=0.90, load_format="auto",
+        )
         (serving.EVIDENCE / "memory-validation.json").write_text(json.dumps(report, indent=2))
         print("MEMORY_VALIDATION", json.dumps(report), flush=True)
 

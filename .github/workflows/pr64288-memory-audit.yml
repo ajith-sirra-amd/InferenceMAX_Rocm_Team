@@ -1,4 +1,4 @@
-name: PR64288 fixed-GMU memory audit
+name: PR64288 fixed-GMU model and workspace memory audit
 on:
   push:
     branches: [checks/pr64288-memory-audit-20261105]
