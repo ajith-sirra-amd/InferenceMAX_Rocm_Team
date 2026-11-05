@@ -101,3 +101,13 @@ The failed server was sent SIGTERM. When shutdown remained stuck, only its named
 The same ON workflow's failed jobs were rerun without source, image, workload, routing or test changes. **Attempt 2 started 07:27:11 UTC**, GPU job **127111065570**. Container: `bmk-server-41967738227-2-mi355x-amd_pit2_p03_g07`; fresh runtime: `/outputs/.native-fp8-validation/serve.57QiqL2e/vllm`. At 07:30:35 UTC candidate installation completed and startup continued. Keep proof monitors pointed to attempt 2; the attempt-1 container/runtime no longer exist.
 
 All three replacement validation workflows stopped at their predecessor gate when ON attempt 1 failed. Their failed jobs were also rerun: kernels, NIAH and serving are now on **attempt 2**, waiting for ON success. Their kernel/test acceptance remains unchanged. Reservation cutoff remains **13:42:35 UTC**, not extended by retries. If the stale-cache error repeats, isolate compiler caches before another retry rather than repeating indefinitely.
+
+## Retry recovered through startup and entered workload warmup
+
+At 07:40 UTC, attempt 2 had passed kernel warmup and reached 72% graph capture with zero server error matches. By 07:43 UTC the server was healthy (HTTP 200), graph capture and CPU KV offload initialization had completed, and the benchmark client was preparing the trace workload.
+
+Workload warmup started at **07:44:51 UTC** with 51 mandatory snapshot primers and 10 additional requests per lane, **531** expected warmup completions. At **07:45:44 UTC**, the server log contained eight `projection` and eight `cached_fmha` events, one each for ranks 0-7. The installed validation function accepted their exact candidate SHA, FP8 types, nonempty inputs, non-capture execution and normal replay routing. This confirms real warmup execution of the optimized cached path; the one-hour measured phase had not started yet.
+
+Actual server PID **1827**: flag=1, native candidate a03796b8, accuracy stress=0, native observer enabled, both BLAS preference flags=0. The retry's full serve command again compared equal to OFF. The fresh Triton cache is under `serve.57QiqL2e/cache/triton`.
+
+CCD binding was inspected live at 07:46 UTC: ranks 0-7 (PIDs 2885,2887,2888,2886,2891,2884,2890,2889) have main-thread CPU masks **0-7, 8-15, 16-23, 24-31, 64-71, 72-79, 80-87, 88-95**, matching `results/ccdmap.txt`; memory-node masks are 0-1. No performance result is available yet. All three standalone review workflows remain waiting on attempt-2 ON success.
