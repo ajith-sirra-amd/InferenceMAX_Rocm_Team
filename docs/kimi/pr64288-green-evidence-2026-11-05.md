@@ -181,3 +181,26 @@ Replacement serving run **42006336780** started automatically from the harness p
 User has repeatedly asked about the historical cache decline and runtime reinstall. Responded with the original document's timeline: prototype vLLM1b2a66639 at17406TPS/22695620tokens; earlier native492080779+a1cfd2c1 at18276TPS/22524219tokens; currenta037+69d27 at18267OFF/19001ON and19834746tokens. Same e0d00e4b image digest for the two native generations, different installed runtime. The historical 17,406-to19,001 difference must not be attributed only to this PR. Current matched OFF/ON is the observed4.02% flag comparison.
 
 All five inspected files (cache utils/interface, extensible allocator, gpu_worker, AMD KDA) are byte-identical between candidatea037 and upstream69d27. This attributes the cache-policy code changes to upstream, but does not isolate every byte of memory difference with a GPU allocator ablation.
+
+
+## Published candidate, memory audit and current-main conflict, 10:24 UTC
+
+Published PR64288 head is now a03796b8e3bfe536e22f9db741109dbf80170079. Description and reviewer replies reflect its inspected green accuracy/numerical/static/full-performance evidence. Main/OFF/ON serving remains pending. The PR is open, not draft; upstream CI authorization remains external.
+
+Serving42006336780 at harness49552a38912be4551bfb9986b54a005c9661c745 is healthy on container-local overlayfs compiler caches. Main has completed short_context_c8 (32/32), short_query_c8 (32/32), cached_c8 (64/64), and is running cached_c48. No stale-file-handle recurrence. The first three results alone are not a comparison or a final workflow pass.
+
+Memory audit42008641826 at harness2919dbdb42f430b62f4f228e3436d2d41e5e96ea passed code checks and waits on serving. Startup-only main OFF/candidate ON, same a037/69d27, fixed GMU0.90, explicit load-format auto, TP8/DCP8, full1M max length and CPU KV offload. Read-only per-rank allocator/storage snapshots at load, memory profiling and final warmup. No allocator resets or GPU arithmetic. Do not sum virtual KV storage as physical memory.
+
+Both current OFF and ON use FP8 latent cache AND native per-channel FP8 kv_b_proj weights. Original historical baseline used BF16 projection weights. Current OFF runs native FP8 linear with dynamic activation quantization and emits BF16 K/V; ON directly emits FP8 K/V. The current pair isolates the attention flag, not weight quantization.
+
+GitHub PR base.sha remained69d27 even while actual main had advanced toee85faa1280c3f9ef877c7b17d1a3ef113133e57 (107 commits ahead). Always inspect git/ref/heads/main as well as pull.base.sha. The earlier compare69d27...44d9 was behind19, explaining its zero added commits/files; it was not current main.
+
+Upstream PR59124 merged at2026-11-05T09:21:40Z, commit7187c01de54aadcf28367f53284eda95c28778fd. Its added imports/forward routing plus another upstream initialization change cause three textual conflicts in rocm_aiter_mla.py. All other feature files merge cleanly.
+
+Prepared separate integration candidate54f39769d0e17a8f2874695e849c4e6626e71b56 on integrate/pr64288-main-20261105, parentsa037 andee85. Exactly8 files differ fromee85. Keeps both sides of additive conflicts and excludes the upstream superseding FlyDSL backend from our two direct-projection routing guards. Native FP8 kernels and numerical test file are byte-identical toa037. No GPU validation yet; do not publish this revision or transfer old result claims to it.
+
+Static/docs harness ea6bc5839134953ab9dc43e69aff725868f53175 on checks/pr64288-integrate-static-20261105 targets54f39769 againstee85. It runs independently on hosted CPU runners, leaving the active GPU source unchanged. Inspect result and artifacts.
+
+PR description and related-PR comment6473674684 now state that59124 merged after the validated baseline and current-main integration/revalidation remains pending. No current-main gain is claimed.
+
+Keep GPU cutoff13:42:35UTC (19:12:35IST), reservation12214 ends13:52:35UTC. User explicitly requires GMU0.90 and preserving load-formatauto. Next: finish serving; inspect memory audit; validate backend coexistence for integration candidate; publish only after applicable checks. Profiling and C56/C96 remain later.
