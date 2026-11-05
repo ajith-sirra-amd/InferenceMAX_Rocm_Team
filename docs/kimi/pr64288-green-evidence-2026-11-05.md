@@ -245,3 +245,25 @@ Live OFF server PID10627 was checked: native attention flag0; sourcea037; both B
 At11:09UTC integration-baseee85 exact wheel metadata still returned404. The public ROCm100 nightly alias points toa2bcb5657a881a002e79d0adab3c6b5e39436121, which predates59124. Do not use it as matching binaries for integration54f39769. No new human reviewer comments were found in checks through11:12UTC.
 
 Replacement memory audit42010811107 atf8f707ea remains waiting behind serving. GPU cutoff13:42:35UTC unchanged. After serving, inspect artifacts and update PR replies, then follow the memory audit. Any graph-size experiment remains separate, conditional on evidence and available reservation time; preserve existing performance recipe until validated.
+
+## Serving progress and follow-up scope, 12:34 UTC
+
+Serving42006336780 is on its final ON long_cached_c48 case. Main and OFF each completed512/512 requests; ON completed320/320 in its first four cases. Final case is progressing, without inspected server errors. HTTP200 stream starts are not completion counts.
+
+| Case | Main output tokens/s | OFF output tokens/s | ON output tokens/s | ON vs OFF |
+| --- | ---: | ---: | ---: | ---: |
+| short_context_c8 | 21.47985 | 20.94746 | 21.72310 | +3.70% |
+| short_query_c8 | 32.47360 | 30.72546 | 35.14914 | +14.40% |
+| cached_c8 | 23.33016 | 23.83573 | 22.11723 | -7.21% |
+| cached_c48 | 31.92021 | 33.89550 | 32.34014 | -4.59% |
+| long_cached_c48 | 19.13811 | 19.61760 | pending | pending |
+
+Numbers are for the whole server, not per GPU. One pass only. Below-cutoff cases execute BF16 and cannot establish FP8 speedup. Eligible ON cases have real FP8 projection/FMHA proof on ranks0-7. Do not cite the unfinished workflow as passing. Keep these mixed results alongside the separate full-replay +4.02% result, whose CPU offload/synthetic DSpark workload differs.
+
+User questioned two-hour GPU duration. Matrix has three startups and fifteen benchmark cases. Each control's final case took about21minutes; ON final started around12:24UTC. Do not shorten current cases or relax acceptance.
+
+Periodic DSpark counts (including warmup, not exact measured-only counters) yield cached_c8 approximate acceptance length OFF1.36773/ON1.36681 and cached_c48 OFF1.37399/ON1.37672. No evidence of a large acceptance collapse. Cause of serving regression remains unproven.
+
+ON Triton cache had8 variants each of _q_and_cache_partials/_q_quant_and_cache_reduce after cached_c8,15 after cached_c48,17 during the long case. This motivates isolated runtime-count candidate768a5da2 but does not measure compilation overhead or establish causality. GPU validation remains pending.
+
+Memory42010811107 still waits for serving; no memory GPU job has begun. Integration54f39769 has inspected passing static/docs evidence, but no GPU validation. Exact ee85 ROCm100 wheel still404 at12:33UTC; nightly stilla2bcb5657 (pre59124). Do not pair incompatible sources/binaries or transfer results to unvalidated integration. PR head remainsa037. GPU cutoff13:42:35UTC, GMU0.90, load-formatauto unchanged.
