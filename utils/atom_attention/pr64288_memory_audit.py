@@ -64,8 +64,14 @@ def snapshot(worker, phase):
     if is_workspace_manager_initialized():
         roots.append(("workspace_manager", current_workspace_manager()))
     rows, traversal = tensor_inventory(roots)
-    workspaces = [row for row in rows if any(word in row["path"].lower()
-                  for word in ("workspace", "buffer", "metadata", "scratch"))]
+    # Parent aliases such as metadata_builders can lead to model parameters.
+    # Retain the full inventory and classify only the owning tensor field.
+    workspaces = [
+        row for row in rows
+        if row["path"].startswith("workspace_manager.")
+        or any(word in row["path"].rsplit(".", 1)[-1].lower()
+               for word in ("workspace", "buffer", "metadata", "scratch"))
+    ]
     rank = int(worker.rank)
     report = {
         "rank": rank, "phase": phase, "device": str(device),
@@ -75,6 +81,7 @@ def snapshot(worker, phase):
         "torch_peak_since_last_reset_bytes": torch.cuda.max_memory_allocated(device),
         **traversal,
         "largest_storages": rows[:80], "workspace_storages": workspaces[:100],
+        "all_storages": rows,
         "scope": "Read-only tensor metadata and allocator counters. KV tensor storage can be virtual; storage sizes are not summed as physical residency.",
     }
     directory = Path(os.environ["REVIEW_MANIFEST"]).parent
@@ -120,6 +127,17 @@ def main():
         spec.update(rejection_sample_method="synthetic", synthetic_acceptance_length=3.36)
         command[spec_index] = json.dumps(spec)
         assert command[command.index("--gpu-memory-utilization") + 1] == "0.90"
+        assert command[command.index("--max-num-seqs") + 1] == "96"
+        graph_index = command.index("--compilation-config") + 1
+        graphs = json.loads(command[graph_index])
+        assert graphs["max_cudagraph_capture_size"] == 480
+        assert graphs["cudagraph_capture_sizes"] == list(range(2, 481, 2))
+        assert spec["num_speculative_tokens"] == 4
+        # C48 verification uses at most 48 * (4 + 1) = 240 decode tokens.
+        # Keep max-num-seqs=96 and the full recipe otherwise unchanged.
+        graphs["max_cudagraph_capture_size"] = 240
+        graphs["cudagraph_capture_sizes"] = list(range(2, 241, 2))
+        command[graph_index] = json.dumps(graphs)
         return command
 
     def env_transform(env):
@@ -140,10 +158,9 @@ def main():
                 "scope": "Startup memory audit only; no throughput or numerical claim."}
 
     report = {"status": "running", "arms": {}, "candidate": serving.CANDIDATE,
-              "base": serving.BASE, "scope": "Full-recipe startup memory inventory at GMU=0.90 and load-format=auto"}
+              "base": serving.BASE, "scope": "Candidate-only startup audit: graph cap 480 to 240, GMU=0.90 and load-format=auto; no performance claim"}
     try:
-        serving.main(report, arms=(("upstream_base", serving.BASE, "0"),
-                                   ("candidate_on", serving.CANDIDATE, "1")),
+        serving.main(report, arms=(("candidate_on", serving.CANDIDATE, "1"),),
                      exercise=exercise, command_transform=command_transform,
                      env_transform=env_transform)
     except Exception as error:
@@ -153,6 +170,8 @@ def main():
         report.setdefault("settings", {}).update(
             cpu_kv_offload=True, synthetic_acceptance=True,
             gpu_memory_utilization=0.90, load_format="auto",
+            max_num_seqs=96, max_cudagraph_capture_size=240,
+            experiment="C48 graph-cap startup audit; performance unvalidated",
         )
         (serving.EVIDENCE / "memory-validation.json").write_text(json.dumps(report, indent=2))
         print("MEMORY_VALIDATION", json.dumps(report), flush=True)
