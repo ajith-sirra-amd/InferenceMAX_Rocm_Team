@@ -1,12 +1,14 @@
-# FP8 FMHA: BF16 projection weights and FP8 attention tensors
+# FP8 FMHA: historical prototype dataflows
 
-[中文](fp8-fmha-dataflow_zh.md) | [Current audit](kimi-prefill-overhead-audit.md) | [ATOM opportunities](atom-vllm-opportunities-2026-10-28.md)
+[中文](fp8-fmha-dataflow_zh.md) | [Prototype audit](kimi-prefill-overhead-audit.md) | [ATOM opportunities](atom-vllm-opportunities-2026-10-28.md)
 
-This describes the large cached-prefix path tested at serving checkout e4cf47a7650321e4bd40c83746088a2679ec0509. New-token and small cached-context attention remain BF16. The full-run result is pending.
+This records the BF16-projection prototype tested at serving checkout e4cf47a7650321e4bd40c83746088a2679ec0509 and the later direct-FP8 prototype. The charts and throughput values below describe those historical revisions and configurations.
+
+> **Validated native implementation, 2026-11-05:** Revision `a03796b8` in [vLLM PR #64288](https://github.com/vllm-project/vllm/pull/64288) uses native FP8 `kv_b_proj` weights and derives output scales from cached latent norms, weight norms and cached RoPE maxima. The **2x new-token scale estimate** shown in the later prototype section is historical; it is not the validated native scaling rule. The current matched OFF/ON control keeps the same FP8 cache and FP8 weight configuration in both arms. See the [PR validation results](https://github.com/vllm-project/vllm/pull/64288#issuecomment-6473435649) for its pinned runtime and measured gain; the historical throughput values below are not controls for that revision.
 
 **The key distinction:** kv_b_proj reconstructs K/V before FMHA starts. Its BF16 weights are not inputs to FMHA. Compressed KV cache, projection weights, and expanded attention K/V are three different objects.
 
-| Object | Current dtype | Shape per TP rank |
+| Object | BF16-projection prototype dtype | Shape per TP rank |
 |---|---|---|
 | Compressed cache | FP8 E4M3 | 512 latent + 64 RoPE values per token |
 | kv_b_proj weights | BF16 | [3072, 512] |
