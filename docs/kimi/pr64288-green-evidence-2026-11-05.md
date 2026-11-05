@@ -111,3 +111,13 @@ Workload warmup started at **07:44:51 UTC** with 51 mandatory snapshot primers a
 Actual server PID **1827**: flag=1, native candidate a03796b8, accuracy stress=0, native observer enabled, both BLAS preference flags=0. The retry's full serve command again compared equal to OFF. The fresh Triton cache is under `serve.57QiqL2e/cache/triton`.
 
 CCD binding was inspected live at 07:46 UTC: ranks 0-7 (PIDs 2885,2887,2888,2886,2891,2884,2890,2889) have main-thread CPU masks **0-7, 8-15, 16-23, 24-31, 64-71, 72-79, 80-87, 88-95**, matching `results/ccdmap.txt`; memory-node masks are 0-1. No performance result is available yet. All three standalone review workflows remain waiting on attempt-2 ON success.
+
+## ON measured interval started
+
+Attempt 2 completed all **531** warmup requests at **08:02:51.715 UTC** in **1080.49 seconds** (no cutoff cancellations). The progress reporter's zero errors is not a statement about raw max_tokens=1 empty-content classifications; inspect raw records separately at completion, as for OFF.
+
+The configured **3600-second measured interval started 08:02:51.848 UTC**, expected to finish sending around **09:02:52 UTC / 14:32:52 IST**, followed by drain, upload and cleanup. At 08:03:47 the reporter showed 28 successful measured requests and zero measured errors. No final throughput result yet.
+
+For comparison only of setup timing, the inspected OFF benchmark log records warmup 04:24:38.350-04:45:55.066 UTC (**1276.72 seconds**). Do not treat warmup duration as the reported throughput benchmark. ON had a KDA Triton JIT warning and one-minute pauses with subsequent progress; a read-only GPU check showed all eight GPUs busy. No ERROR/Traceback recurrence was observed through measurement startup. CPU-offload stale-pin warnings are separate from the earlier NFS file-handle exception; the scheduler reports releasing those pins.
+
+The live benchmark command preserves agentic trace timing (`--trace-idle-gap-cap-seconds 300`), C48, seed 42, 393 traces, 10 warmup requests per lane, synthetic DSpark acceptance and the 3600-second duration. Total input throughput includes cached prompt tokens; performance interpretation must retain that definition. Do not infer kernel speedup from total-token throughput alone.
