@@ -73,3 +73,14 @@ then 1, without profiling. This selects the pinned e0d00e4b image digest and
 binaries for the exact 69d27bf8 base. Preserve CPU offload, CCD placement,
 quantization targets, BLAS settings and synthetic speculative acceptance.
 Do not label those replay results as live-MTP accuracy evaluations.
+
+## Upstream documentation check diagnosed
+
+Read the Docs build 35640024 at published head e2393d70 did not reach rendering.
+The public build-command log shows docs/pre_run_check.sh stopping because
+pre-commit/pre-run-check concluded failure. Its log links the existing
+contributor-authorization gate, 41822182813/job/126547776319. This is not a
+reported MkDocs/source error. Candidate independent rendered docs passed in
+41836553476; that does not replace upstream CI authorization.
+Evidence: https://app.readthedocs.org/api/v2/build/35640024/.
+Do not request labels or bypass the upstream gate as an agent.
