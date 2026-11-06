@@ -1,0 +1,105 @@
+name: PR64288 bounded mixed-context diagnostic
+on:
+  push:
+    branches: [checks/pr64288-mixed-fallback-20261106]
+    paths:
+      - .github/workflows/pr64288-mixed-fallback.yml
+      - utils/atom_attention/pr64288_mixed_context_diagnostic.py
+      - utils/atom_attention/pr64288_mixed_context_validation.sh
+permissions:
+  contents: read
+env:
+  IMAGE: vllm/vllm-openai-rocm:nightly-rocm100-e0d00e4b8eb0c89ec30921d0695cfdd409e9c211@sha256:b1374c3814b6e7706c49968ba17ca3b35484382f7b9fc7115dd3e66068d53f2f
+  NATIVE_SHA: 436f9022967b26f4cb19f712063a63defe6a6cff
+  BASE_SHA: 69d27bf8002a4634de1699c95fb0aeb22fb86ca5
+jobs:
+  code-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: ajith-sirra-amd/vllm
+          ref: 436f9022967b26f4cb19f712063a63defe6a6cff
+          path: vllm-source
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.6"
+      - name: Verify candidate and diagnostic before using GPUs
+        run: |
+          set -euo pipefail
+          uv venv --python 3.12
+          uv pip install --python .venv/bin/python ruff==0.14.0
+          git -C vllm-source fetch --no-tags --depth=1 origin a03796b8e3bfe536e22f9db741109dbf80170079
+          .venv/bin/python utils/atom_attention/pr64288_fallback_static_audit.py vllm-source
+          .venv/bin/python -m ruff check --select E9,F63,F7,F82 utils/atom_attention/pr64288_mixed_context_diagnostic.py
+          .venv/bin/python -c "import ast,pathlib; ast.parse(pathlib.Path('utils/atom_attention/pr64288_mixed_context_diagnostic.py').read_text())"
+          bash -n utils/atom_attention/pr64288_mixed_context_validation.sh
+  gpu:
+    needs: code-checks
+    runs-on: [self-hosted, "cluster:mi355x-amds-2", "nodes:1"]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Run one bounded diagnostic on the newly authorized runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = mi355x-amd_pit2_p03_g07
+          test "$(hostname -s)" = pit2-p03-g07
+          task_work="$GITHUB_WORKSPACE/.pr64288-mixed/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$task_work"
+          mkdir -p "$task_work/evidence"
+          printf 'Started UTC: %s\nMaximum container duration: 1200 seconds\n' "$(date -u +%FT%TZ)" | tee "$task_work/evidence/budget.txt"
+          container="pr64288-mixed-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          cleanup() {
+            if docker ps --format '{{.Names}}' | grep -Fxq "$container"; then
+              docker stop --time 30 "$container"
+            fi
+          }
+          trap cleanup EXIT
+          docker ps --format '{{.Names}}'
+          timeout --signal=TERM --kill-after=45 1200 \
+            docker run --rm --init --network host --ipc=host --shm-size=8g \
+              --name "$container" \
+              --device=/dev/kfd --device=/dev/dri \
+              -v "$GITHUB_WORKSPACE":/repo:ro -v "$task_work":/work \
+              -e NATIVE_SHA -e BASE_SHA -e PYTHONDONTWRITEBYTECODE=1 \
+              -e TORCH_BLAS_PREFER_HIPBLASLT=0 -e TORCH_BLAS_PREFER_CUBLASLT=0 \
+              --entrypoint bash "$IMAGE" /repo/utils/atom_attention/pr64288_mixed_context_validation.sh
+      - name: Stop only this run's container
+        if: always()
+        shell: bash
+        run: |
+          container="pr64288-mixed-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if docker ps --format '{{.Names}}' | grep -Fxq "$container"; then
+            docker stop --time 30 "$container"
+          fi
+      - name: Restore this run's evidence ownership
+        if: always()
+        shell: bash
+        run: |
+          task_evidence="$GITHUB_WORKSPACE/.pr64288-mixed/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/evidence"
+          if [ -d "$task_evidence" ]; then
+            test ! -L "$task_evidence"
+            workspace_real="$(realpath -e -- "$GITHUB_WORKSPACE")"
+            test "$(realpath -e -- "$task_evidence")" = "$workspace_real/.pr64288-mixed/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/evidence"
+            docker run --rm --network none --user 0:0 \
+              --mount "type=bind,source=$task_evidence,target=/repair" \
+              --entrypoint chown "$IMAGE" --recursive --no-dereference -P -- "$(id -u):$(id -g)" /repair
+          fi
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pr64288-mixed-context
+          path: .pr64288-mixed/${{ github.run_id }}-${{ github.run_attempt }}/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
