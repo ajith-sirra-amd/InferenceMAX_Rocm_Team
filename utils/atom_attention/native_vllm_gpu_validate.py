@@ -216,7 +216,10 @@ def main():
         record["source_hashes"] = source_hashes
         record["source_root"] = str(source)
         if args.prepare_only:
-            observer = Path(__file__).resolve().parent / "native_validation_plugin"
+            observer = root / "native-validation-plugin"
+            shutil.copytree(
+                Path(__file__).resolve().parent / "native_validation_plugin", observer,
+            )
             run(["uv", "pip", "install", "--python", python, "--no-deps",
                  "--editable", observer], cwd=source, env=env)
             import shlex

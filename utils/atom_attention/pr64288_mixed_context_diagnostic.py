@@ -254,6 +254,9 @@ def worker(rank, output_dir, init_method):
                         sys.setprofile(None)
                     kinds = [r[0] for r in calls.records]
                     expected_fp8 = eligible if arm == "on" else 0
+                    for kind, _, qi, ki, vi, *_ in calls.records:
+                        expected_dtype = torch.float8_e4m3fn if kind == "fp8" else torch.bfloat16
+                        assert qi.dtype == ki.dtype == vi.dtype == expected_dtype
                     assert kinds.count("fp8") == expected_fp8, (arm, kinds, expected_fp8)
                     assert kinds.count("native") == len(chunks) - expected_fp8
                     assert calls.native_gathers == len(chunks) - expected_fp8
