@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = mi355x-amd_pit2_p03_g07
-          test "$(hostname -s)" = pit2-p03-g07
+          test "$(hostname -s)" = pit2-p03-g34
           task_work="$GITHUB_WORKSPACE/.pr64288-mixed/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test ! -e "$task_work"
           mkdir -p "$task_work/evidence"
