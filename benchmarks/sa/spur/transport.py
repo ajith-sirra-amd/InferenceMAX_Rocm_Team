@@ -113,7 +113,8 @@ def main(args):
     with (root / 'container-transport.jsonl').open('a') as f:
         f.write(json.dumps(record) + '\n')
     def stop(signum, frame):
-        subprocess.run(['docker', 'stop', '--time', '5', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+        # SRT owns the shutdown deadline; deliver TERM without a shorter Docker kill timer.
+        subprocess.run(['docker', 'kill', '--signal', 'TERM', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
