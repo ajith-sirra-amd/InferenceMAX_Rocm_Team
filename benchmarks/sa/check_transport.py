@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--config', type=Path, required=True)
@@ -34,7 +35,12 @@ commands = {
                     '--name', 'sa-transport-' + a.output.name,
                     '--network', 'host', '--mount', f'type=bind,src={a.output.resolve()},dst=/logs,readonly',
                     '--entrypoint', task[0], image, *task[1:]],
+    'native_adapter': [str(Path(__file__).parent / 'spur/srun'), *base[1:],
+                       '--container-image', image, '--container-remap-root',
+                       '--container-mounts', f'{a.output.resolve()}:/logs:ro', *task],
 }
+os.environ.update(SA_REAL_SRUN=shutil.which('srun'), SA_OUTPUT=str(a.output.resolve()),
+                  SA_CONTAINER_TRANSPORT='docker', SLURM_JOB_ID=a.allocation)
 results = {'allocation': allocation, 'image': image, 'checks': {}}
 for name, command in commands.items():
     print('Checking ' + name, flush=True)
@@ -45,4 +51,4 @@ for name, command in commands.items():
         results['checks'][name] = {'error': str(error)}
     print(json.dumps(results['checks'][name]), flush=True)
 (a.output / 'transport-check.json').write_text(json.dumps(results, indent=2) + '\n')
-raise SystemExit(0 if results['checks']['spur_docker'].get('returncode') == 0 else 1)
+raise SystemExit(0 if results['checks']['native_adapter'].get('returncode') == 0 else 1)

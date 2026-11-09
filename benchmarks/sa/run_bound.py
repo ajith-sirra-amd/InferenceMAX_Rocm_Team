@@ -33,13 +33,14 @@ for host, target in cluster.get('workspace-mounts', {}).items():
 settings = dict(cluster['extra'])
 settings.update(cluster='mi355x-local', default_partition='amd-spur', default_account='',
                 default_time_limit='08:00:00', gpus_per_node=8,
-                network_interface='lo', srtctl_root=str(a.srt), output_dir=str(a.output / 'native'),
+                network_interface='', srtctl_root=str(a.srt), output_dir=str(a.output / 'native'),
                 default_mounts=mounts, use_segment_sbatch_directive=False,
                 use_exclusive_sbatch_directive=False,
                 model_paths={f"hf:{c['environment']['MODEL']}": '/share_nfs/models/' + c['environment']['MODEL']})
 (a.srt / 'srtslurm.yaml').write_text(yaml.safe_dump(settings, sort_keys=False))
 os.environ['SRTSLURM_CONFIG'] = str(a.srt / 'srtslurm.yaml')
-extra = ['--set', 'benchmark.stream_output=true', '--set', 'srun_options.container-workdir="/infmax-workspace"']
+extra = ['--set', 'benchmark.stream_output=true', '--set', 'srun_options.container-workdir="/infmax-workspace"',
+         '--set', 'srun_options.container-remap-root=""', '--set', 'srun_options.container-writable=""']
 plans = plan_commands(str(recipe_file), c['environment']['FRAMEWORK'], runtime_arguments(recipe, os.environ) + extra, os.environ)
 if len(plans) != 1:
     raise RuntimeError('Exactly one native recipe is required')
@@ -59,8 +60,9 @@ plan.command.extend(['--set', 'roles.agg.args.speculative-config=' + json.dumps(
 (a.output / 'native-plan.json').write_text(json.dumps({'selected': selected, 'command': plan.command,
     'acceptance_length': plan.acceptance_length, 'adaptations': [
     'Execute native rendered batch script in the existing single-node allocation; never cancel the reservation.',
-    'Local model/cache/output mounts and loopback interface replace SA host paths.',
-    'Spur transport omits unsupported Pyxis default flags; native workload argv is retained.',
+    'Local model/cache/output mounts and auto-detected host interface replace SA host paths.',
+    'Spur overlap ignores container options; Docker executes unchanged native task argv inside the reservation.',
+    'Container root is read-only; per-step writable runtime caches and temporary compiler storage are mounted separately.',
     'Native GPU and RAPL telemetry are requested; unavailable local permissions remain explicit missing evidence.',
     'GitHub release assets use the API route because direct download URLs return HTTP 504.'
 ]}, indent=2) + '\n')
@@ -84,7 +86,14 @@ subprocess.run(command, check=True, env={**os.environ, **dict(plan.environment)}
 os.environ['SA_REAL_SRUN'] = subprocess.check_output(['which', 'srun'], text=True).strip()
 os.environ['PATH'] = str(Path(__file__).parent / 'spur') + ':' + os.environ['PATH']
 os.environ['SA_OUTPUT'] = str(a.output)
-subprocess.run(['bash', str(rendered / 'sbatch_script.sh')], check=True)
+os.environ['SA_CONTAINER_TRANSPORT'] = 'docker'
+try:
+    subprocess.run(['bash', str(rendered / 'sbatch_script.sh')], check=True)
+finally:
+    # Clean only containers belonging to this workflow; never cancel the reservation.
+    owned = subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'label=sa.run=' + a.output.name], text=True).split()
+    if owned:
+        subprocess.run(['docker', 'rm', '-f', *owned], check=True)
 
 # SA's workflow validates the native AgentX output after the benchmark exits.
 logs = a.output / 'native' / os.environ['SLURM_JOB_ID'] / 'logs'

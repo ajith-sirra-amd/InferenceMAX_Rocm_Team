@@ -204,6 +204,7 @@ jobs:
                   name: sa-benchmark-${{ github.run_id }}
                   path: |
                       ${{ env.SA_OUTPUT }}/*.json
+                      ${{ env.SA_OUTPUT }}/*.jsonl
                       ${{ env.SA_OUTPUT }}/*.yaml
                       ${{ env.SA_OUTPUT }}/*.txt
                       ${{ env.SA_OUTPUT }}/*.log

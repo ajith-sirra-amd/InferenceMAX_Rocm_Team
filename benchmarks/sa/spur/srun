@@ -4,6 +4,9 @@ import os
 import sys
 
 args = sys.argv[1:]
+if os.environ.get('SA_CONTAINER_TRANSPORT') == 'docker':
+    from transport import main
+    raise SystemExit(main(args))
 kept = []
 output = None
 i = 0
@@ -12,7 +15,7 @@ while i < len(args):
     if not word.startswith('-'):
         kept.extend(args[i:])
         break
-    if word in ('--no-container-entrypoint', '--no-container-mount-home', '--container-writable'):
+    if word in ('--no-container-entrypoint', '--no-container-mount-home', '--container-writable', '--quiet'):
         i += 1
         continue
     if word == '--open-mode':
