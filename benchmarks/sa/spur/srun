@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Translate Pyxis defaults to Spur without changing the native task command."""
+import os
+import sys
+
+args = sys.argv[1:]
+kept = []
+output = None
+i = 0
+while i < len(args):
+    word = args[i]
+    if not word.startswith('-'):
+        kept.extend(args[i:])
+        break
+    if word in ('--no-container-entrypoint', '--no-container-mount-home', '--container-writable'):
+        i += 1
+        continue
+    if word == '--open-mode':
+        if args[i + 1] != 'append':
+            raise SystemExit('Only append logging is supported')
+        i += 2
+        continue
+    if word == '--output':
+        output = args[i + 1]
+        i += 2
+        continue
+    if word.startswith('--export='):
+        values = word.partition('=')[2].split(',')
+        if values.pop(0) != 'ALL':
+            raise SystemExit('Only inherited task environments are supported')
+        for value in values:
+            key, val = value.split('=', 1)
+            os.environ[key] = val
+        i += 1
+        continue
+    kept.append(word)
+    if '=' not in word and word not in ('--overlap', '--container-remap-root', '--exclusive', '--oversubscribe'):
+        kept.append(args[i + 1])
+        i += 1
+    i += 1
+if output:
+    fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    os.dup2(fd, 1)
+    os.dup2(fd, 2)
+    os.close(fd)
+os.execv(os.environ['SA_REAL_SRUN'], ['srun', *kept])

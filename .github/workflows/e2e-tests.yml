@@ -4,6 +4,14 @@ run-name: e2e Test - ${{ inputs.test-name || github.event.inputs.test-name || in
 on:
     workflow_dispatch:
         inputs:
+            sa-config:
+                description: "Native SA configuration file in this repository"
+                required: false
+                type: string
+            allocation-id:
+                description: "Existing single-node scheduler allocation"
+                required: false
+                type: string
             ipat-request:
                 description: "Frozen IPAT request JSON; bypasses the sweep when supplied"
                 required: false
@@ -79,6 +87,48 @@ on:
                 default: ""
 
 jobs:
+    sa-benchmark:
+        if: ${{ inputs.sa-config != '' }}
+        name: Native SA benchmark
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2', 'nodes:1']
+        timeout-minutes: 480
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            SA_OUTPUT: /share_nfs/ajith/benchmarks/${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: sa-benchmark-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Replicate selected SA datapoint
+              working-directory: sa-benchmark-${{ github.run_id }}
+              env:
+                  SA_CONFIG: ${{ inputs.sa-config }}
+                  SA_ALLOCATION: ${{ inputs.allocation-id }}
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: |
+                  set -o pipefail
+                  mkdir -p "$SA_OUTPUT"
+                  python3 benchmarks/sa/run.py --config "$SA_CONFIG" --allocation "$SA_ALLOCATION" --output "$SA_OUTPUT" 2>&1 | tee "$SA_OUTPUT/workflow.log"
+            - name: Preserve native results and logs
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: sa-benchmark-${{ github.run_id }}
+                  path: |
+                      ${{ env.SA_OUTPUT }}/*.json
+                      ${{ env.SA_OUTPUT }}/*.yaml
+                      ${{ env.SA_OUTPUT }}/*.txt
+                      ${{ env.SA_OUTPUT }}/*.log
+                      ${{ env.SA_OUTPUT }}/rendered/**
+                      ${{ env.SA_OUTPUT }}/native/**
+                  retention-days: 30
     ipat:
         if: ${{ inputs.ipat-request != '' }}
         runs-on: ${{ fromJSON(inputs.ipat-request).labels }}
@@ -145,7 +195,7 @@ jobs:
                   if-no-files-found: error
                   retention-days: 30
     get-jobs:
-        if: ${{ !inputs.ipat-request }}
+        if: ${{ !inputs.ipat-request && !inputs.sa-config }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}
