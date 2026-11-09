@@ -79,6 +79,19 @@ shutdown. Native server arguments and workload duration are preserved.
 `attachment-status.json` records export status and worker PIDs;
 `profile-capture-validation.json` in the run root records fresh device/window
 validation. The host report stays outside container-owned raw trace directories.
-`mode: launch` retains the earlier launch-based collector for workloads with
-verified graceful profiler finalization. Native model coverage must always be
-established from the resulting artifacts.
+`mode: launch` uses rocprof with SDK signal handlers disabled, leaving root-first
+shutdown to the application. Its profiling overlay gives vLLM workers 900 seconds
+and the native orchestrator 1200 seconds to finalize; the exact orchestrator
+timeout edit and source hashes are retained in `profile-shutdown-overlay.json`.
+These are maximum shutdown allowances, not additional capture time.
+
+For an explicitly shortened diagnostic, set the environment's `DURATION` and
+the profile's `warmup_requests_per_lane`. The small client adapter reuses the
+pinned native Plan, bootstrap, execution and scoring, changing only the warmup
+count. Fast mode must remain disabled because it forces 1200 seconds. The
+`kimi-k3.1-pro-vllm-mi355x-c48-profile-check.json` diagnostic selects 600 seconds,
+one warmup request per lane, and a 60-second launch capture. Its launch delay
+must be checked against fresh measurement boundaries. It is not a replacement
+for the saved SA baseline. Native model coverage must always be established
+from the resulting artifacts. Phase 3 saves and validates collection; Phase 4
+post-processes those saved files.

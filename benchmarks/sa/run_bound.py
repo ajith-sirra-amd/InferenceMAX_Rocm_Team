@@ -1,6 +1,7 @@
 """Local storage/scheduler bindings; workload and process lifecycle stay native."""
 import argparse
 import fnmatch
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -59,6 +60,29 @@ if profile:
     for key, value in {'SA_PROFILE_DELAY_SECONDS': str(delay), 'SA_PROFILE_SECONDS': str(seconds), 'SA_PROFILE_MODE': mode,
                        'SA_PROFILE_OUTPUT': '/logs/profiles/rocprof'}.items():
         extra += ['--set', 'roles.agg.env.' + key + '=' + json.dumps(value)]
+    if mode == 'launch':
+        # Give native shutdown time to export profiler buffers. Workload code is unchanged.
+        stage = a.srt / 'src/srtctl/cli/mixins/worker_stage.py'
+        original = stage.read_text()
+        needle = 'WORKER_TERMINATE_TIMEOUT_SECONDS = 30.0'
+        if original.count(needle) != 1:
+            raise ValueError('Unexpected native worker shutdown definition')
+        revised = original.replace(needle, 'WORKER_TERMINATE_TIMEOUT_SECONDS = 1200.0')
+        stage.write_text(revised)
+        extra += ['--set', 'roles.agg.env.VLLM_WORKER_SHUTDOWN_TIMEOUT_SECONDS="900"']
+        (a.output / 'profile-shutdown-overlay.json').write_text(json.dumps(dict(
+            file=str(stage), original_sha256=hashlib.sha256(original.encode()).hexdigest(),
+            revised_sha256=hashlib.sha256(revised.encode()).hexdigest(),
+            native_worker_timeout_seconds=1200, vllm_worker_timeout_seconds=900), indent=2) + '\n')
+    if 'warmup_requests_per_lane' in profile:
+        warmup = profile['warmup_requests_per_lane']
+        if type(warmup) is not int or warmup < 1 or c['environment']['AIPERF_EXPERIMENTAL_FAST'] != '0':
+            raise ValueError('Diagnostic warmup needs a positive count and explicit duration')
+        extra += ['--set', 'benchmark.env.SA_PROFILE_WARMUP_REQUESTS_PER_LANE=' + json.dumps(str(warmup)),
+                  '--set', 'benchmark.command=' + json.dumps(
+                      'env PYTHONSAFEPATH=1 PYTHONDONTWRITEBYTECODE=1 '
+                      'PYTHONPATH="/infmax-workspace${PYTHONPATH:+:$PYTHONPATH}" '
+                      'python3 /sa-profile-bin/agentic.py')]
 plans = plan_commands(str(recipe_file), c['environment']['FRAMEWORK'], runtime_arguments(recipe, os.environ) + extra, os.environ)
 if len(plans) != 1:
     raise RuntimeError('Exactly one native recipe is required')
