@@ -20,7 +20,8 @@ if allocation != f'{owner}|RUNNING|{host}':
 a.output.mkdir(parents=True, exist_ok=True)
 marker = a.output / 'transport-marker.txt'
 marker.write_text(a.output.name)
-image = json.loads(a.config.read_text())['environment']['IMAGE']
+config = json.loads(a.config.read_text())
+image = config['environment']['IMAGE']
 task = ['python3', '-c', '''import json, shutil
 from pathlib import Path
 marker = Path('/logs/transport-marker.txt')
@@ -46,8 +47,10 @@ commands = {
 }
 if a.command_json:
     commands = {'native_adapter': commands['native_adapter']}
+os.environ.update(config['environment'])
 os.environ.update(SA_REAL_SRUN=shutil.which('srun'), SA_OUTPUT=str(a.output.resolve()),
-                  SLURM_JOB_ID=a.allocation)
+                  SLURM_JOB_ID=a.allocation,
+                  SA_PASSTHROUGH_ENV=json.dumps(sorted(config['environment'])))
 results = {'allocation': allocation, 'image': image, 'checks': {}}
 for name, command in commands.items():
     print('Checking ' + name, flush=True)
