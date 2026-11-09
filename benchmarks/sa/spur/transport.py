@@ -84,6 +84,7 @@ def main(args):
         if key in os.environ:
             docker += ['--env', key]
     for key, value in {'TMPDIR': '/work/tmp', 'XDG_CACHE_HOME': '/work/cache',
+                       'ROCPROF_TMPDIR': '/work/tmp',
                        'FLYDSL_RUNTIME_CACHE_DIR': '/work/cache/flydsl',
                        'CCACHE_DIR': '/work/cache/ccache', 'SCCACHE_DIR': '/work/cache/sccache',
                        'PIP_CACHE_DIR': '/work/cache/pip', 'PYTHONDONTWRITEBYTECODE': '1',
