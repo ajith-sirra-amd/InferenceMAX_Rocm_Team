@@ -32,7 +32,15 @@ class AdapterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             fake = root / 'srun'
-            fake.write_text('#!/usr/bin/env python3\nimport json,sys,os\nfrom pathlib import Path\nPath(os.environ["CAPTURE"]).write_text(json.dumps(sys.argv[1:]))\n')
+            fake.write_text('''#!/usr/bin/env python3
+import json,sys,os
+from pathlib import Path
+args = sys.argv[1:]
+Path(os.environ["CAPTURE"]).write_text(json.dumps(args))
+envfile = Path(args[args.index('--env-file') + 1])
+assert envfile.stat().st_mode & 0o777 == 0o600
+Path(os.environ["CAPTURE"] + '.env').write_text(envfile.read_text())
+''')
             fake.chmod(0o755)
             docker = root / 'docker'
             docker.write_text('#!/usr/bin/env python3\nimport json,sys,os\nfrom pathlib import Path\nPath(os.environ["CLEANUP"]).write_text(json.dumps(sys.argv[1:]))\n')
@@ -56,11 +64,12 @@ class AdapterTests(unittest.TestCase):
             self.assertIn('type=bind,src=/weights,dst=/model,readonly', args)
             self.assertIn('type=bind,src=/data,dst=/logs', args)
             self.assertNotIn('--read-only', args)
-            forwarded = [args[i + 1] for i, value in enumerate(args) if value == '--env']
-            self.assertIn('IS_MULTINODE', forwarded)
-            self.assertIn('AIPERF_EXPERIMENTAL_FAST', forwarded)
+            forwarded = dict(line.split('=', 1) for line in (root / 'args.env').read_text().splitlines())
+            self.assertEqual(forwarded['IS_MULTINODE'], 'false')
+            self.assertEqual(forwarded['AIPERF_EXPERIMENTAL_FAST'], '0')
             self.assertNotIn('PATH', forwarded)
             self.assertNotIn('GH_TOKEN', forwarded)
+            self.assertFalse(Path(args[args.index('--env-file') + 1]).exists())
             name = args[args.index('--name') + 1]
             self.assertEqual(json.loads((root / 'cleanup').read_text()), ['rm', '-f', name])
 

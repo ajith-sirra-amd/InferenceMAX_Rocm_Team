@@ -86,9 +86,19 @@ def main(args):
     inherited = {'HF_TOKEN', 'HUGGING_FACE_HUB_TOKEN', 'HF_HUB_CACHE',
                  'SLURM_JOB_ID', 'SLURM_NODELIST', 'SLURM_JOB_NODELIST', 'ROCR_VISIBLE_DEVICES'}
     inherited.update(json.loads(os.environ.get('SA_PASSTHROUGH_ENV', '[]')))
+    values = []
     for key in sorted(inherited):
         if key in os.environ:
-            docker += ['--env', key]
+            value = os.environ[key]
+            if '\n' in value or '\r' in value:
+                raise ValueError('Docker environment files require single-line values: ' + key)
+            values.append(key + '=' + value)
+    # Spur does not preserve the submitting process environment for Docker's
+    # --env NAME lookup. A private file carries the values across that boundary.
+    environment = work / 'container.env'
+    with os.fdopen(os.open(environment, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as f:
+        f.write('\n'.join(values) + '\n')
+    docker += ['--env-file', str(environment)]
     for key, value in {'TMPDIR': '/work/tmp', 'XDG_CACHE_HOME': '/work/cache',
                        'ROCPROF_TMPDIR': '/work/tmp',
                        'FLYDSL_RUNTIME_CACHE_DIR': '/work/cache/flydsl',
@@ -102,12 +112,13 @@ def main(args):
               'native_task_sha256': hashlib.sha256(json.dumps(task).encode()).hexdigest()}
     with (root / 'container-transport.jsonl').open('a') as f:
         f.write(json.dumps(record) + '\n')
-    proc = subprocess.Popen([os.environ['SA_REAL_SRUN'], *scheduler, *docker])
     def stop(signum, frame):
         subprocess.run(['docker', 'stop', '--time', '5', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
+        proc = subprocess.Popen([os.environ['SA_REAL_SRUN'], *scheduler, *docker])
         return proc.wait()
     finally:
+        environment.unlink(missing_ok=True)
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
