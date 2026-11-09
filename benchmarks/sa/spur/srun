@@ -33,6 +33,12 @@ while i < len(args):
             os.environ[key] = val
         i += 1
         continue
+    if word == '--container-image':
+        image = args[i + 1].removeprefix('docker://').replace('#', '/', 1)
+        image = image.replace(':sha256:', '@sha256:', 1)
+        kept.extend([word, image])
+        i += 2
+        continue
     kept.append(word)
     if '=' not in word and word not in ('--overlap', '--container-remap-root', '--exclusive', '--oversubscribe'):
         kept.append(args[i + 1])
