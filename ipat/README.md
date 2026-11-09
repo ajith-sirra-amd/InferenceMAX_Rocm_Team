@@ -1,5 +1,12 @@
 # IPAT runner
 
+**SA execution boundary:** the executor below reconstructs Docker execution and
+does not establish native SA workflow replication. IPAT disables SA starts through
+this route while the native handoff is prepared. The user and IPAT must invoke
+the same team-owned SA workflow, with replication and steady-state profiling in
+two independent workflow runs. See the [profiling and code-path README](https://github.com/ajith-sirra-amd/IPAT/blob/ajith-ipat/docs/PROFILING_README.md)
+for commands, output files, evidence requirements and current validation status.
+
 `e2e-tests.yml` accepts an optional `ipat-request` JSON input on branch `IPAT`.
 It runs a single frozen request on the selected MI355X runner, in a dedicated
 checkout. Run data goes to the user-approved MI355X server directory:
