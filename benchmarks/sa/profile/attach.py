@@ -44,14 +44,33 @@ def gpu_children(parent):
     return workers
 
 
+def worker_state(parent):
+    workers = {}
+    for pid in gpu_children(parent):
+        try:
+            process = Path('/proc', str(pid))
+            name = (process / 'comm').read_text().strip()
+            if '::Worker' in name:
+                workers[pid] = {'name': name, 'attach_ready': any(
+                    p.read_text().strip() == 'rocp-bg-attach'
+                    for p in (process / 'task').glob('*/comm'))}
+        except OSError:
+            pass
+    return workers
+
+
 def main(command):
     output = Path(os.environ['SA_PROFILE_OUTPUT'])
     delay = int(os.environ['SA_PROFILE_DELAY_SECONDS'])
     seconds = int(os.environ['SA_PROFILE_SECONDS'])
-    environment = dict(os.environ, ROCP_TOOL_ATTACH='1')
+    # A fresh interpreter initializes profiler registration in each vLLM worker.
+    # This is a profiling-only startup override; the replication stays unchanged.
+    environment = dict(os.environ, ROCP_TOOL_ATTACH='1', VLLM_WORKER_MULTIPROC_METHOD='spawn')
     environment['LD_PRELOAD'] = ':'.join(filter(None, (register_library(), environment.get('LD_PRELOAD'))))
-    result = {'status': 'pending', 'server_argv': command, 'worker_pids': []}
+    result = {'status': 'pending', 'server_argv': command, 'worker_pids': [],
+              'worker_start_method': 'spawn'}
     finished = threading.Event()
+    launched = time.monotonic()
     server = subprocess.Popen(command, env=environment)
 
     def forward(signum, _frame):
@@ -64,12 +83,24 @@ def main(command):
     def capture():
         jobs, handles = [], []
         try:
-            if finished.wait(delay):
+            expected = int(os.environ.get('GPU_COUNT', '8'))
+            deadline = launched + min(delay, 300)
+            while True:
+                state = worker_state(server.pid)
+                result['preflight_workers'] = state
+                if len(state) == expected and all(w['attach_ready'] for w in state.values()):
+                    result['preflight_utc_ns'] = time.time_ns()
+                    (output / 'attachment-preflight.json').write_text(json.dumps(result, indent=2) + '\n')
+                    break
+                if time.monotonic() >= deadline or finished.wait(1):
+                    raise RuntimeError(f'Expected {expected} attachment-ready vLLM workers before capture; found {state}')
+            if finished.wait(max(0, launched + delay - time.monotonic())):
                 raise RuntimeError('Server exited before capture')
-            workers = gpu_children(server.pid)
+            state = worker_state(server.pid)
+            workers = list(state)
             result['worker_pids'] = workers
-            if not workers:
-                raise RuntimeError('No GPU processes found in the server process tree')
+            if len(workers) != expected or not all(w['attach_ready'] for w in state.values()):
+                raise RuntimeError('Attachment-ready worker coverage changed before capture')
             result['started_utc_ns'] = time.time_ns()
             for pid in workers:
                 command = ['rocprofv3', '--attach', str(pid), '--attach-children', 'false',
@@ -88,6 +119,13 @@ def main(command):
             result['exported_while_workers_alive'] = True
         except Exception as error:
             result.update(status='failed', error=str(error))
+            # Abort this invalid profiling attempt through native server shutdown.
+            # Do not wait for a full workload when capture cannot succeed.
+            if server.poll() is None:
+                try:
+                    server.send_signal(signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
         finally:
             for job in jobs:
                 if job.poll() is None:
@@ -104,7 +142,7 @@ def main(command):
     code = server.wait()
     finished.set()
     thread.join()
-    return code
+    return code or (1 if result['status'] == 'failed' else 0)
 
 
 if __name__ == '__main__':

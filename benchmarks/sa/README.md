@@ -65,9 +65,15 @@ The delay must be calibrated and the actual window checked against fresh
 steady-state traffic. `clock-sync.json` brackets a boot-clock sample in UTC so
 native rocprof timestamps can be compared with client phase timestamps.
 Attachment mode loads the installed registration library before framework startup
-and enables `ROCP_TOOL_ATTACH=1` only for the profiling server. At the calibrated
-delay, it finds GPU processes within that server's process tree and attaches to
-each separately. Synchronous detachment exports traces while the workers remain
+and enables `ROCP_TOOL_ATTACH=1` and `VLLM_WORKER_MULTIPROC_METHOD=spawn` only for
+the profiling server. The explicit multiprocessing override gives each worker a
+fresh interpreter for profiler registration; record this profiling difference
+from the unmodified replication. Before waiting for the calibrated window, the
+hook checks that all expected vLLM GPU workers have the `rocp-bg-attach` thread.
+It records `attachment-preflight.json`, excludes non-worker parent processes,
+and rechecks readiness before attaching to each worker separately. Missing
+readiness or failed export stops the invalid profile attempt through the native
+server shutdown. Synchronous detachment exports traces while the workers remain
 alive, avoiding loss when the serving engine later force-kills workers during
 shutdown. Native server arguments and workload duration are preserved.
 `attachment-status.json` records export status and worker PIDs;
