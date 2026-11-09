@@ -177,14 +177,24 @@ def normalize(event, family):
 
 
 def metadata(args, operator):
+    def dimensions(short, native):
+        value = first(args, short, native)
+        if value is not None:
+            return value
+        values = [args.get(native + '_' + axis) for axis in 'XYZ']
+        return values if all(v is not None and v != '' for v in values) else None
+
     # CPU operator input metadata is kept explicitly separate from proven kernel tensors.
     return {key: value for key, value in {
         'operator': operator.get('_name'),
         'operator_input_shapes': first(operator, 'Input Dims', 'Input Shapes'),
         'operator_input_dtypes': first(operator, 'Input type', 'Input Types'),
         'operator_input_strides': operator.get('Input Strides'),
-        'grid': first(args, 'grid', 'Grid_Size'), 'block': first(args, 'block', 'Workgroup_Size'),
+        'grid': dimensions('grid', 'Grid_Size'), 'block': dimensions('block', 'Workgroup_Size'),
         'registers_per_thread': first(args, 'registers per thread', 'VGPR_Count'),
+        'scalar_registers': args.get('SGPR_Count'),
+        'accumulator_registers': args.get('Accum_VGPR_Count'),
+        'scratch_size': args.get('Scratch_Size'),
         'shared_memory': first(args, 'shared memory', 'LDS_Block_Size'),
         'code_object': first(args, 'Code_Object_Id', 'code_object'),
         'phase': first(args, 'phase', 'Phase') or first(operator, 'phase', 'Phase'),

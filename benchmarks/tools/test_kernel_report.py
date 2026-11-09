@@ -84,6 +84,30 @@ class KernelReportTests(unittest.TestCase):
         self.assertEqual(stats['std_us'],5)
         self.assertEqual(r['top10'][0]['variants'][0]['analysis']['tensors']['status'],'unavailable')
 
+    def test_native_rocprof_launch_dimensions_keep_variants_separate(self):
+        # The runner's rocprofv3 CSV has component columns, without Process_Id.
+        path = self.traces / '15_kernel_trace.csv'
+        fields = ['Kernel_Name', 'Start_Timestamp', 'End_Timestamp', 'Agent_Id',
+                  'Grid_Size_X', 'Grid_Size_Y', 'Grid_Size_Z',
+                  'Workgroup_Size_X', 'Workgroup_Size_Y', 'Workgroup_Size_Z',
+                  'VGPR_Count', 'SGPR_Count', 'Accum_VGPR_Count', 'Scratch_Size']
+        with path.open('w', newline='') as handle:
+            writer = csv.writer(handle)
+            writer.writerow(fields)
+            for grid in (16384, 32768):
+                writer.writerow(['gemm', 1000, 4000, 'Agent 2', grid, 1, 1,
+                                 256, 1, 1, 8, 16, 0, 0])
+        report = aggregate(self.traces, self.output, expected_devices=1)
+        variants = report['top10'][0]['variants']
+        self.assertEqual(report['kernel_count'], 2)
+        self.assertEqual(len(variants), 2)
+        self.assertEqual({v['grid'][0] for v in variants}, {'16384', '32768'})
+        self.assertEqual(len({v['shape_signature'] for v in variants}), 2)
+        self.assertEqual(variants[0]['block'], ['256', '1', '1'])
+        self.assertEqual(variants[0]['scalar_registers'], '16')
+        self.assertNotIn('operator_input_shapes', variants[0])
+        self.assertEqual(report['processes'], ['15_kernel_trace.csv:unknown'])
+
     def test_ambiguous_external_ids_are_not_arbitrarily_assigned(self):
         op={'ph':'X','cat':'cpu_op','name':'op','ts':1,'dur':2,'pid':99,'args':{'External id':7,'Input Dims':[[2]]}}
         self.trace([op,op,self.kernel()])

@@ -58,4 +58,5 @@ Use a separate configuration and workflow run after the baseline succeeds.
 The hook retains native server arguments and captures kernel, HIP, copy and
 marker traces as CSV/JSON under `native/<allocation>/logs/profiles/rocprof/`.
 The delay must be calibrated and the actual window checked against fresh
-steady-state traffic. Live launch capture remains unverified.
+steady-state traffic. A small eight-process GPU launch capture has passed;
+native model capture and steady-state coverage remain under validation.
