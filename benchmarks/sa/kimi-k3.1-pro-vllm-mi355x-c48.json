@@ -28,9 +28,28 @@
     "DISAGG": "false",
     "RUN_EVAL": "false",
     "EVAL_ONLY": "false",
-    "MAX_MODEL_LEN": "1048576",
+    "MAX_MODEL_LEN": "0",
     "REQUIRE_POWER": "0",
-    "THINKING_MODE": "thinking_on"
+    "THINKING_MODE": "thinking_on",
+    "PORT": "8888",
+    "INFMAX_CONTAINER_WORKSPACE": "/workspace",
+    "IS_MULTINODE": "false",
+    "CPU_POWER": "0",
+    "RANDOM_RANGE_RATIO": "0.8",
+    "EXP_NAME": "kimik3.1_tp8_conc48_kvdram-vllm-simple_spec-mtp",
+    "RECIPE_FINGERPRINT": "aedecf3517bfa15a506ea47dc107a504fb5dea94a31b6896330650b986be1a40",
+    "SRT_RECIPE": "benchmarks/single_node/srt-slurm-recipes/kimik3.1/vllm/mi355x-fp4-mtp/agentic.yaml",
+    "ISL": "0",
+    "OSL": "0",
+    "AIPERF_EXPERIMENTAL_FAST": "0",
+    "AIPERF_FAILED_REQUEST_THRESHOLD": "0.10",
+    "EVAL_FRAMEWORK": "lm-eval",
+    "EVAL_SUITE": "",
+    "ROUTER_METADATA": "",
+    "KV_P2P_TRANSFER": "",
+    "AL_GATE_DATASET": ""
   },
-  "telemetry_release": "v2.67.1"
+  "telemetry_release": "v2.67.1",
+  "source_job_url": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/42371416815/job/128427970115",
+  "source_workflow_sha": "e9a33875c5d7803c3874120e4f1c7d06ec4d9be6"
 }

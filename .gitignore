@@ -8,3 +8,5 @@ GG_README.md
 pareto*.py
 gg_*
 .env
+
+.sa-runs/

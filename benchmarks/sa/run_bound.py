@@ -13,10 +13,11 @@ from infx.srt_slurm.synthetic_acceptance import plan_commands
 p = argparse.ArgumentParser()
 for name in ('config', 'output', 'source', 'srt'):
     p.add_argument('--' + name, required=True, type=Path)
+p.add_argument('--prepare-only', action='store_true')
 a = p.parse_args()
 c = json.loads(a.config.read_text())
 recipe = str(a.source / c['recipe'])
-selected, bound = select_recipe(recipe, os.environ)
+selected, bound = select_recipe(recipe, os.environ, cpu_power_source='rapl')
 (a.output / 'bound-sa-recipe.yaml').write_text(yaml.safe_dump(bound, sort_keys=False))
 recipe_file = a.output / 'recipe.yaml'
 recipe_file.write_text(yaml.safe_dump(bound, sort_keys=False))
@@ -60,15 +61,34 @@ plan.command.extend(['--set', 'roles.agg.args.speculative-config=' + json.dumps(
     'Execute native rendered batch script in the existing single-node allocation; never cancel the reservation.',
     'Local model/cache/output mounts and loopback interface replace SA host paths.',
     'Spur transport omits unsupported Pyxis default flags; native workload argv is retained.',
-    'CPU power exporter is unavailable locally; GPU telemetry retains the SA exporter configuration.'
+    'Native GPU and RAPL telemetry are requested; unavailable local permissions remain explicit missing evidence.',
+    'GitHub release assets use the API route because direct download URLs return HTTP 504.'
 ]}, indent=2) + '\n')
 rendered = a.output / 'rendered'
 command = list(plan.command)
 command[1] = 'render'
 command += ['--to', str(rendered)]
+(a.output / 'render-command.json').write_text(json.dumps(command, indent=2) + '\n')
+if a.prepare_only:
+    raise SystemExit(0)
+# Keep native setup and checksum verification; adapt only the download route.
+import shutil
+setup_env = dict(os.environ)
+for tool in ('curl', 'wget'):
+    setup_env['SA_REAL_' + tool.upper()] = shutil.which(tool)
+setup_env['PATH'] = str(Path(__file__).parent / 'download') + ':' + os.environ['PATH']
+subprocess.run(['make', 'setup', 'ARCH=x86_64', 'TACHOMETER_RELEASE=' + c['telemetry_release'], 'CPU_POWER_EXPORTER_RELEASE=v2.66.1'], check=True, env=setup_env)
+os.environ.pop('GH_TOKEN', None)
 subprocess.run(command, check=True, env={**os.environ, **dict(plan.environment)})
 # Keep the scheduler real. Only translate equivalent container defaults on Spur.
 os.environ['SA_REAL_SRUN'] = subprocess.check_output(['which', 'srun'], text=True).strip()
 os.environ['PATH'] = str(Path(__file__).parent / 'spur') + ':' + os.environ['PATH']
 os.environ['SA_OUTPUT'] = str(a.output)
 subprocess.run(['bash', str(rendered / 'sbatch_script.sh')], check=True)
+
+# SA's workflow validates the native AgentX output after the benchmark exits.
+logs = a.output / 'native' / os.environ['SLURM_JOB_ID'] / 'logs'
+result = logs / (c['name'] + '.json')
+if not result.is_file():
+    raise RuntimeError('Native benchmark result is missing: ' + str(result))
+subprocess.run([sys.executable, '-m', 'infx.results.agentic.validate_agentic_result', str(logs / 'agentic'), '--failed-request-threshold', c['environment']['AIPERF_FAILED_REQUEST_THRESHOLD']], check=True)

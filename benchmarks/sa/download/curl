@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Route GitHub release downloads through the API on this network."""
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+from urllib.parse import quote, unquote
+
+args = sys.argv[1:]
+tool = Path(sys.argv[0]).name
+pattern = r'https://github.com/([^/]+/[^/]+)/releases/(?:download/([^/]+)|latest/download)/(.+)'
+found = [match for arg in args if (match := re.fullmatch(pattern, arg))]
+if len(found) != 1:
+    os.execv(os.environ['SA_REAL_' + tool.upper()], [tool, *args])
+repo, tag, asset = found[0].groups()
+output = None
+for i, arg in enumerate(args):
+    if arg in ('--output', '-o') or (tool == 'wget' and arg == '-O'):
+        output = args[i + 1]
+        break
+if tool == 'wget' and output is None:
+    output = unquote(asset)
+# Pass credentials on stdin, never in command logging or process arguments.
+# curl strips Authorization on a cross-host redirect (no --location-trusted).
+auth = ''
+if token := os.environ.get('GH_TOKEN'):
+    if not re.fullmatch(r'[A-Za-z0-9_]+', token):
+        raise SystemExit('Invalid GitHub token encoding')
+    auth = 'header = "Authorization: token ' + token + '"\n'
+base = [os.environ['SA_REAL_CURL'], '--fail', '--silent', '--show-error', '--location',
+        '--retry', '3', '--retry-delay', '2', '--connect-timeout', '10', '--max-time', '180',
+        '--config', '-']
+release = 'latest' if tag is None else 'tags/' + quote(unquote(tag), safe='')
+api = f'https://api.github.com/repos/{repo}/releases/{release}'
+metadata = json.loads(subprocess.check_output(base + ['--header', 'Accept: application/vnd.github+json', api], input=auth.encode()))
+entry = next(item for item in metadata['assets'] if item['name'] == unquote(asset))
+command = base + ['--header', 'Accept: application/octet-stream', entry['url']]
+if output:
+    command += ['--output', output]
+subprocess.run(command, input=auth.encode(), check=True)
