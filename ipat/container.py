@@ -1,11 +1,12 @@
 """Container-side lifecycle and separate server profiling for a frozen IPAT recipe."""
 import argparse
-import csv
 import datetime as dt
-import gzip
 import importlib.metadata
 import json
 import math
+
+from kernel_report import aggregate
+from rocprof_capture import launch_command, REFERENCE
 import os
 from pathlib import Path
 import shutil
@@ -77,63 +78,23 @@ def request(url, body=None):
         return response.read().decode()
 
 
-def stop(process):
+def stop(process, timeout=90):
     if process and process.poll() is None:
         try: os.killpg(process.pid, signal.SIGINT)
-        except ProcessLookupError: return
+        except ProcessLookupError: return True
         try:
-            process.wait(timeout=90)
+            process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             try: os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError: return
+            except ProcessLookupError: return True
             process.wait(timeout=15)
+            return False
+    return True
 
 
 def trace_summary(directory):
-    kernels, operators, devices, processes = {}, {}, set(), set()
-    files, errors = [], []
-    for path in sorted(directory.rglob("*")):
-        if not path.is_file() or not (path.name.endswith(".json.gz") or path.name.endswith(".trace.json") or path.name.endswith("kernel_trace.csv")):
-            continue
-        try:
-            if path.name.endswith("kernel_trace.csv"):
-                with path.open() as f:
-                    rows = list(csv.DictReader(f))
-                for row in rows:
-                    name = row.get("Kernel_Name", row.get("Name", "unknown"))
-                    duration = (float(row["End_Timestamp"]) - float(row["Start_Timestamp"])) / 1000
-                    bucket = kernels.setdefault(name, {"name": name, "calls": 0, "total_us": 0})
-                    bucket["calls"] += 1; bucket["total_us"] += duration
-                    devices.add(str(row.get("Agent_Id", "unknown")))
-                    processes.add(str(row.get("Process_Id", "unknown")))
-            else:
-                opener = gzip.open if path.name.endswith(".gz") else open
-                with opener(path, "rt") as f:
-                    events = json.load(f).get("traceEvents", [])
-                for event in events:
-                    category, args = event.get("cat", ""), event.get("args", {})
-                    if event.get("ph") != "X" or not isinstance(event.get("dur"), (int, float)):
-                        continue
-                    target = kernels if category == "kernel" else operators if category == "cpu_op" else None
-                    if target is None:
-                        continue
-                    name = event.get("name", "unknown")
-                    bucket = target.setdefault(name, {"name": name, "calls": 0, "total_us": 0})
-                    bucket["calls"] += 1; bucket["total_us"] += event["dur"]
-                    if target is operators:
-                        for key in ("Input Dims", "Input type", "Input Strides"):
-                            if key in args and key not in bucket: bucket[key] = args[key]
-                    else:
-                        devices.add(str(args.get("device", event.get("pid"))))
-                        processes.add(str(event.get("pid")))
-            files.append(str(path.relative_to(directory)))
-        except (OSError, ValueError, KeyError, TypeError) as error:
-            errors.append({"file": path.name, "error": str(error)})
-    return {"kernel_count": sum(k["calls"] for k in kernels.values()), "devices": sorted(devices),
-            "processes": sorted(processes), "files": files, "errors": errors,
-            "kernels": sorted(kernels.values(), key=lambda k: k["total_us"], reverse=True)[:50],
-            "operators": sorted(operators.values(), key=lambda k: k["total_us"], reverse=True)[:50],
-            "note": "Summed dispatch time may overlap across streams/devices; it is not end-to-end elapsed time. Operator input metadata does not prove fused internal precision or full tensor flow."}
+    from kernel_report import aggregate
+    return aggregate(directory)
 
 
 def benchmark_metrics(path, chips):
@@ -154,7 +115,7 @@ def benchmark_metrics(path, chips):
             "was_cancelled": data.get("was_cancelled"), "quality_evaluation": "not_run"}
 
 
-def profile(recipe, client, output, url, result, finished):
+def profile(recipe, client, output, url, result, finished, server_started=None):
     settings = recipe["profile"]
     profilers = []
     try:
@@ -169,6 +130,23 @@ def profile(recipe, client, output, url, result, finished):
                     raise RuntimeError("Client ended before the profiling phase marker")
             else:
                 raise TimeoutError("Profiling phase marker did not arrive")
+        if settings["kind"] == "rocprof" and settings.get("mode", "attach") == "launch":
+            if not marker or server_started is None:
+                raise RuntimeError("Launch profiling requires a measured-phase marker and server launch clock")
+            scheduled = server_started + settings["launch_delay_seconds"]
+            remaining = scheduled - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError("rocprof capture began before measured-phase readiness was verified; recalibrate the launch delay")
+            result.update(reference=REFERENCE, mode="launch", window_basis="server launch; measured-phase marker checked before capture",
+                          launch_delay_seconds=settings["launch_delay_seconds"], duration_seconds=settings["seconds"],
+                          timing_limit="Host launch timer is approximate; native dispatch timestamps and rank coverage still require inspection")
+            if finished.wait(remaining):
+                raise RuntimeError("Client ended before the launch-relative profile window")
+            result["started_at"] = now()
+            if finished.wait(settings["seconds"]):
+                raise RuntimeError("Client ended before the complete rocprof window")
+            result.update(status="collected", ended_at=now())
+            return
         if finished.wait(settings["delay_seconds"]):
             raise RuntimeError("Client ended before the requested profile window")
         result["started_at"] = now()
@@ -220,6 +198,7 @@ def run(recipe, output, pass_name):
     manifest = {"pass": pass_name, "started_at": now(), "status": "running", "profile": {}}
     write(output / "pass.json", manifest)
     server = client = None
+    server_started = None
     profile_thread = None
     finished = threading.Event()
     url = "http://127.0.0.1:" + str(recipe["port"])
@@ -285,6 +264,13 @@ def run(recipe, output, pass_name):
             checked(expand(setup), output / f"client-prepare-{index}.log", setup_env, timeout=3600)
         manifest["client_argv"] = client_argv
         write(output / "pass.json", manifest)
+        if pass_name == "profile" and recipe["profile"]["kind"] == "rocprof" and recipe["profile"].get("mode", "attach") == "launch":
+            (output / "traces").mkdir(exist_ok=True)
+            argv = launch_command(argv, recipe["profile"], output, (output / "capabilities/rocprofv3-help.txt").read_text())
+            manifest["profiler_argv"] = argv
+            manifest["profiler_reference"] = REFERENCE
+        server_started = time.monotonic()
+        manifest["server_launch_at"] = now()
         with (output / "server.log").open("w") as log:
             server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
         deadline = time.monotonic() + recipe["startup_timeout_seconds"]
@@ -302,11 +288,22 @@ def run(recipe, output, pass_name):
         with (output / "client.log").open("w") as log:
             client = subprocess.Popen(client_argv, stdout=log, stderr=subprocess.STDOUT, env=client_env, start_new_session=True)
         if pass_name == "profile":
-            profile_thread = threading.Thread(target=profile, args=(recipe, client, output, url, manifest["profile"], finished), daemon=True)
+            profile_thread = threading.Thread(target=profile, args=(recipe, client, output, url, manifest["profile"], finished, server_started), daemon=True)
             profile_thread.start()
         deadline = time.monotonic() + recipe["client_timeout_seconds"]
         with (output / "serving-metrics.jsonl").open("w") as metrics:
             while client.poll() is None:
+                marker = recipe["profile"].get("start_marker")
+                phase_log = output / "client/logs/aiperf.log"
+                if marker and "measurement_start_after_server_seconds" not in manifest and phase_log.exists():
+                    with phase_log.open("rb") as handle:
+                        handle.seek(max(0, phase_log.stat().st_size - 131072))
+                        observed = marker.encode() in handle.read()
+                    if observed:
+                        manifest["measurement_start_after_server_seconds"] = time.monotonic() - server_started
+                        manifest["measurement_marker_observed_at"] = now()
+                        manifest["measurement_marker_poll_seconds"] = 5
+                        write(output / "pass.json", manifest)
                 if server.poll() is not None: raise RuntimeError("Server exited during the client workload")
                 if time.monotonic() > deadline: raise TimeoutError("Client workload timed out")
                 try: row = {"at": now(), "text": request(url + "/metrics")}
@@ -327,12 +324,18 @@ def run(recipe, output, pass_name):
     finally:
         finished.set()
         if profile_thread: profile_thread.join(timeout=240)
-        stop(client); stop(server)
+        stop(client)
+        clean = stop(server, timeout=900 if pass_name == "profile" else 90)
+        manifest["server_shutdown"] = "graceful" if clean else "forced_kill"
         if pass_name == "profile":
-            summary = trace_summary(output / "traces")
-            summary["expected_devices"] = recipe["physical_chips"]
-            summary["device_coverage_complete"] = len(summary["devices"]) == recipe["physical_chips"] and "unknown" not in summary["devices"]
-            write(output / "trace-summary.json", summary)
+            if not clean:
+                manifest.update(status="failed", error="Profiler server required forced shutdown; trace completeness is unverified")
+            try:
+                summary = aggregate(output / "traces", output, family=recipe["profile"]["kind"], expected_devices=recipe["physical_chips"])
+            except Exception as error:
+                summary = {"kernel_count": 0, "device_coverage_complete": False, "errors": [{"error": str(error)}]}
+                write(output / "trace-summary.json", summary)
+            manifest["kernel_report"] = "kernel-report.html" if (output / "kernel-report.html").exists() else None
             if manifest["profile"].get("status") != "collected" or not summary["kernel_count"] or not summary["device_coverage_complete"] or summary["errors"]:
                 manifest["status"] = "failed"
                 manifest.setdefault("error", "Profiling did not verify GPU kernel coverage on every expected device; see profile.json and trace-summary.json")

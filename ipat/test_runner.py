@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 from container import benchmark_metrics, trace_summary, run
-from runner import validate_recipe, resolve_models, cleanup, ownership_command, validate_output, runtime_storage, recover
+from runner import validate_recipe, resolve_models, cleanup, ownership_command, validate_output, runtime_storage, recover, resume_profile_manifest
 
 
 RECIPE = {"model": "Model", "framework": "vllm", "image": "image:pin", "image_policy": "local",
@@ -33,6 +33,16 @@ class RunnerTests(unittest.TestCase):
                         {"profile": {"kind": "torch", "seconds": 9999, "delay_seconds": 0}}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate_recipe(dict(RECIPE, **changes))
+
+    def test_separate_profile_stage_retains_only_matching_successful_baseline(self):
+        current = {"id": "a" * 32, "recipe_sha256": "frozen"}
+        previous = dict(current, passes=[{"pass": "baseline", "status": "completed", "metrics": {"throughput": 123}}])
+        result = resume_profile_manifest(previous, current)
+        self.assertEqual(result["passes"], previous["passes"])
+        self.assertEqual(result["status"], "preparing_profile")
+        for changed in ({"id": "b" * 32}, {"recipe_sha256": "different"},
+                        {"passes": [{"pass": "baseline", "status": "failed"}]}):
+            with self.assertRaises(ValueError): resume_profile_manifest(dict(previous, **changed), current)
 
     def test_trace_summary_requires_gpu_events_and_keeps_units(self):
         events = [{"ph": "X", "cat": "kernel", "name": "gemm", "dur": 1000, "pid": 10, "args": {"device": 0}},

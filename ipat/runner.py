@@ -2,6 +2,8 @@
 import argparse
 import datetime as dt
 import hashlib
+import math
+import copy
 import json
 import os
 from pathlib import Path
@@ -112,6 +114,12 @@ def preflight(request, output):
     if request.get("image_check"):
         assert_gpu_idle()
         settings = request["image_check"]
+        if settings.get("pull"):
+            pulled = capture(["docker", "pull", settings["image"]], output / "image-pull.log", timeout=1800)
+            if pulled.get("returncode") != 0:
+                facts.update(status="failed", image_pull=pulled)
+                write_json(output / "manifest.json", facts)
+                return facts
         image = json.loads(subprocess.check_output(["docker", "image", "inspect", settings["image"]], text=True))[0]
         facts["image"] = {"requested": settings["image"], "id": image["Id"],
                           "repo_digests": image.get("RepoDigests", []),
@@ -184,9 +192,20 @@ def validate_recipe(recipe):
     profile = recipe.get("profile", {})
     if profile.get("kind") not in ("torch", "rocprof"):
         raise ValueError("Choose torch or rocprof profiling")
-    for key, minimum, maximum in (("seconds", 1, 120), ("delay_seconds", 0, 3600)):
+    for key, minimum, maximum in (("seconds", 1, 180), ("delay_seconds", 0, 3600)):
         if type(profile.get(key)) is not int or not minimum <= profile[key] <= maximum:
             raise ValueError(f"Invalid profile {key}")
+    if profile.get("mode", "attach") not in ("attach", "launch"):
+        raise ValueError("Choose rocprof attach or launch mode")
+    if profile.get("mode") == "launch":
+        if profile["kind"] != "rocprof" or not isinstance(profile.get("start_marker"), str) or not profile["start_marker"].strip():
+            raise ValueError("rocprof launch requires a measured-phase start_marker")
+        delay = profile.get("launch_delay_seconds")
+        if delay is not None and (type(delay) is not int or not 0 <= delay <= 86400):
+            raise ValueError("Invalid profile launch_delay_seconds")
+    for flag in ("hip_trace", "marker_trace"):
+        if flag in profile and type(profile[flag]) is not bool:
+            raise ValueError("Profile trace-domain switches must be booleans")
     if recipe.get("framework") not in ("vllm", "sglang", "generic"):
         raise ValueError("Choose vllm, sglang or generic")
     if not isinstance(recipe.get("health_path"), str) or not recipe["health_path"].startswith("/"):
@@ -237,12 +256,16 @@ def report(output, manifest):
               "Quality evaluation, measured HBM counters, full tensor-flow attribution and roofline calibration are not collected by this initial path.",
               "Original SA model/dataset revisions and image identity may be unresolved; see the frozen source provenance.",
               "Raw client outputs, server logs, capabilities, per-pass manifests and native traces are retained beside this report."]
+    if (output / "profile/kernel-report.md").exists():
+        lines += ["", "## Kernel analysis", "", "[Aggregated kernel report and top-10 investigations](profile/kernel-report.html)",
+                  "", "[Excel workbook](profile/kernel-report.xlsx) · [All kernel statistics](profile/kernel-summary.csv) · [Every dispatch](profile/kernel-dispatches.csv.gz)",
+                  "", "Roofline, tensor precision and optimized-path verdicts require bound counter/runtime/candidate evidence. Missing measurements remain explicit."]
     if manifest.get("error"): lines += ["", "Failure: " + manifest["error"]]
     (output / "report.md").write_text("\n".join(lines) + "\n")
     (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>IPAT run evidence</title><h1>IPAT run evidence</h1>'
         '<ul><li><a href="report.md">Replication and profiling report</a></li><li><a href="manifest.json">Run manifest</a></li>'
         '<li><a href="request.json">Frozen request</a></li><li><a href="recipe.json">Effective recipe</a></li>'
-        '<li><a href="baseline/">Unprofiled baseline</a></li><li><a href="profile/">Profile and native traces</a></li></ul>')
+        '<li><a href="profile/kernel-report.html">Aggregated kernel report</a></li><li><a href="profile/kernel-report.xlsx">Kernel Excel workbook</a></li><li><a href="baseline/">Unprofiled baseline</a></li><li><a href="profile/">Profile and native traces</a></li></ul>')
 
 
 def ownership_command(output, image):
@@ -294,7 +317,29 @@ def recover(request, output):
     write_json(output / "manifest.json", {"status": "recovered", "previous": previous})
 
 
-def execute(request, output):
+def resolve_pass_recipe(recipe, pass_name, records):
+    resolved = copy.deepcopy(recipe)
+    settings = resolved["profile"]
+    if pass_name == "profile" and settings.get("mode") == "launch" and settings.get("launch_delay_seconds") is None:
+        baseline = next((p for p in records if p["pass"] == "baseline" and p["status"] == "completed"), {})
+        offset = baseline.get("measurement_start_after_server_seconds")
+        if type(offset) not in (int, float) or not math.isfinite(offset) or offset < 0:
+            raise ValueError("Launch profiling requires a successful baseline with a measured-phase marker, or an explicit calibrated launch delay")
+        settings["launch_delay_seconds"] = math.ceil(offset + settings["delay_seconds"])
+        settings["delay_basis"] = "preceding baseline marker plus requested delay; fresh profile marker must precede capture"
+    return resolved
+
+
+def resume_profile_manifest(previous, current):
+    if (previous.get("id") != current["id"] or previous.get("recipe_sha256") != current["recipe_sha256"]
+            or not any(p["pass"] == "baseline" and p["status"] == "completed" for p in previous.get("passes", []))):
+        raise ValueError("Profile stage requires this request's successful frozen baseline")
+    resumed = copy.deepcopy(previous)
+    resumed["status"] = "preparing_profile"
+    return resumed
+
+
+def execute(request, output, stage=None):
     recipe = validate_recipe(request["recipe"])
     repo = REPOSITORY
     output = validate_output(output)
@@ -307,6 +352,9 @@ def execute(request, output):
                 "workflow_run_id": os.environ.get("GITHUB_RUN_ID"), "workflow_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
                 "passes": [], "source": request.get("source")}
     image_id = None
+    if stage == "profile" and "baseline" in request.get("passes", ["baseline", "profile"]):
+        previous = json.loads((output / "manifest.json").read_text())
+        manifest = resume_profile_manifest(previous, manifest)
     def save(): write_json(output / "manifest.json", manifest)
     def interrupted(signum, frame): raise InterruptedError("IPAT run interrupted")
     signal.signal(signal.SIGTERM, interrupted)
@@ -347,9 +395,15 @@ def execute(request, output):
         passes = request.get("passes", ["baseline", "profile"])
         if not passes or any(p not in ("baseline", "profile") for p in passes) or len(set(passes)) != len(passes):
             raise ValueError("Use baseline, profile, or baseline then profile once each")
+        if stage:
+            if stage not in passes: raise ValueError("Stage is not requested")
+            passes = [stage]
         for pass_name in passes:
+            pass_recipe = resolve_pass_recipe(recipe, pass_name, manifest["passes"])
+            pass_recipe_file = pass_name + "-recipe.json"
+            write_json(output / pass_recipe_file, pass_recipe)
             manifest["status"] = "running_" + pass_name; save()
-            argv = [*common, "--entrypoint", "python3", image_id, "/ipat/container.py", "--recipe", "/output/recipe.json",
+            argv = [*common, "--entrypoint", "python3", image_id, "/ipat/container.py", "--recipe", "/output/" + pass_recipe_file,
                     "--output", "/output/" + pass_name, "--pass-name", pass_name]
             with (output / (pass_name + "-container.log")).open("w") as log:
                 result = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT,
@@ -375,6 +429,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cleanup", action="store_true")
+    parser.add_argument("--stage", choices=("baseline", "profile"))
     args = parser.parse_args()
     args.output = validate_output(args.output)
     if args.cleanup:
@@ -390,7 +445,7 @@ def main():
     elif request.get("mode") == "recover":
         recover(request, args.output)
     elif request.get("mode") == "run":
-        result = execute(request, args.output)
+        result = execute(request, args.output, args.stage)
         raise SystemExit(0 if result["status"] == "completed" else 1)
     else:
         raise ValueError("Unsupported IPAT request mode")

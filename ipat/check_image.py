@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 
 import torch
+from container import probe
 
 
 def emit(key, value):
@@ -13,6 +14,7 @@ def emit(key, value):
 
 
 emit("torch", {"version": torch.__version__, "hip": torch.version.hip})
+emit("capabilities", probe(Path('/output/capabilities')))
 test_path = Path(os.environ['TMPDIR']) / 'ipat-name:check'
 try:
     test_path.write_text('compiler filename check\n')

@@ -63,3 +63,32 @@ Local checks (set `TMPDIR` to a directory inside one of the two repositories):
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=ipat python3 -m unittest ipat/test_runner.py
 ```
+
+## Aggregated kernel reports
+
+`kernel_report.py` streams rocprof kernel CSVs or Torch Chrome traces. It exports
+all kernel symbols ordered by summed GPU duration share, calls, mean/min/max/std,
+per-device/shape variants, per-dispatch and explicit-iteration compressed CSVs,
+and HTML/Markdown/Excel reports. The report is generated after profile shutdown.
+Top-ten rooflines and best-among-tested-path verdicts require separately supplied
+`kernel-evidence.json`, bound to the trace/variant and hashed evidence files.
+Without counters, runtime tensor/source proof or compatible candidate benchmarks,
+those sections stay unavailable and `top10-collection-plan.json` lists follow-ups.
+See IPAT's `docs/KERNEL_REPORT.md` for the schema and interpretation limits.
+
+`rocprof_capture.py` adds the launch wrapper from the user-supplied profiling
+archive: kernel trace + stats, CSV, and a bounded collection period. New AgentX
+preparations use launch mode; legacy attach and Torch configs remain supported.
+The baseline observes the measured-phase marker offset from server launch. Its
+offset plus `delay_seconds` calibrates a separate profile pass; an explicit
+`launch_delay_seconds` can override it. The fresh profile marker must arrive before
+the scheduled window or the attempt fails. `hip_trace`/`marker_trace` optionally
+add domains, and capture is bounded to 1–180 seconds. Do not copy C96's 3300-second
+delay to another workload. Capture timing, flush and device coverage require live
+verification. Generated counter commands are templates, not automatic GPU jobs.
+
+The workflow exposes Phase 2 replication and Phase 3 profiling as separate steps.
+Both consume the same request; the profile stage verifies the preceding baseline
+identity and retains its results before calibrating the bounded rocprof window.
+Preflight image checks can explicitly pull the requested pinned image and record
+GPU math, compiler-cache scope and profiler capabilities before model startup.
