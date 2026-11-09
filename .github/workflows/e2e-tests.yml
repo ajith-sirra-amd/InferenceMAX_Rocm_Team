@@ -169,6 +169,7 @@ jobs:
         timeout-minutes: 480
         permissions:
             contents: read
+            actions: read
         concurrency:
             group: sa-mi355x-single-node
             cancel-in-progress: false
@@ -176,6 +177,40 @@ jobs:
             SA_OUTPUT: /share_nfs/ajith/benchmarks/${{ github.run_id }}-${{ github.run_attempt }}
             PYTHONDONTWRITEBYTECODE: '1'
         steps:
+            - name: Release disposable environments from completed native runs
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  python3 - <<'PY'
+                  import json, os, re, shutil, urllib.request
+                  from pathlib import Path
+                  workspace = Path(os.environ['GITHUB_WORKSPACE']).resolve()
+                  output = Path(os.environ['SA_OUTPUT'])
+                  output.mkdir(parents=True, exist_ok=True)
+                  removed = []
+                  for checkout in sorted(workspace.glob('sa-benchmark-*')):
+                      match = re.fullmatch(r'sa-benchmark-(\d+)', checkout.name)
+                      if not match or match[1] == os.environ['GITHUB_RUN_ID'] or checkout.is_symlink():
+                          continue
+                      environments = [p for p in checkout.glob('.sa-runs/*/srt-slurm/.venv*')
+                                      if p.is_dir() and not p.is_symlink() and p.resolve().is_relative_to(checkout)]
+                      if not environments:
+                          continue
+                      request = urllib.request.Request(
+                          os.environ['GITHUB_API_URL'] + '/repos/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + match[1],
+                          headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN']})
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          state = json.load(response)
+                      if state['status'] != 'completed':
+                          continue
+                      for environment in environments:
+                          if environment.stat().st_uid != os.getuid():
+                              continue
+                          print('Removing regenerable environment:', environment, flush=True)
+                          shutil.rmtree(environment)
+                          removed.append(str(environment))
+                  (output / 'environment-cleanup.json').write_text(json.dumps({'removed': removed}, indent=2) + '\n')
+                  PY
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
               with:
                   ref: ${{ github.sha }}

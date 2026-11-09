@@ -61,6 +61,11 @@ def main():
     if not source.exists():
         source = work / 'InferenceX'
     srt = work / 'srt-slurm'
+    # Native venv names stay the same; their disposable contents use shared storage.
+    for name in ('.venv', '.venv-compute'):
+        environment = output / 'work' / name.lstrip('.')
+        environment.mkdir(parents=True, exist_ok=True)
+        (srt / name).symlink_to(environment, target_is_directory=True)
     for patch in sorted((source / 'runners/srt-slurm/patches').glob('*.patch')):
         run(['git', '-C', srt, 'apply', patch])
     mirror = source / 'benchmarks/multi_node/srt-slurm-recipes'
