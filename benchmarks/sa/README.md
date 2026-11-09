@@ -58,5 +58,7 @@ Use a separate configuration and workflow run after the baseline succeeds.
 The hook retains native server arguments and captures kernel, HIP, copy and
 marker traces as CSV/JSON under `native/<allocation>/logs/profiles/rocprof/`.
 The delay must be calibrated and the actual window checked against fresh
-steady-state traffic. A small eight-process GPU launch capture has passed;
+steady-state traffic. `clock-sync.json` brackets a boot-clock sample in UTC so
+native rocprof timestamps can be compared with client phase timestamps.
+A small eight-process GPU launch capture has passed;
 native model capture and steady-state coverage remain under validation.

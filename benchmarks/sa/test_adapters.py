@@ -24,6 +24,9 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(args[args.index('--')+1:], ['vllm', *native])
             self.assertEqual(args[args.index('--collection-period')+1], '1200:60:1')
             self.assertIn('--kernel-trace', args)
+            clocks = json.loads((root / 'clock-sync.json').read_text())
+            self.assertGreater(clocks['boottime_ns'], 0)
+            self.assertGreaterEqual(clocks['utc_after_ns'], clocks['utc_before_ns'])
 
     def test_docker_transport_preserves_task_mounts_and_cleans_only_owned_container(self):
         with tempfile.TemporaryDirectory() as temp:
