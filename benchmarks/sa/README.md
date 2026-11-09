@@ -35,8 +35,10 @@ explicit missing evidence. Release assets use the GitHub API route on this netwo
 performance equivalence.
 
 Use `sa-mode: transport-check` for a small image/mount check before model startup.
-The container root is read-only; runtime caches stay in the run's `work/` directory,
-with compiler temporary files on bounded tmpfs. SRT owns the process lifecycle.
+Container writability follows the native SRT option. SA's writable container is
+needed for JIT modules built and imported under the installed package directory;
+the image itself remains unchanged. Runtime caches stay in the run's `work/`
+directory, with compiler temporary files on bounded tmpfs. SRT owns the process lifecycle.
 
 Source checkouts and Python environments stay within this repository under
 `.sa-runs/`. Run data goes to `/share_nfs/ajith/benchmarks/<run>-<attempt>/`:

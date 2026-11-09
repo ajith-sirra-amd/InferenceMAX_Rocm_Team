@@ -61,7 +61,7 @@ def main(args):
     work = root / 'work' / 'containers' / name
     for part in ('home', 'cache', 'tmp', 'log'):
         (work / part).mkdir(parents=True, exist_ok=True)
-    docker = ['docker', 'run', '--rm', '--init', '--read-only', '--user', '0:0', '--name', name,
+    docker = ['docker', 'run', '--rm', '--init', '--user', '0:0', '--name', name,
               '--label', 'sa.run=' + root.name, '--network', 'host', '--ipc', 'host',
               '--device', '/dev/kfd', '--device', '/dev/dri', '--cap-add', 'SYS_PTRACE',
               '--security-opt', 'seccomp=unconfined', '--ulimit', 'memlock=-1', '--ulimit', 'stack=67108864',
@@ -69,6 +69,9 @@ def main(args):
               '--mount', f'type=bind,src={work / "home"},dst=/root',
               '--mount', f'type=bind,src={work / "log"},dst=/var/log',
               '--tmpfs', '/work/tmp:rw,exec,size=64g']
+    # Preserve SRT/Pyxis writable-container semantics for native JIT modules.
+    if '--container-writable' not in container:
+        docker.append('--read-only')
     for mount in container.get('--container-mounts', '').split(','):
         if mount:
             source, target, *options = mount.split(':')

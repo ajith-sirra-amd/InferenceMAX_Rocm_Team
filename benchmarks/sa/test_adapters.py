@@ -53,6 +53,7 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(args[image_index+1:], native[1:])
             self.assertIn('type=bind,src=/weights,dst=/model,readonly', args)
             self.assertIn('type=bind,src=/data,dst=/logs', args)
+            self.assertNotIn('--read-only', args)
             name = args[args.index('--name') + 1]
             self.assertEqual(json.loads((root / 'cleanup').read_text()), ['rm', '-f', name])
 

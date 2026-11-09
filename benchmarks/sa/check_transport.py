@@ -41,7 +41,7 @@ commands = {
                     '--network', 'host', '--mount', f'type=bind,src={a.output.resolve()},dst=/logs,readonly',
                     '--entrypoint', task[0], image, *task[1:]],
     'native_adapter': [str(Path(__file__).parent / 'spur/srun'), *base[1:],
-                       '--container-image', image, '--container-remap-root',
+                       '--container-image', image, '--container-remap-root', '--container-writable',
                        '--container-mounts', f'{a.output.resolve()}:/logs' + ('' if a.command_json else ':ro'), *task],
 }
 if a.command_json:
