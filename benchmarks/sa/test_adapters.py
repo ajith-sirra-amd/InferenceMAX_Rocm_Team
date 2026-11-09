@@ -10,6 +10,21 @@ ROOT = Path(__file__).parent
 
 
 class AdapterTests(unittest.TestCase):
+    def test_profile_hook_keeps_server_arguments_and_bounds_capture(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            fake = root / 'rocprofv3'
+            fake.write_text('#!/usr/bin/env python3\nimport json,os,sys\nfrom pathlib import Path\nPath(os.environ["CAPTURE"]).write_text(json.dumps(sys.argv[1:]))\n')
+            fake.chmod(0o755)
+            native = ['serve', '/model', '--speculative-config', '{"method": "dspark"}']
+            subprocess.run([str(ROOT / 'profile/vllm'), *native], check=True, env=dict(os.environ,
+                PATH=str(root) + ':' + os.environ['PATH'], CAPTURE=str(root / 'args'),
+                SA_PROFILE_OUTPUT=str(root), SA_PROFILE_DELAY_SECONDS='1200', SA_PROFILE_SECONDS='60'))
+            args = json.loads((root / 'args').read_text())
+            self.assertEqual(args[args.index('--')+1:], ['vllm', *native])
+            self.assertEqual(args[args.index('--collection-period')+1], '1200:60:1')
+            self.assertIn('--kernel-trace', args)
+
     def test_docker_transport_preserves_task_mounts_and_cleans_only_owned_container(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

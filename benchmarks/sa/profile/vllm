@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Optional profiling overlay; the native server arguments pass through unchanged.
+set -euo pipefail
+export PATH="${PATH#/sa-profile-bin:}"
+if [[ "${1:-}" != serve ]]; then
+    exec vllm "$@"
+fi
+: "${SA_PROFILE_DELAY_SECONDS:?Calibrate the delay from the successful baseline}"
+: "${SA_PROFILE_SECONDS:?Set a bounded capture duration}"
+: "${SA_PROFILE_OUTPUT:?Set the profile output directory}"
+mkdir -p "$SA_PROFILE_OUTPUT"
+date -u +%FT%TZ > "$SA_PROFILE_OUTPUT/launch-utc.txt"
+exec rocprofv3 --kernel-trace --hip-trace --memory-copy-trace --marker-trace --stats \
+    --collection-period "${SA_PROFILE_DELAY_SECONDS}:${SA_PROFILE_SECONDS}:1" \
+    --collection-period-unit sec -f csv json -d "$SA_PROFILE_OUTPUT/traces" \
+    -- vllm "$@"

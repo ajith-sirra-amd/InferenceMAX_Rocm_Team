@@ -31,6 +31,15 @@ mounts = {
 for host, target in cluster.get('workspace-mounts', {}).items():
     mounts[str(a.source / host)] = target
 settings = dict(cluster['extra'])
+profile = c.get('profile')
+if profile:
+    if c['environment']['FRAMEWORK'] != 'vllm' or profile.get('tool') != 'rocprofv3':
+        raise ValueError('The native launch profiling hook currently supports vLLM with rocprofv3')
+    delay, seconds = profile['delay_seconds'], profile['seconds']
+    if type(delay) is not int or delay < 0 or type(seconds) is not int or not 1 <= seconds <= 180:
+        raise ValueError('Use a calibrated nonnegative delay and a 1–180 second capture')
+    mounts[str(Path(__file__).parent / 'profile')] = '/sa-profile-bin:ro'
+    settings['default_bash_preamble'] = 'export PATH="/sa-profile-bin:$PATH"'
 settings.update(cluster='mi355x-local', default_partition='amd-spur', default_account='',
                 default_time_limit='08:00:00', gpus_per_node=8,
                 network_interface='', srtctl_root=str(a.srt), output_dir=str(a.output / 'native'),
@@ -41,6 +50,10 @@ settings.update(cluster='mi355x-local', default_partition='amd-spur', default_ac
 os.environ['SRTSLURM_CONFIG'] = str(a.srt / 'srtslurm.yaml')
 extra = ['--set', 'benchmark.stream_output=true', '--set', 'srun_options.container-workdir="/infmax-workspace"',
          '--set', 'srun_options.container-remap-root=""', '--set', 'srun_options.container-writable=""']
+if profile:
+    for key, value in {'SA_PROFILE_DELAY_SECONDS': str(delay), 'SA_PROFILE_SECONDS': str(seconds),
+                       'SA_PROFILE_OUTPUT': '/logs/profiles/rocprof'}.items():
+        extra += ['--set', 'roles.agg.env.' + key + '=' + json.dumps(value)]
 plans = plan_commands(str(recipe_file), c['environment']['FRAMEWORK'], runtime_arguments(recipe, os.environ) + extra, os.environ)
 if len(plans) != 1:
     raise RuntimeError('Exactly one native recipe is required')
