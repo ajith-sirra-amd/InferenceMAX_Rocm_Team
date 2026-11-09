@@ -17,6 +17,12 @@ on:
                 description: "Existing single-node scheduler allocation"
                 required: false
                 type: string
+            sa-mode:
+                description: "Replicate the SA datapoint or check local container transport"
+                required: false
+                type: choice
+                default: replication
+                options: [replication, transport-check]
             generate-cli-command:
                 description: "Command passed to generate matrix script"
                 required: true
@@ -172,7 +178,15 @@ jobs:
                   path: sa-benchmark-${{ github.run_id }}
                   sparse-checkout: benchmarks/sa
                   persist-credentials: false
+            - name: Check container transport
+              if: ${{ inputs.sa-mode == 'transport-check' }}
+              working-directory: sa-benchmark-${{ github.run_id }}
+              env:
+                  SA_CONFIG: ${{ inputs.sa-config }}
+                  SA_ALLOCATION: ${{ inputs.allocation-id }}
+              run: python3 benchmarks/sa/check_transport.py --config "$SA_CONFIG" --allocation "$SA_ALLOCATION" --output "$SA_OUTPUT"
             - name: Replicate selected SA datapoint
+              if: ${{ inputs.sa-mode != 'transport-check' }}
               working-directory: sa-benchmark-${{ github.run_id }}
               env:
                   SA_CONFIG: ${{ inputs.sa-config }}
