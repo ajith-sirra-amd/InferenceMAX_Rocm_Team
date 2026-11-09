@@ -80,6 +80,10 @@ def preflight(request, output):
         "rocm-smi.txt": ["rocm-smi", "--showproductname", "--showmeminfo", "vram", "--json"],
         "memory.txt": ["free", "-b"],
         "disk.txt": ["df", "-h", str(output)],
+        "host-addresses.txt": ["hostname", "-I"],
+        "slurm-version.txt": ["srun", "--version"],
+        "slurm-nodes.txt": ["sinfo", "-N", "-o", "%N %P %t %G"],
+        "slurm-controller.txt": ["scontrol", "ping"],
     }
     for name, command in commands.items():
         facts["commands"].append(capture(command, output / name))
@@ -444,6 +448,8 @@ def main():
         raise SystemExit(0 if result["status"] == "completed" else 1)
     elif request.get("mode") == "recover":
         recover(request, args.output)
+        if request.get("inspect_host"):
+            preflight({"id": request["id"]}, args.output / "preflight")
     elif request.get("mode") == "run":
         result = execute(request, args.output, args.stage)
         raise SystemExit(0 if result["status"] == "completed" else 1)
