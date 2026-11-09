@@ -339,7 +339,7 @@ def analyze_evidence(root, evidence, capture, variant):
     return result
 
 
-def aggregate(directory, output=None, family=None, expected_devices=None):
+def aggregate(directory, output=None, family=None, expected_devices=None, window_ns=None):
     directory = Path(directory)
     output = Path(output) if output is not None else None
     if output:
@@ -347,6 +347,10 @@ def aggregate(directory, output=None, family=None, expected_devices=None):
     candidates = sorted(p for p in directory.rglob('*') if p.is_file() and
                         (p.name.endswith('kernel_trace.csv') or p.name.endswith('.json.gz') or p.name.endswith('.trace.json')))
     family = family or ('rocprof' if any(p.name.endswith('kernel_trace.csv') for p in candidates) else 'torch')
+    if window_ns is not None and (family != 'rocprof' or len(window_ns) != 2
+            or any(type(n) is not int for n in window_ns) or window_ns[0] >= window_ns[1]):
+        raise ValueError('A native rocprof window requires integer start/end timestamps with start < end')
+    excluded = 0
     paths = [p for p in candidates if p.name.endswith('kernel_trace.csv') == (family == 'rocprof')]
     errors, files, warnings, seen = [], [], [], set()
     if len(paths) != len(candidates):
@@ -379,6 +383,9 @@ def aggregate(directory, output=None, family=None, expected_devices=None):
                                 duration = (end - start) / 1000 if start is not None else args['_duration_ns'] / 1000
                                 if not name or not math.isfinite(duration) or duration < 0:
                                     raise ValueError('Invalid kernel/operator name or duration')
+                                if window_ns is not None and (start < window_ns[0] or end > window_ns[1]):
+                                    excluded += 1
+                                    continue  # Retain whole dispatches; never clip their durations.
                                 db.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                                     (kind, name, relative, index, start, end, duration, encode(args),
                                      str(pid) if pid is not None else 'unknown', str(device) if device is not None else 'unknown',
@@ -393,7 +400,8 @@ def aggregate(directory, output=None, family=None, expected_devices=None):
                 db.commit()
             db.execute('CREATE INDEX correlations ON events(kind,source,external)')
             db.execute('CREATE INDEX steps ON events(kind,source,pid,thread,start_ns,end_ns)')
-            capture = hashlib.sha256(encode(files).encode()).hexdigest()
+            identity = files if window_ns is None else {'files': files, 'window_ns': list(window_ns)}
+            capture = hashlib.sha256(encode(identity).encode()).hexdigest()
             evidence = {}
             if output and (output / 'kernel-evidence.json').exists():
                 evidence = json.loads((output / 'kernel-evidence.json').read_text())
@@ -476,6 +484,8 @@ def aggregate(directory, output=None, family=None, expected_devices=None):
                 'per_device': [dict(name=n, device=d, **s.record()) for (n, d), s in per_device.items()],
                 'operators': [dict((k, v) for k, v in row.items() if k != 'stats') | row['stats'].record() for row in operators.values()],
                 'coverage': {'dispatches_with_timestamps': timed, 'dispatches_with_operator_link': linked,
+                             'selected_window_ns': list(window_ns) if window_ns is not None else None,
+                             'dispatches_outside_window': excluded,
                              'dispatches_with_iteration': with_iteration, 'dropped_events': 'unknown',
                              'rank_mapping': 'trace-local process/device identities; global rank mapping requires runtime evidence'},
                 'note': NOTE}
@@ -514,6 +524,11 @@ def export_report(output, summary, variants):
         '## All captured kernels, highest GPU time first', '',
         '| Kernel | Calls | GPU time % | Total (us) | Avg (us) | Min (us) | Max (us) | Std (us) |',
         '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
+    if summary['coverage'].get('selected_window_ns') is not None:
+        lines[2:2] = ['Selected timestamp window only: ' +
+            str(summary['coverage']['selected_window_ns']) +
+            ' ns in the native profiler clock. Crossing dispatches are excluded. '
+            'This selection does not validate the original capture or exporter exit.', '']
     for row in summary['kernels']:
         lines.append('| ' + ' | '.join(display(row[key]) for key in fields) + ' |')
     lines += ['', 'Individual dispatches: [kernel-dispatches.csv.gz](kernel-dispatches.csv.gz).',
@@ -619,6 +634,11 @@ def export_html(path, summary):
              '<h1>Aggregated kernel profile</h1><p>' + html.escape(NOTE) + '</p>',
              '<p><a href="kernel-report.xlsx">Excel workbook</a> · <a href="kernel-summary.csv">CSV</a> · <a href="kernel-dispatches.csv.gz">Every dispatch</a> · <a href="kernel-iterations.csv.gz">Iteration groups</a> · <a href="kernel-report.md">Full report</a> · <a href="trace-summary.json">JSON</a></p>',
              '<h2>All captured kernels</h2><table><tr>' + ''.join('<th>'+v+'</th>' for v in ['Kernel','Calls','GPU time %','Total us','Avg us','Min us','Max us','Std us']) + '</tr>']
+    if summary['coverage'].get('selected_window_ns') is not None:
+        parts.insert(3, '<p><strong>Selected timestamp window only:</strong> ' +
+            html.escape(str(summary['coverage']['selected_window_ns'])) +
+            ' ns in the native profiler clock; crossing dispatches are excluded. '
+            'This selection does not validate the original capture or exporter exit.</p>')
     for row in summary['kernels']:
         parts.append('<tr>' + ''.join('<td>'+display(row[k])+'</td>' for k in ['name','calls','time_pct','total_us','avg_us','min_us','max_us','std_us']) + '</tr>')
     parts.append('</table><h2>Top 10 investigations</h2>')
@@ -653,7 +673,12 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--format', choices=('torch', 'rocprof'))
     parser.add_argument('--expected-devices', type=int)
+    parser.add_argument('--start-ns', type=int, help='Inclusive native rocprof timestamp; use with --end-ns')
+    parser.add_argument('--end-ns', type=int, help='Inclusive native rocprof timestamp; exclude crossing dispatches')
     args = parser.parse_args()
-    result = aggregate(args.traces, args.output, args.format, args.expected_devices)
+    if (args.start_ns is None) != (args.end_ns is None):
+        parser.error('--start-ns and --end-ns must be supplied together')
+    window = None if args.start_ns is None else (args.start_ns, args.end_ns)
+    result = aggregate(args.traces, args.output, args.format, args.expected_devices, window)
     print(json.dumps({'kernels': result['unique_kernels'], 'dispatches': result['kernel_count'], 'errors': result['errors']}))
     raise SystemExit(1 if result['errors'] or not result['kernel_count'] or result.get('device_coverage_complete') is False else 0)

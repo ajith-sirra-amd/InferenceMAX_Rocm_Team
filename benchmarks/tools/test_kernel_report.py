@@ -84,6 +84,30 @@ class KernelReportTests(unittest.TestCase):
         self.assertEqual(stats['std_us'],5)
         self.assertEqual(r['top10'][0]['variants'][0]['analysis']['tensors']['status'],'unavailable')
 
+    def test_native_window_keeps_whole_dispatches_and_distinct_evidence_identity(self):
+        path = self.traces / 'rank_kernel_trace.csv'
+        with path.open('w', newline='') as handle:
+            writer = csv.writer(handle)
+            writer.writerow(['Kernel_Name', 'Start_Timestamp', 'End_Timestamp', 'Agent_Id'])
+            writer.writerows([['warmup', 0, 110, 2], ['inside', 100, 120, 2],
+                              ['inside', 120, 200, 2], ['crossing_end', 190, 210, 2]])
+        original = path.read_bytes()
+        whole = aggregate(self.traces, self.output)
+        selected = aggregate(self.traces, self.output, window_ns=(100, 200))
+        self.assertEqual(selected['kernel_count'], 2)
+        self.assertEqual([r['name'] for r in selected['kernels']], ['inside'])
+        self.assertAlmostEqual(selected['total_gpu_us'], 0.1)
+        self.assertEqual(selected['coverage']['dispatches_outside_window'], 2)
+        self.assertEqual(selected['coverage']['selected_window_ns'], [100, 200])
+        self.assertNotEqual(whole['capture_sha256'], selected['capture_sha256'])
+        self.assertEqual(path.read_bytes(), original)
+        for window in ((200, 100), (100, 100), (None, 200), (True, 200)):
+            with self.assertRaises(ValueError):
+                aggregate(self.traces, self.output, window_ns=window)
+        self.trace([self.kernel()])
+        with self.assertRaises(ValueError):
+            aggregate(self.traces, self.output, family='torch', window_ns=(100, 200))
+
     def test_native_rocprof_launch_dimensions_keep_variants_separate(self):
         # The runner's rocprofv3 CSV has component columns, without Process_Id.
         path = self.traces / '15_kernel_trace.csv'
