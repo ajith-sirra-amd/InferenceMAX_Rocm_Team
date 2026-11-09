@@ -84,6 +84,11 @@ shutdown to the application. Its profiling overlay gives vLLM workers 900 second
 and the native orchestrator 1200 seconds to finalize; the exact orchestrator
 timeout edit and source hashes are retained in `profile-shutdown-overlay.json`.
 These are maximum shutdown allowances, not additional capture time.
+Launch collection records kernels, HIP graph launches, copies and markers in
+CSV/JSON. Broad HIP API tracing is omitted because the installed SDK can crash
+while serializing API arguments at exit. This reduces CPU API visibility;
+graph records do not replace a full host call trace. Inspect complete JSON and
+profiler exit evidence as well as CSV coverage before accepting the capture.
 
 For an explicitly shortened diagnostic, set the environment's `DURATION` and
 the profile's `warmup_requests_per_lane`. The small client adapter reuses the

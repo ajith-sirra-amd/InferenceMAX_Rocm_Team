@@ -59,6 +59,15 @@ class CaptureValidationTests(unittest.TestCase):
         self.assertEqual(result['status'], 'failed')
         self.assertTrue(any('outside measured' in e for e in result['errors']))
 
+    def test_export_crash_overrides_graceful_engine_message(self):
+        self.trace()
+        (self.logs / 'host_agg_w0.out').write_text(
+            '[shutdown] Executor: all workers exited gracefully\n'
+            '!!!!!!! Segfault encountered !!!!!!!\n')
+        result = validate(self.logs, 8)
+        self.assertEqual(result['status'], 'failed')
+        self.assertTrue(any('Segfault' in error for error in result['errors']))
+
 
 if __name__ == '__main__':
     unittest.main()

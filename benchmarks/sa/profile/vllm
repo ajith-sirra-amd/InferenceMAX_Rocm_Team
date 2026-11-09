@@ -23,7 +23,8 @@ PY
 if [[ "${SA_PROFILE_MODE:-launch}" == attach ]]; then
     exec python3 "$(dirname "$0")/attach.py" vllm "$@"
 fi
-exec rocprofv3 --kernel-trace --hip-trace --memory-copy-trace --marker-trace --stats \
+# Keep graph correlation without broad HIP API argument serialization at exit.
+exec rocprofv3 --kernel-trace --hip-graph-trace --memory-copy-trace --marker-trace --stats \
     --disable-signal-handlers true \
     --collection-period "${SA_PROFILE_DELAY_SECONDS}:${SA_PROFILE_SECONDS}:1" \
     --collection-period-unit sec -f csv json -d "$SA_PROFILE_OUTPUT/traces" \

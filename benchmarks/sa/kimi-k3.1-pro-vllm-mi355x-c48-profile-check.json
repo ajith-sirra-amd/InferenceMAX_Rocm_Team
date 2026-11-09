@@ -55,7 +55,7 @@
   "profile": {
     "tool": "rocprofv3",
     "mode": "launch",
-    "delay_seconds": 2400,
+    "delay_seconds": 2580,
     "seconds": 60,
     "warmup_requests_per_lane": 1
   },

@@ -10,6 +10,12 @@ def validate(logs, seconds, devices=8, output=None, require_attachment=False):
     root = Path(logs) / 'profiles/rocprof'
     result = {'status': 'failed', 'devices': {}, 'errors': []}
     try:
+        for log in Path(logs).glob('*_agg_w*.out'):
+            for line in log.read_text(errors='replace').splitlines():
+                if re.search(r'Segfault encountered|Segmentation fault|buffer\s+overrun|'
+                             r'dropped\s+[1-9]\d*\s+(?:events|records)|'
+                             r'workers still running after (?:grace period|SIGTERM)', line, re.I):
+                    result['errors'].append(log.name + ': ' + line.strip()[:300])
         if require_attachment:
             attachment = json.loads((root / 'attachment-status.json').read_text())
             if attachment.get('status') != 'passed' or attachment.get('exported_while_workers_alive') is not True:
