@@ -122,4 +122,5 @@ if not result.is_file():
 subprocess.run([sys.executable, '-m', 'infx.results.agentic.validate_agentic_result', str(logs / 'agentic'), '--failed-request-threshold', c['environment']['AIPERF_FAILED_REQUEST_THRESHOLD']], check=True)
 if profile:
     subprocess.run([sys.executable, Path(__file__).with_name('validate_profile.py'),
-                    logs, '--seconds', str(seconds)], check=True)
+                    logs, '--seconds', str(seconds),
+                    '--output', a.output / 'profile-capture-validation.json'], check=True)

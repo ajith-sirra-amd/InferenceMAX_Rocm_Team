@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 
-def validate(logs, seconds, devices=8):
+def validate(logs, seconds, devices=8, output=None):
     root = Path(logs) / 'profiles/rocprof'
     result = {'status': 'failed', 'devices': {}, 'errors': []}
     try:
@@ -46,8 +46,9 @@ def validate(logs, seconds, devices=8):
     if not result['errors']:
         result['status'] = 'passed'
     result['limits'] = 'Device/window check only; inspect dropped events, rank mapping and profiler perturbation separately.'
-    root.mkdir(parents=True, exist_ok=True)
-    (root / 'capture-validation.json').write_text(json.dumps(result, indent=2) + '\n')
+    destination = Path(output) if output is not None else root / 'capture-validation.json'
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(result, indent=2) + '\n')
     return result
 
 
@@ -56,7 +57,8 @@ if __name__ == '__main__':
     p.add_argument('logs', type=Path)
     p.add_argument('--seconds', type=int, required=True)
     p.add_argument('--devices', type=int, default=8)
+    p.add_argument('--output', type=Path, help='Writable report path outside container-owned raw traces')
     args = p.parse_args()
-    result = validate(args.logs, args.seconds, args.devices)
+    result = validate(args.logs, args.seconds, args.devices, args.output)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['status'] == 'passed' else 1)

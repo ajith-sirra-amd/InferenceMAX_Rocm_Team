@@ -35,6 +35,13 @@ class CaptureValidationTests(unittest.TestCase):
         self.trace()
         self.assertEqual(validate(self.logs, 8)['status'], 'passed')
 
+    def test_report_can_be_written_outside_container_owned_traces(self):
+        report = self.logs / 'profile-capture-validation.json'
+        result = validate(self.logs, 8, output=report)
+        self.assertEqual(json.loads(report.read_text()), result)
+        self.assertEqual(result['status'], 'failed')
+        self.assertFalse((self.root / 'capture-validation.json').exists())
+
     def test_missing_rank_and_warmup_capture_fail(self):
         self.trace(devices=7)
         self.assertEqual(validate(self.logs, 8)['status'], 'failed')
