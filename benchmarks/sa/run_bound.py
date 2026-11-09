@@ -75,7 +75,7 @@ plan.command.extend(['--set', 'roles.agg.args.speculative-config=' + json.dumps(
     'Execute native rendered batch script in the existing single-node allocation; never cancel the reservation.',
     'Local model/cache/output mounts and auto-detected host interface replace SA host paths.',
     'Spur overlap ignores container options; Docker executes unchanged native task argv inside the reservation.',
-    'Container root is read-only; per-step writable runtime caches and temporary compiler storage are mounted separately.',
+    'Container writability follows native SRT options; per-step runtime caches and temporary compiler storage are mounted separately.',
     'Native GPU and RAPL telemetry are requested; unavailable local permissions remain explicit missing evidence.',
     'GitHub release assets use the API route because direct download URLs return HTTP 504.'
 ]}, indent=2) + '\n')
