@@ -127,14 +127,21 @@ jobs:
               with:
                   name: ipat-${{ fromJSON(inputs.ipat-request).id }}
                   path: |
-                      ${{ env.IPAT_OUTPUT }}
-                      !${{ env.IPAT_OUTPUT }}/work
+                      ${{ env.IPAT_OUTPUT }}/*.json
+                      ${{ env.IPAT_OUTPUT }}/*.txt
+                      ${{ env.IPAT_OUTPUT }}/*.log
+                      ${{ env.IPAT_OUTPUT }}/*.md
+                      ${{ env.IPAT_OUTPUT }}/*.html
+                      ${{ env.IPAT_OUTPUT }}/capabilities/**
+                      ${{ env.IPAT_OUTPUT }}/model-metadata/**
+                      ${{ env.IPAT_OUTPUT }}/rocprof-check/**
+                      ${{ env.IPAT_OUTPUT }}/baseline/**
+                      ${{ env.IPAT_OUTPUT }}/profile/**
+                      ${{ env.IPAT_OUTPUT }}/preflight/**
+                      ${{ env.IPAT_OUTPUT }}/recovered/**
                       !${{ env.IPAT_OUTPUT }}/**/client-env
                       !${{ env.IPAT_OUTPUT }}/**/client-tools
-                      !${{ env.IPAT_OUTPUT }}/cache
-                      !${{ env.IPAT_OUTPUT }}/hf
-                      !${{ env.IPAT_OUTPUT }}/home
-                      !${{ env.IPAT_OUTPUT }}/tmp
+                      !${{ env.IPAT_OUTPUT }}/**/work
                   if-no-files-found: error
                   retention-days: 30
     get-jobs:

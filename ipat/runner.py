@@ -85,6 +85,19 @@ def preflight(request, output):
         "slurm-nodes.txt": ["sinfo", "-N", "-o", "%N %P %t %G"],
         "slurm-controller.txt": ["scontrol", "ping"],
     }
+    if request.get("native_inventory"):
+        commands.update({
+            "slurm-jobs.txt": ["squeue", "-h", "-o", "%i|%u|%T|%N|%j"],
+            "slurm-local-node.txt": ["scontrol", "show", "node", os.uname().nodename],
+            "srun-help.txt": ["srun", "--help"],
+            "sbatch-help.txt": ["sbatch", "--help"],
+            "enroot-version.txt": ["enroot", "version"],
+            "gpu-processes.json": ["amd-smi", "process", "--json"],
+            "kfd-users.txt": ["sudo", "-n", "fuser", "/dev/kfd"],
+            "rocprof-compute-help.txt": ["rocprof-compute", "profile", "--help"],
+        })
+        facts["allocation"] = {key: os.environ.get(key) for key in
+            ("USER", "SLURM_JOB_ID", "SLURM_JOB_NODELIST", "SLURM_JOB_PARTITION", "SLURM_STEP_ID")}
     for name, command in commands.items():
         facts["commands"].append(capture(command, output / name))
     facts["paths"] = {}
@@ -118,6 +131,10 @@ def preflight(request, output):
     if request.get("image_check"):
         assert_gpu_idle()
         settings = request["image_check"]
+        if settings.get("rocprof_check"):
+            idle = capture(["sudo", "-n", "fuser", "/dev/kfd"], output / "kfd-idle-check.txt")
+            if idle.get("returncode") != 1 or (output / "kfd-idle-check.txt").read_text().strip():
+                raise RuntimeError("Cannot confirm idle /dev/kfd; see kfd-idle-check.txt")
         if settings.get("pull"):
             pulled = capture(["docker", "pull", settings["image"]], output / "image-pull.log", timeout=1800)
             if pulled.get("returncode") != 0:
@@ -146,11 +163,14 @@ def preflight(request, output):
                    "--workdir", "/work"]
         if settings.get("temporary_memory_filesystem"):
             command += ["--tmpfs", "/work/tmp:rw,exec,size=64g"]
+        if settings.get("rocprof_check"):
+            command += ["--cap-add", "SYS_PTRACE"]
         for key, value in settings.get("environment", {}).items():
             if key in storage_env or key in ('HF_TOKEN', 'HUGGING_FACE_HUB_TOKEN'):
                 raise ValueError("Image diagnostic cannot override output or credential paths")
             command += ["--env", f"{key}={value}"]
-        command += ["--entrypoint", "python3", image["Id"], "/ipat/check_image.py"]
+        script = "/ipat/check_rocprof.py" if settings.get("rocprof_check") else "/ipat/check_image.py"
+        command += ["--entrypoint", "python3", image["Id"], script]
         facts["image_check"] = capture(command, output / "image-check.log", timeout=600)
         if facts["image_check"].get("returncode") != 0:
             facts["status"] = "failed"
