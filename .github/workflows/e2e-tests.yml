@@ -12,17 +12,11 @@ on:
                 description: "Existing single-node scheduler allocation"
                 required: false
                 type: string
-            ipat-request:
-                description: "Frozen IPAT request JSON; bypasses the sweep when supplied"
-                required: false
-                type: string
-                default: ""
             generate-cli-command:
                 description: "Command passed to generate matrix script"
                 required: true
                 type: choice
                 options:
-                - "IPAT"
                 # - "test-config  --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-atom-agentic-lmcache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
@@ -105,6 +99,7 @@ jobs:
               with:
                   ref: ${{ github.sha }}
                   path: sa-benchmark-${{ github.run_id }}
+                  sparse-checkout: benchmarks/sa
                   persist-credentials: false
             - name: Replicate selected SA datapoint
               working-directory: sa-benchmark-${{ github.run_id }}
@@ -129,73 +124,8 @@ jobs:
                       ${{ env.SA_OUTPUT }}/rendered/**
                       ${{ env.SA_OUTPUT }}/native/**
                   retention-days: 30
-    ipat:
-        if: ${{ inputs.ipat-request != '' }}
-        runs-on: ${{ fromJSON(inputs.ipat-request).labels }}
-        timeout-minutes: 480
-        permissions:
-            contents: read
-        env:
-            IPAT_OUTPUT: /share_nfs/ajith/IPAT/runs/${{ github.run_id }}-${{ github.run_attempt }}
-        concurrency:
-            group: ipat-${{ join(fromJSON(inputs.ipat-request).labels, '-') }}
-            cancel-in-progress: false
-        steps:
-            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-              with:
-                  ref: ${{ github.sha }}
-                  path: ipat-${{ github.run_id }}-${{ github.run_attempt }}
-                  persist-credentials: false
-            - name: Run frozen IPAT request
-              if: ${{ fromJSON(inputs.ipat-request).mode != 'run' }}
-              working-directory: ipat-${{ github.run_id }}-${{ github.run_attempt }}
-              env:
-                  IPAT_REQUEST: ${{ inputs.ipat-request }}
-                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
-              run: python3 ipat/runner.py --output "$IPAT_OUTPUT"
-            - name: Phase 2 - Replicate SA run
-              if: ${{ fromJSON(inputs.ipat-request).mode == 'run' && contains(fromJSON(inputs.ipat-request).passes, 'baseline') }}
-              working-directory: ipat-${{ github.run_id }}-${{ github.run_attempt }}
-              env:
-                  IPAT_REQUEST: ${{ inputs.ipat-request }}
-                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
-              run: python3 ipat/runner.py --output "$IPAT_OUTPUT" --stage baseline
-            - name: Phase 3 - Profile and aggregate kernels
-              if: ${{ fromJSON(inputs.ipat-request).mode == 'run' && contains(fromJSON(inputs.ipat-request).passes, 'profile') }}
-              working-directory: ipat-${{ github.run_id }}-${{ github.run_attempt }}
-              env:
-                  IPAT_REQUEST: ${{ inputs.ipat-request }}
-                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
-              run: python3 ipat/runner.py --output "$IPAT_OUTPUT" --stage profile
-            - name: Stop owned container and restore evidence ownership
-              if: always()
-              working-directory: ipat-${{ github.run_id }}-${{ github.run_attempt }}
-              run: python3 ipat/runner.py --cleanup --output "$IPAT_OUTPUT"
-            - name: Preserve IPAT evidence
-              if: always()
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-              with:
-                  name: ipat-${{ fromJSON(inputs.ipat-request).id }}
-                  path: |
-                      ${{ env.IPAT_OUTPUT }}/*.json
-                      ${{ env.IPAT_OUTPUT }}/*.txt
-                      ${{ env.IPAT_OUTPUT }}/*.log
-                      ${{ env.IPAT_OUTPUT }}/*.md
-                      ${{ env.IPAT_OUTPUT }}/*.html
-                      ${{ env.IPAT_OUTPUT }}/capabilities/**
-                      ${{ env.IPAT_OUTPUT }}/model-metadata/**
-                      ${{ env.IPAT_OUTPUT }}/rocprof-check/**
-                      ${{ env.IPAT_OUTPUT }}/baseline/**
-                      ${{ env.IPAT_OUTPUT }}/profile/**
-                      ${{ env.IPAT_OUTPUT }}/preflight/**
-                      ${{ env.IPAT_OUTPUT }}/recovered/**
-                      !${{ env.IPAT_OUTPUT }}/**/client-env
-                      !${{ env.IPAT_OUTPUT }}/**/client-tools
-                      !${{ env.IPAT_OUTPUT }}/**/work
-                  if-no-files-found: error
-                  retention-days: 30
     get-jobs:
-        if: ${{ !inputs.ipat-request && !inputs.sa-config }}
+        if: ${{ !inputs.sa-config }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}

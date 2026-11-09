@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 
 def run(argv, **kwargs):
@@ -85,7 +86,15 @@ def main():
     os.environ.update(config['environment'])
     os.environ['RESULT_FILENAME'] = config['name']
     os.environ['HF_HUB_CACHE'] = '/hf_hub_cache'
-    run(['make', 'setup', 'ARCH=x86_64'], cwd=srt)
+    setup = ['make', 'setup', 'ARCH=x86_64', 'TACHOMETER_RELEASE=' + config['telemetry_release']]
+    for attempt in range(3):
+        try:
+            run(setup, cwd=srt)
+            break
+        except subprocess.CalledProcessError:
+            if attempt == 2:
+                raise
+            time.sleep(5)
     # The rest runs in the pinned engine's environment, using its public renderer.
     run([srt / '.venv/bin/python', Path(__file__).with_name('run_bound.py'),
          '--config', args.config.resolve(), '--output', output, '--source', source,

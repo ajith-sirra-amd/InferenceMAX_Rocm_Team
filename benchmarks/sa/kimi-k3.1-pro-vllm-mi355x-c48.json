@@ -29,6 +29,8 @@
     "RUN_EVAL": "false",
     "EVAL_ONLY": "false",
     "MAX_MODEL_LEN": "1048576",
-    "REQUIRE_POWER": "0"
-  }
+    "REQUIRE_POWER": "0",
+    "THINKING_MODE": "thinking_on"
+  },
+  "telemetry_release": "v2.67.1"
 }
