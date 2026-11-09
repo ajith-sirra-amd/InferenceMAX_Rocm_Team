@@ -56,13 +56,23 @@ Native replication is under live validation. Successful model startup,
 benchmark completion and profiling must be established by the run artifacts;
 a successful dispatch or setup does not establish them.
 
-An optional `profile` object selects the small launch hook, currently for vLLM:
-`{"tool":"rocprofv3","delay_seconds":CALIBRATED_DELAY,"seconds":60}`.
+An optional `profile` object selects the capture hook, currently for vLLM:
+`{"tool":"rocprofv3","mode":"attach","delay_seconds":CALIBRATED_DELAY,"seconds":60}`.
 Use a separate configuration and workflow run after the baseline succeeds.
 The hook retains native server arguments and captures kernel, HIP, copy and
 marker traces as CSV/JSON under `native/<allocation>/logs/profiles/rocprof/`.
 The delay must be calibrated and the actual window checked against fresh
 steady-state traffic. `clock-sync.json` brackets a boot-clock sample in UTC so
 native rocprof timestamps can be compared with client phase timestamps.
-A small eight-process GPU launch capture has passed;
-native model capture and steady-state coverage remain under validation.
+Attachment mode loads the installed registration library before framework startup
+and enables `ROCP_TOOL_ATTACH=1` only for the profiling server. At the calibrated
+delay, it finds GPU processes within that server's process tree and attaches to
+each separately. Synchronous detachment exports traces while the workers remain
+alive, avoiding loss when the serving engine later force-kills workers during
+shutdown. Native server arguments and workload duration are preserved.
+`attachment-status.json` records export status and worker PIDs;
+`profile-capture-validation.json` in the run root records fresh device/window
+validation. The host report stays outside container-owned raw trace directories.
+`mode: launch` retains the earlier launch-based collector for workloads with
+verified graceful profiler finalization. Native model coverage must always be
+established from the resulting artifacts.

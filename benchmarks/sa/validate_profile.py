@@ -6,10 +6,15 @@ from pathlib import Path
 import re
 
 
-def validate(logs, seconds, devices=8, output=None):
+def validate(logs, seconds, devices=8, output=None, require_attachment=False):
     root = Path(logs) / 'profiles/rocprof'
     result = {'status': 'failed', 'devices': {}, 'errors': []}
     try:
+        if require_attachment:
+            attachment = json.loads((root / 'attachment-status.json').read_text())
+            if attachment.get('status') != 'passed' or attachment.get('exported_while_workers_alive') is not True:
+                raise ValueError('Bounded attachment did not export while all workers remained alive')
+            result['attachment'] = attachment
         clock = json.loads((root / 'clock-sync.json').read_text())
         low = clock['utc_before_ns'] - clock['boottime_ns']
         high = clock['utc_after_ns'] - clock['boottime_ns']
@@ -58,7 +63,8 @@ if __name__ == '__main__':
     p.add_argument('--seconds', type=int, required=True)
     p.add_argument('--devices', type=int, default=8)
     p.add_argument('--output', type=Path, help='Writable report path outside container-owned raw traces')
+    p.add_argument('--require-attachment', action='store_true')
     args = p.parse_args()
-    result = validate(args.logs, args.seconds, args.devices, args.output)
+    result = validate(args.logs, args.seconds, args.devices, args.output, args.require_attachment)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['status'] == 'passed' else 1)

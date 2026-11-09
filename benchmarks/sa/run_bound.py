@@ -38,6 +38,9 @@ if profile:
     if c['environment']['FRAMEWORK'] != 'vllm' or profile.get('tool') != 'rocprofv3':
         raise ValueError('The native launch profiling hook currently supports vLLM with rocprofv3')
     delay, seconds = profile['delay_seconds'], profile['seconds']
+    mode = profile.get('mode', 'launch')
+    if mode not in ('launch', 'attach'):
+        raise ValueError('Profile mode must be launch or attach')
     if type(delay) is not int or delay < 0 or type(seconds) is not int or not 1 <= seconds <= 180:
         raise ValueError('Use a calibrated nonnegative delay and a 1–180 second capture')
     mounts[str(Path(__file__).parent / 'profile')] = '/sa-profile-bin:ro'
@@ -53,7 +56,7 @@ os.environ['SRTSLURM_CONFIG'] = str(a.srt / 'srtslurm.yaml')
 extra = ['--set', 'benchmark.stream_output=true', '--set', 'srun_options.container-workdir="/infmax-workspace"',
          '--set', 'srun_options.container-remap-root=""', '--set', 'srun_options.container-writable=""']
 if profile:
-    for key, value in {'SA_PROFILE_DELAY_SECONDS': str(delay), 'SA_PROFILE_SECONDS': str(seconds),
+    for key, value in {'SA_PROFILE_DELAY_SECONDS': str(delay), 'SA_PROFILE_SECONDS': str(seconds), 'SA_PROFILE_MODE': mode,
                        'SA_PROFILE_OUTPUT': '/logs/profiles/rocprof'}.items():
         extra += ['--set', 'roles.agg.env.' + key + '=' + json.dumps(value)]
 plans = plan_commands(str(recipe_file), c['environment']['FRAMEWORK'], runtime_arguments(recipe, os.environ) + extra, os.environ)
@@ -123,4 +126,5 @@ subprocess.run([sys.executable, '-m', 'infx.results.agentic.validate_agentic_res
 if profile:
     subprocess.run([sys.executable, Path(__file__).with_name('validate_profile.py'),
                     logs, '--seconds', str(seconds),
-                    '--output', a.output / 'profile-capture-validation.json'], check=True)
+                    '--output', a.output / 'profile-capture-validation.json']
+                   + (['--require-attachment'] if mode == 'attach' else []), check=True)

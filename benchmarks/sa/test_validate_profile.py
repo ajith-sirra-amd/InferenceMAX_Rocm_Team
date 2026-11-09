@@ -42,6 +42,15 @@ class CaptureValidationTests(unittest.TestCase):
         self.assertEqual(result['status'], 'failed')
         self.assertFalse((self.root / 'capture-validation.json').exists())
 
+    def test_attach_capture_requires_confirmed_export_before_worker_exit(self):
+        self.trace()
+        self.assertEqual(validate(self.logs, 8, require_attachment=True)['status'], 'failed')
+        status = self.root / 'attachment-status.json'
+        status.write_text(json.dumps(dict(status='passed', exported_while_workers_alive=False)))
+        self.assertEqual(validate(self.logs, 8, require_attachment=True)['status'], 'failed')
+        status.write_text(json.dumps(dict(status='passed', exported_while_workers_alive=True)))
+        self.assertEqual(validate(self.logs, 8, require_attachment=True)['status'], 'passed')
+
     def test_missing_rank_and_warmup_capture_fail(self):
         self.trace(devices=7)
         self.assertEqual(validate(self.logs, 8)['status'], 'failed')

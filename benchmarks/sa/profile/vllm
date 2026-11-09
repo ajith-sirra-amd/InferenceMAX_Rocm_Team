@@ -20,6 +20,9 @@ after = time.time_ns()
 Path(sys.argv[1]).write_text(json.dumps(dict(utc_before_ns=before,
     boottime_ns=boot, utc_after_ns=after)) + '\n')
 PY
+if [[ "${SA_PROFILE_MODE:-launch}" == attach ]]; then
+    exec python3 "$(dirname "$0")/attach.py" vllm "$@"
+fi
 exec rocprofv3 --kernel-trace --hip-trace --memory-copy-trace --marker-trace --stats \
     --disable-signal-handlers true \
     --collection-period "${SA_PROFILE_DELAY_SECONDS}:${SA_PROFILE_SECONDS}:1" \
