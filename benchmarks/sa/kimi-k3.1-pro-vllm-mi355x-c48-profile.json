@@ -54,7 +54,7 @@
   "source_run_head_sha": "e9a33875c5d7803c3874120e4f1c7d06ec4d9be6",
   "profile": {
     "tool": "rocprofv3",
-    "mode": "attach",
+    "mode": "launch",
     "delay_seconds": 4080,
     "seconds": 60
   }

@@ -57,7 +57,7 @@ benchmark completion and profiling must be established by the run artifacts;
 a successful dispatch or setup does not establish them.
 
 An optional `profile` object selects the capture hook, currently for vLLM:
-`{"tool":"rocprofv3","mode":"attach","delay_seconds":CALIBRATED_DELAY,"seconds":60}`.
+`{"tool":"rocprofv3","mode":"launch","delay_seconds":CALIBRATED_DELAY,"seconds":60}`.
 Use a separate configuration and workflow run after the baseline succeeds.
 The hook retains native server arguments and captures kernel, HIP, copy and
 marker traces as CSV/JSON under `native/<allocation>/logs/profiles/rocprof/`.
