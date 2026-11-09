@@ -21,6 +21,7 @@ Path(sys.argv[1]).write_text(json.dumps(dict(utc_before_ns=before,
     boottime_ns=boot, utc_after_ns=after)) + '\n')
 PY
 exec rocprofv3 --kernel-trace --hip-trace --memory-copy-trace --marker-trace --stats \
+    --disable-signal-handlers true \
     --collection-period "${SA_PROFILE_DELAY_SECONDS}:${SA_PROFILE_SECONDS}:1" \
     --collection-period-unit sec -f csv json -d "$SA_PROFILE_OUTPUT/traces" \
     -- vllm "$@"

@@ -24,6 +24,7 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(args[args.index('--')+1:], ['vllm', *native])
             self.assertEqual(args[args.index('--collection-period')+1], '1200:60:1')
             self.assertIn('--kernel-trace', args)
+            self.assertEqual(args[args.index('--disable-signal-handlers')+1], 'true')
             clocks = json.loads((root / 'clock-sync.json').read_text())
             self.assertGreater(clocks['boottime_ns'], 0)
             self.assertGreaterEqual(clocks['utc_after_ns'], clocks['utc_before_ns'])
