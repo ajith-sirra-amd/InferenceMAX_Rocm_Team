@@ -1,4 +1,4 @@
-"""Run one frozen IPAT request on a local MI355X Docker host."""
+"""Run one frozen BENCHMARK request on a local MI355X Docker host."""
 import argparse
 import datetime as dt
 import hashlib
@@ -14,8 +14,8 @@ import socket
 import subprocess
 
 
-REPOSITORY = Path(__file__).resolve().parents[1]
-SHARED_DATA_ROOT = Path('/share_nfs/ajith/IPAT')
+REPOSITORY = Path(__file__).resolve().parents[2]
+SHARED_DATA_ROOT = Path('/share_nfs/ajith/benchmarks')
 
 
 def validate_output(output):
@@ -24,7 +24,7 @@ def validate_output(output):
         if not SHARED_DATA_ROOT.parent.is_dir():
             raise ValueError('Shared storage /share_nfs/ajith is unavailable; no checkout fallback')
     elif not output.is_relative_to(REPOSITORY):
-        raise ValueError('IPAT output must stay in the team checkout or /share_nfs/ajith/IPAT')
+        raise ValueError('BENCHMARK output must stay in the team checkout or /share_nfs/ajith/benchmarks')
     return output
 
 
@@ -40,7 +40,7 @@ def runtime_storage(output):
     env = {'HOME': '/work/home', 'TMPDIR': '/work/tmp', 'XDG_CACHE_HOME': '/work/cache',
            'PIP_CACHE_DIR': '/work/cache/pip', 'HF_HOME': '/work/hf',
            'CCACHE_DIR': '/work/cache/ccache', 'SCCACHE_DIR': '/work/cache/sccache',
-           'IPAT_WORK_DIR': '/work', 'PYTHONDONTWRITEBYTECODE': '1'}
+           'BENCHMARK_WORK_DIR': '/work', 'PYTHONDONTWRITEBYTECODE': '1'}
     args = ['--mount', f'type=bind,src={output},dst=/output',
             '--mount', f'type=bind,src={work},dst=/work']
     for key, value in env.items(): args += ['--env', f'{key}={value}']
@@ -149,18 +149,18 @@ def preflight(request, output):
         write_json(output / "manifest.json", facts)
         work, storage_args, storage_env = runtime_storage(output)
         facts['storage'] = {'evidence': str(output.resolve()), 'work': str(work)}
-        test_path = work / "tmp/ipat-name:check"
+        test_path = work / "tmp/benchmark-name:check"
         try:
             test_path.write_text("compiler filename check\n")
             test_path.unlink()
             facts["host_temporary_filename_check"] = {"status": "passed"}
         except OSError as error:
             facts["host_temporary_filename_check"] = {"status": "failed", "error": str(error)}
-        command = ["docker", "run", "--rm", "--init", "--read-only", "--name", "ipat-" + request["id"],
+        command = ["docker", "run", "--rm", "--init", "--read-only", "--name", "benchmark-" + request["id"],
                    "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
                    "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1",
                    *storage_args,
-                   "--mount", f"type=bind,src={Path(__file__).resolve().parent},dst=/ipat,readonly",
+                   "--mount", f"type=bind,src={Path(__file__).resolve().parent},dst=/benchmark,readonly",
                    "--workdir", "/work"]
         if settings.get("temporary_memory_filesystem"):
             command += ["--tmpfs", "/work/tmp:rw,exec,size=64g"]
@@ -173,7 +173,7 @@ def preflight(request, output):
             if key in storage_env or key in ('HF_TOKEN', 'HUGGING_FACE_HUB_TOKEN'):
                 raise ValueError("Image diagnostic cannot override output or credential paths")
             command += ["--env", f"{key}={value}"]
-        script = "/ipat/check_rocprof.py" if settings.get("rocprof_check") else "/ipat/check_image.py"
+        script = "/benchmark/check_rocprof.py" if settings.get("rocprof_check") else "/benchmark/check_image.py"
         command += ["--entrypoint", "python3", image["Id"], script]
         facts["image_check"] = capture(command, output / "image-check.log", timeout=600)
         if facts["image_check"].get("returncode") != 0:
@@ -212,7 +212,7 @@ def validate_recipe(recipe):
     if recipe.get("image_policy") not in ("pull", "local") or not isinstance(recipe.get("image"), str):
         raise ValueError("Specify an image and an explicit pull/local image policy")
     reserved = {"HOME", "TMPDIR", "HF_HOME", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "XDG_CACHE_HOME", "PIP_CACHE_DIR",
-                "CCACHE_DIR", "SCCACHE_DIR", "IPAT_WORK_DIR"}
+                "CCACHE_DIR", "SCCACHE_DIR", "BENCHMARK_WORK_DIR"}
     for env in (recipe.get("environment"), recipe.get("client_environment", {})):
         if not isinstance(env, dict) or any(not isinstance(v, str) for v in env.values()):
             raise ValueError("Environment values must be strings")
@@ -278,7 +278,7 @@ def resolve_models(recipe, cache):
 
 
 def report(output, manifest):
-    lines = ["# IPAT replication and profiling", "", f"Status: {manifest['status']}",
+    lines = ["# BENCHMARK replication and profiling", "", f"Status: {manifest['status']}",
              f"Config: {manifest.get('config_id')} · Hash: {manifest.get('config_sha256')}",
              f"Runner: {manifest.get('runner')} · Execution commit: {manifest.get('execution_sha')}", "",
              "| Pass | Status | Output tok/s/GPU | P90 full-response ITL (ms) | Completed requests | Failed requests |",
@@ -298,7 +298,7 @@ def report(output, manifest):
                   "", "Roofline, tensor precision and optimized-path verdicts require bound counter/runtime/candidate evidence. Missing measurements remain explicit."]
     if manifest.get("error"): lines += ["", "Failure: " + manifest["error"]]
     (output / "report.md").write_text("\n".join(lines) + "\n")
-    (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>IPAT run evidence</title><h1>IPAT run evidence</h1>'
+    (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>BENCHMARK run evidence</title><h1>BENCHMARK run evidence</h1>'
         '<ul><li><a href="report.md">Replication and profiling report</a></li><li><a href="manifest.json">Run manifest</a></li>'
         '<li><a href="request.json">Frozen request</a></li><li><a href="recipe.json">Effective recipe</a></li>'
         '<li><a href="profile/kernel-report.html">Aggregated kernel report</a></li><li><a href="profile/kernel-report.xlsx">Kernel Excel workbook</a></li><li><a href="baseline/">Unprofiled baseline</a></li><li><a href="profile/">Profile and native traces</a></li></ul>')
@@ -325,7 +325,7 @@ def cleanup(output):
     if not path.exists(): return
     request = json.loads(path.read_text())
     if not re.fullmatch(r"[0-9a-f]{32}", request.get("id", "")): raise ValueError("Invalid cleanup identity")
-    subprocess.run(["docker", "rm", "--force", "ipat-" + request["id"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+    subprocess.run(["docker", "rm", "--force", "benchmark-" + request["id"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
     manifest = output / "manifest.json"
     image = json.loads(manifest.read_text()).get("image", {}).get("id") if manifest.exists() else None
     if image:
@@ -339,7 +339,7 @@ def recover(request, output):
     if not run_id.isdigit() or not attempt.isdigit(): raise ValueError("Invalid previous workflow identity")
     old = SHARED_DATA_ROOT / 'runs' / f'{run_id}-{attempt}'
     if not old.is_dir():
-        checkout = REPOSITORY.parent / f"ipat-{run_id}-{attempt}"
+        checkout = REPOSITORY.parent / f"benchmark-{run_id}-{attempt}"
         origin = subprocess.check_output(["git", "-C", str(checkout), "config", "--get", "remote.origin.url"], text=True).strip()
         if origin.removesuffix(".git") != "https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team":
             raise ValueError("Recovery target must be a team repository checkout")
@@ -380,7 +380,7 @@ def execute(request, output, stage=None):
     repo = REPOSITORY
     output = validate_output(output)
     output.mkdir(parents=True, exist_ok=True)
-    name = "ipat-" + request["id"]
+    name = "benchmark-" + request["id"]
     manifest = {"id": request["id"], "kind": "run", "status": "preparing", "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 "config_id": request.get("config_id"), "config_sha256": request.get("config_sha256"),
                 "recipe_sha256": hashlib.sha256(json.dumps(recipe, sort_keys=True).encode()).hexdigest(),
@@ -392,7 +392,7 @@ def execute(request, output, stage=None):
         previous = json.loads((output / "manifest.json").read_text())
         manifest = resume_profile_manifest(previous, manifest)
     def save(): write_json(output / "manifest.json", manifest)
-    def interrupted(signum, frame): raise InterruptedError("IPAT run interrupted")
+    def interrupted(signum, frame): raise InterruptedError("BENCHMARK run interrupted")
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
     save()
@@ -413,10 +413,10 @@ def execute(request, output, stage=None):
         manifest["models"] = resolve_models(recipe, model_cache)
         work, storage_args, env = runtime_storage(output)
         mounts = [*storage_args,
-                  "--mount", f"type=bind,src={repo / 'ipat'},dst=/ipat,readonly",
+                  "--mount", f"type=bind,src={repo / 'benchmark'},dst=/benchmark,readonly",
                   "--mount", f"type=bind,src={model_cache},dst=/model-cache,readonly"]
         write_json(output / "recipe.json", recipe)
-        common = ["docker", "run", "--rm", "--init", "--read-only", "--name", name, "--label", "ipat.run=" + request["id"],
+        common = ["docker", "run", "--rm", "--init", "--read-only", "--name", name, "--label", "benchmark.run=" + request["id"],
                   "--network", "host", "--ipc", "host", "--device", "/dev/kfd", "--device", "/dev/dri",
                   "--cap-add", "SYS_PTRACE", "--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1", "--ulimit", "stack=67108864", *mounts,
                   # COMGR filenames contain colons, rejected by this host's NFS.
@@ -439,7 +439,7 @@ def execute(request, output, stage=None):
             pass_recipe_file = pass_name + "-recipe.json"
             write_json(output / pass_recipe_file, pass_recipe)
             manifest["status"] = "running_" + pass_name; save()
-            argv = [*common, "--entrypoint", "python3", image_id, "/ipat/container.py", "--recipe", "/output/" + pass_recipe_file,
+            argv = [*common, "--entrypoint", "python3", image_id, "/benchmark/container.py", "--recipe", "/output/" + pass_recipe_file,
                     "--output", "/output/" + pass_name, "--pass-name", pass_name]
             with (output / (pass_name + "-container.log")).open("w") as log:
                 result = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT,
@@ -471,9 +471,9 @@ def main():
     if args.cleanup:
         cleanup(args.output)
         return
-    request = json.loads(os.environ["IPAT_REQUEST"])
+    request = json.loads(os.environ["BENCHMARK_REQUEST"])
     if not re.fullmatch(r"[0-9a-f]{32}", request.get("id", "")):
-        raise ValueError("IPAT request needs a unique hexadecimal ID")
+        raise ValueError("BENCHMARK request needs a unique hexadecimal ID")
     write_json(args.output / "request.json", request)
     if request.get("mode") == "preflight":
         result = preflight(request, args.output)
@@ -486,7 +486,7 @@ def main():
         result = execute(request, args.output, args.stage)
         raise SystemExit(0 if result["status"] == "completed" else 1)
     else:
-        raise ValueError("Unsupported IPAT request mode")
+        raise ValueError("Unsupported BENCHMARK request mode")
 
 
 if __name__ == "__main__":

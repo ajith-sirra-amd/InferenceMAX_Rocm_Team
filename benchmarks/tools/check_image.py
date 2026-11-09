@@ -15,7 +15,7 @@ def emit(key, value):
 
 emit("torch", {"version": torch.__version__, "hip": torch.version.hip})
 emit("capabilities", probe(Path('/output/capabilities')))
-test_path = Path(os.environ['TMPDIR']) / 'ipat-name:check'
+test_path = Path(os.environ['TMPDIR']) / 'benchmark-name:check'
 try:
     test_path.write_text('compiler filename check\n')
     test_path.unlink()

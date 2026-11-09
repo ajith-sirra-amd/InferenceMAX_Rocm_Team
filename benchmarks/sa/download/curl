@@ -26,9 +26,9 @@ if tool == 'wget' and output is None:
 # curl strips Authorization on a cross-host redirect (no --location-trusted).
 auth = ''
 if token := os.environ.get('GH_TOKEN'):
-    if not re.fullmatch(r'[A-Za-z0-9_]+', token):
+    if '\r' in token or '\n' in token:
         raise SystemExit('Invalid GitHub token encoding')
-    auth = 'header = "Authorization: token ' + token + '"\n'
+    auth = 'header = ' + json.dumps('Authorization: token ' + token) + '\n'
 base = [os.environ['SA_REAL_CURL'], '--fail', '--silent', '--show-error', '--location',
         '--retry', '3', '--retry-delay', '2', '--connect-timeout', '10', '--max-time', '180',
         '--config', '-']

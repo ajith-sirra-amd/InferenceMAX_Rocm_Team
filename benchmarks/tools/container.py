@@ -1,4 +1,4 @@
-"""Container-side lifecycle and separate server profiling for a frozen IPAT recipe."""
+"""Container-side lifecycle and separate server profiling for a frozen BENCHMARK recipe."""
 import argparse
 import datetime as dt
 import importlib.metadata
@@ -234,7 +234,7 @@ def run(recipe, output, pass_name):
         # Fail on missing client dependencies before paying the model startup cost.
         client_argv = expand(recipe["client_argv"])
         if recipe["client_packages"]:
-            work = Path(os.environ.get('IPAT_WORK_DIR', str(output / 'work'))) / pass_name
+            work = Path(os.environ.get('BENCHMARK_WORK_DIR', str(output / 'work'))) / pass_name
             work.mkdir(parents=True, exist_ok=True)
             venv = work / "client-env"
             if recipe.get("client_python"):

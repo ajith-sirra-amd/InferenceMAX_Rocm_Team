@@ -51,5 +51,5 @@
   },
   "telemetry_release": "v2.67.1",
   "source_job_url": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/42371416815/job/128427970115",
-  "source_workflow_sha": "e9a33875c5d7803c3874120e4f1c7d06ec4d9be6"
+  "source_run_head_sha": "e9a33875c5d7803c3874120e4f1c7d06ec4d9be6"
 }

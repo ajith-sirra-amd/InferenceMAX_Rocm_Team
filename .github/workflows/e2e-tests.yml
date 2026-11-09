@@ -4,6 +4,11 @@ run-name: e2e Test - ${{ inputs.test-name || github.event.inputs.test-name || in
 on:
     workflow_dispatch:
         inputs:
+            benchmark-request:
+                description: "Frozen custom benchmark or diagnostic request JSON"
+                required: false
+                type: string
+                default: ""
             sa-config:
                 description: "Native SA configuration file in this repository"
                 required: false
@@ -17,6 +22,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "Single benchmark"
                 # - "test-config  --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-atom-agentic-lmcache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
@@ -81,6 +87,71 @@ on:
                 default: ""
 
 jobs:
+    benchmark:
+        if: ${{ inputs.benchmark-request != '' }}
+        runs-on: ${{ fromJSON(inputs.benchmark-request).labels }}
+        timeout-minutes: 480
+        permissions:
+            contents: read
+        env:
+            BENCHMARK_OUTPUT: /share_nfs/ajith/benchmarks/runs/${{ github.run_id }}-${{ github.run_attempt }}
+        concurrency:
+            group: benchmark-${{ join(fromJSON(inputs.benchmark-request).labels, '-') }}
+            cancel-in-progress: false
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+                  persist-credentials: false
+            - name: Run frozen BENCHMARK request
+              if: ${{ fromJSON(inputs.benchmark-request).mode != 'run' }}
+              working-directory: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+              env:
+                  BENCHMARK_REQUEST: ${{ inputs.benchmark-request }}
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: python3 benchmarks/tools/runner.py --output "$BENCHMARK_OUTPUT"
+            - name: Phase 2 - Replicate SA run
+              if: ${{ fromJSON(inputs.benchmark-request).mode == 'run' && contains(fromJSON(inputs.benchmark-request).passes, 'baseline') }}
+              working-directory: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+              env:
+                  BENCHMARK_REQUEST: ${{ inputs.benchmark-request }}
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: python3 benchmarks/tools/runner.py --output "$BENCHMARK_OUTPUT" --stage baseline
+            - name: Phase 3 - Profile and aggregate kernels
+              if: ${{ fromJSON(inputs.benchmark-request).mode == 'run' && contains(fromJSON(inputs.benchmark-request).passes, 'profile') }}
+              working-directory: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+              env:
+                  BENCHMARK_REQUEST: ${{ inputs.benchmark-request }}
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: python3 benchmarks/tools/runner.py --output "$BENCHMARK_OUTPUT" --stage profile
+            - name: Stop owned container and restore evidence ownership
+              if: always()
+              working-directory: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+              run: python3 benchmarks/tools/runner.py --cleanup --output "$BENCHMARK_OUTPUT"
+            - name: Preserve BENCHMARK evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: benchmark-${{ fromJSON(inputs.benchmark-request).id }}
+                  path: |
+                      ${{ env.BENCHMARK_OUTPUT }}/*.json
+                      ${{ env.BENCHMARK_OUTPUT }}/*.txt
+                      ${{ env.BENCHMARK_OUTPUT }}/*.log
+                      ${{ env.BENCHMARK_OUTPUT }}/*.md
+                      ${{ env.BENCHMARK_OUTPUT }}/*.html
+                      ${{ env.BENCHMARK_OUTPUT }}/capabilities/**
+                      ${{ env.BENCHMARK_OUTPUT }}/model-metadata/**
+                      ${{ env.BENCHMARK_OUTPUT }}/rocprof-check/**
+                      ${{ env.BENCHMARK_OUTPUT }}/baseline/**
+                      ${{ env.BENCHMARK_OUTPUT }}/profile/**
+                      ${{ env.BENCHMARK_OUTPUT }}/preflight/**
+                      ${{ env.BENCHMARK_OUTPUT }}/recovered/**
+                      !${{ env.BENCHMARK_OUTPUT }}/**/client-env
+                      !${{ env.BENCHMARK_OUTPUT }}/**/client-tools
+                      !${{ env.BENCHMARK_OUTPUT }}/**/work
+                  if-no-files-found: error
+                  retention-days: 30
     sa-benchmark:
         if: ${{ inputs.sa-config != '' }}
         name: Native SA benchmark
@@ -126,7 +197,7 @@ jobs:
                       ${{ env.SA_OUTPUT }}/native/**
                   retention-days: 30
     get-jobs:
-        if: ${{ !inputs.sa-config }}
+        if: ${{ !inputs.sa-config && !inputs.benchmark-request }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}

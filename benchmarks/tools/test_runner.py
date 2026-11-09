@@ -29,7 +29,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(validate_recipe(copy.deepcopy(RECIPE))["concurrency"], 48)
         for changes in ({"physical_chips": 16}, {"concurrency": True}, {"server_argv": "vllm serve Model"},
                         {"environment": {"HF_TOKEN": "do-not-export"}}, {"client_packages": ["agentx-harness"]},
-                        {"environment": {"IPAT_WORK_DIR": "/elsewhere"}}, {"client_environment": {"CCACHE_DIR": "/elsewhere"}},
+                        {"environment": {"BENCHMARK_WORK_DIR": "/elsewhere"}}, {"client_environment": {"CCACHE_DIR": "/elsewhere"}},
                         {"profile": {"kind": "torch", "seconds": 9999, "delay_seconds": 0}}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate_recipe(dict(RECIPE, **changes))
@@ -107,7 +107,7 @@ class RunnerTests(unittest.TestCase):
         (self.root / "manifest.json").write_text(json.dumps({"image": {"id": "sha256:example"}}))
         with patch("runner.subprocess.run") as command:
             cleanup(self.root)
-        self.assertEqual(command.call_args_list[0].args[0], ["docker", "rm", "--force", "ipat-" + "a" * 32])
+        self.assertEqual(command.call_args_list[0].args[0], ["docker", "rm", "--force", "benchmark-" + "a" * 32])
         self.assertIn(f"type=bind,src={self.root.resolve()},dst=/output", command.call_args_list[1].args[0])
         self.assertNotIn("--device", command.call_args_list[1].args[0])
         (self.root / "request.json").write_text(json.dumps({"id": "invalid"}))
@@ -144,7 +144,7 @@ class RunnerTests(unittest.TestCase):
 
     def test_storage_accepts_only_checkout_or_available_shared_root(self):
         repo = self.root / 'repo'; repo.mkdir()
-        shared = self.root / 'share/ajith/IPAT'
+        shared = self.root / 'share/ajith/benchmarks'
         with patch('runner.REPOSITORY', repo), patch('runner.SHARED_DATA_ROOT', shared):
             self.assertEqual(validate_output(repo / 'output'), repo / 'output')
             with self.assertRaisesRegex(ValueError, 'unavailable'):
@@ -162,7 +162,7 @@ class RunnerTests(unittest.TestCase):
         with patch('runner.REPOSITORY', self.root):
             work, args, env = runtime_storage(output)
             self.assertEqual(work, output / 'work')
-            self.assertEqual(env['IPAT_WORK_DIR'], '/work')
+            self.assertEqual(env['BENCHMARK_WORK_DIR'], '/work')
             self.assertEqual(env['XDG_CACHE_HOME'], '/work/cache')
             self.assertEqual(env['TMPDIR'], '/work/tmp')
             self.assertIn(f'type=bind,src={output},dst=/output', args)
@@ -177,7 +177,7 @@ class RunnerTests(unittest.TestCase):
         output, work = self.root / 'evidence/baseline', self.root / 'runtime'
         process = MagicMock(); process.poll.return_value = 1
         capabilities = {'devices': [{'name': 'AMD Instinct MI355X'}] * 8}
-        with patch.dict('os.environ', {'IPAT_WORK_DIR': str(work)}), \
+        with patch.dict('os.environ', {'BENCHMARK_WORK_DIR': str(work)}), \
              patch('container.probe', return_value=capabilities), \
              patch('container.shutil.which', return_value='/bin/uv'), \
              patch('container.checked') as checked, \
@@ -190,7 +190,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result['status'], 'failed')
 
     def test_shared_recovery_checks_identity_and_excludes_runtime_files(self):
-        shared = self.root / 'share/ajith/IPAT'
+        shared = self.root / 'share/ajith/benchmarks'
         old = shared / 'runs/123-1'; old.mkdir(parents=True)
         (old / 'request.json').write_text(json.dumps({'id': 'a' * 32}))
         (old / 'server.log').write_text('retained')

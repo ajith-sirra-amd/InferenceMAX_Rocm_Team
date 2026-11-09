@@ -51,7 +51,7 @@ class KernelReportTests(unittest.TestCase):
         with gzip.open(self.output/'kernel-dispatches.csv.gz','rt') as handle:
             self.assertEqual(len(list(csv.DictReader(handle))),64)
         self.assertEqual(report['top10'][0]['variants'][0]['analysis']['path']['status'],'insufficient_evidence')
-        self.assertFalse(any(self.output.glob('ipat-kernels-*')))
+        self.assertFalse(any(self.output.glob('benchmark-kernels-*')))
 
     def test_precise_csv_timestamps_and_overlap_do_not_become_walltime(self):
         path = self.traces/'rank_kernel_trace.csv'

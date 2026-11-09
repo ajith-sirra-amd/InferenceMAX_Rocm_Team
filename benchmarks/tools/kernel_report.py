@@ -342,7 +342,7 @@ def aggregate(directory, output=None, family=None, expected_devices=None):
     if len(paths) != len(candidates):
         warnings.append('Only ' + family + ' traces are aggregated; other formats are excluded to avoid double counting.')
     # SQLite spills correlations and iteration groups to local disk instead of retaining all dispatches in RAM.
-    with tempfile.TemporaryDirectory(prefix='ipat-kernels-', dir=output or directory.parent) as temporary:
+    with tempfile.TemporaryDirectory(prefix='benchmark-kernels-', dir=output or directory.parent) as temporary:
         db = sqlite3.connect(str(Path(temporary) / 'events.sqlite'))
         try:
             db.execute('PRAGMA cache_size=-8192')
@@ -496,7 +496,7 @@ def export_report(output, summary, variants):
         writer.writerows({key: row[key] for key in fields} for row in summary['kernels'])
     write_json(output / 'kernel-variants.json', variants)
     plan = {'capture_sha256': summary['capture_sha256'], 'status': 'needs_targeted_collection', 'kernels': []}
-    lines = ['# IPAT aggregated kernel profile', '',
+    lines = ['# BENCHMARK aggregated kernel profile', '',
         f"Captured dispatches: {summary['kernel_count']}; distinct kernel symbols: {summary['unique_kernels']}.", '', NOTE, '',
         'All timing units below are microseconds. Statistics describe profiler-observed dispatches, not unprofiled latency.', '',
         '## Coverage', '', '```json', json.dumps(summary['coverage'], indent=2), '```', '',
@@ -536,7 +536,7 @@ def export_report(output, summary, variants):
             required += ['Inspect occupancy, VGPR/SGPR use, spills, LDS, cache hit rates, memory/coalescing, MFMA/VALU mix, stalls and synchronization where applicable.']
             plan['kernels'].append({'name': kernel['name'], 'variant_id': variant['variant_id'],
                                     'device': variant['device'], 'shape_signature': variant['shape_signature'], 'required_evidence': required,
-                                    'counter_command_template': ['rocprof-compute', 'profile', '--name', 'ipat-' + variant['variant_id'],
+                                    'counter_command_template': ['rocprof-compute', 'profile', '--name', 'benchmark-' + variant['variant_id'],
                                         '--output-directory', '<fresh-counter-pass>', '--kernel', kernel['name'], '--roof-only', '--', '<verified-matched-reproducer>'],
                                     'command_status': 'template_only; verify installed help, counter support, exact dispatch selection and reproducer equivalence before execution'})
             lines += ['Required follow-up:'] + ['- ' + item for item in required] + ['']
@@ -604,7 +604,7 @@ def export_xlsx(path, summary):
 
 
 def export_html(path, summary):
-    parts = ['<!doctype html><meta charset="utf-8"><title>IPAT kernel report</title>',
+    parts = ['<!doctype html><meta charset="utf-8"><title>BENCHMARK kernel report</title>',
              '<style>body{font:14px system-ui;margin:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:6px;text-align:right}td:first-child{text-align:left;overflow-wrap:anywhere;max-width:500px}pre{white-space:pre-wrap;overflow-wrap:anywhere}svg{max-width:640px;width:100%}</style>',
              '<h1>Aggregated kernel profile</h1><p>' + html.escape(NOTE) + '</p>',
              '<p><a href="kernel-report.xlsx">Excel workbook</a> · <a href="kernel-summary.csv">CSV</a> · <a href="kernel-dispatches.csv.gz">Every dispatch</a> · <a href="kernel-iterations.csv.gz">Iteration groups</a> · <a href="kernel-report.md">Full report</a> · <a href="trace-summary.json">JSON</a></p>',
