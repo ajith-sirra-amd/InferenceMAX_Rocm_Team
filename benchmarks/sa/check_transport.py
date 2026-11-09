@@ -42,7 +42,7 @@ commands = {
                     '--entrypoint', task[0], image, *task[1:]],
     'native_adapter': [str(Path(__file__).parent / 'spur/srun'), *base[1:],
                        '--container-image', image, '--container-remap-root',
-                       '--container-mounts', f'{a.output.resolve()}:/logs:ro', *task],
+                       '--container-mounts', f'{a.output.resolve()}:/logs' + ('' if a.command_json else ':ro'), *task],
 }
 if a.command_json:
     commands = {'native_adapter': commands['native_adapter']}
@@ -57,5 +57,8 @@ for name, command in commands.items():
     except subprocess.TimeoutExpired as error:
         results['checks'][name] = {'error': str(error)}
     print(json.dumps(results['checks'][name]), flush=True)
+owned = subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'label=sa.run=' + a.output.name], text=True).split()
+if owned:
+    subprocess.run(['docker', 'rm', '-f', *owned], check=True)
 (a.output / 'transport-check.json').write_text(json.dumps(results, indent=2) + '\n')
 raise SystemExit(0 if results['checks']['native_adapter'].get('returncode') == 0 else 1)
