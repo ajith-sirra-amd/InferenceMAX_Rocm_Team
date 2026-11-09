@@ -120,3 +120,6 @@ result = logs / (c['name'] + '.json')
 if not result.is_file():
     raise RuntimeError('Native benchmark result is missing: ' + str(result))
 subprocess.run([sys.executable, '-m', 'infx.results.agentic.validate_agentic_result', str(logs / 'agentic'), '--failed-request-threshold', c['environment']['AIPERF_FAILED_REQUEST_THRESHOLD']], check=True)
+if profile:
+    subprocess.run([sys.executable, Path(__file__).with_name('validate_profile.py'),
+                    logs, '--seconds', str(seconds)], check=True)
