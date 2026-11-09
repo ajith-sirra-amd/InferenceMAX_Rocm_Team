@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 from container import benchmark_metrics, trace_summary, run
-from runner import validate_recipe, resolve_models, cleanup, ownership_command, validate_output, runtime_storage, recover, resume_profile_manifest
+from runner import validate_recipe, resolve_models, cleanup, ownership_command, validate_output, runtime_storage, recover, resume_profile_manifest, require_idle_devices
 
 
 RECIPE = {"model": "Model", "framework": "vllm", "image": "image:pin", "image_policy": "local",
@@ -33,6 +33,14 @@ class RunnerTests(unittest.TestCase):
                         {"profile": {"kind": "torch", "seconds": 9999, "delay_seconds": 0}}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate_recipe(dict(RECIPE, **changes))
+
+    def test_idle_check_requires_explicit_empty_process_list_on_every_device(self):
+        idle = [{"gpu": i, "process_list": [{"process_info": "No running processes detected"}]} for i in range(8)]
+        require_idle_devices(idle, 8)
+        for changed in (idle[:-1], idle[:-1] + [idle[0]],
+                        idle[:-1] + [{"gpu": 7, "process_list": [{"pid": 123}]}],
+                        idle[:-1] + [{"gpu": 7, "process_list": []}], {"error": "permission denied"}):
+            with self.assertRaises(RuntimeError): require_idle_devices(changed, 8)
 
     def test_separate_profile_stage_retains_only_matching_successful_baseline(self):
         current = {"id": "a" * 32, "recipe_sha256": "frozen"}

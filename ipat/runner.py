@@ -93,7 +93,7 @@ def preflight(request, output):
             "sbatch-help.txt": ["sbatch", "--help"],
             "enroot-version.txt": ["enroot", "version"],
             "gpu-processes.json": ["amd-smi", "process", "--json"],
-            "kfd-users.txt": ["sudo", "-n", "fuser", "/dev/kfd"],
+            "kfd-users.txt": ["fuser", "/dev/kfd"],
             "rocprof-compute-help.txt": ["rocprof-compute", "profile", "--help"],
         })
         facts["allocation"] = {key: os.environ.get(key) for key in
@@ -132,9 +132,10 @@ def preflight(request, output):
         assert_gpu_idle()
         settings = request["image_check"]
         if settings.get("rocprof_check"):
-            idle = capture(["sudo", "-n", "fuser", "/dev/kfd"], output / "kfd-idle-check.txt")
-            if idle.get("returncode") != 1 or (output / "kfd-idle-check.txt").read_text().strip():
-                raise RuntimeError("Cannot confirm idle /dev/kfd; see kfd-idle-check.txt")
+            idle = capture(["amd-smi", "process", "--json"], output / "gpu-idle-check.json")
+            if idle.get("returncode") != 0:
+                raise RuntimeError("Cannot read GPU activity; see gpu-idle-check.json")
+            require_idle_devices(json.loads((output / "gpu-idle-check.json").read_text()), 8)
         if settings.get("pull"):
             pulled = capture(["docker", "pull", settings["image"]], output / "image-pull.log", timeout=1800)
             if pulled.get("returncode") != 0:
@@ -177,6 +178,14 @@ def preflight(request, output):
     write_json(output / "manifest.json", facts)
     print(json.dumps(facts, indent=2))
     return facts
+
+
+def require_idle_devices(rows, count):
+    if (not isinstance(rows, list) or len(rows) != count
+            or any(not isinstance(row, dict) or type(row.get("gpu")) is not int for row in rows)
+            or {row["gpu"] for row in rows} != set(range(count))
+            or any(row.get("process_list") != [{"process_info": "No running processes detected"}] for row in rows)):
+        raise RuntimeError("GPU activity is present or unknown; see gpu-idle-check.json")
 
 
 def assert_gpu_idle():
