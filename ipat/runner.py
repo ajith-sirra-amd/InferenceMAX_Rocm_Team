@@ -165,7 +165,10 @@ def preflight(request, output):
         if settings.get("temporary_memory_filesystem"):
             command += ["--tmpfs", "/work/tmp:rw,exec,size=64g"]
         if settings.get("rocprof_check"):
-            command += ["--cap-add", "SYS_PTRACE"]
+            profiler_tmp = work / "profiler-tmp"
+            profiler_tmp.mkdir(exist_ok=True)
+            command += ["--cap-add", "SYS_PTRACE",
+                        "--mount", f"type=bind,src={profiler_tmp},dst=/tmp"]
         for key, value in settings.get("environment", {}).items():
             if key in storage_env or key in ('HF_TOKEN', 'HUGGING_FACE_HUB_TOKEN'):
                 raise ValueError("Image diagnostic cannot override output or credential paths")
