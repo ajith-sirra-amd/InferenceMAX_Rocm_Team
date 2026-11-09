@@ -182,7 +182,7 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
               run: |
                   python3 - <<'PY'
-                  import json, os, re, shutil, urllib.request
+                  import json, os, re, shutil, urllib.error, urllib.request
                   from pathlib import Path
                   workspace = Path(os.environ['GITHUB_WORKSPACE']).resolve()
                   output = Path(os.environ['SA_OUTPUT'])
@@ -199,8 +199,14 @@ jobs:
                       request = urllib.request.Request(
                           os.environ['GITHUB_API_URL'] + '/repos/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + match[1],
                           headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN']})
-                      with urllib.request.urlopen(request, timeout=30) as response:
-                          state = json.load(response)
+                      try:
+                          with urllib.request.urlopen(request, timeout=30) as response:
+                              state = json.load(response)
+                      except urllib.error.HTTPError as error:
+                          if error.code != 404:
+                              raise
+                          print('Retaining environment: workflow status unavailable for', match[1], flush=True)
+                          continue
                       if state['status'] != 'completed':
                           continue
                       for environment in environments:
