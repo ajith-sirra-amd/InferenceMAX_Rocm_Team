@@ -37,7 +37,9 @@ performance equivalence.
 Use `sa-mode: transport-check` for a small image/mount check before model startup.
 Container writability follows the native SRT option. SA's writable container is
 needed for JIT modules built and imported under the installed package directory;
-the image itself remains unchanged. Runtime caches stay in the run's `work/`
+the image itself remains unchanged. Frozen workflow inputs and SA's workload
+environment names are explicitly forwarded into Docker, preserving the native
+inheritance needed by the benchmark client. Runtime caches stay in the run's `work/`
 directory, with compiler temporary files on bounded tmpfs. SRT owns the process lifecycle.
 
 Source checkouts and Python environments stay within this repository under

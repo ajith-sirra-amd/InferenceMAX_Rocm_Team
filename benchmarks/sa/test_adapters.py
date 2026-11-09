@@ -40,6 +40,8 @@ class AdapterTests(unittest.TestCase):
             native = ['bash', '-c', "export PRECISION=fp4 && exec vllm serve /model --tp 8\n"]
             env = dict(os.environ, SA_REAL_SRUN=str(fake), SA_OUTPUT=str(root),
                        SLURM_JOB_ID='123',
+                       SA_PASSTHROUGH_ENV=json.dumps(['IS_MULTINODE', 'AIPERF_EXPERIMENTAL_FAST']),
+                       IS_MULTINODE='false', AIPERF_EXPERIMENTAL_FAST='0',
                        CAPTURE=str(root / 'args'), CLEANUP=str(root / 'cleanup'),
                        PATH=str(root) + ':' + os.environ['PATH'])
             subprocess.run([str(ROOT / 'spur/srun'), '--quiet', '--jobid', '123', '--nodes=1',
@@ -54,6 +56,11 @@ class AdapterTests(unittest.TestCase):
             self.assertIn('type=bind,src=/weights,dst=/model,readonly', args)
             self.assertIn('type=bind,src=/data,dst=/logs', args)
             self.assertNotIn('--read-only', args)
+            forwarded = [args[i + 1] for i, value in enumerate(args) if value == '--env']
+            self.assertIn('IS_MULTINODE', forwarded)
+            self.assertIn('AIPERF_EXPERIMENTAL_FAST', forwarded)
+            self.assertNotIn('PATH', forwarded)
+            self.assertNotIn('GH_TOKEN', forwarded)
             name = args[args.index('--name') + 1]
             self.assertEqual(json.loads((root / 'cleanup').read_text()), ['rm', '-f', name])
 

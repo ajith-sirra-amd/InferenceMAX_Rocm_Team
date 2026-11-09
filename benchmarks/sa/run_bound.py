@@ -1,5 +1,6 @@
 """Local storage/scheduler bindings; workload and process lifecycle stay native."""
 import argparse
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -9,6 +10,7 @@ import yaml
 
 from infx.srt_slurm.single_node import select_recipe, runtime_arguments
 from infx.srt_slurm.synthetic_acceptance import plan_commands
+from infx.launch.drivers.srt.submit import WORKLOAD_ENV
 
 p = argparse.ArgumentParser()
 for name in ('config', 'output', 'source', 'srt'):
@@ -76,6 +78,7 @@ plan.command.extend(['--set', 'roles.agg.args.speculative-config=' + json.dumps(
     'Local model/cache/output mounts and auto-detected host interface replace SA host paths.',
     'Spur overlap ignores container options; Docker executes unchanged native task argv inside the reservation.',
     'Container writability follows native SRT options; per-step runtime caches and temporary compiler storage are mounted separately.',
+    'Frozen workflow inputs and native workload environment names are explicitly inherited by Docker steps.',
     'Native GPU and RAPL telemetry are requested; unavailable local permissions remain explicit missing evidence.',
     'GitHub release assets use the API route because direct download URLs return HTTP 504.'
 ]}, indent=2) + '\n')
@@ -99,6 +102,10 @@ subprocess.run(command, check=True, env={**os.environ, **dict(plan.environment)}
 os.environ['SA_REAL_SRUN'] = subprocess.check_output(['which', 'srun'], text=True).strip()
 os.environ['PATH'] = str(Path(__file__).parent / 'spur') + ':' + os.environ['PATH']
 os.environ['SA_OUTPUT'] = str(a.output)
+# Pyxis inherits the workflow inputs; Docker needs them forwarded explicitly.
+os.environ['SA_PASSTHROUGH_ENV'] = json.dumps(sorted(
+    key for key in os.environ if key in c['environment']
+    or any(fnmatch.fnmatchcase(key, pattern) for pattern in WORKLOAD_ENV)))
 try:
     subprocess.run(['bash', str(rendered / 'sbatch_script.sh')], check=True)
 finally:

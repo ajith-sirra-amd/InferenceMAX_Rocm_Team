@@ -83,7 +83,10 @@ def main(args):
             docker += ['--mount', f'type=bind,src={source},dst={target}' + (',readonly' if 'ro' in options else '')]
     if container.get('--container-workdir'):
         docker += ['--workdir', container['--container-workdir']]
-    for key in ('HF_TOKEN', 'HUGGING_FACE_HUB_TOKEN', 'SLURM_JOB_ID', 'SLURM_NODELIST', 'SLURM_JOB_NODELIST', 'ROCR_VISIBLE_DEVICES'):
+    inherited = {'HF_TOKEN', 'HUGGING_FACE_HUB_TOKEN', 'HF_HUB_CACHE',
+                 'SLURM_JOB_ID', 'SLURM_NODELIST', 'SLURM_JOB_NODELIST', 'ROCR_VISIBLE_DEVICES'}
+    inherited.update(json.loads(os.environ.get('SA_PASSTHROUGH_ENV', '[]')))
+    for key in sorted(inherited):
         if key in os.environ:
             docker += ['--env', key]
     for key, value in {'TMPDIR': '/work/tmp', 'XDG_CACHE_HOME': '/work/cache',
