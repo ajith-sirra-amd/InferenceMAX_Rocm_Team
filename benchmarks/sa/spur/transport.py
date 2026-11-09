@@ -61,7 +61,7 @@ def main(args):
     work = root / 'work' / 'containers' / name
     for part in ('home', 'cache', 'tmp'):
         (work / part).mkdir(parents=True, exist_ok=True)
-    docker = ['docker', 'run', '--rm', '--init', '--read-only', '--name', name,
+    docker = ['docker', 'run', '--rm', '--init', '--read-only', '--user', '0:0', '--name', name,
               '--label', 'sa.run=' + root.name, '--network', 'host', '--ipc', 'host',
               '--device', '/dev/kfd', '--device', '/dev/dri', '--cap-add', 'SYS_PTRACE',
               '--security-opt', 'seccomp=unconfined', '--ulimit', 'memlock=-1', '--ulimit', 'stack=67108864',

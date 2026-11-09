@@ -40,7 +40,7 @@ commands = {
                        '--container-mounts', f'{a.output.resolve()}:/logs:ro', *task],
 }
 os.environ.update(SA_REAL_SRUN=shutil.which('srun'), SA_OUTPUT=str(a.output.resolve()),
-                  SA_CONTAINER_TRANSPORT='docker', SLURM_JOB_ID=a.allocation)
+                  SLURM_JOB_ID=a.allocation)
 results = {'allocation': allocation, 'image': image, 'checks': {}}
 for name, command in commands.items():
     print('Checking ' + name, flush=True)

@@ -26,12 +26,17 @@ by InferenceX; do not hard-code it. Keep model-specific settings in JSON files.
 
 The launcher verifies the allocation belongs to the current account and contains
 only the current host. It executes the native rendered batch script in that
-allocation and does not cancel the reservation. The Spur adapter translates
-unsupported Pyxis default flags and append-mode output routing; it retains the
-native task command. Model/cache mounts, output paths, network interface and
+allocation and does not cancel the reservation. Spur's overlap mode ignores
+container image/mount options, as confirmed by the retained transport check.
+The adapter therefore runs Docker through the real reservation, preserving the
+native task command and mounts. Model/cache mounts, output paths, network interface and
 telemetry differences are recorded in `native-plan.json`. Native GPU and RAPL telemetry are requested; unavailable permissions remain
 explicit missing evidence. Release assets use the GitHub API route on this network. Recipe equality alone does not certify
 performance equivalence.
+
+Use `sa-mode: transport-check` for a small image/mount check before model startup.
+The container root is read-only; runtime caches stay in the run's `work/` directory,
+with compiler temporary files on bounded tmpfs. SRT owns the process lifecycle.
 
 Source checkouts and Python environments stay within this repository under
 `.sa-runs/`. Run data goes to `/share_nfs/ajith/benchmarks/<run>-<attempt>/`:

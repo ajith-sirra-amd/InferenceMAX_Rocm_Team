@@ -21,7 +21,7 @@ class AdapterTests(unittest.TestCase):
             docker.chmod(0o755)
             native = ['bash', '-c', "export PRECISION=fp4 && exec vllm serve /model --tp 8\n"]
             env = dict(os.environ, SA_REAL_SRUN=str(fake), SA_OUTPUT=str(root),
-                       SA_CONTAINER_TRANSPORT='docker', SLURM_JOB_ID='123',
+                       SLURM_JOB_ID='123',
                        CAPTURE=str(root / 'args'), CLEANUP=str(root / 'cleanup'),
                        PATH=str(root) + ':' + os.environ['PATH'])
             subprocess.run([str(ROOT / 'spur/srun'), '--quiet', '--jobid', '123', '--nodes=1',
@@ -67,24 +67,6 @@ else:
                 self.assertNotIn(token, ' '.join(call['argv']))
                 self.assertEqual(call['config'], 'header = ' + json.dumps('Authorization: token ' + token) + '\n')
 
-    def test_spur_keeps_native_task_and_allocation_with_append_logs(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            fake = root / 'srun'
-            fake.write_text('#!/usr/bin/env python3\nimport json,sys,os\nprint(json.dumps({"args":sys.argv[1:],"exported":os.environ.get("EXAMPLE")}))\n')
-            fake.chmod(0o755)
-            log = root / 'log'
-            log.write_text('previous\n')
-            native = ['bash', '-c', "export PRECISION=fp4 && exec vllm serve model --tp 8"]
-            subprocess.run([str(ROOT / 'spur/srun'), '--jobid', '123', '--overlap',
-                '--no-container-entrypoint', '--no-container-mount-home', '--container-writable',
-                '--open-mode', 'append', '--output', str(log), '--export=ALL,EXAMPLE=value',
-                '--nodes', '1', '--container-image', 'registry-1.docker.io#repo/image:sha256:abc', *native], env=dict(os.environ, SA_REAL_SRUN=str(fake)), check=True)
-            lines = log.read_text().splitlines()
-            self.assertEqual(lines[0], 'previous')
-            result = json.loads(lines[1])
-            self.assertEqual(result['args'], ['--jobid', '123', '--overlap', '--nodes', '1', '--container-image', 'registry-1.docker.io/repo/image@sha256:abc', *native])
-            self.assertEqual(result['exported'], 'value')
 
 
 if __name__ == '__main__':

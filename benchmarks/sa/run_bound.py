@@ -86,7 +86,6 @@ subprocess.run(command, check=True, env={**os.environ, **dict(plan.environment)}
 os.environ['SA_REAL_SRUN'] = subprocess.check_output(['which', 'srun'], text=True).strip()
 os.environ['PATH'] = str(Path(__file__).parent / 'spur') + ':' + os.environ['PATH']
 os.environ['SA_OUTPUT'] = str(a.output)
-os.environ['SA_CONTAINER_TRANSPORT'] = 'docker'
 try:
     subprocess.run(['bash', str(rendered / 'sbatch_script.sh')], check=True)
 finally:
