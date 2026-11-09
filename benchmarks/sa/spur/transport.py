@@ -59,7 +59,7 @@ def main(args):
     root = Path(os.environ['SA_OUTPUT'])
     name = 'sa-step-' + root.name + '-' + uuid.uuid4().hex[:8]
     work = root / 'work' / 'containers' / name
-    for part in ('home', 'cache', 'tmp'):
+    for part in ('home', 'cache', 'tmp', 'log'):
         (work / part).mkdir(parents=True, exist_ok=True)
     docker = ['docker', 'run', '--rm', '--init', '--read-only', '--user', '0:0', '--name', name,
               '--label', 'sa.run=' + root.name, '--network', 'host', '--ipc', 'host',
@@ -67,6 +67,7 @@ def main(args):
               '--security-opt', 'seccomp=unconfined', '--ulimit', 'memlock=-1', '--ulimit', 'stack=67108864',
               '--mount', f'type=bind,src={work},dst=/work',
               '--mount', f'type=bind,src={work / "home"},dst=/root',
+              '--mount', f'type=bind,src={work / "log"},dst=/var/log',
               '--tmpfs', '/work/tmp:rw,exec,size=64g']
     for mount in container.get('--container-mounts', '').split(','):
         if mount:
@@ -83,6 +84,7 @@ def main(args):
         if key in os.environ:
             docker += ['--env', key]
     for key, value in {'TMPDIR': '/work/tmp', 'XDG_CACHE_HOME': '/work/cache',
+                       'FLYDSL_RUNTIME_CACHE_DIR': '/work/cache/flydsl',
                        'CCACHE_DIR': '/work/cache/ccache', 'SCCACHE_DIR': '/work/cache/sccache',
                        'PIP_CACHE_DIR': '/work/cache/pip', 'PYTHONDONTWRITEBYTECODE': '1',
                        'UV_PYTHON_INSTALL_DIR': '/work/cache/python', 'UV_LINK_MODE': 'copy'}.items():

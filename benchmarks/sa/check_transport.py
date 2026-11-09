@@ -10,6 +10,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--config', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--allocation', required=True)
+p.add_argument('--command-json', default=os.environ.get('SA_CHECK_COMMAND', ''))
 a = p.parse_args()
 host = subprocess.check_output(['hostname', '-s'], text=True).strip()
 owner = subprocess.check_output(['id', '-un'], text=True).strip()
@@ -27,6 +28,10 @@ facts = {'vllm': shutil.which('vllm'), 'marker': marker.read_text() if marker.ex
 print(json.dumps(facts), flush=True)
 assert facts['vllm'] and facts['marker'], 'Requested image and mount are not active'
 ''']
+if a.command_json:
+    task = json.loads(a.command_json)
+    if not isinstance(task, list) or not task or not all(isinstance(v, str) for v in task):
+        raise ValueError('Diagnostic command must be a nonempty JSON string array')
 base = ['srun', '--jobid', a.allocation, '--overlap', '--nodes', '1', '--ntasks', '1', '--nodelist', host]
 commands = {
     'spur_container': [*base, '--container-image', image, '--container-remap-root',
@@ -39,13 +44,15 @@ commands = {
                        '--container-image', image, '--container-remap-root',
                        '--container-mounts', f'{a.output.resolve()}:/logs:ro', *task],
 }
+if a.command_json:
+    commands = {'native_adapter': commands['native_adapter']}
 os.environ.update(SA_REAL_SRUN=shutil.which('srun'), SA_OUTPUT=str(a.output.resolve()),
                   SLURM_JOB_ID=a.allocation)
 results = {'allocation': allocation, 'image': image, 'checks': {}}
 for name, command in commands.items():
     print('Checking ' + name, flush=True)
     try:
-        result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+        result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
         results['checks'][name] = {'returncode': result.returncode, 'output': result.stdout}
     except subprocess.TimeoutExpired as error:
         results['checks'][name] = {'error': str(error)}
