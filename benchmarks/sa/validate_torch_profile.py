@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 
-def validate(logs, minimum_seconds):
+def validate(logs, minimum_seconds, require_metadata=False):
     root = logs / 'profiles/torch'
     control = json.loads((root / 'profile-control.json').read_text())
     if control['status'] != 'exported':
@@ -27,7 +27,13 @@ def validate(logs, minimum_seconds):
         base = int(trace.get('baseTimeNanoseconds', 0))
         seen = set()
         count = 0
+        metadata = dict(shape_events=0, input_dtype_events=0, python_frames=0, memory_events=0)
         for event in trace['traceEvents']:
+            args = event.get('args', {})
+            metadata['shape_events'] += bool(args.get('Input Dims'))
+            metadata['input_dtype_events'] += bool(args.get('Input type'))
+            metadata['python_frames'] += event.get('cat') == 'python_function'
+            metadata['memory_events'] += event.get('name') == '[memory]'
             if event.get('cat') != 'kernel' or event.get('dur', 0) <= 0:
                 continue
             device = str(event['args']['device'])
@@ -39,9 +45,11 @@ def validate(logs, minimum_seconds):
             count += 1
         if len(seen) != 1 or count == 0:
             raise ValueError(f'{path.name}: expected one worker GPU and nonzero kernels')
+        if require_metadata and not all(metadata[key] > 0 for key in ('shape_events', 'input_dtype_events', 'python_frames')):
+            raise ValueError(f'{path.name}: missing required shape, dtype or Python-call metadata: {metadata}')
         if (before.st_size, before.st_mtime_ns) != (path.stat().st_size, path.stat().st_mtime_ns):
             raise ValueError(f'{path.name}: export still changing')
-        files.append(dict(file=path.name, bytes=before.st_size, kernels=count, devices=sorted(seen)))
+        files.append(dict(file=path.name, bytes=before.st_size, kernels=count, devices=sorted(seen), metadata=metadata))
         print(json.dumps(files[-1]), flush=True)
         del trace
     if set(devices) != set(map(str, range(8))):
@@ -62,9 +70,10 @@ if __name__ == '__main__':
     p.add_argument('logs', type=Path)
     p.add_argument('--minimum-seconds', type=int, required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--require-metadata', action='store_true')
     a = p.parse_args()
     try:
-        result = validate(a.logs, a.minimum_seconds)
+        result = validate(a.logs, a.minimum_seconds, a.require_metadata)
     except (OSError, ValueError, KeyError, TypeError) as error:
         result = dict(status='failed', error=str(error))
     a.output.write_text(json.dumps(result, indent=2) + '\n')

@@ -93,6 +93,18 @@ class MeasuredTests(unittest.TestCase):
                 with gzip.open(root / f'rank{rank}.pt.trace.json.gz', 'wt') as f:
                     json.dump(doc, f)
             self.assertEqual(validate(logs, 120)['status'], 'passed')
+            with self.assertRaisesRegex(ValueError, 'missing required shape'):
+                validate(logs, 120, require_metadata=True)
+            for path in root.glob('*.pt.trace.json.gz'):
+                with gzip.open(path, 'rt') as f:
+                    doc = json.load(f)
+                doc['traceEvents'] += [dict(cat='cpu_op', args={
+                    'Input Dims': [[32, 64]], 'Input type': ['c10::BFloat16']}),
+                    dict(cat='python_function', name='observed.py(10): observed_call')]
+                with gzip.open(path, 'wt') as f:
+                    json.dump(doc, f)
+            metadata_result = validate(logs, 120, require_metadata=True)
+            self.assertTrue(all(f['metadata']['shape_events'] == 1 for f in metadata_result['files']))
             with self.assertRaises(ValueError):
                 validate(logs, 140)
             path = root / 'rank0.pt.trace.json.gz'

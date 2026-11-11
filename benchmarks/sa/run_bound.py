@@ -101,6 +101,11 @@ if profile:
             torch_profiler_with_stack=False, torch_profiler_record_shapes=False,
             torch_profiler_with_memory=False, torch_profiler_use_gzip=True,
             torch_profiler_dump_cuda_time_total=False)
+        for option in ('record_shapes', 'with_stack', 'with_memory', 'with_flops'):
+            value = profile.get(option, False)
+            if type(value) is not bool:
+                raise ValueError('Native Torch ' + option + ' must be a boolean')
+            profiler_config['torch_profiler_' + option] = value
         extra += ['--set', 'roles.agg.args.profiler-config=' + json.dumps(json.dumps(profiler_config))]
     else:
         for key, value in {'SA_PROFILE_DELAY_SECONDS': str(delay), 'SA_PROFILE_SECONDS': str(seconds), 'SA_PROFILE_MODE': mode,
@@ -207,7 +212,8 @@ if profile:
     if mode == 'measured':
         subprocess.run([sys.executable, Path(__file__).with_name('validate_torch_profile.py'),
                         logs, '--minimum-seconds', str(minimum),
-                        '--output', a.output / 'profile-capture-validation.json'], check=True)
+                        '--output', a.output / 'profile-capture-validation.json']
+                       + (['--require-metadata'] if profile.get('record_shapes') and profile.get('with_stack') else []), check=True)
     else:
         subprocess.run([sys.executable, Path(__file__).with_name('validate_profile.py'),
                     logs, '--seconds', str(seconds), '--require-exports',

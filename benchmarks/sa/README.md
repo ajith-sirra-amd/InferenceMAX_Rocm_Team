@@ -18,6 +18,30 @@ control logs and validation remain with the fresh workflow output; previous
 captures are preserved. Timing/CPU/GPU activity is collected here; HBM counters,
 tensor shapes/precision and request-to-kernel attribution require separate passes.
 
+For a separate **metadata diagnostic**, select
+`kimi-k3.1-pro-vllm-mi355x-c48-metadata-sa42638222682.json`. It retains that full
+native C48 workload and the measured +2,400 s trigger, with a **20 s** capture to
+bound shape/stack/allocation instrumentation overhead. Native Torch
+`record_shapes`, `with_stack`, `with_memory` and `with_flops` are enabled; validation
+requires actual shape, input-dtype and Python-frame events on every rank, in
+addition to eight complete GPU traces. This does not replace the 130 s timing
+capture. Graphs were built before the session: internal replayed operators may
+have no tensor/call-stack attribution. Torch FLOP estimates do not cover all
+custom kernels, and allocation records are not hardware HBM counters.
+
+The bounded exact-image check `43010911535` collected real `FETCH_SIZE`,
+`WRITE_SIZE` and BF16/F8/F6F4 math counters on synthetic graph-replayed GEMMs.
+Read and write values use KiB (multiply by 1024 for bytes); MOPS values use 512
+operations per count. `FETCH_SIZE` plus `WRITE_SIZE` in one pass exceeds this
+installed counter configuration's hardware capacity (also verified in
+`43011308200`), so read, write and math use separate passes. Do not join model
+passes on symbol/dispatch number alone or label these synthetic results a Kimi
+roofline. Native Proton graph attribution is not currently validated: the
+installed backend fails to load its SDK library. All probe evidence remains
+under the original run-specific output/artifact. The reusable bounded probe is
+`profile/evidence_probe.py`; its result records individual check failures even
+when the overall capability inventory completes.
+
 Pinned-image capability check `42987645614` captured 96 synthetic kernel events
 on all eight GPUs. It establishes basic profiler capability, not full Kimi model
 coverage. Twenty-three local adapter/controller/export checks pass, including
