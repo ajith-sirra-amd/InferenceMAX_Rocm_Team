@@ -144,6 +144,27 @@ Capture occurs from server launch +55 minutes through +56 minutes. First verify 
 
 The [archived cleanup](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/275f4eb8c718f0ba653f45e11e5049727808e515/upstream/InferenceX/benchmarks/single_node/agentic/patches/kimik3_fp4_mi355x_mtp.profiling-archive.sh#L69) allows up to 1200 seconds (20 minutes) after SIGTERM for the summary, polling every 5 seconds while the wrapper is alive, then performs bounded teardown. This is a flush cap, not mandatory waiting time. Its summary-file check alone is insufficient: inspect the actual nonempty kernel CSVs, rank/device coverage, timestamps and clean export.
 
+### Exact shutdown change in the archived wrapper
+
+The fix expanded shutdown from signaling the wrapper alone to signaling its captured process tree before waiting for export. In the existing recipe context, which defines the descendant helper, the core change is:
+
+~~~bash
+profiler_children=$(_background_process_descendants "$SERVER_PID")
+while read -r profiler_child; do
+  [[ -n "$profiler_child" ]] && kill -TERM "$profiler_child" 2>/dev/null || true
+done < <(printf '%s\n' "$profiler_children" | tac)
+kill -TERM "$SERVER_PID" 2>/dev/null || true
+
+rocprof_deadline=$((SECONDS + 1200))
+while [ ! -s "$RESULT_DIR/rocprof_summary.txt" ] \
+  && [ $SECONDS -lt $rocprof_deadline ] \
+  && kill -0 "$SERVER_PID" 2>/dev/null; do
+  sleep 5
+done
+~~~
+
+This is scoped to the launched server tree. It does not kill unrelated jobs. After the bounded wait, the recipe performs its normal scoped teardown. SIGKILL before export can lose the trace. The current native controller instead calls /stop_profile while the server is still alive; it need not wait for server exit to export.
+
 ## Reports and analysis
 
 Current native capture outputs under results/native_steady_profile/:
