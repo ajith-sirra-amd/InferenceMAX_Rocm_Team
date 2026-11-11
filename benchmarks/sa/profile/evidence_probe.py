@@ -6,13 +6,12 @@ Every subprocess owns its process group and has an export-inclusive deadline.
 import argparse
 import collections
 import csv
+import dataclasses
 import gzip
 import hashlib
-import inspect
 import json
 import os
 from pathlib import Path
-import shutil
 import signal
 import subprocess
 import sys
@@ -54,7 +53,7 @@ def workload(mode, output):
             torch.cuda.synchronize()
             profile.step()
         profile.stop()
-        write(output / 'native-profiler-config.json', config.model_dump(mode='json'))
+        write(output / 'native-profiler-config.json', dataclasses.asdict(config))
         trace = list(output.glob('*.pt.trace.json.gz'))
         if len(trace) != 1:
             raise RuntimeError('Native metadata probe did not export exactly one trace')
@@ -68,6 +67,28 @@ def workload(mode, output):
             memory_event_count=len(memory), memory_examples=memory[:3],
             trace_sha256=hashlib.sha256(trace[0].read_bytes()).hexdigest()))
         assert categories['kernel'] > 0 and shapes, 'Missing GPU/shape metadata'
+    elif mode == 'proton':
+        import triton
+        from vllm.config import ProfilerConfig
+        from vllm.profiler.wrapper import ProtonProfilerWrapper
+        config = ProfilerConfig(profiler='proton', proton_profiler_dir=str(output),
+            proton_graph_attribution=True, proton_context='python')
+        write(output / 'native-profiler-config.json', dataclasses.asdict(config))
+        profile = ProtonProfilerWrapper(config, 'proton-probe')
+        graph = torch.cuda.CUDAGraph()
+        with profile.capture_cuda_graphs():
+            with torch.cuda.graph(graph):
+                torch.mm(x, x, out=y)
+        profile.start()
+        for _ in range(4):
+            graph.replay()
+            torch.cuda.synchronize()
+        profile.stop()
+        profile.shutdown()
+        files = sorted(output.glob('*.hatchet'))
+        assert files, 'No Proton graph-attribution output'
+        write(output / 'proton-summary.json', dict(triton=triton.__version__,
+            files=[dict(name=f.name, bytes=f.stat().st_size) for f in files]))
     else:
         for _ in range(4):
             torch.mm(x, x, out=y)
@@ -105,21 +126,25 @@ def probe(root):
     result['checks']['rocprof-counters'] = command(root, 'rocprof-counters', ['rocprofv3', '--list-avail'], 30)
     result['checks']['metadata'] = command(root, 'metadata',
         [sys.executable, __file__, '--output', str(root / 'metadata'), '--worker', 'metadata'], 120)
-    counters = ['FETCH_SIZE', 'WRITE_SIZE', 'SQ_INSTS_VALU_MFMA_MOPS_BF16']
-    for mode in ('eager', 'graph'):
-        folder = root / ('counters-' + mode)
+    result['checks']['proton'] = command(root, 'proton',
+        [sys.executable, __file__, '--output', str(root / 'proton'), '--worker', 'proton'], 90)
+    groups = {'read': ['FETCH_SIZE'], 'write': ['WRITE_SIZE'],
+              'math': ['SQ_INSTS_VALU_MFMA_MOPS_BF16', 'SQ_INSTS_VALU_MFMA_MOPS_F8',
+                       'SQ_INSTS_VALU_MFMA_MOPS_F6F4']}
+    for group, counters in groups.items():
+        folder = root / ('counters-graph-' + group)
         folder.mkdir()
         argv = ['rocprofv3', '--pmc', *counters, '--kernel-trace',
             '--disable-signal-handlers', 'true', '-f', 'csv', 'json', '-d', str(folder),
-            '--', sys.executable, __file__, '--output', str(folder), '--worker', mode]
-        record = command(root, 'counters-' + mode, argv, 120)
+            '--', sys.executable, __file__, '--output', str(folder), '--worker', 'graph']
+        record = command(root, 'counters-graph-' + group, argv, 90)
         csvs = {}
         for file in folder.rglob('*.csv'):
             with file.open(newline='') as stream:
                 rows = list(csv.DictReader(stream))
             csvs[str(file.relative_to(root))] = dict(rows=len(rows), examples=rows[:4])
         record['csvs'] = csvs
-        result['checks']['counters-' + mode] = record
+        result['checks']['counters-graph-' + group] = record
     result['status'] = 'completed'
     write(root / 'capability-result.json', result)
     print(json.dumps(result, indent=2), flush=True)
@@ -129,7 +154,7 @@ def probe(root):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--worker', choices=['eager', 'graph', 'metadata'])
+    parser.add_argument('--worker', choices=['eager', 'graph', 'metadata', 'proton'])
     args = parser.parse_args()
     if args.worker:
         args.output.mkdir(parents=True, exist_ok=True)
