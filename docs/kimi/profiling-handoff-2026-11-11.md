@@ -120,3 +120,56 @@ Eight compressed traces totaled about 446 MB. Analysis found 417,128 kernel even
 
 The later mixed-context diagnostic's TCPStore/FileStore failure is separate from profiling. Its TCP rendezvous fix remains pending; see the [main handoff](pr64288-handoff-2026-11-09.md#latest-failures-and-immediate-next-fix).
 
+## Archived rocprof command and report finalization
+
+[Exact archived command and timing](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/275f4eb8c718f0ba653f45e11e5049727808e515/upstream/InferenceX/benchmarks/single_node/agentic/patches/kimik3_fp4_mi355x_mtp.profiling-archive.sh#L569):
+
+~~~bash
+ROCPROF_ENABLE=1
+ROCPROF_START_DELAY=3300
+ROCPROF_DURATION=60
+ROCPROF_DIR="$RESULT_DIR/rocprof"
+mkdir -p "$ROCPROF_DIR"
+rocprofv3 --kernel-trace --stats \
+  -d "$ROCPROF_DIR" -f csv \
+  --summary-output-file "$RESULT_DIR/rocprof_summary.txt" \
+  -P "${ROCPROF_START_DELAY}:${ROCPROF_DURATION}:1" \
+  --collection-period-unit sec \
+  -- "${VLLM_CMD[@]}"
+~~~
+
+The archived file hardcodes enable=1, delay=3300 and duration=60; its older "off by default" comment does not describe those assignments. This wrapper launches the server under profiling. It is not a command to attach to an already running server.
+
+Capture occurs from server launch +55 minutes through +56 minutes. First verify that this window overlaps steady measured replay. Report files may not finalize until the wrapped server and workers exit. Capture ending does not mean the summary is immediately downloadable.
+
+The [archived cleanup](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/275f4eb8c718f0ba653f45e11e5049727808e515/upstream/InferenceX/benchmarks/single_node/agentic/patches/kimik3_fp4_mi355x_mtp.profiling-archive.sh#L69) allows up to 1200 seconds (20 minutes) after SIGTERM for the summary, polling every 5 seconds while the wrapper is alive, then performs bounded teardown. This is a flush cap, not mandatory waiting time. Its summary-file check alone is insufficient: inspect the actual nonempty kernel CSVs, rank/device coverage, timestamps and clean export.
+
+## Reports and analysis
+
+Current native capture outputs under results/native_steady_profile/:
+
+- profile-control.json: capture status, timestamps, generation progress, file inventory and errors.
+- controller.log: controller output/errors.
+- Eight rank-specific .pt.trace.json.gz files: CPU/GPU timelines.
+- GitHub artifact: native-steady-profile-<run_id>.
+
+The separate CPU analyzer produces profile-analysis.json and kernel-times.csv. Its [workflow and command](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/blob/93b7624d154f38ddfa2e02bcb65654877e2ae11a/.github/workflows/native-profile-analysis.yml) are preserved by the existing diagnostic archive even though the old branch name was retired. Read source at the immutable revision; do not assume that deleted branch is still dispatchable.
+
+Download already completed artifacts from within the authorized repository:
+
+~~~bash
+gh run download 41478604149 \
+  --repo ajith-sirra-amd/InferenceMAX_Rocm_Team \
+  --name native-steady-profile-41478604149 \
+  --dir results/profile-41478604149
+gh run download 41776530466 \
+  --repo ajith-sirra-amd/InferenceMAX_Rocm_Team \
+  --name native-profile-analysis-41478604149 \
+  --dir results/profile-analysis-41478604149
+~~~
+
+Compute hotspot shares from valid kernel durations and GPU busy time from the union of intervals per device. Summed overlapping kernel durations are not wall-clock GPU utilization. Older rocprof statistics contained a wrapped duration that corrupted the Percentage column; retain the raw evidence and explicitly flag invalid rows before recomputing statistics.
+
+Kernel traces do not establish HBM bandwidth or VRAM occupancy. For a future separate capture, --memory-copy-trace can add copy events; version-appropriate AMD SMI telemetry supplies memory-capacity/utilization samples. Hardware bandwidth counters require a separate supported counter configuration. Do not label copy timing or summed kernel time "memory utilization".
+
+Use profiled throughput only as diagnostic data. Preserve unprofiled matched performance measurements, and compare whole gather/communication/scaling/projection/FMHA/merge pipelines before proposing another optimization.
