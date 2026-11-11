@@ -46,8 +46,8 @@ def inventory(output):
     for root in list(roots):
         if root.name == 'aiter':
             roots += [root.parent / name for name in ('csrc', 'aiter_meta')]
-    pattern = re.compile(r'custom.?all.?reduce|allreduce|all_reduce|communicator|'
-                         r'gemm_a16w16|rocm_aiter|jit/(core|utils)|jit/config', re.I)
+    pattern = re.compile(r'custom.?all.?reduce|allreduce|all_reduce|communicat|'
+                         r'gemm.*a16w16|rocm_aiter|jit/(core|utils)|jit/config', re.I)
     seen, copied, scanned = set(), 0, 0
     for root in roots:
         if not root.is_dir():
@@ -89,7 +89,7 @@ def inventory(output):
         aiter_reduction_header=any('custom_all_reduce' in p and Path(p).suffix in ('.cuh', '.h', '.hpp') for p in saved),
         reduction_python=any('all_reduce' in p and p.endswith('.py') for p in saved),
         vllm_communicator=any('/vllm/' in p and 'communicator' in p and p.endswith('.py') for p in saved),
-        selected_gemm_source=any('gemm_a16w16' in p for p in saved))
+        selected_gemm_source=any(re.search(r'gemm.*a16w16', p) for p in saved))
     result['source_status'] = 'complete' if all(result['source_coverage'].values()) else 'incomplete'
     result['imported_relevant_python_modules'] = []
     for name, module in sorted(sys.modules.copy().items()):

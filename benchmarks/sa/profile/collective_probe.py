@@ -208,9 +208,10 @@ if __name__ == '__main__':
     parser.add_argument('--roctx')
     parser.add_argument('--counter', action='append', choices=[
         'FETCH_SIZE', 'WRITE_SIZE', 'TCC_EA0_RDREQ_DRAM_32B_sum',
-        'TCC_EA0_RDREQ_IO_32B_sum', 'TCC_EA0_WRREQ_WRITE_DRAM_32B_sum',
-        'TCC_EA0_WRREQ_WRITE_IO_32B_sum'],
-        help='At most two separate passes. Default: FETCH_SIZE, then WRITE_SIZE. DRAM/IO counters use 32-byte units, not KiB.')
+        'TCC_EA0_RDREQ_IO_32B_sum', 'TCC_EA0_RDREQ_GMI_32B_sum',
+        'TCC_EA0_WRREQ_WRITE_DRAM_32B_sum', 'TCC_EA0_WRREQ_WRITE_IO_32B_sum',
+        'TCC_EA0_WRREQ_WRITE_GMI_32B_sum'],
+        help='At most two separate passes. Default: FETCH_SIZE, then WRITE_SIZE. DRAM/IO/GMI counters use 32-byte units, not KiB.')
     args = parser.parse_args()
     if args.worker:
         worker(args)
