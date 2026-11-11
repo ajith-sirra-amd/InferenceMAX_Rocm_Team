@@ -29,6 +29,8 @@ def worker(args):
     assert case['launch_mode'] == 'eager' and case['collective'] == '_allgather_base'
     torch.set_num_threads(1)
     torch.cuda.set_device(rank)
+    if 'MI355X' not in torch.cuda.get_device_name(rank).upper():
+        raise RuntimeError('This saved case requires an MI355X device on every rank')
     dist.init_process_group('nccl', init_method=args.rendezvous, rank=rank, world_size=world,
                             timeout=datetime.timedelta(seconds=60))
     source = torch.full((count,), rank, dtype=torch.int32, device='cuda')
@@ -107,7 +109,8 @@ def launch(output, case, counter, roctx):
             logs.append(log)
             env = dict(os.environ, NCCL_DEBUG='INFO', NCCL_DEBUG_SUBSYS='INIT,GRAPH,TUNING,COLL',
                        NCCL_DEBUG_FILE=str(rank_output / 'rccl.%h.%p.log'))
-            records.append(dict(rank=rank, command=task))
+            records.append(dict(rank=rank, command=task, environment_additions={
+                key: env[key] for key in ('NCCL_DEBUG', 'NCCL_DEBUG_SUBSYS', 'NCCL_DEBUG_FILE')}))
             workers.append(subprocess.Popen(task, stdout=log, stderr=subprocess.STDOUT, env=env))
         deadline = time.monotonic() + 150
         while any(p.poll() is None for p in workers) and time.monotonic() < deadline:
