@@ -1,4 +1,4 @@
-"""Check image and bind-mount execution inside an existing single-node reservation."""
+"""Check image execution directly on the runner or in an explicit reservation."""
 import argparse
 import json
 import os
@@ -13,10 +13,12 @@ p.add_argument('--allocation', required=True)
 p.add_argument('--command-json', default=os.environ.get('SA_CHECK_COMMAND', ''))
 a = p.parse_args()
 host = subprocess.check_output(['hostname', '-s'], text=True).strip()
-owner = subprocess.check_output(['id', '-un'], text=True).strip()
-allocation = subprocess.check_output(['squeue', '-h', '-j', a.allocation, '-o', '%u|%T|%N'], text=True).strip()
-if allocation != f'{owner}|RUNNING|{host}':
-    raise RuntimeError('Reservation must be owned by this user on this host: ' + allocation)
+allocation = None
+if a.allocation:
+    owner = subprocess.check_output(['id', '-un'], text=True).strip()
+    allocation = subprocess.check_output(['squeue', '-h', '-j', a.allocation, '-o', '%u|%T|%N'], text=True).strip()
+    if allocation != f'{owner}|RUNNING|{host}':
+        raise RuntimeError('Reservation must be owned by this user on this host: ' + allocation)
 a.output.mkdir(parents=True, exist_ok=True)
 marker = a.output / 'transport-marker.txt'
 marker.write_text(a.output.name)
@@ -33,7 +35,9 @@ if a.command_json:
     task = json.loads(a.command_json)
     if not isinstance(task, list) or not task or not all(isinstance(v, str) for v in task):
         raise ValueError('Diagnostic command must be a nonempty JSON string array')
-base = ['srun', '--jobid', a.allocation, '--overlap', '--nodes', '1', '--ntasks', '1', '--nodelist', host]
+base = ['srun', '--nodes', '1', '--ntasks', '1', '--nodelist', host]
+if a.allocation:
+    base += ['--jobid', a.allocation, '--overlap']
 commands = {
     'spur_container': [*base, '--container-image', image, '--container-remap-root',
                        '--container-mounts', f'{a.output.resolve()}:/logs:ro', *task],
@@ -43,13 +47,15 @@ commands = {
                     '--entrypoint', task[0], image, *task[1:]],
     'native_adapter': [str(Path(__file__).parent / 'spur/srun'), *base[1:],
                        '--container-image', image, '--container-remap-root', '--container-writable',
-                       '--container-mounts', f'{a.output.resolve()}:/logs' + ('' if a.command_json else ':ro'), *task],
+                       '--container-mounts', f'{a.output.resolve()}:/logs' + ('' if a.command_json else ':ro')
+                       + f',{Path(__file__).resolve().parent}:/sa-tools:ro', *task],
 }
-if a.command_json:
+if a.command_json or not a.allocation:
     commands = {'native_adapter': commands['native_adapter']}
 os.environ.update(config['environment'])
 os.environ.update(SA_REAL_SRUN=shutil.which('srun'), SA_OUTPUT=str(a.output.resolve()),
-                  SLURM_JOB_ID=a.allocation,
+                  SA_LOCAL_EXECUTION='0' if a.allocation else '1',
+                  SLURM_JOB_ID=a.allocation or 'local-' + a.output.name,
                   SA_PASSTHROUGH_ENV=json.dumps(sorted(config['environment'])))
 results = {'allocation': allocation, 'image': image, 'checks': {}}
 for name, command in commands.items():

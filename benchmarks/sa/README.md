@@ -79,6 +79,14 @@ Successful model startup,
 benchmark completion and profiling must be established by the run artifacts;
 a successful dispatch or setup does not establish them.
 
+For a quick synthetic profiler check, use `sa-mode: transport-check`, an empty
+allocation, the current image config, and `sa-check-command` set to
+`["python3","/sa-tools/profile/dummy.py","--output","/logs/native/dummy-profile"]`.
+This replays batch-8 BF16 graphs on eight GPUs for 15 seconds, requires at least
+10 seconds of common steady GPU events, and validates complete CSV/JSON exports
+after worker exit. It loads no model and does not validate Kimi/C48 steady-state
+coverage. The real C48 profile retains its 120-second minimum.
+
 An optional `profile` object selects the capture hook, currently for vLLM:
 `{"tool":"rocprofv3","mode":"launch","delay_seconds":CALIBRATED_DELAY,"seconds":130,"minimum_seconds":120}`.
 Use a separate configuration and workflow run after the baseline succeeds.
