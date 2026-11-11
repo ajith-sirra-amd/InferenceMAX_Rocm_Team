@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import yaml
@@ -23,8 +24,12 @@ c = json.loads(a.config.read_text())
 # Bind that infrastructure endpoint locally; server and client use the same native constant.
 if 'local_frontend_port' in c:
     port = c['local_frontend_port']
-    if type(port) is not int or not 1024 <= port <= 65535:
-        raise ValueError('local_frontend_port must be an unprivileged TCP port')
+    if type(port) is not int or not (port == 0 or 1024 <= port <= 65535):
+        raise ValueError('local_frontend_port must be 0 (automatic) or an unprivileged TCP port')
+    with socket.socket() as endpoint:
+        endpoint.bind(('0.0.0.0', port))
+        port = endpoint.getsockname()[1]
+    print(f'Local public endpoint: {port}', flush=True)
     ports = a.srt / 'src/srtctl/ports.py'
     original = ports.read_text()
     needle = 'FRONTEND_PUBLIC_PORT = 8000'
