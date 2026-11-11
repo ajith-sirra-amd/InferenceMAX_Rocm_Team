@@ -42,6 +42,14 @@ under the original run-specific output/artifact. The reusable bounded probe is
 `profile/evidence_probe.py`; its result records individual check failures even
 when the overall capability inventory completes.
 
+`profile/extract_arguments.py SAVED_WORKER_TRACE --output NEW_JSON` extracts
+directly correlated GEMM operator shape/stride/dtype/scalar records for a later
+reviewed replay. It rejects `hipGraphLaunch` correlations: an outer graph replay
+does not identify an inner operator's arguments. Review the installed operator
+schema, fill no unknown argument by assumption, and require the replay kernel
+symbol to match the captured variant before using its hardware counters. An
+isolated kernel replay is separate evidence from the original model/cache state.
+
 Pinned-image capability check `42987645614` captured 96 synthetic kernel events
 on all eight GPUs. It establishes basic profiler capability, not full Kimi model
 coverage. Twenty-three local adapter/controller/export checks pass, including
