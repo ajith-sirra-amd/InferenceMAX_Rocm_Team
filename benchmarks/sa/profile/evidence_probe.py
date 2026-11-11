@@ -24,6 +24,8 @@ def write(path, value):
 
 
 def workload(mode, output):
+    if mode == 'proton':
+        return proton_workload(output)
     import torch
     torch.set_num_threads(1)
     torch.cuda.set_device(0)
@@ -68,36 +70,6 @@ def workload(mode, output):
             memory_event_count=len(memory), memory_examples=memory[:3],
             trace_sha256=hashlib.sha256(trace[0].read_bytes()).hexdigest()))
         assert categories['kernel'] > 0 and shapes, 'Missing GPU/shape metadata'
-    elif mode == 'proton':
-        import ctypes
-        import triton
-        from vllm.config import ProfilerConfig
-        from vllm.profiler.wrapper import ProtonProfilerWrapper
-        config = ProfilerConfig(profiler='proton', proton_profiler_dir=str(output),
-            proton_graph_attribution=True, proton_context='python')
-        write(output / 'native-profiler-config.json', dataclasses.asdict(config))
-        library = os.environ.get('TRITON_ROCPROFILER_SDK_LIBRARY')
-        if library:
-            try:
-                ctypes.CDLL(library)
-            except OSError as error:
-                write(output / 'sdk-loader-error.json', dict(library=library, error=str(error)))
-                raise
-        profile = ProtonProfilerWrapper(config, 'proton-probe')
-        graph = torch.cuda.CUDAGraph()
-        with profile.capture_cuda_graphs():
-            with torch.cuda.graph(graph):
-                torch.mm(x, x, out=y)
-        profile.start()
-        for _ in range(4):
-            graph.replay()
-            torch.cuda.synchronize()
-        profile.stop()
-        profile.shutdown()
-        files = sorted(output.glob('*.hatchet'))
-        assert files, 'No Proton graph-attribution output'
-        write(output / 'proton-summary.json', dict(triton=triton.__version__,
-            files=[dict(name=f.name, bytes=f.stat().st_size) for f in files]))
     else:
         for _ in range(4):
             torch.mm(x, x, out=y)
@@ -105,6 +77,55 @@ def workload(mode, output):
     assert float(y[0, 0]) == 2048, 'Synthetic GEMM returned wrong value'
     print(json.dumps(dict(status='passed', mode=mode, torch=torch.__version__,
         hip=torch.version.hip, device=torch.cuda.get_device_name(0))), flush=True)
+
+
+def proton_workload(output):
+    import ctypes
+    library = os.environ.get('TRITON_ROCPROFILER_SDK_LIBRARY')
+    if library:
+        try:
+            sdk = ctypes.CDLL(library)
+            status = sdk.rocprofiler_get_status_string
+            status.argtypes = [ctypes.c_int]
+            status.restype = ctypes.c_char_p
+            write(output / 'sdk-status.json', dict(library=library,
+                status_16=status(16).decode(), initialization='Before importing Torch/Triton/vLLM'))
+        except OSError as error:
+            write(output / 'sdk-loader-error.json', dict(library=library, error=str(error)))
+            raise
+    import torch
+    import triton
+    from vllm.config import ProfilerConfig
+    from vllm.profiler.wrapper import ProtonProfilerWrapper
+    config = ProfilerConfig(profiler='proton', proton_profiler_dir=str(output),
+        proton_graph_attribution=True, proton_context='python')
+    write(output / 'native-profiler-config.json', dataclasses.asdict(config))
+    profile = ProtonProfilerWrapper(config, 'proton-probe')
+    write(output / 'startup-order.json', dict(cuda_initialized_before_session=torch.cuda.is_initialized(),
+        scope='Synthetic early initialization; native vLLM startup integration is not established'))
+    # Configure the SDK before the first device/context/allocation operation.
+    with profile.capture_cuda_graphs():
+        torch.set_num_threads(1)
+        torch.cuda.set_device(0)
+        x = torch.ones((2048, 2048), device='cuda', dtype=torch.bfloat16)
+        y = torch.empty_like(x)
+        for _ in range(3):
+            torch.mm(x, x, out=y)
+        torch.cuda.synchronize()
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph):
+            torch.mm(x, x, out=y)
+    profile.start()
+    for _ in range(4):
+        graph.replay()
+        torch.cuda.synchronize()
+    profile.stop()
+    profile.shutdown()
+    assert float(y[0, 0]) == 2048, 'Synthetic GEMM returned wrong value'
+    files = sorted(output.glob('*.hatchet'))
+    assert files, 'No Proton graph-attribution output'
+    write(output / 'proton-summary.json', dict(triton=triton.__version__,
+        files=[dict(name=f.name, bytes=f.stat().st_size) for f in files]))
 
 
 def command(root, name, argv, timeout=100, env=None):
