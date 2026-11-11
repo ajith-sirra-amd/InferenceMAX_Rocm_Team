@@ -324,12 +324,39 @@ def cleanup(output):
     path = output / "request.json"
     if not path.exists(): return
     request = json.loads(path.read_text())
+    if request.get('mode') == 'native-status':
+        return
     if not re.fullmatch(r"[0-9a-f]{32}", request.get("id", "")): raise ValueError("Invalid cleanup identity")
     subprocess.run(["docker", "rm", "--force", "benchmark-" + request["id"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
     manifest = output / "manifest.json"
     image = json.loads(manifest.read_text()).get("image", {}).get("id") if manifest.exists() else None
     if image:
         subprocess.run(ownership_command(output, image), timeout=120, check=True)
+
+
+def native_status(request, output):
+    """Read bounded log tails from a native run through shared storage."""
+    run, attempt = request['workflow_run_id'], request.get('attempt', 1)
+    if any(type(v) is not int or v < 1 for v in (run, attempt)):
+        raise ValueError('Native status needs positive run and attempt IDs')
+    source = (SHARED_DATA_ROOT / f'{run}-{attempt}').resolve()
+    if not source.is_relative_to(SHARED_DATA_ROOT.resolve()) or not source.is_dir():
+        raise ValueError('Native run directory is unavailable')
+    files = [source / 'workflow.log', *source.glob('native/*/logs/benchmark.out'),
+             *source.glob('native/*/logs/*_agg_w*.out'),
+             *source.glob('native/*/logs/profiles/rocprof/launch-utc.txt')]
+    result = dict(run_id=run, at=dt.datetime.now(dt.timezone.utc).isoformat(),
+                  reader_host=os.uname().nodename, reader_runner=os.environ.get('RUNNER_NAME'), files={})
+    for path in files:
+        if not path.is_file() or not path.resolve().is_relative_to(source):
+            continue
+        size = path.stat().st_size
+        with path.open('rb') as stream:
+            stream.seek(max(0, size - 65536))
+            tail = stream.read(65536).decode(errors='replace')
+        result['files'][str(path.relative_to(source))] = dict(bytes=size, tail=tail)
+    write_json(output / 'native-log-snapshot.json', result)
+    print(json.dumps(result), flush=True)
 
 
 def recover(request, output):
@@ -478,6 +505,8 @@ def main():
     if request.get("mode") == "preflight":
         result = preflight(request, args.output)
         raise SystemExit(0 if result["status"] == "completed" else 1)
+    elif request.get("mode") == "native-status":
+        native_status(request, args.output)
     elif request.get("mode") == "recover":
         recover(request, args.output)
         if request.get("inspect_host"):
