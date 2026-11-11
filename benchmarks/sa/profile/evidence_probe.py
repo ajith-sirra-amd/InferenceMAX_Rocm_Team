@@ -69,12 +69,20 @@ def workload(mode, output):
             trace_sha256=hashlib.sha256(trace[0].read_bytes()).hexdigest()))
         assert categories['kernel'] > 0 and shapes, 'Missing GPU/shape metadata'
     elif mode == 'proton':
+        import ctypes
         import triton
         from vllm.config import ProfilerConfig
         from vllm.profiler.wrapper import ProtonProfilerWrapper
         config = ProfilerConfig(profiler='proton', proton_profiler_dir=str(output),
             proton_graph_attribution=True, proton_context='python')
         write(output / 'native-profiler-config.json', dataclasses.asdict(config))
+        library = os.environ.get('TRITON_ROCPROFILER_SDK_LIBRARY')
+        if library:
+            try:
+                ctypes.CDLL(library)
+            except OSError as error:
+                write(output / 'sdk-loader-error.json', dict(library=library, error=str(error)))
+                raise
         profile = ProtonProfilerWrapper(config, 'proton-probe')
         graph = torch.cuda.CUDAGraph()
         with profile.capture_cuda_graphs():
@@ -145,9 +153,15 @@ def probe(root, proton_only=False):
         (aliases / 'librocprofiler-sdk.so').symlink_to(libraries[0])
     library_path = ':'.join([str(aliases), *sorted({str(Path(f).parent) for f in libraries})])
     library_path += ':' + os.environ.get('LD_LIBRARY_PATH', '')
+    proton_env = {'LD_LIBRARY_PATH': library_path}
+    if len(libraries) == 1:
+        # Proton's explicit loader directory can override LD_LIBRARY_PATH.
+        # Select the already-installed binary; never substitute another SDK.
+        proton_env.update(TRITON_ROCPROFILER_SDK_LIBRARY=libraries[0],
+                          TRITON_ROCPROFILER_SDK_LIB_PATH=str(Path(libraries[0]).parent))
     result['checks']['proton'] = command(root, 'proton',
         [sys.executable, __file__, '--output', str(root / 'proton'), '--worker', 'proton'], 90,
-        env={'LD_LIBRARY_PATH': library_path})
+        env=proton_env)
     groups = {'read-write': ['FETCH_SIZE', 'WRITE_SIZE'],
               'read': ['FETCH_SIZE'], 'write': ['WRITE_SIZE'],
               'math': ['SQ_INSTS_VALU_MFMA_MOPS_BF16', 'SQ_INSTS_VALU_MFMA_MOPS_F8',
