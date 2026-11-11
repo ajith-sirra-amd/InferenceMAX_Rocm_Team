@@ -79,5 +79,15 @@
     "Input data is deterministic rank values; original data content/cache state/arrival schedule are not reproduced",
     "FETCH_SIZE/WRITE_SIZE may include peer fabric transactions; do not label all traffic HBM",
     "No model throughput or request E2E speedup claim"
-  ]
+  ],
+  "source_kernel_symbol": "ncclDevKernel_Generic_1(ncclDevKernelArgsStorage<4096ul>) [clone .kd]",
+  "source_kernel_symbol_evidence": {
+    "name": "paired-rank-0.json",
+    "sha256": "44f2251a90653e38c4b4c57d116b8ae12a7425d3f3eb891313c784f9bf61ace6",
+    "join_keys": [
+      "Process Group Name",
+      "Seq",
+      "Comms Id"
+    ]
+  }
 }

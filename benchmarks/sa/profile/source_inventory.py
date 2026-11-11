@@ -83,6 +83,20 @@ def inventory(output):
                 break
     result['scanned_files'] = scanned
     result['copied_source_bytes'] = copied
+    saved = [v['path'] for v in result['files'] if 'saved' in v]
+    result['source_coverage'] = dict(
+        aiter_reduction_cpp=any('custom_all_reduce' in p and Path(p).suffix in ('.cu', '.cpp') for p in saved),
+        aiter_reduction_header=any('custom_all_reduce' in p and Path(p).suffix in ('.cuh', '.h', '.hpp') for p in saved),
+        reduction_python=any('all_reduce' in p and p.endswith('.py') for p in saved),
+        vllm_communicator=any('/vllm/' in p and 'communicator' in p and p.endswith('.py') for p in saved),
+        selected_gemm_source=any('gemm_a16w16' in p for p in saved))
+    result['source_status'] = 'complete' if all(result['source_coverage'].values()) else 'incomplete'
+    result['imported_relevant_python_modules'] = []
+    for name, module in sorted(sys.modules.copy().items()):
+        path = getattr(module, '__file__', None)
+        if name.startswith(('aiter.', 'vllm.')) and path and pattern.search(str(path)):
+            result['imported_relevant_python_modules'].append(dict(module=name, path=str(Path(path).resolve())))
+    result['invocation_binding'] = 'Package/submodule imports are observed here; no measured reduction graph-node or JIT-kernel binding'
     try:
         import torch
         for name in ('aiter::_gemm_a16w16_asm', 'aten::mm', 'aten::bmm'):
@@ -114,7 +128,7 @@ def inventory(output):
         result['loaded_libraries'].append(record)
     (output / 'inventory.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(dict(source_files=len(result['files']), copied_bytes=copied,
-                         packages=result['packages'])), flush=True)
+                         source_status=result['source_status'], packages=result['packages'])), flush=True)
 
 
 if __name__ == '__main__':

@@ -82,6 +82,9 @@ def worker(args):
 
 def launch(output, case, counter, roctx):
     output.mkdir()
+    def normalized_symbol(name):
+        return name.removesuffix(' [clone .kd]').removesuffix('.kd')
+    original_symbol = normalized_symbol(json.loads(case.read_text())['source_kernel_symbol'])
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
@@ -141,13 +144,16 @@ def launch(output, case, counter, roctx):
         for rank in range(8):
             rows = [row for entry in summary['counter_rows'] if entry['rank'] == rank for row in entry['rows']]
             names = sorted({row['Kernel_Name'] for row in rows})
+            symbol_matches = bool(names) and all(normalized_symbol(name) == original_symbol for name in names)
             valid = len(rows) == 4 and all(
                 row['Counter_Name'] == counter and math.isfinite(float(row['Counter_Value']))
                 and float(row['Counter_Value']) >= 0
                 and int(row['End_Timestamp']) > int(row['Start_Timestamp'])
                 and 'ncclDevKernel' in row['Kernel_Name'] for row in rows)
             validation.append(dict(rank=rank, selected_collective_dispatches=len(rows),
-                                   kernel_symbols=names, valid=valid))
+                                   kernel_symbols=names, source_symbol_match=symbol_matches,
+                                   positive_traffic_observed=any(float(row['Counter_Value']) > 0 for row in rows),
+                                   valid=valid and symbol_matches))
         summary['selected_region_validation'] = validation
         summary['success'] = summary['success'] and all(v['valid'] for v in validation)
     write(output / 'result.json', summary)
@@ -163,6 +169,14 @@ def probe(args):
     write(args.output / 'case.json', case)
     write(args.output / 'environment.json', {k: v for k, v in os.environ.items()
         if k.startswith(('NCCL_', 'RCCL_', 'VLLM_', 'AITER_', 'HSA_'))})
+    configs = []
+    for path in {Path('/etc/nccl.conf'), Path.home() / '.nccl.conf',
+                 Path(os.environ.get('NCCL_CONF_FILE', '/etc/nccl.conf'))}:
+        if path.is_file() and path.stat().st_size <= 65536:
+            data = path.read_bytes()
+            configs.append(dict(path=str(path), sha256=hashlib.sha256(data).hexdigest(),
+                                contents=data.decode(errors='replace')))
+    write(args.output / 'collective-config-files.json', configs)
     source = command(args.output, 'source-inventory', [sys.executable,
         str(Path(__file__).with_name('source_inventory.py')), '--output', str(args.output / 'installed-source')], 60)
     roots = [Path(p) / '_rocm_sdk_devel' / 'lib' for p in sys.path if p]
