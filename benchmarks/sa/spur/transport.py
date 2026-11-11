@@ -1,4 +1,4 @@
-"""Map SRT container steps to Docker inside the user's real Spur reservation."""
+"""Map unchanged SRT tasks to Docker locally or through a Spur reservation."""
 import hashlib
 import json
 import os
@@ -46,6 +46,7 @@ def split_args(args):
 
 def main(args):
     scheduler, container, task, output = split_args(args)
+    local = os.environ.get('SA_LOCAL_EXECUTION') == '1'
     if output:
         output = output.replace('%N', os.uname().nodename)
         fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
@@ -54,6 +55,8 @@ def main(args):
         os.close(fd)
     image = container.get('--container-image')
     if not image:
+        if local:
+            os.execvp(task[0], task)
         os.execv(os.environ['SA_REAL_SRUN'], ['srun', *scheduler, *task])
     image = image.removeprefix('docker://').replace('#', '/', 1).replace(':sha256:', '@sha256:', 1)
     root = Path(os.environ['SA_OUTPUT'])
@@ -107,8 +110,9 @@ def main(args):
                        'UV_PYTHON_INSTALL_DIR': '/work/cache/python', 'UV_LINK_MODE': 'copy'}.items():
         docker += ['--env', key + '=' + value]
     docker += ['--entrypoint', task[0], image, *task[1:]]
-    record = {'container': name, 'image': image, 'allocation': os.environ['SLURM_JOB_ID'],
-              'mounts': container.get('--container-mounts'), 'transport': 'srun-docker',
+    record = {'container': name, 'image': image, 'allocation': None if local else os.environ['SLURM_JOB_ID'],
+              'context_id': os.environ['SLURM_JOB_ID'],
+              'mounts': container.get('--container-mounts'), 'transport': 'local-docker' if local else 'srun-docker',
               'native_task_sha256': hashlib.sha256(json.dumps(task).encode()).hexdigest()}
     with (root / 'container-transport.jsonl').open('a') as f:
         f.write(json.dumps(record) + '\n')
@@ -118,7 +122,7 @@ def main(args):
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
-        proc = subprocess.Popen([os.environ['SA_REAL_SRUN'], *scheduler, *docker])
+        proc = subprocess.Popen(docker if local else [os.environ['SA_REAL_SRUN'], *scheduler, *docker])
         return proc.wait()
     finally:
         environment.unlink(missing_ok=True)

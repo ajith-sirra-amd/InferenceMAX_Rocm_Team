@@ -10,6 +10,53 @@ ROOT = Path(__file__).parent
 
 
 class AdapterTests(unittest.TestCase):
+    def test_local_transport_never_uses_scheduler_and_preserves_native_task(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            docker = root / 'docker'
+            docker.write_text('''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+with open(os.environ['CAPTURE'], 'a') as stream:
+    stream.write(json.dumps(args) + '\\n')
+if args[0] == 'run':
+    envfile = Path(args[args.index('--env-file') + 1])
+    assert 'MODEL=test-model' in envfile.read_text()
+''')
+            docker.chmod(0o755)
+            forbidden = root / 'forbidden'
+            forbidden.write_text('#!/bin/sh\nexit 99\n')
+            forbidden.chmod(0o755)
+            env = dict(os.environ, SA_LOCAL_EXECUTION='1', SA_REAL_SRUN=str(forbidden),
+                       SA_REAL_SQUEUE=str(forbidden), SA_OUTPUT=str(root),
+                       SLURM_JOB_ID='local-smoke', MODEL='test-model',
+                       SA_PASSTHROUGH_ENV='["MODEL"]', CAPTURE=str(root / 'calls'),
+                       PATH=str(root) + ':' + os.environ['PATH'])
+            native = ['bash', '-c', 'export PRECISION=fp4; exec vllm serve /model --tp 8']
+            subprocess.run([str(ROOT / 'spur/srun'), '--jobid=local-smoke', '--nodes=1',
+                            '--container-image=repo/image@sha256:abc', '--container-writable',
+                            '--container-mounts=/weights:/model,/data:/logs', *native],
+                           env=env, check=True)
+            calls = [json.loads(line) for line in (root / 'calls').read_text().splitlines()]
+            launch, cleanup = calls
+            self.assertEqual(launch[0], 'run')
+            idx = launch.index('repo/image@sha256:abc')
+            self.assertEqual(launch[idx-2:idx], ['--entrypoint', native[0]])
+            self.assertEqual(launch[idx+1:], native[1:])
+            self.assertIn('type=bind,src=/weights,dst=/model,readonly', launch)
+            self.assertEqual(cleanup, ['rm', '-f', launch[launch.index('--name')+1]])
+            record = json.loads((root / 'container-transport.jsonl').read_text())
+            self.assertEqual(record['transport'], 'local-docker')
+            self.assertIsNone(record['allocation'])
+            # Native SRT sees no scheduler steps and uses its managed process fallback.
+            steps = subprocess.check_output([str(ROOT / 'spur/squeue'), '--steps',
+                                             '--jobs=local-smoke'], env=env)
+            self.assertEqual(steps, b'')
+            host = subprocess.check_output([str(ROOT / 'spur/srun'), '--nodes=1',
+                                             'printf', 'native-host-task'], env=env)
+            self.assertEqual(host, b'native-host-task')
+
     def test_profile_hook_keeps_server_arguments_and_bounds_capture(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

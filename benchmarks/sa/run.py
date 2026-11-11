@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--allocation', required=True)
+    parser.add_argument('--allocation', default='', help='Existing reservation; empty runs directly on this runner')
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
     output = args.output.resolve()
@@ -34,15 +34,21 @@ def main():
                       UV_PYTHON_INSTALL_DIR=str(output / 'work/uv/python'),
                       UV_LINK_MODE='copy', UV_NO_MODIFY_PATH='1')
     (output / 'request.json').write_text(json.dumps(config, indent=2) + '\n')
-    # Reuse only the explicitly requested, currently running, single-node reservation.
-    info = subprocess.check_output(['squeue', '-h', '-j', args.allocation, '-o', '%u|%T|%N'], text=True).strip()
-    owner, state, nodes = info.split('|')
     local = subprocess.check_output(['hostname', '-s'], text=True).strip()
-    if owner != subprocess.check_output(['id', '-un'], text=True).strip() or state != 'RUNNING' or nodes != local:
-        raise RuntimeError('Allocation must belong to the runner user and contain only this host: ' + info)
-    (output / 'allocation.txt').write_text(info + '\n')
-    os.environ.update(SLURM_JOB_ID=args.allocation, SLURM_JOB_NODELIST=nodes,
-                      SLURM_NODELIST=nodes, SLURM_JOB_NUM_NODES='1', SLURM_NNODES='1',
+    if args.allocation:
+        info = subprocess.check_output(['squeue', '-h', '-j', args.allocation, '-o', '%u|%T|%N'], text=True).strip()
+        expected = subprocess.check_output(['id', '-un'], text=True).strip() + '|RUNNING|' + local
+        if info != expected:
+            raise RuntimeError('Requested reservation is not running for this user on this host: ' + repr(info))
+        (output / 'allocation.txt').write_text(info + '\n')
+    # The local ID supplies SRT's output-directory context, not a Slurm reservation.
+    context_id = args.allocation or 'local-' + output.name
+    (output / 'execution-context.json').write_text(json.dumps(dict(
+        transport='srun-docker' if args.allocation else 'local-docker', host=local,
+        allocation=args.allocation or None, context_id=context_id), indent=2) + '\n')
+    os.environ.update(SA_LOCAL_EXECUTION='0' if args.allocation else '1',
+                      SLURM_JOB_ID=context_id, SLURM_JOB_NODELIST=local,
+                      SLURM_NODELIST=local, SLURM_JOB_NUM_NODES='1', SLURM_NNODES='1',
                       SLURM_GPUS_PER_NODE='8')
     for folder, remote, sha in (
         ('InferenceX', 'SemiAnalysisAI/InferenceX', config['inferencex_sha']),

@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Local native tasks have no Slurm steps; SRT uses its process-signal fallback."""
+import os
+import sys
+
+if os.environ.get('SA_LOCAL_EXECUTION') == '1':
+    raise SystemExit(0)
+os.execv(os.environ['SA_REAL_SQUEUE'], ['squeue', *sys.argv[1:]])

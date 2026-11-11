@@ -52,6 +52,8 @@ settings.update(cluster='mi355x-local', default_partition='amd-spur', default_ac
                 default_mounts=mounts, use_segment_sbatch_directive=False,
                 use_exclusive_sbatch_directive=False,
                 model_paths={f"hf:{c['environment']['MODEL']}": '/share_nfs/models/' + c['environment']['MODEL']})
+if os.environ.get('SA_LOCAL_EXECUTION') == '1':
+    settings['release_nodes_before_postprocess'] = False
 (a.srt / 'srtslurm.yaml').write_text(yaml.safe_dump(settings, sort_keys=False))
 os.environ['SRTSLURM_CONFIG'] = str(a.srt / 'srtslurm.yaml')
 extra = ['--set', 'benchmark.stream_output=true', '--set', 'srun_options.container-workdir="/infmax-workspace"',
@@ -101,9 +103,11 @@ spec['model'] = '/models/' + spec['model']
 plan.command.extend(['--set', 'roles.agg.args.speculative-config=' + json.dumps(json.dumps(spec))])
 (a.output / 'native-plan.json').write_text(json.dumps({'selected': selected, 'command': plan.command,
     'acceptance_length': plan.acceptance_length, 'adaptations': [
-    'Execute native rendered batch script in the existing single-node allocation; never cancel the reservation.',
+    ('Execute the native rendered script directly on this runner; no Slurm reservation is used or changed.'
+     if os.environ.get('SA_LOCAL_EXECUTION') == '1' else
+     'Execute native rendered batch script in the existing single-node allocation; never cancel the reservation.'),
     'Local model/cache/output mounts and auto-detected host interface replace SA host paths.',
-    'Spur overlap ignores container options; Docker executes unchanged native task argv inside the reservation.',
+    'Docker executes unchanged native task argv, directly in local mode or through Spur in reservation mode.',
     'Container writability follows native SRT options; per-step runtime caches and temporary compiler storage are mounted separately.',
     'Frozen workflow inputs and native workload environment names are explicitly inherited by Docker steps.',
     'Native GPU and RAPL telemetry are requested; unavailable local permissions remain explicit missing evidence.',
@@ -126,7 +130,9 @@ subprocess.run(['make', 'setup', 'ARCH=x86_64', 'TACHOMETER_RELEASE=' + c['telem
 os.environ.pop('GH_TOKEN', None)
 subprocess.run(command, check=True, env={**os.environ, **dict(plan.environment)})
 # Keep the scheduler real. Only translate equivalent container defaults on Spur.
-os.environ['SA_REAL_SRUN'] = subprocess.check_output(['which', 'srun'], text=True).strip()
+if os.environ.get('SA_LOCAL_EXECUTION') != '1':
+    os.environ['SA_REAL_SRUN'] = subprocess.check_output(['which', 'srun'], text=True).strip()
+    os.environ['SA_REAL_SQUEUE'] = subprocess.check_output(['which', 'squeue'], text=True).strip()
 os.environ['PATH'] = str(Path(__file__).parent / 'spur') + ':' + os.environ['PATH']
 os.environ['SA_OUTPUT'] = str(a.output)
 # Pyxis inherits the workflow inputs; Docker needs them forwarded explicitly.

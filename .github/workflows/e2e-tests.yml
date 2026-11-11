@@ -14,7 +14,7 @@ on:
                 required: false
                 type: string
             allocation-id:
-                description: "Existing single-node scheduler allocation"
+                description: "Optional existing reservation; leave empty to run directly on the selected runner"
                 required: false
                 type: string
             sa-mode:

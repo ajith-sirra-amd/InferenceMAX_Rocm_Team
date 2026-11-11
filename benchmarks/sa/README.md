@@ -6,17 +6,16 @@ script owns server startup, readiness, benchmark warmup, measurement and cleanup
 The team launcher supplies local storage and scheduler settings.
 
 In **End-to-End Tests → Run workflow**, set `sa-config` to a checked-in JSON
-configuration, `allocation-id` to your existing single-node reservation, and
+configuration, leave `allocation-id` empty for direct execution on the runner, and
 `test-name` to a descriptive model/framework/GPU/concurrency/pass name. When
 `sa-config` is set, the sweep command is ignored. A replication run and a profile
 run must have separate workflow IDs.
 
-The same entrypoint works directly from this repository on the allocated host:
+The same entrypoint works directly from this repository on the runner:
 
 ```bash
 python3 benchmarks/sa/run.py \
-  --config benchmarks/sa/kimi-k3.1-pro-vllm-mi355x-c48.json \
-  --allocation YOUR_ALLOCATION_ID \
+  --config benchmarks/sa/kimi-k3.1-pro-vllm-mi355x-c48-sa42638222682.json \
   --output /share_nfs/ajith/benchmarks/YOUR_UNIQUE_RUN_NAME
 ```
 
@@ -25,11 +24,15 @@ image digest and workflow environment. The golden acceptance value is selected
 by InferenceX; do not hard-code it. Keep model-specific settings in JSON files.
 
 The native job targets `self-hosted` and `cluster:mi355x-amds-2`; the runner does
-not need a separate `nodes:1` label. The launcher verifies the allocation belongs to the current account and contains
-only the current host. It executes the native rendered batch script in that
-allocation and does not cancel the reservation. Spur's overlap mode ignores
+not need a separate `nodes:1` label. Direct execution uses Docker on that host,
+without looking up, creating, resizing or cancelling a reservation. A local
+context ID supplies native output-directory naming; it is not an allocation.
+The native engine owns process startup and shutdown through the transport adapter.
+If `--allocation` is explicitly supplied, the launcher instead verifies that
+existing reservation belongs to the current account and contains only this host.
+Spur's overlap mode ignores
 container image/mount options, as confirmed by the retained transport check.
-The adapter therefore runs Docker through the real reservation, preserving the
+In reservation mode, the adapter runs Docker through the real reservation, preserving the
 native task command and mounts. Model/cache mounts, output paths, network interface and
 telemetry differences are recorded in `native-plan.json`. Native GPU and RAPL telemetry are requested; unavailable permissions remain
 explicit missing evidence. Release assets use the GitHub API route on this network. Recipe equality alone does not certify
@@ -50,10 +53,18 @@ Source checkouts and Python environments stay within this repository under
 - `bound-sa-recipe.yaml`: recipe selected by the unmodified SA binder.
 - `native-plan.json`: generated command, acceptance and infrastructure adaptations.
 - `rendered/`: native batch script and resolved configuration.
-- `native/<allocation>/`: native benchmark logs, metrics and telemetry.
+- `execution-context.json`: local transport, host, and optional allocation.
+- `native/<context-id>/`: native benchmark logs, metrics and telemetry.
 - `work/`: regenerable caches; excluded from Actions artifacts.
 
-Native replication is under live validation. Successful model startup,
+The files suffixed `sa42638222682` pin the updated SA Kimi C48 reference,
+including its new image, six speculative tokens and native acceptance 3.57.
+The paired `profile-check` uses 600 seconds and one warmup request per lane.
+Its initial 1500-second launch delay is estimated from the reference startup;
+actual capture overlap must pass validation before a full profile is launched.
+The original files preserve the prior SA reference.
+
+Successful model startup,
 benchmark completion and profiling must be established by the run artifacts;
 a successful dispatch or setup does not establish them.
 
