@@ -61,5 +61,6 @@
   },
   "diagnostic_note": "Smoke: 600 seconds, one warmup request per lane. Initial 1500-second capture delay uses the updated SA 966-second startup as a timing reference; local measured-window validation is mandatory. Not a baseline or full steady-state result.",
   "source_run_attempt": 3,
-  "source_metadata_note": "The target attempt-3 job uploads the event artifact carrying stale attempt-1/job-129233658619 fields; target job log and API identify the requested job. Checkout SHA, recipe and image are confirmed in that log."
+  "source_metadata_note": "The target attempt-3 job uploads the event artifact carrying stale attempt-1/job-129233658619 fields; target job log and API identify the requested job. Checkout SHA, recipe and image are confirmed in that log.",
+  "local_frontend_port": 18000
 }

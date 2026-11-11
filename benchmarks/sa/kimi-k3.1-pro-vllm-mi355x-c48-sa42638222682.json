@@ -53,5 +53,6 @@
   "source_job_url": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/42638222682/job/129550719685",
   "source_run_head_sha": "b829e588b968e5a1b936fea6b398b05e58aabf32",
   "source_run_attempt": 3,
-  "source_metadata_note": "The target attempt-3 job uploads the event artifact carrying stale attempt-1/job-129233658619 fields; target job log and API identify the requested job. Checkout SHA, recipe and image are confirmed in that log."
+  "source_metadata_note": "The target attempt-3 job uploads the event artifact carrying stale attempt-1/job-129233658619 fields; target job log and API identify the requested job. Checkout SHA, recipe and image are confirmed in that log.",
+  "local_frontend_port": 18000
 }

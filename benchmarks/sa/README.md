@@ -63,6 +63,12 @@ The paired `profile-check` uses 600 seconds and one warmup request per lane.
 Its initial 1500-second launch delay is estimated from the reference startup;
 actual capture overlap must pass validation before a full profile is launched.
 The original files preserve the prior SA reference.
+These configs bind the public endpoint to local port 18000 because port 8000
+is occupied on the runner. This pinned SRT version has no YAML port option,
+so the binding changes its single shared port constant before native rendering.
+Server, readiness checks and client inherit that same value; the original and
+revised hashes are saved in `local-endpoint-binding.json`. Workload flags remain
+unchanged.
 
 Successful model startup,
 benchmark completion and profiling must be established by the run artifacts;

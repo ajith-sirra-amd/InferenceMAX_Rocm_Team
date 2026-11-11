@@ -19,6 +19,23 @@ for name in ('config', 'output', 'source', 'srt'):
 p.add_argument('--prepare-only', action='store_true')
 a = p.parse_args()
 c = json.loads(a.config.read_text())
+# This SRT revision fixes the public endpoint in ports.py, without a YAML option.
+# Bind that infrastructure endpoint locally; server and client use the same native constant.
+if 'local_frontend_port' in c:
+    port = c['local_frontend_port']
+    if type(port) is not int or not 1024 <= port <= 65535:
+        raise ValueError('local_frontend_port must be an unprivileged TCP port')
+    ports = a.srt / 'src/srtctl/ports.py'
+    original = ports.read_text()
+    needle = 'FRONTEND_PUBLIC_PORT = 8000'
+    if original.count(needle) != 1:
+        raise ValueError('Unexpected native frontend port definition')
+    revised = original.replace(needle, f'FRONTEND_PUBLIC_PORT = {port}')
+    ports.write_text(revised)
+    (a.output / 'local-endpoint-binding.json').write_text(json.dumps(dict(
+        file=str(ports), source_port=8000, local_port=port,
+        original_sha256=hashlib.sha256(original.encode()).hexdigest(),
+        revised_sha256=hashlib.sha256(revised.encode()).hexdigest()), indent=2) + '\n')
 recipe = str(a.source / c['recipe'])
 selected, bound = select_recipe(recipe, os.environ, cpu_power_source='rapl')
 (a.output / 'bound-sa-recipe.yaml').write_text(yaml.safe_dump(bound, sort_keys=False))
