@@ -1,0 +1,320 @@
+{
+  "id": "17b4f1e01baa7c41c67fa057b833cabc72142fe62b9d362c50a6bdb06b38e9f0",
+  "observed": {
+    "operator": "aten::bmm",
+    "input_dims": [
+      [
+        12,
+        9963,
+        128
+      ],
+      [
+        12,
+        128,
+        512
+      ],
+      [
+        12,
+        9963,
+        512
+      ]
+    ],
+    "input_types": [
+      "c10::BFloat16",
+      "c10::BFloat16",
+      "c10::BFloat16"
+    ],
+    "input_strides": [
+      [
+        192,
+        2304,
+        1
+      ],
+      [
+        131072,
+        512,
+        1
+      ],
+      [
+        512,
+        6144,
+        1
+      ]
+    ],
+    "concrete_inputs": [
+      "",
+      "",
+      ""
+    ]
+  },
+  "kernel_dispatches": 24,
+  "operator_invocations": 24,
+  "summed_kernel_us": 2178.003,
+  "kernel_symbols": {
+    "Cijk_Ailk_Bljk_BBS_BH_Bias_HA_S_SAV_UserArgs_MT256x96x64_MI32x32x1_SN_LDSB0_AFC0_AG0_AGGSUA0_AGNTAB0_AFEM1_AFEM1_ASEM1_BL1_BS1_CD1_1_CLR0_CLS0_CADS0_DTLA0_DTLB0_DTLM0_DTVA0_DTVB0_DTVMXSA0_DTVMXSB0_DTVSM0_DPLB0_EPS0_ELFLR0_EMLLn1_FDSI0_GRPM1_GRVWA8_GRVWB8_GSU0_GSUAMB_GLS0_HPLR0_ISA950_ICIW0_IU1_K1_LDSTI1_LBSPPA0_LBSPPB128_LBSPPMXSA0_LBSPPMXSB0_LBSPPM0_LPA0_LPB8_LPMXSA0_LPMXSB0_LPM0_LRVW8_LWPMn1_MIAV0_MIWT2_3_MXLIBL_MXSFNS_MO40_MGRIPM1_NTn1_NTA0_NTB4_NTC4_NTD4_NTE0_NTMXSA0_NTMXSB0_NTM0_NTWS0_NVn1_NVA0_NVB0_NVC0_NVD0_NVE0_NVMXSA0_NVMXSB0_NVM0_NVWS0_NEPBS16_NLCA1_NLCB1_ONLL1_PAP0_PGL0_PGR2_PLR1_PKA1_SGROB0_SIA3_SS1_SPO1_SRVW0_SSO4_SVW1_SK5_SKFTR0_SKFDPO0_SKWS0_SKXCCM0_SNLL0_SIP1_SGRO0_TDMI0_TDMIM0_TDMS0_TIN0_THn1_THA0_THB0_THC0_THD0_THE0_THMXSA0_THMXSB0_THM0_THWS0_TLDS1_TLDSM1_ULSGRO0_USL1_USLMX0_UDFMAC0_UIOFGRO0_UPLRP0_USFGROn1_USI0_VSn1_VWA1_VWB1_WSGRA0_WSGRB0_WS64_WG128_2_1_WGMXCCn1.kd": 24
+  },
+  "launch_apis": {
+    "hipExtModuleLaunchKernel": 24
+  },
+  "example_events": [
+    {
+      "kernel": {
+        "ph": "X",
+        "cat": "kernel",
+        "name": "Cijk_Ailk_Bljk_BBS_BH_Bias_HA_S_SAV_UserArgs_MT256x96x64_MI32x32x1_SN_LDSB0_AFC0_AG0_AGGSUA0_AGNTAB0_AFEM1_AFEM1_ASEM1_BL1_BS1_CD1_1_CLR0_CLS0_CADS0_DTLA0_DTLB0_DTLM0_DTVA0_DTVB0_DTVMXSA0_DTVMXSB0_DTVSM0_DPLB0_EPS0_ELFLR0_EMLLn1_FDSI0_GRPM1_GRVWA8_GRVWB8_GSU0_GSUAMB_GLS0_HPLR0_ISA950_ICIW0_IU1_K1_LDSTI1_LBSPPA0_LBSPPB128_LBSPPMXSA0_LBSPPMXSB0_LBSPPM0_LPA0_LPB8_LPMXSA0_LPMXSB0_LPM0_LRVW8_LWPMn1_MIAV0_MIWT2_3_MXLIBL_MXSFNS_MO40_MGRIPM1_NTn1_NTA0_NTB4_NTC4_NTD4_NTE0_NTMXSA0_NTMXSB0_NTM0_NTWS0_NVn1_NVA0_NVB0_NVC0_NVD0_NVE0_NVMXSA0_NVMXSB0_NVM0_NVWS0_NEPBS16_NLCA1_NLCB1_ONLL1_PAP0_PGL0_PGR2_PLR1_PKA1_SGROB0_SIA3_SS1_SPO1_SRVW0_SSO4_SVW1_SK5_SKFTR0_SKFDPO0_SKWS0_SKXCCM0_SNLL0_SIP1_SGRO0_TDMI0_TDMIM0_TDMS0_TIN0_THn1_THA0_THB0_THC0_THD0_THE0_THMXSA0_THMXSB0_THM0_THWS0_TLDS1_TLDSM1_ULSGRO0_USL1_USLMX0_UDFMAC0_UIOFGRO0_UPLRP0_USFGROn1_USI0_VSn1_VWA1_VWB1_WSGRA0_WSGRB0_WS64_WG128_2_1_WGMXCCn1.kd",
+        "pid": 0,
+        "tid": 6,
+        "ts": 3544700097514.823,
+        "dur": 92.24,
+        "args": {
+          "External id": 107429,
+          "device": 0,
+          "stream": 6,
+          "correlation": 45590,
+          "kind": "Dispatch Kernel",
+          "grid": [
+            638976,
+            1,
+            1
+          ],
+          "block": [
+            256,
+            1,
+            1
+          ]
+        }
+      },
+      "launch": {
+        "ph": "X",
+        "cat": "cuda_runtime",
+        "name": "hipExtModuleLaunchKernel",
+        "pid": 1340,
+        "tid": 1340,
+        "ts": 3544699766129.785,
+        "dur": 12.99,
+        "args": {
+          "External id": 107429,
+          "cid": 388,
+          "correlation": 45590,
+          "grid": [
+            638976,
+            1,
+            1
+          ],
+          "block": [
+            256,
+            1,
+            1
+          ],
+          "shared memory": 0
+        }
+      },
+      "operator": {
+        "ph": "X",
+        "cat": "cpu_op",
+        "name": "aten::bmm",
+        "pid": 1340,
+        "tid": 1340,
+        "ts": 3544699765831.016,
+        "dur": 319.198,
+        "args": {
+          "External id": 107429,
+          "Record function id": 0,
+          "Concrete Inputs": [
+            "",
+            "",
+            ""
+          ],
+          "Input type": [
+            "c10::BFloat16",
+            "c10::BFloat16",
+            "c10::BFloat16"
+          ],
+          "Input Strides": [
+            [
+              192,
+              2304,
+              1
+            ],
+            [
+              131072,
+              512,
+              1
+            ],
+            [
+              512,
+              6144,
+              1
+            ]
+          ],
+          "Input Dims": [
+            [
+              12,
+              9963,
+              128
+            ],
+            [
+              12,
+              128,
+              512
+            ],
+            [
+              12,
+              9963,
+              512
+            ]
+          ],
+          "Ev Idx": 107428
+        }
+      }
+    },
+    {
+      "kernel": {
+        "ph": "X",
+        "cat": "kernel",
+        "name": "Cijk_Ailk_Bljk_BBS_BH_Bias_HA_S_SAV_UserArgs_MT256x96x64_MI32x32x1_SN_LDSB0_AFC0_AG0_AGGSUA0_AGNTAB0_AFEM1_AFEM1_ASEM1_BL1_BS1_CD1_1_CLR0_CLS0_CADS0_DTLA0_DTLB0_DTLM0_DTVA0_DTVB0_DTVMXSA0_DTVMXSB0_DTVSM0_DPLB0_EPS0_ELFLR0_EMLLn1_FDSI0_GRPM1_GRVWA8_GRVWB8_GSU0_GSUAMB_GLS0_HPLR0_ISA950_ICIW0_IU1_K1_LDSTI1_LBSPPA0_LBSPPB128_LBSPPMXSA0_LBSPPMXSB0_LBSPPM0_LPA0_LPB8_LPMXSA0_LPMXSB0_LPM0_LRVW8_LWPMn1_MIAV0_MIWT2_3_MXLIBL_MXSFNS_MO40_MGRIPM1_NTn1_NTA0_NTB4_NTC4_NTD4_NTE0_NTMXSA0_NTMXSB0_NTM0_NTWS0_NVn1_NVA0_NVB0_NVC0_NVD0_NVE0_NVMXSA0_NVMXSB0_NVM0_NVWS0_NEPBS16_NLCA1_NLCB1_ONLL1_PAP0_PGL0_PGR2_PLR1_PKA1_SGROB0_SIA3_SS1_SPO1_SRVW0_SSO4_SVW1_SK5_SKFTR0_SKFDPO0_SKWS0_SKXCCM0_SNLL0_SIP1_SGRO0_TDMI0_TDMIM0_TDMS0_TIN0_THn1_THA0_THB0_THC0_THD0_THE0_THMXSA0_THMXSB0_THM0_THWS0_TLDS1_TLDSM1_ULSGRO0_USL1_USLMX0_UDFMAC0_UIOFGRO0_UPLRP0_USFGROn1_USI0_VSn1_VWA1_VWB1_WSGRA0_WSGRB0_WS64_WG128_2_1_WGMXCCn1.kd",
+        "pid": 0,
+        "tid": 6,
+        "ts": 3544700122888.425,
+        "dur": 91.08,
+        "args": {
+          "External id": 108407,
+          "device": 0,
+          "stream": 6,
+          "correlation": 46178,
+          "kind": "Dispatch Kernel",
+          "grid": [
+            638976,
+            1,
+            1
+          ],
+          "block": [
+            256,
+            1,
+            1
+          ]
+        }
+      },
+      "launch": {
+        "ph": "X",
+        "cat": "cuda_runtime",
+        "name": "hipExtModuleLaunchKernel",
+        "pid": 1340,
+        "tid": 1340,
+        "ts": 3544699779912.054,
+        "dur": 11.56,
+        "args": {
+          "External id": 108407,
+          "cid": 388,
+          "correlation": 46178,
+          "grid": [
+            638976,
+            1,
+            1
+          ],
+          "block": [
+            256,
+            1,
+            1
+          ],
+          "shared memory": 0
+        }
+      },
+      "operator": {
+        "ph": "X",
+        "cat": "cpu_op",
+        "name": "aten::bmm",
+        "pid": 1340,
+        "tid": 1340,
+        "ts": 3544699779821.284,
+        "dur": 112.51,
+        "args": {
+          "External id": 108407,
+          "Record function id": 0,
+          "Concrete Inputs": [
+            "",
+            "",
+            ""
+          ],
+          "Input type": [
+            "c10::BFloat16",
+            "c10::BFloat16",
+            "c10::BFloat16"
+          ],
+          "Input Strides": [
+            [
+              192,
+              2304,
+              1
+            ],
+            [
+              131072,
+              512,
+              1
+            ],
+            [
+              512,
+              6144,
+              1
+            ]
+          ],
+          "Input Dims": [
+            [
+              12,
+              9963,
+              128
+            ],
+            [
+              12,
+              128,
+              512
+            ],
+            [
+              12,
+              9963,
+              512
+            ]
+          ],
+          "Ev Idx": 108406
+        }
+      }
+    }
+  ],
+  "source_run": "43012036134",
+  "source_image": "vllm/vllm-openai-rocm:kimi-k31-d73dd529@sha256:5b54f223a150a9baad41a5d511e159e7cbf43e308c6cd44ad3f6a2463c245b3c",
+  "server_environment": {
+    "AITER_BF16_FP8_MOE_BOUND": "0",
+    "AITER_FLYDSL_SPARSE_MLA": "1",
+    "AITER_FLYDSL_STAGE2_FP8": "0",
+    "HSA_NO_SCRATCH_RECLAIM": "1",
+    "PYTHONHASHSEED": "42",
+    "PYTHONNOUSERSITE": "1",
+    "SAFETENSORS_FAST_GPU": "1",
+    "THP_MEM_ALLOC_ENABLE": "1",
+    "VLLM_ENGINE_READY_TIMEOUT_S": "7200",
+    "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "1200",
+    "VLLM_FASTSAFETENSORS_QUEUE_SIZE": "-1",
+    "VLLM_ROCM_AITER_MLA_ASM_PADDING": "asm",
+    "VLLM_ROCM_AITER_MLA_DCP_VERIFY": "asm",
+    "VLLM_ROCM_DCP_AITER_ALLGATHER": "1",
+    "VLLM_ROCM_DSA_DCP_GLOBAL_KEY_PREFILL": "1",
+    "VLLM_ROCM_DSA_DCP_ROWSHARD_PREFILL": "1",
+    "VLLM_ROCM_QUICK_REDUCE_QUANTIZATION": "NONE",
+    "VLLM_ROCM_USE_AITER": "1",
+    "VLLM_ROCM_USE_AITER_FLYDSL_SPARSE_MLA": "1",
+    "VLLM_ROCM_USE_AITER_MOE_SITUV2": "1",
+    "VLLM_USE_BREAKABLE_CUDAGRAPH": "1",
+    "VLLM_USE_DIRECT_DCP_A2A": "0",
+    "VLLM_USE_DIRECT_DCP_KV_GATHER": "0",
+    "VLLM_USE_DIRECT_DCP_Q_GATHER": "0",
+    "VLLM_USE_V2_MODEL_RUNNER": "1"
+  },
+  "source_evidence": {
+    "argument_file": "/scratch/IPAT/.ipat/tmp/kernel-scope-review/metadata-43012036134/rank-0-gemm-arguments.json",
+    "argument_file_sha256": "42df0e72ea006cce080cbd2e8c1130541d94966d7ba53a370e5f3a249789ffbf",
+    "trace": "/scratch/IPAT/.ipat/tmp/k31-c48-live/native-profile-43012036134/native/local-43012036134-1/logs/profiles/torch/measured-c48_dp0_pp0_tp0_dcp0_ep0_rank0.1794401811426485100.pt.trace.json.gz",
+    "trace_sha256": "23f5e1658f3c15aa9d2eb06fef455af0af06372b11428705cc337f2b8e8bc035",
+    "extractor_sha256": "26961e5f263bffcbd178f96da1392fb2f6b8b9196542a23ced6828c48f71a4cc"
+  },
+  "replay_scope": "Observed bmm.out argument layouts from native metadata; outside prior Top10. Isolated BF16 all-ones repeated-buffer replay; no model cache state or throughput claim."
+}
