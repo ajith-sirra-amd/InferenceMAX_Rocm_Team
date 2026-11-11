@@ -47,7 +47,8 @@ def inventory(output):
         if root.name == 'aiter':
             roots += [root.parent / name for name in ('csrc', 'aiter_meta')]
     pattern = re.compile(r'custom.?all.?reduce|allreduce|all_reduce|communicat|'
-                         r'gemm.*a16w16|rocm_aiter|jit/(core|utils)|jit/config', re.I)
+                         r'gemm.*a16w16|a4w4|fp4|fused.?moe|moe.?fused|moe_flydsl|'
+                         r'rocm_aiter|jit/(core|utils)|jit/config', re.I)
     seen, copied, scanned = set(), 0, 0
     for root in roots:
         if not root.is_dir():
@@ -89,7 +90,9 @@ def inventory(output):
         aiter_reduction_header=any('custom_all_reduce' in p and Path(p).suffix in ('.cuh', '.h', '.hpp') for p in saved),
         reduction_python=any('all_reduce' in p and p.endswith('.py') for p in saved),
         vllm_communicator=any('/vllm/' in p and 'communicator' in p and p.endswith('.py') for p in saved),
-        selected_gemm_source=any(re.search(r'gemm.*a16w16', p) for p in saved))
+        selected_gemm_source=any(re.search(r'gemm.*a16w16', p) for p in saved),
+        fp4_gemm_source=any('gemm' in p and re.search(r'a4w4|fp4', p) for p in saved),
+        fused_moe_source=any(re.search(r'fused.?moe|moe.?fused|moe_flydsl', p) for p in saved))
     result['source_status'] = 'complete' if all(result['source_coverage'].values()) else 'incomplete'
     result['imported_relevant_python_modules'] = []
     for name, module in sorted(sys.modules.copy().items()):
@@ -101,6 +104,8 @@ def inventory(output):
         import torch
         for name in ('aiter::_gemm_a16w16_asm', 'aten::mm', 'aten::bmm'):
             result['schemas'][name] = [str(s) for s in torch._C._jit_get_schemas_for_operator(name)]
+        result['registered_fp4_moe_schemas'] = [str(s) for s in torch._C._jit_get_all_schemas()
+            if s.name.startswith('aiter::') and re.search(r'a4w4|fp4|moe', s.name)][:128]
         aiter = sys.modules.get('aiter')
         for name in ('gemm_a16w16', 'gemm_a16w16_asm', 'all_reduce'):
             function = getattr(aiter, name, None)

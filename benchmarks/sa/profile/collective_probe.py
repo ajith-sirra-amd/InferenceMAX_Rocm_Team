@@ -61,6 +61,8 @@ def worker(args):
     assert valid, 'All-gather output mismatch'
     record = dict(rank=rank, pid=os.getpid(), device=torch.cuda.get_device_name(rank),
                   case=case, payload_valid=valid, iterations=4,
+                  warmup_iterations=3,
+                  buffer_scope='Same input/output buffers reused after three warmups; cache state differs from model execution',
                   isolated_event_duration_us=durations, counters_enabled=bool(roctx),
                   event_duration_scope='Enclosing event interval, not request E2E',
                   torch=torch.__version__, hip=torch.version.hip,
