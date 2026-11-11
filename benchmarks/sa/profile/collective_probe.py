@@ -161,6 +161,8 @@ def launch(output, case, counter, roctx):
 
 
 def probe(args):
+    if args.counter and (len(args.counter) > 2 or len(set(args.counter)) != len(args.counter)):
+        raise ValueError('Use at most two distinct counter passes per bounded workflow')
     args.output.mkdir(parents=True, exist_ok=False)
     case = json.loads(args.case.read_text())
     assert case['world_size'] == 8 and case['dtype'] == 'int32'
@@ -187,12 +189,13 @@ def probe(args):
     if len(roctx) != 1:
         raise RuntimeError('Expected exactly one installed ROCTX library')
     outcomes = {'source_inventory': source.get('returncode') == 0}
-    for name, counter in (('baseline', None), ('read', 'FETCH_SIZE'), ('write', 'WRITE_SIZE')):
+    groups = [(value.lower(), value) for value in args.counter] if args.counter else [('read', 'FETCH_SIZE'), ('write', 'WRITE_SIZE')]
+    for name, counter in [('baseline', None), *groups]:
         outcomes[name] = launch(args.output / name, args.case, counter, roctx[0])
         if not outcomes[name]:
             break
     write(args.output / 'result.json', dict(scope=__doc__, outcomes=outcomes))
-    return 0 if all(outcomes.values()) and 'write' in outcomes else 1
+    return 0 if all(outcomes.values()) and groups[-1][0] in outcomes else 1
 
 
 if __name__ == '__main__':
@@ -203,6 +206,11 @@ if __name__ == '__main__':
     parser.add_argument('--rank', type=int)
     parser.add_argument('--rendezvous')
     parser.add_argument('--roctx')
+    parser.add_argument('--counter', action='append', choices=[
+        'FETCH_SIZE', 'WRITE_SIZE', 'TCC_EA0_RDREQ_DRAM_32B_sum',
+        'TCC_EA0_RDREQ_IO_32B_sum', 'TCC_EA0_WRREQ_WRITE_DRAM_32B_sum',
+        'TCC_EA0_WRREQ_WRITE_IO_32B_sum'],
+        help='At most two separate passes. Default: FETCH_SIZE, then WRITE_SIZE. DRAM/IO counters use 32-byte units, not KiB.')
     args = parser.parse_args()
     if args.worker:
         worker(args)
