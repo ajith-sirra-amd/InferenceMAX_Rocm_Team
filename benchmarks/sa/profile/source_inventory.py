@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 
 def inventory(output):
@@ -102,6 +103,18 @@ def inventory(output):
     result['invocation_binding'] = 'Package/submodule imports are observed here; no measured reduction graph-node or JIT-kernel binding'
     try:
         import torch
+        from torch.profiler.profiler import _KinetoProfile, tensorboard_trace_handler
+        exporter = output / 'torch-profiler-exporter.py'
+        exporter.write_text(inspect.getsource(_KinetoProfile.export_chrome_trace)
+                            + '\n\n' + inspect.getsource(tensorboard_trace_handler))
+        temporary = tempfile.gettempdir()
+        fs = os.statvfs(temporary)
+        result['torch_exporter'] = dict(torch_git_version=torch.version.git_version,
+            profiler_module=torch.profiler.__file__, source=str(exporter.relative_to(output)),
+            source_sha256=hashlib.sha256(exporter.read_bytes()).hexdigest(),
+            tempfile_directory=temporary, TMPDIR=os.environ.get('TMPDIR'),
+            filesystem_capacity_bytes=fs.f_blocks * fs.f_frsize,
+            filesystem_available_bytes=fs.f_bavail * fs.f_frsize)
         for name in ('aiter::_gemm_a16w16_asm', 'aten::mm', 'aten::bmm'):
             result['schemas'][name] = [str(s) for s in torch._C._jit_get_schemas_for_operator(name)]
         result['registered_fp4_moe_schemas'] = [str(s) for s in torch._C._jit_get_all_schemas()
