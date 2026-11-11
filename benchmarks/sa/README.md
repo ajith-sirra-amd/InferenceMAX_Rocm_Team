@@ -24,7 +24,8 @@ Each JSON freezes the InferenceX and srt-slurm SHAs, native recipe/variant,
 image digest and workflow environment. The golden acceptance value is selected
 by InferenceX; do not hard-code it. Keep model-specific settings in JSON files.
 
-The launcher verifies the allocation belongs to the current account and contains
+The native job targets `self-hosted` and `cluster:mi355x-amds-2`; the runner does
+not need a separate `nodes:1` label. The launcher verifies the allocation belongs to the current account and contains
 only the current host. It executes the native rendered batch script in that
 allocation and does not cancel the reservation. Spur's overlap mode ignores
 container image/mount options, as confirmed by the retained transport check.

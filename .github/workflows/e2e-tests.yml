@@ -165,7 +165,7 @@ jobs:
     sa-benchmark:
         if: ${{ inputs.sa-config != '' }}
         name: Native SA benchmark
-        runs-on: [self-hosted, 'cluster:mi355x-amds-2', 'nodes:1']
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 480
         permissions:
             contents: read
