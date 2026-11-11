@@ -1,0 +1,268 @@
+{
+  "source_run": "42988482125",
+  "source_image": "vllm/vllm-openai-rocm:kimi-k31-d73dd529@sha256:5b54f223a150a9baad41a5d511e159e7cbf43e308c6cd44ad3f6a2463c245b3c",
+  "server_environment": {
+    "AITER_BF16_FP8_MOE_BOUND": "0",
+    "AITER_FLYDSL_SPARSE_MLA": "1",
+    "AITER_FLYDSL_STAGE2_FP8": "0",
+    "HSA_NO_SCRATCH_RECLAIM": "1",
+    "PYTHONHASHSEED": "42",
+    "PYTHONNOUSERSITE": "1",
+    "SAFETENSORS_FAST_GPU": "1",
+    "THP_MEM_ALLOC_ENABLE": "1",
+    "VLLM_ENGINE_READY_TIMEOUT_S": "7200",
+    "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "1200",
+    "VLLM_FASTSAFETENSORS_QUEUE_SIZE": "-1",
+    "VLLM_ROCM_AITER_MLA_ASM_PADDING": "asm",
+    "VLLM_ROCM_AITER_MLA_DCP_VERIFY": "asm",
+    "VLLM_ROCM_DCP_AITER_ALLGATHER": "1",
+    "VLLM_ROCM_DSA_DCP_GLOBAL_KEY_PREFILL": "1",
+    "VLLM_ROCM_DSA_DCP_ROWSHARD_PREFILL": "1",
+    "VLLM_ROCM_QUICK_REDUCE_QUANTIZATION": "NONE",
+    "VLLM_ROCM_USE_AITER": "1",
+    "VLLM_ROCM_USE_AITER_FLYDSL_SPARSE_MLA": "1",
+    "VLLM_ROCM_USE_AITER_MOE_SITUV2": "1",
+    "VLLM_USE_BREAKABLE_CUDAGRAPH": "1",
+    "VLLM_USE_DIRECT_DCP_A2A": "0",
+    "VLLM_USE_DIRECT_DCP_KV_GATHER": "0",
+    "VLLM_USE_DIRECT_DCP_Q_GATHER": "0",
+    "VLLM_USE_V2_MODEL_RUNNER": "1"
+  },
+  "server_environment_source": {
+    "name": "native-profile-42988482125-job-130415270449.log",
+    "sha256": "3080ad1c10b1f0a85b2906ac8c7fb2a11c29feac79abcec154786a4d6ee0979c",
+    "excluded_local_endpoints": [
+      "DYN_VLLM_KV_EVENT_PORT",
+      "HEAD_NODE_IP",
+      "VLLM_NIXL_SIDE_CHANNEL_HOST",
+      "VLLM_NIXL_SIDE_CHANNEL_PORT",
+      "VLLM_PORT"
+    ]
+  },
+  "collective": "alltoall_base_",
+  "dtype": "bfloat16",
+  "world_size": 8,
+  "input_elements": 12089280,
+  "output_elements": 12089280,
+  "input_split_sizes": [],
+  "output_split_sizes": [],
+  "async_op": true,
+  "timeout_ms": -1,
+  "launch_mode": "eager",
+  "source_kernel_symbol": "ncclDevKernel_Generic_1(ncclDevKernelArgsStorage<4096ul>) [clone .kd]",
+  "source_evidence": {
+    "name": "paired-rank-0.json",
+    "sha256": "44f2251a90653e38c4b4c57d116b8ae12a7425d3f3eb891313c784f9bf61ace6",
+    "ranks": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "measured_event": {
+      "ph": "X",
+      "cat": "kernel",
+      "name": "ncclDevKernel_Generic_1(ncclDevKernelArgsStorage<4096ul>) [clone .kd]",
+      "pid": 0,
+      "tid": 6,
+      "ts": 3535137835028.773,
+      "dur": 96.441,
+      "args": {
+        "External id": 1776476,
+        "device": 0,
+        "stream": 6,
+        "correlation": 794339,
+        "kind": "Dispatch Kernel",
+        "grid": [
+          0,
+          0,
+          0
+        ],
+        "block": [
+          0,
+          0,
+          0
+        ],
+        "Collective name": "all_to_allv",
+        "In msg nelems": 12089280,
+        "Out msg nelems": 12089280,
+        "Group size": 8,
+        "dtype": "BFloat16",
+        "In split size": "[]",
+        "Out split size": "[]",
+        "Process Group Name": "5",
+        "Process Group Description": "undefined",
+        "Process Group Ranks": "[0, 1, 2, 3, 4, 5, 6, 7]",
+        "Seq": 278394,
+        "Comms Id": 7995238608706818671
+      },
+      "cpu_collective": {
+        "ph": "X",
+        "cat": "cpu_op",
+        "name": "record_param_comms",
+        "pid": 1339,
+        "tid": 1339,
+        "ts": 3535137764179.683,
+        "dur": 173.19,
+        "args": {
+          "External id": 1776476,
+          "Record function id": 0,
+          "Process Group Name": "5",
+          "Comms Id": 7995238608706818671,
+          "Global rank stride": 1,
+          "Is asynchronized op": 1,
+          "Seq": 278394,
+          "Collective name": "all_to_allv",
+          "Process Group Description": "undefined",
+          "dtype": "BFloat16",
+          "Rank": 0,
+          "In split size": "[]",
+          "Out split size": "[]",
+          "Ev Idx": 1776475,
+          "In msg nelems": 12089280,
+          "Global rank start": 0,
+          "Group size": 8,
+          "Process Group Ranks": "[0, 1, 2, 3, 4, 5, 6, 7]",
+          "Out msg nelems": 12089280
+        }
+      },
+      "runtime": {
+        "ph": "X",
+        "cat": "cuda_runtime",
+        "name": "hipModuleLaunchKernel",
+        "pid": 1339,
+        "tid": 1339,
+        "ts": 3535137764284.813,
+        "dur": 13.32,
+        "args": {
+          "External id": 1776476,
+          "cid": 308,
+          "correlation": 794339,
+          "grid": [
+            0,
+            0,
+            0
+          ],
+          "block": [
+            0,
+            0,
+            0
+          ],
+          "shared memory": 0
+        }
+      }
+    }
+  },
+  "source_kernel_symbol_evidence": {
+    "name": "paired-rank-0.json",
+    "sha256": "44f2251a90653e38c4b4c57d116b8ae12a7425d3f3eb891313c784f9bf61ace6",
+    "join_keys": [
+      "Process Group Name",
+      "Seq",
+      "Comms Id",
+      "External id",
+      "correlation"
+    ]
+  },
+  "metadata_evidence": {
+    "run_id": "43012036134",
+    "name": "rank-0-audit.json",
+    "sha256": "d1ef0a87e1a415cb8ccc2ba01b27929db067a60692c605be326d38cf1b32ee24",
+    "trace": "/scratch/IPAT/.ipat/tmp/k31-c48-live/native-profile-43012036134/native/local-43012036134-1/logs/profiles/torch/measured-c48_dp0_pp0_tp0_dcp0_ep0_rank0.1794401811426485100.pt.trace.json.gz",
+    "trace_sha256": "23f5e1658f3c15aa9d2eb06fef455af0af06372b11428705cc337f2b8e8bc035",
+    "event": {
+      "ph": "X",
+      "cat": "cpu_op",
+      "name": "c10d::alltoall_base_",
+      "pid": 1340,
+      "tid": 1340,
+      "ts": 3544699428584.121,
+      "dur": 130.409,
+      "args": {
+        "External id": 80721,
+        "Record function id": 0,
+        "Concrete Inputs": [
+          "",
+          "",
+          "",
+          "[]",
+          "[]",
+          "True",
+          "-1"
+        ],
+        "Input type": [
+          "c10::BFloat16",
+          "c10::BFloat16",
+          "",
+          "ScalarList",
+          "ScalarList",
+          "Scalar",
+          "Scalar"
+        ],
+        "Input Strides": [
+          [
+            1
+          ],
+          [
+            1
+          ],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "Input Dims": [
+          [
+            12089280
+          ],
+          [
+            12089280
+          ],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "Ev Idx": 80720
+      }
+    },
+    "observed_ranks": [
+      0,
+      4,
+      5,
+      7
+    ],
+    "matching_calls_per_valid_rank": 72,
+    "scope": "Same payload/argumentform in later native metadata, not the identical measured call"
+  },
+  "torch_git_version": "6596a0dea537c1c78520c73cc6678214781a9d06",
+  "installed_python_source_sha256": "cb2926a8eeaa4a040aaff6e731a2841ddd408b92693d99f291cf782bdd2b26bc",
+  "cpp_source_evidence": [
+    {
+      "url": "https://raw.githubusercontent.com/pytorch/pytorch/6596a0dea537c1c78520c73cc6678214781a9d06/torch/csrc/distributed/c10d/ProcessGroupNCCL.cpp",
+      "path": "/scratch/IPAT/.ipat/tmp/k31-c48-live/alltoall-feasibility/ProcessGroupNCCL.cpp",
+      "bytes": 228336,
+      "sha256": "bf4210311fe0c2a61ac9ccfcda0656edb281b985109881315e0b5dfd6beec9cc"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pytorch/pytorch/6596a0dea537c1c78520c73cc6678214781a9d06/torch/csrc/distributed/c10d/Ops.cpp",
+      "path": "/scratch/IPAT/.ipat/tmp/k31-c48-live/alltoall-feasibility/Ops.cpp",
+      "bytes": 33002,
+      "sha256": "bce61a4d93c6938694667fd06efdb53233c126f655085f3c32a3246cfa1371c9"
+    }
+  ],
+  "replay_limitations": [
+    "Fresh default communicator replaces original processgroup5; channel/protocol/topology parity not proven",
+    "Recorded async=True and timeout=-1 retained; immediate work.wait plus device sync provides isolated duration, not original deferred wait/arrival schedule",
+    "Input destination chunks encode source_rank*8+destination_rank; original content/cache state differ",
+    "Recorded empty splitlists passed literally, no explicit8-entry vectors are fabricated",
+    "Original measured binding and later metadata have separate provenance; samepayload is not samepercallstate",
+    "No model throughput or request E2E speedup claim"
+  ]
+}

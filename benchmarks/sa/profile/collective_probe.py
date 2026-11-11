@@ -1,4 +1,4 @@
-"""Bounded isolated replay of a trace-bound all-gather payload.
+"""Bounded isolated replay of a trace-bound collective payload.
 
 READ and WRITE counters run separately. This does not recreate model arrival,
 cache state, request critical path or communicator/channel choices.
@@ -8,6 +8,7 @@ import csv
 import ctypes
 import datetime
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -25,18 +26,39 @@ def worker(args):
     import torch.distributed as dist
     case = json.loads(args.case.read_text())
     rank, world, count = args.rank, case['world_size'], case['input_elements']
-    assert case['dtype'] == 'int32' and case['output_elements'] == count * world
-    assert case['launch_mode'] == 'eager' and case['collective'] == '_allgather_base'
+    alltoall = case['collective'] == 'alltoall_base_'
+    if alltoall:
+        assert case['dtype'] == 'bfloat16' and case['output_elements'] == count
+        assert case['output_split_sizes'] == case['input_split_sizes'] == []
+        assert case['async_op'] is True and case['timeout_ms'] == -1
+        assert count % world == 0
+    else:
+        assert case['dtype'] == 'int32' and case['output_elements'] == count * world
+        assert case['collective'] == '_allgather_base'
+    assert case['launch_mode'] == 'eager'
     torch.set_num_threads(1)
     torch.cuda.set_device(rank)
     if 'MI355X' not in torch.cuda.get_device_name(rank).upper():
         raise RuntimeError('This saved case requires an MI355X device on every rank')
     dist.init_process_group('nccl', init_method=args.rendezvous, rank=rank, world_size=world,
                             timeout=datetime.timedelta(seconds=60))
-    source = torch.full((count,), rank, dtype=torch.int32, device='cuda')
-    target = torch.empty((count * world,), dtype=torch.int32, device='cuda')
+    dtype = torch.bfloat16 if alltoall else torch.int32
+    source = torch.full((count,), rank, dtype=dtype, device='cuda')
+    target = torch.empty((case['output_elements'],), dtype=dtype, device='cuda')
+    if alltoall:
+        for destination in range(world):
+            source[destination * (count // world):(destination + 1) * (count // world)].fill_(rank * world + destination)
+    def invoke():
+        if alltoall:
+            work = torch.ops.c10d.alltoall_base_.default(target, source,
+                dist.distributed_c10d._get_default_group(), [], [], True, -1)
+            # Preserve asynchronous API, then order the measurement stream after
+            # this work. The original model's deferred-wait/arrival timing differs.
+            work.wait()
+        else:
+            dist.all_gather_into_tensor(target, source)
     for _ in range(3):
-        dist.all_gather_into_tensor(target, source)
+        invoke()
     torch.cuda.synchronize()
     dist.barrier(device_ids=[rank])
     torch.cuda.synchronize()
@@ -53,20 +75,24 @@ def worker(args):
         assert roctx.roctxProfilerResume(0) == 0
     for i in range(4):
         start[i].record()
-        dist.all_gather_into_tensor(target, source)
+        invoke()
         end[i].record()
         torch.cuda.synchronize()
     if roctx:
         assert roctx.roctxProfilerPause(0) == 0
     durations = [s.elapsed_time(e) * 1000 for s, e in zip(start, end)]
-    valid = all(bool(torch.all(target[j * count:(j + 1) * count] == j).item()) for j in range(world))
-    assert valid, 'All-gather output mismatch'
+    chunk = count // world if alltoall else count
+    valid = all(bool(torch.all(target[j * chunk:(j + 1) * chunk] == (j * world + rank if alltoall else j)).item())
+                for j in range(world))
+    assert valid, 'Collective output mismatch'
     record = dict(rank=rank, pid=os.getpid(), device=torch.cuda.get_device_name(rank),
                   case=case, payload_valid=valid, iterations=4,
                   warmup_iterations=3,
                   buffer_scope='Same input/output buffers reused after three warmups; cache state differs from model execution',
                   isolated_event_duration_us=durations, counters_enabled=bool(roctx),
                   event_duration_scope='Enclosing event interval, not request E2E',
+                  async_wait_scope='Literal async=True,timeout=-1; work.wait then device synchronize per call' if alltoall else 'Synchronous all_gather_into_tensor',
+                  correctness_pattern='Each destination chunk encodes source_rank*world_size+destination_rank' if alltoall else 'Each input encodes source rank',
                   torch=torch.__version__, hip=torch.version.hip,
                   nccl_version=torch.cuda.nccl.version(),
                   replay_group='Fresh default NCCL/RCCL communicator; global ranks 0 through 7',
@@ -112,7 +138,7 @@ def launch(output, case, counter, roctx):
             records.append(dict(rank=rank, command=task, environment_additions={
                 key: env[key] for key in ('NCCL_DEBUG', 'NCCL_DEBUG_SUBSYS', 'NCCL_DEBUG_FILE')}))
             workers.append(subprocess.Popen(task, stdout=log, stderr=subprocess.STDOUT, env=env))
-        deadline = time.monotonic() + 150
+        deadline = time.monotonic() + 100
         while any(p.poll() is None for p in workers) and time.monotonic() < deadline:
             if any(p.poll() not in (None, 0) for p in workers):
                 break
@@ -166,14 +192,28 @@ def launch(output, case, counter, roctx):
 
 
 def probe(args):
-    if args.counter and (len(args.counter) > 2 or len(set(args.counter)) != len(args.counter)):
-        raise ValueError('Use at most two distinct counter passes per bounded workflow')
+    if args.counter and (len(args.counter) > 4 or len(set(args.counter)) != len(args.counter)):
+        raise ValueError('Use at most four distinct counter passes per bounded workflow')
     args.output.mkdir(parents=True, exist_ok=False)
     case = json.loads(args.case.read_text())
-    assert case['world_size'] == 8 and case['dtype'] == 'int32'
+    assert case['world_size'] == 8 and case['dtype'] in ('int32', 'bfloat16')
     env = case['server_environment']
     os.environ.update(env)
     write(args.output / 'case.json', case)
+    if case['collective'] == 'alltoall_base_':
+        import torch
+        import torch.distributed.distributed_c10d as c10d
+        schema = str(torch.ops.c10d.alltoall_base_.default._schema)
+        assert 'int[] output_split_sizes, int[] input_split_sizes, bool async_op=True, int timeout=-1' in schema
+        assert torch.version.git_version == case['torch_git_version']
+        source_path = Path(inspect.getsourcefile(c10d))
+        source_bytes = source_path.read_bytes()
+        digest = hashlib.sha256(source_bytes).hexdigest()
+        assert digest == case['installed_python_source_sha256'], 'Installed collective Python source differs from reviewed revision'
+        (args.output / 'installed-distributed_c10d.py').write_bytes(source_bytes)
+        write(args.output / 'installed-alltoall-api.json', dict(schema=schema, torch=torch.__version__,
+            torch_git_version=torch.version.git_version, python_source_path=str(source_path), sha256=digest,
+            cpp_source_evidence=case['cpp_source_evidence']))
     write(args.output / 'environment.json', {k: v for k, v in os.environ.items()
         if k.startswith(('NCCL_', 'RCCL_', 'VLLM_', 'AITER_', 'HSA_'))})
     configs = []
@@ -220,7 +260,7 @@ if __name__ == '__main__':
         'TCC_EA0_RDREQ_IO_32B_sum', 'TCC_EA0_RDREQ_GMI_32B_sum',
         'TCC_EA0_WRREQ_WRITE_DRAM_32B_sum', 'TCC_EA0_WRREQ_WRITE_IO_32B_sum',
         'TCC_EA0_WRREQ_WRITE_GMI_32B_sum'],
-        help='At most two separate passes. Default: FETCH_SIZE, then WRITE_SIZE. DRAM/IO/GMI counters use 32-byte units, not KiB.')
+        help='At most four separate 100-second passes, plus baseline. Default: FETCH_SIZE, then WRITE_SIZE. DRAM/IO/GMI counters use 32-byte units, not KiB.')
     args = parser.parse_args()
     if args.worker:
         worker(args)
