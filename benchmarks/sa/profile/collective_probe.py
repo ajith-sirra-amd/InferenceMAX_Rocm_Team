@@ -50,13 +50,35 @@ def worker(args):
             source[destination * (count // world):(destination + 1) * (count // world)].fill_(rank * world + destination)
     def invoke():
         if alltoall:
-            work = torch.ops.c10d.alltoall_base_.default(target, source,
-                dist.distributed_c10d._get_default_group(), [], [], True, -1)
+            work = dist.all_to_all_single(target, source,
+                output_split_sizes=[], input_split_sizes=[], async_op=True)
             # Preserve asynchronous API, then order the measurement stream after
             # this work. The original model's deferred-wait/arrival timing differs.
             work.wait()
         else:
             dist.all_gather_into_tensor(target, source)
+    api_validation = None
+    if alltoall:
+        assert dist.AllToAllOptions().timeout == datetime.timedelta(milliseconds=-1)
+        if not args.roctx:
+            # The public API adapts Python ProcessGroup to the registered C++ op.
+            # Certify its exact native arguments in baseline only; never combine
+            # Kineto and rocprof counter collectors in the same worker.
+            with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU],
+                                        record_shapes=True) as cpu_profile:
+                invoke()
+                torch.cuda.synchronize()
+            path = args.output / 'alltoall-api-probe.json'
+            cpu_profile.export_chrome_trace(str(path))
+            calls = [e for e in json.loads(path.read_text())['traceEvents']
+                     if e.get('name') == 'c10d::alltoall_base_']
+            assert len(calls) == 1, 'Public API did not produce one native alltoall_base_ call'
+            actual = calls[0]['args']
+            assert actual['Concrete Inputs'][3:] == ['[]', '[]', 'True', '-1']
+            assert actual['Input Dims'][:2] == [[count], [count]]
+            assert actual['Input Strides'][:2] == [[1], [1]]
+            assert actual['Input type'][:2] == ['c10::BFloat16', 'c10::BFloat16']
+            api_validation = dict(valid=True, native_call=calls[0], trace_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
     for _ in range(3):
         invoke()
     torch.cuda.synchronize()
@@ -93,6 +115,7 @@ def worker(args):
                   event_duration_scope='Enclosing event interval, not request E2E',
                   async_wait_scope='Literal async=True,timeout=-1; work.wait then device synchronize per call' if alltoall else 'Synchronous all_gather_into_tensor',
                   correctness_pattern='Each destination chunk encodes source_rank*world_size+destination_rank' if alltoall else 'Each input encodes source rank',
+                  native_api_validation=api_validation,
                   torch=torch.__version__, hip=torch.version.hip,
                   nccl_version=torch.cuda.nccl.version(),
                   replay_group='Fresh default NCCL/RCCL communicator; global ranks 0 through 7',
