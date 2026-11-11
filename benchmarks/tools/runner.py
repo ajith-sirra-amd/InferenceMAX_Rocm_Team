@@ -342,7 +342,8 @@ def native_status(request, output):
     source = (SHARED_DATA_ROOT / f'{run}-{attempt}').resolve()
     if not source.is_relative_to(SHARED_DATA_ROOT.resolve()) or not source.is_dir():
         raise ValueError('Native run directory is unavailable')
-    files = [source / 'workflow.log', *source.glob('native/*/logs/benchmark.out'),
+    files = [source / 'workflow.log', source / 'completed-container-cleanup.json',
+             source / 'gpu-memory-after-cleanup.json', *source.glob('native/*/logs/benchmark.out'),
              *source.glob('native/*/logs/*_agg_w*.out'),
              *source.glob('native/*/logs/profiles/rocprof/launch-utc.txt')]
     result = dict(run_id=run, at=dt.datetime.now(dt.timezone.utc).isoformat(),
