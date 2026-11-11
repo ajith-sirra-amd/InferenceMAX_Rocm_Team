@@ -1,5 +1,30 @@
 # Native SA benchmark runs
 
+For the current C48 measured profile, select
+`benchmarks/sa/kimi-k3.1-pro-vllm-mi355x-c48-measured-profile-sa42638222682.json`.
+It preserves the SA image, server environment, native warmup, client command and
+3,600-second replay. The sole server profiling argument configures the installed
+vLLM Torch profiler; no rocprof launch timer is used in this pass.
+
+The independent controller reads `logs/agentic/benchmark.log`, recognizes
+`Phase profiling (profiling) started`, resolves that timestamp using the native
+client timezone record, and requests `/start_profile` at **measurement +2,400 s**.
+It captures **130 s**, calls `/stop_profile`, and permits **1,200 s** for export.
+An uncertain start response still causes a stop request. Control states and UTC
+boundaries are saved continuously under `logs/profiles/torch/`. After the native
+workload completes, validation requires eight complete worker traces, GPU IDs
+0–7, and at least **120 s common GPU extent within measured sending**. Traces,
+control logs and validation remain with the fresh workflow output; previous
+captures are preserved. Timing/CPU/GPU activity is collected here; HBM counters,
+tensor shapes/precision and request-to-kernel attribution require separate passes.
+
+Pinned-image capability check `42987645614` captured 96 synthetic kernel events
+on all eight GPUs. It establishes basic profiler capability, not full Kimi model
+coverage. Twenty-three local adapter/controller/export checks pass, including
+marker timing, a lost start response, missing-rank rejection and warmup rejection.
+The marker-controlled configuration supersedes the historical launch-delay
+configurations described below for this measured-phase request.
+
 Run one published SA datapoint using its pinned InferenceX recipe binder,
 golden-acceptance planner, and SRT benchmark engine. The native generated batch
 script owns server startup, readiness, benchmark warmup, measurement and cleanup.

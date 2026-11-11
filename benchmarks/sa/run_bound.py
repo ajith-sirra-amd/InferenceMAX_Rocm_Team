@@ -58,19 +58,30 @@ for host, target in cluster.get('workspace-mounts', {}).items():
 settings = dict(cluster['extra'])
 profile = c.get('profile')
 if profile:
-    if c['environment']['FRAMEWORK'] != 'vllm' or profile.get('tool') != 'rocprofv3':
-        raise ValueError('The native launch profiling hook currently supports vLLM with rocprofv3')
+    if c['environment']['FRAMEWORK'] != 'vllm' or profile.get('tool') not in ('rocprofv3', 'torch'):
+        raise ValueError('Native profiling supports vLLM with rocprofv3 or torch')
     delay, seconds = profile['delay_seconds'], profile['seconds']
     mode = profile.get('mode', 'launch')
-    if mode not in ('launch', 'attach'):
-        raise ValueError('Profile mode must be launch or attach')
+    if (profile['tool'], mode) not in (('rocprofv3', 'launch'), ('rocprofv3', 'attach'), ('torch', 'measured')):
+        raise ValueError('Use rocprof launch/attach or torch measured profiling')
     if type(delay) is not int or delay < 0 or type(seconds) is not int or not 1 <= seconds <= 180:
         raise ValueError('Use a calibrated nonnegative delay and a 1–180 second capture')
     minimum = profile.get('minimum_seconds')
     if minimum is not None and (type(minimum) is not int or not 1 <= minimum <= seconds):
         raise ValueError('Profile minimum_seconds must be a positive integer no greater than seconds')
-    mounts[str(Path(__file__).parent / 'profile')] = '/sa-profile-bin:ro'
-    settings['default_bash_preamble'] = 'export PATH="/sa-profile-bin:$PATH"'
+    if mode != 'measured':
+        mounts[str(Path(__file__).parent / 'profile')] = '/sa-profile-bin:ro'
+        settings['default_bash_preamble'] = 'export PATH="/sa-profile-bin:$PATH"'
+    else:
+        if 'warmup_requests_per_lane' in profile:
+            raise ValueError('Measured profiling preserves native warmup')
+        if minimum is None or 'local_frontend_port' not in c:
+            raise ValueError('Measured profiling requires minimum_seconds and an explicit local endpoint binding')
+        for key in ('phase_timeout_seconds', 'poll_seconds', 'export_timeout_seconds'):
+            if type(profile.get(key)) is not int or profile[key] <= 0:
+                raise ValueError('Measured profiling requires positive ' + key)
+        if delay + seconds >= int(c['environment']['DURATION']):
+            raise ValueError('Capture must fit inside measured sending')
 settings.update(cluster='mi355x-local', default_partition='amd-spur', default_account='',
                 default_time_limit='08:00:00', gpus_per_node=8,
                 network_interface='', srtctl_root=str(a.srt), output_dir=str(a.output / 'native'),
@@ -84,9 +95,17 @@ os.environ['SRTSLURM_CONFIG'] = str(a.srt / 'srtslurm.yaml')
 extra = ['--set', 'benchmark.stream_output=true', '--set', 'srun_options.container-workdir="/infmax-workspace"',
          '--set', 'srun_options.container-remap-root=""', '--set', 'srun_options.container-writable=""']
 if profile:
-    for key, value in {'SA_PROFILE_DELAY_SECONDS': str(delay), 'SA_PROFILE_SECONDS': str(seconds), 'SA_PROFILE_MODE': mode,
+    if mode == 'measured':
+        profiler_config = dict(profiler='torch', torch_profiler_dir='/logs/profiles/torch',
+            torch_profiler_activities=['CPU', 'CUDA'], ignore_frontend=True,
+            torch_profiler_with_stack=False, torch_profiler_record_shapes=False,
+            torch_profiler_with_memory=False, torch_profiler_use_gzip=True,
+            torch_profiler_dump_cuda_time_total=False)
+        extra += ['--set', 'roles.agg.args.profiler-config=' + json.dumps(json.dumps(profiler_config))]
+    else:
+        for key, value in {'SA_PROFILE_DELAY_SECONDS': str(delay), 'SA_PROFILE_SECONDS': str(seconds), 'SA_PROFILE_MODE': mode,
                        'SA_PROFILE_OUTPUT': '/logs/profiles/rocprof'}.items():
-        extra += ['--set', 'roles.agg.env.' + key + '=' + json.dumps(value)]
+            extra += ['--set', 'roles.agg.env.' + key + '=' + json.dumps(value)]
     if mode == 'launch':
         # Give native shutdown time to export profiler buffers. Workload code is unchanged.
         stage = a.srt / 'src/srtctl/cli/mixins/worker_stage.py'
@@ -165,7 +184,12 @@ os.environ['SA_PASSTHROUGH_ENV'] = json.dumps(sorted(
     key for key in os.environ if key in c['environment']
     or any(fnmatch.fnmatchcase(key, pattern) for pattern in WORKLOAD_ENV)))
 try:
-    subprocess.run(['bash', str(rendered / 'sbatch_script.sh')], check=True)
+    if profile and mode == 'measured':
+        from measured_run import run_measured
+        logs = a.output / 'native' / os.environ['SLURM_JOB_ID'] / 'logs'
+        run_measured(['bash', str(rendered / 'sbatch_script.sh')], logs, port, profile)
+    else:
+        subprocess.run(['bash', str(rendered / 'sbatch_script.sh')], check=True)
 finally:
     # Clean only containers belonging to this workflow; never cancel the reservation.
     owned = subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'label=sa.run=' + a.output.name], text=True).split()
@@ -180,7 +204,12 @@ if not result.is_file():
 subprocess.run([sys.executable, '-m', 'infx.results.agentic.validate_agentic_result', str(logs / 'agentic'), '--failed-request-threshold', c['environment']['AIPERF_FAILED_REQUEST_THRESHOLD']], check=True)
 if profile:
     print('Server shutdown finished; validating completed profiler files before artifact upload.', flush=True)
-    subprocess.run([sys.executable, Path(__file__).with_name('validate_profile.py'),
+    if mode == 'measured':
+        subprocess.run([sys.executable, Path(__file__).with_name('validate_torch_profile.py'),
+                        logs, '--minimum-seconds', str(minimum),
+                        '--output', a.output / 'profile-capture-validation.json'], check=True)
+    else:
+        subprocess.run([sys.executable, Path(__file__).with_name('validate_profile.py'),
                     logs, '--seconds', str(seconds), '--require-exports',
                     '--output', a.output / 'profile-capture-validation.json']
                    + (['--require-attachment'] if mode == 'attach' else [])
