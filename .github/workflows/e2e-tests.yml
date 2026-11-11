@@ -223,6 +223,11 @@ jobs:
                   path: sa-benchmark-${{ github.run_id }}
                   sparse-checkout: benchmarks/sa
                   persist-credentials: false
+            - name: Stop leftover native containers from completed runs
+              working-directory: sa-benchmark-${{ github.run_id }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: python3 benchmarks/sa/cleanup.py --completed --output "$SA_OUTPUT"
             - name: Check container transport
               if: ${{ inputs.sa-mode == 'transport-check' }}
               working-directory: sa-benchmark-${{ github.run_id }}
@@ -243,6 +248,10 @@ jobs:
                   set -o pipefail
                   mkdir -p "$SA_OUTPUT"
                   python3 benchmarks/sa/run.py --config "$SA_CONFIG" --allocation "$SA_ALLOCATION" --output "$SA_OUTPUT" 2>&1 | tee "$SA_OUTPUT/workflow.log"
+            - name: Stop this run's remaining native containers
+              if: always()
+              working-directory: sa-benchmark-${{ github.run_id }}
+              run: python3 benchmarks/sa/cleanup.py --output "$SA_OUTPUT"
             - name: Preserve native results and logs
               if: always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

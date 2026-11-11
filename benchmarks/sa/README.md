@@ -46,6 +46,12 @@ environment names are explicitly forwarded into Docker, preserving the native
 inheritance needed by the benchmark client. Runtime caches stay in the run's `work/`
 directory, with compiler temporary files on bounded tmpfs. SRT owns the process lifecycle.
 
+The workflow also runs independent container cleanup after execution, including
+on cancellation. Before a new run it stops leftovers only when both the `sa.run`
+label and saved launch record identify them and GitHub confirms that attempt is
+completed. Cleanup allows 1,200 seconds for graceful shutdown/export and records
+the stopped containers and remaining GPU memory. It does not alter reservations.
+
 Source checkouts and Python environments stay within this repository under
 `.sa-runs/`. Run data goes to `/share_nfs/ajith/benchmarks/<run>-<attempt>/`:
 
