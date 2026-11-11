@@ -345,6 +345,8 @@ def native_status(request, output):
     files = [source / 'workflow.log', source / 'completed-container-cleanup.json',
              source / 'gpu-memory-after-cleanup.json', *source.glob('native/*/logs/benchmark.out'),
              *source.glob('native/*/logs/*_agg_w*.out'),
+             *source.glob('native/*/logs/profiles/torch/profile-control.json'),
+             *source.glob('native/*/logs/profiles/torch/controller.log'),
              *source.glob('native/*/logs/profiles/rocprof/launch-utc.txt')]
     result = dict(run_id=run, at=dt.datetime.now(dt.timezone.utc).isoformat(),
                   reader_host=os.uname().nodename, reader_runner=os.environ.get('RUNNER_NAME'), files={})
@@ -356,6 +358,10 @@ def native_status(request, output):
             stream.seek(max(0, size - 65536))
             tail = stream.read(65536).decode(errors='replace')
         result['files'][str(path.relative_to(source))] = dict(bytes=size, tail=tail)
+    result['profile_files'] = [dict(file=str(path.relative_to(source)),
+        bytes=path.stat().st_size, modified_unix=path.stat().st_mtime)
+        for path in source.glob('native/*/logs/profiles/torch/**/*.trace.json*')
+        if path.is_file() and path.resolve().is_relative_to(source)]
     write_json(output / 'native-log-snapshot.json', result)
     print(json.dumps(result), flush=True)
 
