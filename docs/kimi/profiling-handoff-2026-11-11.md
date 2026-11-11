@@ -78,3 +78,45 @@ The controller recognizes the benchmark line containing "Phase profiling ... sta
 | GPU capture | 20 seconds after /start_profile returns. |
 | Trace export | /stop_profile performs export; extra time depends on trace volume. Each controller HTTP request has a 120-second timeout. |
 | Local reports | Inspect controller.log, profile-control.json and all worker trace files after export. |
+| GitHub artifact | Uploaded after the full replay and launch step finish, not immediately at capture completion. |
+| Phase-wait deadline | 7200 seconds from controller startup. This is a failure ceiling for finding the marker, not a recommended idle wait or whole-job timeout. |
+
+Poll job progress every two minutes during an authorized run. Check server/warmup progress and the measured-phase marker. If progress stops, investigate rather than waiting for the two-hour ceiling. The current controller writes "waiting" initially and its detailed report at completion/failure; it does not update every intermediate phase in profile-control.json.
+
+A file appearing is not enough: require status=captured, eight nonempty worker traces, successful export and subsequent kernel analysis. If an HTTP request reaches its 120-second timeout, inspect the controller/server error and cleanup; do not claim collection succeeded.
+
+### Observed successful timeline
+
+[Profile run 41478604149](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41478604149) and [analysis run 41776530466](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/41776530466) both passed. Status and the analysis artifact were checked November 11.
+
+Historical vLLM source: 492080779e9feea19308092b0aba0840e87c6115. This is not validation of the current a03796b8 head or the native-fallback candidate.
+
+| Event on November 2 | UTC |
+| --- | --- |
+| GPU job started | 16:09:37 |
+| Launch step started | 16:11:04 |
+| Measured phase began | 16:51:34 |
+| Controller observed marker | 16:51:38 |
+| Start-profile request returned | 16:56:39 |
+| Stop-profile/export request returned | 16:57:33 |
+| Profile artifact upload completed | 17:53:51 |
+
+The configured capture was 20 seconds; start-return to stop-return was about 54 seconds, including roughly 34 seconds of stop/export overhead. Reports were available locally about 6 minutes after the measured phase began. GitHub upload completed about 1 hour 44 minutes after GPU job start because the full replay continued.
+
+Eight compressed traces totaled about 446 MB. Analysis found 417,128 kernel events per worker over approximately 20.12 seconds. The CPU analysis workflow took about 3 minutes. These are observed examples, not guaranteed deadlines.
+
+## Earlier problems and the fixes
+
+| Problem encountered | Explanation and solution | State |
+| --- | --- | --- |
+| Capture started during setup/warmup | A server-relative delay cannot predict loading, graph capture and warmup across configurations. Use the actual measured-phase marker, then a settling window with generation progress. | Implemented and used in the successful capture above. |
+| Profiling environment overrides did not take effect | The launcher had already exported timing/warmup values; shell default expressions did not override existing values. The archived recipe used explicit values. The current workflow supplies explicit controller timings. Inspect the resolved command and logs. | Resolved configuration method; do not assume an outer export overrides a hardcoded recipe value. |
+| rocprof stopped at "will wait for 2 children to exit" | Terminating only the wrapper left instrumented descendants alive. The archived cleanup signals the captured descendants from leaves to root, then the root, and permits finalization. | Code fix retained in the archive; not a promise every shutdown produces a valid report. |
+| Trace export exceeded normal cleanup allowance | Keep the profile controller alive long enough to call /stop_profile and export before stopping vLLM. The controller is stopped before the server with a 125-second grace; historical profiling container allowance was extended to 210 seconds versus 90 normally. | Implemented; interruption/lost-start-response handling has CPU tests. Hard kill still cannot guarantee export. |
+| Generic profile workflow used the wrong launch/storage path | The generic profile.yml used an older path and published outside the two authorized repositories. Use native replay integration and InferenceMAX Actions artifacts. | Dedicated path implemented. Do not dispatch generic profile.yml unchanged for this task. |
+| Trace files mistaken for GPU coverage | CPU-only, stale, empty or missing-rank traces are insufficient. Use a fresh output directory, reject stale traces and run the analyzer requiring ranks 0-7 and nonzero kernel events. | Capture and analysis succeeded for the historical run above. |
+| Output ownership / read-only mounts | The profile controller restores ownership only inside its new output tree. A separate November 6 diagnostic failed when editable installation wrote metadata into a read-only repository; its driver now copies the observer into a writable run directory before installation. | Distinct fixes; the latter was not an FP8 numerical failure. |
+| Storage quota before Docker launch | The earlier runner reported "Disk quota exceeded" while copying run-helper.sh, despite free filesystem space. User/project quota can prevent output creation. Verify quota and output writability; the user moved runners. | No quota increase was performed by this session. This error was not established in the successful profile above. |
+
+The later mixed-context diagnostic's TCPStore/FileStore failure is separate from profiling. Its TCP rendezvous fix remains pending; see the [main handoff](pr64288-handoff-2026-11-09.md#latest-failures-and-immediate-next-fix).
+
