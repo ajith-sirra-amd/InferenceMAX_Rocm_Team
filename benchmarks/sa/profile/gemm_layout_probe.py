@@ -39,8 +39,9 @@ def worker(args):
     # Small nonuniform integer values are exact in both BF16 and FP32.
     a.copy_((torch.arange(a.numel(), device='cuda', dtype=torch.int32).reshape(a.shape) % 7) - 3)
     b.copy_((torch.arange(b.numel(), device='cuda', dtype=torch.int32).reshape(b.shape) % 5) - 2)
-    packed = a.contiguous()
-    copied = torch.empty_like(packed)
+    variants = ('original',) if args.original_only else VARIANTS
+    packed = None if args.original_only else a.contiguous()
+    copied = None if args.original_only else torch.empty_like(packed)
     reference = torch.bmm(a.float(), b.float()).to(torch.bfloat16)
     # Also independently check sampled FP32-reference results with host scalar dots.
     samples = []
@@ -64,7 +65,7 @@ def worker(args):
         torch.bmm(operand, b, out=out)
 
     checks = {}
-    for variant in VARIANTS:
+    for variant in variants:
         for _ in range(5):
             invoke(variant)
         torch.cuda.synchronize()
@@ -83,10 +84,11 @@ def worker(args):
         for _ in range(5):
             invoke(args.counter_variant)
         torch.cuda.synchronize()
-        plan = [(i, 0, args.counter_variant) for i in range(4)]
+        plan = [(i, 0, args.counter_variant) for i in range(args.iterations or 4)]
     else:
-        for round_id in range(48):
-            order = VARIANTS[round_id % 3:] + VARIANTS[:round_id % 3]
+        for round_id in range(args.iterations or 48):
+            offset = round_id % len(variants)
+            order = variants[offset:] + variants[:offset]
             plan.extend((round_id, position, variant) for position, variant in enumerate(order))
     events = [(torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)) for _ in plan]
     if roctx:
@@ -101,6 +103,8 @@ def worker(args):
     if roctx:
         assert roctx.roctxProfilerPause(0) == 0
     assert bool(torch.equal(out, reference))
+    actual_strides = [list(t.stride()) for t in (a, b, out)]
+    assert actual_strides == strides
     record = dict(payload_valid=True, correctness_by_variant=checks,
         reference='Separate full FP32 BMM rounded to BF16, plus six host scalar-dot checks',
         scalar_reference_samples=samples, device=torch.cuda.get_device_name(0),
@@ -108,7 +112,9 @@ def worker(args):
         blas_preference=str(torch.backends.cuda.preferred_blas_library()),
         math_policy=dict(allow_tf32=torch.backends.cuda.matmul.allow_tf32,
             allow_bf16_reduced_precision_reduction=torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction),
-        shapes=shapes, original_strides=strides, packed_a_stride=list(packed.stride()),
+        shapes=shapes, original_strides=strides, packed_a_stride=list(packed.stride()) if packed is not None else None,
+        actual_input_output_strides=actual_strides, input_output_precision='BF16',
+        mathematical_flops_per_call=2*shapes[0][0]*shapes[0][1]*shapes[0][2]*shapes[1][2],
         warmups_per_variant=5, samples=samples_timing,
         timing_scope='Enclosing GPU events; local isolated pipeline, no model E2E',
         prepacked_scope='Packing and allocation performed once outside timings; requires producer to supply contiguous A',
@@ -118,9 +124,9 @@ def worker(args):
     record['distributions_us'] = {variant: distribution([s['duration_us'] for s in samples_timing
                                   if s['variant'] == variant]) for variant in VARIANTS
                                   if any(s['variant'] == variant for s in samples_timing)}
-    if not args.counter_variant:
+    if not args.counter_variant and not args.original_only:
         by_round = {i: {s['variant']: s['duration_us'] for s in samples_timing if s['round'] == i}
-                    for i in range(48)}
+                    for i in range(args.iterations or 48)}
         record['paired_difference_us'] = {variant: distribution([
             row[variant] - row['original'] for row in by_round.values()]) for variant in VARIANTS[1:]}
         record['paired_speedup_ratio'] = {variant: distribution([
@@ -192,6 +198,8 @@ if __name__ == '__main__':
     parser.add_argument('--worker', action='store_true')
     parser.add_argument('--counter-variant', choices=VARIANTS[:2])
     parser.add_argument('--roctx')
+    parser.add_argument('--original-only', action='store_true')
+    parser.add_argument('--iterations', type=int, choices=(4, 8, 48))
     args = parser.parse_args()
     if args.worker:
         worker(args)
