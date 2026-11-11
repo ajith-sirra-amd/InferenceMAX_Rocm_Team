@@ -123,20 +123,27 @@ def command(root, name, argv, timeout=100, env=None):
     return record
 
 
-def probe(root):
+def probe(root, proton_only=False):
     root.mkdir(parents=True, exist_ok=False)
     result = dict(scope='Synthetic pinned-image capability; not Kimi performance', checks={})
     result['checks']['rocprof-version'] = command(root, 'rocprof-version', ['rocprofv3', '--version'], 30)
     result['checks']['rocprof-counters'] = command(root, 'rocprof-counters', ['rocprofv3', '--list-avail'], 30)
-    result['checks']['metadata'] = command(root, 'metadata',
-        [sys.executable, __file__, '--output', str(root / 'metadata'), '--worker', 'metadata'], 120)
+    if not proton_only:
+        result['checks']['metadata'] = command(root, 'metadata',
+            [sys.executable, __file__, '--output', str(root / 'metadata'), '--worker', 'metadata'], 120)
     search = [Path(shutil.which('rocprofv3')).resolve().parent.parent, Path('/opt/rocm')]
     search += [Path(p) / package for p in sys.path if p
                for package in ('_rocm_sdk_devel', '_rocm_sdk_core')]
     libraries = sorted({str(f.resolve()) for base in search if base.exists()
                         for f in base.rglob('librocprofiler-sdk.so*') if f.is_file()})
     write(root / 'rocprofiler-libraries.json', libraries)
-    library_path = ':'.join(sorted({str(Path(f).parent) for f in libraries}))
+    aliases = root / 'library-aliases'
+    aliases.mkdir()
+    if len(libraries) == 1:
+        # This image ships only the versioned SDK SONAME. Proton dlopens the
+        # development name; alias the same bytes inside the new output tree.
+        (aliases / 'librocprofiler-sdk.so').symlink_to(libraries[0])
+    library_path = ':'.join([str(aliases), *sorted({str(Path(f).parent) for f in libraries})])
     library_path += ':' + os.environ.get('LD_LIBRARY_PATH', '')
     result['checks']['proton'] = command(root, 'proton',
         [sys.executable, __file__, '--output', str(root / 'proton'), '--worker', 'proton'], 90,
@@ -145,6 +152,8 @@ def probe(root):
               'read': ['FETCH_SIZE'], 'write': ['WRITE_SIZE'],
               'math': ['SQ_INSTS_VALU_MFMA_MOPS_BF16', 'SQ_INSTS_VALU_MFMA_MOPS_F8',
                        'SQ_INSTS_VALU_MFMA_MOPS_F6F4']}
+    if proton_only:
+        groups = {}
     for group, counters in groups.items():
         folder = root / ('counters-graph-' + group)
         folder.mkdir()
@@ -162,16 +171,18 @@ def probe(root):
     result['status'] = 'completed'
     write(root / 'capability-result.json', result)
     print(json.dumps(result, indent=2), flush=True)
-    return 0 if result['checks']['metadata'].get('returncode') == 0 else 1
+    required = 'proton' if proton_only else 'metadata'
+    return 0 if result['checks'][required].get('returncode') == 0 else 1
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--worker', choices=['eager', 'graph', 'metadata', 'proton'])
+    parser.add_argument('--proton-only', action='store_true')
     args = parser.parse_args()
     if args.worker:
         args.output.mkdir(parents=True, exist_ok=True)
         workload(args.worker, args.output)
     else:
-        raise SystemExit(probe(args.output))
+        raise SystemExit(probe(args.output, args.proton_only))
