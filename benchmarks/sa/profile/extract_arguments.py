@@ -4,6 +4,7 @@ Graph-launch correlation identifies an outer replay, not an inner operator. Such
 events are deliberately excluded. Output is evidence, not executable replay code.
 """
 import argparse
+from collections import defaultdict
 import gzip
 import hashlib
 import json
@@ -13,26 +14,41 @@ import re
 
 def extract(trace, operator_pattern):
     events = trace['traceEvents']
-    operators = {str(e['args']['External id']): e for e in events
-                 if e.get('cat') == 'cpu_op' and e.get('args', {}).get('External id') is not None
-                 and re.search(operator_pattern, e.get('name', ''))}
-    launches = {str(e['args']['correlation']): e for e in events
-                if e.get('cat') in ('cuda_runtime', 'hip_runtime')
-                and e.get('args', {}).get('correlation') is not None}
-    cases, skipped = {}, dict(graph_launches=0, missing_launch=0, missing_operator=0, missing_shape=0)
+    operators, launches = defaultdict(list), defaultdict(list)
+    for event in events:
+        args = event.get('args', {})
+        if event.get('cat') == 'cpu_op' and args.get('External id') is not None:
+            operators[(event.get('pid'), str(args['External id']))].append(event)
+        if event.get('cat') in ('cuda_runtime', 'hip_runtime') and args.get('correlation') is not None:
+            launches[str(args['correlation'])].append(event)
+    cases, invocations = {}, defaultdict(set)
+    skipped = dict(graph_launches=0, missing_launch=0, ambiguous_launch=0,
+                   missing_operator=0, ambiguous_operator=0, excluded_operator=0, missing_shape=0)
     for kernel in events:
         if kernel.get('cat') != 'kernel':
             continue
-        launch = launches.get(str(kernel.get('args', {}).get('correlation')))
-        if not launch:
+        candidates = launches.get(str(kernel.get('args', {}).get('correlation')), [])
+        if not candidates:
             skipped['missing_launch'] += 1
             continue
+        if len(candidates) != 1:
+            skipped['ambiguous_launch'] += 1
+            continue
+        launch = candidates[0]
         if 'GraphLaunch' in launch.get('name', ''):
             skipped['graph_launches'] += 1
             continue
-        operator = operators.get(str(launch.get('args', {}).get('External id')))
-        if not operator:
+        operator_key = (launch.get('pid'), str(launch.get('args', {}).get('External id')))
+        candidates = operators.get(operator_key, [])
+        if not candidates or operator_key[0] is None:
             skipped['missing_operator'] += 1
+            continue
+        if len(candidates) != 1:
+            skipped['ambiguous_operator'] += 1
+            continue
+        operator = candidates[0]
+        if not re.search(operator_pattern, operator.get('name', '')):
+            skipped['excluded_operator'] += 1
             continue
         args = operator.get('args', {})
         if not args.get('Input Dims') or not args.get('Input type'):
@@ -43,15 +59,21 @@ def extract(trace, operator_pattern):
             concrete_inputs=args.get('Concrete Inputs'))
         signature = hashlib.sha256(json.dumps(observed, sort_keys=True).encode()).hexdigest()
         case = cases.setdefault(signature, dict(id=signature, observed=observed,
-            calls=0, summed_kernel_us=0.0, kernel_symbols={}, launch_apis={}, example_events=[]))
-        case['calls'] += 1
+            kernel_dispatches=0, operator_invocations=0, summed_kernel_us=0.0,
+            kernel_symbols={}, launch_apis={}, example_events=[]))
+        case['kernel_dispatches'] += 1
+        invocations[signature].add(operator_key)
+        case['operator_invocations'] = len(invocations[signature])
         case['summed_kernel_us'] += kernel.get('dur', 0)
         for key, name in (('kernel_symbols', kernel['name']), ('launch_apis', launch['name'])):
             case[key][name] = case[key].get(name, 0) + 1
         if len(case['example_events']) < 2:
             case['example_events'].append(dict(kernel=kernel, launch=launch, operator=operator))
     return dict(cases=sorted(cases.values(), key=lambda c: -c['summed_kernel_us']), skipped=skipped,
-        limits=['Direct CPU external-id and HIP launch correlation only; graph-internal arguments excluded.',
+        binding_audit=dict(cpu_operator_keys=len(operators), launch_correlation_keys=len(launches),
+            ambiguous_operator_keys=sum(len(v) != 1 for v in operators.values()),
+            ambiguous_launch_keys=sum(len(v) != 1 for v in launches.values())),
+        limits=['Direct unique CPU (PID, external-id) and globally unique HIP launch correlation only; ambiguous and graph-internal arguments excluded.',
                 'Empty concrete values can be unrecorded arguments, not necessarily defaults or null.',
                 'Review the installed operator schema and all scalar/optional arguments before replay.',
                 'A replay must verify exact kernel symbol, tensor strides, dtype and call configuration; '
