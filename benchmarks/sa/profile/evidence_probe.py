@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
 import sys
@@ -98,10 +99,13 @@ def workload(mode, output):
         hip=torch.version.hip, device=torch.cuda.get_device_name(0))), flush=True)
 
 
-def command(root, name, argv, timeout=100):
+def command(root, name, argv, timeout=100, env=None):
     record = dict(argv=argv, timeout_seconds=timeout, started_utc_ns=time.time_ns())
+    if env:
+        record['environment_additions'] = env
     with (root / (name + '.log')).open('w') as log:
         process = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT,
+                                   env=dict(os.environ, **(env or {})),
                                    start_new_session=True)
         try:
             record['returncode'] = process.wait(timeout=timeout)
@@ -126,9 +130,19 @@ def probe(root):
     result['checks']['rocprof-counters'] = command(root, 'rocprof-counters', ['rocprofv3', '--list-avail'], 30)
     result['checks']['metadata'] = command(root, 'metadata',
         [sys.executable, __file__, '--output', str(root / 'metadata'), '--worker', 'metadata'], 120)
+    search = [Path(shutil.which('rocprofv3')).resolve().parent.parent, Path('/opt/rocm')]
+    search += [Path(p) / package for p in sys.path if p
+               for package in ('_rocm_sdk_devel', '_rocm_sdk_core')]
+    libraries = sorted({str(f.resolve()) for base in search if base.exists()
+                        for f in base.rglob('librocprofiler-sdk.so*') if f.is_file()})
+    write(root / 'rocprofiler-libraries.json', libraries)
+    library_path = ':'.join(sorted({str(Path(f).parent) for f in libraries}))
+    library_path += ':' + os.environ.get('LD_LIBRARY_PATH', '')
     result['checks']['proton'] = command(root, 'proton',
-        [sys.executable, __file__, '--output', str(root / 'proton'), '--worker', 'proton'], 90)
-    groups = {'read': ['FETCH_SIZE'], 'write': ['WRITE_SIZE'],
+        [sys.executable, __file__, '--output', str(root / 'proton'), '--worker', 'proton'], 90,
+        env={'LD_LIBRARY_PATH': library_path})
+    groups = {'read-write': ['FETCH_SIZE', 'WRITE_SIZE'],
+              'read': ['FETCH_SIZE'], 'write': ['WRITE_SIZE'],
               'math': ['SQ_INSTS_VALU_MFMA_MOPS_BF16', 'SQ_INSTS_VALU_MFMA_MOPS_F8',
                        'SQ_INSTS_VALU_MFMA_MOPS_F6F4']}
     for group, counters in groups.items():
