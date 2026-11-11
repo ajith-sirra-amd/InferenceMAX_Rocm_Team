@@ -50,6 +50,21 @@ schema, fill no unknown argument by assumption, and require the replay kernel
 symbol to match the captured variant before using its hardware counters. An
 isolated kernel replay is separate evidence from the original model/cache state.
 
+`profile/collective_probe.py` provides a bounded isolated eight-rank Int32
+all-gather replay from `profile/cases/kimi-k31-int32-allgather-42988482125.json`.
+The case binds the measured payload, type, rank set and eager launch to saved
+trace metadata. It retains the recorded server environment, checks all output
+values and collects four warm iterations in separate READ/WRITE passes using
+ROCTX selected regions. Each pass has a 150-second export-inclusive deadline;
+rank coverage and exactly four collective counter rows per rank are required.
+This new path needs runner validation before its counters can support a report.
+It records communication tuning diagnostics and installed source through
+`profile/source_inventory.py`. A fresh communicator and synthetic rank-valued
+input do not reproduce original channel/protocol choices, arrival timing or
+cache state. Peer traffic must not be relabeled pure HBM traffic, and generic
+RCCL symbol equality does not establish algorithm equivalence. Source hashes
+bind files to the image; graph-node invocation binding remains separate.
+
 Pinned-image capability check `42987645614` captured 96 synthetic kernel events
 on all eight GPUs. It establishes basic profiler capability, not full Kimi model
 coverage. Twenty-three local adapter/controller/export checks pass, including

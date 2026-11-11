@@ -1,0 +1,83 @@
+{
+  "collective": "_allgather_base",
+  "dtype": "int32",
+  "world_size": 8,
+  "input_elements": 2359296,
+  "output_elements": 18874368,
+  "launch_mode": "eager",
+  "source_run": "42988482125",
+  "source_image": "vllm/vllm-openai-rocm:kimi-k31-d73dd529@sha256:5b54f223a150a9baad41a5d511e159e7cbf43e308c6cd44ad3f6a2463c245b3c",
+  "source_evidence": {
+    "name": "paired-collectives.json",
+    "sha256": "20124a34843cdd7c4238a31e7712bc987cf9e6ae2af80edd8d3fc3dd91d443de",
+    "metadata": {
+      "Collective name": "_allgather_base",
+      "Group size": 8,
+      "In msg nelems": 2359296,
+      "Out msg nelems": 18874368,
+      "Process Group Name": "5",
+      "Process Group Ranks": "[0, 1, 2, 3, 4, 5, 6, 7]",
+      "Seq": 278393,
+      "dtype": "Int"
+    },
+    "ranks": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "launch_apis": [
+      "hipModuleLaunchKernel"
+    ]
+  },
+  "server_environment": {
+    "AITER_BF16_FP8_MOE_BOUND": "0",
+    "AITER_FLYDSL_SPARSE_MLA": "1",
+    "AITER_FLYDSL_STAGE2_FP8": "0",
+    "HSA_NO_SCRATCH_RECLAIM": "1",
+    "PYTHONHASHSEED": "42",
+    "PYTHONNOUSERSITE": "1",
+    "SAFETENSORS_FAST_GPU": "1",
+    "THP_MEM_ALLOC_ENABLE": "1",
+    "VLLM_ENGINE_READY_TIMEOUT_S": "7200",
+    "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "1200",
+    "VLLM_FASTSAFETENSORS_QUEUE_SIZE": "-1",
+    "VLLM_ROCM_AITER_MLA_ASM_PADDING": "asm",
+    "VLLM_ROCM_AITER_MLA_DCP_VERIFY": "asm",
+    "VLLM_ROCM_DCP_AITER_ALLGATHER": "1",
+    "VLLM_ROCM_DSA_DCP_GLOBAL_KEY_PREFILL": "1",
+    "VLLM_ROCM_DSA_DCP_ROWSHARD_PREFILL": "1",
+    "VLLM_ROCM_QUICK_REDUCE_QUANTIZATION": "NONE",
+    "VLLM_ROCM_USE_AITER": "1",
+    "VLLM_ROCM_USE_AITER_FLYDSL_SPARSE_MLA": "1",
+    "VLLM_ROCM_USE_AITER_MOE_SITUV2": "1",
+    "VLLM_USE_BREAKABLE_CUDAGRAPH": "1",
+    "VLLM_USE_DIRECT_DCP_A2A": "0",
+    "VLLM_USE_DIRECT_DCP_KV_GATHER": "0",
+    "VLLM_USE_DIRECT_DCP_Q_GATHER": "0",
+    "VLLM_USE_V2_MODEL_RUNNER": "1"
+  },
+  "server_environment_source": {
+    "name": "native-profile-42988482125-job-130415270449.log",
+    "sha256": "3080ad1c10b1f0a85b2906ac8c7fb2a11c29feac79abcec154786a4d6ee0979c",
+    "excluded_local_endpoints": [
+      "DYN_VLLM_KV_EVENT_PORT",
+      "HEAD_NODE_IP",
+      "VLLM_NIXL_SIDE_CHANNEL_HOST",
+      "VLLM_NIXL_SIDE_CHANNEL_PORT",
+      "VLLM_PORT"
+    ]
+  },
+  "replay_limitations": [
+    "Same payload, dtype, image and ranks; isolated eager collective",
+    "Fresh default communicator does not reproduce model process group 5 and channel/protocol choices",
+    "Diagnostic NCCL_DEBUG INFO and INIT,GRAPH,TUNING,COLL added only to this isolated replay",
+    "Input data is deterministic rank values; original data content/cache state/arrival schedule are not reproduced",
+    "FETCH_SIZE/WRITE_SIZE may include peer fabric transactions; do not label all traffic HBM",
+    "No model throughput or request E2E speedup claim"
+  ]
+}
