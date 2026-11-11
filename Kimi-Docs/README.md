@@ -33,3 +33,10 @@ These handoffs are maintained on the investigation branch:
 - [REPRODUCE.md](REPRODUCE.md)
 - [SESSION-HANDOFF.md](SESSION-HANDOFF.md)
 - [UPSTREAM-STATUS.md](UPSTREAM-STATUS.md)
+
+## PR 54736 patch artifacts
+
+- [54736.solo.diff](54736.solo.diff)
+- [54736.solo.raw](54736.solo.raw)
+
+[Dockerfile.solo](../Dockerfile.solo) uses the diff. Keep the repository root as its Docker build context.
