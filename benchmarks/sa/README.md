@@ -59,9 +59,14 @@ Source checkouts and Python environments stay within this repository under
 
 The files suffixed `sa42638222682` pin the updated SA Kimi C48 reference,
 including its new image, six speculative tokens and native acceptance 3.57.
-The paired `profile-check` uses 600 seconds and one warmup request per lane.
-Its initial 1500-second launch delay is estimated from the reference startup;
-actual capture overlap must pass validation before a full profile is launched.
+The historical `profile-check` captured during warmup with its initial
+1500-second delay. Use the linked `profile-check-120s-sa42638222682.json`
+candidate for the retry: 600-second benchmark, one additional warmup request per
+lane, 2700-second profiler delay and 130-second capture. It requires at least
+120 seconds common measured coverage across eight GPUs. The paired
+`profile-120s-sa42638222682.json` preserves the full native workload and uses a
+3000-second delay; launch it only after the smoke passes. The
+[timing record](profile/TIMING_SA42638222682.md) explains calibration and limits.
 The original files preserve the prior SA reference.
 These configs use `local_frontend_port: 0` to select an available host TCP port
 because ports 8000 and 18000 are occupied on the runner. This pinned SRT version has no YAML port option,
@@ -75,7 +80,7 @@ benchmark completion and profiling must be established by the run artifacts;
 a successful dispatch or setup does not establish them.
 
 An optional `profile` object selects the capture hook, currently for vLLM:
-`{"tool":"rocprofv3","mode":"launch","delay_seconds":CALIBRATED_DELAY,"seconds":60}`.
+`{"tool":"rocprofv3","mode":"launch","delay_seconds":CALIBRATED_DELAY,"seconds":130,"minimum_seconds":120}`.
 Use a separate configuration and workflow run after the baseline succeeds.
 The hook retains native server arguments and captures kernel, HIP, copy and
 marker traces as CSV/JSON under `native/<allocation>/logs/profiles/rocprof/`.
@@ -107,6 +112,10 @@ CSV/JSON. Broad HIP API tracing is omitted because the installed SDK can crash
 while serializing API arguments at exit. This reduces CPU API visibility;
 graph records do not replace a full host call trace. Inspect complete JSON and
 profiler exit evidence as well as CSV coverage before accepting the capture.
+The launcher waits for native server shutdown, then checks complete, stable JSON
+files against worker CSV counts and finalization metadata before artifact upload.
+The capture timer is not an export timeout. Missing/truncated or still-changing
+files fail validation; failed-run artifacts remain preserved for diagnosis.
 
 For an explicitly shortened diagnostic, set the environment's `DURATION` and
 the profile's `warmup_requests_per_lane`. The small client adapter reuses the

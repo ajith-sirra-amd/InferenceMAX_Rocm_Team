@@ -5,11 +5,17 @@ import json
 from pathlib import Path
 import re
 
+from validate_exports import validate_exports
 
-def validate(logs, seconds, devices=8, output=None, require_attachment=False):
+
+def validate(logs, seconds, devices=8, output=None, require_attachment=False, minimum_seconds=None,
+             require_exports=False):
     root = Path(logs) / 'profiles/rocprof'
-    result = {'status': 'failed', 'devices': {}, 'errors': []}
+    result = {'status': 'failed', 'requested_seconds': seconds,
+              'stop_grace_seconds': 15, 'devices': {}, 'errors': []}
     try:
+        if minimum_seconds is not None and (type(minimum_seconds) is not int or not 1 <= minimum_seconds <= seconds):
+            raise ValueError('minimum_seconds must be a positive integer no greater than seconds')
         for log in Path(logs).glob('*_agg_w*.out'):
             for line in log.read_text(errors='replace').splitlines():
                 if re.search(r'Segfault encountered|Segmentation fault|buffer\s+overrun|'
@@ -50,13 +56,28 @@ def validate(logs, seconds, devices=8, output=None, require_attachment=False):
             d['utc_last_ns'] = d['last_ns'] + high
             if not begin <= d['utc_first_ns'] <= d['utc_last_ns'] <= end:
                 result['errors'].append(device + ': capture falls outside measured sending period')
-            if not 0.8 * seconds <= d['span_seconds'] <= seconds + 5:
+            # Recorded graph dispatches can extend beyond the timer: the last
+            # smoke requested 60s and exported 70.76s. Keep that allowance
+            # explicit and bounded; it never relaxes measured-phase containment.
+            if not 0.8 * seconds <= d['span_seconds'] <= seconds + result['stop_grace_seconds']:
                 result['errors'].append(device + ': kernel span does not cover the requested window')
-    except (OSError, ValueError, KeyError, csv.Error) as error:
+        if minimum_seconds is not None and result['devices']:
+            # Use the inner clock bracket: every device must cover the same
+            # minimum interval inside measured sending, not separate intervals.
+            common_begin = max(begin, max(d['first_ns'] + high for d in result['devices'].values()))
+            common_end = min(end, min(d['last_ns'] + low for d in result['devices'].values()))
+            result['minimum_common_seconds'] = minimum_seconds
+            result['common_coverage_utc_ns'] = [common_begin, common_end]
+            result['common_coverage_seconds'] = max(0, common_end - common_begin) / 1e9
+            if common_end - common_begin < minimum_seconds * 10**9:
+                result['errors'].append(f'Common measured GPU coverage is below {minimum_seconds} seconds')
+        if require_exports:
+            result['exports'] = validate_exports(root / 'traces')
+    except (OSError, ValueError, KeyError, TypeError, csv.Error) as error:
         result['errors'].append(str(error))
     if not result['errors']:
         result['status'] = 'passed'
-    result['limits'] = 'Device/window check only; inspect dropped events, rank mapping and profiler perturbation separately.'
+    result['limits'] = 'Device/window extent check only; not proof of gap-free capture. Inspect dropped events, rank mapping and profiler perturbation separately.'
     destination = Path(output) if output is not None else root / 'capture-validation.json'
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(result, indent=2) + '\n')
@@ -70,7 +91,10 @@ if __name__ == '__main__':
     p.add_argument('--devices', type=int, default=8)
     p.add_argument('--output', type=Path, help='Writable report path outside container-owned raw traces')
     p.add_argument('--require-attachment', action='store_true')
+    p.add_argument('--minimum-seconds', type=int, help='Required common measured interval across every captured device')
+    p.add_argument('--require-exports', action='store_true', help='Require complete, stable JSON matching every worker CSV')
     args = p.parse_args()
-    result = validate(args.logs, args.seconds, args.devices, args.output, args.require_attachment)
+    result = validate(args.logs, args.seconds, args.devices, args.output, args.require_attachment,
+                      args.minimum_seconds, args.require_exports)
     print(json.dumps(result, indent=2))
     raise SystemExit(0 if result['status'] == 'passed' else 1)

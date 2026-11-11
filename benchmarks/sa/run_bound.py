@@ -66,6 +66,9 @@ if profile:
         raise ValueError('Profile mode must be launch or attach')
     if type(delay) is not int or delay < 0 or type(seconds) is not int or not 1 <= seconds <= 180:
         raise ValueError('Use a calibrated nonnegative delay and a 1–180 second capture')
+    minimum = profile.get('minimum_seconds')
+    if minimum is not None and (type(minimum) is not int or not 1 <= minimum <= seconds):
+        raise ValueError('Profile minimum_seconds must be a positive integer no greater than seconds')
     mounts[str(Path(__file__).parent / 'profile')] = '/sa-profile-bin:ro'
     settings['default_bash_preamble'] = 'export PATH="/sa-profile-bin:$PATH"'
 settings.update(cluster='mi355x-local', default_partition='amd-spur', default_account='',
@@ -176,7 +179,9 @@ if not result.is_file():
     raise RuntimeError('Native benchmark result is missing: ' + str(result))
 subprocess.run([sys.executable, '-m', 'infx.results.agentic.validate_agentic_result', str(logs / 'agentic'), '--failed-request-threshold', c['environment']['AIPERF_FAILED_REQUEST_THRESHOLD']], check=True)
 if profile:
+    print('Server shutdown finished; validating completed profiler files before artifact upload.', flush=True)
     subprocess.run([sys.executable, Path(__file__).with_name('validate_profile.py'),
-                    logs, '--seconds', str(seconds),
+                    logs, '--seconds', str(seconds), '--require-exports',
                     '--output', a.output / 'profile-capture-validation.json']
-                   + (['--require-attachment'] if mode == 'attach' else []), check=True)
+                   + (['--require-attachment'] if mode == 'attach' else [])
+                   + (['--minimum-seconds', str(minimum)] if minimum is not None else []), check=True)
