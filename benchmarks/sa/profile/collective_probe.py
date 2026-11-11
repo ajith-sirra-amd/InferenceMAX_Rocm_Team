@@ -191,12 +191,16 @@ def probe(args):
     roctx = sorted({str(p.resolve()) for root in roots if root.is_dir()
                     for p in root.glob('librocprofiler-sdk-roctx.so*') if p.is_file()})
     write(args.output / 'roctx-libraries.json', roctx)
-    if len(roctx) != 1:
-        raise RuntimeError('Expected exactly one installed ROCTX library')
+    versioned = [p for p in roctx if p.endswith('.so.1')]
+    selected = versioned if len(versioned) == 1 else roctx
+    if len(selected) != 1:
+        raise RuntimeError('Could not uniquely select the installed ROCTX SONAME')
+    write(args.output / 'selected-roctx.json', dict(path=selected[0],
+        selection='Installed versioned .so.1 preferred over development .so filename'))
     outcomes = {'source_inventory': source.get('returncode') == 0}
     groups = [(value.lower(), value) for value in args.counter] if args.counter else [('read', 'FETCH_SIZE'), ('write', 'WRITE_SIZE')]
     for name, counter in [('baseline', None), *groups]:
-        outcomes[name] = launch(args.output / name, args.case, counter, roctx[0])
+        outcomes[name] = launch(args.output / name, args.case, counter, selected[0])
         if not outcomes[name]:
             break
     write(args.output / 'result.json', dict(scope=__doc__, outcomes=outcomes))
