@@ -41,9 +41,12 @@ def worker(args):
     result = dict(rank=args.rank, status='initializing', cases=[], scope=__doc__,
                   torch=torch.__version__, hip=torch.version.hip,
                   device=torch.cuda.get_device_name(args.rank), sources={})
-    for obj in (ReplicatedLinear, RMSNorm, initialize_model_parallel):
+    for obj, expected in ((ReplicatedLinear, 'd4b97d850eb8bdee5fd2459e7ac688d00623b54f5ec0ea590c08da0173f8b4d4'),
+                          (RMSNorm, '45a29c6f8a78c6a76fb6abf4dbe68ff3ab21b73293cd0fe63d612322f098e0c6'),
+                          (initialize_model_parallel, 'f37b5ca1fc25c2a872aa0d3c4cc0288abc0a781b2affa7842f3e731fff1bc7ec')):
         path = Path(inspect.getsourcefile(obj))
         result['sources'][str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+        assert result['sources'][str(path)] == expected, f'Pinned source mismatch: {path}'
     save = lambda: write(args.output / 'result.json', result)
     save()
     # Config has no model path: initialization must not download/load a model.
@@ -57,7 +60,7 @@ def worker(args):
                                         params_dtype=torch.bfloat16)
             candidate = ColumnParallelLinear(35840, 7168, bias=False, return_bias=False,
                                              params_dtype=torch.bfloat16, gather_output=True)
-            norm = RMSNorm(7168, eps=1e-6, dtype=torch.bfloat16)
+            norm = RMSNorm(7168, eps=1e-5, dtype=torch.bfloat16)
         baseline.weight.normal_(0, 0.005)
         candidate.weight.weight_loader(candidate.weight, baseline.weight)
         assert torch.equal(candidate.weight, baseline.weight[args.rank * 896:(args.rank + 1) * 896])
