@@ -31,6 +31,7 @@ def worker(args):
     import torch
     import torch.distributed as dist
     from vllm.config import VllmConfig, set_current_vllm_config
+    from vllm.config.compilation import CompilationConfig
     from vllm.distributed import (init_distributed_environment, initialize_model_parallel,
                                   get_tp_group, destroy_model_parallel, destroy_distributed_environment)
     from vllm.model_executor.layers.linear import ReplicatedLinear, ColumnParallelLinear
@@ -49,8 +50,23 @@ def worker(args):
         assert result['sources'][str(path)] == expected, f'Pinned source mismatch: {path}'
     save = lambda: write(args.output / 'result.json', result)
     save()
-    # Config has no model path: initialization must not download/load a model.
-    with set_current_vllm_config(VllmConfig()), torch.inference_mode():
+    # Breakable graphs force mode NONE in the saved SA run; graph mode stays
+    # FULL_AND_PIECEWISE. Install platform IR priorities like worker startup.
+    # No model path: initialization must not download/load model weights.
+    config = VllmConfig(compilation_config=CompilationConfig(
+        mode=0, cudagraph_mode='FULL_AND_PIECEWISE', custom_ops=['+fused_rms_norm_gated']))
+    config.kernel_config.set_platform_defaults(config)
+    config.kernel_config.ir_op_priority.set_default()
+    result['effective_config'] = dict(compilation_mode=str(config.compilation_config.mode),
+        cudagraph_mode=str(config.compilation_config.cudagraph_mode),
+        ir_op_priority=str(config.kernel_config.ir_op_priority))
+    result['runtime_environment'] = {key: value for key, value in os.environ.items()
+        if key.startswith(('VLLM_', 'AITER_', 'ROCPROF', 'HSA_', 'HIP_', 'ROCBLAS_', 'HIPBLAS_'))
+        or key in ('LD_PRELOAD', 'LD_AUDIT', 'ROCTRACER_DOMAIN', 'HSA_TOOLS_LIB', 'HSA_TOOLS_REPORT_LOAD_FAILURE')}
+    result['loaded_profile_libraries'] = sorted({line.split()[-1] for line in Path('/proc/self/maps').read_text().splitlines()
+        if any(s in line.lower() for s in ('rocprof', 'roctrace', 'kineto')) and '/' in line})
+    save()
+    with set_current_vllm_config(config), torch.inference_mode():
         init_distributed_environment(8, args.rank, args.rendezvous, args.rank,
                                      timeout=datetime.timedelta(seconds=90))
         initialize_model_parallel(8, decode_context_model_parallel_size=8)
