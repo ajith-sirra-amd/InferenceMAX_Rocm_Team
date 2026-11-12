@@ -23,7 +23,8 @@ sys.dont_write_bytecode = True
 import optimization_attnres as common
 
 NORM_V1_SHA256 = "c4bb07264a72ada42331c8535928ea98c3246d90db2fa4fe22644ddf5c14aac8"
-NORM_SHA256 = "40719ea01e4b6a3365086c364b8c9dea61dadf741497111283842aa33b86b8f1"
+NORM_V2_SHA256 = "40719ea01e4b6a3365086c364b8c9dea61dadf741497111283842aa33b86b8f1"
+NORM_SHA256 = "59739607be72dc856b0a827d5bf82ab43eba13da181cff512216c2f6293ac021"
 ARMS = ("baseline", "product_only", "norm_cache", "combined")
 ENVIRONMENT_KEYS = (
     'VLLM_ROCM_USE_AITER',
@@ -130,7 +131,7 @@ def norm_source_v1(product_source):
     return source
 
 
-def norm_source(product_source):
+def norm_source_v2(product_source):
     """Use the native initial masked reduction; later writer reductions stay intact.
 
     Diagnostic43193326018 binds the old initial2-D reduction to a different
@@ -165,6 +166,29 @@ def norm_source(product_source):
                 first_rstd,
             )
 """)
+    ast.parse(source)
+    return source
+
+
+def norm_source(product_source):
+    """Recompute historical block 0; retain v2 writes and later cache reuse.
+
+    Diagnostic43221040563 shows the FP8 initial-output reduction has layout16,
+    while the native historical consumer uses layout8. Its scalar cannot be
+    reused exactly. Keep native output arithmetic and all strict gates intact.
+    """
+    source = norm_source_v2(product_source)
+    if common.digest(source.encode()) != NORM_V2_SHA256:
+        raise ValueError("Historical norm-cache v2 source hash mismatch")
+    source = replace_once(source, """                if source_tile == num_blocks:
+                    # Retain the live-prefix source reduction and its BF16
+                    # rounding; writers publish this scalar for later calls.""", """                if source_tile == 0 or source_tile == num_blocks:
+                    # The initial FP8 output norm has a different reduction
+                    # layout. Recompute historical block 0 in the native loop;
+                    # only the live prefix may publish the current writer.""")
+    source = replace_once(source, """                    if WRITE_BLOCK:
+                        tl.store(""", """                    if WRITE_BLOCK and source_tile == num_blocks:
+                        tl.store(""")
     ast.parse(source)
     return source
 
@@ -210,6 +234,10 @@ def prepare_sources(output, source_file):
     if common.digest(historical.encode()) != NORM_V1_SHA256:
         raise ValueError("Historical norm-cache candidate source hash mismatch")
     (output / "sources" / "norm_cached_attn_res_v1.py").write_text(historical)
+    historical_v2 = norm_source_v2(paths[1].read_text())
+    if common.digest(historical_v2.encode()) != NORM_V2_SHA256:
+        raise ValueError("Historical norm-cache v2 candidate source hash mismatch")
+    (output / "sources" / "norm_cached_attn_res_v2.py").write_text(historical_v2)
     candidate = norm_source(paths[1].read_text())
     candidate_hash = common.digest(candidate.encode())
     if candidate_hash != NORM_SHA256:
@@ -217,9 +245,10 @@ def prepare_sources(output, source_file):
     path = output / "sources" / "norm_cached_attn_res.py"
     path.write_text(candidate)
     provenance.update(norm_candidate_sha256=candidate_hash,
-                      norm_revision="v2-masked-initial-reduction",
+                      norm_revision="v3-native-historical-block0",
+                      historical_norm_v2_sha256=NORM_V2_SHA256,
                       historical_norm_candidate_sha256=NORM_V1_SHA256,
-                      diagnostic_source_run="43193326018",
+                      diagnostic_source_run="43221040563",
                       probe_sha256=common.digest(Path(__file__).read_bytes()),
                       helper_sha256=common.digest(Path(common.__file__).read_bytes()))
     return paths + [path], provenance
