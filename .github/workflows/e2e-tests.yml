@@ -9,6 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "Natural verifier diagnostic Kimi baseline"
                 - "Agentic Kimi baseline + MoE front + DSpark"
                 - "Natural validation Kimi baseline + MoE front + DSpark"
                 - "Fixed-length Kimi baseline"
@@ -273,8 +274,53 @@ jobs:
                       !${{ env.AGENTIC_OUTPUT }}/client/tmp/**
                   retention-days: 30
                   if-no-files-found: error
+    natural-verifier-diagnostic:
+        if: ${{ inputs.generate-cli-command == 'Natural verifier diagnostic Kimi baseline' }}
+        name: Kimi native verifier diagnostic - C1 and short C48
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 45
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            DIAGNOSTIC_OUTPUT: /share_nfs/ajith/benchmarks/natural-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+            RUN_STAMP: natural-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: natural-diagnostic-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Observe short natural verification and graph proposals
+              timeout-minutes: 43
+              working-directory: natural-diagnostic-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$(dirname "$DIAGNOSTIC_OUTPUT")"
+                  bash benchmarks/quality/diagnostic/run.sh "$PWD" "$DIAGNOSTIC_OUTPUT" \
+                      2>&1 | tee "$DIAGNOSTIC_OUTPUT.log"
+            - name: Stop only this diagnostic job's containers
+              if: always()
+              run: |
+                  container="kimi-diagnostic-$RUN_STAMP"
+                  timeout 50s docker stop --time 45 "$container" || true
+                  timeout 10s docker rm -f "$container" "$container-ownership" || true
+            - name: Preserve diagnostic evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-natural-diagnostic-${{ github.run_id }}
+                  path: |
+                      ${{ env.DIAGNOSTIC_OUTPUT }}.log
+                      ${{ env.DIAGNOSTIC_OUTPUT }}/**
+                      !${{ env.DIAGNOSTIC_OUTPUT }}/work/**
+                  retention-days: 30
+                  if-no-files-found: error
     get-jobs:
-        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural validation Kimi ') && !startsWith(inputs.generate-cli-command, 'Agentic Kimi ') }}
+        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural validation Kimi ') && !startsWith(inputs.generate-cli-command, 'Agentic Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural verifier diagnostic ') }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}
