@@ -8611,3 +8611,9 @@
   description:
     - 'Add an isolated fixed-length AttnRes candidate: precompute immutable BF16 score-weight products before graphs, restricted to qualified residual/output-normalized rows280/336 and blocks4/8. Preserve the SA server/client settings and baseline image; measure E2E separately.'
     - '新增独立的定长 AttnRes 候选实验：在图捕获前预计算不可变 BF16 权重乘积，仅用于已验证的 rows280/336 和 blocks4/8 残差与输出归一化路径。保留 SA 服务端、客户端配置及基线镜像，单独测量端到端性能。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Add an isolated DSpark context-projection sharding comparison after real-checkpoint TP8 qualification. Keep the native output gather and normalization, all SA core settings and the fixed client; record eight-worker activation. BF16 rounding and model quality remain separate validation.'
+    - '在真实权重 TP8 验证后新增独立 DSpark 上下文投影分片对比，保留原生输出聚合、归一化、SA 核心配置及定长客户端，记录八个 worker 的激活证据。BF16 舍入差异与模型质量须单独验证。'

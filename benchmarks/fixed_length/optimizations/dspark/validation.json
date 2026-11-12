@@ -1,0 +1,107 @@
+{
+  "status": "pass",
+  "changed_methods": [
+    "K3DSparkModel.__init__",
+    "K3DSparkForCausalLM.load_weights"
+  ],
+  "constructor_cases": [
+    {
+      "runtime": {},
+      "geometry": {},
+      "active": true
+    },
+    {
+      "runtime": {
+        "requested": "0"
+      },
+      "geometry": {},
+      "active": false
+    },
+    {
+      "runtime": {
+        "rocm": false
+      },
+      "geometry": {},
+      "active": false
+    },
+    {
+      "runtime": {
+        "quant": "quantized"
+      },
+      "geometry": {},
+      "active": false
+    },
+    {
+      "runtime": {
+        "tp": 4
+      },
+      "geometry": {},
+      "active": false
+    },
+    {
+      "runtime": {},
+      "geometry": {
+        "hidden_size": 3584
+      },
+      "active": false
+    },
+    {
+      "runtime": {},
+      "geometry": {
+        "target_hidden_size": 3584
+      },
+      "active": false
+    },
+    {
+      "runtime": {},
+      "geometry": {
+        "num_target_layers": 4
+      },
+      "active": false
+    },
+    {
+      "runtime": {
+        "dtype": "torch.float32"
+      },
+      "geometry": {},
+      "active": false
+    }
+  ],
+  "checks": [
+    "Actual constructor and loader methods executed with CPU module doubles",
+    "Exact TP8/BF16 geometry, default-off and unsupported guards",
+    "Projection then full norm forwarding order retained",
+    "Native duplicate-context-KV input and mapper forwarded unchanged",
+    "Original loaded set returned by identity; load marker only once and only after projection loads",
+    "Other model methods unchanged by AST",
+    "Installer candidate roundtrip hashes and original/dependency preservation"
+  ],
+  "installer_rejections": [
+    {
+      "case": "existing output",
+      "error": "Output already exists; use a fresh run directory"
+    },
+    {
+      "case": "output inside source",
+      "error": "Output must be separate from original source"
+    },
+    {
+      "case": "output above source",
+      "error": "Output must be separate from original source"
+    },
+    {
+      "case": "wrong patched source hash",
+      "error": "Baseline source hash mismatch: vllm/models/kimi_k3/nvidia/dspark_mla.py"
+    },
+    {
+      "case": "wrong native dependency hash",
+      "error": "Baseline source hash mismatch: vllm/model_executor/layers/linear.py"
+    }
+  ],
+  "limits": [
+    "CPU doubles do not validate actual Torch model construction or full checkpoint load",
+    "Real-weight native component GPU qualification is separate from this integration test",
+    "Full-model graph capture, activation agreement, output quality and E2E remain unvalidated"
+  ],
+  "test_source_sha256": "6ff9bd34bd260dc9c5b8571139446afb82d0cdecd3ce71fef0eab384efb2173a"
+}

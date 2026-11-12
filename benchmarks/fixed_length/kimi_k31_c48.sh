@@ -3,8 +3,8 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 upstream_dir=$(cd "$script_dir/../../upstream/InferenceX" && pwd)
 run_dir=${1:?Supply a fresh shared benchmark output directory}
-optimization=${2:?Supply baseline or attnres}
-case "$optimization" in baseline|attnres) ;; *) echo 'Unknown optimization' >&2; exit 2 ;; esac
+optimization=${2:?Supply baseline, attnres or dspark}
+case "$optimization" in baseline|attnres|dspark) ;; *) echo 'Unknown optimization' >&2; exit 2 ;; esac
 case "$run_dir" in /share_nfs/ajith/benchmarks/*) ;; *) echo 'Use the shared benchmark output directory' >&2; exit 2 ;; esac
 mkdir -p "$run_dir"
 if [[ -e "$run_dir/recipe.json" ]]; then echo 'Refusing to overwrite an earlier run' >&2; exit 2; fi
@@ -35,19 +35,25 @@ for directory in /share_nfs/models/moonshotai/Kimi-K3.1-Pro /share_nfs/models/In
     test -d "$directory" || { echo "Missing model directory: $directory" >&2; exit 1; }
 done
 overlays=()
-if [[ "$optimization" == attnres ]]; then
+if [[ "$optimization" != baseline ]]; then
     docker run --rm --network none \
         --mount "type=bind,src=$script_dir,dst=/fixed-tools,readonly" \
         --mount "type=bind,src=$run_dir,dst=/logs" \
         --env PYTHONDONTWRITEBYTECODE=1 \
         --entrypoint /opt/runtime-venv/bin/python "$image" \
-        /fixed-tools/optimizations/attnres/install.py \
+        "/fixed-tools/optimizations/$optimization/install.py" \
         --source /opt/runtime-venv/lib/python3.12/site-packages --output /logs/work/overlay
     cp "$run_dir/work/overlay/manifest.json" "$run_dir/optimization.json"
-    for source in vllm/models/kimi_k3/amd/linear.py vllm/models/kimi_k3/amd/ops/attn_res.py; do
+    if [[ "$optimization" == attnres ]]; then
+        sources=(vllm/models/kimi_k3/amd/linear.py vllm/models/kimi_k3/amd/ops/attn_res.py)
+        overlays+=(--env KIMI_ATTNRES_PRECOMPUTE_WEIGHTS=1)
+    else
+        sources=(vllm/models/kimi_k3/nvidia/dspark_mla.py)
+        overlays+=(--env KIMI_DSPARK_SHARD_CONTEXT_PROJ=1)
+    fi
+    for source in "${sources[@]}"; do
         overlays+=(--mount "type=bind,src=$run_dir/work/overlay/candidate/$source,dst=/opt/runtime-venv/lib/python3.12/site-packages/$source,readonly")
     done
-    overlays+=(--env KIMI_ATTNRES_PRECOMPUTE_WEIGHTS=1)
 fi
 echo "Starting SA-configured server; optimization=$optimization; output=$run_dir; port=$port"
 docker run --rm --init --name "$container" --label "kimi.fixed.run=$(basename "$run_dir")" \
@@ -64,6 +70,7 @@ docker run --rm --init --name "$container" --label "kimi.fixed.run=$(basename "$
     --mount type=bind,src=/share_nfs/models/moonshotai/Kimi-K3.1-Pro,dst=/model,readonly \
     --tmpfs /tmp:rw,exec,size=64g \
     --env "PORT=$port" --env TMPDIR=/tmp --env PYTHONDONTWRITEBYTECODE=1 \
+    --env PYTHONPYCACHEPREFIX=/work/cache/python \
     --env XDG_CACHE_HOME=/work/cache --env FLYDSL_RUNTIME_CACHE_DIR=/work/cache/flydsl \
     --env CCACHE_DIR=/work/cache/ccache --env SCCACHE_DIR=/work/cache/sccache \
     --env MODEL=moonshotai/Kimi-K3.1-Pro --env MODEL_PATH=/model \
@@ -78,3 +85,4 @@ docker run --rm --init --name "$container" --label "kimi.fixed.run=$(basename "$
     --entrypoint /bin/bash "$image" -c \
     'set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; cd /inferencex; python3 /fixed-tools/check_client.py; exec bash benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh'
 python3 "$script_dir/validate.py" "$run_dir/baseline.json" --output "$run_dir/validation.json"
+python3 "$script_dir/validate_optimization.py" "$run_dir"

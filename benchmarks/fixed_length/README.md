@@ -37,10 +37,20 @@ Outputs stay in the supplied directory: `recipe.json`, `effective-server.json`,
 compact results and logs; the original data remain on the shared filesystem.
 
 Use the **e2e Test** workflow on **IPAT-Script**, choose **Fixed-length Kimi
-baseline** or **Fixed-length Kimi AttnRes**, and give the run a descriptive name. It targets the existing
+baseline** **, **Fixed-length Kimi AttnRes** or **Fixed-length Kimi DSpark**, and give the run a descriptive name. It targets the existing
 `cluster:mi355x-amds-2` runner without modifying allocation or reservation.
 
 Collect and validate this unchanged baseline before applying candidates. Compare
 the same fixed workload and configuration for each candidate; then validate a
 promising change with the full agentic workload. Fixed-length and AgentX results
 are not interchangeable because their cache reuse and request distributions differ.
+
+The `dspark` mode shards the draft context projection over TP8, gathers the
+output, then keeps the existing full-width normalization. It uses a single
+verified read-only overlay and records native dependency hashes. Real-checkpoint
+component checks pass, but BF16 rounding differs; serving performance under
+synthetic acceptance does not establish natural acceptance or model quality.
+
+`validate_optimization.py` requires candidate preparation/loading markers on
+all eight workers. AttnRes capture-time selection is distinguished from measured
+replay frequency. Run-local Python cache paths avoid installed bytecode reuse.

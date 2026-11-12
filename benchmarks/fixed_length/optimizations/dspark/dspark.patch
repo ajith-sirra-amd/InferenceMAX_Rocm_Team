@@ -1,0 +1,116 @@
+--- a/vllm/models/kimi_k3/nvidia/dspark_mla.py
++++ b/vllm/models/kimi_k3/nvidia/dspark_mla.py
+@@ -4,13 +4,22 @@
+ 
+ from collections.abc import Iterable
+ 
++import os
++
+ import torch
+ import torch.nn as nn
+ 
+ import vllm._custom_ops as ops
+ from vllm.config import VllmConfig
++from vllm.distributed import (
++    get_tensor_model_parallel_rank,
++    get_tensor_model_parallel_world_size,
++)
++from vllm.logger import init_logger
++from vllm.platforms import current_platform
+ from vllm.model_executor.layers.layernorm import RMSNorm
+ from vllm.model_executor.layers.linear import (
++    ColumnParallelLinear,
+     MergedColumnParallelLinear,
+     ReplicatedLinear,
+ )
+@@ -30,6 +39,8 @@
+ from vllm.models.kimi_k3.nvidia.model import KimiMLP
+ from vllm.v1.kv_cache_interface import is_quantized_kv_cache
+ from vllm.v1.worker.workspace import current_workspace_manager
++
++logger = init_logger(__name__)
+ 
+ _GROUPED_KV_CACHE_DTYPES = frozenset(
+     {"auto", "bfloat16", "fp8", "fp8_e4m3", "fp8_e5m2"}
+@@ -147,14 +158,50 @@
+         # The frozen target embedding is aliased after the draft checkpoint loads.
+         self.embed_tokens: nn.Module | None = None
+ 
+-        self.context_proj = ReplicatedLinear(
++        # Opt-in at construction, identical on every rank before graph capture.
++        context_tp = get_tensor_model_parallel_world_size()
++        self._context_shard_requested = (
++            os.environ.get("KIMI_DSPARK_SHARD_CONTEXT_PROJ", "0") == "1"
++        )
++        self._context_shard_active = (
++            self._context_shard_requested
++            and current_platform.is_rocm()
++            and self.quant_config is None
++            and context_tp == 8
++            and self.config.hidden_size == 7168
++            and self.config.target_hidden_size == 7168
++            and self.config.num_target_layers == 5
++            and torch.get_default_dtype() == torch.bfloat16
++        )
++        context_cls = (
++            ColumnParallelLinear if self._context_shard_active else ReplicatedLinear
++        )
++        context_kwargs = {"gather_output": True} if self._context_shard_active else {}
++        self.context_proj = context_cls(
+             self.config.target_hidden_size * self.config.num_target_layers,
+             self.config.hidden_size,
+             bias=False,
+             return_bias=False,
+             quant_config=self.quant_config,
+             prefix=maybe_prefix(prefix, "context_proj"),
+-        )
++            **context_kwargs,
++        )
++        if self._context_shard_requested:
++            context_weight = getattr(self.context_proj, "weight", None)
++            logger.info(
++                "DSPARK_CONTEXT_SHARD phase=construct active=%s rank=%s tp=%s "
++                "global_in=%s global_out=%s local_weight_shape=%s dtype=%s "
++                "quantized=%s norm_eps=%s",
++                self._context_shard_active,
++                get_tensor_model_parallel_rank(),
++                context_tp,
++                self.config.target_hidden_size * self.config.num_target_layers,
++                self.config.hidden_size,
++                tuple(getattr(context_weight, "shape", ())),
++                getattr(context_weight, "dtype", None),
++                self.quant_config is not None,
++                self.config.rms_norm_eps,
++            )
+         self.context_norm = RMSNorm(
+             self.config.hidden_size, eps=self.config.rms_norm_eps
+         )
+@@ -531,7 +578,27 @@
+         loader = AutoWeightsLoader(self)
+         # read: 1. all weights. 2. context kv weights
+         weights = _duplicate_context_kv_weights(weights, len(self.model.layers))
+-        return loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)
++        loaded = loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)
++        if (
++            self.model._context_shard_requested
++            and "model.context_proj.weight" in loaded
++            and not getattr(self, "_context_shard_load_logged", False)
++        ):
++            weight = self.model.context_proj.weight
++            weight_loader = getattr(weight, "weight_loader", None)
++            logger.info(
++                "DSPARK_CONTEXT_SHARD phase=loaded active=%s rank=%s tp=%s "
++                "parameter=model.context_proj.weight local_weight_shape=%s "
++                "dtype=%s loader=%s",
++                self.model._context_shard_active,
++                get_tensor_model_parallel_rank(),
++                get_tensor_model_parallel_world_size(),
++                tuple(weight.shape),
++                weight.dtype,
++                getattr(weight_loader, "__qualname__", type(weight_loader).__name__),
++            )
++            self._context_shard_load_logged = True
++        return loaded
+ 
+     def process_weights_after_loading(self) -> None:
+         self.model._build_fused_context_kv_metadata()
