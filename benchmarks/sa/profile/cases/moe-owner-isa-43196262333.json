@@ -1,0 +1,71 @@
+{
+  "status": "approved",
+  "reviewer": "Codex /root/next_capture",
+  "compile_run": "43196262333",
+  "notes": "Actual gfx950 compiler assembly and embedded AMDGPU ELF reviewed. Approval is limited to isolated correctness and correctness-gated timing of these exact executables; GPU correctness and serving suitability remain unvalidated. Original debug compilation produced no disk cache; any no-dispatch preload must match these ELF hashes before execution.",
+  "native_sha256": "5b51a36a47be834249ef370d20b857144880bf44f674aa72045ea1734ffebf28",
+  "candidate_sha256": "ad3167e1b691d359731cb5746e6d535f36d0993d25e7d4d2704d9debeabf80b4",
+  "gpu_sha256": {
+    "baseline": [
+      "782f0c4b45ee99a50d46129a7a5b79e5003e14179f7ae4c2831c194f1110afd6"
+    ],
+    "owner": [
+      "46f003be1eba96f970d95ea7e56420a2c94c3d89d0cea9cb2abc9ad27e23efca"
+    ]
+  },
+  "artifacts": {
+    "baseline": {
+      "isa": "baseline/compiler-dump/gemm2_a4w4_port_hmax8192_imax384_bm16_bn128_bk128_nt_atomic_bhoist_apf_spart4x2_bf16lds_v2_biasabi7/22_final_isa.s",
+      "isa_sha256": "8f083ab1ce8e2aa67bc1a723586e2aaed2a7c937c620bb7eb96e0034645de2c2",
+      "binary_ir": "baseline/compiler-dump/gemm2_a4w4_port_hmax8192_imax384_bm16_bn128_bk128_nt_atomic_bhoist_apf_spart4x2_bf16lds_v2_biasabi7/20_gpu_module_to_binary.mlir",
+      "binary_ir_sha256": "eababed49adefed6405f01a85e4da8710f038c944db309dbb8a9e0b1af89b5d7",
+      "elf_bytes": 6552
+    },
+    "owner": {
+      "isa": "owner/compiler-dump/gemm2_a4w4_port_hmax8192_imax384_bm16_bn128_bk128_nt_atomic_bhoist_apf_spart4x2_bf16lds_v2_biasabi7_owner0_vmemwait/22_final_isa.s",
+      "isa_sha256": "19c3e99bf999b8a7f98635207d186bf0f4eb23e21413ddbb45046ca529ac0d2e",
+      "binary_ir": "owner/compiler-dump/gemm2_a4w4_port_hmax8192_imax384_bm16_bn128_bk128_nt_atomic_bhoist_apf_spart4x2_bf16lds_v2_biasabi7_owner0_vmemwait/20_gpu_module_to_binary.mlir",
+      "binary_ir_sha256": "739821c6aaaa45c06711b218d3ba2e8af7f61d840799fee4131a941baf6a09ac",
+      "elf_bytes": 6648
+    }
+  },
+  "resources": {
+    "baseline": {
+      "vgpr_count": 44,
+      "sgpr_count": 45,
+      "vgpr_spill_count": 0,
+      "sgpr_spill_count": 0,
+      "group_segment_fixed_size": 4096,
+      "private_segment_fixed_size": 0,
+      "wavefront_size": 64,
+      "barrier_count": 3,
+      "static_a_to_lds_loads": 3,
+      "mfma_count": 6,
+      "bf16_atomic_instruction_count": 4
+    },
+    "owner": {
+      "vgpr_count": 42,
+      "sgpr_count": 46,
+      "vgpr_spill_count": 0,
+      "sgpr_spill_count": 0,
+      "group_segment_fixed_size": 4096,
+      "private_segment_fixed_size": 0,
+      "wavefront_size": 64,
+      "barrier_count": 3,
+      "static_a_to_lds_loads": 3,
+      "mfma_count": 6,
+      "bf16_atomic_instruction_count": 4
+    }
+  },
+  "checks": {
+    "owner_wave": "First-lane workitem ID shifted by6 gives the uniform wave index; s_cmp_lg_u32/s_cbranch_scc1 skips only the A-load region for waves1\u20133. All64 wave0 lanes remain active.",
+    "load_coverage": "Three16-byte-per-lane LDS-DMA operations at m0=0,1024,2048 cover all3072 A-LDS bytes once; emitted LLVM source-address expressions match native wave0 for all16 rows and three K128 slots.",
+    "completion": "Owner line94 waits vmcnt(0) before .LBB0_3 reconvergence; no barrier inside owner-only branch. All waves reach line170 barrier before first LDS read at176.",
+    "lds_reuse": "Last A-LDS read line197 is followed by vmcnt(0) lgkmcnt(0) and barrier199 before any C-slab store. lgkmcnt(0)/barrier234 precedes C-slab reads and atomic stores.",
+    "arithmetic": "Both arms retain six FP4 scaled MFMA instructions, three A-slot reads, eight BF16 LDS stores and four packed BF16 atomic instructions with token_id<M masking.",
+    "scheduling_change": "Owner schedules expert-ID load as global_load_dword/readfirstlane instead of baseline scalar s_load_dword, adds the owner wait and changes B-load wait scheduling. Runtime performance cannot be inferred from load-count reduction."
+  },
+  "gpu_correctness_validated": false,
+  "serving_promotion_approved": false,
+  "original_disk_cache_present": false
+}

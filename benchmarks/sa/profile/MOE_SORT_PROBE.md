@@ -32,12 +32,15 @@ nonzero weights deliberately: the checker rejects any leaked padding route.
 Each timed padded invocation copies active IDs and weights into the larger
 input buffers. Workspace capacity and graph launch/layout effects are retained.
 
-The pinned dispatch permits the smaller M-row output: E896 selects multiphase,
-physical512 selects the small uint8 path, and the non-null local count selects
-P0_v2/P23 with `LocalToken=true`. P0_v2 has no output pointer; P23 reads M from
-the device count and bounds zeroing by M×3584 elements. The separate P2 kernel
-that zeros physical rows is not selected. Reverse-map initialization does use
-physical512, so its allocation covers all 512×16 entries.
+The pinned header's zeroing bounds support the M-row output allocation:
+E896 auto dispatch selects multiphase; physical512 selects the `<2048` uint8
+path; non-null `num_local_tokens` selects P0_v2 and P23 with `LocalToken=true`
+(`moe_sorting_opus.h`:1450, 3679, 3722, 3594). P0_v2 has no output pointer.
+P23 reads the device-side M and passes it to the zeroing helper (2914–2927),
+which bounds stores to `M*3584*2/16` aligned vectors (1397). The physical-row
+zeroing at2467 belongs to P2, which this dispatch does not invoke. Reverse-map
+initialization does use physical512; that array is allocated for512×16 entries.
+Canaries supplement this source proof; they are not its basis.
 
 All arms emit sorted IDs, FP32 weights, expert IDs, padded/valid counts,
 `m_indices`, reverse maps, and zero the complete output. Comparisons check the

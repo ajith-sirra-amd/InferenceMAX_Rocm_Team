@@ -30,7 +30,7 @@ H, I, E, TOPK, BM = 3584, 384, 896, 16, 16
 SENTINEL = 29.0  # Exactly representable BF16, checked on both sides of output.
 
 
-def approved_cache(review_path, compiled, source_cache, target_cache):
+def reviewed_sources(review_path, compiled):
     """Inspect without importing Torch, unpickling or launching GPU code.
 
     Review JSON: status='approved', reviewer, notes, native_sha256,
@@ -49,6 +49,13 @@ def approved_cache(review_path, compiled, source_cache, target_cache):
             or review.get('candidate_sha256') != expected_candidate
             or compiler.digest(candidate) != expected_candidate):
         raise ValueError('Reviewed source differs from this exact candidate')
+    if any(not review.get('gpu_sha256', {}).get(arm) for arm in ('baseline', 'owner')):
+        raise ValueError('Reviewed GPU executable hashes are required')
+    return review
+
+
+def approved_cache(review_path, compiled, source_cache, target_cache):
+    review = reviewed_sources(review_path, compiled)
     records = {}
     pending_copies = []
     for arm in ('baseline', 'owner'):
@@ -79,6 +86,59 @@ def approved_cache(review_path, compiled, source_cache, target_cache):
             raise ValueError('Reviewed arm caches collide')
         shutil.copyfile(source, target)
     return dict(review=review, compile_evidence=str(compiled), artifacts=records)
+
+
+def preload_worker(args):
+    """Recover a missing disk cache by compilation only in a separate process."""
+    reviewed_sources(args.review, args.compiled)
+    cache = args.cache / args.preload_worker
+    cache.mkdir(parents=True, exist_ok=False)
+    os.environ.update(COMPILE_ONLY='1', FLYDSL_GPU_ARCH='gfx950', ARCH='gfx950',
+                      GPU_ARCHS='gfx950', CU_NUM='256', AITER_AOT_IMPORT='1',
+                      FLYDSL_RUNTIME_CACHE_DIR=str(cache), FLYDSL_RUNTIME_RUN_ONLY='0',
+                      FLYDSL_RUNTIME_ENABLE_CACHE='1', FLYDSL_DUMP_IR='0',
+                      FLYDSL_DEBUG_DUMP_ASM='0', PYTHONDONTWRITEBYTECODE='1')
+    import torch
+    from aiter.aot.flydsl.dry_run import dry_run
+    from aiter.ops.flydsl.kernels.tensor_shim import _preload_compiled
+    from aiter.ops.flydsl.kernels import mxmoe_dispatcher as native
+    for path, expected in compiler.HASHES.items():
+        if compiler.digest(Path(native.__file__).parents[3] / path) != expected:
+            raise ValueError('Installed preload source mismatch: ' + path)
+    module = native
+    config = dict(compiler.CONFIG)
+    if args.preload_worker == 'owner':
+        name = 'aiter.ops.flydsl.kernels._moe_owner_experiment'
+        spec = importlib.util.spec_from_file_location(name, args.compiled / 'source/mxmoe_dispatcher.owner.py')
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        config['_owner_wave'] = True
+    with dry_run('gfx950', 256, 'AMD Instinct MI355X'):
+        launch = module.compile_gemm2_a4w4_port(**config)
+        _preload_compiled(launch, *([0] * 9 + [280, 280, 280, 384, 3584, 0, 0, torch.cuda.current_stream()]))
+    return 0
+
+
+def runtime_cache_source(args, evidence):
+    if any(args.approved_cache.rglob('*.pkl')):
+        return args.approved_cache
+    # Dump-enabled compilation can bypass disk caching. Recreate only in fresh
+    # work storage, then approved_cache must match the previously reviewed ELF.
+    generated = args.cache.with_name(args.cache.name + '-preload')
+    generated.mkdir(parents=True, exist_ok=False)
+    evidence.data['preload'] = dict(cache=str(generated), launches=0,
+                                  reason='Original compile cache contains no pickle artifacts')
+    for arm in ('baseline', 'owner'):
+        evidence.save(arm + ': rebuilding missing cache with GPU execution forbidden')
+        command = [sys.executable, __file__, '--preload-worker', arm,
+                   '--review', str(args.review), '--compiled', str(args.compiled),
+                   '--approved-cache', str(args.approved_cache), '--cache', str(generated),
+                   '--output', str(args.output)]
+        with (args.output / ('preload-' + arm + '.log')).open('w') as stream:
+            subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT,
+                           timeout=75, check=True)
+    return generated
 
 
 def cases(seed):
@@ -172,7 +232,9 @@ class Evidence:
 
 
 def run(args, evidence):
-    evidence.data['approval'] = approved_cache(args.review, args.compiled, args.approved_cache, args.cache)
+    reviewed_sources(args.review, args.compiled)
+    source_cache = runtime_cache_source(args, evidence)
+    evidence.data['approval'] = approved_cache(args.review, args.compiled, source_cache, args.cache)
     evidence.save('Reviewed source/executables checked; candidate execution now permitted')
     sys.dont_write_bytecode = True
     os.environ.update(FLYDSL_RUNTIME_CACHE_DIR=str(args.cache), FLYDSL_RUNTIME_RUN_ONLY='1',
@@ -308,6 +370,7 @@ def arguments():
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--timeout-seconds', type=int, default=180)
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--preload-worker', choices=('baseline', 'owner'), help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not 5 <= args.iterations <= 100 or not 30 <= args.timeout_seconds <= 240:
         parser.error('Use 5..100 timing iterations and a 30..240 second deadline')
@@ -315,6 +378,8 @@ def arguments():
 
 
 def main(args):
+    if args.preload_worker:
+        return preload_worker(args)
     if not args.worker:
         args.output.mkdir(parents=True, exist_ok=False)
         command = [sys.executable, __file__, *sys.argv[1:], '--worker']
