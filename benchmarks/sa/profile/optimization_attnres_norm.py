@@ -341,6 +341,185 @@ def run_case(torch, modules, case, plan, rounds, seed, progress, check_budget):
     return record
 
 
+def diagnostic_source(source):
+    """Observe source sums/rstd/dot/logits; verify observer output parity on GPU."""
+    source = replace_once(source, "    output_scale_ptr,\n", "    output_scale_ptr,\n    source_stats_ptr,\n")
+    source = replace_once(source, "    HAS_DELTA: tl.constexpr,\n", "    HAS_DELTA: tl.constexpr,\n    SAVE_SOURCE_STATS: tl.constexpr,\n")
+    source = replace_once(source, "            logits = tl.sum(values * input_qk_weight[None, :], axis=1) * reciprocal_std\n", """            logits = tl.sum(values * input_qk_weight[None, :], axis=1) * reciprocal_std
+            if SAVE_SOURCE_STATS:
+                stats = source_stats_ptr + row_idx * 40 + source_offsets * 4
+                tl.store(stats + 0, tl.sum(values * values, axis=1), mask=source_mask)
+                tl.store(stats + 1, reciprocal_std, mask=source_mask)
+                tl.store(stats + 2, tl.sum(values * input_qk_weight[None, :], axis=1), mask=source_mask)
+                tl.store(stats + 3, logits, mask=source_mask)
+""")
+    source = replace_once(source, "        output_norm_weight = tl.load(\n", """        if SAVE_SOURCE_STATS:
+            tl.store(source_stats_ptr + row_idx * 40 + 36,
+                     tl.sum(tl.where(d_mask, mixed * mixed, 0.0), axis=0))
+            tl.store(source_stats_ptr + row_idx * 40 + 37, output_reciprocal_std)
+        output_norm_weight = tl.load(
+""")
+    source = replace_once(source, "    quant_dtype: torch.dtype | None = None,\n", "    quant_dtype: torch.dtype | None = None,\n    source_stats: torch.Tensor | None = None,\n")
+    source = replace_once(source, "    num_tokens, hidden_size = prefix.shape\n", """    num_tokens, hidden_size = prefix.shape
+    if source_stats is not None:
+        assert source_stats.shape == (num_tokens, 10, 4)
+        assert source_stats.dtype == torch.float32 and source_stats.is_contiguous()
+        assert source_stats.device == prefix.device
+""")
+    source = replace_once(source, "        output,\n        scale,\n", "        output,\n        scale,\n        source_stats,\n")
+    source = replace_once(source, "        HAS_DELTA=delta is not None,\n", "        HAS_DELTA=delta is not None,\n        SAVE_SOURCE_STATS=source_stats is not None,\n")
+    ast.parse(source)
+    return source
+
+
+def dump_kernel_artifacts(compiled, directory):
+    """Save generated arithmetic and register/spill metadata, excluding binaries."""
+    directory.mkdir(parents=True, exist_ok=True)
+    result = dict(files={}, resources={})
+    for name, value in getattr(compiled, "asm", {}).items():
+        if isinstance(value, str) and name in ("ttir", "ttgir", "llir", "amdgcn", "ptx"):
+            path = directory / ("kernel." + name)
+            path.write_text(value)
+            result["files"][name] = dict(path=str(path), sha256=common.digest(value.encode()), bytes=len(value.encode()))
+    for name in ("n_regs", "n_spills"):
+        value = getattr(compiled, name, None)
+        if isinstance(value, (int, float, str, bool)) or value is None:
+            result["resources"][name] = value
+    metadata = getattr(compiled, "metadata", None)
+    for name in ("num_warps", "num_stages", "shared", "warp_size", "enable_fp_fusion"):
+        value = getattr(metadata, name, None)
+        if isinstance(value, (int, float, str, bool)) or value is None:
+            result["resources"][name] = value
+    return result
+
+
+def diagnose_first_consumer(torch, paths, output, plan, progress, check_budget):
+    """Observe the first divergent historical use without qualifying a candidate."""
+    rows, hidden = 280, 7168
+    generator = torch.Generator(device="cuda").manual_seed(20261112)
+    def random(shape):
+        return torch.randn(shape, device="cuda", dtype=torch.bfloat16, generator=generator)
+    signals = random((16, rows, hidden))
+    weights = random((len(plan), 3, hidden))
+    norms = (weights[:, 0].float() * 0.05 + 1).to(torch.bfloat16)
+    qks = (weights[:, 1].float() / math.sqrt(hidden)).to(torch.bfloat16)
+    out_norms = (weights[:, 2].float() * 0.05 + 1).to(torch.bfloat16)
+    products = (norms.float() * qks.float()).contiguous()
+    diagnostic_paths = []
+    for path, name in ((paths[0], "baseline_debug"), (paths[2], "norm_debug")):
+        source = diagnostic_source(path.read_text())
+        destination = output / "sources" / (name + ".py")
+        destination.write_text(source)
+        diagnostic_paths.append(destination)
+    variants = (
+        ("baseline", paths[0], False, False, False, False),
+        ("product_only", paths[1], True, False, False, False),
+        ("norm_cache", paths[2], False, True, False, False),
+        ("norm_disabled", paths[2], False, False, False, False),
+        ("baseline_debug", diagnostic_paths[0], False, False, True, False),
+        ("norm_debug", diagnostic_paths[1], False, True, True, False),
+        ("baseline_no_fma", paths[0], False, False, False, True),
+        ("norm_no_fma", paths[2], False, True, False, True),
+    )
+    captures = {}; summaries = {}
+    for name, path, product, cache, debug, no_fma in variants:
+        check_budget(); progress("diagnostic_arm", arm=name)
+        module = common.load_module(path, "attnres_norm_diagnostic_" + name)
+        original_kernel = module._attn_res_kernel
+        class Recorder:
+            def __getitem__(self, grid):
+                def launch(*args, **kwargs):
+                    if no_fma:
+                        kwargs["enable_fp_fusion"] = False
+                    compiled = original_kernel[grid](*args, **kwargs)
+                    self.compiled = compiled
+                    return compiled
+                return launch
+        recorder = Recorder()
+        module._attn_res_kernel = recorder
+        state = dict(prefix=torch.empty((rows, hidden), device="cuda", dtype=torch.bfloat16),
+                     blocks=torch.full((rows, 8, hidden), float("nan"), device="cuda", dtype=torch.bfloat16),
+                     cache=torch.full((rows, 8), float("nan"), device="cuda", dtype=torch.float32))
+        records = []; compiled_records = []
+        try:
+            for step in plan[:2]:
+                check_budget(); index = step["index"]
+                state["prefix"].copy_(signals[index % len(signals)])
+                stats = torch.full((rows, 10, 4), float("nan"), device="cuda", dtype=torch.float32) if debug else None
+                kwargs = {}
+                if path != paths[0] and name not in ("baseline_debug", "baseline_no_fma"):
+                    kwargs["input_qk_weight"] = products[index] if product and step["blocks"] else None
+                if path == paths[2] or name == "norm_debug":
+                    kwargs["block_rstd_cache"] = state["cache"] if cache else None
+                if debug:
+                    kwargs["source_stats"] = stats
+                value = module.attn_res(state["prefix"], signals[(index + 7) % len(signals)] if step["delta"] else None,
+                    state["blocks"], norms[index], qks[index], out_norms[index], step["blocks"], step["write"],
+                    common.RMS_EPS, common.RMS_EPS, **kwargs)
+                torch.cuda.synchronize()
+                records.append(dict(output=value, prefix=state["prefix"].clone(),
+                    blocks=state["blocks"][:, :index + 1].clone(),
+                    cache=state["cache"][:, :index + 1].clone() if cache else None,
+                    stats=stats))
+                compiled_records.append(dump_kernel_artifacts(recorder.compiled, output / "compiler" / name / ("step-" + str(index))))
+            captures[name] = records
+            summaries[name] = dict(status="collected", source_sha256=common.digest(path.read_bytes()),
+                                   no_fma=no_fma, compiler=compiled_records)
+        except Exception as exc:
+            summaries[name] = dict(status="error", error=str(exc), traceback=traceback.format_exc())
+        common.write_json(output / "diagnostic-progress.json", summaries)
+    if "baseline" not in captures or "norm_cache" not in captures:
+        raise RuntimeError("Could not collect the original baseline and failed norm candidate")
+    for name, records in captures.items():
+        summaries[name]["against_original"] = [dict(
+            output=common.compare(torch, record["output"], reference["output"]),
+            prefix=common.compare(torch, record["prefix"], reference["prefix"]),
+            blocks=common.compare(torch, record["blocks"], reference["blocks"]))
+            for record, reference in zip(records, captures["baseline"])]
+        if "baseline_no_fma" in captures and name == "norm_no_fma":
+            summaries[name]["against_no_fma_baseline"] = [common.compare(torch, record["output"], reference["output"])
+                for record, reference in zip(records, captures["baseline_no_fma"])]
+    details = {}
+    def compare_values(name, actual, reference):
+        actual, reference = actual.contiguous(), reference.contiguous()
+        report = common.compare(torch, actual, reference)
+        unequal = (actual != reference).reshape(-1).nonzero().reshape(-1)[:32]
+        a, b = actual.reshape(-1), reference.reshape(-1)
+        report["first_differences"] = [dict(index=int(index), actual=float(a[index].item()), reference=float(b[index].item()),
+            actual_bits=int(a.view(torch.int32)[index].item()) & 0xffffffff,
+            reference_bits=int(b.view(torch.int32)[index].item()) & 0xffffffff) for index in unequal.tolist()]
+        details[name] = report
+    if "baseline_debug" in captures:
+        reference = captures["baseline_debug"][1]["stats"]
+        compare_values("block0_producer_cache_vs_original_consumer_rstd", captures["norm_cache"][0]["cache"][:, 0], reference[:, 0, 1])
+        compare_values("block1_writer_cache_vs_original_live_prefix_rstd", captures["norm_cache"][1]["cache"][:, 1], reference[:, 1, 1])
+        compare_values("block0_cache_vs_initial_output_rstd", captures["norm_cache"][0]["cache"][:, 0], captures["baseline_debug"][0]["stats"][:, 9, 1])
+        if "norm_debug" in captures:
+            for metric, index in (("sum_squares", 0), ("rstd", 1), ("score_dot", 2), ("logit", 3)):
+                compare_values("observed_consumer_" + metric, captures["norm_debug"][1]["stats"][:, :2, index], reference[:, :2, index])
+            compare_values("norm_observer_producer_cache_parity", captures["norm_debug"][0]["cache"], captures["norm_cache"][0]["cache"])
+    # Compact raw FP32 arrays let offline review correlate error rows and ULPs.
+    raw = {}
+    for name, records in captures.items():
+        raw[name] = []
+        for index, record in enumerate(records):
+            item = {}
+            if record["cache"] is not None:
+                item["written_cache"] = record["cache"].cpu().tolist()
+            if record["stats"] is not None:
+                item["source_stats"] = record["stats"][:, :index + 1].cpu().tolist() if index > 0 else []
+                item["output_norm_sum_rstd"] = record["stats"][:, 9, :2].cpu().tolist()
+            different = (record["output"].float() != captures["baseline"][index]["output"].float()).nonzero()
+            item["output_difference_indices"] = different[:128].cpu().tolist()
+            raw[name].append(item)
+    common.write_json(output / "diagnostic-values.json", raw)
+    return dict(status="diagnostic_collected", candidate_qualified=False, rows=rows, dtype="bf16",
+                seed=20261112, steps=plan[:2], arms=summaries, comparisons=details,
+                limits=["Observed kernels add stores; compare observer outputs against originals before interpreting values",
+                        "No-FMA is a diagnostic control, not a proposed change to SA arithmetic",
+                        "No timings, graph validation, tolerance relaxation or model-integration qualification"])
+
+
 def rows_csv(value):
     rows = [int(item) for item in value.split(",")]
     if not rows or len(set(rows)) != len(rows) or any(row not in (256, 280, 336, 1024) for row in rows):
@@ -353,6 +532,7 @@ def main(argv=None):
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--source-file", type=Path)
     parser.add_argument("--source-only", action="store_true")
+    parser.add_argument("--diagnose", action="store_true", help="Observe first failed BF16/280-row producer-consumer pair; no candidate qualification")
     parser.add_argument("--rows", type=rows_csv, default=[280, 336])
     parser.add_argument("--bf16-only", action="store_true", help="Skip FP8 qualification explicitly")
     parser.add_argument("--consumers", type=int, default=12, help="Repeated consumers at each of blocks4 and8")
@@ -401,6 +581,14 @@ def main(argv=None):
             inherited_environment={key: os.environ.get(key) for key in ENVIRONMENT_KEYS})
         modules = [common.load_module(path, "attnres_norm_probe_" + name) for path, name in zip(paths, ("baseline", "product", "norm"))]
         result["gpu_executed"] = True; save()
+        if args.diagnose:
+            with torch.inference_mode():
+                result["diagnostic"] = diagnose_first_consumer(torch, paths, args.output, plan, progress, check_budget)
+            result["status"] = "diagnostic_collected"
+            result["candidate_qualified"] = False
+            result["elapsed_seconds"] = time.monotonic() - started
+            save(); progress("finished", status=result["status"], candidate_qualified=False)
+            return 0
         with torch.inference_mode():
             for index, case in enumerate(cases):
                 check_budget(); progress("case_started", case=case)
