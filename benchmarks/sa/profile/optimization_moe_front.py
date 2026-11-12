@@ -59,12 +59,12 @@ def arguments(argv=None):
     except ValueError:
         parser.error("Rows must be comma-separated integers")
     if not (
-        1 <= len(args.rows) <= 4
+        1 <= len(args.rows) <= 16
         and len(args.rows) == len(set(args.rows))
         and all(256 < value <= 4096 for value in args.rows)
     ):
         parser.error(
-            "Choose one to four unique rows in 257..4096; smaller rows retain native shared-stream overlap"
+            "Choose one to sixteen unique rows in 257..4096; smaller rows retain native shared-stream overlap"
         )
     if not 6 <= args.rounds <= 60 or not 30 <= args.max_seconds <= 540:
         parser.error("Rounds must be 6..60 and max-seconds 30..540")
