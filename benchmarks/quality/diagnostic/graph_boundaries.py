@@ -17,7 +17,6 @@ import torch
 MAX_GRAPH_REQUESTS = int(os.environ.get('KIMI_GRAPH_BOUNDARY_MAX_REQS', '2'))
 INSTALLED = False
 _ACTIVE = None
-_GRAPHS = {}
 _LABELS = {}
 
 
@@ -61,7 +60,7 @@ def begin_proposal(speculator, arguments):
                   query_per_req=speculator.num_query_per_req,
                   target_live=(~batch.is_padding[:batch.num_tokens]).clone(),
                   num_target_rows=batch.num_tokens,
-                  graph_key=None)
+                  graph_key=None, graph_bucket=None)
     speculator._graph_boundary_ticket = ticket
     _ACTIVE = ticket
     for index, hidden in enumerate(arguments.get('aux_hidden_states') or []):
@@ -96,17 +95,20 @@ def _serialize(bucket, ticket):
 def cancel_proposal(speculator):
     """Clear an interrupted outer observation without reading device data."""
     global _ACTIVE
+    ticket = getattr(speculator, '_graph_boundary_ticket', None)
+    if ticket is not None:
+        ticket['graph_bucket'] = None
     _ACTIVE = None
     speculator._graph_boundary_ticket = None
 
 
 def end_proposal(speculator, ticket):
     """Read only the graph that this proposal actually replayed, after it ends."""
+    graph = ticket.get('graph_bucket')
     cancel_proposal(speculator)
     if torch.cuda.is_current_stream_capturing():
         raise RuntimeError('end_proposal must run outside CUDA capture')
     key = ticket['graph_key']
-    graph = _GRAPHS.get(key)
     records = _serialize(ticket, ticket)
     if graph is not None:
         records.extend(_serialize(graph, ticket))
@@ -218,7 +220,13 @@ def install():
             _ACTIVE = None
             if num_reqs <= MAX_GRAPH_REQUESTS:
                 _ACTIVE = _bucket('native_graph_replay')
-                _GRAPHS[(id(self.query_cudagraph_manager), num_reqs)] = _ACTIVE
+                manager = self.query_cudagraph_manager
+                buckets = getattr(manager, '_graph_boundary_buckets', None)
+                if buckets is None:
+                    buckets = manager._graph_boundary_buckets = {}
+                # Startup memory profiling discards its managers and pool.
+                # Summary tensors must be released with that actual manager.
+                buckets[num_reqs] = _ACTIVE
                 count = self._num_graph_context_tokens(num_reqs)
                 if self._aux_staging is not None:
                     _record('context.staged_aux', self._aux_staging[:count], 'context')
@@ -278,6 +286,8 @@ def install():
     def run_graph(self, desc):
         if _ACTIVE is not None and _ACTIVE['mode'] == 'eager_before_graph':
             _ACTIVE['graph_key'] = (id(self), desc.num_reqs)
+            _ACTIVE['graph_bucket'] = getattr(
+                self, '_graph_boundary_buckets', {}).get(desc.num_reqs)
         return replay(self, desc)
     DFlashCudaGraphManager.run_fullgraph = run_graph
     INSTALLED = True
