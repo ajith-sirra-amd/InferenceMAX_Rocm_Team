@@ -23,13 +23,15 @@ def audit(config, output, model, port, source_root, actual_argv):
                      'vllm/models/kimi_k3/amd/ops/attn_res.py'):
         sources[relative] = hashlib.sha256((source_root / relative).read_bytes()).hexdigest()
     optimization = os.environ['KIMI_FIXED_OPTIMIZATION']
-    flags = {'attnres': 'KIMI_ATTNRES_PRECOMPUTE_WEIGHTS', 'dspark': 'KIMI_DSPARK_SHARD_CONTEXT_PROJ'}
+    flags = {'attnres': 'KIMI_ATTNRES_PRECOMPUTE_WEIGHTS', 'dspark': 'KIMI_DSPARK_SHARD_CONTEXT_PROJ',
+             'moe_front': 'KIMI_MOE_MERGED_FRONT'}
     for mode, flag in flags.items():
         if os.environ.get(flag, '0') != ('1' if optimization == mode else '0'):
             raise ValueError('Unexpected optimization flag: ' + flag)
     if optimization in flags:
         manifest = json.loads((output / 'optimization.json').read_text())
         for entry in manifest['files']:
+            sources[entry['path']] = hashlib.sha256((source_root / entry['path']).read_bytes()).hexdigest()
             if sources[entry['path']] != entry['candidate_sha256']:
                 raise ValueError('Candidate overlay hash mismatch: ' + entry['path'])
     elif optimization != 'baseline':

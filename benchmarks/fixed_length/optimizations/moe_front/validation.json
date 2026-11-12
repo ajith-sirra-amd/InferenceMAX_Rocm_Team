@@ -1,0 +1,72 @@
+{
+  "status": "passed",
+  "runtime_lane_checks": 29,
+  "shared_mlp_bound_method_checks": 3,
+  "post_load_guard_checks": 8,
+  "opaque_dispatch_validation": {
+    "status": "passed",
+    "runtime_lane_checks": 29,
+    "one_persistent_callback_changing_shapes": 6,
+    "native_helper_equivalence_cases": 5,
+    "final_output_fake_shape_cases": 3,
+    "one_layer_lookup_per_initialized_call": true,
+    "no_runtime_shape_dtype_or_stream_gate_in_traced_forward": true,
+    "limits": [
+      "CPU AST/control-flow and shape stand-ins only",
+      "No Torch compile, graph capture, Triton execution or model numerics",
+      "Larger opaque boundary may change compiler optimizations and needs GPU measurement"
+    ]
+  },
+  "concatenation_and_view_checks": "passed with real output widths, reduced CPU K=16",
+  "full_weight_bytes_per_layer": 86245376,
+  "scratch_fp32_bytes_at_M336": 8085504,
+  "large_prefill_projection_classes_unchanged": true,
+  "limits": [
+    "CPU control flow, source identity and concatenation algebra only",
+    "GPU component evidence is in manifest.json; isolated full-model startup, graph capture and runtime still pending",
+    "No strict numerical parity, natural acceptance, checkpoint quality or E2E gain established"
+  ],
+  "root_postload_validation": {
+    "status": "passed",
+    "eight_worker_ready_markers": true,
+    "all_native_mla_work_before_merging": true,
+    "disabled_flag_native_only": true,
+    "capture_rejected_before_merge": true,
+    "seen_set_cleared": true,
+    "partial_initialization_count_visible": true,
+    "installer_rejections": [
+      "separate from original source",
+      "already exists",
+      "patch hash mismatch",
+      "Baseline source hash mismatch"
+    ],
+    "limits": [
+      "CPU AST and fixtures; full-model postload and graph replay pending"
+    ]
+  },
+  "patch_roundtrip": {
+    "status": "passed",
+    "patch_fuzz": 0,
+    "native_sources_unchanged": true,
+    "candidate_hashes_verified": true
+  },
+  "validation_source_sha256": {
+    "validate_candidate_cpu.py": "33b7d8d1c2680baa0a72ba7de31c13b1606e39184914392f6bb0cff86354c081",
+    "validate_graph_dispatch_cpu.py": "29556cbf6cf387d319bcb4eb546ff6d584e9350e85226235c319d6a689fe02a7",
+    "validate_postload_cpu.py": "bf3452df8254a14cdcdc6cf7e6f5b3194b35a9da5246fc4a8c19969c570de55c"
+  },
+  "qualified_runtime_rows": [
+    259,
+    266,
+    273,
+    280,
+    287,
+    294,
+    301,
+    308,
+    315,
+    322,
+    329,
+    336
+  ]
+}

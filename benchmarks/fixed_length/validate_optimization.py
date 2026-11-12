@@ -18,6 +18,9 @@ def validate(output):
     elif mode == 'dspark':
         patterns = {phase: rf'DSPARK_CONTEXT_SHARD phase={phase} active=True rank=\d+ tp=8 .*local_weight_shape=\(896, 35840\) dtype=torch.bfloat16'
                     for phase in ('construct', 'loaded')}
+    elif mode == 'moe_front':
+        patterns = {'prepared': r'MOE_MERGED_FRONT_READY rank=\d+ active=True prepared=92 expected=92\b',
+                    'selected': r'MOE_MERGED_FRONT_SELECTED rank=\d+ rows=(?:259|266|273|280|287|294|301|308|315|322|329|336)\b'}
     elif mode == 'baseline':
         patterns = {}
     else:
@@ -31,7 +34,7 @@ def validate(output):
         phases[phase] = sorted(ranks)
     errors = [f'{phase}: expected ranks0-7, observed {ranks}'
               for phase, ranks in phases.items() if set(ranks) != expected]
-    if mode == 'baseline' and re.search(r'ATTNRES_PRODUCT_(?:PREPARED|SELECTED)|DSPARK_CONTEXT_SHARD', log):
+    if mode == 'baseline' and re.search(r'ATTNRES_PRODUCT_(?:PREPARED|SELECTED)|DSPARK_CONTEXT_SHARD|MOE_MERGED_FRONT_(?:READY|SELECTED)', log):
         errors.append('Candidate activation appeared in baseline')
     result = dict(status='failed' if errors else 'passed', optimization=mode,
                   phases=phases, errors=errors,

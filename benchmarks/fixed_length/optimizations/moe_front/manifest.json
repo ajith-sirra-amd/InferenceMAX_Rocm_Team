@@ -1,0 +1,346 @@
+{
+  "name": "kimi-moe-merged-front",
+  "status": "Component GPU evidence collected; isolated full-model qualification pending",
+  "image": "vllm/vllm-openai-rocm:kimi-k31-d73dd529@sha256:5b54f223a150a9baad41a5d511e159e7cbf43e308c6cd44ad3f6a2463c245b3c",
+  "upstream_pr": 66736,
+  "patch": "moe_front.patch",
+  "patch_sha256": "9fe8a0a10bab18f590ec3a14e404d10f149ad69b99c2f07234b794331fafd204",
+  "files": [
+    {
+      "path": "vllm/models/kimi_k3/amd/linear.py",
+      "baseline_sha256": "633d2451e82b6cb8d855245932bfb055e3e79558cb979784ede4b0aa9e894914",
+      "candidate_sha256": "942e03048bc7250970524fccb805c11df16beff67e230a6e40177e8d00164942"
+    },
+    {
+      "path": "vllm/models/kimi_k3/amd/latent_moe_runner.py",
+      "baseline_sha256": "78deccd9d5390bd142e6ec43c8bb1d88d0ffc41568634f8aab5886d45ab229b6",
+      "candidate_sha256": "8650a76df2bf71380f7b22ef5009857c911c25104d4fd2a5d11ec2965d491c0a"
+    }
+  ],
+  "native_dependency_sha256": {
+    "vllm/model_executor/layers/linear.py": "d4b97d850eb8bdee5fd2459e7ac688d00623b54f5ec0ea590c08da0173f8b4d4",
+    "vllm/model_executor/layers/utils.py": "571680e80668de63954f35830dd5f2dd617b0b56f339a7ebec314d00498a3c60",
+    "vllm/model_executor/layers/activation.py": "bebeddbd4997f49f54471ee31ac42b22c3c11dfe25244e55d20c36f390489c05",
+    "vllm/model_executor/layers/fused_moe/router/gate_linear.py": "d2a490dd1b084b2e783c2ca7d91b58164310e471ecc1f17df3ee9d6382e856f3",
+    "vllm/model_executor/layers/fused_moe/router/grouped_topk_router.py": "add3764cec2bb08d121610673b06a09e89e78c11ea45de8d4ab1c1cd24cfcf71",
+    "vllm/model_executor/layers/fused_moe/experts/rocm_aiter_moe.py": "08c8fd04cfa8ce7bb7f33203cf38adeb4c815c0b9c868b6a1571bf94e46752ad",
+    "aiter/ops/triton/moe/moe_situ_epilogue.py": "4d78e400fa743562e851c43c126a88154fccc7a156d76a3047f4035a761d68cf",
+    "aiter/ops/triton/_triton_kernels/moe/moe_situ_epilogue.py": "8ba913f456776def5718459564816bfce328a4adb7fd9950c4c95933ffc4d502"
+  },
+  "enable_environment": {
+    "KIMI_MOE_MERGED_FRONT": "1"
+  },
+  "qualified_rows": [
+    259,
+    266,
+    273,
+    280,
+    287,
+    294,
+    301,
+    308,
+    315,
+    322,
+    329,
+    336
+  ],
+  "activation_evidence": {
+    "postload_marker": "MOE_MERGED_FRONT_READY rank=<0..7> active=True prepared=92 expected=92 rows=259,266,273,280,287,294,301,308,315,322,329,336",
+    "first_submission_marker": "MOE_MERGED_FRONT_SELECTED rank=<0..7> rows=<one of qualified_rows> submission=<capture|eager>",
+    "first_submission_limit": "A graph-capture/warmup marker is not measured replay proof"
+  },
+  "guards": [
+    "gfx950, AITER enabled, batch-invariant disabled",
+    "TP8, DP1, PCP1, EP1; no LoRA or sequence parallelism",
+    "Native ROCmLatentMoERunner, shardable tail, no already reduced or unpadded output",
+    "BF16 contiguous unbiased native weights of shapes1536x7168,896x7168,3584x7168",
+    "SiTU beta4/linear_beta25, shared local width768, FP32 router logits",
+    "Only twelve explicit rows259,266,273,280,287,294,301,308,315,322,329,336; BF16 input and no shared-expert auxiliary-stream overlap"
+  ],
+  "invariants": [
+    "Native large-prefill routed projection unchanged",
+    "Unqualified shapes/precision use original fused forward inside same opaque operation",
+    "Exactly one layer resolution per initialized MoE invocation",
+    "Original native MLA postload work completes before merging",
+    "Native correction bias, topk, routed experts and final tail retained"
+  ],
+  "limitations": [
+    "Synthetic component BF16/FP32 differences and three ordered-route mismatch cases remain; no sampled expert-set changes; checkpoint/model quality and natural acceptance unvalidated",
+    "Opaque full-model integration, graph capture and native fallback still need runner qualification",
+    "Fixed weights/device only: reload, sleep, migration, live flag changes not supported",
+    "No E2E improvement implied by component timings"
+  ],
+  "component_qualification": {
+    "run": 43188122614,
+    "result_sha256": "f2103ce699e85dd79e8d090db21eb12e456ba6b71f83947a5758ca6663d092e6",
+    "scope": "Bounded native three-projection versus merged MoE-front GPU comparison.\n\nOne GPU, synthetic BF16 weights/inputs, actual TP8 local widths. Includes SiTU\nand native router top-k; excludes experts, shared down projection and collectives.\nNever modifies installed packages or loads the model. Timing is not request E2E.\n",
+    "strict_candidate_parity": false,
+    "own_graph_eager_exact": true,
+    "cases": [
+      {
+        "rows": 259,
+        "native_graph_median_us": 92.38100051879883,
+        "candidate_graph_median_us": 56.5200001001358,
+        "graph_median_reduction_pct": 38.81858847303303,
+        "graph_mean_reduction_pct": 39.01753414428659,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 266,
+        "native_graph_median_us": 91.84099733829498,
+        "candidate_graph_median_us": 57.000499218702316,
+        "graph_median_reduction_pct": 37.935670484128345,
+        "graph_mean_reduction_pct": 38.232401903487315,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 273,
+        "native_graph_median_us": 92.36050024628639,
+        "candidate_graph_median_us": 57.30050057172775,
+        "graph_median_reduction_pct": 37.95994995811894,
+        "graph_mean_reduction_pct": 38.72714068730574,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 280,
+        "native_graph_median_us": 94.04100105166435,
+        "candidate_graph_median_us": 57.960499078035355,
+        "graph_median_reduction_pct": 38.36677786299515,
+        "graph_mean_reduction_pct": 40.06271892742295,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 287,
+        "native_graph_median_us": 96.88049927353859,
+        "candidate_graph_median_us": 56.68049864470959,
+        "graph_median_reduction_pct": 41.49441934163216,
+        "graph_mean_reduction_pct": 41.46553845692939,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 294,
+        "native_graph_median_us": 95.86100280284882,
+        "candidate_graph_median_us": 64.58050012588501,
+        "graph_median_reduction_pct": 32.63110312052171,
+        "graph_mean_reduction_pct": 33.05864300432343,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 1,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 301,
+        "native_graph_median_us": 95.56099772453308,
+        "candidate_graph_median_us": 64.54100087285042,
+        "graph_median_reduction_pct": 32.46093865731897,
+        "graph_mean_reduction_pct": 32.987583630830045,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 1,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 308,
+        "native_graph_median_us": 95.40099650621414,
+        "candidate_graph_median_us": 64.38050046563148,
+        "graph_median_reduction_pct": 32.51590358237198,
+        "graph_mean_reduction_pct": 32.54215741591311,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 315,
+        "native_graph_median_us": 95.48099711537361,
+        "candidate_graph_median_us": 64.3405020236969,
+        "graph_median_reduction_pct": 32.614337965122395,
+        "graph_mean_reduction_pct": 32.48605010502531,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 322,
+        "native_graph_median_us": 96.26049920916557,
+        "candidate_graph_median_us": 69.62049752473831,
+        "graph_median_reduction_pct": 27.674904974823455,
+        "graph_mean_reduction_pct": 27.586920190899345,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 329,
+        "native_graph_median_us": 97.44099900126457,
+        "candidate_graph_median_us": 70.0405016541481,
+        "graph_median_reduction_pct": 28.120090750260964,
+        "graph_mean_reduction_pct": 28.1475125321642,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      },
+      {
+        "rows": 336,
+        "native_graph_median_us": 97.84099832177162,
+        "candidate_graph_median_us": 70.40049880743027,
+        "graph_median_reduction_pct": 28.04601341463958,
+        "graph_mean_reduction_pct": 28.782250542874287,
+        "routing": {
+          "eager_candidate_vs_native": {
+            "ordered_mismatch_rows": 1,
+            "set_mismatch_rows": 0
+          },
+          "changed_candidate_vs_native": {
+            "ordered_mismatch_rows": 0,
+            "set_mismatch_rows": 0
+          }
+        },
+        "own_eager_graph_exact": true,
+        "changed_input_observed": true,
+        "strict_candidate_parity": false
+      }
+    ]
+  },
+  "cpu_validation": "validation.json",
+  "initial_component_qualification": {
+    "run": 43187278675,
+    "result_sha256": "1bb965c9b59ce03cea0492837f1072b603420a623487eee5297b7cf0f5490353",
+    "scope": "One MI355X, synthetic BF16 inputs/weights, native projections/SiTU/topk vs merged GEMM/epilogue/topk",
+    "strict_candidate_parity": false,
+    "own_graph_eager_exact": true,
+    "cases": [
+      {
+        "rows": 287,
+        "native_graph_median_us": 96.54049947857857,
+        "candidate_graph_median_us": 56.5204992890358,
+        "graph_median_reduction_pct": 41.45410517419462,
+        "original_and_changed_router_ids_match": true
+      },
+      {
+        "rows": 336,
+        "native_graph_median_us": 95.54100036621094,
+        "candidate_graph_median_us": 68.34100186824799,
+        "graph_median_reduction_pct": 28.469451223772737,
+        "original_and_changed_router_ids_match": true
+      }
+    ]
+  }
+}

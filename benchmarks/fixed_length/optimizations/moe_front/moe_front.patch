@@ -1,0 +1,312 @@
+--- a/vllm/models/kimi_k3/amd/linear.py
++++ b/vllm/models/kimi_k3/amd/linear.py
+@@ -2,6 +2,7 @@
+ # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+ 
+ from collections.abc import Iterable
++import os
+ from typing import Any, cast
+ 
+ import torch
+@@ -9,6 +10,7 @@
+ from torch import nn
+ 
+ from vllm import envs
++from vllm._aiter_ops import rocm_aiter_ops
+ from vllm.config import CacheConfig, VllmConfig, get_current_vllm_config
+ from vllm.distributed import (
+     get_dcp_group,
+@@ -34,6 +36,7 @@
+     MergedColumnParallelLinear,
+     ReplicatedLinear,
+     RowParallelLinear,
++    UnquantizedLinearMethod,
+ )
+ from vllm.model_executor.layers.logits_processor import LogitsProcessor
+ from vllm.model_executor.layers.mamba.gdn.kimi_gdn_linear_attn import (
+@@ -87,6 +90,9 @@
+ from vllm.utils.math_utils import cdiv
+ 
+ logger = init_logger(__name__)
++_MOE_MERGED_FRONT_ENABLED = os.environ.get("KIMI_MOE_MERGED_FRONT", "0") == "1"
++_MOE_MERGED_FRONT_ROWS = (259, 266, 273, 280, 287, 294, 301, 308, 315, 322, 329, 336)
++_MOE_MERGED_FRONT_SEEN: set[int] = set()
+ 
+ 
+ # DSA indexer weight rename mapping. Specific rules must come before the
+@@ -147,6 +153,13 @@
+         return get_input_quant_key(self.gate_up_proj)
+ 
+     def forward(self, x):
++        # Only the gated merged-front caller supplies the post-SiTU tensor.
++        if (
++            getattr(self, "_accept_merged_front_input", False)
++            and isinstance(x, torch.Tensor)
++            and x.shape[-1] == self.down_proj.input_size_per_partition
++        ):
++            return self.down_proj(x)[0]
+         gate_up, _ = self.gate_up_proj(x)
+         x = self.act_fn(gate_up)
+         x, _ = self.down_proj(x)
+@@ -467,9 +480,128 @@
+                 moe_intermediate_size // self.tp_size
+             )
+ 
++    def initialize_merged_front(self) -> None:
++        """Research backport of vLLM #66736; called by the root post-load hook."""
++        from vllm.platforms.rocm import on_gfx950
++
++        self.merged_front_weight = None
++        runner, shared = self.experts, self.shared_experts
++        if (
++            not on_gfx950()
++            or not rocm_aiter_ops.is_enabled()
++            or envs.VLLM_BATCH_INVARIANT
++            or not isinstance(runner, ROCmLatentMoERunner)
++            or shared is None
++            or not isinstance(shared.act_fn, SituAndMul)
++            or shared.act_fn.beta != 4.0
++            or shared.act_fn.linear_beta != 25.0
++            or runner.moe_config.is_lora_enabled
++            or runner.moe_config.is_sequence_parallel
++            or runner.moe_config.dp_size != 1
++            or runner.moe_config.pcp_size != 1
++            or runner.moe_config.ep_size != 1
++            or runner.moe_config.tp_size != 8
++            or not runner._tail_shardable
++            or runner._fused_output_is_reduced
++            or runner._quant_method.has_unpadded_output
++            or runner.gate is not None
++            or runner.moe_config.hidden_dim != 3584
++            or runner.moe_config.hidden_dim_unpadded != 3584
++            or self.gate.out_dtype != torch.float32
++            or shared.down_proj.input_size_per_partition != 768
++        ):
++            return
++        assert self.routed_expert_down_proj is not None
++        layers = (shared.gate_up_proj, self.gate, self.routed_expert_down_proj)
++        if not all(
++            isinstance(layer.quant_method, UnquantizedLinearMethod)
++            and not layer.has_bias
++            and layer.weight.dtype == torch.bfloat16
++            and layer.weight.device == layers[0].weight.device
++            and layer.weight.is_cuda
++            and layer.weight.is_contiguous()
++            for layer in layers
++        ) or [tuple(layer.weight.shape) for layer in layers] != [
++            (1536, 7168), (896, 7168), (3584, 7168)
++        ]:
++            return
++        # One post-load copy; keep the native weights as views for fallback.
++        # Direct weight reload is outside this research candidate's scope.
++        merged = torch.cat([layer.weight for layer in layers])
++        self.merged_front_weight = merged
++        start = 0
++        for layer in layers:
++            end = start + layer.weight.shape[0]
++            layer.weight.data = merged[start:end]
++            start = end
++        shared._accept_merged_front_input = True
++        runner.merged_front_core = self._merged_front_core
++
++    def _merged_front_core(
++        self, hidden_states: torch.Tensor
++    ) -> torch.Tensor:
++        # Called only inside the opaque MoE op. This fork drops Dynamo guards,
++        # so token/dtype/stream decisions must not be traced in forward().
++        runner = cast(ROCmLatentMoERunner, self.experts)
++        num_tokens = hidden_states.shape[0]
++        if not (
++            hidden_states.dtype == torch.bfloat16
++            and num_tokens in _MOE_MERGED_FRONT_ROWS
++            and (
++                envs.VLLM_DISABLE_SHARED_EXPERTS_STREAM
++                or num_tokens > envs.VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD
++            )
++        ):
++            router_logits, _ = self.gate(hidden_states)
++            return runner._fused_forward(
++                hidden_states, router_logits, None, None, _inside_moe_op=True
++            )
++
++        if num_tokens not in _MOE_MERGED_FRONT_SEEN:
++            _MOE_MERGED_FRONT_SEEN.add(num_tokens)
++            logger.info(
++                "MOE_MERGED_FRONT_SELECTED rank=%d rows=%d submission=%s",
++                get_tp_group().rank_in_group, num_tokens,
++                "capture" if torch.cuda.is_current_stream_capturing() else "eager",
++            )
++
++        from aiter.ops.triton.moe.moe_situ_epilogue import moe_situ_epilogue
++        from vllm.models.kimi_k3.amd.latent_moe_runner import (
++            enable_quantized_routed_input,
++        )
++
++        if runner._quantized_routed_input is None:
++            runner._quantized_routed_input = enable_quantized_routed_input(runner)
++        shared = self.shared_experts
++        assert shared is not None and self.merged_front_weight is not None
++        act = cast(SituAndMul, shared.act_fn)
++        shared_input, router_logits, routed_input = moe_situ_epilogue(
++            torch.mm(
++                hidden_states, self.merged_front_weight.t(), out_dtype=torch.float32
++            ),
++            shared_intermediate_size=768,
++            num_experts=896,
++            routed_latent_size=3584,
++            situ_beta=act.beta,
++            situ_linear_beta=act.linear_beta,
++        )
++        # Inside our custom op: do not invoke a second layer-resolving op.
++        shared_output, fused_output = cast(
++            tuple[torch.Tensor, torch.Tensor],
++            runner._forward_impl(routed_input, router_logits, shared_input),
++        )
++        result = runner._shard_up_proj_tail(fused_output, shared_output, None)
++        return runner._maybe_add_zero_expert_output(result)
++
+     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+         num_tokens, hidden_size = hidden_states.shape
+         hidden_states = hidden_states.view(-1, hidden_size)
++        # Readiness is fixed at post-load; runtime lane selection is opaque.
++        if getattr(self, "merged_front_weight", None) is not None:
++            runner = cast(ROCmLatentMoERunner, self.experts)
++            result = runner.forward_merged_front(hidden_states)
++            return result.view(num_tokens, hidden_size)
++        # Ineligible model configurations retain the original entry entirely.
+         router_logits, _ = self.gate(hidden_states)
+         final_hidden_states = self.experts(
+             hidden_states=hidden_states, router_logits=router_logits
+@@ -1354,6 +1486,19 @@
+         for module in self.modules():
+             if isinstance(module, KimiK3MultiHeadLatentAttentionWrapper):
+                 module.process_weights_after_loading()
++        if not _MOE_MERGED_FRONT_ENABLED:
++            return
++        if torch.cuda.is_current_stream_capturing():
++            raise RuntimeError("Merged MoE front must be initialized before graph capture")
++        modules = [module for module in self.modules() if isinstance(module, KimiMoE)]
++        for module in modules:
++            module.initialize_merged_front()
++        prepared = sum(module.merged_front_weight is not None for module in modules)
++        _MOE_MERGED_FRONT_SEEN.clear()
++        logger.info(
++            "MOE_MERGED_FRONT_READY rank=%d active=%s prepared=%d expected=%d rows=259,266,273,280,287,294,301,308,315,322,329,336",
++            get_tp_group().rank_in_group, prepared > 0, prepared, len(modules),
++        )
+ 
+     def compute_logits(
+         self,
+--- a/vllm/models/kimi_k3/amd/latent_moe_runner.py
++++ b/vllm/models/kimi_k3/amd/latent_moe_runner.py
+@@ -1,5 +1,6 @@
+ # SPDX-License-Identifier: Apache-2.0
+ # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++from collections.abc import Callable
+ from typing import TYPE_CHECKING, cast
+ 
+ import torch
+@@ -20,7 +21,13 @@
+ from vllm.model_executor.layers.fused_moe.prepare_finalize.no_dp_ep import (
+     MoEPrepareAndFinalizeNoDPEPModular,
+ )
+-from vllm.model_executor.layers.fused_moe.runner.moe_runner import MoERunner
++from vllm.model_executor.layers.fused_moe.runner.moe_runner import (
++    MoERunner,
++    _layer_name_type,
++    _resolve_layer_name,
++    get_layer_from_name,
++)
++from vllm.utils.torch_utils import direct_register_custom_op
+ from vllm.model_executor.layers.quantization.online.fp8 import Fp8PtpcOnlineLinearMethod
+ from vllm.model_executor.layers.quantization.online.mxfp4 import Mxfp4OnlineLinearMethod
+ 
+@@ -39,6 +46,8 @@
+     Native path: the replicated up-proj produces the full hidden dim on every
+     rank, so the base runner combines routed + shared correctly at any TP size.
+     """
++
++    merged_front_core: Callable[[torch.Tensor], torch.Tensor] | None = None
+ 
+     def __init__(
+         self,
+@@ -138,6 +147,8 @@
+         router_logits: torch.Tensor,
+         input_ids: torch.Tensor | None,
+         shared_experts_input: torch.Tensor | None,
++        *,
++        _inside_moe_op: bool = False,
+     ) -> torch.Tensor:
+         # The modular kernel is selected after weight loading. Resolve its
+         # compatible prepare adapter once, during warmup before graph capture.
+@@ -173,16 +184,24 @@
+                 )
+             )
+ 
+-        result = self._forward_entry(
+-            hidden_states,
+-            router_logits,
+-            shared_experts_input,
+-            input_ids,
+-            self._encode_layer_name(),
+-            self.moe_config.hidden_dim_unpadded
+-            if defer_projection or self._quant_method.has_unpadded_output
+-            else 0,
+-        )
++        if _inside_moe_op:
++            # The outer custom op has already resolved this layer. Calling
++            # _forward_entry again would advance the implicit layer index twice.
++            # Its real implementation only delegates these four arguments.
++            result = self._forward_impl(
++                hidden_states, router_logits, shared_experts_input, input_ids
++            )
++        else:
++            result = self._forward_entry(
++                hidden_states,
++                router_logits,
++                shared_experts_input,
++                input_ids,
++                self._encode_layer_name(),
++                self.moe_config.hidden_dim_unpadded
++                if defer_projection or self._quant_method.has_unpadded_output
++                else 0,
++            )
+ 
+         shared_output, fused_output = cast(tuple[torch.Tensor, torch.Tensor], result)
+ 
+@@ -194,6 +213,35 @@
+         )
+ 
+         return self._maybe_add_zero_expert_output(result)
++
++
++    def forward_merged_front(self, hidden_states: torch.Tensor) -> torch.Tensor:
++        return torch.ops.vllm.kimi_k3_moe_front(
++            hidden_states, self._encode_layer_name()
++        )
++
++
++def _kimi_k3_moe_front(
++    hidden_states: torch.Tensor, layer_name: _layer_name_type
++) -> torch.Tensor:
++    runner = get_layer_from_name(_resolve_layer_name(layer_name))
++    assert isinstance(runner, ROCmLatentMoERunner)
++    assert runner.merged_front_core is not None
++    return runner.merged_front_core(hidden_states)
++
++
++def _kimi_k3_moe_front_fake(
++    hidden_states: torch.Tensor, layer_name: _layer_name_type
++) -> torch.Tensor:
++    return torch.empty_like(hidden_states, memory_format=torch.contiguous_format)
++
++
++direct_register_custom_op(
++    op_name="kimi_k3_moe_front",
++    op_func=_kimi_k3_moe_front,
++    fake_impl=_kimi_k3_moe_front_fake,
++    tags=(torch.Tag.needs_fixed_stride_order,),
++)
+ 
+ 
+ class KimiLatentAiterExperts(AiterMxfp4Experts):

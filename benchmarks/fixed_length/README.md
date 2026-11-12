@@ -37,7 +37,7 @@ Outputs stay in the supplied directory: `recipe.json`, `effective-server.json`,
 compact results and logs; the original data remain on the shared filesystem.
 
 Use the **e2e Test** workflow on **IPAT-Script**, choose **Fixed-length Kimi
-baseline** **, **Fixed-length Kimi AttnRes** or **Fixed-length Kimi DSpark**, and give the run a descriptive name. It targets the existing
+baseline**, **Fixed-length Kimi AttnRes** or **Fixed-length Kimi DSpark**, and give the run a descriptive name. It targets the existing
 `cluster:mi355x-amds-2` runner without modifying allocation or reservation.
 
 Collect and validate this unchanged baseline before applying candidates. Compare
@@ -54,3 +54,10 @@ synthetic acceptance does not establish natural acceptance or model quality.
 `validate_optimization.py` requires candidate preparation/loading markers on
 all eight workers. AttnRes capture-time selection is distinguished from measured
 replay frequency. Run-local Python cache paths avoid installed bytecode reuse.
+
+The `moe_front` mode combines shared gate/up, router and routed latent front
+projections, with the installed SiTU/split epilogue. It preserves the native
+path outside the twelve qualified decode row sizes. Two source overlays and
+`KIMI_MOE_MERGED_FRONT=1` isolate this arm; all eight workers must prepare92
+layers. Component tests preserve expert sets but show small floating-point
+and occasional expert-order differences; full-model quality remains open.

@@ -8617,3 +8617,9 @@
   description:
     - 'Add an isolated DSpark context-projection sharding comparison after real-checkpoint TP8 qualification. Keep the native output gather and normalization, all SA core settings and the fixed client; record eight-worker activation. BF16 rounding and model quality remain separate validation.'
     - '在真实权重 TP8 验证后新增独立 DSpark 上下文投影分片对比，保留原生输出聚合、归一化、SA 核心配置及定长客户端，记录八个 worker 的激活证据。BF16 舍入差异与模型质量须单独验证。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Add an isolated merged MoE-front fixed-length comparison after twelve decode batch-size component checks. Preserve native fallback, one layer resolution and SA core settings; record per-worker preparation. Numerical and expert-order differences remain experimental.'
+    - '在十二种解码批次大小验证后新增独立 MoE 前端融合定长对比。保留原生回退、单次层解析及 SA 核心配置，记录各 worker 的准备情况。数值及专家顺序差异仍需实验验证。'
