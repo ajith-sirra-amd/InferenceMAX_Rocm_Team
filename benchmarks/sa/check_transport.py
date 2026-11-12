@@ -3,8 +3,43 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import shutil
+
+
+def saved_evidence_mounts(task, root=Path('/share_nfs/ajith/benchmarks')):
+    """Mount only explicitly requested prior-run evidence directories, read-only."""
+    mounts = []
+    for flag in ('--compiled', '--approved-cache'):
+        values = []
+        for index, token in enumerate(task):
+            if token == flag:
+                if index + 1 == len(task):
+                    raise ValueError(f'{flag} requires a saved-evidence directory')
+                values.append(task[index + 1])
+            elif token.startswith(flag + '='):
+                values.append(token[len(flag) + 1:])
+        if not values:
+            continue
+        if len(values) != 1:
+            raise ValueError(f'{flag} must be specified once')
+        target = Path(values[0])
+        relative = target.relative_to('/saved-benchmarks')
+        if (len(relative.parts) < 2 or '..' in relative.parts
+                or not re.fullmatch(r'[0-9]+-[1-9][0-9]*', relative.parts[0])
+                or any(character in str(target) for character in ',:')):
+            raise ValueError(f'{flag} must name a subdirectory of /saved-benchmarks/<run>-<attempt>/')
+        source = root / relative
+        resolved = source.resolve()
+        if (not source.is_dir() or not resolved.is_relative_to(root.resolve())
+                or any(character in str(resolved) for character in ',:')):
+            raise ValueError(f'Saved evidence must be an existing directory under {root}: {source}')
+        mount = f',{resolved}:{target}:ro'
+        if mount not in mounts:
+            mounts.append(mount)
+    return ''.join(mounts)
+
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--config', type=Path, required=True)
@@ -44,6 +79,7 @@ if '--checkpoint' in task:
     if '..' in relative.parts or not source.is_dir() or not source.resolve().is_relative_to(model_root.resolve()):
         raise ValueError(f'Checkpoint must be an existing directory under {model_root}: {source}')
     checkpoint_mount = f',{source}:{checkpoint}:ro'
+evidence_mounts = saved_evidence_mounts(task)
 base = ['srun', '--nodes', '1', '--ntasks', '1', '--nodelist', host]
 if a.allocation:
     base += ['--jobid', a.allocation, '--overlap']
@@ -57,7 +93,7 @@ commands = {
     'native_adapter': [str(Path(__file__).parent / 'spur/srun'), *base[1:],
                        '--container-image', image, '--container-remap-root', '--container-writable',
                        '--container-mounts', f'{a.output.resolve()}:/logs' + ('' if a.command_json else ':ro')
-                       + f',{Path(__file__).resolve().parent}:/sa-tools:ro' + checkpoint_mount, *task],
+                       + f',{Path(__file__).resolve().parent}:/sa-tools:ro' + checkpoint_mount + evidence_mounts, *task],
 }
 if a.command_json or not a.allocation:
     commands = {'native_adapter': commands['native_adapter']}
