@@ -440,18 +440,26 @@ def dump_kernel_artifacts(compiled, directory):
     return result
 
 
-def diagnose_first_consumer(torch, paths, output, plan, progress, check_budget):
+def diagnose_first_consumer(torch, paths, output, plan, progress, check_budget,
+                            *, seed=20261112, dtype="bf16"):
     """Observe the first divergent historical use without qualifying a candidate."""
     rows, hidden = 280, 7168
-    generator = torch.Generator(device="cuda").manual_seed(20261112)
+    if dtype not in ("bf16", "fp8"):
+        raise ValueError("Diagnostic output dtype must be bf16 or fp8")
+    generator = torch.Generator(device="cuda").manual_seed(seed)
     def random(shape):
         return torch.randn(shape, device="cuda", dtype=torch.bfloat16, generator=generator)
     signals = random((16, rows, hidden))
+    # Keep the complete plan's RNG allocation even though only two steps run.
     weights = random((len(plan), 3, hidden))
     norms = (weights[:, 0].float() * 0.05 + 1).to(torch.bfloat16)
     qks = (weights[:, 1].float() / math.sqrt(hidden)).to(torch.bfloat16)
     out_norms = (weights[:, 2].float() * 0.05 + 1).to(torch.bfloat16)
     products = (norms.float() * qks.float()).contiguous()
+    input_hashes = {name: common.digest(value.view(torch.uint8).cpu().numpy().tobytes())
+                    for name, value in (("signals", signals), ("weights", weights))}
+    quant_dtype = torch.float8_e4m3fn if dtype == "fp8" else None
+    (output / "sources").mkdir(parents=True, exist_ok=True)
     diagnostic_paths = []
     for path, name in ((paths[0], "baseline_debug"), (paths[2], "norm_debug")):
         source = diagnostic_source(path.read_text())
@@ -470,8 +478,8 @@ def diagnose_first_consumer(torch, paths, output, plan, progress, check_budget):
     )
     captures = {}; summaries = {}
     for name, path, product, cache, debug, no_fma in variants:
-        check_budget(); progress("diagnostic_arm", arm=name)
-        module = common.load_module(path, "attnres_norm_diagnostic_" + name)
+        check_budget(); progress("diagnostic_arm", arm=name, dtype=dtype, seed=seed)
+        module = common.load_module(path, "attnres_norm_diagnostic_" + dtype + "_" + name)
         original_kernel = module._attn_res_kernel
         class Recorder:
             def __getitem__(self, grid):
@@ -493,7 +501,7 @@ def diagnose_first_consumer(torch, paths, output, plan, progress, check_budget):
                 check_budget(); index = step["index"]
                 state["prefix"].copy_(signals[index % len(signals)])
                 stats = torch.full((rows, 10, 4), float("nan"), device="cuda", dtype=torch.float32) if debug else None
-                kwargs = {}
+                kwargs = dict(quant_dtype=quant_dtype)
                 if path != paths[0] and name not in ("baseline_debug", "baseline_no_fma"):
                     kwargs["input_qk_weight"] = products[index] if product and step["blocks"] else None
                 if path == paths[2] or name == "norm_debug":
@@ -517,15 +525,48 @@ def diagnose_first_consumer(torch, paths, output, plan, progress, check_budget):
         common.write_json(output / "diagnostic-progress.json", summaries)
     if "baseline" not in captures or "norm_cache" not in captures:
         raise RuntimeError("Could not collect the original baseline and failed norm candidate")
-    for name, records in captures.items():
-        summaries[name]["against_original"] = [dict(
-            output=common.compare(torch, record["output"], reference["output"]),
+    def compare_output(actual, reference):
+        actual, reference = common.outputs(actual), common.outputs(reference)
+        if len(actual) != len(reference) or len(actual) != (2 if quant_dtype is not None else 1):
+            raise AssertionError("Diagnostic output/scale contract changed")
+        checks = [common.compare(torch, a, b) for a, b in zip(actual, reference)]
+        return checks[0] if quant_dtype is None else dict(data=checks[0], scale=checks[1])
+
+    def compare_record(record, reference):
+        return dict(
+            output=compare_output(record["output"], reference["output"]),
             prefix=common.compare(torch, record["prefix"], reference["prefix"]),
             blocks=common.compare(torch, record["blocks"], reference["blocks"]))
+
+    for name, records in captures.items():
+        summaries[name]["against_original"] = [compare_record(record, reference)
             for record, reference in zip(records, captures["baseline"])]
         if "baseline_no_fma" in captures and name == "norm_no_fma":
-            summaries[name]["against_no_fma_baseline"] = [common.compare(torch, record["output"], reference["output"])
+            summaries[name]["against_no_fma_baseline"] = [compare_output(record["output"], reference["output"])
                 for record, reference in zip(records, captures["baseline_no_fma"])]
+    observer_parity = {}
+    for observer, original in (("baseline_debug", "baseline"), ("norm_debug", "norm_cache")):
+        if observer not in captures:
+            observer_parity[observer] = dict(available=False, passed=False)
+            continue
+        checks = [compare_record(a, b) for a, b in zip(captures[observer], captures[original])]
+        if observer == "norm_debug":
+            checks += [dict(cache=common.compare(torch, a["cache"], b["cache"]))
+                       for a, b in zip(captures[observer], captures[original])]
+        observer_parity[observer] = dict(available=True, passed=require_exact(checks), checks=checks)
+    # Retain failed finite/parity checks even if a later diagnostic export fails.
+    common.write_json(output / "diagnostic-comparisons.json", dict(arms=summaries, observer_parity=observer_parity))
+    nonfinite_raw_values = 0
+    def finite_json(value):
+        nonlocal nonfinite_raw_values
+        if isinstance(value, dict):
+            return {key: finite_json(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [finite_json(item) for item in value]
+        if isinstance(value, float) and not math.isfinite(value):
+            nonfinite_raw_values += 1
+            return None
+        return value
     details = {}
     def compare_values(name, actual, reference):
         actual, reference = actual.contiguous(), reference.contiguous()
@@ -535,12 +576,13 @@ def diagnose_first_consumer(torch, paths, output, plan, progress, check_budget):
         report["first_differences"] = [dict(index=int(index), actual=float(a[index].item()), reference=float(b[index].item()),
             actual_bits=int(a.view(torch.int32)[index].item()) & 0xffffffff,
             reference_bits=int(b.view(torch.int32)[index].item()) & 0xffffffff) for index in unequal.tolist()]
-        details[name] = report
+        details[name] = finite_json(report)
     if "baseline_debug" in captures:
         reference = captures["baseline_debug"][1]["stats"]
         compare_values("block0_producer_cache_vs_original_consumer_rstd", captures["norm_cache"][0]["cache"][:, 0], reference[:, 0, 1])
         compare_values("block1_writer_cache_vs_original_live_prefix_rstd", captures["norm_cache"][1]["cache"][:, 1], reference[:, 1, 1])
         compare_values("block0_cache_vs_initial_output_rstd", captures["norm_cache"][0]["cache"][:, 0], captures["baseline_debug"][0]["stats"][:, 9, 1])
+        compare_values("native_initial_output_vs_native_consumer_rstd", captures["baseline_debug"][0]["stats"][:, 9, 1], reference[:, 0, 1])
         if "norm_debug" in captures:
             for metric, index in (("sum_squares", 0), ("rstd", 1), ("score_dot", 2), ("logit", 3)):
                 compare_values("observed_consumer_" + metric, captures["norm_debug"][1]["stats"][:, :2, index], reference[:, :2, index])
@@ -556,13 +598,27 @@ def diagnose_first_consumer(torch, paths, output, plan, progress, check_budget):
             if record["stats"] is not None:
                 item["source_stats"] = record["stats"][:, :index + 1].cpu().tolist() if index > 0 else []
                 item["output_norm_sum_rstd"] = record["stats"][:, 9, :2].cpu().tolist()
-            different = (record["output"].float() != captures["baseline"][index]["output"].float()).nonzero()
+            actual = common.outputs(record["output"])
+            reference = common.outputs(captures["baseline"][index]["output"])
+            different = (actual[0].float() != reference[0].float()).nonzero()
             item["output_difference_indices"] = different[:128].cpu().tolist()
+            item["output_difference_values"] = [dict(
+                row=row, column=column, actual=float(actual[0][row, column].item()),
+                reference=float(reference[0][row, column].item()))
+                for row, column in item["output_difference_indices"]]
+            if quant_dtype is not None:
+                item["output_scales"] = actual[1].cpu().tolist()
+                item["scale_difference_indices"] = (actual[1] != reference[1]).nonzero()[:128].cpu().tolist()
             raw[name].append(item)
-    common.write_json(output / "diagnostic-values.json", raw)
-    return dict(status="diagnostic_collected", candidate_qualified=False, rows=rows, dtype="bf16",
-                seed=20261112, steps=plan[:2], arms=summaries, comparisons=details,
+    common.write_json(output / "diagnostic-values.json", finite_json(raw))
+    return dict(status="diagnostic_collected", candidate_qualified=False, rows=rows, dtype=dtype,
+                seed=seed, rng_allocation_shapes=dict(signals=list(signals.shape), weights=list(weights.shape)),
+                input_sha256=input_hashes, steps=plan[:2], arms=summaries, comparisons=details,
+                observer_parity=observer_parity,
+                observer_outputs_exact=all(item["passed"] for item in observer_parity.values()),
+                nonfinite_raw_values_encoded_as_null=nonfinite_raw_values,
                 limits=["Observed kernels add stores; compare observer outputs against originals before interpreting values",
+                        "Exact observer outputs do not alone prove unchanged intermediate reductions; inspect saved compiler artifacts",
                         "No-FMA is a diagnostic control, not a proposed change to SA arithmetic",
                         "No timings, graph validation, tolerance relaxation or model-integration qualification"])
 
@@ -579,7 +635,9 @@ def main(argv=None):
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--source-file", type=Path)
     parser.add_argument("--source-only", action="store_true")
-    parser.add_argument("--diagnose", action="store_true", help="Observe first failed BF16/280-row producer-consumer pair; no candidate qualification")
+    parser.add_argument("--diagnose", action="store_true", help="Observe first two 280-row producer-consumer operations; no candidate qualification")
+    parser.add_argument("--diagnose-seed", type=int, default=20261112, help="Diagnostic-only RNG seed; identical across dtype lanes")
+    parser.add_argument("--diagnose-dtype", choices=("bf16", "fp8", "both"), default="bf16", help="Diagnostic-only output dtype; both runs BF16 and FP8 with identical inputs")
     parser.add_argument("--rows", type=rows_csv, default=[280, 336])
     parser.add_argument("--bf16-only", action="store_true", help="Skip FP8 qualification explicitly")
     parser.add_argument("--consumers", type=int, default=12, help="Repeated consumers at each of blocks4 and8")
@@ -605,6 +663,10 @@ def main(argv=None):
                           "No profiler capture requested; pinned runtime may still preload profiling libraries",
                           "Timing includes writers and prefix reset copies; immutable product preparation excluded",
                           "Full-model piecewise graphs, PP, specialization, concurrent forwards and quality unvalidated"])
+    diagnostic_dtypes = ("bf16", "fp8") if args.diagnose_dtype == "both" else (args.diagnose_dtype,)
+    if args.diagnose:
+        result["diagnostic_plan"] = [dict(rows=280, dtype=dtype, seed=args.diagnose_seed)
+                                     for dtype in diagnostic_dtypes]
     def save(): common.write_json(args.output / "result.json", result)
     def progress(event, **fields):
         value = dict(event=event, elapsed_seconds=time.monotonic() - started, **fields)
@@ -630,7 +692,23 @@ def main(argv=None):
         result["gpu_executed"] = True; save()
         if args.diagnose:
             with torch.inference_mode():
-                result["diagnostic"] = diagnose_first_consumer(torch, paths, args.output, plan, progress, check_budget)
+                if len(diagnostic_dtypes) == 1:
+                    result["diagnostic"] = diagnose_first_consumer(
+                        torch, paths, args.output, plan, progress, check_budget,
+                        seed=args.diagnose_seed, dtype=diagnostic_dtypes[0])
+                else:
+                    result["diagnostics"] = []
+                    for dtype in diagnostic_dtypes:
+                        check_budget(); progress("diagnostic_lane_started", dtype=dtype, seed=args.diagnose_seed)
+                        record = diagnose_first_consumer(
+                            torch, paths, args.output / dtype, plan, progress, check_budget,
+                            seed=args.diagnose_seed, dtype=dtype)
+                        result["diagnostics"].append(record); save()
+                        progress("diagnostic_lane_finished", dtype=dtype, observer_outputs_exact=record["observer_outputs_exact"])
+                    result["diagnostic_inputs_identical"] = (
+                        result["diagnostics"][0]["input_sha256"] == result["diagnostics"][1]["input_sha256"])
+                    if not result["diagnostic_inputs_identical"]:
+                        raise AssertionError("Diagnostic dtype lanes did not use identical RNG inputs")
             result["status"] = "diagnostic_collected"
             result["candidate_qualified"] = False
             result["elapsed_seconds"] = time.monotonic() - started
