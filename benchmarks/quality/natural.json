@@ -1,0 +1,30 @@
+{
+  "name": "kimi-k31-c48-natural-gsm8k48-screen",
+  "base_recipe_sha256": "e0c545be4da28a6f3f30d54939cab9de64f267d48262ab11c20b717ef757086c",
+  "speculative_overrides": {
+    "rejection_sample_method": "block",
+    "remove": [
+      "synthetic_acceptance_length",
+      "synthetic_acceptance_rates"
+    ]
+  },
+  "expected_natural_config_match": true,
+  "sa_throughput_recipe_match": false,
+  "counter_reader": {
+    "repository": "SemiAnalysisAI/InferenceX",
+    "commit": "903a3023682c6b27683839309cbd4b4d9153afcb",
+    "path": "infx/results/agentic/spec_decode.py",
+    "vendored_path": "native_spec_decode.py",
+    "sha256": "291dba55ae48b562940068ecd36945a60bf9f2a3e14c6e61a4b7ed7c79936ea6",
+    "modifications": "None; exact byte copy",
+    "license": "Apache-2.0; ../../upstream/InferenceX/LICENSE"
+  },
+  "dataset_sha256": "c894463c7203895b395ff4123209a61fa0a7c16b37a9824c3e404db5fb2b9a80",
+  "bounds_seconds": {
+    "readiness": 1800,
+    "client": 390,
+    "server_cleanup": 75,
+    "arm": 2400,
+    "job": 5100
+  }
+}

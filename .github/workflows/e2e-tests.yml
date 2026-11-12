@@ -9,6 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "Natural validation Kimi baseline + MoE front + DSpark"
                 - "Fixed-length Kimi baseline"
                 - "Fixed-length Kimi AttnRes"
                 - "Fixed-length Kimi DSpark"
@@ -120,8 +121,62 @@ jobs:
                       ${{ env.FIXED_OUTPUT }}/*.log
                   retention-days: 30
                   if-no-files-found: error
+    natural-validation:
+        if: ${{ inputs.generate-cli-command == 'Natural validation Kimi baseline + MoE front + DSpark' }}
+        name: Kimi C48 natural scored screen - baseline and combined
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 85
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            NATURAL_OUTPUT: /share_nfs/ajith/benchmarks/natural-${{ github.run_id }}-${{ github.run_attempt }}
+            RUN_STAMP: natural-${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: natural-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Sequential natural baseline and combined screen
+              working-directory: natural-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$NATURAL_OUTPUT"
+                  for arm in baseline moe_front_dspark; do
+                      arm_dir="$NATURAL_OUTPUT/$RUN_STAMP-$arm"
+                      mkdir -p "$arm_dir"
+                      timeout --signal=TERM --kill-after=120s 38m \
+                          bash benchmarks/fixed_length/kimi_k31_c48.sh "$arm_dir" "$arm" natural \
+                          2>&1 | tee "$arm_dir/workflow.log"
+                  done
+                  python3 benchmarks/quality/compare.py \
+                      "$NATURAL_OUTPUT/$RUN_STAMP-baseline" \
+                      "$NATURAL_OUTPUT/$RUN_STAMP-moe_front_dspark" \
+                      "$NATURAL_OUTPUT/comparison.json"
+            - name: Stop only this natural-validation job's containers
+              if: always()
+              run: |
+                  for arm in baseline moe_front_dspark; do
+                      container="kimi-natural-$RUN_STAMP-$arm"
+                      timeout 50s docker stop --time 45 "$container" || true
+                      timeout 10s docker rm -f "$container" "$container-install" "$container-ownership" || true
+                  done
+            - name: Save natural-screen evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-natural-${{ github.run_id }}
+                  path: |
+                      ${{ env.NATURAL_OUTPUT }}/**
+                      !${{ env.NATURAL_OUTPUT }}/**/work/**
+                  retention-days: 30
+                  if-no-files-found: error
     get-jobs:
-        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') }}
+        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural validation Kimi ') }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}

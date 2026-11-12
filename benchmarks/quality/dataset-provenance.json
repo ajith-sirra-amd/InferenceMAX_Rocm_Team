@@ -1,0 +1,12 @@
+{
+  "repository": "openai/grade-school-math",
+  "commit": "3101c7d5072418e28b9008a6636bde82a006892c",
+  "url": "https://raw.githubusercontent.com/openai/grade-school-math/3101c7d5072418e28b9008a6636bde82a006892c/grade_school_math/data/test.jsonl",
+  "source_sha256": "3730d312f6e3440559ace48831e51066acaca737f6eabec99bccb9e4b3c39d14",
+  "source_bytes": 749738,
+  "source_rows": 1319,
+  "selection": "first 48 test items in source order",
+  "fixture_sha256": "c894463c7203895b395ff4123209a61fa0a7c16b37a9824c3e404db5fb2b9a80",
+  "fixture_bytes": 28996,
+  "screen": "Zero-shot scored screen; not official 5-shot GSM8K or full model quality."
+}

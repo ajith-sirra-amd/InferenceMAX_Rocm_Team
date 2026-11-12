@@ -68,3 +68,8 @@ retains both complete component manifests in `optimization.json`. Both flags
 are enabled; all eight workers must show MoE preparation/selection and DSpark
 construction/loading. Baseline and isolated modes remain available. The combined
 result must be measured directly; isolated gains are not additive estimates.
+
+Use the separate [natural-verification screen](../quality/README.md) to check
+scored answers and natural draft acceptance for the baseline and combined
+candidate. It has its own workflow choice and does not replace this fixed-length
+performance comparison.
