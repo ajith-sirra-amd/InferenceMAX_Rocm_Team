@@ -362,6 +362,21 @@ def native_status(request, output):
         bytes=path.stat().st_size, modified_unix=path.stat().st_mtime)
         for path in source.glob('native/*/logs/profiles/torch/**/*.trace.json*')
         if path.is_file() and path.resolve().is_relative_to(source)]
+    # Preserve complete small component results after an artifact-upload failure.
+    # Runtime caches and large profiles remain outside this read-only snapshot.
+    result['component_results'] = []
+    for path in sorted(source.glob('native/optimization-*/result.json')):
+        if not path.is_file() or not path.resolve().is_relative_to(source):
+            continue
+        if path.stat().st_size > 4 * 1024 * 1024:
+            raise ValueError('Component result exceeds the 4 MiB recovery limit')
+        payload = path.read_bytes()
+        json.loads(payload)
+        destination = output / 'recovered' / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(payload)
+        result['component_results'].append(dict(file=str(path.relative_to(source)),
+            bytes=len(payload), sha256=hashlib.sha256(payload).hexdigest()))
     write_json(output / 'native-log-snapshot.json', result)
     print(json.dumps(result), flush=True)
 
