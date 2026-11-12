@@ -25,10 +25,11 @@ def audit(config, output, model, port, source_root, actual_argv):
     optimization = os.environ['KIMI_FIXED_OPTIMIZATION']
     flags = {'attnres': 'KIMI_ATTNRES_PRECOMPUTE_WEIGHTS', 'dspark': 'KIMI_DSPARK_SHARD_CONTEXT_PROJ',
              'moe_front': 'KIMI_MOE_MERGED_FRONT'}
+    enabled = ('moe_front', 'dspark') if optimization == 'moe_front_dspark' else (optimization,)
     for mode, flag in flags.items():
-        if os.environ.get(flag, '0') != ('1' if optimization == mode else '0'):
+        if os.environ.get(flag, '0') != ('1' if mode in enabled else '0'):
             raise ValueError('Unexpected optimization flag: ' + flag)
-    if optimization in flags:
+    if optimization in flags or optimization == 'moe_front_dspark':
         manifest = json.loads((output / 'optimization.json').read_text())
         for entry in manifest['files']:
             sources[entry['path']] = hashlib.sha256((source_root / entry['path']).read_bytes()).hexdigest()

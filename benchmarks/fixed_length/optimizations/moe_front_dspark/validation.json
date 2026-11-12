@@ -1,0 +1,57 @@
+{
+  "status": "passed",
+  "composed_files": 3,
+  "original_sources_unchanged": true,
+  "component_manifests_preserved": true,
+  "all_five_activation_modes_pass": true,
+  "combined_marker_negative_cases": [
+    "missing_loaded_rank7",
+    "wrong_moe_layer_count",
+    "missing_moe",
+    "missing_dspark"
+  ],
+  "audit_negative_cases": [
+    "KIMI_MOE_MERGED_FRONT",
+    "KIMI_DSPARK_SHARD_CONTEXT_PROJ",
+    "KIMI_ATTNRES_PRECOMPUTE_WEIGHTS",
+    "candidate_hash_mismatch"
+  ],
+  "wrapper_modes": {
+    "baseline": {
+      "mounts": 0,
+      "flags": []
+    },
+    "attnres": {
+      "mounts": 2,
+      "flags": [
+        "KIMI_ATTNRES_PRECOMPUTE_WEIGHTS=1"
+      ]
+    },
+    "dspark": {
+      "mounts": 1,
+      "flags": [
+        "KIMI_DSPARK_SHARD_CONTEXT_PROJ=1"
+      ]
+    },
+    "moe_front": {
+      "mounts": 2,
+      "flags": [
+        "KIMI_MOE_MERGED_FRONT=1"
+      ]
+    },
+    "moe_front_dspark": {
+      "mounts": 3,
+      "flags": [
+        "KIMI_MOE_MERGED_FRONT=1",
+        "KIMI_DSPARK_SHARD_CONTEXT_PROJ=1"
+      ]
+    }
+  },
+  "installer_rejection_cases": 2,
+  "limits": [
+    "Uses saved isolated logs for combined marker fixtures; combined model has not run",
+    "No combined quality or E2E inference from these CPU integration checks"
+  ],
+  "validation_source_sha256": "e9c3085ab578abebf77685d0bc82a336f1f8b6d56dfb2fe60b592c9c961cba95",
+  "installer_sha256": "0665c140e307e3c85c30d46fb3912e2e86c49acf43e98d6e008b0ae210449a27"
+}

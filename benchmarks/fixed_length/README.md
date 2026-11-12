@@ -61,3 +61,10 @@ path outside the twelve qualified decode row sizes. Two source overlays and
 `KIMI_MOE_MERGED_FRONT=1` isolate this arm; all eight workers must prepare92
 layers. Component tests preserve expert sets but show small floating-point
 and occasional expert-order differences; full-model quality remains open.
+
+The `moe_front_dspark` mode measures both candidates together. It composes their
+unchanged installers, checks that the three source overlays are disjoint, and
+retains both complete component manifests in `optimization.json`. Both flags
+are enabled; all eight workers must show MoE preparation/selection and DSpark
+construction/loading. Baseline and isolated modes remain available. The combined
+result must be measured directly; isolated gains are not additive estimates.

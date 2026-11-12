@@ -13,6 +13,7 @@ on:
                 - "Fixed-length Kimi AttnRes"
                 - "Fixed-length Kimi DSpark"
                 - "Fixed-length Kimi MoE front"
+                - "Fixed-length Kimi MoE front + DSpark"
                 # - "test-config  --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-atom-agentic-lmcache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
@@ -90,7 +91,7 @@ jobs:
         env:
             FIXED_OUTPUT: /share_nfs/ajith/benchmarks/fixed-${{ github.run_id }}-${{ github.run_attempt }}
             PYTHONDONTWRITEBYTECODE: '1'
-            FIXED_OPTIMIZATION: ${{ inputs.generate-cli-command == 'Fixed-length Kimi AttnRes' && 'attnres' || inputs.generate-cli-command == 'Fixed-length Kimi DSpark' && 'dspark' || inputs.generate-cli-command == 'Fixed-length Kimi MoE front' && 'moe_front' || 'baseline' }}
+            FIXED_OPTIMIZATION: ${{ inputs.generate-cli-command == 'Fixed-length Kimi AttnRes' && 'attnres' || inputs.generate-cli-command == 'Fixed-length Kimi DSpark' && 'dspark' || inputs.generate-cli-command == 'Fixed-length Kimi MoE front' && 'moe_front' || inputs.generate-cli-command == 'Fixed-length Kimi MoE front + DSpark' && 'moe_front_dspark' || 'baseline' }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
               with:

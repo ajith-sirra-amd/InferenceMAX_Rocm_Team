@@ -3,8 +3,8 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 upstream_dir=$(cd "$script_dir/../../upstream/InferenceX" && pwd)
 run_dir=${1:?Supply a fresh shared benchmark output directory}
-optimization=${2:?Supply baseline, attnres, dspark or moe_front}
-case "$optimization" in baseline|attnres|dspark|moe_front) ;; *) echo 'Unknown optimization' >&2; exit 2 ;; esac
+optimization=${2:?Supply baseline, attnres, dspark, moe_front or moe_front_dspark}
+case "$optimization" in baseline|attnres|dspark|moe_front|moe_front_dspark) ;; *) echo 'Unknown optimization' >&2; exit 2 ;; esac
 case "$run_dir" in /share_nfs/ajith/benchmarks/*) ;; *) echo 'Use the shared benchmark output directory' >&2; exit 2 ;; esac
 mkdir -p "$run_dir"
 if [[ -e "$run_dir/recipe.json" ]]; then echo 'Refusing to overwrite an earlier run' >&2; exit 2; fi
@@ -53,6 +53,10 @@ if [[ "$optimization" != baseline ]]; then
     else
         sources=(vllm/models/kimi_k3/amd/linear.py vllm/models/kimi_k3/amd/latent_moe_runner.py)
         overlays+=(--env KIMI_MOE_MERGED_FRONT=1)
+        if [[ "$optimization" == moe_front_dspark ]]; then
+            sources+=(vllm/models/kimi_k3/nvidia/dspark_mla.py)
+            overlays+=(--env KIMI_DSPARK_SHARD_CONTEXT_PROJ=1)
+        fi
     fi
     for source in "${sources[@]}"; do
         overlays+=(--mount "type=bind,src=$run_dir/work/overlay/candidate/$source,dst=/opt/runtime-venv/lib/python3.12/site-packages/$source,readonly")

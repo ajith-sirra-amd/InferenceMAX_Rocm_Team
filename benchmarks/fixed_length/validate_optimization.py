@@ -15,7 +15,7 @@ def validate(output):
     if mode == 'attnres':
         patterns = {'prepared': r'ATTNRES_PRODUCT_PREPARED buffers=38\b',
                     'selected': r'ATTNRES_PRODUCT_SELECTED rows=(?:280|336) blocks=(?:4|8)\b'}
-    elif mode == 'dspark':
+    elif mode in ('dspark', 'moe_front_dspark'):
         patterns = {phase: rf'DSPARK_CONTEXT_SHARD phase={phase} active=True rank=\d+ tp=8 .*local_weight_shape=\(896, 35840\) dtype=torch.bfloat16'
                     for phase in ('construct', 'loaded')}
     elif mode == 'moe_front':
@@ -25,6 +25,9 @@ def validate(output):
         patterns = {}
     else:
         raise ValueError('Unknown optimization mode: ' + mode)
+    if mode == 'moe_front_dspark':
+        patterns.update({'prepared': r'MOE_MERGED_FRONT_READY rank=\d+ active=True prepared=92 expected=92\b',
+                         'selected': r'MOE_MERGED_FRONT_SELECTED rank=\d+ rows=(?:259|266|273|280|287|294|301|308|315|322|329|336)\b'})
     for phase, pattern in patterns.items():
         ranks = set()
         for line in log.splitlines():
