@@ -22,7 +22,8 @@ sys.dont_write_bytecode = True
 
 import optimization_attnres as common
 
-NORM_SHA256 = "c4bb07264a72ada42331c8535928ea98c3246d90db2fa4fe22644ddf5c14aac8"
+NORM_V1_SHA256 = "c4bb07264a72ada42331c8535928ea98c3246d90db2fa4fe22644ddf5c14aac8"
+NORM_SHA256 = "40719ea01e4b6a3365086c364b8c9dea61dadf741497111283842aa33b86b8f1"
 ARMS = ("baseline", "product_only", "norm_cache", "combined")
 ENVIRONMENT_KEYS = (
     'VLLM_ROCM_USE_AITER',
@@ -62,8 +63,8 @@ def replace_once(source, old, new):
     return source.replace(old, new, 1)
 
 
-def norm_source(product_source):
-    """Keep two-dimensional source reductions; cache only immutable BF16 blocks."""
+def norm_source_v1(product_source):
+    """Historical failed candidate; retained byte-for-byte for source provenance."""
     source = replace_once(product_source, "    output_scale_ptr,\n", "    output_scale_ptr,\n    block_rstd_ptr,\n    stride_rstd_m: tl.constexpr,\n    stride_rstd_b: tl.constexpr,\n")
     source = replace_once(source, "    PRECOMPUTED_INPUT_QK: tl.constexpr,\n", "    PRECOMPUTED_INPUT_QK: tl.constexpr,\n    CACHE_BLOCK_RSTD: tl.constexpr,\n")
     source = replace_once(source, "    if num_blocks == 0:\n        mixed = updated_prefix\n", """    if num_blocks == 0:
@@ -129,6 +130,45 @@ def norm_source(product_source):
     return source
 
 
+def norm_source(product_source):
+    """Use the native initial masked reduction; later writer reductions stay intact.
+
+    Diagnostic43193326018 binds the old initial2-D reduction to a different
+    Triton layout ([1,1] instead of consumer[1,8]) and45 small rstd errors.
+    The native initial1-D output reduction matches the consumer for all280 rows.
+    This revision remains subject to unchanged exact GPU parity checks.
+    """
+    source = norm_source_v1(product_source)
+    if common.digest(source.encode()) != NORM_V1_SHA256:
+        raise ValueError("Historical norm-cache source hash mismatch")
+    source = replace_once(source, """            # Conservative initial writer: match the 2-D source expression,
+            # rather than borrowing the separate 1-D output normalization.
+            first_values = updated_prefix[None, :]
+            first_rstd = tl.rsqrt(
+                tl.sum(first_values * first_values, axis=1)
+                * (1.0 / hidden_size) + eps
+            )
+            tl.store(
+                block_rstd_ptr + row_idx * stride_rstd_m
+                + block_write_idx * stride_rstd_b + tl.arange(0, 1) * 0,
+                first_rstd,
+            )
+""", """            # Preserve the native initial-writer masked reduction layout.
+            # A separate 2-D reduction changes its FP32 summation order.
+            first_rstd = tl.rsqrt(
+                tl.sum(tl.where(d_mask, updated_prefix * updated_prefix, 0.0), axis=0)
+                * (1.0 / hidden_size) + eps
+            )
+            tl.store(
+                block_rstd_ptr + row_idx * stride_rstd_m
+                + block_write_idx * stride_rstd_b,
+                first_rstd,
+            )
+""")
+    ast.parse(source)
+    return source
+
+
 def sequence_plan(consumers):
     """Reduced synthetic sequence, preserving writer-before-reader ownership."""
     plan = []
@@ -166,6 +206,10 @@ def validate_plan(plan):
 
 def prepare_sources(output, source_file):
     paths, provenance = common.prepare_sources(output, source_file)
+    historical = norm_source_v1(paths[1].read_text())
+    if common.digest(historical.encode()) != NORM_V1_SHA256:
+        raise ValueError("Historical norm-cache candidate source hash mismatch")
+    (output / "sources" / "norm_cached_attn_res_v1.py").write_text(historical)
     candidate = norm_source(paths[1].read_text())
     candidate_hash = common.digest(candidate.encode())
     if candidate_hash != NORM_SHA256:
@@ -173,6 +217,9 @@ def prepare_sources(output, source_file):
     path = output / "sources" / "norm_cached_attn_res.py"
     path.write_text(candidate)
     provenance.update(norm_candidate_sha256=candidate_hash,
+                      norm_revision="v2-masked-initial-reduction",
+                      historical_norm_candidate_sha256=NORM_V1_SHA256,
+                      diagnostic_source_run="43193326018",
                       probe_sha256=common.digest(Path(__file__).read_bytes()),
                       helper_sha256=common.digest(Path(common.__file__).read_bytes()))
     return paths + [path], provenance
