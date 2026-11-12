@@ -51,7 +51,7 @@ docker run --rm --init --name "$container" --label "kimi.fixed.run=$(basename "$
     --env CCACHE_DIR=/work/cache/ccache --env SCCACHE_DIR=/work/cache/sccache \
     --env MODEL=moonshotai/Kimi-K3.1-Pro --env MODEL_PATH=/model \
     --env TP=8 --env DCP_SIZE=8 --env CONC=48 --env EP_SIZE=1 \
-    --env KV_OFFLOADING=dram --env TOTAL_CPU_DRAM_GB=1799 \
+    --env KV_OFFLOADING=dram --env KV_OFFLOAD_BACKEND=vllm-native --env TOTAL_CPU_DRAM_GB=1799 \
     --env RESULT_DIR=/logs --env RESULT_FILENAME=baseline \
     --env EVAL_ONLY=false --env DURATION=600 --env PIN_CCD=0 --env PROFILE=0 \
     --env TEST=1 --env TEST_ISL=8192 --env TEST_OSL=1024 \
