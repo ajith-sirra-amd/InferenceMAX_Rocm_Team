@@ -25,6 +25,12 @@ Preserve the transport's temporary/cache paths.
 | `optimization_attnres.py` | Cached constant products; BF16/FP8 output and mutation checks | `/logs/native/optimization-attnres` |
 | `optimization_moe.py` | Native FP4 GEMM1/GEMM2 tile variants, full pair including sort/quantization | `/logs/native/optimization-moe` |
 | `optimization_dspark.py` | Native TP8 projection, output gather and RMSNorm on eight GPUs | `/logs/native/optimization-dspark` |
+| `optimization_attnres_norm.py` | Historical norm-cache sequence; `--diagnose` preserves the first numerical mismatch and compiler evidence | `/logs/native/optimization-attnres-norm` |
+| `optimization_moe_front.py` | Three native front projections versus merged projection, SiTU and top-k | `/logs/native/optimization-moe-front` |
+| `optimization_moe_sort.py` | Five installed sorter paths, route/map checks and complete sorting cost | `/logs/native/optimization-moe-sort` |
+| `optimization_gather.py` | Native versus medium Int32 DCP gather; TP8 correctness, shared signals and graph replay | `/logs/native/optimization-gather` |
+| `optimization_moe_owner.py` | Compile-only owner-wave GEMM2 and emitted ISA collection; no kernel execution | `/logs/native/moe-owner-compile` |
+| `optimization_moe_owner_gpu.py` | Separate GEMM2 correctness/timing after review of exact compiler evidence | `/logs/native/moe-owner-gpu` |
 
 Example sparse command:
 
@@ -50,3 +56,10 @@ Follow each run until terminal, download `sa-benchmark-<run-id>`, and inspect
 check `all_numerical_and_graph_smoke_checks_pass` separately. Keep numerical
 differences, fallback warnings, failed candidates and all timing samples.
 Event-time improvements are operation results, not request-latency estimates.
+
+The owner-wave GPU probe requires reviewed source and GPU-object hashes plus
+the corresponding compile cache; it refuses unreviewed executables and disables
+JIT. Norm diagnosis does not qualify its candidate. The sorter probe preserves
+ordering differences and charges the padded byte-mesh arm's copies; see
+[its guidance](MOE_SORT_PROBE.md). Gather timing includes staging/repair and
+separately measures a sequence with TP reductions before and after the gather.
