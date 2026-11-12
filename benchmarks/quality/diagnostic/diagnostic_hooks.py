@@ -12,6 +12,7 @@ import time
 import torch
 
 ROOT = Path(os.environ.get("KIMI_DIAGNOSTIC_OUTPUT", "/logs/diagnostic"))
+STAGE = Path(os.environ.get('KIMI_DIAGNOSTIC_STAGE_FILE', '/tmp/kimi-diagnostic-stage'))
 COUNTS = {}
 INSTALLED = False
 
@@ -56,7 +57,7 @@ def begin(kind):
     if torch.cuda.is_current_stream_capturing():
         return None
     try:
-        stage = (ROOT / 'stage.txt').read_text().strip()
+        stage = STAGE.read_text().strip()
     except FileNotFoundError:
         return None
     if stage not in ('c1-greedy', 'c1-sampled', 'c48-sampled'):
@@ -104,6 +105,7 @@ def install():
     global INSTALLED
     if INSTALLED:
         return
+    import graph_boundaries
     from vllm.v1.worker.gpu.spec_decode.dflash.speculator import DFlashSpeculator
     from vllm.v1.worker.gpu.spec_decode.dspark.speculator import DSparkSpeculator
     from vllm.v1.worker.gpu.spec_decode.rejection_sampler import RejectionSampler
@@ -119,10 +121,19 @@ def install():
         bound = signatures['propose'].bind(self, *args, **kwargs)
         if bound.arguments.get('dummy_run', False):
             return originals['propose'](self, *args, **kwargs)
+        if bound.arguments.get('num_speculative_tokens') == 0:
+            return originals['propose'](self, *args, **kwargs)
         record = begin('proposal')
-        output = originals['propose'](self, *args, **kwargs)
+        ticket = graph_boundaries.begin_proposal(self, bound.arguments) if record is not None else None
+        try:
+            output = originals['propose'](self, *args, **kwargs)
+        except BaseException:
+            if ticket is not None:
+                graph_boundaries.cancel_proposal(self)
+            raise
         if record is not None:
             try:
+                record['graph_boundaries'] = graph_boundaries.end_proposal(self, ticket)
                 batch = bound.arguments['input_batch']
                 nr = batch.num_reqs
                 record.update(model_class=f'{type(self.model).__module__}.{type(self.model).__qualname__}',
@@ -132,6 +143,7 @@ def install():
                               last_graph_replay=getattr(self.query_cudagraph_manager, '_diagnostic_replay', None),
                               request_ids=batch.req_ids,
                               num_reqs=nr, input_token_ids=tensor_info(batch.input_ids, True),
+                              requested_speculative_tokens=bound.arguments.get('num_speculative_tokens'),
                               input_positions=tensor_info(batch.positions, True),
                               idx_mapping=tensor_info(batch.idx_mapping, True),
                               draft_token_ids=tensor_info(output, True),
@@ -256,6 +268,7 @@ def install():
     observed = {str(Path(path).relative_to(root)): digest for path, digest in sources.items()}
     if observed != expected:
         raise RuntimeError('Diagnostic imported source hashes differ from pinned image source')
+    graph_boundaries.install()
     ROOT.mkdir(parents=True, exist_ok=True)
     (ROOT / f'hooks-{os.getpid()}.json').write_text(json.dumps(dict(
         pid=os.getpid(), source_sha256=sources,

@@ -36,12 +36,13 @@ recipe and SA throughput recipe. The core model/server settings still match the
 natural baseline.
 
 Three sequential scenarios: C1 temperature0, C1 temperature1, then C48
-temperature1, each at max128 output tokens, with API token IDs requested.
+temperature1, each at max16 output tokens, with API token IDs requested.
 Sampling seeds and the ordinary GSM8K question prompts are retained. Output
 truncation is expected at this limit and is not scored as a quality result.
 
-Each worker saves its first two live proposal calls and native sampling calls
-per scenario. The first two verification calls are recorded where native
+Each worker saves its first two actual draft proposal calls and native sampling calls
+per scenario. Context-only calls that request zero speculative tokens are skipped
+because their returned draft buffer may be stale. The first two verification calls are recorded where native
 sampling ownership executes them; C1 may have only one owner. C48 should expose
 all eight owners. Saved JSON includes selected IDs, input/position mappings,
 cache row ownership, raw/processed target and draft logit finite/NaN/Inf counts,
@@ -71,5 +72,30 @@ unbuffered progress markers and repeats a Python stack dump every30s until done.
 An earlier attempt (`43237433849`) timed out in this preflight with an empty log
 while eager `sitecustomize` imports were enabled. The revised helper removes
 `sitecustomize` entirely; the exact cause of that import stall was not established.
-The existing evidence did not include logits or token IDs, so the
-specific corruption mechanism remains unproven until this diagnostic runs.
+Retry `43239357102` passed hook installation and collected 128 C1 worker records,
+then exhausted the 360-second client budget. The greedy request produced 98 tokens
+before its 300-second HTTP timeout; C48 did not start. All eight workers observed
+all-NaN draft-cache values with finite raw target logits. Sampled block verification
+accepted six repeated draft IDs; greedy verification rejected them. The exact
+operation that first produces NaNs remains unresolved. The initial finite-cache
+snapshot was context-only and is not evidence of successful eager drafting.
+
+The next diagnostic caps requests at 16 output tokens, writes each response when
+it completes, and reports readiness/stage progress to the workflow log. Stage
+markers use the container's private `/tmp` mount so repeated hook checks do not
+read the shared filesystem. Slow-generation cause has not been established.
+Mounted target and draft `config.json` files are copied into the evidence directory.
+
+
+For the first two actual C1 proposals, additional per-row finite/NaN/+Inf/-Inf
+counts are retained in the native draft graph and read after the selected replay.
+The observed boundaries include target auxiliaries, staged context, context
+projection/norm/KV projection, draft-layer attention/MLP/norm, shared-head logits,
+Markov projection and summed sampling logits. Live and padded rows are labelled
+separately. Only native graphs of at most two requests are instrumented internally;
+larger graphs, including C48, retain outer proposal/verifier observations and
+explicitly report unavailable inner coverage. No eager rerun is substituted.
+A C1 collection fails validation if those graph observations are missing.
+These observations change timing and memory lifetime and do not prove numerical
+correctness. The first invalid observed boundary may require a narrower follow-up
+to identify the exact operation.
