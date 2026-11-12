@@ -1,7 +1,8 @@
 """Short TP8 context-projection comparison using native vLLM linear/norm/gather.
 
-Synthetic weights and replicated inputs, no Kimi load or E2E claim. Installed
-packages stay untouched. Candidate is ColumnParallelLinear(gather_output=True).
+Replicated synthetic inputs and synthetic or selected real checkpoint weights;
+no full Kimi load or E2E claim. Installed packages stay untouched. Candidate is
+ColumnParallelLinear(gather_output=True).
 """
 import argparse
 import datetime
@@ -19,7 +20,9 @@ import traceback
 
 
 def write(path, value):
-    path.write_text(json.dumps(value, indent=2) + '\n')
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_text(json.dumps(value, indent=2) + '\n')
+    temporary.replace(path)
 
 
 def distribution(values):
@@ -36,14 +39,18 @@ def worker(args):
                                   get_tp_group, destroy_model_parallel, destroy_distributed_environment)
     from vllm.model_executor.layers.linear import ReplicatedLinear, ColumnParallelLinear
     from vllm.model_executor.layers.layernorm import RMSNorm
+    from vllm.model_executor import parameter
     torch.set_num_threads(1)
     torch.cuda.set_device(args.rank)
     assert 'MI355X' in torch.cuda.get_device_name(args.rank).upper()
     result = dict(rank=args.rank, status='initializing', cases=[], scope=__doc__,
                   torch=torch.__version__, hip=torch.version.hip,
                   device=torch.cuda.get_device_name(args.rank), sources={})
+    result['probe_source_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    result['input_provenance'] = 'Deterministic synthetic BF16 activations; not captured model hidden states'
     for obj, expected in ((ReplicatedLinear, 'd4b97d850eb8bdee5fd2459e7ac688d00623b54f5ec0ea590c08da0173f8b4d4'),
                           (RMSNorm, '45a29c6f8a78c6a76fb6abf4dbe68ff3ab21b73293cd0fe63d612322f098e0c6'),
+                          (parameter, '1a5e4f3adcb4e47f03e684a39f110567b945306f0ec658593cade69fcf7a1e17'),
                           (initialize_model_parallel, 'f37b5ca1fc25c2a872aa0d3c4cc0288abc0a781b2affa7842f3e731fff1bc7ec')):
         path = Path(inspect.getsourcefile(obj))
         result['sources'][str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -77,12 +84,28 @@ def worker(args):
             candidate = ColumnParallelLinear(35840, 7168, bias=False, return_bias=False,
                                              params_dtype=torch.bfloat16, gather_output=True)
             norm = RMSNorm(7168, eps=1e-5, dtype=torch.bfloat16)
-        baseline.weight.normal_(0, 0.005)
-        candidate.weight.weight_loader(candidate.weight, baseline.weight)
+        if args.checkpoint:
+            from dspark_checkpoint import load_context_weights
+            result['status'] = 'loading_selected_checkpoint_weights'
+            save()
+            checkpoint_weight, checkpoint_norm, checkpoint_evidence = load_context_weights(args.checkpoint, torch)
+            baseline.weight.weight_loader(baseline.weight, checkpoint_weight)
+            candidate.weight.weight_loader(candidate.weight, checkpoint_weight)
+            norm.weight.copy_(checkpoint_norm)
+            result['checkpoint'] = checkpoint_evidence
+            result['weight_provenance'] = 'Real checkpoint context projection and norm, loaded through native linear weight loaders'
+            del checkpoint_weight, checkpoint_norm
+        else:
+            baseline.weight.normal_(0, 0.005)
+            candidate.weight.weight_loader(candidate.weight, baseline.weight)
+            norm.weight.uniform_(0.75, 1.25)
+            result['weight_provenance'] = 'Synthetic projection and norm weights'
         assert torch.equal(candidate.weight, baseline.weight[args.rank * 896:(args.rank + 1) * 896])
+        result['exact_local_shard_verified'] = True
+        result['qualification_geometry'] = dict(tp=8, dcp=8, hidden=7168, input=35840,
+                                                local_output=896, dtype='torch.bfloat16')
         for layer in (baseline, candidate):
             layer.quant_method.process_weights_after_loading(layer)
-        norm.weight.uniform_(0.75, 1.25)
         result['weight_shapes'] = [list(layer.weight.shape) for layer in (baseline, candidate)]
         result['weight_strides'] = [list(layer.weight.stride()) for layer in (baseline, candidate)]
         result['loader'] = str(candidate.weight.weight_loader)
@@ -101,25 +124,32 @@ def worker(args):
                 error = (a.float() - b.float()).abs()
                 entry = dict(label=label, finite=bool(torch.isfinite(b).all()),
                              max_abs=float(error.max()), rms=float(error.square().mean().sqrt()),
+                             reference_rms=float(a.float().square().mean().sqrt()),
+                             relative_l2=float(error.norm() / a.float().norm().clamp_min(1e-30)),
                              unequal_fraction=float((a != b).float().mean()),
-                             valid=bool(torch.allclose(a, b, atol=0.03125, rtol=0.015625)))
+                             atol=0.03125, rtol=0.015625,
+                             valid=bool(torch.isfinite(a).all() and torch.allclose(a, b, atol=0.03125, rtol=0.015625)))
                 record['correctness'].append(entry)
                 save()
                 assert entry['finite'] and entry['valid'], entry
             a = run('baseline')
             check(a, run('baseline'), 'baseline-repeat')
             check(a, run('candidate'), 'candidate-eager')
-            # Independent full-K FP32 dot checks expose shard/layout errors.
+            # Independent full-K FP32 dots straddle every native output shard.
             spots = []
-            for row, col in ((0, 0), (rows // 2, 3590), (rows - 1, 7167)):
-                # Check pre-norm linear against FP32. Full normalized results
-                # above retain native RMSNorm in both comparison arms.
+            pre_norm = dict(baseline=baseline(x), candidate=candidate(x))
+            for col in sorted({edge for shard in range(8) for edge in (shard * 896, (shard + 1) * 896 - 1)}):
+                row = (col // 896) % rows
                 expected = (x[row].float() * baseline.weight[col].float()).sum()
-                actual = baseline(x)[row, col].float()
-                ok = bool(torch.isclose(actual, expected, atol=0.01, rtol=0.02))
-                spots.append(dict(row=row, col=col, expected=float(expected), actual=float(actual), valid=ok))
-                assert ok
+                for name, output in pre_norm.items():
+                    actual = output[row, col].float()
+                    ok = bool(torch.isclose(actual, expected, atol=0.01, rtol=0.02))
+                    spots.append(dict(variant=name, row=row, col=col, expected=float(expected),
+                                      actual=float(actual), atol=0.01, rtol=0.02, valid=ok))
             record['scalar_checks'] = spots
+            save()
+            assert all(s['valid'] for s in spots), spots
+            del pre_norm
             graphs, outputs = {}, {}
             for name in ('baseline', 'candidate'):
                 for _ in range(3):
@@ -191,6 +221,8 @@ def main(args):
             argv = [sys.executable, __file__, '--worker', '--rank', str(rank),
                     '--rendezvous', rendezvous, '--output', str(args.output / f'rank-{rank}'),
                     '--iterations', str(args.iterations), '--rows', *map(str, args.rows)]
+            if args.checkpoint:
+                argv += ['--checkpoint', str(args.checkpoint)]
             children.append(subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT))
         deadline = time.monotonic() + 480
         while time.monotonic() < deadline and any(p.poll() is None for p in children):
@@ -209,9 +241,27 @@ def main(args):
                 p.wait()
         for log in logs:
             log.close()
-    results = [json.loads(p.read_text()) for p in sorted(args.output.glob('rank-*/result.json'))]
+    results, read_errors = [], []
+    for rank in range(8):
+        path = args.output / f'rank-{rank}' / 'result.json'
+        try:
+            results.append(json.loads(path.read_text()))
+        except (OSError, ValueError) as exc:
+            read_errors.append(dict(rank=rank, error=str(exc)))
     success = len(results) == 8 and all(p.returncode == 0 for p in children) and all(r['status'] == 'passed' for r in results)
+    checkpoint_agreement = None
+    if args.checkpoint:
+        fingerprints = []
+        for result in results:
+            evidence = result.get('checkpoint', {})
+            fingerprints.append((evidence.get('config_sha256'),
+                *(evidence.get('selected_tensors', {}).get(key, {}).get('tensor_sha256')
+                  for key in ('projection', 'norm'))))
+        checkpoint_agreement = (len(fingerprints) == 8 and all(all(f) for f in fingerprints)
+                                and len(set(fingerprints)) == 1)
+        success = success and checkpoint_agreement
     write(args.output / 'result.json', dict(success=success, workers=results,
+          read_errors=read_errors, checkpoint_agreement=checkpoint_agreement,
           returncodes=[p.returncode for p in children], scope=__doc__))
     print(json.dumps(dict(success=success, output=str(args.output))), flush=True)
     return 0 if success else 1
@@ -222,6 +272,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--rows', type=int, nargs='+', default=[280, 336])
     parser.add_argument('--iterations', type=int, default=16)
+    parser.add_argument('--checkpoint', type=Path,
+                        help='Read only real context projection/norm weights from a local DSpark safetensors checkpoint')
     parser.add_argument('--worker', action='store_true')
     parser.add_argument('--rank', type=int)
     parser.add_argument('--rendezvous')

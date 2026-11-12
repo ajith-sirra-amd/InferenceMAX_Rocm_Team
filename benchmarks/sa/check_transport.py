@@ -35,6 +35,15 @@ if a.command_json:
     task = json.loads(a.command_json)
     if not isinstance(task, list) or not task or not all(isinstance(v, str) for v in task):
         raise ValueError('Diagnostic command must be a nonempty JSON string array')
+checkpoint_mount = ''
+if '--checkpoint' in task:
+    checkpoint = Path(task[task.index('--checkpoint') + 1])
+    relative = checkpoint.relative_to('/models')
+    model_root = Path('/share_nfs/models')
+    source = model_root / relative
+    if '..' in relative.parts or not source.is_dir() or not source.resolve().is_relative_to(model_root.resolve()):
+        raise ValueError(f'Checkpoint must be an existing directory under {model_root}: {source}')
+    checkpoint_mount = f',{source}:{checkpoint}:ro'
 base = ['srun', '--nodes', '1', '--ntasks', '1', '--nodelist', host]
 if a.allocation:
     base += ['--jobid', a.allocation, '--overlap']
@@ -48,7 +57,7 @@ commands = {
     'native_adapter': [str(Path(__file__).parent / 'spur/srun'), *base[1:],
                        '--container-image', image, '--container-remap-root', '--container-writable',
                        '--container-mounts', f'{a.output.resolve()}:/logs' + ('' if a.command_json else ':ro')
-                       + f',{Path(__file__).resolve().parent}:/sa-tools:ro', *task],
+                       + f',{Path(__file__).resolve().parent}:/sa-tools:ro' + checkpoint_mount, *task],
 }
 if a.command_json or not a.allocation:
     commands = {'native_adapter': commands['native_adapter']}
