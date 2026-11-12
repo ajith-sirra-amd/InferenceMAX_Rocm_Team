@@ -6,12 +6,16 @@ auxiliary maps, and zeroing the full M x 3584 BF16 atomic output. The physical
 """
 
 import argparse
+import faulthandler
 import hashlib
 import importlib.util
 import json
+import os
 import random
 import signal
 import statistics
+import subprocess
+import sys
 import time
 import traceback
 from collections import Counter
@@ -32,11 +36,16 @@ NAMES = ("native", "native_local", "single", "byte512_with_copy", "adaptive")
 def arguments():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--rows", default="259,280,336")
-    p.add_argument("--rounds", type=int, default=30)
-    p.add_argument("--max-seconds", type=int, default=300)
+    p.add_argument("--rows", default="259")
+    p.add_argument(
+        "--arms", default="native", help="Comma-separated arms; start with native only"
+    )
+    p.add_argument("--histograms", default="balanced")
+    p.add_argument("--rounds", type=int, default=6)
+    p.add_argument("--max-seconds", type=int, default=60)
     p.add_argument("--source-only", action="store_true")
     p.add_argument("--source-root", type=Path)
+    p.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     a = p.parse_args()
     try:
         a.rows = list(map(int, a.rows.split(",")))
@@ -52,6 +61,21 @@ def arguments():
         p.error("Use 6..60 rounds and 30..540 seconds")
     if a.source_root and not a.source_only:
         p.error("--source-root requires --source-only")
+    a.arms = a.arms.split(",")
+    a.histograms = a.histograms.split(",")
+    if (
+        not a.arms
+        or a.arms[0] != "native"
+        or len(set(a.arms)) != len(a.arms)
+        or not set(a.arms) <= set(NAMES)
+    ):
+        p.error("Use unique known arms, starting with native")
+    if (
+        not a.histograms
+        or len(set(a.histograms)) != len(a.histograms)
+        or not set(a.histograms) <= {"balanced", "clustered64", "hot16"}
+    ):
+        p.error("Use unique histograms: balanced,clustered64,hot16")
     return a
 
 
@@ -192,9 +216,23 @@ def timing(torch, operations, rounds):
 
 
 def run_gpu(args, result):
+    started = time.monotonic()
+
+    def mark(stage, **context):
+        event = {
+            "stage": stage,
+            "elapsed_seconds": time.monotonic() - started,
+            **context,
+        }
+        result.setdefault("progress", []).append(event)
+        save(args.output, result)
+        print(json.dumps(event), flush=True)
+
+    mark("import_runtime")
     import aiter
     import torch
 
+    mark("runtime_imported")
     if (
         not torch.cuda.is_available()
         or not torch.version.hip
@@ -208,6 +246,7 @@ def run_gpu(args, result):
         "hip": torch.version.hip,
         "device": torch.cuda.get_device_name(0),
     }
+    mark("device_ready")
 
     class Arm:
         def __init__(self, name, ids, weights):
@@ -329,11 +368,11 @@ def run_gpu(args, result):
             }
 
     for rows in args.rows:
-        for distribution in ("balanced", "clustered64", "hot16"):
+        for distribution in args.histograms:
+            mark("case_inputs", rows=rows, distribution=distribution)
             cpu_ids, cpu_weights = inputs(rows, distribution, seed=7)
             ids = torch.tensor(cpu_ids, device="cuda", dtype=torch.int32)
             weights = torch.tensor(cpu_weights, device="cuda", dtype=torch.float32)
-            arms = {name: Arm(name, ids, weights) for name in NAMES}
             case = {
                 "rows": rows,
                 "distribution": distribution,
@@ -342,10 +381,17 @@ def run_gpu(args, result):
             }
             result["cases"].append(case)
             save(args.output, result)
+            arms = {}
+            for name in args.arms:
+                mark("arm_prepare", rows=rows, distribution=distribution, arm=name)
+                arms[name] = Arm(name, ids, weights)
+                mark("arm_prepared", arm=name)
             graphs = {}
             for name, arm in arms.items():
+                mark("eager_submit", arm=name)
                 arm.poison()
                 arm()
+                mark("eager_sync", arm=name)
                 original = arm.snapshot()
                 report = validate(original, cpu_ids, cpu_weights)
                 case["checks"][name] = {
@@ -353,16 +399,21 @@ def run_gpu(args, result):
                     "workspace_bytes": arm.workspace_bytes,
                     "physical_rows": arm.physical,
                 }
+                mark("eager_validated", arm=name)
                 # Warm library/compiler paths before capturing. Outputs stay owned
                 # by this arm and all graph inputs retain stable addresses.
                 for _ in range(3):
                     arm()
+                mark("warmup_sync", arm=name)
                 torch.cuda.synchronize()
                 graph = torch.cuda.CUDAGraph()
+                mark("graph_capture", arm=name)
                 with torch.cuda.graph(graph):
                     arm()
+                mark("graph_captured", arm=name)
                 arm.poison()
                 graph.replay()
+                mark("graph_replay_sync", arm=name)
                 replay = arm.snapshot()
                 validate(replay, cpu_ids, cpu_weights)
                 count = report["padded_rows"]
@@ -379,6 +430,7 @@ def run_gpu(args, result):
                 )
                 case["checks"][name]["graph_semantics_passed"] = True
                 graphs[name] = graph
+                mark("graph_validated", arm=name)
             # Changed expert assignments and weights must reach every graph;
             # changing the distribution also changes the padded expert histogram.
             changed_ids, changed_weights = inputs(
@@ -389,12 +441,15 @@ def run_gpu(args, result):
                 torch.tensor(changed_weights, device="cuda", dtype=torch.float32)
             )
             for name, arm in arms.items():
+                mark("changed_graph_replay", arm=name)
                 arm.poison()
                 graphs[name].replay()
+                mark("changed_graph_sync", arm=name)
                 replay = arm.snapshot()
                 report = validate(replay, changed_ids, changed_weights)
                 arm.poison()
                 arm()
+                mark("changed_eager_sync", arm=name)
                 eager = arm.snapshot()
                 validate(eager, changed_ids, changed_weights)
                 count = report["padded_rows"]
@@ -415,11 +470,14 @@ def run_gpu(args, result):
                 )
                 case["checks"][name]["changed"] = report
                 case["checks"][name]["changed_graph_exact"] = exact
+                mark("changed_input_validated", arm=name)
             ids.copy_(torch.tensor(cpu_ids, device="cuda", dtype=torch.int32))
             weights.copy_(torch.tensor(cpu_weights, device="cuda", dtype=torch.float32))
             for arm in arms.values():
                 arm()
+            mark("eager_timing", rows=rows, distribution=distribution)
             case["eager_timing"] = timing(torch, arms, args.rounds)
+            mark("graph_timing", rows=rows, distribution=distribution)
             case["graph_timing"] = timing(
                 torch, {name: g.replay for name, g in graphs.items()}, args.rounds
             )
@@ -440,15 +498,75 @@ def run_gpu(args, result):
             )
 
 
+def supervise(command, output, seconds):
+    """Enforce the deadline outside the Python process that can block in HIP."""
+    with (output / "probe.log").open("w") as stream:
+        child = subprocess.Popen(
+            command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True
+        )
+        try:
+            return child.wait(timeout=seconds)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass  # Report unreaped state; outer container cleanup owns recovery.
+            path = output / "result.json"
+            result = json.loads(path.read_text()) if path.exists() else {}
+            result.update(
+                status="timed_out",
+                timeout_seconds=seconds,
+                child_returncode=child.poll(),
+                hard_kill_sent=True,
+            )
+            save(output, result)
+            print(
+                json.dumps(
+                    {
+                        "status": "timed_out",
+                        "timeout_seconds": seconds,
+                        "last_progress": result.get("progress", [])[-1:],
+                    }
+                ),
+                flush=True,
+            )
+            return 124
+        finally:
+            if child.poll() is None:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+
+
 def main():
     args = arguments()
-    args.output.mkdir(parents=True, exist_ok=False)
+    if not args.worker:
+        args.output.mkdir(parents=True, exist_ok=False)
+
+        def cancelled(signum, _frame):
+            raise SystemExit(128 + signum)
+
+        signal.signal(signal.SIGTERM, cancelled)
+        return supervise(
+            [sys.executable, "-u", __file__, *sys.argv[1:], "--worker"],
+            args.output,
+            args.max_seconds,
+        )
+    faulthandler.enable()
+    faulthandler.dump_traceback_later(20, repeat=True)
     result = {
         "status": "running",
         "gpu_executed": False,
         "cases": [],
         "scope": __doc__,
         "probe_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "requested_arms": args.arms,
+        "requested_histograms": args.histograms,
         "limits": [
             "Synthetic routing histograms; no checkpoint or full-MoE/E2E result",
             "Byte arm uses physical512 with num_local_tokens=M and charges active ID/weight copies; not a pure mesh-threshold change",
@@ -458,11 +576,6 @@ def main():
     }
     started = time.monotonic()
 
-    def deadline(_signum, _frame):
-        raise TimeoutError("Bounded sorter probe deadline reached")
-
-    signal.signal(signal.SIGALRM, deadline)
-    signal.alarm(args.max_seconds)
     try:
         result["sources"] = source_checks(args)
         if args.source_only:
@@ -476,7 +589,7 @@ def main():
             status="failed", error=str(error), traceback=traceback.format_exc()
         )
     finally:
-        signal.alarm(0)
+        faulthandler.cancel_dump_traceback_later()
         result["elapsed_seconds"] = time.monotonic() - started
         save(args.output, result)
     print(

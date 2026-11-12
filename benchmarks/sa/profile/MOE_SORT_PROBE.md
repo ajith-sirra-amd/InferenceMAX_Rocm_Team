@@ -5,15 +5,28 @@ workflow. No model load, serving patch, installed-source edit or allocation chan
 
 ```bash
 /opt/runtime-venv/bin/python benchmarks/sa/profile/optimization_moe_sort.py \
-  --output /logs/optimization-moe-sort --rows 259,280,336 \
-  --rounds 30 --max-seconds 300
+  --output /logs/optimization-moe-sort-native-smoke --rows 259 \
+  --arms native --histograms balanced --rounds 6 --max-seconds 60
 ```
 
 The output directory must be fresh. `/logs` should use the workflow's authorized
-dated storage under `/share_nfs/ajith/benchmarks/`. Start with one representative
-row (`--rows 280`) if only a short gap is available. The default is nine cases:
-three token counts and balanced E896, clustered E64, and hot E16 histograms.
-These are synthetic workloads, not measured checkpoint routing histograms.
+dated storage under `/share_nfs/ajith/benchmarks/`. Defaults are the single native
+smoke above. A separate parent process enforces the deadline and kills the
+worker process group; it waits at most five extra seconds for teardown.
+`probe.log` retains stdout/stderr and periodic Python stack dumps. `result.json`
+saves a checkpoint before each arm, eager synchronization, graph capture/replay
+and timing phase, including a terminal timeout result if HIP blocks.
+
+After native smoke passes, compare only `--arms native,byte512_with_copy` at the
+same M259 before widening. Then explicitly select `--rows 259,280,336` and
+`--histograms balanced,clustered64,hot16` for coverage. The single-kernel and
+adaptive controls require explicit selection; neither runs by default. These
+are synthetic workloads, not measured checkpoint routing histograms.
+
+Run43196486628 was cancelled after its in-process SIGALRM failed to interrupt
+a native call. It reached the first M259/balanced case, but old checkpoints did
+not persist per-arm progress, so the exact stalled arm is unproven. Its saved
+artifact is retained. Do not repeat all nine cases to diagnose that failure.
 
 | Arm | Installed operation | Interpretation |
 |---|---|---|
