@@ -1316,7 +1316,7 @@ if __name__ == "__main__":
         "--tokenizer-mode",
         type=str,
         default="auto",
-        choices=["auto", "slow", "mistral", "custom", "deepseek_v4"],
+        choices=["auto", "slow", "mistral", "custom", "deepseek_v4", "kimi_k3"],
         help='The tokenizer mode.\n\n* "auto" will use the '
         'fast tokenizer if available.\n* "slow" will '
         "always use the slow tokenizer. \n* "

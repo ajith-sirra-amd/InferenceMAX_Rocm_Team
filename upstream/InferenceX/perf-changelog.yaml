@@ -8593,3 +8593,9 @@
   description:
     - 'Profile the C96 BF16 context-attention baseline with a 60-second kernel trace, record actual Q/K/V dtypes, and signal profiler descendants before waiting for finalization. FP8 context overlay disabled; FP8 KV storage retained.'
     - '分析 C96 BF16 上下文注意力基线，采集 60 秒内核跟踪并记录 Q/K/V 数据类型；等待输出前终止分析器子进程。禁用 FP8 上下文补丁，保留 FP8 KV 缓存。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Add opt-in fixed 8192/1024 C48 testing through the existing agentic launcher and run_benchmark_serving helper. Allow a frozen SA environment/argv; save detailed client metrics. No model optimization is applied.'
+    - '在现有 AgentX 启动器中新增可选的 8192/1024 C48 定长测试，使用 run_benchmark_serving。支持冻结的 SA 环境和参数，保存详细客户端指标，不应用模型优化。'

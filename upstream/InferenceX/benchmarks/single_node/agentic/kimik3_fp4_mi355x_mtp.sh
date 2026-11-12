@@ -7,6 +7,9 @@ wait_for_amd_gpu_clean
 export EVAL_ONLY="${EVAL_ONLY:-false}"
 check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
 check_env_vars DCP_SIZE EVAL_ONLY
+if [[ "${TEST-}" == "1" ]]; then
+    check_env_vars TEST_ISL TEST_OSL TEST_RANGE_RATIO TEST_NUM_PROMPTS RESULT_FILENAME
+fi
 
 DP_SIZE=1
 export DP_SIZE
@@ -26,8 +29,32 @@ else
 fi
 
 rocm-smi || true
-resolve_trace_source
-install_agentic_deps
+if [[ "${TEST-}" != "1" ]]; then
+    resolve_trace_source
+    install_agentic_deps
+fi
+
+SERVER_LOG="$RESULT_DIR/server.log"
+mkdir -p "$RESULT_DIR"
+SERVER_PID=""
+cleanup_agentic_services() {
+    local exit_code=$?
+    trap - EXIT INT TERM
+    set +e
+    stop_background_process_tree "$SERVER_PID" "vLLM server" 60
+    exit "$exit_code"
+}
+trap cleanup_agentic_services EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# An explicitly frozen SA recipe bypasses historical tuning defaults below.
+# It changes configuration only; both clients share the same server lifecycle.
+if [[ -n "${SA_SERVER_CONFIG:-}" ]]; then
+    check_env_vars SA_SERVER_CONFIG SA_CONFIG_PREPARE PORT
+    python3 "$SA_CONFIG_PREPARE" "$SA_SERVER_CONFIG" "$RESULT_DIR" "$MODEL_PATH" "$PORT"
+    source "$RESULT_DIR/server-config.sh"
+else
 
 # export AIPERF_WARMUP_REQUESTS_PER_LANE=1
 # export DURATION=600
@@ -51,20 +78,6 @@ export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200
 export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
 export PYTHONNOUSERSITE=1
 export PYTHONHASHSEED=42
-
-SERVER_LOG="$RESULT_DIR/server.log"
-mkdir -p "$RESULT_DIR"
-SERVER_PID=""
-cleanup_agentic_services() {
-    local exit_code=$?
-    trap - EXIT INT TERM
-    set +e
-    stop_background_process_tree "$SERVER_PID" "vLLM server" 60
-    exit "$exit_code"
-}
-trap cleanup_agentic_services EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 SPEC_ARGS=()
 SPEC_ROWS=1
@@ -249,6 +262,7 @@ VLLM_CMD=(
     "${SPEC_ARGS[@]}"
     "${COMPILATION_CONFIG_ARGS[@]}"
 )
+fi
 
 printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
 printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
@@ -315,6 +329,17 @@ pin_workers_to_ccd || true
 
 if [ "${EVAL_ONLY:-false}" = "true" ]; then
     run_eval --port "$PORT"
+elif [[ "${TEST-}" == "1" ]]; then
+    echo "[fixed-length] input=$TEST_ISL output=$TEST_OSL ratio=$TEST_RANGE_RATIO C=$CONC requests=$TEST_NUM_PROMPTS"
+    run_benchmark_serving \
+        --model "$MODEL" --tokenizer "$MODEL_PATH" --tokenizer-mode kimi_k3 \
+        --port "$PORT" --backend vllm \
+        --input-len "$TEST_ISL" --output-len "$TEST_OSL" \
+        --random-range-ratio "$TEST_RANGE_RATIO" \
+        --num-prompts "$TEST_NUM_PROMPTS" --max-concurrency "$CONC" \
+        --result-filename "$RESULT_FILENAME" --result-dir "$RESULT_DIR" \
+        --bench-serving-dir "$INFERENCEX_REPO_ROOT" \
+        --use-chat-template --trust-remote-code
 else
     build_replay_cmd "$RESULT_DIR"
     run_agentic_replay_and_write_outputs "$RESULT_DIR"

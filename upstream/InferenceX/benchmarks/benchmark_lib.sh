@@ -970,6 +970,7 @@ run_benchmark_serving() {
         --ignore-eos
         "${profile_flag[@]}"
         --save-result
+        --save-detailed
         --num-warmups "$((2 * max_concurrency))" \
         --percentile-metrics 'ttft,tpot,itl,e2el'
         --result-dir "$result_dir"
@@ -1007,6 +1008,7 @@ run_benchmark_serving() {
         INFERENCEX_SERVER_PID="$server_pid"
     fi
     local benchmark_exit_code=0
+    write_command "$result_dir/$result_filename-command.txt" "${benchmark_cmd[@]}"
     set -x
     run_server_client "${benchmark_cmd[@]}" || benchmark_exit_code=$?
     set +x

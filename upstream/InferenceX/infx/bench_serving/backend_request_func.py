@@ -517,6 +517,15 @@ def get_tokenizer(
     trust_remote_code: bool = False,
     **kwargs: Any,
 ) -> PreTrainedTokenizer | PreTrainedTokenizerFast:
+    if tokenizer_mode == "kimi_k3":
+        from vllm.tokenizers import get_tokenizer as vllm_get_tokenizer
+
+        return vllm_get_tokenizer(
+            pretrained_model_name_or_path,
+            tokenizer_mode=tokenizer_mode,
+            trust_remote_code=trust_remote_code,
+            **kwargs,
+        )
     if pretrained_model_name_or_path is not None and not os.path.exists(
         pretrained_model_name_or_path
     ):
