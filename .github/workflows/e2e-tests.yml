@@ -10,6 +10,7 @@ on:
                 type: choice
                 options:
                 - "Natural verifier diagnostic Kimi baseline"
+                - "Natural verifier diagnostic GPU ownership"
                 - "Agentic Kimi baseline + MoE front + DSpark"
                 - "Natural validation Kimi baseline + MoE front + DSpark"
                 - "Fixed-length Kimi baseline"
@@ -275,7 +276,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     natural-verifier-diagnostic:
-        if: ${{ inputs.generate-cli-command == 'Natural verifier diagnostic Kimi baseline' }}
+        if: ${{ startsWith(inputs.generate-cli-command, 'Natural verifier diagnostic ') }}
         name: Kimi native verifier diagnostic - C1 and short C48
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 45
@@ -287,6 +288,7 @@ jobs:
         env:
             DIAGNOSTIC_OUTPUT: /share_nfs/ajith/benchmarks/natural-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
             RUN_STAMP: natural-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+            DIAGNOSTIC_MODE: ${{ inputs.generate-cli-command }}
             PYTHONDONTWRITEBYTECODE: '1'
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -300,8 +302,13 @@ jobs:
               run: |
                   set -eo pipefail
                   mkdir -p "$(dirname "$DIAGNOSTIC_OUTPUT")"
-                  bash benchmarks/quality/diagnostic/run.sh "$PWD" "$DIAGNOSTIC_OUTPUT" \
-                      2>&1 | tee "$DIAGNOSTIC_OUTPUT.log"
+                  if [[ "$DIAGNOSTIC_MODE" == 'Natural verifier diagnostic GPU ownership' ]]; then
+                      timeout 180s python3 benchmarks/quality/diagnostic/inspect_gpu.py "$DIAGNOSTIC_OUTPUT" \
+                          2>&1 | tee "$DIAGNOSTIC_OUTPUT.log"
+                  else
+                      bash benchmarks/quality/diagnostic/run.sh "$PWD" "$DIAGNOSTIC_OUTPUT" \
+                          2>&1 | tee "$DIAGNOSTIC_OUTPUT.log"
+                  fi
             - name: Stop only this diagnostic job's containers
               if: always()
               run: |
