@@ -35,10 +35,14 @@ def validate(source_root):
         assert sha(source_root / item["path"]) == item["baseline_sha256"]
         assert sha(HERE / "candidate" / item["path"]) == item["candidate_sha256"]
     assert manifest["files"][1]["candidate_sha256"] == "59739607be72dc856b0a827d5bf82ab43eba13da181cff512216c2f6293ac021"
-    tree = ast.parse((HERE / "candidate" / LINEAR).read_text())
+    candidate_source = (HERE / "candidate" / LINEAR).read_text()
+    tree = ast.parse(candidate_source)
     gate = next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=="_attnres_norm_forward_ok")
-    gate_hash = hashlib.sha256(ast.dump(gate).encode()).hexdigest()
-    assert gate_hash == "7e0b6fdbbb42f1c81bd6ba36fd3a16c34f4c377aecbd83c7afc73c9c4ec6d14c"
+    # Python 3.12 adds AST fields such as type_params; exact source is stable.
+    gate_source = ast.get_source_segment(candidate_source, gate)
+    assert gate_source is not None
+    gate_hash = hashlib.sha256(gate_source.encode()).hexdigest()
+    assert gate_hash == "223de1313e136fbaa8c593603f141e164a56d8ced394ad24d76872f0ac54bd17"
     callmap = json.loads((HERE / "call-map.json").read_text())
     assert sha(HERE / "call-map.json") == manifest["call_map_sha256"]
     assert len(callmap["kda_layers_one_based"]) == 69 and len(callmap["dsa_layers_one_based"]) == 24
@@ -51,7 +55,7 @@ def validate(source_root):
     capture = next(n for n in owner.body if isinstance(n,ast.FunctionDef) and n.name=="capture")
     assert any(isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=="forward_fn" and n.lineno>495 and ast.unparse(n.args[0])=="CUDAGraphMode.NONE" for n in ast.walk(capture))
     return {"status":"CPU source validation only; GPU not executed", "manifest":manifest,
-        "unmodified_admission_gate_ast_sha256":gate_hash,"harness_sha256":sha(Path(__file__)),
+        "unmodified_admission_gate_source_sha256":gate_hash,"harness_sha256":sha(Path(__file__)),
         "rows":[280,336],"patterns":["bf16","synthetic-fp8"],"default_patterns":["bf16"],"calls_per_forward":187,
         "historical_reads_per_forward":816,"replay_rows":[280,336,280],
         "lanes":["explicit_full_descriptor", "native_none_capture_injected_diagnostic", "native_none_capture_no_injection_control"],
