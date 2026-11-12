@@ -11,6 +11,7 @@ on:
                 options:
                 - "Natural verifier diagnostic Kimi baseline"
                 - "Natural verifier diagnostic GPU ownership"
+                - "Natural verifier diagnostic Wait for idle GPUs"
                 - "Agentic Kimi baseline + MoE front + DSpark"
                 - "Natural validation Kimi baseline + MoE front + DSpark"
                 - "Fixed-length Kimi baseline"
@@ -279,7 +280,7 @@ jobs:
         if: ${{ startsWith(inputs.generate-cli-command, 'Natural verifier diagnostic ') }}
         name: Kimi native verifier diagnostic - C1 and short C48
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
-        timeout-minutes: 45
+        timeout-minutes: 170
         permissions:
             contents: read
         concurrency:
@@ -296,6 +297,11 @@ jobs:
                   ref: ${{ github.sha }}
                   path: natural-diagnostic-${{ github.run_id }}
                   persist-credentials: false
+            - name: Wait for idle GPUs - check every five minutes
+              if: ${{ inputs.generate-cli-command == 'Natural verifier diagnostic Wait for idle GPUs' }}
+              timeout-minutes: 122
+              working-directory: natural-diagnostic-${{ github.run_id }}
+              run: python3 benchmarks/quality/diagnostic/wait_for_idle.py "$DIAGNOSTIC_OUTPUT.availability.jsonl"
             - name: Observe short natural verification and graph proposals
               timeout-minutes: 43
               working-directory: natural-diagnostic-${{ github.run_id }}
@@ -322,6 +328,7 @@ jobs:
                   name: kimi-natural-diagnostic-${{ github.run_id }}
                   path: |
                       ${{ env.DIAGNOSTIC_OUTPUT }}.log
+                      ${{ env.DIAGNOSTIC_OUTPUT }}.availability.jsonl
                       ${{ env.DIAGNOSTIC_OUTPUT }}/**
                       !${{ env.DIAGNOSTIC_OUTPUT }}/work/**
                   retention-days: 30
