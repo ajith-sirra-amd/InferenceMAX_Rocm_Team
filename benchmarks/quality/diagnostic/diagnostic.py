@@ -103,8 +103,11 @@ def main():
     output.mkdir(exist_ok=False)
     validation, _ = screen.assets()
     config = quality_launch.recipe(Path('/fixed-tools/baseline.json'), validation)
+    save(logs / 'natural-recipe.json', config)
+    extension = 'worker_extension.DiagnosticWorkerExtension'
+    config['server_arguments']['worker-extension-cls'] = extension
     os.environ.update(config['server_environment'])
-    os.environ.update(KIMI_DIAGNOSTIC_ENABLE='1', KIMI_DIAGNOSTIC_OUTPUT=str(output),
+    os.environ.update(KIMI_DIAGNOSTIC_OUTPUT=str(output),
                       PYTHONPATH='/quality-diagnostic:/inferencex',
                       VLLM_COMPUTE_NANS_IN_LOGITS='1')
     argv = quality_launch.command(config, os.environ['MODEL_PATH'], os.environ['PORT'])
@@ -117,13 +120,19 @@ def main():
     effective_path = logs / 'effective-server.json'
     effective = json.loads(effective_path.read_text())
     effective.update(sa_config_match=False, sa_throughput_recipe_match=False,
-                     expected_natural_config_match=True, instrumented_diagnostic=True)
+                     expected_natural_config_match=False,
+                     expected_natural_core_config_match=True,
+                     instrumented_diagnostic=True,
+                     instrumentation_arguments={'worker-extension-cls': extension})
     save(effective_path, effective)
     save(output / 'contract.json', dict(
         mode='natural verifier diagnostic, baseline only',
         server_config_sha256=hashlib.sha256((logs / 'recipe.json').read_bytes()).hexdigest(),
+        natural_core_config_sha256=hashlib.sha256((logs / 'natural-recipe.json').read_bytes()).hexdigest(),
         helper_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in Path('/quality-diagnostic').glob('*.py')},
         hooks='first 2 live proposal and verification calls per scenario',
+        hook_initialization='native WorkerWrapperBase.init_device extension hook, before model load',
+        server_argument_changes={'worker-extension-cls': extension},
         environment_changes={'PYTHONPATH': os.environ['PYTHONPATH'], 'VLLM_COMPUTE_NANS_IN_LOGITS': '1'},
         scenarios=['C1 temperature0 max_tokens128', 'C1 temperature1 max_tokens128', 'C48 temperature1 max_tokens128'],
         output='raw responses/token IDs; bounded per-worker summaries; no full logits saved'))
@@ -135,8 +144,15 @@ def main():
     signal.signal(signal.SIGINT, interrupted)
     try:
         with (output / 'hook-preflight.log').open('xb') as log:
-            subprocess.run([sys.executable, '-c',
-                            'import diagnostic_hooks; assert diagnostic_hooks.INSTALLED; print("Diagnostic hooks installed")'],
+            subprocess.run([sys.executable, '-u', '-c',
+                            'import faulthandler; faulthandler.enable(); '
+                            'faulthandler.dump_traceback_later(30, repeat=True); '
+                            'print("Python startup complete; importing diagnostic hooks", flush=True); '
+                            'import diagnostic_hooks; '
+                            'print("Installing diagnostic hooks", flush=True); '
+                            'diagnostic_hooks.install(); assert diagnostic_hooks.INSTALLED; '
+                            'print("Diagnostic hooks installed", flush=True); '
+                            'faulthandler.cancel_dump_traceback_later()'],
                            stdout=log, stderr=subprocess.STDOUT, check=True, timeout=90)
         with (logs / 'server.log').open('xb') as log:
             server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
@@ -155,12 +171,16 @@ def main():
                     pass
                 time.sleep(2)
             observed = quality_launch.observed_verifier((logs / 'server.log').read_text(errors='replace'), json.loads(config['server_arguments']['speculative-config']))
+            observed.update(scope='speculative_config_only',
+                            expected_natural_config_match=False,
+                            expected_natural_core_config_match=True,
+                            speculative_config_match=True,
+                            instrumented_diagnostic=True)
             save(logs / 'observed-verifier.json', observed)
-            # Fresh child isolates client timeout and excludes worker hooks there.
-            client_env = dict(os.environ, KIMI_DIAGNOSTIC_ENABLE='0')
+            # Only native workers invoke the extension; client startup has no hooks.
             command = ['timeout', '--signal=TERM', '--kill-after=15s', '360s',
                        sys.executable, __file__, 'client', endpoint, str(output)]
-            result['client_exit_code'] = subprocess.call(command, env=client_env)
+            result['client_exit_code'] = subprocess.call(command)
             if result['client_exit_code']:
                 raise RuntimeError('Diagnostic capture incomplete; see summary or logs')
             result['status'] = 'collected'
