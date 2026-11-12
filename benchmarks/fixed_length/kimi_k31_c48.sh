@@ -50,13 +50,14 @@ docker run --rm --init --name "$container" --label "kimi.fixed.run=$(basename "$
     --env XDG_CACHE_HOME=/work/cache --env FLYDSL_RUNTIME_CACHE_DIR=/work/cache/flydsl \
     --env CCACHE_DIR=/work/cache/ccache --env SCCACHE_DIR=/work/cache/sccache \
     --env MODEL=moonshotai/Kimi-K3.1-Pro --env MODEL_PATH=/model \
+    --env DRAFT_MODEL_PATH=/models/Inferact/Kimi-K3.1-Pro-DSpark-preview \
     --env TP=8 --env DCP_SIZE=8 --env CONC=48 --env EP_SIZE=1 \
     --env KV_OFFLOADING=dram --env KV_OFFLOAD_BACKEND=vllm-native --env TOTAL_CPU_DRAM_GB=1799 \
     --env RESULT_DIR=/logs --env RESULT_FILENAME=baseline \
-    --env EVAL_ONLY=false --env DURATION=600 --env PIN_CCD=0 --env PROFILE=0 \
+    --env EVAL_ONLY=false --env DURATION=600 --env PROFILE=0 \
     --env TEST=1 --env TEST_ISL=8192 --env TEST_OSL=1024 \
     --env TEST_RANGE_RATIO=1 --env TEST_NUM_PROMPTS=192 \
-    --env SA_SERVER_CONFIG=/fixed-tools/baseline.json --env SA_CONFIG_PREPARE=/fixed-tools/prepare.py \
+    --env SA_REFERENCE_CONFIG=/fixed-tools/baseline.json --env SA_CONFIG_AUDIT=/fixed-tools/audit_server.py \
     --entrypoint /bin/bash "$image" -c \
     'set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; cd /inferencex; python3 /fixed-tools/check_client.py; exec bash benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh'
 python3 "$script_dir/validate.py" "$run_dir/baseline.json" --output "$run_dir/validation.json"

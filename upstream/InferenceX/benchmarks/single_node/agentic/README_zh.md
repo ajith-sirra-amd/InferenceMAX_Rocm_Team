@@ -21,11 +21,17 @@ AgentX 默认持续 3600 秒，调用工作流可显式覆盖。主配置必须�
 
 ## Kimi 定长对比
 
-`kimik3_fp4_mi355x_mtp.sh` 在 `TEST=1` 时等待服务就绪后调用现有的
-`run_benchmark_serving`，替代 AgentX 回放。显式传入 `TEST_ISL`、
-`TEST_OSL`、`TEST_RANGE_RATIO`、`TEST_NUM_PROMPTS` 和 `RESULT_FILENAME`。
-比例 1 请求固定长度；原生 helper 执行 `2 * CONC` 次预热，保存详细指标及命令。
-`TEST=0` 保留回放。可选的 `SA_SERVER_CONFIG` 与 `SA_CONFIG_PREPARE`
-在启动前载入冻结的服务环境和命令参数，绕过历史调优默认值。两种客户端
-使用相同的服务生命周期。参见团队的
+`kimik3_fp4_mi355x_mtp.sh` 显式固定 SA run 42638222682、job 129550719685
+实际执行的 C48 吞吐配置：25 个引擎环境变量、TP8/DCP8、设备 0–7、10240
+batched tokens、48 sequences，以及 DSpark 六个草稿 token、合成接受长度 3.57。
+历史调优分支已删除。本地模型和草稿路径、端口由调用方提供。
+`TOTAL_CPU_DRAM_GB=1799` 对应每 rank 224875000000 字节的原始卸载预算。
+吞吐配置要求 `EVAL_ONLY=false`；质量评估需要自然验证配置。
+
+`TEST=1` 在服务就绪后调用现有 `run_benchmark_serving`，替代 AgentX 回放。
+显式传入 `TEST_ISL`、`TEST_OSL`、`TEST_RANGE_RATIO`、`TEST_NUM_PROMPTS` 和
+`RESULT_FILENAME`。比例 1 请求固定长度；原生 helper 执行 `2 * CONC` 次预热，
+保存详细指标及命令。`TEST=0` 保留回放，两者共用同一个服务配置。
+可选的 `SA_CONFIG_AUDIT` 将实际命令与 `SA_REFERENCE_CONFIG` 比较，
+不会设置环境变量或构建服务命令。参见团队的
 [定长指南](../../../../../benchmarks/fixed_length/README.md)。

@@ -8599,3 +8599,9 @@
   description:
     - 'Add opt-in fixed 8192/1024 C48 testing through the existing agentic launcher and run_benchmark_serving helper. Allow a frozen SA environment/argv; save detailed client metrics. No model optimization is applied.'
     - '在现有 AgentX 启动器中新增可选的 8192/1024 C48 定长测试，使用 run_benchmark_serving。支持冻结的 SA 环境和参数，保存详细客户端指标，不应用模型优化。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Replace historical Kimi C48 script defaults with the explicit resolved configuration from SA run 42638222682/job 129550719685, including device IDs 0-7. Fixed-length and AgentX modes share the same server command. Retain reference audit without configuration injection.'
+    - '使用 SA run 42638222682/job 129550719685 的实际配置替换 Kimi C48 历史默认值，显式指定设备 0-7。定长与 AgentX 模式共用服务命令；保留只读配置校验。'

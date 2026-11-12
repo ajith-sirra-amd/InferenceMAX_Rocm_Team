@@ -1,335 +1,121 @@
 #!/usr/bin/env bash
 set -eo pipefail
-set -x
 source "$(dirname "$0")/../../benchmark_lib.sh"
-wait_for_amd_gpu_clean
-
-export EVAL_ONLY="${EVAL_ONLY:-false}"
-check_env_vars MODEL TP CONC KV_OFFLOADING TOTAL_CPU_DRAM_GB RESULT_DIR DURATION EP_SIZE
-check_env_vars DCP_SIZE EVAL_ONLY
-if [[ "${TEST-}" == "1" ]]; then
+check_env_vars MODEL MODEL_PATH DRAFT_MODEL_PATH TP DCP_SIZE CONC EP_SIZE
+check_env_vars KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR PORT EVAL_ONLY
+if [[ "$EVAL_ONLY" != false ]]; then
+    echo 'This script pins SA throughput settings with synthetic acceptance; use a separate natural-verification configuration for eval.' >&2
+    exit 1
+fi
+if [[ "$TP" != 8 || "$DCP_SIZE" != 8 || "$CONC" != 48 || "$EP_SIZE" != 1 ]]; then
+    echo 'This script pins the SA C48 point: TP=8 DCP_SIZE=8 CONC=48 EP_SIZE=1' >&2
+    exit 1
+fi
+if [[ "$KV_OFFLOADING" != dram || "$KV_OFFLOAD_BACKEND" != vllm-native || "$TOTAL_CPU_DRAM_GB" != 1799 ]]; then
+    echo 'The SA C48 point uses vllm-native DRAM offload with TOTAL_CPU_DRAM_GB=1799' >&2
+    exit 1
+fi
+if [[ "${TEST-}" == 1 ]]; then
     check_env_vars TEST_ISL TEST_OSL TEST_RANGE_RATIO TEST_NUM_PROMPTS RESULT_FILENAME
-fi
-
-DP_SIZE=1
-export DP_SIZE
-TOTAL_RANKS=$(( TP * DP_SIZE ))
-
-if [ -n "${ROCR_VISIBLE_DEVICES:-}" ]; then
-    export HIP_VISIBLE_DEVICES="$ROCR_VISIBLE_DEVICES"
-fi
-
-if [[ -n "${MODEL_PATH:-}" ]]; then
-    if [[ ! -d "$MODEL_PATH" || -z "$(ls -A "$MODEL_PATH" 2>/dev/null)" ]]; then
-        hf download "$MODEL" --local-dir "$MODEL_PATH"
-    fi
 else
-    hf download "$MODEL"
-    export MODEL_PATH="$MODEL"
+    check_env_vars DURATION
 fi
-
+for model_directory in "$MODEL_PATH" "$DRAFT_MODEL_PATH"; do
+    if [[ ! -d "$model_directory" ]]; then
+        echo "Missing model directory: $model_directory" >&2
+        exit 1
+    fi
+done
+wait_for_amd_gpu_clean
 rocm-smi || true
-if [[ "${TEST-}" != "1" ]]; then
+if [[ "${TEST-}" != 1 ]]; then
     resolve_trace_source
     install_agentic_deps
 fi
 
-SERVER_LOG="$RESULT_DIR/server.log"
+export VLLM_ROCM_USE_AITER=1
+export VLLM_ROCM_USE_AITER_MOE_SITUV2=1
+export SAFETENSORS_FAST_GPU=1
+export VLLM_USE_V2_MODEL_RUNNER=1
+export VLLM_FASTSAFETENSORS_QUEUE_SIZE=-1
+export VLLM_USE_BREAKABLE_CUDAGRAPH=1
+export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
+export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm
+export VLLM_ROCM_DCP_AITER_ALLGATHER=1
+export VLLM_ROCM_USE_AITER_FLYDSL_SPARSE_MLA=1
+export AITER_FLYDSL_SPARSE_MLA=1
+export VLLM_ROCM_DSA_DCP_GLOBAL_KEY_PREFILL=1
+export VLLM_ROCM_DSA_DCP_ROWSHARD_PREFILL=1
+export VLLM_USE_DIRECT_DCP_A2A=0
+export VLLM_USE_DIRECT_DCP_Q_GATHER=0
+export VLLM_USE_DIRECT_DCP_KV_GATHER=0
+export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION=NONE
+export AITER_FLYDSL_STAGE2_FP8=0
+export AITER_BF16_FP8_MOE_BOUND=0
+export HSA_NO_SCRATCH_RECLAIM=1
+export THP_MEM_ALLOC_ENABLE=1
+export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200
+export PYTHONNOUSERSITE=1
+export VLLM_ENGINE_READY_TIMEOUT_S=7200
+export PYTHONHASHSEED=42
+
+CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TP ))
+VLLM_CMD=(
+    /opt/runtime-venv/bin/vllm serve "$MODEL_PATH" --host 0.0.0.0 --port "$PORT"
+    --served-model-name "$MODEL"
+    --tensor-parallel-size "$TP"
+    --decode-context-parallel-size "$DCP_SIZE"
+    --dcp-comm-backend a2a
+    --cp-kv-cache-interleave-size 1
+    --trust-remote-code
+    --moe-backend auto
+    --seed 7
+    --language-model-only
+    --load-format fastsafetensors
+    --max-model-len 1048576
+    --enable-prefix-caching
+    --prefix-match-unit 64
+    --kv-cache-dtype fp8
+    --mamba-ssm-cache-dtype float32
+    --attention-config '{"indexer_kv_dtype":"mxfp4"}'
+    --additional-config '{"kda_prefill_backend":"fused"}'
+    --max-num-batched-tokens 10240
+    --gpu-memory-utilization 0.91
+    --stream-interval 10
+    --disable-uvicorn-access-log
+    --kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":false}}"
+    --max-num-seqs "$CONC"
+    --prefill-schedule-interval 8
+    --long-prefill-token-threshold 10240
+    --long-prefill-token-threshold-adaptive
+    --compilation-config '{"mode":3,"cudagraph_mode":"FULL_AND_PIECEWISE","max_cudagraph_capture_size":10240,"custom_ops":["+fused_rms_norm_gated"],"cudagraph_capture_sizes":[7,14,21,28,35,42,49,56,63,70,77,84,91,98,105,112,119,126,133,140,147,154,161,168,175,182,189,196,203,210,217,224,231,238,245,252,259,266,273,280,287,294,301,308,315,322,329,336,352,384,416,448,480,512,640,768,896,1024,1280,1536,1792,2048,2560,3072,3584,4096,4608,5120,6144,6400,7168,8192,8704,10240]}'
+    --speculative-config "{\"method\": \"dspark\", \"model\": \"$DRAFT_MODEL_PATH\", \"num_speculative_tokens\": 6, \"attention_backend\": \"ROCM_AITER_MLA\", \"kv_cache_dtype\": \"fp8\", \"draft_sample_method\": \"probabilistic\", \"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": 3.57}"
+    --device-ids 0,1,2,3,4,5,6,7
+)
+
 mkdir -p "$RESULT_DIR"
+SERVER_LOG="$RESULT_DIR/server.log"
 SERVER_PID=""
-cleanup_agentic_services() {
+cleanup_services() {
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
     stop_background_process_tree "$SERVER_PID" "vLLM server" 60
     exit "$exit_code"
 }
-trap cleanup_agentic_services EXIT
+trap cleanup_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-
-# An explicitly frozen SA recipe bypasses historical tuning defaults below.
-# It changes configuration only; both clients share the same server lifecycle.
-if [[ -n "${SA_SERVER_CONFIG:-}" ]]; then
-    check_env_vars SA_SERVER_CONFIG SA_CONFIG_PREPARE PORT
-    python3 "$SA_CONFIG_PREPARE" "$SA_SERVER_CONFIG" "$RESULT_DIR" "$MODEL_PATH" "$PORT"
-    source "$RESULT_DIR/server-config.sh"
-else
-
-# export AIPERF_WARMUP_REQUESTS_PER_LANE=1
-# export DURATION=600
-
-export VLLM_ROCM_AITER_MLA_ASM_PADDING=asm
-export VLLM_ROCM_AITER_MLA_DCP_VERIFY=asm
-export VLLM_ROCM_USE_AITER=1
-export VLLM_ROCM_USE_AITER_MOE_SITUV2=1
-export AITER_BF16_FP8_MOE_BOUND=0
-export AITER_FLYDSL_STAGE2_FP8=1
-export VLLM_ROCM_QUICK_REDUCE_QUANTIZATION="${VLLM_ROCM_QUICK_REDUCE_QUANTIZATION:-INT4}"
-export VLLM_ROCM_QUICK_REDUCE_MIN_SIZE_BYTES_MB=16
-export SAFETENSORS_FAST_GPU=1
-export HSA_NO_SCRATCH_RECLAIM=1
-export VLLM_USE_BREAKABLE_CUDAGRAPH=0
-export VLLM_USE_DIRECT_DCP_A2A=0
-export VLLM_USE_DIRECT_DCP_Q_GATHER=0
-export VLLM_USE_DIRECT_DCP_KV_GATHER=0
-export VLLM_ENGINE_READY_TIMEOUT_S=7200
-export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=1200
-export AIPERF_HTTP_TCP_USER_TIMEOUT=900000
-export PYTHONNOUSERSITE=1
-export PYTHONHASHSEED=42
-
-SPEC_ARGS=()
-SPEC_ROWS=1
-case "$CONC" in
-    1|2|4|8|10|12|14|16)
-        DCP_SIZE=1
-        OFFLOAD_POLICY=harness
-        case "$CONC" in
-            1)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-6}}" ;;
-            4)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
-            10)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-5}}" ;;
-            *)  SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}" ;;
-        esac
-        case "$SPEC_NUM_TOKENS" in
-            1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
-            2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
-            3) SYNTHETIC_ACCEPT_LEN=3.00 ;;
-            4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
-            5) SYNTHETIC_ACCEPT_LEN=3.62 ;;
-            6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
-            7) SYNTHETIC_ACCEPT_LEN=3.84 ;;
-            8) SYNTHETIC_ACCEPT_LEN=4.00 ;;
-            *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
-        esac
-        DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
-        if [ "${EVAL_ONLY:-false}" = "true" ]; then
-            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
-            echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) draft_kv=$DRAFT_KV_DTYPE"
-        else
-            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
-            echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN draft_kv=$DRAFT_KV_DTYPE"
-        fi
-        SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
-        case "$CONC" in
-            1)  SPEC_SEATS=2  ;;
-            2)  SPEC_SEATS=4  ;;
-            4)  SPEC_SEATS=8  ;;
-            8)  SPEC_SEATS=10 ;;
-            10) SPEC_SEATS=12 ;;
-            12) SPEC_SEATS=24 ;;
-            14) SPEC_SEATS=16 ;;
-            16) SPEC_SEATS=18 ;;
-            *)  SPEC_SEATS=$(( CONC + 2 )) ;;
-        esac
-        MAX_NUM_SEQS="${MAX_NUM_SEQS:-$SPEC_SEATS}"
-        if [ "$CONC" -eq 1 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-16384}"
-        else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"; fi
-        ;;
-    48|56)
-        DCP_SIZE="${DCP_SIZE:-8}"
-        OFFLOAD_POLICY=harness
-        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"
-        MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 2 ))}"
-        SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-4}}"
-        case "$SPEC_NUM_TOKENS" in
-            1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
-            2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
-            3) SYNTHETIC_ACCEPT_LEN=3.00 ;;
-            4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
-            5) SYNTHETIC_ACCEPT_LEN=3.62 ;;
-            6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
-            7) SYNTHETIC_ACCEPT_LEN=3.84 ;;
-            8) SYNTHETIC_ACCEPT_LEN=4.00 ;;
-            *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
-        esac
-        DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
-        if [ "${EVAL_ONLY:-false}" = "true" ]; then
-            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
-            echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) under DCP=$DCP_SIZE, draft_kv=$DRAFT_KV_DTYPE"
-        else
-            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
-            echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN under DCP=$DCP_SIZE, draft_kv=$DRAFT_KV_DTYPE"
-        fi
-        SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
-        ;;
-    64)
-        DCP_SIZE="${DCP_SIZE:-8}"
-        OFFLOAD_POLICY=harness
-        MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
-        if [ "$CONC" -eq 64 ]; then
-            MAX_NUM_SEQS="${MAX_NUM_SEQS:-80}"
-        else
-            MAX_NUM_SEQS="${MAX_NUM_SEQS:-96}"
-        fi
-        SPEC_NUM_TOKENS="${SPEC_NUM_TOKENS:-${SPEC_K:-3}}"
-        case "$SPEC_NUM_TOKENS" in
-            1) SYNTHETIC_ACCEPT_LEN=1.85 ;;
-            2) SYNTHETIC_ACCEPT_LEN=2.51 ;;
-            3) SYNTHETIC_ACCEPT_LEN=3.00 ;;
-            4) SYNTHETIC_ACCEPT_LEN=3.36 ;;
-            5) SYNTHETIC_ACCEPT_LEN=3.62 ;;
-            6) SYNTHETIC_ACCEPT_LEN=3.75 ;;
-            7) SYNTHETIC_ACCEPT_LEN=3.84 ;;
-            8) SYNTHETIC_ACCEPT_LEN=4.00 ;;
-            *) echo "[spec] no golden AL for k=$SPEC_NUM_TOKENS" >&2; exit 1 ;;
-        esac
-        DRAFT_KV_DTYPE="${DRAFT_KV_DTYPE:-fp8}"
-        SPEC_BASE="\"model\":\"Inferact/Kimi-K3-DSpark\",\"num_speculative_tokens\":$SPEC_NUM_TOKENS,\"method\":\"dspark\",\"attention_backend\":\"ROCM_AITER_MLA\",\"kv_cache_dtype\":\"$DRAFT_KV_DTYPE\",\"draft_sample_method\":\"probabilistic\""
-        if [ "${EVAL_ONLY:-false}" = "true" ]; then
-            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"block\"}")
-            echo "MTP: k=$SPEC_NUM_TOKENS LIVE block rejection (accuracy gate) under DCP=$DCP_SIZE, draft_kv=$DRAFT_KV_DTYPE"
-        else
-            SPEC_ARGS=(--speculative-config "{$SPEC_BASE,\"rejection_sample_method\": \"synthetic\", \"synthetic_acceptance_length\": $SYNTHETIC_ACCEPT_LEN}")
-            echo "MTP: k=$SPEC_NUM_TOKENS synthetic_accept=$SYNTHETIC_ACCEPT_LEN under DCP=$DCP_SIZE, draft_kv=$DRAFT_KV_DTYPE"
-        fi
-        SPEC_ROWS=$(( SPEC_NUM_TOKENS + 1 ))
-        ;;
-    *)
-        DCP_SIZE="${DCP_SIZE:-8}"
-        OFFLOAD_POLICY=harness
-        if [ "$CONC" -gt 64 ]; then MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-24576}"
-        else MAX_BATCHED_TOKENS="${MAX_BATCHED_TOKENS:-8192}"; fi
-        if [ "$CONC" -lt 72 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(( CONC * 14 / 10 ))}"
-        elif [ "$CONC" -eq 80 ]; then MAX_NUM_SEQS="${MAX_NUM_SEQS:-112}"
-        else MAX_NUM_SEQS="${MAX_NUM_SEQS:-144}"; fi
-        ;;
-esac
-export DCP_SIZE
-
-GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
-CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
-
-LADDER=$(( MAX_NUM_SEQS * SPEC_ROWS ))
-CUDAGRAPH_CAPTURE_SIZES=$(seq -s, 2 2 "$LADDER")
-COMPILATION_CONFIG_ARGS=(--compilation-config "{\"mode\":3,\"cudagraph_mode\":\"$CUDAGRAPH_MODE\",\"max_cudagraph_capture_size\":$LADDER,\"custom_ops\":[\"+fused_rms_norm_gated\"],\"cudagraph_capture_sizes\":[$CUDAGRAPH_CAPTURE_SIZES]}")
-
-CP_ARGS=(--attention-backend ROCM_AITER_MLA)
-if [ "$DCP_SIZE" -gt 1 ]; then
-    CP_ARGS+=(--decode-context-parallel-size "$DCP_SIZE" --dcp-comm-backend a2a)
+write_command "$RESULT_DIR/vllm_command.txt" "${VLLM_CMD[@]}"
+if [[ -n "${SA_CONFIG_AUDIT-}" ]]; then
+    check_env_vars SA_REFERENCE_CONFIG
+    python3 "$SA_CONFIG_AUDIT" "$SA_REFERENCE_CONFIG" "$RESULT_DIR" "$MODEL_PATH" "$PORT" "${VLLM_CMD[@]}"
 fi
-
-OFFLOAD_ARGS=()
-OFFLOAD_LABEL="$OFFLOAD_POLICY"
-if [ "$OFFLOAD_POLICY" = "none" ]; then
-    :
-elif agentic_kv_offload_enabled; then
-    OFFLOAD_LABEL="${KV_OFFLOADING}"
-    CPU_BYTES_PER_RANK=$(( TOTAL_CPU_DRAM_GB * 1000 * 1000 * 1000 / TOTAL_RANKS ))
-    OFFLOAD_ARGS=(--kv-transfer-config "{\"kv_connector\":\"SimpleCPUOffloadConnector\",\"kv_role\":\"kv_both\",\"kv_connector_extra_config\":{\"cpu_bytes_to_use_per_rank\":$CPU_BYTES_PER_RANK,\"lazy_offload\":false}}")
-else
-    OFFLOAD_LABEL=none
-fi
-
-EP_ARGS=()
-if [ "${EP_SIZE:-1}" -gt 1 ]; then EP_ARGS=(--enable-expert-parallel); fi
-
-QUANT_CONFIG_JSON='{"targets":{"*in_proj_qkvgfab":"fp8_per_channel"}}'
-if [ "$CONC" -eq 1 ]; then
-    QUANT_CONFIG_JSON='{"linear":"fp8_per_channel","ignore":["*kv_b_proj","*vision_tower*","*mm_projector*","*f_b_proj","*fused_qkv_a_proj","*self_attn.g_proj","*.layers.0.mlp.down_proj"]}'
-fi
-
-echo "[cfg] conc=$CONC dcp=$DCP_SIZE gmu=$GPU_MEM_UTIL mns=$MAX_NUM_SEQS ladder=1..$LADDER spec_rows=$SPEC_ROWS chunk=$MAX_BATCHED_TOKENS cudagraph=$CUDAGRAPH_MODE offload=$OFFLOAD_LABEL"
-
-ATTENTION_CONFIG_JSON='{"mla_prefill_backend":"ROCM_AITER_FA"}'
-
-VLLM_CMD=(
-    vllm serve "$MODEL_PATH" --served-model-name "$MODEL"
-    --host 0.0.0.0
-    --port "$PORT"
-    --trust-remote-code
-    # --load-format fastsafetensors
-    --moe-backend auto
-    --tensor-parallel-size "$TP"
-    --gpu-memory-utilization "$GPU_MEM_UTIL"
-    --language-model-only
-    --max-num-seqs "$MAX_NUM_SEQS"
-    --max-num-batched-tokens "$MAX_BATCHED_TOKENS"
-    --max-model-len 1048576
-    --kv-cache-dtype fp8
-    --enable-auto-tool-choice
-    --tool-call-parser kimi_k3
-    --reasoning-parser kimi_k3
-    --enable-prefix-caching
-    --stream-interval 10
-    --quantization-config "$QUANT_CONFIG_JSON"
-    --attention-config "$ATTENTION_CONFIG_JSON"
-    "${OFFLOAD_ARGS[@]}"
-    "${CP_ARGS[@]}"
-    "${EP_ARGS[@]}"
-    "${SPEC_ARGS[@]}"
-    "${COMPILATION_CONFIG_ARGS[@]}"
-)
-fi
-
-printf '%q ' "${VLLM_CMD[@]}" | tee "$RESULT_DIR/vllm_command.txt"
-printf '\n' | tee -a "$RESULT_DIR/vllm_command.txt"
-
 "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
-echo "Server PID: $SERVER_PID"
-
-python3 - <<'CCDPY' > "$RESULT_DIR/ccdmap.txt" 2>/dev/null || true
-import subprocess, re, os, glob
-def expand(s):
-    v=[]
-    for part in s.split(','):
-        if '-' in part:
-            a,b=part.split('-'); v+=list(range(int(a),int(b)+1))
-        else: v.append(int(part))
-    return v
-def l3_domains():
-    seen,out=set(),[]
-    for c in sorted(int(re.search(r'cpu(\d+)$',x).group(1)) for x in glob.glob('/sys/devices/system/cpu/cpu[0-9]*')):
-        f=f'/sys/devices/system/cpu/cpu{c}/cache/index3/shared_cpu_list'
-        if not os.path.exists(f): continue
-        d=open(f).read().strip()
-        if d not in seen: seen.add(d); out.append(d)
-    return out
-def node_of(cpus):
-    for n in glob.glob('/sys/devices/system/node/node[0-9]*'):
-        nid=int(re.search(r'node(\d+)$',n).group(1))
-        if cpus[0] in expand(open(f'{n}/cpulist').read().strip()): return nid
-    return -1
-topo=""
-try: topo=subprocess.run(["rocm-smi","--showtoponuma"],capture_output=True,text=True).stdout
-except Exception: pass
-gpu_node={int(m.group(1)):int(m.group(2)) for m in re.finditer(r"GPU\[(\d+)\].*?Numa Node:\s*(\d+)",topo)}
-if not gpu_node: raise SystemExit
-by={}
-for d in l3_domains(): by.setdefault(node_of(expand(d)),[]).append(d)
-for n in by: by[n].sort(key=lambda d: expand(d)[0])
-for n in sorted(by):
-    for i,g in enumerate(sorted(k for k,v in gpu_node.items() if v==n)):
-        if i < len(by[n]): print(f"{g} {by[n][i]}")
-CCDPY
-
-PIN_CCD="${PIN_CCD:-1}"
-pin_workers_to_ccd() {
-    [ "$PIN_CCD" = "1" ] || return 0
-    [ -s "$RESULT_DIR/ccdmap.txt" ] || return 0
-    local pinned=0
-    while read -r _g _cpus; do
-        for _p in $(pgrep -f "VLLM::Worker_TP${_g}([^0-9]|$)" 2>/dev/null); do
-            for _t in /proc/$_p/task/*; do
-                taskset -pc "$_cpus" "${_t##*/}" >/dev/null 2>&1 && pinned=$((pinned+1)) || true
-            done
-        done
-    done < "$RESULT_DIR/ccdmap.txt"
-    echo "[pin-ccd] pinned $pinned threads"
-}
-
 wait_for_server_ready --port "$PORT" --server-log "$SERVER_LOG" --server-pid "$SERVER_PID"
 
-pin_workers_to_ccd || true
-
-# run_eval --port "$PORT"
-
-if [ "${EVAL_ONLY:-false}" = "true" ]; then
-    run_eval --port "$PORT"
-elif [[ "${TEST-}" == "1" ]]; then
+if [[ "${TEST-}" == 1 ]]; then
     echo "[fixed-length] input=$TEST_ISL output=$TEST_OSL ratio=$TEST_RANGE_RATIO C=$CONC requests=$TEST_NUM_PROMPTS"
     run_benchmark_serving \
         --model "$MODEL" --tokenizer "$MODEL_PATH" --tokenizer-mode kimi_k3 \
