@@ -14,12 +14,15 @@ import inspect
 import json
 import os
 from pathlib import Path
+import pickletools
+import re
 import shutil
 import signal
 import struct
 import subprocess
 import sys
 import traceback
+import zlib
 
 
 HASHES = {
@@ -139,7 +142,9 @@ def worker(args):
     # and GPU lazy initialization, even if a compile API unexpectedly dispatches.
     os.environ.update(COMPILE_ONLY='1', FLYDSL_GPU_ARCH='gfx950', ARCH='gfx950',
         GPU_ARCHS='gfx950', CU_NUM='256', AITER_AOT_IMPORT='1',
-        FLYDSL_RUNTIME_CACHE_DIR=str(cache), PYTHONDONTWRITEBYTECODE='1')
+        FLYDSL_RUNTIME_CACHE_DIR=str(cache), PYTHONDONTWRITEBYTECODE='1',
+        FLYDSL_DEBUG_DUMP_ASM='1', FLYDSL_DUMP_IR='1',
+        FLYDSL_DUMP_DIR=str(folder / 'compiler-dump'))
     import torch
     import flydsl.compiler.jit_executor as executor
     import flydsl.utils.env as compiler_env
@@ -203,6 +208,48 @@ def elf_extent(data, offset):
     return extent if 64 <= extent <= len(data) - offset else None
 
 
+def cached_ir(data):
+    """Read compressed IR literals without unpickling or executing cached code."""
+    pending, streams = False, []
+    for opcode, value, _ in pickletools.genops(data):
+        if isinstance(value, str) and value == 'ir_zlib':
+            pending = True
+        elif pending and isinstance(value, bytes):
+            decoder = zlib.decompressobj()
+            decoded = decoder.decompress(value, 32 * 1024 * 1024)
+            if not decoder.eof or decoder.unconsumed_tail:
+                raise ValueError('Cached IR exceeds bounded decompression limit')
+            streams.append(decoded.decode('utf-8'))
+            pending = False
+        elif pending and opcode.name not in ('MEMOIZE', 'BINPUT', 'LONG_BINPUT'):
+            raise ValueError('Unsupported ir_zlib pickle layout')
+    return streams
+
+
+def mlir_binaries(text):
+    """Decode ELF-containing MLIR string literals without importing a runtime."""
+    binaries = []
+    for match in re.finditer(r'"((?:[^"\\]|\\.)*)"', text):
+        value = match.group(1)
+        if not re.match(r'\\7[fF]ELF', value):
+            continue
+        decoded = bytearray()
+        index = 0
+        while index < len(value):
+            if value[index] != '\\':
+                decoded.extend(value[index].encode('utf-8'))
+                index += 1
+            elif re.fullmatch('[0-9a-fA-F]{2}', value[index + 1:index + 3]):
+                decoded.append(int(value[index + 1:index + 3], 16))
+                index += 3
+            else:
+                escaped = {'\\': 92, '"': 34, 'n': 10, 't': 9, 'r': 13}
+                decoded.append(escaped[value[index + 1]])
+                index += 2
+        binaries.append(bytes(decoded))
+    return binaries
+
+
 def artifacts(cache, output):
     folder = output / 'artifacts'
     folder.mkdir()
@@ -222,16 +269,34 @@ def artifacts(cache, output):
             continue
         data = path.read_bytes()
         row['sha256'] = hashlib.sha256(data).hexdigest()
+        payloads = [data]
+        if path.suffix == '.pkl':
+            try:
+                streams = cached_ir(data)
+                row['cached_ir_streams'] = len(streams)
+                for index, text in enumerate(streams):
+                    saved = folder / (str(len(records)) + '-' + str(index) + '-compiled.mlir')
+                    encoded = text.encode('utf-8')
+                    if total_saved + len(encoded) <= 32 * 1024 * 1024:
+                        saved.write_bytes(encoded)
+                        total_saved += len(encoded)
+                        row.setdefault('saved_ir', []).append(saved.name)
+                    payloads.extend(mlir_binaries(text))
+            except (ValueError, KeyError, IndexError, UnicodeError, zlib.error) as exc:
+                row['cache_decode_error'] = str(exc)
         if path.suffix in ('.s', '.ll', '.mlir') and total_saved + size <= 32 * 1024 * 1024:
             saved = folder / (str(len(records)) + '-' + path.name)
             saved.write_bytes(data)
             total_saved += size
             row['saved_ir'] = saved.name
-        offset = data.find(b'\x7fELF')
-        while offset >= 0:
-            extent = elf_extent(data, offset)
-            if extent:
-                binary = data[offset:offset + extent]
+        for payload in payloads:
+            offset = payload.find(b'\x7fELF')
+            while offset >= 0:
+                extent = elf_extent(payload, offset)
+                if not extent:
+                    offset = payload.find(b'\x7fELF', offset + 4)
+                    continue
+                binary = payload[offset:offset + extent]
                 sha = hashlib.sha256(binary).hexdigest()
                 if sha not in gpu_hashes and len(gpu_hashes) < 4 and total_saved + extent <= 32 * 1024 * 1024:
                     gpu_hashes.add(sha)
@@ -245,7 +310,7 @@ def artifacts(cache, output):
                             completed = subprocess.run([objdump, '--disassemble', '--mcpu=gfx950', str(saved)],
                                 stdout=stream, stderr=subprocess.STDOUT, timeout=15)
                         row['objdump_returncode'] = completed.returncode
-            offset = data.find(b'\x7fELF', offset + 4)
+                offset = payload.find(b'\x7fELF', offset + 4)
     return dict(cache_files=records, gpu_objects=len(gpu_hashes), objdump=objdump,
                 saved_bytes=total_saved, isa_review='pending')
 
@@ -255,6 +320,14 @@ def main(args):
         worker(args)
         return 0
     args.output.mkdir(parents=True, exist_ok=False)
+    if args.recover_cache:
+        if args.cache is None or not args.cache.is_dir():
+            raise ValueError('--recover-cache requires --cache pointing to an existing read-only cache')
+        result = dict(status='compile_only', phase='recovered_existing_cache', launches=0,
+                      cache=str(args.cache), isa_review='pending',
+                      artifacts=artifacts(args.cache, args.output))
+        save(args.output / 'result.json', result)
+        return 0 if result['artifacts']['gpu_objects'] >= 2 else 1
     if args.source is None:
         os.environ['AITER_AOT_IMPORT'] = '1'
         spec = importlib.util.find_spec('aiter')
@@ -300,6 +373,7 @@ if __name__ == '__main__':
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--prepare-only', action='store_true')
     mode.add_argument('--compile-only', action='store_true')
+    mode.add_argument('--recover-cache', action='store_true', help='Read existing cache and extract IR/ELF; no compilation or execution')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--source', type=Path, help='Pinned aiter package directory; optional in image')
     parser.add_argument('--cache', type=Path, help='Fresh run work directory for compiler cache')
