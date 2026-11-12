@@ -1,0 +1,17 @@
+{
+  "status": "STOPPED: native V2 FULL capture omits batch descriptor; CPU wiring prototype only, unapplied",
+  "patch_sha256": "9bd123b256363319153b084580cfe531cb7056a8d378e746418975ddde54029c",
+  "files": [
+    {
+      "path": "vllm/models/kimi_k3/amd/linear.py",
+      "baseline_sha256": "633d2451e82b6cb8d855245932bfb055e3e79558cb979784ede4b0aa9e894914",
+      "candidate_sha256": "c6c70c4ff7771402c9b87d958305bb4cba907039598c6758a4bb96ee5c0c7897"
+    },
+    {
+      "path": "vllm/models/kimi_k3/amd/ops/attn_res.py",
+      "baseline_sha256": "b90ad19c15e8d2732634909a5f0ae80ac7d440eaa340d3bc92d89c8576df4e9a",
+      "candidate_sha256": "59739607be72dc856b0a827d5bf82ab43eba13da181cff512216c2f6293ac021"
+    }
+  ],
+  "call_map_sha256": "ab217fe83220429ee6f0bc45ecb3f197e6de4fbcb2d6c47236d7a923f6fb8111"
+}
