@@ -31,7 +31,13 @@ batched tokens、48 sequences，以及 DSpark 六个草稿 token、合成接受�
 `TEST=1` 在服务就绪后调用现有 `run_benchmark_serving`，替代 AgentX 回放。
 显式传入 `TEST_ISL`、`TEST_OSL`、`TEST_RANGE_RATIO`、`TEST_NUM_PROMPTS` 和
 `RESULT_FILENAME`。比例 1 请求固定长度；原生 helper 执行 `2 * CONC` 次预热，
-保存详细指标及命令。`TEST=0` 保留回放，两者共用同一个服务配置。
+保存详细指标及命令。`TEST=0` 要求调用方提供 `SA_CLIENT_ENTRYPOINT`，
+在启动服务前检查已准备的客户端，服务就绪后再交给该入口执行回放。
+团队调用方使用 SA 实测版本 `903a3023682c6b27683839309cbd4b4d9153afcb`
+的原生 AgentX 客户端，并在使用 GPU 前准备固定版本的运行环境和数据集。
+两种模式共用同一个服务命令。
 可选的 `SA_CONFIG_AUDIT` 将实际命令与 `SA_REFERENCE_CONFIG` 比较，
 不会设置环境变量或构建服务命令。参见团队的
 [定长指南](../../../../../benchmarks/fixed_length/README.md)。
+完整的先基线、后组合优化对比见团队
+[AgentX 指南](../../../../../benchmarks/agentic/README.md)。

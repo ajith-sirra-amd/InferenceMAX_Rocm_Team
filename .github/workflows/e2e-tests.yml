@@ -9,6 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "Agentic Kimi baseline + MoE front + DSpark"
                 - "Natural validation Kimi baseline + MoE front + DSpark"
                 - "Fixed-length Kimi baseline"
                 - "Fixed-length Kimi AttnRes"
@@ -175,8 +176,105 @@ jobs:
                       !${{ env.NATURAL_OUTPUT }}/**/work/**
                   retention-days: 30
                   if-no-files-found: error
+    agentic-comparison:
+        if: ${{ inputs.generate-cli-command == 'Agentic Kimi baseline + MoE front + DSpark' }}
+        name: Kimi C48 native SA agentic - baseline then combined
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 380
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            AGENTIC_OUTPUT: /share_nfs/ajith/benchmarks/agentic-${{ github.run_id }}-${{ github.run_attempt }}
+            RUN_STAMP: agentic-${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: agentic-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Check out the measured SA client
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  repository: SemiAnalysisAI/InferenceX
+                  ref: 903a3023682c6b27683839309cbd4b4d9153afcb
+                  path: sa-client-${{ github.run_id }}
+                  sparse-checkout: |
+                      inferencex-e2e/infx
+                      inferencex-e2e/benchmarks
+                  persist-credentials: false
+            - name: Prepare and validate pinned client without GPUs
+              timeout-minutes: 45
+              working-directory: agentic-${{ github.run_id }}
+              env:
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$AGENTIC_OUTPUT"
+                  bash benchmarks/agentic/prepare.sh "$AGENTIC_OUTPUT/client" \
+                      "$(realpath "../sa-client-$GITHUB_RUN_ID/inferencex-e2e")" \
+                      2>&1 | tee "$AGENTIC_OUTPUT/prepare.log"
+            - name: Baseline - native SA warmup and 3600-second measurement
+              timeout-minutes: 165
+              working-directory: agentic-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  arm_dir="$AGENTIC_OUTPUT/$RUN_STAMP-baseline"
+                  mkdir -p "$arm_dir"
+                  timeout --signal=TERM --kill-after=120s 160m \
+                      bash benchmarks/fixed_length/kimi_k31_c48.sh "$arm_dir" baseline agentic \
+                      "$AGENTIC_OUTPUT/client" "$(realpath "../sa-client-$GITHUB_RUN_ID/inferencex-e2e")" \
+                      2>&1 | tee "$arm_dir/workflow.log"
+            - name: Preserve baseline before the candidate
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-agentic-baseline-${{ github.run_id }}
+                  path: |
+                      ${{ env.AGENTIC_OUTPUT }}/${{ env.RUN_STAMP }}-baseline/**
+                      !${{ env.AGENTIC_OUTPUT }}/${{ env.RUN_STAMP }}-baseline/work/**
+                  retention-days: 30
+                  if-no-files-found: warn
+            - name: Combined - native SA warmup and 3600-second measurement
+              timeout-minutes: 165
+              working-directory: agentic-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  arm_dir="$AGENTIC_OUTPUT/$RUN_STAMP-moe_front_dspark"
+                  mkdir -p "$arm_dir"
+                  timeout --signal=TERM --kill-after=120s 160m \
+                      bash benchmarks/fixed_length/kimi_k31_c48.sh "$arm_dir" moe_front_dspark agentic \
+                      "$AGENTIC_OUTPUT/client" "$(realpath "../sa-client-$GITHUB_RUN_ID/inferencex-e2e")" \
+                      2>&1 | tee "$arm_dir/workflow.log"
+            - name: Stop only this agentic job's containers
+              if: always()
+              run: |
+                  timeout 15s docker stop --time 10 "sa-agentic-prepare-$RUN_STAMP" || true
+                  timeout 10s docker rm -f "sa-agentic-prepare-$RUN_STAMP" || true
+                  for arm in baseline moe_front_dspark; do
+                      container="kimi-agentic-$RUN_STAMP-$arm"
+                      timeout 50s docker stop --time 45 "$container" || true
+                      timeout 10s docker rm -f "$container" "$container-install" "$container-ownership" || true
+                  done
+            - name: Preserve agentic results and preparation evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-agentic-${{ github.run_id }}
+                  path: |
+                      ${{ env.AGENTIC_OUTPUT }}/**
+                      !${{ env.AGENTIC_OUTPUT }}/**/work/**
+                      !${{ env.AGENTIC_OUTPUT }}/client/runtime/**
+                      !${{ env.AGENTIC_OUTPUT }}/client/cache/**
+                      !${{ env.AGENTIC_OUTPUT }}/client/home/**
+                      !${{ env.AGENTIC_OUTPUT }}/client/tmp/**
+                  retention-days: 30
+                  if-no-files-found: error
     get-jobs:
-        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural validation Kimi ') }}
+        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural validation Kimi ') && !startsWith(inputs.generate-cli-command, 'Agentic Kimi ') }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}

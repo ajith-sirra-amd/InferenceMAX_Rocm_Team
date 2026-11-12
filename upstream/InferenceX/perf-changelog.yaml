@@ -8623,3 +8623,9 @@
   description:
     - 'Add an isolated merged MoE-front fixed-length comparison after twelve decode batch-size component checks. Preserve native fallback, one layer resolution and SA core settings; record per-worker preparation. Numerical and expert-order differences remain experimental.'
     - '在十二种解码批次大小验证后新增独立 MoE 前端融合定长对比。保留原生回退、单次层解析及 SA 核心配置，记录各 worker 的准备情况。数值及专家顺序差异仍需实验验证。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Use the measured SA native AgentX client in the existing Kimi C48 script non-test mode. Prepare pinned Python, client packages, dataset and tokenizer before GPU use; compare unchanged baseline and combined MoE/DSpark with fresh servers and 3600-second measurements.'
+    - '在现有 Kimi C48 脚本的非定长模式中使用 SA 实测版本的原生 AgentX 客户端。在使用 GPU 前准备固定版本的 Python、客户端依赖、数据集和分词器；分别启动服务，对原始基线与 MoE/DSpark 组合优化进行 3600 秒测量。'

@@ -5,7 +5,7 @@ upstream_dir=$(cd "$script_dir/../../upstream/InferenceX" && pwd)
 run_dir=${1:?Supply a fresh shared benchmark output directory}
 optimization=${2:?Supply baseline, attnres, dspark, moe_front or moe_front_dspark}
 workload=${3:-fixed}
-case "$workload" in fixed|natural) ;; *) echo 'Unknown workload' >&2; exit 2 ;; esac
+case "$workload" in fixed|natural|agentic) ;; *) echo 'Unknown workload' >&2; exit 2 ;; esac
 if [[ "$workload" == natural && "$optimization" != baseline && "$optimization" != moe_front_dspark ]]; then
     echo 'Natural validation supports baseline and combined only' >&2; exit 2
 fi
@@ -13,7 +13,14 @@ case "$optimization" in baseline|attnres|dspark|moe_front|moe_front_dspark) ;; *
 case "$run_dir" in /share_nfs/ajith/benchmarks/*) ;; *) echo 'Use the shared benchmark output directory' >&2; exit 2 ;; esac
 mkdir -p "$run_dir"
 if [[ -e "$run_dir/recipe.json" ]]; then echo 'Refusing to overwrite an earlier run' >&2; exit 2; fi
-if [[ "$workload" == natural ]]; then
+if [[ "$workload" == agentic ]]; then
+    client_dir=${4:?Supply the prepared shared client directory}
+    sa_client_source=${5:?Supply the pinned native SA client checkout}
+    case "$client_dir" in /share_nfs/ajith/benchmarks/*) ;; *) echo 'Use the shared client directory' >&2; exit 2 ;; esac
+    test -f "$client_dir/recipe.json"
+    test -d "$sa_client_source/infx/bench/agentic"
+    cp "$client_dir/recipe.json" "$run_dir/recipe.json"
+elif [[ "$workload" == natural ]]; then
     if [[ -e "$run_dir/base-recipe.json" ]]; then echo 'Refusing to overwrite an earlier natural run' >&2; exit 2; fi
     cp "$script_dir/baseline.json" "$run_dir/base-recipe.json"
 else
@@ -23,22 +30,30 @@ mkdir -p "$run_dir/work/home" "$run_dir/work/cache" "$run_dir/work/tmp"
 image=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$script_dir/baseline.json")
 container="kimi-fixed-$(basename "$run_dir")"
 if [[ "$workload" == natural ]]; then container="kimi-natural-$(basename "$run_dir")"; fi
+if [[ "$workload" == agentic ]]; then container="kimi-agentic-$(basename "$run_dir")"; fi
 printf '%s\n' "$container" > "$run_dir/container-name.txt"
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 run_uid=$(id -u)
 run_gid=$(id -g)
+ownership_mounts=()
+ownership_paths=(/logs)
+if [[ "$workload" == agentic ]]; then
+    ownership_mounts+=(--mount "type=bind,src=$client_dir,dst=/agentic-client")
+    ownership_paths+=(/agentic-client/cache /agentic-client/tmp)
+fi
 cleanup() {
     rc=$?
     trap - EXIT INT TERM
-    if [[ "$workload" == natural ]]; then
+    if [[ "$workload" != fixed ]]; then
         timeout 50s docker stop --time 45 "$container" >/dev/null 2>&1 || true
         timeout 10s docker rm -f "$container" "$container-install" >/dev/null 2>&1 || true
         timeout 30s docker run --rm --name "$container-ownership" --network none \
             --mount "type=bind,src=$run_dir,dst=/logs" \
-            --entrypoint chown "$image" -R "$run_uid:$run_gid" /logs || rc=1
+            "${ownership_mounts[@]}" --entrypoint chown "$image" \
+            -R "$run_uid:$run_gid" "${ownership_paths[@]}" || rc=1
         timeout 5s docker rm -f "$container-ownership" >/dev/null 2>&1 || true
         remaining=$(timeout 10s docker ps --all --filter "name=^/${container}(-ownership|-install)?$" --format '{{.ID}}') || rc=1
-        if [[ -n "$remaining" ]]; then echo 'Owned natural-validation container cleanup incomplete' >&2; rc=1; fi
+        if [[ -n "$remaining" ]]; then echo 'Owned benchmark container cleanup incomplete' >&2; rc=1; fi
         exit "$rc"
     fi
     docker stop --time 120 "$container" >/dev/null 2>&1 || true
@@ -57,15 +72,29 @@ for directory in /share_nfs/models/moonshotai/Kimi-K3.1-Pro /share_nfs/models/In
     test -d "$directory" || { echo "Missing model directory: $directory" >&2; exit 1; }
 done
 overlays=()
+test_mode=1
+duration=600
+reference_config=/fixed-tools/baseline.json
 entry_command='set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; cd /inferencex; python3 /fixed-tools/check_client.py; exec bash benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh'
 if [[ "$workload" == natural ]]; then
     quality_dir=$(cd "$script_dir/../quality" && pwd)
     overlays+=(--mount "type=bind,src=$quality_dir,dst=/quality,readonly")
     entry_command='set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; exec /opt/runtime-venv/bin/python /quality/launch.py'
 fi
+if [[ "$workload" == agentic ]]; then
+    agentic_dir=$(cd "$script_dir/../agentic" && pwd)
+    overlays+=(--mount "type=bind,src=$agentic_dir,dst=/agentic-tools,readonly"
+        --mount "type=bind,src=$client_dir,dst=/agentic-work"
+        --mount "type=bind,src=$sa_client_source,dst=/sa-client,readonly"
+        --env SA_CLIENT_ENTRYPOINT=/agentic-tools/client.py)
+    test_mode=0
+    duration=3600
+    reference_config=/logs/recipe.json
+    entry_command='set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; cd /inferencex; exec bash benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh'
+fi
 if [[ "$optimization" != baseline ]]; then
     installer=(docker run --rm --network none)
-    if [[ "$workload" == natural ]]; then
+    if [[ "$workload" != fixed ]]; then
         installer=(timeout --signal=TERM --kill-after=10s 80s docker run --rm --name "$container-install" --network none)
     fi
     "${installer[@]}" \
@@ -121,10 +150,10 @@ docker run --rm --init --name "$container" --label "kimi.fixed.run=$(basename "$
     --env TP=8 --env DCP_SIZE=8 --env CONC=48 --env EP_SIZE=1 \
     --env KV_OFFLOADING=dram --env KV_OFFLOAD_BACKEND=vllm-native --env TOTAL_CPU_DRAM_GB=1799 \
     --env RESULT_DIR=/logs --env RESULT_FILENAME=baseline \
-    --env EVAL_ONLY=false --env DURATION=600 --env PROFILE=0 \
-    --env TEST=1 --env TEST_ISL=8192 --env TEST_OSL=1024 \
+    --env EVAL_ONLY=false --env "DURATION=$duration" --env PROFILE=0 \
+    --env "TEST=$test_mode" --env TEST_ISL=8192 --env TEST_OSL=1024 \
     --env TEST_RANGE_RATIO=1 --env TEST_NUM_PROMPTS=192 \
-    --env SA_REFERENCE_CONFIG=/fixed-tools/baseline.json --env SA_CONFIG_AUDIT=/fixed-tools/audit_server.py \
+    --env "SA_REFERENCE_CONFIG=$reference_config" --env SA_CONFIG_AUDIT=/fixed-tools/audit_server.py \
     --entrypoint /bin/bash "$image" -c \
     "$entry_command"
 if [[ "$workload" == fixed ]]; then

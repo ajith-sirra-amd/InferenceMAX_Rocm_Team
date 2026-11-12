@@ -73,7 +73,13 @@ configuration requires `EVAL_ONLY=false`; quality evaluation needs natural verif
 instead of AgentX replay. Supply `TEST_ISL`, `TEST_OSL`, `TEST_RANGE_RATIO`,
 `TEST_NUM_PROMPTS` and `RESULT_FILENAME` explicitly. Ratio 1 requests fixed
 lengths; the native helper performs `2 * CONC` warmups and saves detailed response
-metrics and its command. `TEST=0` preserves replay. Both use the same server.
+metrics and its command. `TEST=0` requires `SA_CLIENT_ENTRYPOINT`, checks the
+prepared client before server startup, then hands replay to that entry point
+after readiness. The team caller uses the measured SA native AgentX client at
+`903a3023682c6b27683839309cbd4b4d9153afcb`, with the pinned runtime and dataset
+prepared before GPU use. Both modes use the same server command.
 An optional `SA_CONFIG_AUDIT` checks the constructed command against
 `SA_REFERENCE_CONFIG`; it does not set environment variables or construct argv.
 See the team [fixed-length guide](../../../../../benchmarks/fixed_length/README.md).
+For the full baseline-then-combined comparison, see the team
+[agentic guide](../../../../../benchmarks/agentic/README.md).

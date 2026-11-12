@@ -18,7 +18,8 @@ fi
 if [[ "${TEST-}" == 1 ]]; then
     check_env_vars TEST_ISL TEST_OSL TEST_RANGE_RATIO TEST_NUM_PROMPTS RESULT_FILENAME
 else
-    check_env_vars DURATION
+    check_env_vars DURATION SA_CLIENT_ENTRYPOINT
+    python3 "$SA_CLIENT_ENTRYPOINT" --check
 fi
 for model_directory in "$MODEL_PATH" "$DRAFT_MODEL_PATH"; do
     if [[ ! -d "$model_directory" ]]; then
@@ -28,11 +29,6 @@ for model_directory in "$MODEL_PATH" "$DRAFT_MODEL_PATH"; do
 done
 wait_for_amd_gpu_clean
 rocm-smi || true
-if [[ "${TEST-}" != 1 ]]; then
-    resolve_trace_source
-    install_agentic_deps
-fi
-
 export VLLM_ROCM_USE_AITER=1
 export VLLM_ROCM_USE_AITER_MOE_SITUV2=1
 export SAFETENSORS_FAST_GPU=1
@@ -127,6 +123,5 @@ if [[ "${TEST-}" == 1 ]]; then
         --bench-serving-dir "$INFERENCEX_REPO_ROOT" \
         --use-chat-template --trust-remote-code
 else
-    build_replay_cmd "$RESULT_DIR"
-    run_agentic_replay_and_write_outputs "$RESULT_DIR"
+    python3 "$SA_CLIENT_ENTRYPOINT"
 fi
