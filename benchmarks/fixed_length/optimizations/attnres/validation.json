@@ -1,0 +1,68 @@
+{
+  "status": "pass",
+  "method_changes": [
+    "_apply_attn_res",
+    "KimiLinearForCausalLM.process_weights_after_loading"
+  ],
+  "admitted_shape_block_pairs": 4,
+  "rejected_gate_cases": 25,
+  "unsupported_preparation_cases": 4,
+  "prepared_buffers": 38,
+  "eligible_layers": [
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92
+  ],
+  "cache_bytes_per_rank": 1089536,
+  "checks": [
+    "actual-source AST execution with CPU tensor/module doubles",
+    "FP32 product values and same-buffer in-place rebuild",
+    "nonpersistent registration request",
+    "original caller operands and FP8 exclusion",
+    "native MLA preparation retained before products",
+    "actual model loader quant/deferred-attention/model-hook order",
+    "default-off preparation bypass",
+    "capture-time preparation rejected",
+    "38-buffer ceiling",
+    "all other source methods unchanged"
+  ],
+  "limits": [
+    "CPU doubles do not validate torch runtime storage/registration semantics or actual checkpoint weights",
+    "GPU product kernel remains identical to verified synthetic GPU probe",
+    "full-model startup, graph replay and measured activation remain unvalidated"
+  ],
+  "installer": {
+    "roundtrip": "pass, both candidate hashes exact",
+    "original_sources_unchanged": true,
+    "rejections": [
+      {
+        "rejected": "existing directory",
+        "error": "Output already exists; use a fresh run directory"
+      },
+      {
+        "rejected": "inside original tree",
+        "error": "Output must be separate from original source"
+      },
+      {
+        "rejected": "wrong baseline source hash",
+        "error": "Baseline source hash mismatch: vllm/models/kimi_k3/amd/linear.py"
+      }
+    ]
+  }
+}

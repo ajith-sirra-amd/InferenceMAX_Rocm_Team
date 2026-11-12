@@ -10,6 +10,7 @@ on:
                 type: choice
                 options:
                 - "Fixed-length Kimi baseline"
+                - "Fixed-length Kimi AttnRes"
                 # - "test-config  --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-atom-agentic-lmcache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
@@ -75,8 +76,8 @@ on:
 
 jobs:
     fixed-length:
-        if: ${{ inputs.generate-cli-command == 'Fixed-length Kimi baseline' }}
-        name: Kimi C48 fixed-length baseline 8192-1024
+        if: ${{ startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') }}
+        name: Kimi C48 fixed-length 8192-1024
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 100
         permissions:
@@ -87,18 +88,19 @@ jobs:
         env:
             FIXED_OUTPUT: /share_nfs/ajith/benchmarks/fixed-${{ github.run_id }}-${{ github.run_attempt }}
             PYTHONDONTWRITEBYTECODE: '1'
+            FIXED_OPTIMIZATION: ${{ inputs.generate-cli-command == 'Fixed-length Kimi AttnRes' && 'attnres' || 'baseline' }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
               with:
                   ref: ${{ github.sha }}
                   path: fixed-${{ github.run_id }}
                   persist-credentials: false
-            - name: Baseline - pinned SA server and fixed 8192-1024 client
+            - name: Pinned SA server and fixed 8192-1024 client
               working-directory: fixed-${{ github.run_id }}
               run: |
                   mkdir -p "$FIXED_OUTPUT"
                   set -o pipefail
-                  bash benchmarks/fixed_length/kimi_k31_c48.sh "$FIXED_OUTPUT" 2>&1 | tee "$FIXED_OUTPUT/workflow.log"
+                  bash benchmarks/fixed_length/kimi_k31_c48.sh "$FIXED_OUTPUT" "$FIXED_OPTIMIZATION" 2>&1 | tee "$FIXED_OUTPUT/workflow.log"
             - name: Stop only this benchmark container
               if: always()
               run: |
@@ -116,7 +118,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     get-jobs:
-        if: ${{ inputs.generate-cli-command != 'Fixed-length Kimi baseline' }}
+        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}

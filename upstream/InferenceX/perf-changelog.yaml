@@ -8605,3 +8605,9 @@
   description:
     - 'Replace historical Kimi C48 script defaults with the explicit resolved configuration from SA run 42638222682/job 129550719685, including device IDs 0-7. Fixed-length and AgentX modes share the same server command. Retain reference audit without configuration injection.'
     - '使用 SA run 42638222682/job 129550719685 的实际配置替换 Kimi C48 历史默认值，显式指定设备 0-7。定长与 AgentX 模式共用服务命令；保留只读配置校验。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Add an isolated fixed-length AttnRes candidate: precompute immutable BF16 score-weight products before graphs, restricted to qualified residual/output-normalized rows280/336 and blocks4/8. Preserve the SA server/client settings and baseline image; measure E2E separately.'
+    - '新增独立的定长 AttnRes 候选实验：在图捕获前预计算不可变 BF16 权重乘积，仅用于已验证的 rows280/336 和 blocks4/8 残差与输出归一化路径。保留 SA 服务端、客户端配置及基线镜像，单独测量端到端性能。'

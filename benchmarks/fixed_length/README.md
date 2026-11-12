@@ -1,4 +1,4 @@
-# Kimi-K3.1-Pro fixed-length baseline
+# Kimi-K3.1-Pro fixed-length comparisons
 
 This uses the existing
 [`kimik3_fp4_mi355x_mtp.sh`](../../upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh).
@@ -9,7 +9,7 @@ Run on the MI355X host:
 
 ```bash
 bash benchmarks/fixed_length/kimi_k31_c48.sh \
-  /share_nfs/ajith/benchmarks/fixed-$(date -u +%Y%m%dT%H%M%SZ)
+  /share_nfs/ajith/benchmarks/fixed-$(date -u +%Y%m%dT%H%M%SZ) baseline
 ```
 
 The caller supplies **8192 input / 1024 output tokens, C48, 192 measured
@@ -23,8 +23,11 @@ the server command from SA run 42638222682, including device IDs 0–7.
 compares the actual command/environment against that reference and records source
 hashes before launch. It does not configure the server. Older tuning defaults
 have been removed; this script pins the C48 throughput point.
-No optimization patch, profiler, CPU affinity change or package installation is
-applied. The SA synthetic acceptance length 3.57 is retained for this performance
+The `baseline` mode applies no optimization patch, profiler, CPU affinity change
+or package installation. The `attnres` mode prepares two verified source overlays
+in the new run directory and mounts them read-only for that server process.
+It enables cached score weights for the qualified BF16 AttnRes calls;
+`optimization.json` records exact originals, patch and candidate hashes. The SA synthetic acceptance length 3.57 is retained for this performance
 comparison. This test does not establish model quality or natural draft acceptance.
 
 Outputs stay in the supplied directory: `recipe.json`, `effective-server.json`,
@@ -34,7 +37,7 @@ Outputs stay in the supplied directory: `recipe.json`, `effective-server.json`,
 compact results and logs; the original data remain on the shared filesystem.
 
 Use the **e2e Test** workflow on **IPAT-Script**, choose **Fixed-length Kimi
-baseline**, and give the run a descriptive name. It targets the existing
+baseline** or **Fixed-length Kimi AttnRes**, and give the run a descriptive name. It targets the existing
 `cluster:mi355x-amds-2` runner without modifying allocation or reservation.
 
 Collect and validate this unchanged baseline before applying candidates. Compare

@@ -1,0 +1,48 @@
+{
+  "name": "attnres-cached-score-weights",
+  "status": "isolated candidate ready for full-model qualification; CPU source contracts and installer checks passed",
+  "image": "vllm/vllm-openai-rocm:kimi-k31-d73dd529@sha256:5b54f223a150a9baad41a5d511e159e7cbf43e308c6cd44ad3f6a2463c245b3c",
+  "enable_environment": {
+    "KIMI_ATTNRES_PRECOMPUTE_WEIGHTS": "1"
+  },
+  "patch_sha256": "98e447bd5c6ecdbf9242730d6167d20b9271d0cf19554b20e666addbe3ebd7dc",
+  "files": [
+    {
+      "path": "vllm/models/kimi_k3/amd/linear.py",
+      "baseline_sha256": "633d2451e82b6cb8d855245932bfb055e3e79558cb979784ede4b0aa9e894914",
+      "candidate_sha256": "ee59049cdd1ebceb788e97f0ec6cf1c8d1a80a3955669d825414602285652a83"
+    },
+    {
+      "path": "vllm/models/kimi_k3/amd/ops/attn_res.py",
+      "baseline_sha256": "b90ad19c15e8d2732634909a5f0ae80ac7d440eaa340d3bc92d89c8576df4e9a",
+      "candidate_sha256": "99d21f118d6a53b00e12596529955f68bd476e792124704b078b7fba5263fd9e"
+    }
+  ],
+  "max_buffers_per_rank": 38,
+  "max_bytes_per_rank": 1089536,
+  "gate": {
+    "rows": [
+      280,
+      336
+    ],
+    "hidden": 7168,
+    "historical_blocks": [
+      4,
+      8
+    ],
+    "input_output": "BF16",
+    "residual": true,
+    "output_norm": true,
+    "block_write": false,
+    "fused_fp8": false,
+    "epsilon": 1e-05
+  },
+  "activation": {
+    "prepared": "ATTNRES_PRODUCT_PREPARED buffers=38",
+    "selected": "ATTNRES_PRODUCT_SELECTED rows=280|336 blocks=4|8",
+    "limits": "First selected submission can be graph capture/warmup; not measured replay attribution"
+  },
+  "lifetime": "Flag read once at module import. Immutable model weights during serving. Rebuild same-device/same-shape product through model post-load hook before graph capture; no migration/offload/sleep qualification.",
+  "cpu_validation": "validation.json",
+  "cpu_test_source_sha256": "d4a453d619429815a24a94b9a6bdc511dc1bb8ca6ffea8d4f3444909253557f9"
+}

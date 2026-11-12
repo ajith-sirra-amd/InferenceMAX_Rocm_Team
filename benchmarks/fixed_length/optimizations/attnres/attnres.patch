@@ -1,0 +1,232 @@
+--- a/vllm/models/kimi_k3/amd/linear.py
++++ b/vllm/models/kimi_k3/amd/linear.py
+@@ -2,6 +2,7 @@
+ # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+ 
+ from collections.abc import Iterable
++import os
+ from typing import Any, cast
+ 
+ import torch
+@@ -34,6 +35,7 @@
+     MergedColumnParallelLinear,
+     ReplicatedLinear,
+     RowParallelLinear,
++    UnquantizedLinearMethod,
+ )
+ from vllm.model_executor.layers.logits_processor import LogitsProcessor
+ from vllm.model_executor.layers.mamba.gdn.kimi_gdn_linear_attn import (
+@@ -87,6 +89,8 @@
+ from vllm.utils.math_utils import cdiv
+ 
+ logger = init_logger(__name__)
++_ATTNRES_PRODUCT_ENABLED = os.environ.get("KIMI_ATTNRES_PRECOMPUTE_WEIGHTS", "0") == "1"
++_ATTNRES_PRODUCT_SEEN: set[tuple[int, int]] = set()
+ 
+ 
+ # DSA indexer weight rename mapping. Specific rules must come before the
+@@ -242,6 +246,96 @@
+             hidden_states = self.norm(hidden_states)
+         hidden_states, _ = self.up_proj(hidden_states)
+         return hidden_states
++
++
++def _prepare_attn_res_weight_product(norm: RMSNorm, proj: ReplicatedLinear) -> bool:
++    """Prepare immutable score weights after normal model weight loading."""
++    name = "_attnres_input_qk_weight"
++    if name not in proj._buffers:
++        proj.register_buffer(name, None, persistent=False)
++    if not isinstance(proj.quant_method, UnquantizedLinearMethod):
++        setattr(proj, name, None)
++        return False
++    norm_weight, qk_weight = norm.weight, proj.weight
++    if (
++        envs.VLLM_BATCH_INVARIANT
++        or norm_weight.shape != (7168,)
++        or qk_weight.shape != (1, 7168)
++        or norm_weight.dtype != torch.bfloat16
++        or qk_weight.dtype != torch.bfloat16
++        or not norm_weight.is_cuda
++        or norm_weight.device != qk_weight.device
++        or norm_weight.stride(-1) != 1
++        or qk_weight.stride(-1) != 1
++    ):
++        setattr(proj, name, None)
++        return False
++    with torch.no_grad():
++        product = (norm_weight.float() * qk_weight.squeeze(0).float()).contiguous()
++        previous = getattr(proj, name)
++        if (
++            previous is not None
++            and previous.device == product.device
++            and previous.dtype == product.dtype
++            and previous.shape == product.shape
++            and previous.is_contiguous()
++        ):
++            # Keep the buffer address stable when the post-load hook rebuilds it.
++            previous.copy_(product)
++        else:
++            setattr(proj, name, product)
++    return True
++
++
++def _attn_res_product_for_call(
++    prefix: torch.Tensor,
++    blocks: torch.Tensor,
++    proj: ReplicatedLinear,
++    norm: RMSNorm,
++    num_blocks: int,
++    delta: torch.Tensor | None,
++    output_norm: RMSNorm | None,
++    block_write_idx: int,
++    fuse_quant: bool,
++) -> torch.Tensor | None:
++    """Admit only the residual BF16 shapes exercised by the GPU confirmation."""
++    product = getattr(proj, "_attnres_input_qk_weight", None)
++    if (
++        product is None
++        or envs.VLLM_BATCH_INVARIANT
++        or fuse_quant
++        or delta is None
++        or output_norm is None
++        or block_write_idx >= 0
++        or num_blocks not in (4, 8)
++        or prefix.ndim != 2
++        or prefix.shape[0] not in (280, 336)
++        or prefix.shape[1] != 7168
++        or prefix.dtype != torch.bfloat16
++        or delta.dtype != torch.bfloat16
++        or blocks.dtype != torch.bfloat16
++        or norm.weight.dtype != torch.bfloat16
++        or proj.weight.dtype != torch.bfloat16
++        or output_norm.weight.dtype != torch.bfloat16
++        or norm.variance_epsilon != 1e-5
++        or output_norm.variance_epsilon != 1e-5
++        or product.dtype != torch.float32
++        or product.shape != (7168,)
++        or product.device != prefix.device
++        or product.stride(0) != 1
++    ):
++        return None
++    key = (prefix.shape[0], num_blocks)
++    if key not in _ATTNRES_PRODUCT_SEEN:
++        _ATTNRES_PRODUCT_SEEN.add(key)
++        # This is first eligible Python submission, possibly during graph capture.
++        # It is not a count or timing of measured graph replays.
++        logger.info(
++            "ATTNRES_PRODUCT_SELECTED rows=%d blocks=%d dtype=bf16 "
++            "delta=1 output_norm=1 block_write=0 submission=%s", *key,
++            "capture" if torch.cuda.is_current_stream_capturing() else "eager",
++        )
++    return product
+ 
+ 
+ def _apply_attn_res(
+@@ -268,6 +362,10 @@
+         block_write_idx,
+         norm.variance_epsilon,
+         0.0 if output_norm is None else output_norm.variance_epsilon,
++        input_qk_weight=_attn_res_product_for_call(
++            prefix_sum, block_residual, proj, norm, num_valid_blocks,
++            delta, output_norm, block_write_idx, fuse_quant,
++        ),
+         quant_dtype=cast(torch.dtype, kFp8DynamicTokenSym.dtype)
+         if fuse_quant
+         else None,
+@@ -1354,6 +1452,32 @@
+         for module in self.modules():
+             if isinstance(module, KimiK3MultiHeadLatentAttentionWrapper):
+                 module.process_weights_after_loading()
++        if not _ATTNRES_PRODUCT_ENABLED:
++            return
++        if torch.cuda.is_current_stream_capturing():
++            raise RuntimeError("AttnRes weights must be prepared before graph capture")
++        eligible = [
++            module for module in self.modules()
++            if isinstance(module, KimiDecoderLayer)
++            and module.use_attn_residuals
++            and not module.is_block_write_layer
++            and module.prev_valid_blocks in (4, 8)
++        ]
++        if len(eligible) > 19:
++            raise RuntimeError("AttnRes candidate supports at most 38 cached products")
++        prepared = 0
++        _ATTNRES_PRODUCT_SEEN.clear()
++        for module in eligible:
++            prepared += _prepare_attn_res_weight_product(
++                module.self_attention_res_norm, module.self_attention_res_proj
++            )
++            prepared += _prepare_attn_res_weight_product(
++                module.mlp_res_norm, module.mlp_res_proj
++            )
++        logger.info(
++            "ATTNRES_PRODUCT_PREPARED buffers=%d rows=280,336 blocks=4,8 "
++            "dtype=bf16 delta=1 output_norm=1 block_write=0", prepared
++        )
+ 
+     def compute_logits(
+         self,
+--- a/vllm/models/kimi_k3/amd/ops/attn_res.py
++++ b/vllm/models/kimi_k3/amd/ops/attn_res.py
+@@ -35,6 +35,7 @@
+     eps: tl.constexpr,
+     output_norm_eps: tl.constexpr,
+     HAS_DELTA: tl.constexpr,
++    PRECOMPUTED_INPUT_QK: tl.constexpr,
+     WRITE_BLOCK: tl.constexpr,
+     APPLY_OUTPUT_NORM: tl.constexpr,
+     QUANT_MAX: tl.constexpr,
+@@ -80,11 +81,16 @@
+         # Reloading avoids keeping the full prefix vector live across the loop.
+         if HAS_DELTA:
+             tl.debug_barrier()
+-        input_qk_weight = tl.load(
+-            norm_weight_ptr + d_offsets, mask=d_mask, other=0.0
+-        ).to(tl.float32) * tl.load(
+-            qk_weight_ptr + d_offsets, mask=d_mask, other=0.0
+-        ).to(tl.float32)
++        if PRECOMPUTED_INPUT_QK:
++            input_qk_weight = tl.load(
++                norm_weight_ptr + d_offsets, mask=d_mask, other=0.0
++            ).to(tl.float32)
++        else:
++            input_qk_weight = tl.load(
++                norm_weight_ptr + d_offsets, mask=d_mask, other=0.0
++            ).to(tl.float32) * tl.load(
++                qk_weight_ptr + d_offsets, mask=d_mask, other=0.0
++            ).to(tl.float32)
+         max_logit = tl.full((), -float("inf"), tl.float32)
+         denominator = tl.zeros((), tl.float32)
+         mixed = tl.zeros((BLOCK_D,), tl.float32)
+@@ -160,8 +166,14 @@
+     output_norm_eps: float,
+     *,
+     quant_dtype: torch.dtype | None = None,
++    input_qk_weight: torch.Tensor | None = None,
+ ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+     num_tokens, hidden_size = prefix.shape
++    if input_qk_weight is not None:
++        assert input_qk_weight.shape == (hidden_size,)
++        assert input_qk_weight.dtype == torch.float32
++        assert input_qk_weight.device == prefix.device
++        assert input_qk_weight.stride(0) == 1
+     assert prefix.stride(-1) == 1
+     assert delta is None or delta.stride(-1) == 1
+     assert blocks.stride(-1) == 1
+@@ -190,7 +202,7 @@
+         prefix,
+         delta,
+         blocks,
+-        norm_weight,
++        norm_weight if input_qk_weight is None else input_qk_weight,
+         qk_weight,
+         output_norm_weight,
+         output,
+@@ -206,6 +218,7 @@
+         eps,
+         output_norm_eps,
+         HAS_DELTA=delta is not None,
++        PRECOMPUTED_INPUT_QK=input_qk_weight is not None,
+         WRITE_BLOCK=block_write_idx >= 0,
+         APPLY_OUTPUT_NORM=output_norm_weight is not None,
+         QUANT_MAX=0.0 if quant_dtype is None else get_fp8_min_max()[1],

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Direct fixed-length baseline: pinned SA server, 8192 input / 1024 output, C48.
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 upstream_dir=$(cd "$script_dir/../../upstream/InferenceX" && pwd)
-run_dir=${1:?Usage: bash kimi_k31_c48.sh /share_nfs/ajith/benchmarks/<new-run>}
+run_dir=${1:?Supply a fresh shared benchmark output directory}
+optimization=${2:?Supply baseline or attnres}
+case "$optimization" in baseline|attnres) ;; *) echo 'Unknown optimization' >&2; exit 2 ;; esac
 case "$run_dir" in /share_nfs/ajith/benchmarks/*) ;; *) echo 'Use the shared benchmark output directory' >&2; exit 2 ;; esac
 mkdir -p "$run_dir"
 if [[ -e "$run_dir/recipe.json" ]]; then echo 'Refusing to overwrite an earlier run' >&2; exit 2; fi
@@ -33,8 +34,24 @@ git -C "$script_dir" rev-parse HEAD > "$run_dir/code-sha.txt"
 for directory in /share_nfs/models/moonshotai/Kimi-K3.1-Pro /share_nfs/models/Inferact/Kimi-K3.1-Pro-DSpark-preview; do
     test -d "$directory" || { echo "Missing model directory: $directory" >&2; exit 1; }
 done
-echo "Starting unchanged SA server; output=$run_dir; port=$port"
+overlays=()
+if [[ "$optimization" == attnres ]]; then
+    docker run --rm --network none \
+        --mount "type=bind,src=$script_dir,dst=/fixed-tools,readonly" \
+        --mount "type=bind,src=$run_dir,dst=/logs" \
+        --env PYTHONDONTWRITEBYTECODE=1 \
+        --entrypoint /opt/runtime-venv/bin/python "$image" \
+        /fixed-tools/optimizations/attnres/install.py \
+        --source /opt/runtime-venv/lib/python3.12/site-packages --output /logs/work/overlay
+    cp "$run_dir/work/overlay/manifest.json" "$run_dir/optimization.json"
+    for source in vllm/models/kimi_k3/amd/linear.py vllm/models/kimi_k3/amd/ops/attn_res.py; do
+        overlays+=(--mount "type=bind,src=$run_dir/work/overlay/candidate/$source,dst=/opt/runtime-venv/lib/python3.12/site-packages/$source,readonly")
+    done
+    overlays+=(--env KIMI_ATTNRES_PRECOMPUTE_WEIGHTS=1)
+fi
+echo "Starting SA-configured server; optimization=$optimization; output=$run_dir; port=$port"
 docker run --rm --init --name "$container" --label "kimi.fixed.run=$(basename "$run_dir")" \
+    "${overlays[@]}" --env "KIMI_FIXED_OPTIMIZATION=$optimization" \
     --network host --ipc host --device /dev/kfd --device /dev/dri \
     --cap-add SYS_PTRACE --security-opt seccomp=unconfined \
     --ulimit memlock=-1 --ulimit stack=67108864 \
