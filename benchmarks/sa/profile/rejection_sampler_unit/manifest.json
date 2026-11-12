@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "image": "vllm/vllm-openai-rocm:kimi-k31-d73dd529@sha256:5b54f223a150a9baad41a5d511e159e7cbf43e308c6cd44ad3f6a2463c245b3c",
+  "source_files": {
+    "vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py": "9e6e99879942fc7994c12bb76b5a85b3a35debe927d02812067df3882fd31ffa",
+    "vllm/v1/worker/gpu/spec_decode/draft_logits.py": "9845509cbd6daea82e2d753fb61fe8c92c28e9f7dcb9c6e52ffb3d9eedd45a6d",
+    "vllm/v1/worker/gpu/sample/gumbel.py": "6f8b74acc3cd19a6fa2288b780168df4972e010866d19dbdcfb2d0abae67d6a7",
+    "vllm/v1/worker/gpu/sample/watermark.py": "cfc805592773c49555ebcc9448dbb90e233c7582f325083e88f3a046053f519e",
+    "vllm/v1/worker/gpu/sample/batch_shard.py": "fe9462a19273c8c200e262d7a97242b14e8efe0b38817da4788b9dde0b8d0b18",
+    "vllm/v1/spec_decode/fly.py": "0df931c5c34580043e4a066ceeba3d09da216ea77d6415679e6c94dd50349ad0",
+    "vllm/triton_utils/__init__.py": "f6e03cec7d37ba3370e49771d1230999c584e2a3e4669c0f10d52b07a861b75a",
+    "vllm/triton_utils/importing.py": "3c36659b66aaafb06daec6515ed511efb24a4cb76060eaba2ee82b51f24b0836"
+  },
+  "num_speculative_steps": 6,
+  "vocab_size": 163840,
+  "concurrencies": [
+    1,
+    48
+  ],
+  "dtypes": [
+    "bf16",
+    "fp32"
+  ],
+  "temperatures": [
+    0.0,
+    1.0
+  ],
+  "modes": [
+    "standard",
+    "block"
+  ],
+  "finite_logit_low": -80.0,
+  "finite_logit_high": 80.0,
+  "worker_timeout_seconds": 150,
+  "outer_timeout_seconds": 180,
+  "limits": [
+    "Standalone native rejection_sample, not a model or quality benchmark.",
+    "Replicated DraftLogitsCache with valid identity request mapping; TP-sharded cache ownership is not covered.",
+    "Target logits are already temperature-scaled as required by native API; temperatures0/1 need no nontrivial scaling.",
+    "All graph cases mutate existing target/draft buffers outside capture; output suffix beyond num_sampled is unspecified and ignored.",
+    "NaN draft logits are invalid inputs and cannot pass correctness qualification."
+  ]
+}

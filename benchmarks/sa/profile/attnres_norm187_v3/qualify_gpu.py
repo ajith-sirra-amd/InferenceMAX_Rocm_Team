@@ -350,6 +350,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--source-root",type=Path,required=True)
     parser.add_argument("--output",type=Path,required=True)
+    parser.add_argument("--cache-root",type=Path,help="Regenerable execution caches; defaults to /logs/work/attnres-norm187 for runner outputs")
     parser.add_argument("--execute",action="store_true")
     parser.add_argument("--worker",action="store_true",help=argparse.SUPPRESS)
     parser.add_argument("--device",type=int,default=0)
@@ -372,8 +373,11 @@ def main():
         raise SystemExit(0 if result["status"]=="passed" else 1)
     validate(args.source_root)
     env=dict(os.environ)
+    logs_root=Path("/logs").resolve()
+    cache_root=(args.cache_root or (logs_root/"work"/"attnres-norm187"
+        if args.output.is_relative_to(logs_root) else args.output/"cache")).resolve()
     for key,subdir in (("TRITON_CACHE_DIR","triton"),("XDG_CACHE_HOME","xdg"),("TMPDIR","tmp")):
-        path=args.output/"cache"/subdir; path.mkdir(parents=True,exist_ok=True); env[key]=str(path)
+        path=cache_root/subdir; path.mkdir(parents=True,exist_ok=True); env[key]=str(path)
     argv=[sys.executable,"-B",str(Path(__file__).resolve()),"--worker","--source-root",str(args.source_root),"--output",str(args.output),"--device",str(args.device),"--pressure-mib",str(args.pressure_mib),"--patterns",*args.patterns]
     with (args.output/"worker.log").open("w") as log:
         proc=subprocess.Popen(argv,stdout=log,stderr=subprocess.STDOUT,env=env,start_new_session=True)
