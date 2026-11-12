@@ -3,6 +3,7 @@
 
 Default: H7168, rows280/336, blocks4/8. For the wider matrix use
 --rows 252,280,336,1024 --blocks 1,4,8. Result/progress survives case failures.
+Use --bf16-residual-only for a bounded row-coverage check at blocks4/8.
 Timings are unprofiled graph event intervals, not request E2E measurements.
 """
 from __future__ import annotations
@@ -172,7 +173,7 @@ def load_module(path, name):
     return module
 
 
-def case_plan(rows, blocks):
+def case_plan(rows, blocks, bf16_residual_only=False):
     cases = []
     def add(row, count, mode, quant, delta=True, norm=True, write=-1):
         cases.append(dict(id=f"r{row}-b{count}-{mode}-{'fp8' if quant else 'bf16'}",
@@ -180,16 +181,22 @@ def case_plan(rows, blocks):
                           delta=delta, output_norm=norm, write_index=write))
     for row in rows:
         for count in blocks:
+            if bf16_residual_only:
+                add(row, count, "residual", False)
+                continue
             for quant in (False, True):
                 add(row, count, "residual", quant)
                 if count < 8:
                     add(row, count, "block-write", quant, write=count)
+        if bf16_residual_only:
+            continue
         # Extra semantics use one nontrivial block count to limit cold JIT cost.
         add(row, blocks[0], "fresh-prefix", False, delta=False)
         add(row, blocks[-1], "final-mixture", False, norm=False)
-    # The actual first writer has no historical source and no delta.
-    add(rows[0], 0, "initial-writer", False, delta=False, write=0)
-    add(rows[0], 0, "initial-writer", True, delta=False, write=0)
+    if not bf16_residual_only:
+        # The actual first writer has no historical source and no delta.
+        add(rows[0], 0, "initial-writer", False, delta=False, write=0)
+        add(rows[0], 0, "initial-writer", True, delta=False, write=0)
     return cases
 
 
@@ -394,11 +401,20 @@ def choices_csv(text, allowed):
     return values
 
 
+def rows_csv(text):
+    values = [int(x) for x in text.split(",")]
+    if not values or len(values) != len(set(values)) or any(not 1 <= x <= 10240 for x in values):
+        raise argparse.ArgumentTypeError("Choose unique comma-separated row counts from 1 through 10240")
+    return values
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--rows", type=lambda s: choices_csv(s, {252, 280, 336, 1024}), default=[280, 336])
+    parser.add_argument("--rows", type=rows_csv, default=[280, 336])
     parser.add_argument("--blocks", type=lambda s: choices_csv(s, {1, 4, 8}), default=[4, 8])
+    parser.add_argument("--bf16-residual-only", action="store_true",
+                        help="Only BF16 residual + output norm, no block writes, with blocks4/8")
     parser.add_argument("--rounds", type=int, default=18)
     parser.add_argument("--max-seconds", type=int, default=480, help="Soft bound checked between cases; cold compilation can overrun one case")
     parser.add_argument("--source-file", type=Path, help="Equivalent frozen source for CPU source validation")
@@ -406,15 +422,18 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not 3 <= args.rounds <= 60 or not 30 <= args.max_seconds <= 540:
         parser.error("rounds must be 3..60 and max-seconds 30..540")
+    if args.bf16_residual_only and any(count not in (4, 8) for count in args.blocks):
+        parser.error("--bf16-residual-only supports only --blocks 4,8")
     started = time.monotonic()
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     sys.dont_write_bytecode = True
     # Preserve the transport's local tmpfs/compiler-cache configuration. In
     # particular, never redirect COMGR/Triton caches into NFS artifact storage.
-    plan = case_plan(args.rows, args.blocks)
+    plan = case_plan(args.rows, args.blocks, args.bf16_residual_only)
     result = dict(probe="attnres_product_hoist", status="running", synthetic_controlled_tensors=True,
                   seed=20261112, case_plan=plan, cases=[], rounds=args.rounds,
+                  bf16_residual_only=args.bf16_residual_only,
                   inherited_cache_paths={key: os.environ.get(key) for key in
                                          ("TMPDIR", "TRITON_CACHE_DIR", "XDG_CACHE_HOME")},
                   limits=["Isolated operator experiment; no captured model tensors or per-request E2E result",
