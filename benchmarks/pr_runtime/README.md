@@ -27,8 +27,11 @@ failed in the official baseline version-calculation stage: a depth-one checkout
 had no reachable release tag. Run `43469338489` and its uploaded evidence are
 preserved. Source fetching now includes full history and tags; an early check
 records the pinned commit, release tag target and Git description in
-`source-versions.json` before any dependency build. The official version gate
-is retained. A linked fresh attempt can reuse Docker's completed build cache.
+`source-versions.json` before any dependency build. Early recovery run
+`43491683215` demonstrated that the fork contains no tags, so release refs are
+now explicitly fetched from `vllm-project/vllm`, while HEAD stays at the frozen
+fork SHA. The official version gate is retained. A linked fresh attempt can
+reuse Docker's completed build cache.
 No correctness suite or server has been run with these additions.
 The local tests validate manifest/delta/JUnit behavior; Bash/YAML validation
 does not qualify Docker, compiler, GPU, graph or model behavior.

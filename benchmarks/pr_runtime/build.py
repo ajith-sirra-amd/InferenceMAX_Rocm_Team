@@ -41,7 +41,8 @@ def source_version(source, expected_sha):
     tag = description.rsplit("-", 2)[0]
     tag_sha = capture(["git", "rev-parse", tag + "^{}"], cwd=source)
     return dict(source_sha=sha, git_description=description,
-                release_tag=tag, release_tag_sha=tag_sha)
+                release_tag=tag, release_tag_sha=tag_sha,
+                release_repository="vllm-project/vllm")
 
 
 def build(pr, output):
@@ -63,7 +64,11 @@ def build(pr, output):
         source.mkdir(parents=True)
         run(["git", "init", str(source)])
         run(["git", "remote", "add", "origin", "https://github.com/ajith-sirra-amd/vllm.git"], cwd=source)
-        run(["git", "fetch", "--tags", "origin", sha], cwd=source)
+        run(["git", "fetch", "--no-tags", "origin", sha], cwd=source)
+        # GitHub forks need not carry upstream release tags. Fetch only official
+        # release refs; HEAD remains the explicit frozen fork commit.
+        run(["git", "fetch", "--no-tags", "https://github.com/vllm-project/vllm.git",
+             "refs/tags/v*:refs/tags/v*"], cwd=source)
         run(["git", "checkout", "--detach", sha], cwd=source)
         if capture(["git", "rev-parse", "HEAD"], cwd=source) != sha:
             raise ValueError("Fetched source revision mismatch")
