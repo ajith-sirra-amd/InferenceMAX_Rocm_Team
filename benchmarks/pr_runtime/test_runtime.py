@@ -4,12 +4,42 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
 
 from runtime import candidate_recipe, load_pair, verify_probe
 from check_junit import validate as validate_junit
+from build import source_version
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_release_version_requires_pinned_full_ancestry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            source.mkdir()
+            def git(*args, cwd=source):
+                return subprocess.check_output(["git", *args], cwd=cwd, text=True,
+                                               stderr=subprocess.DEVNULL).strip()
+            git("init")
+            git("config", "user.name", "Runtime test")
+            git("config", "user.email", "test@example.invalid")
+            git("commit", "--allow-empty", "-m", "release")
+            release = git("rev-parse", "HEAD")
+            git("tag", "v1.0.0")
+            git("commit", "--allow-empty", "-m", "candidate")
+            head = git("rev-parse", "HEAD")
+            result = source_version(source, head)
+            self.assertEqual(result["release_tag_sha"], release)
+            self.assertEqual(result["git_description"], "v1.0.0-1-g" + head)
+            with self.assertRaises(ValueError):
+                source_version(source, release)
+            shallow = Path(tmp) / "shallow"
+            git("clone", "--depth", "1", "--no-tags", source.as_uri(), str(shallow))
+            with self.assertRaises(ValueError):
+                source_version(shallow, head)
+            git("tag", "-d", "v1.0.0")
+            with self.assertRaises(subprocess.CalledProcessError):
+                source_version(source, head)
+
     def test_junit_requires_executed_new_cases(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "junit.xml"

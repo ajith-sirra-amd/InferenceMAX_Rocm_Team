@@ -22,7 +22,14 @@ upstream PR #67372 or #67373.
   environment flag, retaining all other SA settings. This prepared recipe is
   evidence for subsequent integration, not a launched server command.
 
-No build, correctness suite or server has been run with these additions.
+The first authorized DSpark build completed shared dependency images, then
+failed in the official baseline version-calculation stage: a depth-one checkout
+had no reachable release tag. Run `43469338489` and its uploaded evidence are
+preserved. Source fetching now includes full history and tags; an early check
+records the pinned commit, release tag target and Git description in
+`source-versions.json` before any dependency build. The official version gate
+is retained. A linked fresh attempt can reuse Docker's completed build cache.
+No correctness suite or server has been run with these additions.
 The local tests validate manifest/delta/JUnit behavior; Bash/YAML validation
 does not qualify Docker, compiler, GPU, graph or model behavior.
 

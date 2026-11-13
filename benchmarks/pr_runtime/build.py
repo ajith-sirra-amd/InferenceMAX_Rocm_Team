@@ -29,6 +29,21 @@ def dependency_inputs(source):
                     "rust", "Cargo.lock", "Cargo.toml"], cwd=source)
 
 
+def source_version(source, expected_sha):
+    """Require real release ancestry before the official version-calc stage."""
+    sha = capture(["git", "rev-parse", "HEAD"], cwd=source)
+    if sha != expected_sha:
+        raise ValueError("Fetched source revision mismatch")
+    if capture(["git", "rev-parse", "--is-shallow-repository"], cwd=source) != "false":
+        raise ValueError("Official version calculation requires full release ancestry")
+    description = capture(["git", "describe", "--tags", "--long", "--abbrev=40",
+                           "--match", "v[0-9]*"], cwd=source)
+    tag = description.rsplit("-", 2)[0]
+    tag_sha = capture(["git", "rev-parse", tag + "^{}"], cwd=source)
+    return dict(source_sha=sha, git_description=description,
+                release_tag=tag, release_tag_sha=tag_sha)
+
+
 def build(pr, output):
     if output.exists():
         raise ValueError("Use a fresh build output directory")
@@ -42,17 +57,20 @@ def build(pr, output):
     (output / "build-host.txt").write_text(socket.gethostname() + "\n")
     (output / "team-sha.txt").write_text(capture(["git", "rev-parse", "HEAD"], cwd=script) + "\n")
     sources = {}
+    versions = {}
     for arm, sha in zip(("baseline", "candidate"), PAIRS[pr]):
         source = output / "work" / arm / "source"
         source.mkdir(parents=True)
         run(["git", "init", str(source)])
         run(["git", "remote", "add", "origin", "https://github.com/ajith-sirra-amd/vllm.git"], cwd=source)
-        run(["git", "fetch", "--depth", "1", "origin", sha], cwd=source)
-        run(["git", "checkout", "--detach", "FETCH_HEAD"], cwd=source)
+        run(["git", "fetch", "--tags", "origin", sha], cwd=source)
+        run(["git", "checkout", "--detach", sha], cwd=source)
         if capture(["git", "rev-parse", "HEAD"], cwd=source) != sha:
             raise ValueError("Fetched source revision mismatch")
         run(["git", "submodule", "update", "--init", "--recursive"], cwd=source)
+        versions[arm] = source_version(source, sha)
         sources[arm] = source
+    (output / "source-versions.json").write_text(json.dumps(versions, indent=2) + "\n")
     inputs = dependency_inputs(sources["baseline"])
     if inputs != dependency_inputs(sources["candidate"]):
         raise ValueError("Dependency build inputs differ; review a matched build recipe before retrying")
