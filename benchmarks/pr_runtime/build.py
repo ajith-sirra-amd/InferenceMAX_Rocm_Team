@@ -32,7 +32,10 @@ def dependency_inputs(source):
 def build(pr, output):
     if output.exists():
         raise ValueError("Use a fresh build output directory")
-    if not output.resolve().is_relative_to(Path("/share_nfs/ajith/benchmarks")):
+    data_root = Path(os.environ["IPAT_PR_DATA_ROOT"])
+    if data_root.parent.parent != Path("/share_nfs") or data_root.name != "benchmarks":
+        raise ValueError("Use an explicit user's shared benchmark root")
+    if not output.resolve().is_relative_to(data_root):
         raise ValueError("Use shared benchmark storage")
     output.mkdir(parents=True)
     script = Path(__file__).resolve().parent

@@ -109,7 +109,8 @@ jobs:
             cancel-in-progress: false
         env:
             IPAT_PR_NUMBER: ${{ inputs.generate-cli-command == 'PR67372 prepare runtimes' && '67372' || '67373' }}
-            IPAT_PR_OUTPUT: /share_nfs/ajith/benchmarks/pr-build-${{ github.run_id }}-${{ github.run_attempt }}
+            IPAT_PR_DATA_ROOT: /share_nfs/gguasti/benchmarks
+            IPAT_PR_OUTPUT: /share_nfs/gguasti/benchmarks/pr-build-${{ github.run_id }}-${{ github.run_attempt }}
             PYTHONDONTWRITEBYTECODE: '1'
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -151,7 +152,8 @@ jobs:
         env:
             IPAT_PR_NUMBER: ${{ inputs.generate-cli-command == 'PR67372 correctness' && '67372' || '67373' }}
             IPAT_PR_MANIFEST: ${{ inputs.pr-runtime-manifest }}
-            IPAT_PR_OUTPUT: /share_nfs/ajith/benchmarks/pr-correctness-${{ github.run_id }}-${{ github.run_attempt }}
+            IPAT_PR_DATA_ROOT: /share_nfs/gguasti/benchmarks
+            IPAT_PR_OUTPUT: /share_nfs/gguasti/benchmarks/pr-correctness-${{ github.run_id }}-${{ github.run_attempt }}
             PYTHONDONTWRITEBYTECODE: '1'
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

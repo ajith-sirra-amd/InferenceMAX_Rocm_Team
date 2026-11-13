@@ -39,6 +39,11 @@ and fresh validation, not an automatic substitution.
 
 ## Build and runtime contract
 
+The new jobs explicitly use `IPAT_PR_DATA_ROOT=/share_nfs/gguasti/benchmarks`.
+The first run `43468920330` stopped before building because the Giovanni runner
+cannot write Ajith's benchmark directory; its logs are preserved. Existing
+Ajith data and directory permissions remain unchanged.
+
 The runner must have Docker buildx using the `docker` driver, sufficient host
 RAM/disk, network access for the upstream build and access to the shared output
 directory. Builds may take hours. Build containers are not given GPU devices.

@@ -2,10 +2,10 @@
 set -eo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$script_dir/../../upstream/InferenceX/benchmarks/benchmark_lib.sh" --validation-only
-check_env_vars IPAT_PR_NUMBER IPAT_PR_MANIFEST IPAT_PR_OUTPUT
+check_env_vars IPAT_PR_NUMBER IPAT_PR_MANIFEST IPAT_PR_OUTPUT IPAT_PR_DATA_ROOT
 case "$IPAT_PR_NUMBER" in 67372|67373) ;; *) echo 'Unsupported PR' >&2; exit 2 ;; esac
-case "$IPAT_PR_OUTPUT" in /share_nfs/ajith/benchmarks/pr-*) ;; *) echo 'Use a fresh shared PR output directory' >&2; exit 2 ;; esac
-case "$IPAT_PR_MANIFEST" in /share_nfs/ajith/*) ;; *) echo 'Use a prepared manifest in shared storage' >&2; exit 2 ;; esac
+case "$IPAT_PR_OUTPUT" in "$IPAT_PR_DATA_ROOT"/pr-*) ;; *) echo 'Use a fresh shared PR output directory' >&2; exit 2 ;; esac
+case "$IPAT_PR_MANIFEST" in /share_nfs/*) ;; *) echo 'Use a prepared manifest in shared storage' >&2; exit 2 ;; esac
 test -f "$IPAT_PR_MANIFEST"
 mkdir -p "$IPAT_PR_OUTPUT"
 for arm in baseline candidate; do

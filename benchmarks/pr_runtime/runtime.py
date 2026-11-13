@@ -7,6 +7,7 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -144,7 +145,9 @@ def verify_image(item, output):
 
 def probe_image(image, output):
     name = "kimi-pr-probe-" + hashlib.sha256(str(output.resolve()).encode()).hexdigest()[:16]
-    base = Path("/share_nfs/ajith/benchmarks")
+    base = Path(os.environ["IPAT_PR_DATA_ROOT"])
+    if base.parent.parent != Path("/share_nfs") or base.name != "benchmarks":
+        raise ValueError("Use an explicit user's shared benchmark root")
     relative = output.resolve().relative_to(base)
     owner = str(base / relative.parts[0])
     try:
