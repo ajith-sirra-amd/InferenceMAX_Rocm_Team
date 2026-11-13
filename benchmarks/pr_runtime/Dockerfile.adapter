@@ -1,0 +1,13 @@
+# Adapter over the full official ROCm test build; no model-source overlay.
+ARG BUILT_IMAGE
+FROM ${BUILT_IMAGE}
+ARG SOURCE_SHA
+LABEL org.opencontainers.image.revision=${SOURCE_SHA}
+LABEL org.opencontainers.image.source=https://github.com/ajith-sirra-amd/vllm
+COPY source /opt/ipat/vllm
+COPY cli_entry.py /opt/runtime-venv/bin/vllm
+RUN python3 -m venv --system-site-packages /opt/runtime-venv \
+    && chmod 755 /opt/runtime-venv/bin/vllm
+ENV PATH=/opt/runtime-venv/bin:$PATH
+WORKDIR /vllm-workspace
+ENTRYPOINT ["/opt/runtime-venv/bin/vllm", "serve"]

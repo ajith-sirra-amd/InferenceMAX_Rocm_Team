@@ -9,6 +9,10 @@ on:
                 required: true
                 type: choice
                 options:
+                - "PR67372 correctness"
+                - "PR67373 correctness"
+                - "PR67372 prepare runtimes"
+                - "PR67373 prepare runtimes"
                 - "Natural verifier diagnostic Kimi baseline"
                 - "Natural verifier diagnostic GPU ownership"
                 - "Natural verifier diagnostic Wait for idle GPUs"
@@ -53,6 +57,11 @@ on:
                 required: false
                 type: string
                 default: ""
+            pr-runtime-manifest:
+                description: "Prepared digest-pinned PR pair manifest under /share_nfs/ajith; required for PR correctness"
+                required: false
+                type: string
+                default: ""
             ref:
                 description: "Ref (branch/sha) to checkout for generating configs"
                 required: false
@@ -64,6 +73,11 @@ on:
                 default: ""
     workflow_call:
         inputs:
+            pr-runtime-manifest:
+                description: "Prepared digest-pinned PR pair manifest"
+                required: false
+                type: string
+                default: ""
             generate-cli-command:
                 description: "Command passed to generate matrix script"
                 required: true
@@ -83,6 +97,89 @@ on:
                 default: ""
 
 jobs:
+    pr-runtime-build:
+        if: ${{ inputs.generate-cli-command == 'PR67372 prepare runtimes' || inputs.generate-cli-command == 'PR67373 prepare runtimes' }}
+        name: Prepare exact PR baseline and candidate ROCm runtimes
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 360
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            IPAT_PR_NUMBER: ${{ inputs.generate-cli-command == 'PR67372 prepare runtimes' && '67372' || '67373' }}
+            IPAT_PR_OUTPUT: /share_nfs/ajith/benchmarks/pr-build-${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: pr-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Build shared dependencies and full source runtimes without GPUs
+              working-directory: pr-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$IPAT_PR_OUTPUT"
+                  python3 -u benchmarks/pr_runtime/build.py --pr "$IPAT_PR_NUMBER" \
+                      --output "$IPAT_PR_OUTPUT/runtime" 2>&1 | tee "$IPAT_PR_OUTPUT/build.log"
+            - name: Stop only this build job's probes
+              if: always()
+              run: |
+                  docker ps -aq --filter "label=ipat.pr.output=$IPAT_PR_OUTPUT" | xargs -r docker rm -f
+            - name: Preserve build identities and failures
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-pr-runtime-build-${{ github.run_id }}
+                  path: |
+                      ${{ env.IPAT_PR_OUTPUT }}/**
+                      !${{ env.IPAT_PR_OUTPUT }}/**/work/**
+                  retention-days: 30
+                  if-no-files-found: error
+    pr-correctness:
+        if: ${{ inputs.generate-cli-command == 'PR67372 correctness' || inputs.generate-cli-command == 'PR67373 correctness' }}
+        name: Exact PR runtime verification and component correctness
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 100
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            IPAT_PR_NUMBER: ${{ inputs.generate-cli-command == 'PR67372 correctness' && '67372' || '67373' }}
+            IPAT_PR_MANIFEST: ${{ inputs.pr-runtime-manifest }}
+            IPAT_PR_OUTPUT: /share_nfs/ajith/benchmarks/pr-correctness-${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: pr-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Verify both prepared runtimes and execute candidate suite
+              working-directory: pr-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$IPAT_PR_OUTPUT"
+                  bash benchmarks/pr_runtime/correctness.sh 2>&1 | tee "$IPAT_PR_OUTPUT/workflow.log"
+            - name: Stop only this correctness job's containers
+              if: always()
+              run: |
+                  container="kimi-pr-correctness-pr-correctness-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+                  timeout 50s docker stop --time 45 "$container" || true
+                  timeout 10s docker rm -f "$container" "$container-ownership" || true
+                  docker ps -aq --filter "label=ipat.pr.output=$IPAT_PR_OUTPUT" | xargs -r docker rm -f
+            - name: Preserve runtime identities and correctness evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-pr-correctness-${{ github.run_id }}
+                  path: ${{ env.IPAT_PR_OUTPUT }}/**
+                  retention-days: 30
+                  if-no-files-found: error
     fixed-length:
         if: ${{ startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') }}
         name: Kimi C48 fixed-length 8192-1024
@@ -334,7 +431,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     get-jobs:
-        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural validation Kimi ') && !startsWith(inputs.generate-cli-command, 'Agentic Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural verifier diagnostic ') }}
+        if: ${{ !startsWith(inputs.generate-cli-command, 'Fixed-length Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural validation Kimi ') && !startsWith(inputs.generate-cli-command, 'Agentic Kimi ') && !startsWith(inputs.generate-cli-command, 'Natural verifier diagnostic ') && !startsWith(inputs.generate-cli-command, 'PR67372 ') && !startsWith(inputs.generate-cli-command, 'PR67373 ') }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}
