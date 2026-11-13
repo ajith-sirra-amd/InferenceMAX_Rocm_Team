@@ -44,6 +44,24 @@ a fresh adapter must bake the reference and complete both arm verifications.
 The local tests validate manifest/delta/JUnit behavior; Bash/YAML validation
 does not qualify Docker, compiler, GPU, graph or model behavior.
 
+## Verified DSpark runtime build
+
+Run [43495485285](https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/actions/runs/43495485285)
+passed both image verifications and artifact upload on `pit2-p03-g37`, using
+team commit `3f774e55f1b36cbec6b8990fbe9461e71f110f5e`. The downloaded manifest
+and verification records were checked again locally. Each arm verifies 3,415
+Python files, 2,485 test files, 47 pinned vendored Python files and seven native
+libraries. Installed package dependencies, vendor hashes and native hashes
+match. Source differences are the intended DSpark file and generated version;
+the test difference is `tests/models/test_dspark_mla.py`.
+
+The retained host-bound pair manifest is
+`/share_nfs/gguasti/benchmarks/pr-build-43495485285-1/runtime/pair.json`.
+This establishes runtime preparation only. No GPU component suite, native
+activation/graph/model validation or benchmark has run; PR67373's paired build
+remains unstarted. The previous failed attempts and diagnostic results are
+preserved separately.
+
 ## Frozen pairs
 
 | PR | Baseline | Candidate |
