@@ -11,8 +11,9 @@ upstream PR #67372 or #67373.
   Build dependency images once from the paired baseline and reuse them for
   both arms. Reject differing dependency inputs or installed package identities.
 - `PR67372 correctness` and `PR67373 correctness`: verify both prepared
-  runtime identities without exposing GPUs, wait for eight idle GPUs, then run
-  the candidate's complete component suite with a JUnit result. Missing/skipped
+  runtime identities without exposing GPUs, then run the candidate's complete
+  component suite with a JUnit result. DSpark's handoff suite runs on CPU with
+  no GPU devices; AttnRes waits for eight idle GPUs before its ROCm suite. Missing/skipped
   new cases and any failed cases fail the job.
 - Source verification compares the installed Python package and baked tests
   with the clean full Git checkout. Generated `_version.py` is recorded
@@ -151,7 +152,7 @@ adapted to these prepared runtimes. No exact-PR fixed/agentic serving choice is
 enabled by this change. Next work, after runtime compatibility is established:
 
 1. Qualify native worker-extension import/initialization at each exact revision;
-   generate actual rank 0–7 loaded-source, DSpark weight/admission and AttnRes
+   generate actual rank 0â€“7 loaded-source, DSpark weight/admission and AttnRes
    eligible-row evidence. A flag or historical marker is insufficient.
 2. Adapt the shared launcher/audit to the prepared recipe and dynamic installed
    source path; preserve all other SA settings and stop on unsupported arguments.

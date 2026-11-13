@@ -35,13 +35,22 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-# An idle Actions runner is insufficient; never stop a foreign workload.
-python3 "$script_dir/wait_idle.py" "$IPAT_PR_OUTPUT/gpu.availability.jsonl"
-rocm-smi > "$IPAT_PR_OUTPUT/gpu-host.txt"
 target=rocm
-if [[ "$IPAT_PR_NUMBER" == 67372 ]]; then target=cpu; fi
+devices=(--device /dev/kfd --device /dev/dri)
+if [[ "$IPAT_PR_NUMBER" == 67372 ]]; then
+    # CPU loading/reconstruction; real BF16 serving is a separate GPU stage.
+    target=cpu
+    devices=()
+    printf '%s\n' 'CPU component suite; no GPU devices exposed' > "$IPAT_PR_OUTPUT/execution-scope.txt"
+else
+    # An idle Actions runner is insufficient; never stop a foreign workload.
+    python3 "$script_dir/wait_idle.py" "$IPAT_PR_OUTPUT/gpu.availability.jsonl"
+    rocm-smi > "$IPAT_PR_OUTPUT/gpu-host.txt"
+    printf '%s\n' 'ROCm suite after eight-GPU idle gate' > "$IPAT_PR_OUTPUT/execution-scope.txt"
+fi
+
 docker run --rm --init --name "$container" --network none --ipc host \
-    --device /dev/kfd --device /dev/dri --security-opt seccomp=unconfined \
+    "${devices[@]}" --security-opt seccomp=unconfined \
     --ulimit memlock=-1 --ulimit stack=67108864 \
     --mount "type=bind,src=$IPAT_PR_OUTPUT,dst=/logs" \
     --tmpfs /tmp:rw,exec,size=16g --workdir /vllm-workspace \
