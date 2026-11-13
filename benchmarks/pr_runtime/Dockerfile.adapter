@@ -5,6 +5,7 @@ ARG SOURCE_SHA
 LABEL org.opencontainers.image.revision=${SOURCE_SHA}
 LABEL org.opencontainers.image.source=https://github.com/ajith-sirra-amd/vllm
 COPY source /opt/ipat/vllm
+COPY vendor/triton /opt/ipat/vendor/triton
 COPY cli_entry.py /opt/runtime-venv/bin/vllm
 RUN python3 -m venv --system-site-packages /opt/runtime-venv \
     && chmod 755 /opt/runtime-venv/bin/vllm

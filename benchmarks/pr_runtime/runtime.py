@@ -68,7 +68,7 @@ def candidate_recipe(recipe, pr, arm):
 
 
 PROBE = r'''
-import hashlib, importlib.util, json, pathlib, subprocess, sys
+import hashlib, importlib.util, json, pathlib, re, subprocess, sys
 root = pathlib.Path('/opt/ipat/vllm')
 sha = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
 dirty = subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'], text=True)
@@ -88,9 +88,32 @@ for name in tracked:
     hashes[name] = hashlib.sha256(target.read_bytes()).hexdigest()
 actual = {'vllm/' + str(p.relative_to(installed)).replace('\\', '/') for p in installed.rglob('*.py')}
 generated = actual - set(hashes)
-if generated - {'vllm/_version.py'}:
-    raise RuntimeError('Unexpected generated/overlaid Python source: ' + repr(sorted(generated)))
-for name in generated:
+vendor = pathlib.Path('/opt/ipat/vendor/triton')
+pins = re.findall(r'^ARG ROCM_TRITON_KERNELS_COMMIT=([0-9a-f]{40})$',
+                  (root / 'docker/Dockerfile.rocm').read_text(), re.M)
+if len(pins) != 1:
+    raise RuntimeError('Missing official vendored Triton pin')
+vendor_git = ['git', '-c', 'safe.directory=' + str(vendor), '-C', str(vendor)]
+vendor_sha = subprocess.check_output(vendor_git + ['rev-parse', 'HEAD'], text=True).strip()
+if vendor_sha != pins[0] or subprocess.check_output(vendor_git + ['status', '--porcelain'], text=True):
+    raise RuntimeError('Vendored reference is dirty or has the wrong revision')
+vendor_hashes = {}
+prefix = 'python/triton_kernels/triton_kernels/'
+for relative in subprocess.check_output(vendor_git + ['ls-files', prefix], text=True).splitlines():
+    if not relative.endswith('.py'):
+        continue
+    name = 'vllm/third_party/triton_kernels/' + relative.removeprefix(prefix)
+    target = installed.parent / name
+    if not target.is_file() or target.read_bytes() != (vendor / relative).read_bytes():
+        raise RuntimeError('Installed/vendor mismatch: ' + name)
+    vendor_hashes[name] = hashlib.sha256(target.read_bytes()).hexdigest()
+if not vendor_hashes:
+    raise RuntimeError('Missing vendored reference inventory')
+unexpected = generated - set(vendor_hashes) - {'vllm/_version.py'}
+if unexpected:
+    raise RuntimeError('Unexpected generated/overlaid Python source: ' + repr(sorted(unexpected)))
+hashes.update(vendor_hashes)
+for name in generated - set(vendor_hashes):
     hashes[name] = hashlib.sha256((installed.parent / name).read_bytes()).hexdigest()
 test_hashes = {}
 for name in subprocess.check_output(['git', '-C', str(root), 'ls-files', 'tests'], text=True).splitlines():
@@ -112,7 +135,8 @@ deps = sorted(line.strip() for line in freeze.splitlines() if line.strip()
     and line.strip() != '-e /opt/ipat/vllm')
 identity = hashlib.sha256(('\n'.join(deps) + '\n').encode()).hexdigest()
 print(json.dumps(dict(source_sha=sha, source_sha256=hashes, dependencies=deps,
-    test_sha256=test_hashes, native_sha256=native, generated_python=sorted(generated),
+    vendored_source_sha256=vendor_hashes, vendor_repository='ROCm/triton', vendor_sha=vendor_sha,
+    test_sha256=test_hashes, native_sha256=native, generated_python=sorted(generated - set(vendor_hashes)),
     dependencies_sha256=identity, python=sys.executable, source_root=str(installed.parent))))
 '''
 

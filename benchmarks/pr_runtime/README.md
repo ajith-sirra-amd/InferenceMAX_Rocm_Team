@@ -16,7 +16,10 @@ upstream PR #67372 or #67373.
   new cases and any failed cases fail the job.
 - Source verification compares the installed Python package and baked tests
   with the clean full Git checkout. Generated `_version.py` is recorded
-  separately; unexpected Python files fail. Native library hashes, package
+  separately. The official Dockerfile also vendors ROCm Triton kernels; these
+  files are compared byte-for-byte with a clean reference checkout at the exact
+  Dockerfile pin, retained in the adapter. Unexpected Python files fail.
+  Native library hashes, package
   versions, image identity and actual interpreter are retained.
 - Recipe preparation applies only the DSpark additional-config key or AttnRes
   environment flag, retaining all other SA settings. This prepared recipe is
@@ -33,6 +36,11 @@ now explicitly fetched from `vllm-project/vllm`, while HEAD stays at the frozen
 fork SHA. The official version gate is retained. A linked fresh attempt can
 reuse Docker's completed build cache.
 No correctness suite or server has been run with these additions.
+Run `43492738381` built the baseline but its original inventory gate correctly
+stopped on these previously unaccounted vendored files. The replacement probe
+passed on that image using an explicit read-only pinned reference: all 47
+vendored Python files matched. This diagnostic is not a qualified paired build;
+a fresh adapter must bake the reference and complete both arm verifications.
 The local tests validate manifest/delta/JUnit behavior; Bash/YAML validation
 does not qualify Docker, compiler, GPU, graph or model behavior.
 

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import socket
@@ -45,6 +46,19 @@ def source_version(source, expected_sha):
                 release_repository="vllm-project/vllm")
 
 
+def prepare_vendor(source, destination):
+    recipe = (source / "docker/Dockerfile.rocm").read_text()
+    pins = re.findall(r"^ARG ROCM_TRITON_KERNELS_COMMIT=([0-9a-f]{40})$", recipe, re.M)
+    if len(pins) != 1:
+        raise ValueError("Require one explicit official ROCm Triton kernels pin")
+    destination.mkdir(parents=True)
+    run(["git", "init", str(destination)])
+    run(["git", "fetch", "--depth", "1", "https://github.com/ROCm/triton.git", pins[0]], cwd=destination)
+    run(["git", "checkout", "--detach", pins[0]], cwd=destination)
+    if capture(["git", "rev-parse", "HEAD"], cwd=destination) != pins[0]:
+        raise ValueError("Vendored reference revision mismatch")
+
+
 def build(pr, output):
     if output.exists():
         raise ValueError("Use a fresh build output directory")
@@ -80,6 +94,8 @@ def build(pr, output):
     if inputs != dependency_inputs(sources["candidate"]):
         raise ValueError("Dependency build inputs differ; review a matched build recipe before retrying")
     (output / "dependency-inputs.txt").write_text(inputs + "\n")
+    vendor = output / "work" / "vendor" / "triton"
+    prepare_vendor(sources["baseline"], vendor)
     prefix = "ipat-pr-" + hashlib.sha256(str(output.resolve()).encode()).hexdigest()[:16]
     # Keep a single Docker daemon: docker-image named contexts must see these
     # local tags. Export the final immutable IDs rather than mutable tags.
@@ -106,6 +122,7 @@ def build(pr, output):
                             TEST_DEPS=prefix + "-test-deps", TAG=prefix + "-" + arm + "-official")
         run(["docker", "buildx", "bake", "-f", "docker/docker-bake-rocm.hcl", "test"], cwd=source, env=env)
         context = source.parent
+        shutil.copytree(vendor, context / "vendor" / "triton")
         shutil.copyfile(script / "Dockerfile.adapter", context / "Dockerfile")
         shutil.copyfile(script / "cli_entry.py", context / "cli_entry.py")
         run(["docker", "build", "--build-arg", "BUILT_IMAGE=" + env["TAG"],
