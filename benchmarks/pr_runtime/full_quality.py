@@ -29,14 +29,26 @@ def extended_answer(row,content):
     from decimal import Decimal
     return str((Decimal(hour)+Decimal(minute)/60).normalize())
 
+def typed_answer(row,content):
+    numeric=extended_answer(row,content)
+    if numeric is not None or row['id']!='gsm8k-test-0806':return numeric
+    # This pinned item explicitly asks for a percentage; gold70 means70%.
+    matches=re.findall(r'(?im)^\s*####\s*([-+]?\d[\d,]*(?:\.\d+)?)\s*%\s*\.?\s*$',content)
+    if not matches:return None
+    from decimal import Decimal
+    return str(Decimal(matches[-1].replace(',','')).normalize())
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--endpoint',required=True);p.add_argument('--model',required=True);p.add_argument('--output',type=Path,required=True);args=p.parse_args()
-    extended=__import__('os').environ.get('IPAT_QUALITY_PROTOCOL')=='extended8192_clock_v2'
+    name=__import__('os').environ.get('IPAT_QUALITY_PROTOCOL','original2048_numeric_v1')
+    assert name in ['original2048_numeric_v1','extended8192_clock_v2','extended8192_typed_v3']
+    extended=name!='original2048_numeric_v1'
     extra=dict(logprobs=True)
     if extended:extra['max_tokens']=8192
     dataset=assets()
-    protocol=dict(protocol='extended8192_clock_v2' if extended else 'original2048_numeric_v1',max_tokens=8192 if extended else 2048,time_answer_item='gsm8k-test-1001' if extended else None,recovery_of=43611263542 if extended else None,limits='No denominator, truncation, request-error, finite-logprob, counter or no-score-drop gate relaxation.')
-    code=screen.capture(args,dataset=dataset,request_extra=extra,answer_extractor=extended_answer if extended else None,scope='All1319 pinned GSM8K test items, zero-shot sampled with native logprobs; protocol '+('extended8192_clock_v2' if extended else 'original2048_numeric_v1')+'. Not official five-shot GSM8K, broad model quality or performance.')
+    protocol=dict(protocol=name,max_tokens=8192 if extended else 2048,time_answer_item='gsm8k-test-1001' if extended else None,percentage_answer_item='gsm8k-test-0806' if name=='extended8192_typed_v3' else None,recovery_of=43617235695 if name=='extended8192_typed_v3' else (43611263542 if extended else None),limits='No denominator, truncation, request-error, finite-logprob, counter or no-score-drop gate relaxation.')
+    extractor=typed_answer if name=='extended8192_typed_v3' else (extended_answer if extended else None)
+    code=screen.capture(args,dataset=dataset,request_extra=extra,answer_extractor=extractor,scope='All1319 pinned GSM8K test items, zero-shot sampled with native logprobs; protocol '+name+'. Not official five-shot GSM8K, broad model quality or performance.')
     screen.save(args.output/'protocol.json',protocol)
     rows=[json.loads(line) for line in (args.output/'responses.jsonl').read_text().splitlines()]
     tokens=0;errors=[]

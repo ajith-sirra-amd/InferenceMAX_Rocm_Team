@@ -22,9 +22,9 @@ def compare(root):
         directory=root/arm
         protocol_path=directory/'quality/protocol.json'
         protocol=json.loads(protocol_path.read_text()) if protocol_path.exists() else dict(protocol='original2048_numeric_v1')
-        assert protocol['protocol'] in ['original2048_numeric_v1','extended8192_clock_v2']
+        assert protocol['protocol'] in ['original2048_numeric_v1','extended8192_clock_v2','extended8192_typed_v3']
         protocols.append(protocol)
-        extended=protocol['protocol']=='extended8192_clock_v2'
+        extended=protocol['protocol']!='original2048_numeric_v1'
         loaded=json.loads((directory/'model-result.json').read_text())
         assert loaded['status']=='collected' and loaded['loaded_ranks']==8
         summary=json.loads((directory/'quality/summary.json').read_text())
@@ -49,8 +49,8 @@ def compare(root):
             message=choice['message']
             content=message.get('content') or message.get('reasoning_content') or ''
             if extended:
-                from full_quality import extended_answer
-                extracted=extended_answer(row,content)
+                from full_quality import extended_answer,typed_answer
+                extracted=(typed_answer if protocol['protocol']=='extended8192_typed_v3' else extended_answer)(row,content)
             else:extracted=screen.answer(content)
             assert choice['finish_reason']=='stop' and extracted is not None
             assert observed['extracted_answer']==extracted
