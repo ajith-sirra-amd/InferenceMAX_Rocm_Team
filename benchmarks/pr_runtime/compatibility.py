@@ -60,7 +60,10 @@ def build(parent_path, output):
             raw = (BUNDLE/(change['patch']+'.source-after')).read_bytes()
             assert hashlib.sha256(raw).hexdigest() == change['after_sha256']
             (work/('indexer.py' if change['path'].startswith('vllm/') else 'rowgroup.py')).write_bytes(raw)
-        dockerfile = 'FROM '+pair[arm]['image']+'\nCOPY indexer.py /usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/mla/indexer.py\nCOPY indexer.py /opt/ipat/vllm/vllm/v1/attention/backends/mla/indexer.py\nCOPY rowgroup.py /usr/local/lib/python3.12/dist-packages/aiter/ops/flydsl/kernels/mqa_logits/pa_mqa_logits_fp4_rowgroup.py\n'
+        tag = 'ipat-mxfp4-parent:'+pair[arm]['image'].split(':')[1]
+        subprocess.run(['docker','tag',pair[arm]['image'],tag],check=True)
+        assert subprocess.check_output(['docker','image','inspect',tag,'--format','{{.Id}}'],text=True).strip() == pair[arm]['image']
+        dockerfile = 'FROM '+tag+'\nCOPY indexer.py /usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/mla/indexer.py\nCOPY indexer.py /opt/ipat/vllm/vllm/v1/attention/backends/mla/indexer.py\nCOPY rowgroup.py /usr/local/lib/python3.12/dist-packages/aiter/ops/flydsl/kernels/mqa_logits/pa_mqa_logits_fp4_rowgroup.py\n'
         (work/'Dockerfile').write_text(dockerfile)
         subprocess.run(['docker','build','--network','none','--iidfile',str(work/'image-id.txt'),str(work)],check=True)
         item = dict(pair[arm],parent_image=pair[arm]['image'],image=(work/'image-id.txt').read_text().strip(),compatibility=dict(kind='historical_MXFP4_compatibility',manifest_sha256=hashlib.sha256((BUNDLE/'patch-manifest.json').read_bytes()).hexdigest()))
