@@ -78,6 +78,14 @@ def build(pr, output):
         source.mkdir(parents=True)
         run(["git", "init", str(source)])
         run(["git", "remote", "add", "origin", "https://github.com/ajith-sirra-amd/vllm.git"], cwd=source)
+        seed = data_root / 'pr-build-43495485285-1/runtime/work/candidate/source'
+        if seed.is_dir():
+            seed_sha = capture(['git', 'rev-parse', 'HEAD'], cwd=seed)
+            if capture(['git', 'rev-parse', '--is-shallow-repository'], cwd=seed) != 'false':
+                raise ValueError('Local Git seed must retain full history')
+            run(['git', 'fetch', '--no-tags', str(seed), seed_sha], cwd=source)
+            (source.parent / 'git-seed.json').write_text(json.dumps(dict(
+                path=str(seed), source_sha=seed_sha, scope='Object reuse only; frozen target and official release refs fetched independently'), indent=2)+'\n')
         run(["git", "fetch", "--no-tags", "origin", sha], cwd=source)
         # GitHub forks need not carry upstream release tags. Fetch only official
         # release refs; HEAD remains the explicit frozen fork commit.
