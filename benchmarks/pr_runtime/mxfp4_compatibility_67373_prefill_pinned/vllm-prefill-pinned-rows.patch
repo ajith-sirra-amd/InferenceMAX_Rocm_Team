@@ -1,0 +1,13 @@
+--- a/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py
++++ b/vllm/v1/attention/ops/rocm_aiter_mla_prefill.py
+@@ -33,7 +33,9 @@
+         offset += padded
+     rows = torch.cat(segments) if segments else torch.empty(0, dtype=torch.int32)
+     assert rows.numel() == chunk.num_context_tokens
+-    return rows.to(device=device, non_blocking=True)
++    # Non-blocking H2D transfer requires pinned CPU storage. Keep the
++    # compact row order unchanged and avoid an implicit host/device sync.
++    return rows.pin_memory().to(device=device, non_blocking=True)
+ 
+ 
+ def gather_compressed_context(

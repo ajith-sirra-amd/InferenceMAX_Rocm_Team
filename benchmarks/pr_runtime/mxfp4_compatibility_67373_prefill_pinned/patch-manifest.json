@@ -1,0 +1,65 @@
+{
+  "status": "prepared_not_applied",
+  "historical_image": "vllm/vllm-openai-rocm@sha256:5b54f223a150a9baad41a5d511e159e7cbf43e308c6cd44ad3f6a2463c245b3c",
+  "current_pair": {
+    "schema_version": 1,
+    "pr": 67373,
+    "source_repository": "ajith-sirra-amd/vllm",
+    "dependency_inputs_sha256": "5e03446a2e098d6188d1fba6c140a255d89ed2702f2cf03b9956f5e6c6ffb25b",
+    "baseline": {
+      "source_sha": "8a8cad0253ecf942f0c00c7e55a6bc7ddfee1dc1",
+      "image": "sha256:c219151e72747227896e227d2509000d6d2880ad79728110feb4693c271742ce",
+      "dependencies_sha256": "94fd256bac02d0bb510e31ca7546db8636285d0e77ea3e6f669e0f8b0b127dc0"
+    },
+    "candidate": {
+      "source_sha": "d5d2c30af2599a164e7a18c7567aa401c5c40a8e",
+      "image": "sha256:461020d8c584062baef4a971f9b0ff894312fa243df166c509c11118c378e60c",
+      "dependencies_sha256": "94fd256bac02d0bb510e31ca7546db8636285d0e77ea3e6f669e0f8b0b127dc0"
+    }
+  },
+  "changes": [
+    {
+      "path": "vllm/v1/attention/backends/mla/indexer.py",
+      "before_sha256": "0fec7dde8560b2458dbd1d1d04d8a4fe06ae44fbeadc0e7edebed7f2a51ad602",
+      "after_sha256": "15d2bd3ce6f67744464c1d69443d4d2e0db2eac39c96f7c69e287a72f23aecff",
+      "patch": "vllm-mxfp4-admission.patch",
+      "patch_sha256": "0d8877ffec49bbeda7f368f55a4bdbacc9f03d3f487237e274612d2609a9eca9",
+      "added_lines": 51,
+      "removed_lines": 11
+    },
+    {
+      "path": "aiter/ops/flydsl/kernels/mqa_logits/pa_mqa_logits_fp4_rowgroup.py",
+      "before_sha256": "987b2a2db14ca42933a22a1b09643ce48781a74546c33d7065c6cfba583c2c55",
+      "after_sha256": "57bcbe39752e90a27f0a791fa47a038ea58e0ef212f180121b3d80b013c74bb9",
+      "patch": "aiter-mxfp4-page-strides.patch",
+      "patch_sha256": "4c1624ded8a0ed5f6283d087f8f92983246976c2d92f817cd7e49a7a03865924",
+      "added_lines": 12,
+      "removed_lines": 2
+    },
+    {
+      "path": "vllm/v1/attention/ops/rocm_aiter_mla_prefill.py",
+      "before_sha256": "f4d4cbed16f01b1bc1b2cd47d9f79301700df3afedadd6fa8680824c69ff865d",
+      "after_sha256": "c058809ddd7234a6dc413d57c4886e81cc6957cb43a45c4740e126763744cacb",
+      "patch": "vllm-prefill-pinned-rows.patch",
+      "patch_sha256": "dbc0645506592b7dc3f646ec3b5544b9a13f5f0e84191980181aedf823e424d8",
+      "added_lines": 3,
+      "removed_lines": 1
+    }
+  ],
+  "limits": "Reuses historical source patches; full-model MXFP4, GPU numerical correctness and matched serving still unverified. Applying changes creates derived runtimes, not unchanged exact PR builds.",
+  "metadata_recovery": {
+    "parent_model_run": 43600633921,
+    "change": "Preserve local DCP bounds and additionally build global bounds for requesting Kimi backend",
+    "limits": "New compatibility variant; requires numerical metadata and model requalification"
+  },
+  "sync_recovery": {
+    "parent_model_run": 43603331956,
+    "change": "Compute DCP scalar allocation lengths from scheduler CPU lengths; preserve strict GPU sync checker",
+    "status": "requires native and model requalification"
+  },
+  "pinned_recovery": {
+    "parent_model_run": 43604829037,
+    "change": "Pin context-row CPU indices before non-blocking H2D copy; strict checker retained",
+    "status": "requires native and full-model requalification"
+  }
+}
