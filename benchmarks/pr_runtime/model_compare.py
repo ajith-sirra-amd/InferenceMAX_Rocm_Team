@@ -25,6 +25,12 @@ def compare(root):
             assert observed['request']==screen.prompt(row,'moonshotai/Kimi-K3.1-Pro')
             assert observed['expected_answer']==screen.answer(row['answer'])
             assert observed['valid_answer'] and observed['error'] is None
+            choice=observed['response']['choices'][0]
+            message=choice['message']
+            extracted=screen.answer(message.get('content') or message.get('reasoning_content') or '')
+            assert choice['finish_reason']=='stop' and extracted is not None
+            assert observed['extracted_answer']==extracted
+            assert observed['correct']==(extracted==observed['expected_answer'])
         assert sum(r['correct'] for r in rows)==summary['correct']
         recipe=json.loads((directory/'recipe.json').read_text())
         normalized=copy.deepcopy(recipe)

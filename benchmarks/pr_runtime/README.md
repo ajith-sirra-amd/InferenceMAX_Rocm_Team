@@ -14,11 +14,24 @@ substitution or sync-check exemption is used.
 Native MXFP4 cache/graph and independent scorer checks passed. Current metadata
 qualification43606584068 passes4 metadata and2 pinned-row cases on8 ranks with
 the native sync checker active across all three preparation paths. Model screen
-43606789911 is active. AttnRes original suite43603528622 fails6 of29 bitwise
+43606789911 completed48 HTTP200 responses but failed unparsed XTML answer
+validity. Offline application of the frozen native Kimi parser yields48 valid
+and47 correct answers, as a diagnostic only. Matched protocol variant43608553660
+enables the unchanged native `kimi_k3` parser in both arms. AttnRes original suite43603528622 fails6 of29 bitwise
 cases; diagnostic43604796100 reproduces differences in all12 native sequences
 while prefix/residual-bank values stay identical. A successful diagnostic means
 the failure reproduced, not that the PR passed. Neither full accuracy nor
 end-to-end speedup is qualified. Sections below preserve earlier attempt history.
+
+`PR67372 fixed paired screen` requires an explicit `pr-quality-output` from a
+complete matched natural screen with no sampled-score regression and exactly
+the same runtime pair. It runs the pinned native InferenceX fixed client atC48,
+8192/1024 tokens,192 measured requests,96 warmups and seed0; synthetic acceptance
+remains3.57 and MXFP4 remains enabled. Strict sync checks are qualified separately
+from timing. Each arm saves its actual immutable image recipe, constructor
+provenance, raw native result and observed profiling environment/library maps.
+One pair is descriptive screening, not repeated agentic or full accuracy
+qualification. The original historical benchmark choices remain available.
 
 ## GPU qualification checkpoint, 14 November
 

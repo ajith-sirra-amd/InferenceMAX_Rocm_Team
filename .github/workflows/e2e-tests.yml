@@ -19,6 +19,7 @@ on:
                 - "PR67373 MXFP4 metadata check"
                 - "PR67372 model screen"
                 - "PR67372 XTML model screen"
+                - "PR67372 fixed paired screen"
                 - "PR67373 model screen"
                 - "PR67373 XTML model screen"
                 - "PR67372 TP8 projection"
@@ -72,6 +73,11 @@ on:
                 required: false
                 type: string
                 default: ""
+            pr-quality-output:
+                description: "Verified paired natural screen output for PR performance prerequisite"
+                required: false
+                type: string
+                default: ""
             pr-runtime-manifest:
                 description: "Prepared digest-pinned PR pair manifest under /share_nfs/ajith; required for PR correctness"
                 required: false
@@ -88,6 +94,11 @@ on:
                 default: ""
     workflow_call:
         inputs:
+            pr-quality-output:
+                description: "Verified paired natural screen output for PR performance prerequisite"
+                required: false
+                type: string
+                default: ""
             pr-runtime-manifest:
                 description: "Prepared digest-pinned PR pair manifest"
                 required: false
@@ -274,6 +285,48 @@ jobs:
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
               with:
                   name: kimi-pr-model-${{ github.run_id }}
+                  path: |
+                      ${{ env.IPAT_PR_OUTPUT }}/**
+                      !${{ env.IPAT_PR_OUTPUT }}/**/cache/**
+                  retention-days: 30
+                  if-no-files-found: error
+    pr-fixed:
+        if: ${{ inputs.generate-cli-command == 'PR67372 fixed paired screen' }}
+        name: DSpark derived-runtime fixed paired screen
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 100
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            IPAT_PR_DATA_ROOT: /share_nfs/gguasti/benchmarks
+            IPAT_PR_MANIFEST: ${{ inputs.pr-runtime-manifest }}
+            IPAT_PR_OUTPUT: /share_nfs/gguasti/benchmarks/pr-perf-${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+            IPAT_PR_QUALITY_OUTPUT: ${{ inputs.pr-quality-output }}
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: pr-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Verify images and native distributed model
+              working-directory: pr-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$IPAT_PR_OUTPUT"
+                  bash benchmarks/pr_runtime/benchmark_pair.sh 2>&1 | tee "$IPAT_PR_OUTPUT/workflow.log"
+            - name: Stop only this qualification's containers
+              if: always()
+              run: |
+                  docker ps -aq --filter "label=ipat.pr.pair=$IPAT_PR_OUTPUT" | xargs -r docker rm -f
+            - name: Preserve native distributed qualification evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-pr-perf-${{ github.run_id }}
                   path: |
                       ${{ env.IPAT_PR_OUTPUT }}/**
                       !${{ env.IPAT_PR_OUTPUT }}/**/cache/**

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ -n "${IPAT_PR_MANIFEST:-}" ]]; then
+    exec bash "$script_dir/../pr_runtime/benchmark_arm.sh" "$@"
+fi
 upstream_dir=$(cd "$script_dir/../../upstream/InferenceX" && pwd)
 run_dir=${1:?Supply a fresh shared benchmark output directory}
 optimization=${2:?Supply baseline, attnres, dspark, moe_front or moe_front_dspark}
