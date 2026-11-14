@@ -50,6 +50,9 @@ def main():
             records = [json.loads((output/f'rank-{rank}.json').read_text()) for rank in range(8)]
             assert [r['rank'] for r in records] == list(range(8))
             result['loaded_ranks'] = 8
+            fp4 = [[json.loads(line) for line in (output/f'mxfp4-rank-{rank}.jsonl').read_text().splitlines()] for rank in range(8)]
+            assert all(rows and all(r['use_fp4'] and r['rank']==rank for r in rows) for rank,rows in enumerate(fp4))
+            result['mxfp4_indexers_per_rank'] = [len(rows) for rows in fp4]
             screen.save(output/'observed-verifier.json', launch.observed_verifier((output/'server.log').read_text(errors='replace'), json.loads(config['server_arguments']['speculative-config'])))
             client = ['timeout', '--signal=TERM', '--kill-after=15s', '375s', sys.executable, '/quality/screen.py', '--endpoint', endpoint, '--model', 'moonshotai/Kimi-K3.1-Pro', '--output', '/logs/quality']
             (output/'client-command.txt').write_text(shlex.join(client)+'\n')

@@ -9,6 +9,17 @@ class ModelWorkerExtension:
         import vllm.models.kimi_k3.nvidia.dspark_mla as module
         from vllm.distributed import get_tensor_model_parallel_rank
         original = module.K3DSparkForCausalLM.load_weights
+        import vllm.models.kimi_k3.amd.dsa as dsa
+        indexer_init = dsa.KimiK3DSAIndexer.__init__
+        def init_indexer(indexer, *args, **kwargs):
+            indexer_init(indexer, *args, **kwargs)
+            assert indexer.use_fp4, 'MXFP4 recipe silently fell back'
+            record = dict(rank=get_tensor_model_parallel_rank(), use_fp4=indexer.use_fp4,
+                          heads=indexer.index_num_heads, head_dim=indexer.index_head_dim,
+                          source_sha256=hashlib.sha256(Path(dsa.__file__).read_bytes()).hexdigest())
+            with Path(f"/logs/mxfp4-rank-{record['rank']}.jsonl").open('a') as sink:
+                sink.write(json.dumps(record)+'\n')
+        dsa.KimiK3DSAIndexer.__init__ = init_indexer
 
         def load_weights(model, *args, **kwargs):
             result = original(model, *args, **kwargs)
