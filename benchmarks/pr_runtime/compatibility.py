@@ -56,6 +56,10 @@ def build(parent_path, output):
         work = output/arm;work.mkdir()
         parent = runtime.probe_image(pair[arm]['image'],work/'parent-probe.json')
         assert parent['source_sha256'][m['changes'][0]['path']] == m['changes'][0]['before_sha256']
+        aiter = m['changes'][1]
+        aiter_check = "import hashlib;from pathlib import Path;print(hashlib.sha256(Path('/usr/local/lib/python3.12/dist-packages/"+aiter['path']+"').read_bytes()).hexdigest())"
+        actual_aiter = subprocess.check_output(['docker','run','--rm','--network','none','--entrypoint',runtime.PYTHON,pair[arm]['image'],'-c',aiter_check],text=True).strip()
+        assert actual_aiter == aiter['before_sha256'], 'Parent AITER reader differs from frozen compatibility input'
         for change in m['changes']:
             raw = (BUNDLE/(change['patch']+'.source-after')).read_bytes()
             assert hashlib.sha256(raw).hexdigest() == change['after_sha256']
