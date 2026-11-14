@@ -21,15 +21,23 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+if [[ "${IPAT_NUMERICAL:-0}" == 1 ]]; then
+    command=(/pr-tools/mxfp4_numerical.py)
+else
+    command=(-m pytest /vllm-workspace/tests/kernels/attention/test_kimi_mxfp4_indexer.py --runxfail -v -rA --junitxml=/logs/junit.xml)
+fi
 timeout --signal=TERM --kill-after=60s 1800s docker run --rm --init --name "$name" \
     --label "ipat.pr.output=$out" --network host --ipc host --device /dev/kfd --device /dev/dri \
     --security-opt seccomp=unconfined --ulimit memlock=-1 --ulimit stack=67108864 \
-    --mount "type=bind,src=$out,dst=/logs" --tmpfs /tmp:rw,exec,size=64g \
+    --mount "type=bind,src=$out,dst=/logs" --mount "type=bind,src=$tools,dst=/pr-tools,readonly" --tmpfs /tmp:rw,exec,size=64g \
     --env OMP_NUM_THREADS=4 --env PYTHONDONTWRITEBYTECODE=1 --env VLLM_TARGET_DEVICE=rocm \
     --env XDG_CACHE_HOME=/logs/cache --env VLLM_GPU_SYNC_CHECK=error \
     --entrypoint /opt/runtime-venv/bin/python "$image" \
-    -m pytest /vllm-workspace/tests/kernels/attention/test_kimi_mxfp4_indexer.py \
-    --runxfail -v -rA --junitxml=/logs/junit.xml 2>&1 | tee "$out/kernel.log"
+    "${command[@]}" 2>&1 | tee "$out/kernel.log"
+if [[ "${IPAT_NUMERICAL:-0}" == 1 ]]; then
+    test -f "$out/numerical-validation.json"
+    exit 0
+fi
 python3 - "$out" <<'PY'
 import json,sys,xml.etree.ElementTree as ET
 from pathlib import Path
