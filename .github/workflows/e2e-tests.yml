@@ -12,6 +12,7 @@ on:
                 - "PR67372 MXFP4 compatibility build"
                 - "PR67372 MXFP4 kernel check"
                 - "PR67372 MXFP4 numerical check"
+                - "PR67372 MXFP4 metadata check"
                 - "PR67372 model screen"
                 - "PR67372 TP8 projection"
                 - "PR67372 ROCm correctness"
@@ -337,6 +338,47 @@ jobs:
                   set -eo pipefail
                   mkdir -p "$IPAT_PR_OUTPUT"
                   IPAT_NUMERICAL=1 bash benchmarks/pr_runtime/mxfp4_check.sh 2>&1 | tee "$IPAT_PR_OUTPUT/workflow.log"
+            - name: Stop only this qualification's containers
+              if: always()
+              run: |
+                  docker ps -aq --filter "label=ipat.pr.output=$IPAT_PR_OUTPUT" | xargs -r docker rm -f
+            - name: Preserve native distributed qualification evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-pr-mxfp4-${{ github.run_id }}
+                  path: |
+                      ${{ env.IPAT_PR_OUTPUT }}/**
+                      !${{ env.IPAT_PR_OUTPUT }}/**/cache/**
+                  retention-days: 30
+                  if-no-files-found: error
+    pr-mxfp4-metadata:
+        if: ${{ inputs.generate-cli-command == 'PR67372 MXFP4 metadata check' }}
+        name: Kimi MXFP4 global and local DCP metadata qualification
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 45
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            IPAT_PR_DATA_ROOT: /share_nfs/gguasti/benchmarks
+            IPAT_PR_MANIFEST: ${{ inputs.pr-runtime-manifest }}
+            IPAT_PR_OUTPUT: /share_nfs/gguasti/benchmarks/pr-mxfp4-${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: pr-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Verify images and native distributed model
+              working-directory: pr-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$IPAT_PR_OUTPUT"
+                  IPAT_METADATA=1 bash benchmarks/pr_runtime/mxfp4_check.sh 2>&1 | tee "$IPAT_PR_OUTPUT/workflow.log"
             - name: Stop only this qualification's containers
               if: always()
               run: |

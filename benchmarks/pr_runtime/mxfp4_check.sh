@@ -21,7 +21,9 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if [[ "${IPAT_NUMERICAL:-0}" == 1 ]]; then
+if [[ "${IPAT_METADATA:-0}" == 1 ]]; then
+    command=(-m torch.distributed.run --standalone --nproc-per-node=8 /pr-tools/mxfp4_metadata.py)
+elif [[ "${IPAT_NUMERICAL:-0}" == 1 ]]; then
     command=(/pr-tools/mxfp4_numerical.py)
 else
     command=(-m pytest /vllm-workspace/tests/kernels/attention/test_kimi_mxfp4_indexer.py --runxfail -v -rA --junitxml=/logs/junit.xml)
@@ -34,7 +36,16 @@ timeout --signal=TERM --kill-after=60s 1800s docker run --rm --init --name "$nam
     --env XDG_CACHE_HOME=/logs/cache --env VLLM_GPU_SYNC_CHECK=error \
     --entrypoint /opt/runtime-venv/bin/python "$image" \
     "${command[@]}" 2>&1 | tee "$out/kernel.log"
-if [[ "${IPAT_NUMERICAL:-0}" == 1 ]]; then
+if [[ "${IPAT_METADATA:-0}" == 1 ]]; then
+    python3 - "$out" <<'PY'
+import json,sys
+from pathlib import Path
+out=Path(sys.argv[1]);records=[json.loads((out/'metadata'/f'rank-{rank}.json').read_text()) for rank in range(8)]
+assert all(r['status']=='passed' and len(r['cases'])==4 for r in records)
+(out/'metadata-validation.json').write_text(json.dumps(dict(status='passed',ranks=8,cases_per_rank=4),indent=2)+'\n')
+PY
+    exit 0
+elif [[ "${IPAT_NUMERICAL:-0}" == 1 ]]; then
     test -f "$out/numerical-validation.json"
     exit 0
 fi

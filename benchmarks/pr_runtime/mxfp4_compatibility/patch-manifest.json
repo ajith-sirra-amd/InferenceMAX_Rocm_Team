@@ -21,10 +21,10 @@
     {
       "path": "vllm/v1/attention/backends/mla/indexer.py",
       "before_sha256": "143db09911bc6761a8eed27a81c8b222b0a6aca348ebd292da15f37e459f93fe",
-      "after_sha256": "a92c4b95ecf577089e773f5db52b42791a43c3378a7012004610df6d2b2cfd74",
+      "after_sha256": "3c634d188e7abe1a5c2b631f53dc28a1d8354001eb091a42c6b0fb6797dbdeb1",
       "patch": "vllm-mxfp4-admission.patch",
-      "patch_sha256": "0a26f6b9515a64853745ce79bdb35423fa64d79e746264496964abc40fc78395",
-      "added_lines": 11,
+      "patch_sha256": "a394f419b3f87a0dfb108c7e194e8b9c245284dd331d7ba5aa3953d1cf48e9e5",
+      "added_lines": 40,
       "removed_lines": 9
     },
     {

@@ -807,7 +807,7 @@ def compute_kpool_tail_slot_mapping(
         )
         return out
     # Torch fallback: CPU tensors (the CPU unit tests), non-1D or empty inputs.
-    # Production always takes the Triton path above â€” spec-decode tokens arrive
+    # Production always takes the Triton path above — spec-decode tokens arrive
     # flattened token-major, so slot_mapping is 1D there too.
     out.copy_(slot_mapping)
     if num_actual_tokens == 0:
