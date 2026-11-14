@@ -52,6 +52,7 @@ def main():
             else:raise TimeoutError('Readiness exceeded1800 seconds')
             records=[json.loads((out/f'rank-{rank}.json').read_text()) for rank in range(8)]
             assert [r['rank'] for r in records]==list(range(8))
+            assert all(r['torch_profiler_active'] is False for r in records),'Torch profiler active during loading'
             fp4=[[json.loads(line) for line in (out/f'mxfp4-rank-{rank}.jsonl').read_text().splitlines()] for rank in range(8)]
             assert all(rows and all(r['use_fp4'] and r['rank']==rank for r in rows) for rank,rows in enumerate(fp4))
             result['loaded_ranks']=8;result['mxfp4_indexers_per_rank']=[len(rows) for rows in fp4]

@@ -35,6 +35,7 @@ class ModelWorkerExtension:
                           module_path=module.__file__, module_sha256=digest,
                           layer_type=type(layer).__name__, weight_shape=list(weight.shape),
                           weight_dtype=str(weight.dtype), gather_output=getattr(layer, 'gather_output', False),
+                          torch_profiler_active=bool(torch.autograd._profiler_enabled()),
                           weight_sha256=hashlib.sha256(weight.detach().cpu().view(torch.uint8).numpy().tobytes()).hexdigest(),
                           status='loaded', limits='Loaded draft provenance; no forward equivalence or performance claim')
             Path(f'/logs/rank-{rank}.json').write_text(json.dumps(record, indent=2)+'\n')
