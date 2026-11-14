@@ -47,7 +47,7 @@ for arm in baseline candidate; do
         --env "PORT=$port" --env "IPAT_ARM=$arm" --env "EXPECTED_SOURCE_SHA=$sha" --env "EXPECTED_MODULE_SHA=$module_sha" \
         --env "IPAT_PR_NUMBER=$pr" \
         --env "IPAT_XTML_PARSER=${IPAT_XTML_PARSER:-0}" \
-        --env "IPAT_FULL_GSM8K=${IPAT_FULL_GSM8K:-0}" --env "EXPECTED_IMAGE=$image" \
+        --env "IPAT_FULL_GSM8K=${IPAT_FULL_GSM8K:-0}" --env "IPAT_QUALITY_PROTOCOL=${IPAT_QUALITY_PROTOCOL:-original2048_numeric_v1}" --env "EXPECTED_IMAGE=$image" \
         --env VLLM_TARGET_DEVICE=rocm --env VLLM_GPU_SYNC_CHECK=error \
         --entrypoint /opt/runtime-venv/bin/python "$image" /pr-tools/model_check.py \
         2>&1 | tee "$out/$arm/coordinator.log"

@@ -20,6 +20,7 @@ on:
                 - "PR67372 model screen"
                 - "PR67372 XTML model screen"
                 - "PR67372 full GSM8K natural comparison"
+                - "PR67372 full GSM8K extended protocol v2"
                 - "PR67372 fixed paired screen"
                 - "PR67372 agentic paired comparison"
                 - "PR67373 model screen"
@@ -313,7 +314,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-full-quality:
-        if: ${{ inputs.generate-cli-command == 'PR67372 full GSM8K natural comparison' }}
+        if: ${{ inputs.generate-cli-command == 'PR67372 full GSM8K natural comparison' || inputs.generate-cli-command == 'PR67372 full GSM8K extended protocol v2' }}
         name: DSpark full pinned GSM8K natural comparison
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 430
@@ -329,6 +330,7 @@ jobs:
             PYTHONDONTWRITEBYTECODE: '1'
             IPAT_XTML_PARSER: '1'
             IPAT_FULL_GSM8K: '1'
+            IPAT_QUALITY_PROTOCOL: ${{ inputs.generate-cli-command == 'PR67372 full GSM8K extended protocol v2' && 'extended8192_clock_v2' || 'original2048_numeric_v1' }}
             IPAT_PR_QUALITY_OUTPUT: ${{ inputs.pr-quality-output }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

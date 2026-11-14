@@ -53,7 +53,7 @@ def prompt(row, model):
     }])
 
 
-def generate(row, body, endpoint):
+def generate(row, body, endpoint, answer_extractor=None):
     started, clock = now(), time.monotonic()
     record = dict(id=row["id"], started_at=started, request=body,
                   expected_answer=answer(row["answer"]), response=None,
@@ -80,7 +80,7 @@ def generate(row, body, endpoint):
             raise ValueError("Response content must be text")
         record["finish_reason"] = choice.get("finish_reason")
         record["truncated"] = choice.get("finish_reason") == "length"
-        record["extracted_answer"] = answer(content)
+        record["extracted_answer"] = answer(content) if answer_extractor is None else answer_extractor(row, content)
         record["valid_answer"] = (choice.get("finish_reason") == "stop"
                                   and record["extracted_answer"] is not None)
         record["correct"] = (record["valid_answer"]
@@ -133,7 +133,7 @@ def serializable(values):
                    for labels, value in series.items()] for name, series in values.items()}
 
 
-def capture(args, dataset=None, request_extra=None, scope=None):
+def capture(args, dataset=None, request_extra=None, scope=None, answer_extractor=None):
     config, rows = assets() if dataset is None else dataset
     denominator=len(rows)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -147,7 +147,7 @@ def capture(args, dataset=None, request_extra=None, scope=None):
     save(args.output / "requests.json", requests)
     save(args.output / "contract.json", dict(dataset_sha256=config["dataset_sha256"],
          counter_reader=config["counter_reader"], requests=denominator, concurrency=48,
-         parameters=PARAMS, seed="42 + item index", metrics_endpoint=metric_url, started_at=now(),
+         parameters=dict(PARAMS, **(request_extra or {})), seed="42 + item index", metrics_endpoint=metric_url, started_at=now(),
          limits=scope or "Zero-shot, sampled 48-item screen; not official GSM8K or model-quality qualification."))
     records, samples, counter_errors = [], [], []
     accepted, drafts, settled, valid_counters = None, None, False, False
@@ -166,7 +166,7 @@ def capture(args, dataset=None, request_extra=None, scope=None):
             raise ValueError("Server has active requests before this screen")
         with (args.output / "responses.jsonl").open("x") as sink:
             with ThreadPoolExecutor(max_workers=48) as pool:
-                futures = [pool.submit(generate, row, req["body"], endpoint)
+                futures = [pool.submit(generate, row, req["body"], endpoint, answer_extractor)
                            for row, req in zip(rows, requests)]
                 for future in as_completed(futures):
                     row = future.result()

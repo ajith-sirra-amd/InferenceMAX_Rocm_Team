@@ -17,8 +17,14 @@ def compare(root):
         from full_quality import assets
         _,fixture=assets()
     denominator=len(fixture)
+    protocols=[]
     for arm in ['baseline','candidate']:
         directory=root/arm
+        protocol_path=directory/'quality/protocol.json'
+        protocol=json.loads(protocol_path.read_text()) if protocol_path.exists() else dict(protocol='original2048_numeric_v1')
+        assert protocol['protocol'] in ['original2048_numeric_v1','extended8192_clock_v2']
+        protocols.append(protocol)
+        extended=protocol['protocol']=='extended8192_clock_v2'
         loaded=json.loads((directory/'model-result.json').read_text())
         assert loaded['status']=='collected' and loaded['loaded_ranks']==8
         summary=json.loads((directory/'quality/summary.json').read_text())
@@ -32,6 +38,7 @@ def compare(root):
             observed=records[row['id']]
             expected_request=screen.prompt(row,'moonshotai/Kimi-K3.1-Pro')
             if full:expected_request['logprobs']=True
+            if extended:expected_request['max_tokens']=8192
             assert observed['request']==expected_request
             assert observed['expected_answer']==screen.answer(row['answer'])
             assert observed['valid_answer'] and observed['error'] is None
@@ -40,11 +47,16 @@ def compare(root):
                 tokens=choice['logprobs']['content']
                 assert tokens and all(type(t['logprob']) in (int,float) and math.isfinite(t['logprob']) and t['logprob']<=0 for t in tokens)
             message=choice['message']
-            extracted=screen.answer(message.get('content') or message.get('reasoning_content') or '')
+            content=message.get('content') or message.get('reasoning_content') or ''
+            if extended:
+                from full_quality import extended_answer
+                extracted=extended_answer(row,content)
+            else:extracted=screen.answer(content)
             assert choice['finish_reason']=='stop' and extracted is not None
             assert observed['extracted_answer']==extracted
             assert observed['correct']==(extracted==observed['expected_answer'])
         assert sum(r['correct'] for r in rows)==summary['correct']
+        assert all(p==protocols[0] for p in protocols)
         recipe=json.loads((directory/'recipe.json').read_text())
         normalized=copy.deepcopy(recipe)
         normalized.pop('image',None)
