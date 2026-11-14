@@ -22,7 +22,9 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if [[ "${IPAT_METADATA:-0}" == 1 ]]; then
+if [[ "${IPAT_ATTNRES_DIAG:-0}" == 1 ]]; then
+    command=(/pr-tools/attnres_diagnosis.py)
+elif [[ "${IPAT_METADATA:-0}" == 1 ]]; then
     command=(-m torch.distributed.run --standalone --nproc-per-node=8 /pr-tools/mxfp4_metadata.py)
 elif [[ "${IPAT_NUMERICAL:-0}" == 1 ]]; then
     command=(/pr-tools/mxfp4_numerical.py)
@@ -37,7 +39,10 @@ timeout --signal=TERM --kill-after=60s 1800s docker run --rm --init --name "$nam
     --env XDG_CACHE_HOME=/logs/cache --env VLLM_GPU_SYNC_CHECK=error \
     --entrypoint /opt/runtime-venv/bin/python "$image" \
     "${command[@]}" 2>&1 | tee "$out/kernel.log"
-if [[ "${IPAT_METADATA:-0}" == 1 ]]; then
+if [[ "${IPAT_ATTNRES_DIAG:-0}" == 1 ]]; then
+    test -f "$out/attnres-diagnosis.json"
+    exit 0
+elif [[ "${IPAT_METADATA:-0}" == 1 ]]; then
     python3 - "$out" <<'PY'
 import json,sys
 from pathlib import Path
