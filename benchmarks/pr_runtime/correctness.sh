@@ -35,9 +35,10 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-target=rocm
+target=${IPAT_PR_DEVICE:-rocm}
+case "$target" in cpu|rocm) ;; *) echo "Unsupported test device" >&2; exit 2 ;; esac
 devices=(--device /dev/kfd --device /dev/dri)
-if [[ "$IPAT_PR_NUMBER" == 67372 ]]; then
+if [[ "$target" == cpu ]]; then
     # CPU loading/reconstruction; real BF16 serving is a separate GPU stage.
     target=cpu
     devices=()

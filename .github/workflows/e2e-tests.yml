@@ -9,6 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "PR67372 ROCm correctness"
                 - "PR67372 correctness"
                 - "PR67373 correctness"
                 - "PR67372 prepare runtimes"
@@ -140,7 +141,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-correctness:
-        if: ${{ inputs.generate-cli-command == 'PR67372 correctness' || inputs.generate-cli-command == 'PR67373 correctness' }}
+        if: ${{ inputs.generate-cli-command == 'PR67372 correctness' || inputs.generate-cli-command == 'PR67372 ROCm correctness' || inputs.generate-cli-command == 'PR67373 correctness' }}
         name: Exact PR runtime verification and component correctness
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 100
@@ -150,7 +151,8 @@ jobs:
             group: sa-mi355x-single-node
             cancel-in-progress: false
         env:
-            IPAT_PR_NUMBER: ${{ inputs.generate-cli-command == 'PR67372 correctness' && '67372' || '67373' }}
+            IPAT_PR_NUMBER: ${{ (inputs.generate-cli-command == 'PR67372 correctness' || inputs.generate-cli-command == 'PR67372 ROCm correctness') && '67372' || '67373' }}
+            IPAT_PR_DEVICE: ${{ inputs.generate-cli-command == 'PR67372 correctness' && 'cpu' || 'rocm' }}
             IPAT_PR_MANIFEST: ${{ inputs.pr-runtime-manifest }}
             IPAT_PR_DATA_ROOT: /share_nfs/gguasti/benchmarks
             IPAT_PR_OUTPUT: /share_nfs/gguasti/benchmarks/pr-correctness-${{ github.run_id }}-${{ github.run_attempt }}
