@@ -208,7 +208,11 @@ def main():
         recipe["runtime_identity"] = dict(pr=args.pr, arm=args.arm, source_sha=pair[args.arm]["source_sha"])
         (args.output / "recipe.json").write_text(json.dumps(recipe, indent=2) + "\n")
     if args.verify:
-        verify_image(pair[args.arm], args.output / "runtime-verification.json")
+        if 'compatibility' in pair[args.arm]:
+            from compatibility import verify
+            verify(pair[args.arm], args.output / "runtime-verification.json")
+        else:
+            verify_image(pair[args.arm], args.output / "runtime-verification.json")
 
 
 if __name__ == "__main__":
