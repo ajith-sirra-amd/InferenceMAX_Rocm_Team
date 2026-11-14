@@ -1,5 +1,25 @@
 # Exact-revision Kimi PR runtime preparation
 
+## Current MXFP4 qualification
+
+Both frozen PR pairs have been built and inventory-verified. Original runtimes
+reject Kimi MXFP4, so model checks use explicitly derived paired compatibility
+variants. `compatibility.py` preserves original and syncfree variants and builds
+the current `prefill_pinned` bundle: admission/page-stride support, global/local
+DCP metadata, scheduler CPU scalar lengths and pinned MLA context-row copies.
+Every declared source change is identical in both arms; inventories reject any
+other source, dependency, native, test or vendor changes. No FP8 indexer
+substitution or sync-check exemption is used.
+
+Native MXFP4 cache/graph and independent scorer checks passed. Current metadata
+qualification43606584068 passes4 metadata and2 pinned-row cases on8 ranks with
+the native sync checker active across all three preparation paths. Model screen
+43606789911 is active. AttnRes original suite43603528622 fails6 of29 bitwise
+cases; diagnostic43604796100 reproduces differences in all12 native sequences
+while prefix/residual-bank values stay identical. A successful diagnostic means
+the failure reproduced, not that the PR passed. Neither full accuracy nor
+end-to-end speedup is qualified. Sections below preserve earlier attempt history.
+
 ## GPU qualification checkpoint, 14 November
 
 ROCm suite run43566518007 passed all32 cases, including the native loader.
