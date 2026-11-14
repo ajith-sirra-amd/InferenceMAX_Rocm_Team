@@ -9,6 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "PR67372 TP8 projection"
                 - "PR67372 ROCm correctness"
                 - "PR67372 correctness"
                 - "PR67373 correctness"
@@ -181,6 +182,45 @@ jobs:
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
               with:
                   name: kimi-pr-correctness-${{ github.run_id }}
+                  path: ${{ env.IPAT_PR_OUTPUT }}/**
+                  retention-days: 30
+                  if-no-files-found: error
+    pr-projection:
+        if: ${{ inputs.generate-cli-command == 'PR67372 TP8 projection' }}
+        name: DSpark native TP8 BF16 projection and graph qualification
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 45
+        permissions:
+            contents: read
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            IPAT_PR_DATA_ROOT: /share_nfs/gguasti/benchmarks
+            IPAT_PR_MANIFEST: ${{ inputs.pr-runtime-manifest }}
+            IPAT_PR_OUTPUT: /share_nfs/gguasti/benchmarks/pr-projection-${{ github.run_id }}-${{ github.run_attempt }}
+            PYTHONDONTWRITEBYTECODE: '1'
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+              with:
+                  ref: ${{ github.sha }}
+                  path: pr-${{ github.run_id }}
+                  persist-credentials: false
+            - name: Verify images and native distributed projection
+              working-directory: pr-${{ github.run_id }}
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$IPAT_PR_OUTPUT"
+                  bash benchmarks/pr_runtime/projection_check.sh 2>&1 | tee "$IPAT_PR_OUTPUT/workflow.log"
+            - name: Stop only this qualification's containers
+              if: always()
+              run: |
+                  docker ps -aq --filter "label=ipat.pr.output=$IPAT_PR_OUTPUT" | xargs -r docker rm -f
+            - name: Preserve native distributed qualification evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: kimi-pr-projection-${{ github.run_id }}
                   path: ${{ env.IPAT_PR_OUTPUT }}/**
                   retention-days: 30
                   if-no-files-found: error
