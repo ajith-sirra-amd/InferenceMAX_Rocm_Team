@@ -133,19 +133,22 @@ def serializable(values):
                    for labels, value in series.items()] for name, series in values.items()}
 
 
-def capture(args):
-    config, rows = assets()
+def capture(args, dataset=None, request_extra=None, scope=None):
+    config, rows = assets() if dataset is None else dataset
+    denominator=len(rows)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from native_spec_decode import READERS, increase, parse
     args.output.mkdir(parents=True, exist_ok=False)
     endpoint = args.endpoint.rstrip("/")
     metric_url = endpoint + "/metrics"
     requests = [dict(id=row["id"], body=prompt(row, args.model)) for row in rows]
+    for request in requests:
+        request['body'].update(request_extra or {})
     save(args.output / "requests.json", requests)
     save(args.output / "contract.json", dict(dataset_sha256=config["dataset_sha256"],
-         counter_reader=config["counter_reader"], requests=48, concurrency=48,
+         counter_reader=config["counter_reader"], requests=denominator, concurrency=48,
          parameters=PARAMS, seed="42 + item index", metrics_endpoint=metric_url, started_at=now(),
-         limits="Zero-shot, sampled 48-item screen; not official GSM8K or model-quality qualification."))
+         limits=scope or "Zero-shot, sampled 48-item screen; not official GSM8K or model-quality qualification."))
     records, samples, counter_errors = [], [], []
     accepted, drafts, settled, valid_counters = None, None, False, False
 
@@ -203,17 +206,17 @@ def capture(args):
         counter_errors.append(f"{type(error).__name__}: {error}")
     save(args.output / "counter-samples.json", samples)
     errors = sum(row["error"] is not None for row in records)
-    missing = 48 - sum(row["valid_answer"] for row in records)
-    summary = dict(status="collected" if len(records) == 48 and not errors and not missing
+    missing = denominator - sum(row["valid_answer"] for row in records)
+    summary = dict(status="collected" if len(records) == denominator and not errors and not missing
                    and valid_counters else "incomplete", responses=len(records),
-                   valid_answers=48 - missing, correct=sum(row["correct"] for row in records),
-                   score_denominator=48, missing_or_invalid_answers=missing,
+                   valid_answers=denominator - missing, correct=sum(row["correct"] for row in records),
+                   score_denominator=denominator, missing_or_invalid_answers=missing,
                    truncated=sum(row["truncated"] for row in records), request_errors=errors,
                    counters_valid=valid_counters, counters_settled=settled, counter_errors=counter_errors,
                    accepted_draft_tokens=accepted, verification_steps=drafts,
                    acceptance_length=1 + accepted / drafts if valid_counters else None,
                    completed_at=now(), quality_qualified=False,
-                   limits="All 48 original IDs stay in the denominator. Missing/truncated answers "
+                   limits=scope or "All 48 original IDs stay in the denominator. Missing/truncated answers "
                    "make the screen incomplete. Matched seeds do not guarantee identical sampled outputs. "
                    "This is not golden SPEED-Bench AL, performance measurement or model-quality proof.")
     save(args.output / "summary.json", summary)

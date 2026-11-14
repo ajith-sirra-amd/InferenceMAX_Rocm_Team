@@ -1,6 +1,7 @@
 """Compare exact-revision natural screen evidence without promoting quality."""
 import copy
 import json
+import math
 from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).parents[1]/'quality'))
@@ -10,22 +11,34 @@ import screen
 def compare(root):
     results=[]
     _,fixture=screen.assets()
+    baseline_summary=json.loads((root/'baseline/quality/summary.json').read_text())
+    full=baseline_summary['score_denominator']==1319
+    if full:
+        from full_quality import assets
+        _,fixture=assets()
+    denominator=len(fixture)
     for arm in ['baseline','candidate']:
         directory=root/arm
         loaded=json.loads((directory/'model-result.json').read_text())
         assert loaded['status']=='collected' and loaded['loaded_ranks']==8
         summary=json.loads((directory/'quality/summary.json').read_text())
-        assert summary['status']=='collected' and summary['score_denominator']==48
+        assert summary['status']=='collected' and summary['score_denominator']==denominator
+        if full:assert json.loads((directory/'quality/logprobs-validation.json').read_text())['status']=='passed'
         quality_compare.acceptance(directory/'quality',summary)
         rows=[json.loads(line) for line in (directory/'quality/responses.jsonl').read_text().splitlines()]
-        assert len(rows)==48 and {r['id'] for r in rows}=={r['id'] for r in fixture}
+        assert len(rows)==denominator and {r['id'] for r in rows}=={r['id'] for r in fixture}
         records={r['id']:r for r in rows}
         for row in fixture:
             observed=records[row['id']]
-            assert observed['request']==screen.prompt(row,'moonshotai/Kimi-K3.1-Pro')
+            expected_request=screen.prompt(row,'moonshotai/Kimi-K3.1-Pro')
+            if full:expected_request['logprobs']=True
+            assert observed['request']==expected_request
             assert observed['expected_answer']==screen.answer(row['answer'])
             assert observed['valid_answer'] and observed['error'] is None
             choice=observed['response']['choices'][0]
+            if full:
+                tokens=choice['logprobs']['content']
+                assert tokens and all(type(t['logprob']) in (int,float) and math.isfinite(t['logprob']) and t['logprob']<=0 for t in tokens)
             message=choice['message']
             extracted=screen.answer(message.get('content') or message.get('reasoning_content') or '')
             assert choice['finish_reason']=='stop' and extracted is not None
@@ -34,6 +47,7 @@ def compare(root):
         assert sum(r['correct'] for r in rows)==summary['correct']
         recipe=json.loads((directory/'recipe.json').read_text())
         normalized=copy.deepcopy(recipe)
+        normalized.pop('image',None)
         additional=json.loads(normalized['server_arguments']['additional-config'])
         identity=json.loads((directory/'runtime-manifest.json').read_text())
         if identity['pair']['pr']==67373:
@@ -46,7 +60,7 @@ def compare(root):
     a,b=results
     assert a[2]==b[2],'Serving recipes differ beyond the tested PR flag'
     transitions=[dict(id=key,baseline_correct=a[1][key]['correct'],candidate_correct=b[1][key]['correct']) for key in a[1]]
-    return dict(status='screen_collected',baseline_correct=a[0]['correct'],candidate_correct=b[0]['correct'],score_denominator=48,baseline_acceptance_length=a[0]['acceptance_length'],candidate_acceptance_length=b[0]['acceptance_length'],transitions=transitions,quality_qualified=False,limits='One matched sampled48-question screen; not full model quality, performance or unchanged exact-PR validation')
+    return dict(status='full_gsm8k_collected' if full else 'screen_collected',baseline_correct=a[0]['correct'],candidate_correct=b[0]['correct'],score_denominator=denominator,baseline_acceptance_length=a[0]['acceptance_length'],candidate_acceptance_length=b[0]['acceptance_length'],transitions=transitions,quality_qualified=False,limits='One matched sampled zero-shot GSM8K comparison; scope given by denominator. Not broad model quality, performance or unchanged exact-PR validation')
 
 if __name__=='__main__':
     root=Path(sys.argv[1]);result=compare(root)

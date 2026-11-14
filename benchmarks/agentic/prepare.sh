@@ -4,9 +4,9 @@ set -euo pipefail
 tools_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 pair_dir=${1:?Supply a fresh pair client directory under shared benchmarks}
 sa_checkout=${2:?Supply the measured checkout inferencex-e2e directory}
-case "$pair_dir" in /share_nfs/ajith/benchmarks/*) ;; *) echo 'Use shared benchmark storage' >&2; exit 2 ;; esac
+case "$pair_dir" in /share_nfs/ajith/benchmarks/*|/share_nfs/gguasti/benchmarks/*) ;; *) echo 'Use shared benchmark storage' >&2; exit 2 ;; esac
 pair_dir=$(realpath -m -- "$pair_dir")
-case "$pair_dir" in /share_nfs/ajith/benchmarks/*) ;; *) echo 'Client directory escapes shared benchmark storage' >&2; exit 2 ;; esac
+case "$pair_dir" in /share_nfs/ajith/benchmarks/*|/share_nfs/gguasti/benchmarks/*) ;; *) echo 'Client directory escapes shared benchmark storage' >&2; exit 2 ;; esac
 sa_checkout=$(realpath -- "$sa_checkout")
 test -d "$sa_checkout/infx/bench/agentic"
 expected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sa_source_sha"])' "$tools_dir/pins.json")

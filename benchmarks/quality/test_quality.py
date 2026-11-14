@@ -60,8 +60,12 @@ class EvidenceTests(TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 screen.snapshot(bad, parse)
 
-    def run_capture(self, root, *, initial=None, final=None, invalid_answers=False):
-        _, rows = screen.assets()
+    def run_capture(self, root, *, initial=None, final=None, invalid_answers=False, dataset_count=None):
+        config, rows = screen.assets()
+        dataset=None
+        if dataset_count is not None:
+            rows=rows[:dataset_count]
+            dataset=(config,rows)
         calls = {"metrics": 0, "requests": 0}
 
         def network(request, timeout):
@@ -90,8 +94,18 @@ class EvidenceTests(TestCase):
         output = root / "capture"
         with patch.object(screen, "urlopen", side_effect=network), patch.object(screen.time, "sleep"), contextlib.redirect_stdout(io.StringIO()):
             rc = screen.capture(Namespace(endpoint="http://test.local:8000", output=output,
-                                           model="moonshotai/Kimi-K3.1-Pro"))
+                                           model="moonshotai/Kimi-K3.1-Pro"), dataset=dataset,
+                                request_extra={'logprobs':True} if dataset is not None else None)
         return rc, json.loads((output / "summary.json").read_text()), calls, output
+
+    def test_expanded_dataset_contract_keeps_all_ids_and_logprobs_requests(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            rc, summary, calls, output=self.run_capture(Path(directory)/'valid',dataset_count=3)
+            self.assertEqual((rc,summary['score_denominator'],summary['correct'],calls['requests']),(0,3,3,3))
+            requests=json.loads((output/'requests.json').read_text())
+            self.assertTrue(all(row['body']['logprobs'] is True for row in requests))
+            rc, summary, _, _=self.run_capture(Path(directory)/'invalid',dataset_count=3,invalid_answers=True)
+            self.assertEqual((rc,summary['score_denominator'],summary['missing_or_invalid_answers']),(1,3,2))
 
     def test_complete_collection_and_incomplete_answers(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:

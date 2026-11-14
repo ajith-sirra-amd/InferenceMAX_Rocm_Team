@@ -19,6 +19,7 @@ for arm in ['baseline','candidate']:
     assert manifest['pair']==pair,'Performance images differ from screened images'
 (o/'pair-start.json').write_text(json.dumps(dict(pr=pair['pr'],quality_output=str(q),quality_comparison_sha256=hashlib.sha256((q/'model-comparison.json').read_bytes()).hexdigest(),manifest_sha256=hashlib.sha256(p.read_bytes()).hexdigest(),limits='Matched sampled48 screen prerequisite only; full accuracy remains unqualified'),indent=2)+'\n')
 PY
+if [[ "${IPAT_VALIDATE_QUALITY_ONLY:-0}" == 1 ]]; then exit 0; fi
 export IPAT_PR_NUMBER=67372
 for arm in baseline candidate; do
     optimization=baseline

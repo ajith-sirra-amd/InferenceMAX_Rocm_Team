@@ -33,6 +33,23 @@ provenance, raw native result and observed profiling environment/library maps.
 One pair is descriptive screening, not repeated agentic or full accuracy
 qualification. The original historical benchmark choices remain available.
 
+`PR67372 full GSM8K natural comparison` extends coverage to all1319 test rows
+from the already pinned dataset source; its first48 rows are verified against
+the original screen. Prompts, per-item seeds, sampling and scoring stay the
+same, with native generated-token log probabilities requested in both arms.
+The complete denominator, invalid answers, truncations, raw log probabilities
+and settled natural acceptance counters remain reviewable. This zero-shot
+sampled evaluation is distinct from official five-shot GSM8K and broad model
+quality. Full-run bounds are separately declared rather than shortening the
+workload or overwriting the original screen.
+
+`PR67372 agentic paired comparison` uses a prepared native client/source via
+explicit inputs and preserves the actual server recipe separately from the
+pinned client reference recipe. It runs two full3600-second pairs, reversing
+the second pair's order. Native validation, aggregation, request accounting and
+server metrics remain required. Dedicated CPU preparation/checks must pass
+before dispatch; preparation paths and helper hashes are immutable evidence.
+
 ## GPU qualification checkpoint, 14 November
 
 ROCm suite run43566518007 passed all32 cases, including the native loader.

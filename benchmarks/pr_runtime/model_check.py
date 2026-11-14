@@ -19,6 +19,8 @@ def main():
     output = Path('/logs')
     validation, _ = screen.assets()
     config = runtime.candidate_recipe(launch.recipe(Path('/fixed-tools/baseline.json'), validation), int(os.environ['IPAT_PR_NUMBER']), os.environ['IPAT_ARM'])
+    if 'EXPECTED_IMAGE' in os.environ:
+        config['image']=os.environ['EXPECTED_IMAGE']
     if os.environ.get('IPAT_XTML_PARSER')=='1':
         assert 'reasoning-parser' not in config['server_arguments']
         config['server_arguments']['reasoning-parser']='kimi_k3'
@@ -63,6 +65,11 @@ def main():
                 result['attnres_admission_ranks'] = 8
             screen.save(output/'observed-verifier.json', launch.observed_verifier((output/'server.log').read_text(errors='replace'), json.loads(config['server_arguments']['speculative-config'])))
             client = ['timeout', '--signal=TERM', '--kill-after=15s', '375s', sys.executable, '/quality/screen.py', '--endpoint', endpoint, '--model', 'moonshotai/Kimi-K3.1-Pro', '--output', '/logs/quality']
+            if os.environ.get('IPAT_FULL_GSM8K')=='1':
+                assert os.environ.get('IPAT_XTML_PARSER')=='1'
+                client[3]='9900s'
+                client[5]='/pr-tools/full_quality.py'
+                result['limits']='Full1319-item pinned zero-shot sampled GSM8K with native logprobs; not broad model quality or performance'
             (output/'client-command.txt').write_text(shlex.join(client)+'\n')
             code = subprocess.call(client)
             if code:

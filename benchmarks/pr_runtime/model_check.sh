@@ -32,7 +32,9 @@ for arm in baseline candidate; do
     module_sha=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["source_sha256"]["vllm/models/kimi_k3/nvidia/dspark_mla.py"])' "$out/$arm/runtime-verification.json")
     mkdir -p "$out/$arm/cache"
     port=$(python3 -c 'import socket;s=socket.socket();s.bind(("",0));print(s.getsockname()[1]);s.close()')
-    timeout --signal=TERM --kill-after=120s 2400s docker run --rm --init --name "$name" \
+    limit=2400s
+    if [[ "${IPAT_FULL_GSM8K:-0}" == 1 ]]; then limit=12000s; fi
+    timeout --signal=TERM --kill-after=120s "$limit" docker run --rm --init --name "$name" \
         --label "ipat.pr.output=$out" --network host --ipc host --device /dev/kfd --device /dev/dri \
         --security-opt seccomp=unconfined --ulimit memlock=-1 --ulimit stack=67108864 \
         --mount "type=bind,src=$out/$arm,dst=/logs" --mount "type=bind,src=$tools,dst=/pr-tools,readonly" \
@@ -45,6 +47,7 @@ for arm in baseline candidate; do
         --env "PORT=$port" --env "IPAT_ARM=$arm" --env "EXPECTED_SOURCE_SHA=$sha" --env "EXPECTED_MODULE_SHA=$module_sha" \
         --env "IPAT_PR_NUMBER=$pr" \
         --env "IPAT_XTML_PARSER=${IPAT_XTML_PARSER:-0}" \
+        --env "IPAT_FULL_GSM8K=${IPAT_FULL_GSM8K:-0}" --env "EXPECTED_IMAGE=$image" \
         --env VLLM_TARGET_DEVICE=rocm --env VLLM_GPU_SYNC_CHECK=error \
         --entrypoint /opt/runtime-venv/bin/python "$image" /pr-tools/model_check.py \
         2>&1 | tee "$out/$arm/coordinator.log"

@@ -41,7 +41,21 @@ def check_prepared(full):
     for name, expected in prepared['tools_sha256'].items():
         require(digest(TOOLS / name) == expected, f'Client helper changed: {name}')
     require(prepared['recipe_sha256'] == digest(WORK / 'recipe.json'), 'Prepared recipe changed')
-    require(digest('/logs/recipe.json') == prepared['recipe_sha256'], 'Per-arm recipe differs from prepared recipe')
+    if os.environ.get('IPAT_EXACT_PR_CLIENT') == '1':
+        require(digest('/logs/client-recipe.json') == prepared['recipe_sha256'], 'Per-arm client reference differs from prepared recipe')
+        effective=json.loads(Path('/logs/recipe.json').read_text())
+        reference=json.loads((WORK/'recipe.json').read_text())
+        require(effective['workload']==reference['workload'], 'Native client workload changed')
+        normalized=json.loads(json.dumps(effective))
+        normalized['image']=reference['image']
+        normalized['server_arguments'].pop('worker-extension-cls')
+        additional=json.loads(normalized['server_arguments']['additional-config'])
+        additional.pop('dspark_context_projection_sharding',None)
+        normalized['server_arguments']['additional-config']=json.dumps(additional,separators=(',',':'))
+        normalized['server_environment'].pop('VLLM_ROCM_KIMI_ATTN_RES_NORM_CACHE')
+        require(normalized==reference, 'Effective server recipe differs beyond declared DSpark/image/constructor instrumentation')
+    else:
+        require(digest('/logs/recipe.json') == prepared['recipe_sha256'], 'Per-arm recipe differs from prepared recipe')
     require(prepared['cache_manifest_sha256'] == digest(WORK / 'cache-manifest.json'), 'Cache manifest changed')
     cache_refs_check()
     if full:
