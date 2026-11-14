@@ -1,5 +1,21 @@
 # Exact-revision Kimi PR runtime preparation
 
+## GPU qualification checkpoint, 14 November
+
+ROCm suite run43566518007 passed all32 cases, including the native loader.
+Native TP8 projection run43567005492 passed10 cases per rank on all8 ranks:
+BF16 projection/gather/RMSNorm, eager/graph and two synthetic weight loads.
+These do not qualify full-model accuracy; the CPU triton-cpu setup remains unresolved.
+
+`PR67372 model screen` runs the verified baseline first, then the candidate
+only after a complete natural48-question screen. It preserves the natural
+recipe and records the native loaded DSpark layer/source/weight shape and hash
+on each rank via a read-only observational worker extension. Source and paired
+runtime inventories are verified before exposing GPUs. The historical audit
+is not reused for the new installed source layout. This diagnostic has loading
+overhead and is not a performance measurement or full quality qualification.
+Failures stop the pair and retain evidence; no gate is relaxed.
+
 This is a staged addition to `IPAT-Script`. The existing fixed, natural and
 agentic choices continue to run their historical runtime. They cannot qualify
 upstream PR #67372 or #67373.
