@@ -13,6 +13,7 @@ def main():
     cpu=torch.tensor([0,3,8],dtype=torch.int32)
     qs=cpu.cuda();lens=torch.tensor([70,129],device='cuda',dtype=torch.int32)
     table=torch.tensor([[3,1,0],[4,0,2]],device='cuda',dtype=torch.int32)
+    lens_cpu=lens.cpu()
     cases=[]
     config=VllmConfig(parallel_config=ParallelConfig(tensor_parallel_size=8,decode_context_parallel_size=8))
     with set_current_vllm_config(config):
@@ -23,7 +24,11 @@ def main():
                 counts.append(base+max(0,min(interleave,length-base*8-rank*interleave)))
             for sliced in [False,True]:
                 query_slice=slice(2,7) if sliced else None
-                chunk=build_prefill_chunk_metadata(0,2,qs,cpu,lens,lens,lens.cpu(),table,1,query_slice=query_slice,dcp_rank=rank,dcp_world_size=8,cp_kv_cache_interleave_size=interleave,global_row_bounds=True)
+                torch.cuda.set_sync_debug_mode('error')
+                try:
+                    chunk=build_prefill_chunk_metadata(0,2,qs,cpu,lens,lens,lens_cpu,table,1,query_slice=query_slice,dcp_rank=rank,dcp_world_size=8,cp_kv_cache_interleave_size=interleave,global_row_bounds=True)
+                finally:
+                    torch.cuda.set_sync_debug_mode('default')
                 first,last=(2,7) if sliced else (0,8)
                 expected_ks=[];expected_ke=[];local_ks=[];local_ke=[]
                 for request,(length,qlen) in enumerate([(70,3),(129,5)]):
@@ -37,6 +42,9 @@ def main():
                         local_ke.append(local_ks[-1]+local)
                 for actual,expected in [(chunk.global_cu_seqlen_ks,expected_ks),(chunk.global_cu_seqlen_ke,expected_ke),(chunk.cu_seqlen_ks,local_ks),(chunk.cu_seqlen_ke,local_ke)]:
                     assert actual.cpu().tolist()==expected[first:last],(rank,interleave,actual,expected)
+                assert chunk.local_total_seq_lens==sum(counts)
+                all_totals=[sum(length//(8*interleave)*interleave+max(0,min(interleave,length-(length//(8*interleave)*interleave)*8-other*interleave)) for length in [70,129]) for other in range(8)]
+                assert chunk.max_local_total_seq_lens==max(all_totals)
                 prepared=prepare_prefill_metadata(DeepseekV32IndexerPrefillMetadata([chunk]),8,rank,interleave)
                 assert len(prepared.plans)==1
                 cases.append(dict(interleave=interleave,sliced=sliced,status='passed'))

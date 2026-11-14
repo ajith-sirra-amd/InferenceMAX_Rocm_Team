@@ -8,13 +8,15 @@ import sys
 import runtime
 
 BUNDLE = Path(__file__).with_name('mxfp4_compatibility')
-def bundle(pr):
-    return BUNDLE if pr == 67372 else BUNDLE.with_name('mxfp4_compatibility_67373')
-def manifest(pr=67372):
-    return json.loads((bundle(pr)/'patch-manifest.json').read_text())
+def bundle(pr, variant='original'):
+    assert variant in ('original','syncfree')
+    name = 'mxfp4_compatibility' if pr == 67372 else 'mxfp4_compatibility_67373'
+    return BUNDLE.with_name(name + ('_syncfree' if variant=='syncfree' else ''))
+def manifest(pr=67372, variant='original'):
+    return json.loads((bundle(pr,variant)/'patch-manifest.json').read_text())
 
-def probe_derived(image, output, pr=67372):
-    m = manifest(pr)
+def probe_derived(image, output, pr=67372, variant='original'):
+    m = manifest(pr,variant)
     v, a = m['changes']
     original = runtime.PROBE
     guard = "if dirty:\n    raise RuntimeError('Baked full-source checkout is dirty')"
@@ -32,10 +34,11 @@ def probe_derived(image, output, pr=67372):
 
 def verify(item, output):
     pr = item['compatibility'].get('pr',67372)
-    m = manifest(pr)
-    assert item['compatibility']['manifest_sha256'] == hashlib.sha256((bundle(pr)/'patch-manifest.json').read_bytes()).hexdigest()
+    variant = item['compatibility'].get('variant','original')
+    m = manifest(pr,variant)
+    assert item['compatibility']['manifest_sha256'] == hashlib.sha256((bundle(pr,variant)/'patch-manifest.json').read_bytes()).hexdigest()
     parent = runtime.probe_image(item['parent_image'], output.with_name('parent-probe.json'))
-    derived = probe_derived(item['image'], output, pr)
+    derived = probe_derived(item['image'], output, pr,variant)
     assert derived['source_sha'] == parent['source_sha'] == item['source_sha']
     changed = {k for k in parent['source_sha256'] if parent['source_sha256'][k] != derived['source_sha256'].get(k)}
     assert changed == {'vllm/v1/attention/backends/mla/indexer.py'}, changed
@@ -52,7 +55,8 @@ def verify(item, output):
 def build(parent_path, output):
     output.mkdir(parents=True,exist_ok=False)
     pr = json.loads(parent_path.read_text())['pr']
-    m = manifest(pr)
+    variant = 'syncfree'
+    m = manifest(pr,variant)
     pair = runtime.load_pair(parent_path,pr)
     assert pair == m['current_pair']
     records = {}
@@ -65,7 +69,7 @@ def build(parent_path, output):
         actual_aiter = subprocess.check_output(['docker','run','--rm','--network','none','--entrypoint',runtime.PYTHON,pair[arm]['image'],'-c',aiter_check],text=True).strip()
         assert actual_aiter == aiter['before_sha256'], 'Parent AITER reader differs from frozen compatibility input'
         for change in m['changes']:
-            raw = (bundle(pr)/(change['patch']+'.source-after')).read_bytes()
+            raw = (bundle(pr,variant)/(change['patch']+'.source-after')).read_bytes()
             assert hashlib.sha256(raw).hexdigest() == change['after_sha256']
             (work/('indexer.py' if change['path'].startswith('vllm/') else 'rowgroup.py')).write_bytes(raw)
         tag = 'ipat-mxfp4-parent:'+pair[arm]['image'].split(':')[1]
@@ -74,7 +78,7 @@ def build(parent_path, output):
         dockerfile = 'FROM '+tag+'\nCOPY indexer.py /usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/mla/indexer.py\nCOPY indexer.py /opt/ipat/vllm/vllm/v1/attention/backends/mla/indexer.py\nCOPY rowgroup.py /usr/local/lib/python3.12/dist-packages/aiter/ops/flydsl/kernels/mqa_logits/pa_mqa_logits_fp4_rowgroup.py\n'
         (work/'Dockerfile').write_text(dockerfile)
         subprocess.run(['docker','build','--network','none','--iidfile',str(work/'image-id.txt'),str(work)],check=True)
-        item = dict(pair[arm],parent_image=pair[arm]['image'],image=(work/'image-id.txt').read_text().strip(),compatibility=dict(kind='historical_MXFP4_compatibility',pr=pr,manifest_sha256=hashlib.sha256((bundle(pr)/'patch-manifest.json').read_bytes()).hexdigest()))
+        item = dict(pair[arm],parent_image=pair[arm]['image'],image=(work/'image-id.txt').read_text().strip(),compatibility=dict(kind='historical_MXFP4_compatibility',pr=pr,variant=variant,manifest_sha256=hashlib.sha256((bundle(pr,variant)/'patch-manifest.json').read_bytes()).hexdigest()))
         verify(item,work/'runtime-verification.json')
         records[arm] = item
     pair.update(records)
