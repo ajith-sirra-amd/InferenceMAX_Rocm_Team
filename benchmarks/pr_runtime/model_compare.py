@@ -29,11 +29,16 @@ def compare(root):
         recipe=json.loads((directory/'recipe.json').read_text())
         normalized=copy.deepcopy(recipe)
         additional=json.loads(normalized['server_arguments']['additional-config'])
-        assert additional.pop('dspark_context_projection_sharding',False)==(arm=='candidate')
+        identity=json.loads((directory/'runtime-manifest.json').read_text())
+        if identity['pair']['pr']==67373:
+            assert normalized['server_environment'].pop('VLLM_ROCM_KIMI_ATTN_RES_NORM_CACHE')==('1' if arm=='candidate' else '0')
+            assert loaded['attnres_admission_ranks']==8
+        else:
+            assert additional.pop('dspark_context_projection_sharding',False)==(arm=='candidate')
         normalized['server_arguments']['additional-config']=additional
         results.append((summary,records,normalized))
     a,b=results
-    assert a[2]==b[2],'Serving recipes differ beyond DSpark flag'
+    assert a[2]==b[2],'Serving recipes differ beyond the tested PR flag'
     transitions=[dict(id=key,baseline_correct=a[1][key]['correct'],candidate_correct=b[1][key]['correct']) for key in a[1]]
     return dict(status='screen_collected',baseline_correct=a[0]['correct'],candidate_correct=b[0]['correct'],score_denominator=48,baseline_acceptance_length=a[0]['acceptance_length'],candidate_acceptance_length=b[0]['acceptance_length'],transitions=transitions,quality_qualified=False,limits='One matched sampled48-question screen; not full model quality, performance or unchanged exact-PR validation')
 
