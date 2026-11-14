@@ -18,7 +18,9 @@ on:
                 - "PR67372 MXFP4 metadata check"
                 - "PR67373 MXFP4 metadata check"
                 - "PR67372 model screen"
+                - "PR67372 XTML model screen"
                 - "PR67373 model screen"
+                - "PR67373 XTML model screen"
                 - "PR67372 TP8 projection"
                 - "PR67372 ROCm correctness"
                 - "PR67372 correctness"
@@ -236,7 +238,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-model:
-        if: ${{ (inputs.generate-cli-command == 'PR67372 model screen' || inputs.generate-cli-command == 'PR67373 model screen') }}
+        if: ${{ ((inputs.generate-cli-command == 'PR67372 model screen' || inputs.generate-cli-command == 'PR67373 model screen') || inputs.generate-cli-command == 'PR67372 XTML model screen' || inputs.generate-cli-command == 'PR67373 XTML model screen') }}
         name: DSpark exact-runtime natural model screen
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 100
@@ -250,6 +252,7 @@ jobs:
             IPAT_PR_MANIFEST: ${{ inputs.pr-runtime-manifest }}
             IPAT_PR_OUTPUT: /share_nfs/gguasti/benchmarks/pr-model-${{ github.run_id }}-${{ github.run_attempt }}
             PYTHONDONTWRITEBYTECODE: '1'
+            IPAT_XTML_PARSER: ${{ contains(inputs.generate-cli-command, 'XTML') && '1' || '0' }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
               with:
