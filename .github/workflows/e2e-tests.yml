@@ -10,10 +10,15 @@ on:
                 type: choice
                 options:
                 - "PR67372 MXFP4 compatibility build"
+                - "PR67373 MXFP4 compatibility build"
                 - "PR67372 MXFP4 kernel check"
+                - "PR67373 MXFP4 kernel check"
                 - "PR67372 MXFP4 numerical check"
+                - "PR67373 MXFP4 numerical check"
                 - "PR67372 MXFP4 metadata check"
+                - "PR67373 MXFP4 metadata check"
                 - "PR67372 model screen"
+                - "PR67373 model screen"
                 - "PR67372 TP8 projection"
                 - "PR67372 ROCm correctness"
                 - "PR67372 correctness"
@@ -230,7 +235,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-model:
-        if: ${{ inputs.generate-cli-command == 'PR67372 model screen' }}
+        if: ${{ (inputs.generate-cli-command == 'PR67372 model screen' || inputs.generate-cli-command == 'PR67373 model screen') }}
         name: DSpark exact-runtime natural model screen
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 100
@@ -271,7 +276,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-mxfp4:
-        if: ${{ inputs.generate-cli-command == 'PR67372 MXFP4 kernel check' }}
+        if: ${{ (inputs.generate-cli-command == 'PR67372 MXFP4 kernel check' || inputs.generate-cli-command == 'PR67373 MXFP4 kernel check') }}
         name: Kimi MXFP4 native kernel and graph qualification
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 45
@@ -312,7 +317,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-mxfp4-numerical:
-        if: ${{ inputs.generate-cli-command == 'PR67372 MXFP4 numerical check' }}
+        if: ${{ (inputs.generate-cli-command == 'PR67372 MXFP4 numerical check' || inputs.generate-cli-command == 'PR67373 MXFP4 numerical check') }}
         name: Kimi MXFP4 independent numerical qualification
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 45
@@ -353,7 +358,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-mxfp4-metadata:
-        if: ${{ inputs.generate-cli-command == 'PR67372 MXFP4 metadata check' }}
+        if: ${{ (inputs.generate-cli-command == 'PR67372 MXFP4 metadata check' || inputs.generate-cli-command == 'PR67373 MXFP4 metadata check') }}
         name: Kimi MXFP4 global and local DCP metadata qualification
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 45
@@ -394,7 +399,7 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-compatibility:
-        if: ${{ inputs.generate-cli-command == 'PR67372 MXFP4 compatibility build' }}
+        if: ${{ (inputs.generate-cli-command == 'PR67372 MXFP4 compatibility build' || inputs.generate-cli-command == 'PR67373 MXFP4 compatibility build') }}
         name: DSpark paired MXFP4 compatibility build
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 45

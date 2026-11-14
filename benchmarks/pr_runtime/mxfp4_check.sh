@@ -4,8 +4,9 @@ tools=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 out=${IPAT_PR_OUTPUT:?}
 case "$out" in /share_nfs/gguasti/benchmarks/pr-mxfp4-*) ;; *) exit 2 ;; esac
 mkdir -p "$out"
+pr=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["pr"])' "$IPAT_PR_MANIFEST")
 for arm in baseline candidate; do
-    python3 "$tools/runtime.py" "$IPAT_PR_MANIFEST" --pr 67372 --arm "$arm" --output "$out/$arm" --verify
+    python3 "$tools/runtime.py" "$IPAT_PR_MANIFEST" --pr "$pr" --arm "$arm" --output "$out/$arm" --verify
 done
 python3 "$tools/wait_idle.py" "$out/gpu.availability.jsonl"
 image=$(cat "$out/candidate/runtime-image.txt")

@@ -5,8 +5,9 @@ repo=$(realpath "$tools/../..")
 out=${IPAT_PR_OUTPUT:?}
 case "$out" in /share_nfs/gguasti/benchmarks/pr-model-*) ;; *) exit 2 ;; esac
 mkdir -p "$out"
+pr=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["pr"])' "$IPAT_PR_MANIFEST")
 for arm in baseline candidate; do
-    python3 "$tools/runtime.py" "$IPAT_PR_MANIFEST" --pr 67372 --arm "$arm" --output "$out/$arm" --verify
+    python3 "$tools/runtime.py" "$IPAT_PR_MANIFEST" --pr "$pr" --arm "$arm" --output "$out/$arm" --verify
 done
 test -d /share_nfs/models/moonshotai/Kimi-K3.1-Pro
 test -d /share_nfs/models/Inferact/Kimi-K3.1-Pro-DSpark-preview
@@ -42,6 +43,7 @@ for arm in baseline candidate; do
         --tmpfs /tmp:rw,exec,size=64g --env OMP_NUM_THREADS=4 --env PYTHONDONTWRITEBYTECODE=1 \
         --env PYTHONPATH=/pr-tools --env XDG_CACHE_HOME=/logs/cache --env TMPDIR=/tmp \
         --env "PORT=$port" --env "IPAT_ARM=$arm" --env "EXPECTED_SOURCE_SHA=$sha" --env "EXPECTED_MODULE_SHA=$module_sha" \
+        --env "IPAT_PR_NUMBER=$pr" \
         --env VLLM_TARGET_DEVICE=rocm --env VLLM_GPU_SYNC_CHECK=error \
         --entrypoint /opt/runtime-venv/bin/python "$image" /pr-tools/model_check.py \
         2>&1 | tee "$out/$arm/coordinator.log"

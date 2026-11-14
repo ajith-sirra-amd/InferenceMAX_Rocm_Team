@@ -26,7 +26,7 @@ class ModelWorkerExtension:
             rank = get_tensor_model_parallel_rank()
             layer = model.model.context_proj
             weight = layer.weight
-            expected = [896, 35840] if os.environ['IPAT_ARM'] == 'candidate' else [7168, 35840]
+            expected = [896, 35840] if os.environ['IPAT_PR_NUMBER'] == '67372' and os.environ['IPAT_ARM'] == 'candidate' else [7168, 35840]
             assert list(weight.shape) == expected, (rank, weight.shape, expected)
             assert weight.dtype == torch.bfloat16
             digest = hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
@@ -41,3 +41,16 @@ class ModelWorkerExtension:
             return result
 
         module.K3DSparkForCausalLM.load_weights = load_weights
+        if os.environ['IPAT_PR_NUMBER'] == '67373':
+            import vllm.models.kimi_k3.amd.linear as linear
+            model_init = linear.KimiLinearModel.__init__
+            def init_model(model, *args, **kwargs):
+                model_init(model, *args, **kwargs)
+                enabled = getattr(model, 'cache_attn_res_norms', False)
+                assert enabled == (os.environ['IPAT_ARM'] == 'candidate')
+                rank = get_tensor_model_parallel_rank()
+                Path(f'/logs/attnres-rank-{rank}.json').write_text(json.dumps(dict(
+                    rank=rank, cache_attn_res_norms=enabled,
+                    source_sha256=hashlib.sha256(Path(linear.__file__).read_bytes()).hexdigest(),
+                    limits='Constructor admission; does not establish graph execution coverage'))+'\n')
+            linear.KimiLinearModel.__init__ = init_model

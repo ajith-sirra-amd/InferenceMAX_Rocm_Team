@@ -18,7 +18,7 @@ import runtime
 def main():
     output = Path('/logs')
     validation, _ = screen.assets()
-    config = runtime.candidate_recipe(launch.recipe(Path('/fixed-tools/baseline.json'), validation), 67372, os.environ['IPAT_ARM'])
+    config = runtime.candidate_recipe(launch.recipe(Path('/fixed-tools/baseline.json'), validation), int(os.environ['IPAT_PR_NUMBER']), os.environ['IPAT_ARM'])
     os.environ.update(config['server_environment'])
     config['server_arguments']['worker-extension-cls'] = 'model_worker.ModelWorkerExtension'
     argv = launch.command(config, '/model', os.environ['PORT'])
@@ -53,6 +53,10 @@ def main():
             fp4 = [[json.loads(line) for line in (output/f'mxfp4-rank-{rank}.jsonl').read_text().splitlines()] for rank in range(8)]
             assert all(rows and all(r['use_fp4'] and r['rank']==rank for r in rows) for rank,rows in enumerate(fp4))
             result['mxfp4_indexers_per_rank'] = [len(rows) for rows in fp4]
+            if os.environ['IPAT_PR_NUMBER'] == '67373':
+                norms = [json.loads((output/f'attnres-rank-{rank}.json').read_text()) for rank in range(8)]
+                assert all(r['rank']==rank and r['cache_attn_res_norms']==(os.environ['IPAT_ARM']=='candidate') for rank,r in enumerate(norms))
+                result['attnres_admission_ranks'] = 8
             screen.save(output/'observed-verifier.json', launch.observed_verifier((output/'server.log').read_text(errors='replace'), json.loads(config['server_arguments']['speculative-config'])))
             client = ['timeout', '--signal=TERM', '--kill-after=15s', '375s', sys.executable, '/quality/screen.py', '--endpoint', endpoint, '--model', 'moonshotai/Kimi-K3.1-Pro', '--output', '/logs/quality']
             (output/'client-command.txt').write_text(shlex.join(client)+'\n')
