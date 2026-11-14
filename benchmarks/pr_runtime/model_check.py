@@ -19,12 +19,16 @@ def main():
     output = Path('/logs')
     validation, _ = screen.assets()
     config = runtime.candidate_recipe(launch.recipe(Path('/fixed-tools/baseline.json'), validation), int(os.environ['IPAT_PR_NUMBER']), os.environ['IPAT_ARM'])
+    if os.environ.get('IPAT_XTML_PARSER')=='1':
+        assert 'reasoning-parser' not in config['server_arguments']
+        config['server_arguments']['reasoning-parser']='kimi_k3'
     os.environ.update(config['server_environment'])
     config['server_arguments']['worker-extension-cls'] = 'model_worker.ModelWorkerExtension'
     argv = launch.command(config, '/model', os.environ['PORT'])
     screen.save(output/'recipe.json', config)
     (output/'command.txt').write_text(shlex.join(argv)+'\n')
     result = dict(status='failed', limits='Natural 48-example screen; not full model quality or performance qualification')
+    result['protocol_variant']='native_kimi_k3_parser' if os.environ.get('IPAT_XTML_PARSER')=='1' else 'original_unparsed'
     server = None
     def stop(signum, frame):
         raise RuntimeError(f'Interrupted by signal {signum}')
