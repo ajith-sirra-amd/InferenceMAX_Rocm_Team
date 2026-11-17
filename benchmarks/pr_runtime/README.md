@@ -8,6 +8,10 @@ MXFP4, native parser, v3 typed extraction and strict validity/truncation/logprob
 counter/no-score-drop requirements remain. Baseline runs first; failed attempts
 and the sampled48/47 result remain evidence. This is a new protocol, not a v3 retry.
 
+`PR67373 full GSM8K typed protocol v4` uses the same full matched protocol
+and the explicit AttnRes runtime manifest after native cache admission/screen
+qualification. No performance lane is enabled by adding this quality choice.
+
 A separate local AttnRes fixture uses equally padded reference prefix/bank tensors
 without consuming random values or changing numerical tolerances. Original fixture
 failures remain retained; a local fixture pass is not an upstream suite pass.
