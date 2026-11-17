@@ -22,7 +22,7 @@ def compare(root):
         directory=root/arm
         protocol_path=directory/'quality/protocol.json'
         protocol=json.loads(protocol_path.read_text()) if protocol_path.exists() else dict(protocol='original2048_numeric_v1')
-        assert protocol['protocol'] in ['original2048_numeric_v1','extended8192_clock_v2','extended8192_typed_v3']
+        assert protocol['protocol'] in ['original2048_numeric_v1','extended8192_clock_v2','extended8192_typed_v3','extended32768_typed_v4']
         protocols.append(protocol)
         extended=protocol['protocol']!='original2048_numeric_v1'
         loaded=json.loads((directory/'model-result.json').read_text())
@@ -38,7 +38,7 @@ def compare(root):
             observed=records[row['id']]
             expected_request=screen.prompt(row,'moonshotai/Kimi-K3.1-Pro')
             if full:expected_request['logprobs']=True
-            if extended:expected_request['max_tokens']=8192
+            if extended:expected_request['max_tokens']=32768 if protocol['protocol']=='extended32768_typed_v4' else 8192
             assert observed['request']==expected_request
             assert observed['expected_answer']==screen.answer(row['answer'])
             assert observed['valid_answer'] and observed['error'] is None
@@ -50,7 +50,7 @@ def compare(root):
             content=message.get('content') or message.get('reasoning_content') or ''
             if extended:
                 from full_quality import extended_answer,typed_answer
-                extracted=(typed_answer if protocol['protocol']=='extended8192_typed_v3' else extended_answer)(row,content)
+                extracted=(typed_answer if protocol['protocol'] in ['extended8192_typed_v3','extended32768_typed_v4'] else extended_answer)(row,content)
             else:extracted=screen.answer(content)
             assert choice['finish_reason']=='stop' and extracted is not None
             assert observed['extracted_answer']==extracted

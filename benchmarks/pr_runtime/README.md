@@ -1,3 +1,17 @@
+## Resumption on g34, 17 November 2026
+
+The frozen images are transferred unchanged from g37 to g34 under owned Job29088.
+The linked `PR67372 full GSM8K typed protocol v4` experiment increases the
+per-request generation budget from8192 to32768 tokens in both arms to investigate
+v3's item0184 reasoning exhaustion. All1319 IDs, prompts, sampling, seeds,
+MXFP4, native parser, v3 typed extraction and strict validity/truncation/logprob/
+counter/no-score-drop requirements remain. Baseline runs first; failed attempts
+and the sampled48/47 result remain evidence. This is a new protocol, not a v3 retry.
+
+A separate local AttnRes fixture uses equally padded reference prefix/bank tensors
+without consuming random values or changing numerical tolerances. Original fixture
+failures remain retained; a local fixture pass is not an upstream suite pass.
+
 # Exact-revision Kimi PR runtime preparation
 
 ## Current MXFP4 qualification

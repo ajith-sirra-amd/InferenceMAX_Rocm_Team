@@ -41,13 +41,14 @@ def typed_answer(row,content):
 def main():
     p=argparse.ArgumentParser();p.add_argument('--endpoint',required=True);p.add_argument('--model',required=True);p.add_argument('--output',type=Path,required=True);args=p.parse_args()
     name=__import__('os').environ.get('IPAT_QUALITY_PROTOCOL','original2048_numeric_v1')
-    assert name in ['original2048_numeric_v1','extended8192_clock_v2','extended8192_typed_v3']
+    assert name in ['original2048_numeric_v1','extended8192_clock_v2','extended8192_typed_v3','extended32768_typed_v4']
     extended=name!='original2048_numeric_v1'
     extra=dict(logprobs=True)
-    if extended:extra['max_tokens']=8192
+    token_limit=32768 if name=='extended32768_typed_v4' else (8192 if extended else 2048)
+    if extended:extra['max_tokens']=token_limit
     dataset=assets()
-    protocol=dict(protocol=name,max_tokens=8192 if extended else 2048,time_answer_item='gsm8k-test-1001' if extended else None,percentage_answer_item='gsm8k-test-0806' if name=='extended8192_typed_v3' else None,recovery_of=43617235695 if name=='extended8192_typed_v3' else (43611263542 if extended else None),limits='No denominator, truncation, request-error, finite-logprob, counter or no-score-drop gate relaxation.')
-    extractor=typed_answer if name=='extended8192_typed_v3' else (extended_answer if extended else None)
+    protocol=dict(protocol=name,max_tokens=token_limit,time_answer_item='gsm8k-test-1001' if extended else None,percentage_answer_item='gsm8k-test-0806' if name in ['extended8192_typed_v3','extended32768_typed_v4'] else None,recovery_of=43619543042 if name=='extended32768_typed_v4' else (43617235695 if name=='extended8192_typed_v3' else (43611263542 if extended else None)),limits='No denominator, truncation, request-error, finite-logprob, counter or no-score-drop gate relaxation.')
+    extractor=typed_answer if name in ['extended8192_typed_v3','extended32768_typed_v4'] else (extended_answer if extended else None)
     code=screen.capture(args,dataset=dataset,request_extra=extra,answer_extractor=extractor,scope='All1319 pinned GSM8K test items, zero-shot sampled with native logprobs; protocol '+name+'. Not official five-shot GSM8K, broad model quality or performance.')
     screen.save(args.output/'protocol.json',protocol)
     rows=[json.loads(line) for line in (args.output/'responses.jsonl').read_text().splitlines()]

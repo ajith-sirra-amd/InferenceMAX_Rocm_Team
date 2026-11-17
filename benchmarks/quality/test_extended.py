@@ -20,4 +20,26 @@ class ClockAnswerTests(unittest.TestCase):
         self.assertEqual(extended_answer(row,'#### 3'),'3')
         self.assertIsNone(extended_answer(row,'I would start at 2:00 pm'))
 
+class BudgetProtocolTests(unittest.TestCase):
+    def test_v4_changes_budget_and_retains_typed_extraction(self):
+        import json, tempfile, os
+        from unittest.mock import patch
+        import full_quality
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)
+            captured={}
+            def capture(args, **kwargs):
+                captured.update(kwargs)
+                rows=[dict(id=f'gsm8k-test-{i:04d}', response={'choices':[{'logprobs':{'content':[{'logprob':-0.5}]}}]}) for i in range(1319)]
+                (output/'responses.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in rows))
+                return 0
+            with patch.dict(os.environ, {'IPAT_QUALITY_PROTOCOL':'extended32768_typed_v4'}), patch.object(sys,'argv',['full_quality','--endpoint','http://unused','--model','test','--output',folder]), patch.object(full_quality,'assets',return_value=({},[])), patch.object(full_quality.screen,'capture',side_effect=capture):
+                self.assertEqual(full_quality.main(),0)
+            self.assertEqual(captured['request_extra'],dict(logprobs=True,max_tokens=32768))
+            self.assertIs(captured['answer_extractor'],full_quality.typed_answer)
+            protocol=json.loads((output/'protocol.json').read_text())
+            self.assertEqual(protocol['recovery_of'],43619543042)
+            self.assertEqual(protocol['percentage_answer_item'],'gsm8k-test-0806')
+            self.assertEqual(json.loads((output/'logprobs-validation.json').read_text())['requests'],1319)
+
 if __name__=='__main__':unittest.main()
