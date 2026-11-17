@@ -1,6 +1,7 @@
 """Validate paired fixed results and report descriptive metrics without promotion."""
 import copy,json,sys
 from pathlib import Path
+from performance_gate import normalize_recipe
 sys.path.insert(0,str(Path(__file__).parents[1]/'fixed_length'))
 from validate import validate_result
 
@@ -11,10 +12,8 @@ def compare(root):
         assert json.loads((d/'performance-result.json').read_text())['status']=='collected'
         result=validate_result(json.loads((d/'baseline.json').read_text()))
         assert result['status']=='passed',result
-        recipe=json.loads((d/'recipe.json').read_text());recipe.pop('image')
-        additional=json.loads(recipe['server_arguments']['additional-config'])
-        assert additional.pop('dspark_context_projection_sharding',False)==(arm=='candidate')
-        recipe['server_arguments']['additional-config']=additional
+        pr=json.loads((d/'performance-result.json').read_text())['pr']
+        recipe=normalize_recipe(json.loads((d/'recipe.json').read_text()),pr,arm)
         recipes.append(recipe);records.append(result)
     assert recipes[0]==recipes[1],'Serving recipes differ beyond PR flag/image'
     a,b=records

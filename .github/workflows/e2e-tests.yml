@@ -25,7 +25,9 @@ on:
                 - "PR67372 full GSM8K typed protocol v4"
                 - "PR67373 full GSM8K typed protocol v4"
                 - "PR67372 fixed paired screen"
+                - "PR67373 fixed paired screen"
                 - "PR67372 agentic paired comparison"
+                - "PR67373 agentic paired comparison"
                 - "PR67373 model screen"
                 - "PR67373 XTML model screen"
                 - "PR67372 TP8 projection"
@@ -94,6 +96,10 @@ on:
                 required: false
                 type: string
                 default: ""
+            pr-component-output:
+                description: "Explicit local AttnRes full same-layout fixture evidence directory"
+                required: false
+                type: string
             pr-runtime-manifest:
                 description: "Prepared digest-pinned PR pair manifest under /share_nfs/ajith; required for PR correctness"
                 required: false
@@ -125,6 +131,10 @@ on:
                 required: false
                 type: string
                 default: ""
+            pr-component-output:
+                description: "Explicit local AttnRes full same-layout fixture evidence directory"
+                required: false
+                type: string
             pr-runtime-manifest:
                 description: "Prepared digest-pinned PR pair manifest"
                 required: false
@@ -364,8 +374,8 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-fixed:
-        if: ${{ inputs.generate-cli-command == 'PR67372 fixed paired screen' }}
-        name: DSpark derived-runtime fixed paired screen
+        if: ${{ inputs.generate-cli-command == 'PR67372 fixed paired screen' || inputs.generate-cli-command == 'PR67373 fixed paired screen' }}
+        name: Frozen Kimi PR derived-runtime fixed paired screen
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 100
         permissions:
@@ -379,6 +389,7 @@ jobs:
             IPAT_PR_OUTPUT: /share_nfs/gguasti/benchmarks/pr-perf-${{ github.run_id }}-${{ github.run_attempt }}
             PYTHONDONTWRITEBYTECODE: '1'
             IPAT_PR_QUALITY_OUTPUT: ${{ inputs.pr-quality-output }}
+            IPAT_PR_COMPONENT_OUTPUT: ${{ inputs.pr-component-output }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
               with:
@@ -406,8 +417,8 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-agentic:
-        if: ${{ inputs.generate-cli-command == 'PR67372 agentic paired comparison' }}
-        name: DSpark derived-runtime repeated native agentic comparison
+        if: ${{ inputs.generate-cli-command == 'PR67372 agentic paired comparison' || inputs.generate-cli-command == 'PR67373 agentic paired comparison' }}
+        name: Frozen Kimi PR repeated native agentic comparison
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 720
         permissions:
@@ -423,6 +434,7 @@ jobs:
             IPAT_PR_AGENTIC_CLIENT: ${{ inputs.pr-agentic-client }}
             IPAT_PR_AGENTIC_SOURCE: ${{ inputs.pr-agentic-source }}
             IPAT_PR_QUALITY_OUTPUT: ${{ inputs.pr-quality-output }}
+            IPAT_PR_COMPONENT_OUTPUT: ${{ inputs.pr-component-output }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
               with:

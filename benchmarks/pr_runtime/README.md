@@ -1,3 +1,16 @@
+## Explicit AttnRes timing prerequisite
+
+The fixed and repeated agentic lanes accept both frozen PR manifests. Every timing
+lane requires full1319 matched no-drop quality and the identical screened images.
+AttnRes additionally requires `pr-component-output`: complete local29-case same-layout
+fixture evidence, original/revised source hashes and JUnit without failures/skips.
+The gate re-derives exactly the two reference-storage changes from the immutable
+parent test; changed tolerances, unrelated fixture edits or another source fail.
+Original upstream23pass/sixfail remains retained. Timing therefore measures an
+explicitly qualified local fixture/derived-runtime experiment, not an upstream test
+suite pass. Cache admission is verified on8 ranks. Workload, synthetic acceptance,
+fixed192 requests and two full3600-second reversed-order agentic pairs are retained.
+
 ## Resumption on g34, 17 November 2026
 
 The frozen images are transferred unchanged from g37 to g34 under owned Job29088.

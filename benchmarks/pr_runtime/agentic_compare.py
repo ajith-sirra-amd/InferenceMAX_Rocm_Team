@@ -1,6 +1,7 @@
 """Compare native agentic aggregates, retaining request accounting and metric scope."""
 import copy,json,math,sys
 from pathlib import Path
+from performance_gate import normalize_recipe
 
 def compare(root):
     replicas=[]
@@ -9,10 +10,8 @@ def compare(root):
         for arm in ['baseline','candidate']:
             d=root/f'replica-{replica}'/arm
             assert json.loads((d/'performance-result.json').read_text())['status']=='collected'
-            recipe=json.loads((d/'recipe.json').read_text());recipe.pop('image')
-            additional=json.loads(recipe['server_arguments']['additional-config'])
-            assert additional.pop('dspark_context_projection_sharding',False)==(arm=='candidate')
-            recipe['server_arguments']['additional-config']=additional;recipes.append(recipe)
+            pr=json.loads((d/'performance-result.json').read_text())['pr']
+            recipe=normalize_recipe(json.loads((d/'recipe.json').read_text()),pr,arm);recipes.append(recipe)
             check=json.loads((d/'agentic-client-start.json').read_text())
             assert check['native_plan']['replay']['duration']==3600 and check['native_plan']['replay']['concurrency']==48
             aggregate=json.loads((d/'agentic.json').read_text())

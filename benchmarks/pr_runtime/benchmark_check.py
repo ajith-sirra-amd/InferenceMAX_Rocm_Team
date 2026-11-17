@@ -18,7 +18,7 @@ def main():
     if workload=='fixed':
         assert config['workload']==dict(input_tokens=8192,output_tokens=1024,concurrency=48,requests=192,warmup_requests=96,seed=0)
     else:
-        assert pr==67372
+        assert pr in (67372,67373)
         assert config['workload']['type']=='native-agentx' and config['workload']['concurrency']==48 and config['workload']['benchmark_duration_seconds']==3600
         (out/'client-recipe.json').write_bytes(reference.read_bytes())
         os.environ.update(IPAT_EXACT_PR_CLIENT='1',MODEL='moonshotai/Kimi-K3.1-Pro',RESULT_DIR='/logs',CONC='48',DURATION='3600')
@@ -56,6 +56,10 @@ def main():
             fp4=[[json.loads(line) for line in (out/f'mxfp4-rank-{rank}.jsonl').read_text().splitlines()] for rank in range(8)]
             assert all(rows and all(r['use_fp4'] and r['rank']==rank for r in rows) for rank,rows in enumerate(fp4))
             result['loaded_ranks']=8;result['mxfp4_indexers_per_rank']=[len(rows) for rows in fp4]
+            if pr==67373:
+                norms=[json.loads((out/f'attnres-rank-{rank}.json').read_text()) for rank in range(8)]
+                assert all(r['rank']==rank and r['cache_attn_res_norms']==(arm=='candidate') for rank,r in enumerate(norms))
+                result['attnres_admission_ranks']=8
             profiling={k:v for k,v in os.environ.items() if k.startswith(('ROCPROF','HIP_TRACE','HSA_TOOLS','VLLM_TORCH_PROFILER','SGLANG_TORCH_PROFILER')) or k in ('LD_PRELOAD','PROFILE')}
             maps={}
             for process in Path('/proc').iterdir():
