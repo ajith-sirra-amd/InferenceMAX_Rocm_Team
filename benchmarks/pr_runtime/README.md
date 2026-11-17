@@ -1,3 +1,14 @@
+## Fixed startup recovery, 17 November 2026
+
+Fixed run44044689753 failed before model loading because Docker explicitly passed
+an empty VLLM_GPU_SYNC_CHECK value. Frozen vLLM only accepts warn/error or absence.
+Timing now omits the variable; the coordinator removes an empty inherited value
+and rejects active warn/error instrumentation. Correctness/model lanes retain
+native error mode. Native environment lookup passed on both frozen DSpark images
+without GPU devices. Coordinator failures now print their saved error and bounded
+server-log tail to the Actions workflow log. The failed run and original quality
+results remain retained; a fresh linked timing attempt is required.
+
 ## Explicit AttnRes timing prerequisite
 
 The fixed and repeated agentic lanes accept both frozen PR manifests. Every timing

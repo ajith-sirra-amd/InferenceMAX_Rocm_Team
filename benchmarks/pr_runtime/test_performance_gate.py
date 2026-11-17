@@ -37,5 +37,17 @@ class PerformanceGateTests(unittest.TestCase):
             same_layout_fixture(original + 'reference_prefix = prefix.clone()\n')
 
 
+class TimingEnvironmentTests(unittest.TestCase):
+    def test_unset_and_empty_disable_by_absence(self):
+        from benchmark_check import configure_timing_environment
+        for env in [{}, {'VLLM_GPU_SYNC_CHECK':'', 'PROFILE':'0'}]:
+            configure_timing_environment(env)
+            self.assertNotIn('VLLM_GPU_SYNC_CHECK',env)
+    def test_strict_instrumentation_is_not_silently_disabled(self):
+        from benchmark_check import configure_timing_environment
+        for mode in ['warn','error']:
+            with self.assertRaises(AssertionError):
+                configure_timing_environment({'VLLM_GPU_SYNC_CHECK':mode})
+
 if __name__ == '__main__':
     unittest.main()

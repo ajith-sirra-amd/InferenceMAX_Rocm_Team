@@ -50,5 +50,5 @@ timeout --signal=TERM --kill-after=120s "$limit" docker run --rm --init --name "
     --env "PORT=$port" --env "IPAT_ARM=$arm" --env "IPAT_PR_NUMBER=$pr" \
     --env "IPAT_PR_WORKLOAD=$workload" \
     --env "EXPECTED_SOURCE_SHA=$sha" --env "EXPECTED_MODULE_SHA=$module_sha" --env "EXPECTED_IMAGE=$image" \
-    --env PROFILE=0 --env VLLM_GPU_SYNC_CHECK= --env VLLM_TARGET_DEVICE=rocm \
+    --env PROFILE=0 --env VLLM_TARGET_DEVICE=rocm \
     --entrypoint /opt/runtime-venv/bin/python "$image" /pr-tools/benchmark_check.py 2>&1 | tee "$out/coordinator.log"

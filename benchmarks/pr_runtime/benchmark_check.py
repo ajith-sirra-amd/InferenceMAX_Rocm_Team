@@ -6,6 +6,12 @@ sys.path.insert(0,'/quality')
 import launch
 import runtime
 
+def configure_timing_environment(environment):
+    # An unset check disables instrumentation; an empty value is invalid in vLLM.
+    assert environment.get('VLLM_GPU_SYNC_CHECK','')=='', 'Strict sync instrumentation belongs to correctness lanes'
+    environment.pop('VLLM_GPU_SYNC_CHECK',None)
+
+
 def main():
     out=Path('/logs');pr=int(os.environ['IPAT_PR_NUMBER']);arm=os.environ['IPAT_ARM']
     workload=os.environ.get('IPAT_PR_WORKLOAD','fixed')
@@ -27,7 +33,7 @@ def main():
     os.environ.update(config['server_environment'])
     os.environ['PATH']='/opt/runtime-venv/bin:'+os.environ['PATH']
     os.environ['EVAL_ONLY']='false'
-    assert os.environ.get('VLLM_GPU_SYNC_CHECK','')==''
+    configure_timing_environment(os.environ)
     assert os.environ['PROFILE']=='0'
     argv=launch.command(config,'/model',os.environ['PORT'])
     (out/'recipe.json').write_text(json.dumps(config,indent=2)+'\n')
@@ -76,7 +82,11 @@ def main():
             if workload=='fixed':
                 subprocess.run([sys.executable,'/fixed-tools/validate.py',str(out/'baseline.json'),'--output',str(out/'validation.json')],check=True)
             result['status']='collected'
-    except Exception as error:result['error']=f'{type(error).__name__}: {error}'
+    except Exception as error:
+        result['error']=f'{type(error).__name__}: {error}'
+        print(json.dumps(dict(status='failed',stage='native_benchmark',error=result['error'])),flush=True)
+        if (out/'server.log').exists():
+            print((out/'server.log').read_text(errors='replace')[-4000:],flush=True)
     finally:
         signal.signal(signal.SIGTERM,signal.SIG_IGN)
         if server is not None:
