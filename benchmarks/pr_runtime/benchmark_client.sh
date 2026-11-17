@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 test "${PROFILE:?}" = 0
-source /inferencex/benchmarks/benchmark_lib.sh --validation-only
+export INFMAX_CONTAINER_WORKSPACE=/inferencex
+source /inferencex/benchmarks/benchmark_lib.sh
+declare -F run_benchmark_serving >/dev/null
 run_benchmark_serving \
     --model moonshotai/Kimi-K3.1-Pro --tokenizer /model --tokenizer-mode kimi_k3 \
     --port "${PORT:?}" --backend vllm --input-len 8192 --output-len 1024 \
