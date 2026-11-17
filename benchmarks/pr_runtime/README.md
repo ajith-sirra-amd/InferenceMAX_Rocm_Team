@@ -42,7 +42,7 @@ the failure reproduced, not that the PR passed. Neither full accuracy nor
 end-to-end speedup is qualified. Sections below preserve earlier attempt history.
 
 `PR67372 fixed paired screen` requires an explicit `pr-quality-output` from a
-complete matched natural screen with no sampled-score regression and exactly
+complete matched full1319 natural comparison with no sampled-score regression and exactly
 the same runtime pair. It runs the pinned native InferenceX fixed client atC48,
 8192/1024 tokens,192 measured requests,96 warmups and seed0; synthetic acceptance
 remains3.57 and MXFP4 remains enabled. Strict sync checks are qualified separately

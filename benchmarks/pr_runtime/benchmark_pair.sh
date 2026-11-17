@@ -13,11 +13,12 @@ import json,sys,hashlib
 from pathlib import Path
 q,p,o=map(Path,sys.argv[1:]);pair=json.loads(p.read_text());comparison=json.loads((q/'model-comparison.json').read_text())
 assert pair['pr']==67372,'AttnRes frozen candidate has failed its numerical gate'
+assert comparison['score_denominator']==1319,'Full pinned quality coverage is required before timing'
 assert comparison['candidate_correct']>=comparison['baseline_correct'],'Screen shows a correctness regression'
 for arm in ['baseline','candidate']:
     manifest=json.loads((q/arm/'runtime-manifest.json').read_text())
     assert manifest['pair']==pair,'Performance images differ from screened images'
-(o/'pair-start.json').write_text(json.dumps(dict(pr=pair['pr'],quality_output=str(q),quality_comparison_sha256=hashlib.sha256((q/'model-comparison.json').read_bytes()).hexdigest(),manifest_sha256=hashlib.sha256(p.read_bytes()).hexdigest(),limits='Matched sampled48 screen prerequisite only; full accuracy remains unqualified'),indent=2)+'\n')
+(o/'pair-start.json').write_text(json.dumps(dict(pr=pair['pr'],quality_output=str(q),quality_comparison_sha256=hashlib.sha256((q/'model-comparison.json').read_bytes()).hexdigest(),manifest_sha256=hashlib.sha256(p.read_bytes()).hexdigest(),limits='Matched full1319 zero-shot sampled prerequisite; broad model accuracy remains unqualified'),indent=2)+'\n')
 PY
 if [[ "${IPAT_VALIDATE_QUALITY_ONLY:-0}" == 1 ]]; then exit 0; fi
 export IPAT_PR_NUMBER=67372
