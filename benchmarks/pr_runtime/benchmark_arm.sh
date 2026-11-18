@@ -18,11 +18,26 @@ cleanup() {
     rc=$?;trap - EXIT INT TERM
     timeout 50s docker stop --time 45 "$name" >/dev/null 2>&1 || true
     timeout 10s docker rm -f "$name" >/dev/null 2>&1 || true
-    timeout 30s docker run --rm --network none --mount "type=bind,src=$out,dst=/logs" --entrypoint chown "$image" -R "$uid:$gid" /logs || rc=1
+    restore_mount "$out" /logs || rc=1
     if [[ "$workload" == agentic ]]; then
-        timeout 60s docker run --rm --network none --mount "type=bind,src=$client,dst=/agentic-work" --entrypoint chown "$image" -R "$uid:$gid" /agentic-work || rc=1
+        restore_mount "$client" /agentic-work || rc=1
     fi
+    printf 'Arm cleanup finished: workload=%s arm=%s exit_code=%s\n' "$workload" "$arm" "$rc"
     exit "$rc"
+}
+restore_mount() {
+    local host_path=$1 mount_path=$2 cleanup_rc=0
+    local cleanup_name="$name-ownership-$(basename "$mount_path")"
+    timeout --signal=TERM --kill-after=15s 300s docker run --rm --name "$cleanup_name" --network none \
+        --mount "type=bind,src=$host_path,dst=$mount_path" \
+        --mount "type=bind,src=$tools,dst=/pr-tools,readonly" \
+        --entrypoint /opt/runtime-venv/bin/python "$image" \
+        /pr-tools/restore_ownership.py "$mount_path" "$uid" "$gid" || cleanup_rc=$?
+    if [[ "$cleanup_rc" != 0 ]]; then
+        timeout 10s docker rm -f "$cleanup_name" >/dev/null 2>&1 || true
+    fi
+    printf 'Ownership cleanup: mount=%s exit_code=%s\n' "$mount_path" "$cleanup_rc"
+    return "$cleanup_rc"
 }
 trap cleanup EXIT;trap 'exit 130' INT;trap 'exit 143' TERM
 port=$(python3 -c 'import socket;s=socket.socket();s.bind(("",0));print(s.getsockname()[1]);s.close()')
