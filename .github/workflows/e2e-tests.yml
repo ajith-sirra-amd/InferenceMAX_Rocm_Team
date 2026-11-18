@@ -27,6 +27,7 @@ on:
                 - "PR67372 fixed paired screen"
                 - "PR67373 fixed paired screen"
                 - "PR67372 agentic paired comparison"
+                - "PR67372 agentic startup retry"
                 - "PR67373 agentic paired comparison"
                 - "PR67373 model screen"
                 - "PR67373 XTML model screen"
@@ -417,8 +418,8 @@ jobs:
                   retention-days: 30
                   if-no-files-found: error
     pr-agentic:
-        if: ${{ inputs.generate-cli-command == 'PR67372 agentic paired comparison' || inputs.generate-cli-command == 'PR67373 agentic paired comparison' }}
-        name: Frozen Kimi PR repeated native agentic comparison
+        if: ${{ inputs.generate-cli-command == 'PR67372 agentic paired comparison' || inputs.generate-cli-command == 'PR67373 agentic paired comparison' || inputs.generate-cli-command == 'PR67372 agentic startup retry' }}
+        name: ${{ inputs.generate-cli-command == 'PR67372 agentic startup retry' && 'DSpark reversed pair recovery with startup observations' || 'Frozen Kimi PR repeated native agentic comparison' }}
         runs-on: [self-hosted, 'cluster:mi355x-amds-2']
         timeout-minutes: 720
         permissions:
@@ -435,6 +436,7 @@ jobs:
             IPAT_PR_AGENTIC_SOURCE: ${{ inputs.pr-agentic-source }}
             IPAT_PR_QUALITY_OUTPUT: ${{ inputs.pr-quality-output }}
             IPAT_PR_COMPONENT_OUTPUT: ${{ inputs.pr-component-output }}
+            IPAT_STARTUP_RETRY: ${{ inputs.generate-cli-command == 'PR67372 agentic startup retry' && '1' || '0' }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
               with:
@@ -446,7 +448,11 @@ jobs:
               run: |
                   set -eo pipefail
                   mkdir -p "$IPAT_PR_OUTPUT"
-                  bash benchmarks/pr_runtime/agentic_pair.sh 2>&1 | tee "$IPAT_PR_OUTPUT/workflow.log"
+                  if [[ "$IPAT_STARTUP_RETRY" == 1 ]]; then
+                      bash benchmarks/pr_runtime/agentic_startup_retry.sh 2>&1 | tee "$IPAT_PR_OUTPUT/workflow.log"
+                  else
+                      bash benchmarks/pr_runtime/agentic_pair.sh 2>&1 | tee "$IPAT_PR_OUTPUT/workflow.log"
+                  fi
             - name: Stop only this qualification's containers
               if: always()
               run: |
