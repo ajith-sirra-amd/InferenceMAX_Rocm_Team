@@ -5,16 +5,7 @@ tools=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 out=${IPAT_PR_OUTPUT:?};client=${IPAT_PR_AGENTIC_CLIENT:?};source=${IPAT_PR_AGENTIC_SOURCE:?}
 parent=/share_nfs/gguasti/benchmarks/pr-perf-44244569921-1
 allocation_gate() {
-    python3 - "$1" <<'PY'
-import datetime,re,subprocess,sys,time
-text=subprocess.check_output(['scontrol','show','job','29088'],text=True)
-assert all(s in text for s in ['JobState=RUNNING','NodeList=pit2-p03-g34','UserId=giovanni.guasti@amd.com'])
-assert subprocess.check_output(['hostname'],text=True).strip()=='pit2-p03-g34'
-expiry=datetime.datetime.strptime(re.search(r'EndTime=(\S+)',text).group(1),'%Y-%m-%dT%H:%M:%S').timestamp()
-remaining=expiry-time.time()
-assert remaining>=int(sys.argv[1]),f'Allocation needs extension: remaining={remaining:.0f}s required={sys.argv[1]}s'
-print(f'Allocation/owner/node gate passed; remaining_seconds={remaining:.0f}',flush=True)
-PY
+    python3 "$tools/allocation.py" --minimum-seconds "$1"
 }
 allocation_gate 21600
 IPAT_VALIDATE_QUALITY_ONLY=1 bash "$tools/benchmark_pair.sh"

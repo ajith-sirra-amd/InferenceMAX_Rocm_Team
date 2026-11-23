@@ -4,6 +4,16 @@ run-name: e2e Test - ${{ inputs.test-name || github.event.inputs.test-name || in
 on:
     workflow_dispatch:
         inputs:
+            allocation-job:
+                description: "Owned Slurm job for PR startup recovery"
+                required: false
+                type: string
+                default: "29088"
+            allocation-node:
+                description: "Exact allocated node for PR startup recovery"
+                required: false
+                type: string
+                default: "pit2-p03-g34"
             generate-cli-command:
                 description: "Command passed to generate matrix script"
                 required: true
@@ -117,6 +127,14 @@ on:
                 default: ""
     workflow_call:
         inputs:
+            allocation-job:
+                required: false
+                type: string
+                default: "29088"
+            allocation-node:
+                required: false
+                type: string
+                default: "pit2-p03-g34"
             pr-agentic-client:
                 description: "Prepared pinned native SA client directory"
                 required: false
@@ -437,6 +455,8 @@ jobs:
             IPAT_PR_QUALITY_OUTPUT: ${{ inputs.pr-quality-output }}
             IPAT_PR_COMPONENT_OUTPUT: ${{ inputs.pr-component-output }}
             IPAT_STARTUP_RETRY: ${{ inputs.generate-cli-command == 'PR67372 agentic startup retry' && '1' || '0' }}
+            IPAT_ALLOCATION_JOB: ${{ inputs.allocation-job || '29088' }}
+            IPAT_ALLOCATION_NODE: ${{ inputs.allocation-node || 'pit2-p03-g34' }}
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
               with:

@@ -5,6 +5,7 @@ changes a cgroup or samples measured GPU execution. Permission gaps are explicit
 """
 import argparse,datetime,json,subprocess,time
 from pathlib import Path
+from allocation import verify as verify_allocation
 
 parser=argparse.ArgumentParser()
 parser.add_argument('--arm-output',required=True,type=Path)
@@ -27,8 +28,7 @@ def emit(record):
     with args.output.open('a') as stream:stream.write(json.dumps(record)+'\n')
     print(json.dumps(record),flush=True)
 def allocation():
-    text=subprocess.check_output(['scontrol','show','job','29088'],text=True,timeout=15)
-    assert all(s in text for s in ['JobState=RUNNING','NodeList=pit2-p03-g34','UserId=giovanni.guasti@amd.com'])
+    return verify_allocation()
 allocation()
 deadline=time.monotonic()+args.timeout
 emit(dict(event='startup_observer_started',arm=str(arm),container=args.container,scope='Host/proc/cgroup only; no mutation; stop before native client'))

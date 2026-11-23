@@ -173,6 +173,13 @@ preserved separately.
 
 ## Frozen pairs
 
+Startup recovery now accepts an explicit owned allocation through workflow inputs
+`allocation-job` and `allocation-node` (environment `IPAT_ALLOCATION_JOB` and
+`IPAT_ALLOCATION_NODE`). The shared gate checks exact job/node/owner/state and the
+unchanged remaining-lifetime requirement; the startup observer uses the same
+binding. Historical defaults remain Job29088/g34. On g42 use Job30172 explicitly.
+This is a resource-binding change, not a runtime, workload or quality change.
+
 | PR | Baseline | Candidate |
 | --- | --- | --- |
 | #67372 | `0e2871508b20815f2e5969f1697a0de5b1b90881` | `c4aea1c4b27bc2a932a177ce8291ea1ba29d6365` |
