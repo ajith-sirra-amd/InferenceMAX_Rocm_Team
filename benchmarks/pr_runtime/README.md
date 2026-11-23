@@ -180,6 +180,17 @@ unchanged remaining-lifetime requirement; the startup observer uses the same
 binding. Historical defaults remain Job29088/g34. On g42 use Job30172 explicitly.
 This is a resource-binding change, not a runtime, workload or quality change.
 
+The startup recovery runs each complete arm through `allocation_guard.py`.
+It verifies ownership/state before launch, every15 seconds and after completion.
+On allocation loss or unverifiable state it stops only its child process session
+and exact output-label-bound container IDs, writes immutable guard evidence and
+fails the attempt. The existing startup observer still stops before the native
+client. This host-side safety monitor does not change requests, runtime or GPU
+profiling settings; new paired references include it symmetrically. Never reuse
+an arm collected after ownership was lost. The g42 attempt45215706960 is retained
+as a preemption-terminated attempt; its observer exited at allocation loss but
+the older wrapper waited until arm completion before checking that exit.
+
 | PR | Baseline | Candidate |
 | --- | --- | --- |
 | #67372 | `0e2871508b20815f2e5969f1697a0de5b1b90881` | `c4aea1c4b27bc2a932a177ce8291ea1ba29d6365` |

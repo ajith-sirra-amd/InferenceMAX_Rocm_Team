@@ -45,7 +45,8 @@ for arm in candidate baseline; do
         --container "kimi-pr-perf-replica-2-$arm" \
         --output "$out/startup-$arm.jsonl" --timeout 3000 >"$out/startup-$arm-observer.log" 2>&1 &
     observer=$!
-    bash "$tools/benchmark_arm.sh" "$d" "$optimization" agentic "$client" "$source"
+    python3 "$tools/allocation_guard.py" --journal "$d/allocation-guard.jsonl" --output "$d" -- \
+        bash "$tools/benchmark_arm.sh" "$d" "$optimization" agentic "$client" "$source"
     wait "$observer";observer=''
     python3 - "$out/startup-$arm.jsonl" <<'PY'
 import json,sys

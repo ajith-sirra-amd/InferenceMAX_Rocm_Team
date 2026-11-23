@@ -15,9 +15,9 @@ def verify(minimum_seconds=0, job=None, node=None):
     raw = subprocess.check_output(['scontrol', 'show', 'job', job], text=True, timeout=15)
     fields = dict(re.findall(r'(\w+)=(\S+)', raw))
     assert fields.get('JobId') == job
-    assert fields.get('JobState') == 'RUNNING'
-    assert fields.get('NodeList') == node
-    assert fields.get('UserId') == 'giovanni.guasti@amd.com'
+    assert fields.get('JobState') == 'RUNNING', f'Allocation {job} state is {fields.get("JobState")}'
+    assert fields.get('NodeList') == node, 'Scheduler node binding differs'
+    assert fields.get('UserId') == 'giovanni.guasti@amd.com', 'Allocation owner differs'
     # Slurm emits local wall-clock EndTime; preserve the verified node timezone.
     end = datetime.datetime.fromisoformat(fields['EndTime']).astimezone()
     remaining = (end - datetime.datetime.now().astimezone()).total_seconds()
