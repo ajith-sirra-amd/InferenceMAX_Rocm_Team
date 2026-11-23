@@ -1,9 +1,10 @@
 import io
+import json
 import signal
 import unittest
 from unittest.mock import Mock, patch
 from pathlib import Path
-from allocation_guard import run
+from allocation_guard import run, release_owned
 
 
 class GuardTests(unittest.TestCase):
@@ -54,6 +55,23 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(125, result)
         stop.assert_not_called()
         self.assertIn('allocation_unavailable_after_arm', log)
+
+    def test_rejects_changed_container_binding_before_stop(self):
+        output = Path('/share_nfs/gguasti/benchmarks/pr-perf-test/candidate')
+        info = {'Id':'a'*64, 'Config':{'Labels':{'ipat.pr.output':'/some-other-attempt'}}}
+        with patch('allocation_guard.subprocess.check_output', side_effect=['short-id\n', json.dumps([info])]), \
+             patch('allocation_guard.subprocess.run') as stop:
+            with self.assertRaises(AssertionError):
+                release_owned(output)
+            stop.assert_not_called()
+
+    def test_container_stop_uses_inspected_immutable_id(self):
+        output = Path('/share_nfs/gguasti/benchmarks/pr-perf-test/candidate')
+        info = {'Id':'a'*64, 'Config':{'Labels':{'ipat.pr.output':str(output)}}}
+        with patch('allocation_guard.subprocess.check_output', side_effect=['short-id\n', json.dumps([info])]), \
+             patch('allocation_guard.subprocess.run', return_value=Mock(returncode=0, stdout='', stderr='')) as stop:
+            release_owned(output)
+            self.assertEqual(['docker','stop','--time','30','a'*64], stop.call_args.args[0])
 
 
 if __name__ == '__main__':
