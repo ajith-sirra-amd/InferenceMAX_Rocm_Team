@@ -70,6 +70,16 @@ if config.get('require_idle_gpus'):
                    for row in rows)):
         raise RuntimeError('GPU activity is present or unknown; see gpu-idle-check.json')
 image = config['environment']['IMAGE']
+# A cold multi-GB image pull must not consume the diagnostic's execution budget.
+inspected = subprocess.run(['docker', 'image', 'inspect', image], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True)
+if inspected.returncode:
+    with (a.output / 'image-pull.log').open('w') as log:
+        subprocess.run(['docker', 'pull', image], stdout=log, stderr=subprocess.STDOUT,
+                       check=True, timeout=1800)
+    inspected = subprocess.run(['docker', 'image', 'inspect', image], check=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+(a.output / 'image-inspect.json').write_text(inspected.stdout)
 task = ['python3', '-c', '''import json, shutil
 from pathlib import Path
 marker = Path('/logs/transport-marker.txt')
@@ -125,7 +135,10 @@ for name, command in commands.items():
         result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
         results['checks'][name] = {'returncode': result.returncode, 'output': result.stdout}
     except subprocess.TimeoutExpired as error:
-        results['checks'][name] = {'error': str(error)}
+        partial = error.stdout or ''
+        if isinstance(partial, bytes):
+            partial = partial.decode(errors='replace')
+        results['checks'][name] = {'error': str(error), 'output': partial}
     print(json.dumps(results['checks'][name]), flush=True)
 owned = subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'label=sa.run=' + a.output.name], text=True).split()
 if owned:
