@@ -97,6 +97,8 @@ def find_model_checkpoints(root, output):
             if config_file.stat().st_size > 4_000_000:
                 continue
             config = json.loads(config_file.read_text())
+            if not isinstance(config, dict):
+                continue
             identity = json.dumps({k: config.get(k) for k in
                 ('architectures', 'model_type', 'speculators_config', '_name_or_path')})
             if not re.search('kimi|dspark|dflash', str(path) + identity, re.IGNORECASE):
@@ -105,6 +107,8 @@ def find_model_checkpoints(root, output):
             shards = {name for index in indices
                       for name in json.loads(index.read_text()).get('weight_map', {}).values()}
             weights = shards or {name for name in files if name.endswith(('.safetensors', '.bin'))}
+            if any(not (path / name).resolve().is_relative_to(root) for name in weights):
+                raise ValueError('Checkpoint weight path leaves the search root')
             candidate = {"path": str(path), "config": config,
                          "weight_files": len(weights),
                          "missing_shards": sorted(name for name in weights if not (path / name).is_file()),
