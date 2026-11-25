@@ -104,7 +104,7 @@ jobs:
         permissions:
             contents: read
         env:
-            BENCHMARK_OUTPUT: /share_nfs/ajith/benchmarks/runs/${{ github.run_id }}-${{ github.run_attempt }}
+            BENCHMARK_OUTPUT: ${{ contains(fromJSON(inputs.benchmark-request).labels, 'cluster:mi350x-amds') && '/data/ajith/benchmarks' || '/share_nfs/ajith/benchmarks' }}/runs/${{ github.run_id }}-${{ github.run_attempt }}
         concurrency:
             group: benchmark-${{ join(fromJSON(inputs.benchmark-request).labels, '-') }}
             cancel-in-progress: false
@@ -165,7 +165,7 @@ jobs:
     sa-benchmark:
         if: ${{ inputs.sa-config != '' }}
         name: Native SA benchmark
-        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        runs-on: [self-hosted, 'cluster:mi350x-amds']
         timeout-minutes: 480
         permissions:
             contents: read
@@ -174,7 +174,7 @@ jobs:
             group: sa-mi355x-single-node
             cancel-in-progress: false
         env:
-            SA_OUTPUT: /share_nfs/ajith/benchmarks/${{ github.run_id }}-${{ github.run_attempt }}
+            SA_OUTPUT: /data/ajith/benchmarks/${{ github.run_id }}-${{ github.run_attempt }}
             PYTHONDONTWRITEBYTECODE: '1'
         steps:
             - name: Release disposable environments from completed native runs

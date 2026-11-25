@@ -20,11 +20,15 @@ SHARED_DATA_ROOT = Path('/share_nfs/ajith/benchmarks')
 
 def validate_output(output):
     output = output.resolve()
-    if output.is_relative_to(SHARED_DATA_ROOT.resolve()):
+    mi350_root = Path('/data/ajith/benchmarks')
+    if output.is_relative_to(mi350_root.resolve()):
+        if not Path('/data').is_dir():
+            raise ValueError('MI350 storage /data is unavailable; no checkout fallback')
+    elif output.is_relative_to(SHARED_DATA_ROOT.resolve()):
         if not SHARED_DATA_ROOT.parent.is_dir():
             raise ValueError('Shared storage /share_nfs/ajith is unavailable; no checkout fallback')
     elif not output.is_relative_to(REPOSITORY):
-        raise ValueError('BENCHMARK output must stay in the team checkout or /share_nfs/ajith/benchmarks')
+        raise ValueError('BENCHMARK output must stay in the team checkout, /share_nfs/ajith/benchmarks or /data/ajith/benchmarks')
     return output
 
 
@@ -101,7 +105,7 @@ def preflight(request, output):
     for name, command in commands.items():
         facts["commands"].append(capture(command, output / name))
     facts["paths"] = {}
-    for directory in ("/data/hf_hub_cache", "/home/models", "/share_nfs/models", "/data/models",
+    for directory in ("/data", "/data/ajith", "/data/hf_hub_cache", "/home/models", "/share_nfs/models", "/data/models",
                       "/it-share/models", "/wrk/dcgmktg_bench_xhd/ajith"):
         path = Path(directory)
         row = {"exists": path.is_dir(), "writable": os.access(path, os.W_OK)}
