@@ -77,9 +77,9 @@
     "delay_seconds": 1800,
     "seconds": 130,
     "minimum_seconds": 120,
-    "phase_timeout_seconds": 7200,
+    "phase_timeout_seconds": 14400,
     "poll_seconds": 2,
     "export_timeout_seconds": 600
   },
-  "diagnostic_note": "Preserve native warmup and 3600-second sending. After measured start +1800s, capture 130s with native Torch. Allow up to 600s each for start and stop acknowledgement within the unchanged measured duration; validate all eight exports and >=120s common GPU extent. MI350X measurement, not MI355X reference performance."
+  "diagnostic_note": "Preserve native warmup and 3600-second sending. After measured start +1800s, capture 130s with native Torch. Allow up to 600s each for start and stop acknowledgement within the unchanged measured duration; validate all eight exports and >=120s common GPU extent. MI350X measurement, not MI355X reference performance. Allow 14400 seconds for startup and native warmup: run 45558938272 reached advancing full graph capture but exceeded the original 7200-second measurement-start wait. Server/client settings, graph ladder, capture offset/window and measured duration remain unchanged."
 }
