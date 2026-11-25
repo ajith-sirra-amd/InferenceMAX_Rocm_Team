@@ -104,7 +104,7 @@ jobs:
         permissions:
             contents: read
         env:
-            BENCHMARK_OUTPUT: ${{ contains(fromJSON(inputs.benchmark-request).labels, 'cluster:mi350x-amds') && '/data/ajith/benchmarks' || '/share_nfs/ajith/benchmarks' }}/runs/${{ github.run_id }}-${{ github.run_attempt }}
+            BENCHMARK_OUTPUT: ${{ fromJSON(inputs.benchmark-request).mode == 'preflight' && format('{0}/benchmark-{1}-{2}/preflight-results', github.workspace, github.run_id, github.run_attempt) || format('{0}/runs/{1}-{2}', contains(fromJSON(inputs.benchmark-request).labels, 'cluster:mi350x-amds') && '/data/ajith/benchmarks' || '/share_nfs/ajith/benchmarks', github.run_id, github.run_attempt) }}
         concurrency:
             group: benchmark-${{ join(fromJSON(inputs.benchmark-request).labels, '-') }}
             cancel-in-progress: false

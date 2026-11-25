@@ -111,7 +111,9 @@ def preflight(request, output):
         row = {"exists": path.is_dir(), "writable": os.access(path, os.W_OK)}
         if path.is_dir():
             try:
-                row["entries"] = sorted(p.name for p in path.iterdir())[:100]
+                children = sorted(path.iterdir())[:100]
+                row["entries"] = [p.name for p in children]
+                row["writable_directories"] = [p.name for p in children if p.is_dir() and os.access(p, os.W_OK)]
             except OSError as error:
                 row["error"] = str(error)
         facts["paths"][directory] = row
