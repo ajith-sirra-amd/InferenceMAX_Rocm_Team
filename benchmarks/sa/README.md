@@ -12,6 +12,13 @@ at the unchanged native 10-second interval. Neither setting changes workload
 duration, graph capture sizes or model precision. An already-running workflow
 keeps the settings from its checked-out revision.
 
+If GitHub cancellation interrupts container cleanup, `sa-mode: cleanup-cancelled`
+with `sa-cancelled-run: <run-id>` finishes cleanup for attempt 1 and retains its
+small logs. It requires the target attempt to be completed/cancelled, the same
+runner and saved host identity, and both container run labels and saved names.
+It force-removes only those verified containers and reports any remaining ones;
+it does not start a model. Original evidence remains on the runner.
+
 For the earlier MI355X C48 measured profile, select
 `benchmarks/sa/kimi-k3.1-pro-vllm-mi355x-c48-measured-profile-sa42638222682.json`.
 It preserves the SA image, server environment, native warmup, client command and

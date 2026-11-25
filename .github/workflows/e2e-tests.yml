@@ -22,7 +22,11 @@ on:
                 required: false
                 type: choice
                 default: replication
-                options: [replication, transport-check, prepare-models]
+                options: [replication, transport-check, prepare-models, cleanup-cancelled]
+            sa-cancelled-run:
+                description: "Cancelled native workflow run ID to clean up and recover; attempt 1"
+                required: false
+                type: string
             sa-check-command:
                 description: "Optional diagnostic argv as a JSON string array; used only in transport-check mode"
                 required: false
@@ -236,6 +240,14 @@ jobs:
                   SA_ALLOCATION: ${{ inputs.allocation-id }}
                   SA_CHECK_COMMAND: ${{ inputs.sa-check-command }}
               run: python3 benchmarks/sa/check_transport.py --config "$SA_CONFIG" --allocation "$SA_ALLOCATION" --output "$SA_OUTPUT"
+            - name: Finish cancelled native run cleanup and retain evidence
+              if: ${{ inputs.sa-mode == 'cleanup-cancelled' }}
+              working-directory: sa-benchmark-${{ github.run_id }}
+              env:
+                  SA_CONFIG: ${{ inputs.sa-config }}
+                  SA_CANCELLED_RUN: ${{ inputs.sa-cancelled-run }}
+                  GH_TOKEN: ${{ github.token }}
+              run: python3 benchmarks/sa/cleanup_cancelled.py --config "$SA_CONFIG" --run "$SA_CANCELLED_RUN" --output "$SA_OUTPUT"
             - name: Prepare pinned model snapshots
               if: ${{ inputs.sa-mode == 'prepare-models' }}
               working-directory: sa-benchmark-${{ github.run_id }}
