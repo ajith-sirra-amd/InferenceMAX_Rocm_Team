@@ -59,5 +59,15 @@
   "execution_hardware": "8x AMD Instinct MI350X",
   "expected_runner": "mi355x-amd_gbt350",
   "local_model_root": "/data",
-  "checkpoint_status": "Unresolved: locate and validate main and released DSpark weights before native model execution."
+  "checkpoint_status": "Pinned snapshots to provision and verify before native model execution.",
+  "model_revisions": {
+    "moonshotai/Kimi-K3.1-Pro": "d9e99b0792a5e93b78ea9bea62a68167e36ddd9e",
+    "Inferact/Kimi-K3.1-Pro-DSpark": "e4e6e6261e9f8b6d5f249f9627eb6b109d762d5f"
+  },
+  "local_model_paths": {
+    "moonshotai/Kimi-K3.1-Pro": "ajith/models/moonshotai/Kimi-K3.1-Pro/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e",
+    "Inferact/Kimi-K3.1-Pro-DSpark": "ajith/models/Inferact/Kimi-K3.1-Pro-DSpark/e4e6e6261e9f8b6d5f249f9627eb6b109d762d5f"
+  },
+  "require_idle_gpus": true,
+  "model_revision_note": "Main snapshot observed in source job tokenizer log; current Hub weights have identical LFS hashes, but encoding_k3.py changed. Server weight-cache revision was not independently printed. Draft revision explicitly pinned by source server command."
 }

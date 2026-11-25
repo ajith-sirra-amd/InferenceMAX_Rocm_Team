@@ -21,6 +21,8 @@ def main():
     parser.add_argument('--allocation', default='', help='Existing reservation; empty runs directly on this runner')
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
+    if config.get('expected_runner') and os.environ.get('RUNNER_NAME') != config['expected_runner']:
+        raise RuntimeError('Selected runner does not match expected_runner')
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     repo = Path(__file__).resolve().parents[2]

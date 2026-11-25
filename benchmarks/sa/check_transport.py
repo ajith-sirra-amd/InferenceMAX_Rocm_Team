@@ -58,6 +58,17 @@ a.output.mkdir(parents=True, exist_ok=True)
 marker = a.output / 'transport-marker.txt'
 marker.write_text(a.output.name)
 config = json.loads(a.config.read_text())
+if config.get('expected_runner') and os.environ.get('RUNNER_NAME') != config['expected_runner']:
+    raise RuntimeError('Selected runner does not match expected_runner')
+if config.get('require_idle_gpus'):
+    idle = subprocess.check_output(['amd-smi', 'process', '--json'], text=True)
+    (a.output / 'gpu-idle-check.json').write_text(idle)
+    rows = json.loads(idle)
+    if (not isinstance(rows, list) or len(rows) != 8
+            or {row.get('gpu') for row in rows} != set(range(8))
+            or any(row.get('process_list') != [{'process_info': 'No running processes detected'}]
+                   for row in rows)):
+        raise RuntimeError('GPU activity is present or unknown; see gpu-idle-check.json')
 image = config['environment']['IMAGE']
 task = ['python3', '-c', '''import json, shutil
 from pathlib import Path

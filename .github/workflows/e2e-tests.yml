@@ -22,7 +22,7 @@ on:
                 required: false
                 type: choice
                 default: replication
-                options: [replication, transport-check]
+                options: [replication, transport-check, prepare-models]
             sa-check-command:
                 description: "Optional diagnostic argv as a JSON string array; used only in transport-check mode"
                 required: false
@@ -236,8 +236,20 @@ jobs:
                   SA_ALLOCATION: ${{ inputs.allocation-id }}
                   SA_CHECK_COMMAND: ${{ inputs.sa-check-command }}
               run: python3 benchmarks/sa/check_transport.py --config "$SA_CONFIG" --allocation "$SA_ALLOCATION" --output "$SA_OUTPUT"
+            - name: Prepare pinned model snapshots
+              if: ${{ inputs.sa-mode == 'prepare-models' }}
+              working-directory: sa-benchmark-${{ github.run_id }}
+              env:
+                  SA_CONFIG: ${{ inputs.sa-config }}
+                  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+              run: |
+                  mkdir -p "$SA_OUTPUT/work"
+                  python3 -m venv "$SA_OUTPUT/work/download-env"
+                  "$SA_OUTPUT/work/download-env/bin/pip" install uv
+                  UV_CACHE_DIR="$SA_OUTPUT/work/uv" "$SA_OUTPUT/work/download-env/bin/uv" pip install --python "$SA_OUTPUT/work/download-env/bin/python" huggingface_hub==2.4.0
+                  "$SA_OUTPUT/work/download-env/bin/python" benchmarks/sa/prepare_models.py --config "$SA_CONFIG" --output "$SA_OUTPUT"
             - name: Replicate selected SA datapoint
-              if: ${{ inputs.sa-mode != 'transport-check' }}
+              if: ${{ inputs.sa-mode == 'replication' }}
               working-directory: sa-benchmark-${{ github.run_id }}
               env:
                   SA_CONFIG: ${{ inputs.sa-config }}

@@ -60,6 +60,15 @@ def local_model(model):
     host = model_root / relative
     if not a.prepare_only and (not host.is_dir() or not host.resolve().is_relative_to(model_root.resolve())):
         raise ValueError('Model checkpoint is missing or outside local_model_root: ' + str(host))
+    if not a.prepare_only and model in c.get('model_revisions', {}):
+        evidence = json.loads((host / '.ipat-checkpoint.json').read_text())
+        if (evidence.get('status') != 'verified' or evidence.get('model') != model
+                or evidence.get('revision') != c['model_revisions'][model] or not evidence.get('files')):
+            raise ValueError('Checkpoint verification does not match the frozen revision')
+        for item in evidence['files']:
+            stat = (host / item['file']).stat()
+            if stat.st_size != item['bytes'] or stat.st_mtime_ns != item['mtime_ns']:
+                raise ValueError('Checkpoint changed after checksum verification: ' + item['file'])
     return host, '/models/' + str(relative)
 
 
@@ -211,6 +220,15 @@ os.environ['SA_OUTPUT'] = str(a.output)
 os.environ['SA_PASSTHROUGH_ENV'] = json.dumps(sorted(
     key for key in os.environ if key in c['environment']
     or any(fnmatch.fnmatchcase(key, pattern) for pattern in WORKLOAD_ENV)))
+if c.get('require_idle_gpus'):
+    idle = subprocess.check_output(['amd-smi', 'process', '--json'], text=True)
+    (a.output / 'gpu-idle-check.json').write_text(idle)
+    rows = json.loads(idle)
+    if (not isinstance(rows, list) or len(rows) != 8
+            or {row.get('gpu') for row in rows} != set(range(8))
+            or any(row.get('process_list') != [{'process_info': 'No running processes detected'}]
+                   for row in rows)):
+        raise RuntimeError('GPU activity is present or unknown; see gpu-idle-check.json')
 try:
     if profile and mode == 'measured':
         from measured_run import run_measured
