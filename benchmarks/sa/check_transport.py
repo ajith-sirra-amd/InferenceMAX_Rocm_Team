@@ -74,7 +74,7 @@ checkpoint_mount = ''
 if '--checkpoint' in task:
     checkpoint = Path(task[task.index('--checkpoint') + 1])
     relative = checkpoint.relative_to('/models')
-    model_root = Path('/share_nfs/models')
+    model_root = Path(config.get('local_model_root', '/share_nfs/models'))
     source = model_root / relative
     if '..' in relative.parts or not source.is_dir() or not source.resolve().is_relative_to(model_root.resolve()):
         raise ValueError(f'Checkpoint must be an existing directory under {model_root}: {source}')
@@ -98,7 +98,12 @@ commands = {
 if a.command_json or not a.allocation:
     commands = {'native_adapter': commands['native_adapter']}
 os.environ.update(config['environment'])
-os.environ.update(SA_REAL_SRUN=shutil.which('srun'), SA_OUTPUT=str(a.output.resolve()),
+if a.allocation:
+    real_srun = shutil.which('srun')
+    if not real_srun:
+        raise RuntimeError('Allocation transport requires srun')
+    os.environ['SA_REAL_SRUN'] = real_srun
+os.environ.update(SA_OUTPUT=str(a.output.resolve()),
                   SA_LOCAL_EXECUTION='0' if a.allocation else '1',
                   SLURM_JOB_ID=a.allocation or 'local-' + a.output.name,
                   SA_PASSTHROUGH_ENV=json.dumps(sorted(config['environment'])))

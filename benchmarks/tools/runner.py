@@ -127,12 +127,15 @@ def preflight(request, output):
             if not path.is_relative_to(cache): raise ValueError("Model inventory must stay in its cache")
             row = {"path": str(path), "exists": path.is_dir()}
             if path.is_dir():
-                row["entries"] = [{"name": p.name, "is_file": p.is_file(), "bytes": p.stat().st_size if p.is_file() else None} for p in sorted(path.iterdir())][:2000]
-                for file in path.glob("*.json"):
-                    if file.stat().st_size < 4_000_000:
-                        dest = output / "model-metadata" / relative / file.name
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copyfile(file, dest)
+                try:
+                    row["entries"] = [{"name": p.name, "is_file": p.is_file(), "bytes": p.stat().st_size if p.is_file() else None} for p in sorted(path.iterdir())[:2000]]
+                    for file in path.glob("*.json"):
+                        if file.stat().st_size < 4_000_000:
+                            dest = output / "model-metadata" / relative / file.name
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copyfile(file, dest)
+                except OSError as error:
+                    row["error"] = str(error)
             facts["model_inventory"][relative] = row
     if request.get("image_check"):
         assert_gpu_idle()

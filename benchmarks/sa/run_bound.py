@@ -47,10 +47,27 @@ selected, bound = select_recipe(recipe, os.environ, cpu_power_source='rapl')
 recipe_file = a.output / 'recipe.yaml'
 recipe_file.write_text(yaml.safe_dump(bound, sort_keys=False))
 cluster = yaml.safe_load((a.source / 'configs/runners.yaml').read_text())['clusters']['mi355x-amds']['slurm']['srt-slurm']
+model_root = Path(c.get('local_model_root', '/share_nfs/models'))
+if not model_root.is_absolute() or any(char in str(model_root) for char in ',:'):
+    raise ValueError('local_model_root must be an absolute mountable path')
+local_models = c.get('local_model_paths', {})
+
+
+def local_model(model):
+    relative = Path(local_models.get(model, model))
+    if relative.is_absolute() or '..' in relative.parts or any(char in str(relative) for char in ',:'):
+        raise ValueError('Local model paths must be relative to local_model_root')
+    host = model_root / relative
+    if not a.prepare_only and (not host.is_dir() or not host.resolve().is_relative_to(model_root.resolve())):
+        raise ValueError('Model checkpoint is missing or outside local_model_root: ' + str(host))
+    return host, '/models/' + str(relative)
+
+
+main_host, main_container = local_model(c['environment']['MODEL'])
 mounts = {
     str(a.source): '/infmax-workspace',
     str(a.output / 'work/hf'): '/hf_hub_cache',
-    '/share_nfs/models': '/models:ro',
+    str(model_root): '/models:ro',
     '/dev/kfd': '/dev/kfd', '/dev/dri': '/dev/dri',
 }
 for host, target in cluster.get('workspace-mounts', {}).items():
@@ -87,7 +104,7 @@ settings.update(cluster='mi355x-local', default_partition='amd-spur', default_ac
                 network_interface='', srtctl_root=str(a.srt), output_dir=str(a.output / 'native'),
                 default_mounts=mounts, use_segment_sbatch_directive=False,
                 use_exclusive_sbatch_directive=False,
-                model_paths={f"hf:{c['environment']['MODEL']}": '/share_nfs/models/' + c['environment']['MODEL']})
+                model_paths={f"hf:{c['environment']['MODEL']}": str(main_host)})
 if os.environ.get('SA_LOCAL_EXECUTION') == '1':
     settings['release_nodes_before_postprocess'] = False
 (a.srt / 'srtslurm.yaml').write_text(yaml.safe_dump(settings, sort_keys=False))
@@ -148,7 +165,13 @@ parsed, _ = options.parse_known_args(plan.command[2:])
 effective = copy.deepcopy(bound)
 apply_overrides_to_recipe(effective, parse_overrides(parsed.set, parsed.unset))
 spec = json.loads(effective['roles']['agg']['args']['speculative-config'])
-spec['model'] = '/models/' + spec['model']
+draft_id = spec['model']
+draft_host, spec['model'] = local_model(draft_id)
+(a.output / 'local-model-bindings.json').write_text(json.dumps(dict(
+    model_root=str(model_root), reference_hardware=c.get('reference_hardware'),
+    execution_hardware=c.get('execution_hardware'),
+    models={c['environment']['MODEL']: dict(host=str(main_host), container=main_container),
+            draft_id: dict(host=str(draft_host), container=spec['model'])}), indent=2) + '\n')
 plan.command.extend(['--set', 'roles.agg.args.speculative-config=' + json.dumps(json.dumps(spec))])
 (a.output / 'native-plan.json').write_text(json.dumps({'selected': selected, 'command': plan.command,
     'acceptance_length': plan.acceptance_length, 'adaptations': [

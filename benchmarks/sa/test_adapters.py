@@ -2,14 +2,36 @@
 import json
 import os
 from pathlib import Path
+import runpy
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).parent
 
 
 class AdapterTests(unittest.TestCase):
+    def test_transport_check_runs_without_slurm_in_local_mode(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = root / 'config.json'
+            config.write_text(json.dumps({'environment': {'IMAGE': 'image:pin'}}))
+            argv = ['check_transport.py', '--config', str(config), '--output', str(root / 'result'), '--allocation', '']
+            result = subprocess.CompletedProcess([], 0, stdout='local check passed')
+            with patch.object(sys, 'argv', argv), patch.dict(os.environ), \
+                    patch('shutil.which', return_value=None), \
+                    patch('subprocess.check_output', side_effect=['test-host\n', '']), \
+                    patch('subprocess.run', return_value=result) as launch:
+                with self.assertRaises(SystemExit) as stopped:
+                    runpy.run_path(str(ROOT / 'check_transport.py'), run_name='__main__')
+                self.assertEqual(stopped.exception.code, 0)
+                self.assertEqual(os.environ['SA_LOCAL_EXECUTION'], '1')
+                self.assertEqual(launch.call_args.args[0][0], str(ROOT / 'spur/srun'))
+            evidence = json.loads((root / 'result/transport-check.json').read_text())
+            self.assertEqual(evidence['checks']['native_adapter']['returncode'], 0)
+
     def test_local_transport_never_uses_scheduler_and_preserves_native_task(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
