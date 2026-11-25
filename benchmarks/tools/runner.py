@@ -12,6 +12,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import time
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -67,6 +68,59 @@ def capture(command, target, timeout=60):
         return {"command": command, "error": str(error), "artifact": target.name}
 
 
+def find_model_checkpoints(root, output):
+    """Bounded read-only search for Kimi/draft checkpoint metadata."""
+    root = root.resolve()
+    started = time.monotonic()
+    result = {"root": str(root), "candidates": [], "errors": [], "directories": 0,
+              "complete": True, "maximum_depth": 8, "maximum_seconds": 60}
+    skip = {'.git', 'node_modules', '__pycache__', 'site-packages', 'proc', 'sys',
+            'blobs', 'overlay2', 'containerd', 'logs'}
+    def onerror(error):
+        result['errors'].append(str(error))
+    for directory, children, files in os.walk(root, followlinks=False, onerror=onerror):
+        path = Path(directory)
+        result['directories'] += 1
+        if result['directories'] > 20000 or time.monotonic() - started > 60:
+            result['complete'] = False
+            result['stop_reason'] = 'Search budget reached'
+            break
+        children[:] = sorted(n for n in children if n not in skip)
+        if len(path.relative_to(root).parts) >= 8:
+            if children:
+                result.setdefault('depth_limited', []).append(str(path))
+            children[:] = []
+        if 'config.json' not in files:
+            continue
+        try:
+            config_file = path / 'config.json'
+            if config_file.stat().st_size > 4_000_000:
+                continue
+            config = json.loads(config_file.read_text())
+            identity = json.dumps({k: config.get(k) for k in
+                ('architectures', 'model_type', 'speculators_config', '_name_or_path')})
+            if not re.search('kimi|dspark|dflash', str(path) + identity, re.IGNORECASE):
+                continue
+            indices = sorted(path.glob('*.index.json'))
+            shards = {name for index in indices
+                      for name in json.loads(index.read_text()).get('weight_map', {}).values()}
+            weights = shards or {name for name in files if name.endswith(('.safetensors', '.bin'))}
+            candidate = {"path": str(path), "config": config,
+                         "weight_files": len(weights),
+                         "missing_shards": sorted(name for name in weights if not (path / name).is_file()),
+                         "weight_bytes": sum((path / name).stat().st_size for name in weights if (path / name).is_file())}
+            result['candidates'].append(candidate)
+            dest = output / 'model-metadata' / path.relative_to(root)
+            dest.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(config_file, dest / 'config.json')
+            for index in indices:
+                shutil.copyfile(index, dest / index.name)
+        except (OSError, ValueError, TypeError) as error:
+            result['errors'].append(str(path) + ': ' + str(error))
+    result['elapsed_seconds'] = time.monotonic() - started
+    return result
+
+
 def preflight(request, output):
     output.mkdir(parents=True, exist_ok=True)
     facts = {"run_id": request["id"], "mode": "preflight", "status": "completed",
@@ -84,6 +138,8 @@ def preflight(request, output):
         "rocm-smi.txt": ["rocm-smi", "--showproductname", "--showmeminfo", "vram", "--json"],
         "memory.txt": ["free", "-b"],
         "disk.txt": ["df", "-h", str(output)],
+        "data-disk.txt": ["df", "-B1", "/data"],
+        "gpu-processes.json": ["amd-smi", "process", "--json"],
         "host-addresses.txt": ["hostname", "-I"],
         "slurm-version.txt": ["srun", "--version"],
         "slurm-nodes.txt": ["sinfo", "-N", "-o", "%N %P %t %G"],
@@ -137,6 +193,8 @@ def preflight(request, output):
                 except OSError as error:
                     row["error"] = str(error)
             facts["model_inventory"][relative] = row
+        if inventory.get('recursive'):
+            facts['checkpoint_search'] = find_model_checkpoints(cache, output)
     if request.get("image_check"):
         assert_gpu_idle()
         settings = request["image_check"]
