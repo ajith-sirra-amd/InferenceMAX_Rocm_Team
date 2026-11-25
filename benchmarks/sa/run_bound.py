@@ -120,6 +120,10 @@ if os.environ.get('SA_LOCAL_EXECUTION') == '1':
 os.environ['SRTSLURM_CONFIG'] = str(a.srt / 'srtslurm.yaml')
 extra = ['--set', 'benchmark.stream_output=true', '--set', 'srun_options.container-workdir="/infmax-workspace"',
          '--set', 'srun_options.container-remap-root=""', '--set', 'srun_options.container-writable=""']
+if c.get('model_revisions'):
+    # Native AgentX supports a checkpoint path separately from the served name.
+    # Use the same verified snapshot instead of resolving mutable Hub main again.
+    extra += ['--set', 'benchmark.env.TOKENIZER=' + json.dumps(main_container)]
 if profile:
     if mode == 'measured':
         profiler_config = dict(profiler='torch', torch_profiler_dir='/logs/profiles/torch',
@@ -188,6 +192,7 @@ plan.command.extend(['--set', 'roles.agg.args.speculative-config=' + json.dumps(
      if os.environ.get('SA_LOCAL_EXECUTION') == '1' else
      'Execute native rendered batch script in the existing single-node allocation; never cancel the reservation.'),
     'Local model/cache/output mounts and auto-detected host interface replace SA host paths.',
+    'When model revisions are pinned, native AgentX TOKENIZER uses the verified local main snapshot.',
     'Docker executes unchanged native task argv, directly in local mode or through Spur in reservation mode.',
     'Container writability follows native SRT options; per-step runtime caches and temporary compiler storage are mounted separately.',
     'Frozen workflow inputs and native workload environment names are explicitly inherited by Docker steps.',
