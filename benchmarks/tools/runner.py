@@ -158,6 +158,7 @@ def preflight(request, output):
             "enroot-version.txt": ["enroot", "version"],
             "gpu-processes.json": ["amd-smi", "process", "--json"],
             "kfd-users.txt": ["fuser", "/dev/kfd"],
+            "host-processes.txt": ["ps", "-eo", "pid,ppid,user,comm,etimes"],
             "rocprof-compute-help.txt": ["rocprof-compute", "profile", "--help"],
         })
         facts["allocation"] = {key: os.environ.get(key) for key in
