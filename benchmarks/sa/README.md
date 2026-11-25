@@ -1,6 +1,18 @@
 # Native SA benchmark runs
 
-For the current C48 measured profile, select
+For the MI350X C48 profile of SA run 44640765021, select
+`kimi-k3.1-pro-vllm-mi350x-c48-measured-profile-sa44640765021.json`.
+It uses the pinned checkpoints under `/data`, native warmup and 3,600-second
+replay, with a 130-second capture at measured start +1,800 seconds. Startup has
+two independent limits: `profile.phase_timeout_seconds` bounds the wait for
+measured sending; `local_health_check_max_attempts` overrides native SRT server
+readiness attempts through `--set health_check.max_attempts`. This configuration
+allows 14,400 seconds for measured sending to begin and 1,440 readiness attempts
+at the unchanged native 10-second interval. Neither setting changes workload
+duration, graph capture sizes or model precision. An already-running workflow
+keeps the settings from its checked-out revision.
+
+For the earlier MI355X C48 measured profile, select
 `benchmarks/sa/kimi-k3.1-pro-vllm-mi355x-c48-measured-profile-sa42638222682.json`.
 It preserves the SA image, server environment, native warmup, client command and
 3,600-second replay. The sole server profiling argument configures the installed

@@ -120,6 +120,13 @@ if os.environ.get('SA_LOCAL_EXECUTION') == '1':
 os.environ['SRTSLURM_CONFIG'] = str(a.srt / 'srtslurm.yaml')
 extra = ['--set', 'benchmark.stream_output=true', '--set', 'srun_options.container-workdir="/infmax-workspace"',
          '--set', 'srun_options.container-remap-root=""', '--set', 'srun_options.container-writable=""']
+if 'local_health_check_max_attempts' in c:
+    attempts = c['local_health_check_max_attempts']
+    if type(attempts) is not int or attempts <= 0:
+        raise ValueError('local_health_check_max_attempts must be a positive integer')
+    # SRT has a separate readiness deadline from the measured-profile controller.
+    # Preserve its native polling interval and change only the startup allowance.
+    extra += ['--set', 'health_check.max_attempts=' + str(attempts)]
 if c.get('model_revisions'):
     # Native AgentX supports a checkpoint path separately from the served name.
     # Use the same verified snapshot instead of resolving mutable Hub main again.
@@ -198,7 +205,8 @@ plan.command.extend(['--set', 'roles.agg.args.speculative-config=' + json.dumps(
     'Frozen workflow inputs and native workload environment names are explicitly inherited by Docker steps.',
     'Native GPU and RAPL telemetry are requested; unavailable local permissions remain explicit missing evidence.',
     'GitHub release assets use the API route because direct download URLs return HTTP 504.'
-]}, indent=2) + '\n')
+] + ([f'Local native readiness max_attempts={attempts}; native health-check interval is unchanged.']
+     if 'local_health_check_max_attempts' in c else [])}, indent=2) + '\n')
 rendered = a.output / 'rendered'
 command = list(plan.command)
 command[1] = 'render'

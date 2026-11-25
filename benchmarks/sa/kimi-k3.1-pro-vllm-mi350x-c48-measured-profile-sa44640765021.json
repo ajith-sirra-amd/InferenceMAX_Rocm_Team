@@ -55,6 +55,7 @@
   "source_run_attempt": 1,
   "source_metadata_note": "Measured job checks out synthetic merge d73305ab; event head recorded separately. Published MI355X point 448458, 2026-11-23. MI350X execution is a hardware adaptation.",
   "local_frontend_port": 0,
+  "local_health_check_max_attempts": 1440,
   "reference_hardware": "8x AMD Instinct MI355X",
   "execution_hardware": "8x AMD Instinct MI350X",
   "expected_runner": "mi355x-amd_gbt350",
@@ -81,5 +82,5 @@
     "poll_seconds": 2,
     "export_timeout_seconds": 600
   },
-  "diagnostic_note": "Preserve native warmup and 3600-second sending. After measured start +1800s, capture 130s with native Torch. Allow up to 600s each for start and stop acknowledgement within the unchanged measured duration; validate all eight exports and >=120s common GPU extent. MI350X measurement, not MI355X reference performance. Allow 14400 seconds for startup and native warmup: run 45558938272 reached advancing full graph capture but exceeded the original 7200-second measurement-start wait. Server/client settings, graph ladder, capture offset/window and measured duration remain unchanged."
+  "diagnostic_note": "Preserve native warmup and 3600-second sending. After measured start +1800s, capture 130s with native Torch. Allow up to 600s each for start and stop acknowledgement within the unchanged measured duration; validate all eight exports and >=120s common GPU extent. MI350X measurement, not MI355X reference performance. Allow 14400 seconds for startup and native warmup: run 45558938272 reached advancing full graph capture but exceeded the original 7200-second measurement-start wait. Independently extend native SRT readiness to 1440 attempts at its unchanged 10-second interval; the outer controller still requires measurement within 14400 seconds. Server/client settings, graph ladder, capture offset/window and measured duration remain unchanged."
 }
