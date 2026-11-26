@@ -75,7 +75,7 @@ overlays=()
 test_mode=1
 duration=600
 reference_config=/fixed-tools/baseline.json
-entry_command='set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; cd /inferencex; python3 /fixed-tools/check_client.py; exec bash benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh'
+entry_command='set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; cd /inferencex; python3 /fixed-tools/check_client.py; exec bash benchmarks/single_node/agentic/deprecated/kimik3_fp4_mi355x_mtp_sa42638222682.sh'
 if [[ "$workload" == natural ]]; then
     quality_dir=$(cd "$script_dir/../quality" && pwd)
     overlays+=(--mount "type=bind,src=$quality_dir,dst=/quality,readonly")
@@ -90,7 +90,7 @@ if [[ "$workload" == agentic ]]; then
     test_mode=0
     duration=3600
     reference_config=/logs/recipe.json
-    entry_command='set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; cd /inferencex; exec bash benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh'
+    entry_command='set -e; export PATH=/opt/runtime-venv/bin:$PATH; export PYTHONPATH=/inferencex; cd /inferencex; exec bash benchmarks/single_node/agentic/deprecated/kimik3_fp4_mi355x_mtp_sa42638222682.sh'
 fi
 if [[ "$optimization" != baseline ]]; then
     installer=(docker run --rm --network none)

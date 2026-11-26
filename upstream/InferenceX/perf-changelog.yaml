@@ -8629,3 +8629,9 @@
   description:
     - 'Use the measured SA native AgentX client in the existing Kimi C48 script non-test mode. Prepare pinned Python, client packages, dataset and tokenizer before GPU use; compare unchanged baseline and combined MoE/DSpark with fresh servers and 3600-second measurements.'
     - '在现有 Kimi C48 脚本的非定长模式中使用 SA 实测版本的原生 AgentX 客户端。在使用 GPU 前准备固定版本的 Python、客户端依赖、数据集和分词器；分别启动服务，对原始基线与 MoE/DSpark 组合优化进行 3600 秒测量。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Update the direct Kimi C48 server script to SA point 448458, run 44640765021/job 135971483924: released DSpark revision e4e6e626, four draft tokens, TRITON_ATTN, measured synthetic acceptance 3.46, prefix unit 1152, new graph ladder and prefill/DCP environment. Record the matching 712d9eb image and measured source. Preserve the older optimization comparisons on an archived script. CPU-only command validation; no GPU run.'
+    - '将 Kimi C48 直接启动脚本更新为 SA 数据点 448458、run 44640765021/job 135971483924：使用正式版 DSpark revision e4e6e626、四个草稿 token、TRITON_ATTN、实测合成接受长度 3.46、1152 前缀匹配单位、新的图捕获尺寸及 prefill/DCP 环境。记录匹配的 712d9eb 镜像和实测源码；旧优化对比继续使用归档脚本。仅完成 CPU 命令校验，未运行 GPU 测试。'

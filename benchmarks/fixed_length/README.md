@@ -1,7 +1,10 @@
 # Kimi-K3.1-Pro fixed-length comparisons
 
-This uses the existing
-[`kimik3_fp4_mi355x_mtp.sh`](../../upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh).
+These historical comparisons use the archived
+[`kimik3_fp4_mi355x_mtp_sa42638222682.sh`](../../upstream/InferenceX/benchmarks/single_node/agentic/deprecated/kimik3_fp4_mi355x_mtp_sa42638222682.sh).
+Their image, preview draft, client and optimization patches remain pinned to SA
+run 42638222682. The current script's [latest C48 server reference](../agentic/README.md)
+is maintained separately; these comparison workflow choices do not select it.
 After the same server startup and readiness check, `TEST=1` selects
 `run_benchmark_serving` in place of the AgentX replay. `TEST=0` keeps the replay.
 

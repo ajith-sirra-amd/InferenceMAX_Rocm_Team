@@ -1,10 +1,56 @@
-# Native SA agentic comparison
+# Kimi C48 SA configurations
+
+The current
+[`kimik3_fp4_mi355x_mtp.sh`](../../upstream/InferenceX/benchmarks/single_node/agentic/kimik3_fp4_mi355x_mtp.sh)
+contains the resolved server command from SA run **44640765021**, job
+**135971483924**, measured checkout
+`d73305abce215bfb1cd46b639dedeffd4d87377f`. As checked on November 26, 2026,
+datapoint **448458** (published November 23) is the latest published vLLM MI355X
+agentic high-concurrency point: **C48, TP8/DCP8, EP1**. Its published output
+throughput is **152.2541 tokens/s/GPU** on eight MI355X GPUs.
+
+Use the matching image:
+
+```text
+vllm/vllm-openai-rocm:kimi-k31-712d9eb@sha256:7c167350f127a3019ac2c2fc99f6d3229356e8e8e033a7634c3201f072f0ecf4
+```
+
+The full image, model revisions, server environment, arguments and source
+provenance are saved in [`sa44640765021.json`](sa44640765021.json). The script
+keeps the environment and command explicit; this reference does not inject
+configuration. It uses the released **Inferact/Kimi-K3.1-Pro-DSpark** revision
+`e4e6e6261e9f8b6d5f249f9627eb6b109d762d5f`, four speculative tokens,
+`TRITON_ATTN`, and the measured golden-planner synthetic acceptance **3.46**.
+Prefix matching is **1152** tokens. The new graph sizes and prefill/DCP
+environment settings match the measured job; its C48 command has no explicit
+prefill-cadence or adaptive long-prefill flags.
+
+Mount the host's **/data** into the container and supply `MODEL_PATH` and
+`DRAFT_MODEL_PATH` pointing to the corresponding local snapshots. The script
+requires `MODEL=moonshotai/Kimi-K3.1-Pro`, `TP=8`, `DCP_SIZE=8`, `CONC=48`,
+`EP_SIZE=1`, `KV_OFFLOADING=dram`, `KV_OFFLOAD_BACKEND=vllm-simple`,
+`TOTAL_CPU_DRAM_GB=1799`, `EVAL_ONLY=false`, `PORT` and `RESULT_DIR`.
+For `TEST=1`, also supply `TEST_ISL`, `TEST_OSL`, `TEST_RANGE_RATIO`,
+`TEST_NUM_PROMPTS` and `RESULT_FILENAME`; this runs the fixed-length client.
+For native replay, supply `TEST=0`, `DURATION=3600` and a prepared
+`SA_CLIENT_ENTRYPOINT` from the measured source with its `--check` contract.
+The historical `client.py` below is pinned to the earlier run and must not be
+used as evidence of latest-workload replication. The legacy generic E2E config
+is also not a launcher for this latest point.
+
+The change was checked locally against the measured command and environment.
+No model startup, GPU benchmark or new throughput measurement was performed.
+The MI355X published result is not a measured result for the MI350 runner.
+
+## Historical native SA agentic comparison
 
 This client hands off to the measured InferenceX `infx.bench agentic` implementation
 from SA run **42638222682**, job **129550719685**, source
 `903a3023682c6b27683839309cbd4b4d9153afcb`. Both comparison arms use the same prepared
 CPython 3.11.18 / AgentX 1.0.13 runtime and all 129 package versions recovered from
-that job. The existing agentic server script supplies the unchanged SA core recipe.
+that job. The wrapper selects the
+[archived server script](../../upstream/InferenceX/benchmarks/single_node/agentic/deprecated/kimik3_fp4_mi355x_mtp_sa42638222682.sh)
+to preserve that run's image, preview draft and optimization comparisons.
 
 The client executes the complete native warmup, 3600-second measured replay,
 aggregation, distribution analysis and validation. The native AgentX preset has
