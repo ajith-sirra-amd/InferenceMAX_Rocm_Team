@@ -1,25 +1,53 @@
-"""Validate complete native Torch exports against the AgentX measured interval."""
+"""Validate complete native Torch exports against the selected measured interval."""
 
 import argparse
 import csv
 import gzip
 import json
+import math
 import re
 from pathlib import Path
 
 
-def validate(logs, minimum_seconds, require_metadata=False):
+def validate(
+    logs,
+    minimum_seconds,
+    require_metadata=False,
+    workload="agentic",
+    result_filename=None,
+):
     root = logs / "profiles/torch"
     control = json.loads((root / "profile-control.json").read_text())
     if control["status"] != "exported":
         raise ValueError("Controller did not complete profile export")
-    phases = re.findall(
-        r"PhaseRecordsStats\(phase=CreditPhase.PROFILING,.*?start_ns=(\d+), sent_end_ns=(\d+)",
-        (logs / "agentic/benchmark.log").read_text(errors="replace"),
-    )
-    if len(phases) != 1:
-        raise ValueError("Expected one completed measured phase")
-    begin, end = map(int, phases[0])
+    if workload in ("fixed", "vllm"):
+        result = json.loads((logs / f"{result_filename}.json").read_text())
+        if workload == "vllm":
+            interval = json.loads((root / "measurement-start.json").read_text())
+            times = [float(interval[key]) for key in ("start_unix", "end_unix")]
+            if result["completed"] != result["num_prompts"]:
+                raise ValueError("Native vLLM benchmark did not complete all requests")
+        else:
+            times = [
+                float(result[key])
+                for key in ("benchmark_start_time_unix", "benchmark_end_time_unix")
+            ]
+        if (
+            not all(math.isfinite(value) and value > 0 for value in times)
+            or times[1] <= times[0]
+        ):
+            raise ValueError("Invalid fixed-length measurement interval")
+        begin, end = [round(value * 1e9) for value in times]
+    elif workload == "agentic":
+        phases = re.findall(
+            r"PhaseRecordsStats\(phase=CreditPhase.PROFILING,.*?start_ns=(\d+), sent_end_ns=(\d+)",
+            (logs / "agentic/benchmark.log").read_text(errors="replace"),
+        )
+        if len(phases) != 1:
+            raise ValueError("Expected one completed measured phase")
+        begin, end = map(int, phases[0])
+    else:
+        raise ValueError("Unknown profiling workload")
     paths = sorted(root.rglob("*.trace.json*"))
     if len(paths) != 8:
         raise ValueError(f"Expected eight worker traces; found {len(paths)}")
@@ -147,12 +175,18 @@ def validate(logs, minimum_seconds, require_metadata=False):
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("logs", type=Path)
-    p.add_argument("--minimum-seconds", type=int, required=True)
+    p.add_argument("--minimum-seconds", type=float, required=True)
+    p.add_argument(
+        "--workload", choices=("fixed", "vllm", "agentic"), default="agentic"
+    )
+    p.add_argument("--result-filename")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--require-metadata", action="store_true")
     a = p.parse_args()
     try:
-        result = validate(a.logs, a.minimum_seconds, a.require_metadata)
+        result = validate(
+            a.logs, a.minimum_seconds, a.require_metadata, a.workload, a.result_filename
+        )
     except (OSError, ValueError, KeyError, TypeError) as error:
         result = {"status": "failed", "error": str(error)}
     a.output.write_text(json.dumps(result, indent=2) + "\n")

@@ -7,11 +7,11 @@ import signal
 import sys
 import time
 import urllib.request
-from datetime import UTC, datetime
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-logs = Path(os.environ["RESULT_DIR"])
+logs = Path(os.environ["TEST_LOG_ROOT"])
 
 
 def event(name):
@@ -80,30 +80,67 @@ def server():
         http.serve_forever()
 
 
-def client():
-    if sys.argv[1:] == ["--check"]:
-        event("client-check")
-        return
-    event("client-start")
-    directory = logs / "agentic"
-    directory.mkdir(exist_ok=True)
-    (directory / "agentic_power_timezone_offset.txt").write_text("+0000\n")
+def client(kind):
+    event(kind + "-client-start")
+    argv = sys.argv[2:]
+    (logs / (kind + "-client-argv.json")).write_text(json.dumps(argv))
     begin = time.time_ns()
-    stamp = datetime.fromtimestamp(begin / 1e9, UTC).strftime("%H:%M:%S.%f")
-    log = directory / "benchmark.log"
-    log.write_text(stamp + " NOTICE Phase profiling (profiling) started\n")
+    if kind == "agentic":
+        stamp = datetime.fromtimestamp(begin / 1e9).strftime("%H:%M:%S.%f")
+        print(stamp + " NOTICE Phase profiling (profiling) started", flush=True)
+    elif "INFERENCEX_PROFILE_PHASE_FILE" in os.environ:
+        phase = Path(os.environ["INFERENCEX_PROFILE_PHASE_FILE"])
+        temporary = phase.with_suffix(".tmp")
+        temporary.write_text(json.dumps({"start_unix": begin / 1e9}))
+        temporary.replace(phase)
     time.sleep(float(os.environ["FAKE_CLIENT_SECONDS"]))
-    with log.open("a") as stream:
-        stream.write(
-            f"PhaseRecordsStats(phase=CreditPhase.PROFILING, start_ns={begin}, sent_end_ns={time.time_ns()})\n"
+    end = time.time_ns()
+    if kind == "agentic":
+        print(
+            f"PhaseRecordsStats(phase=CreditPhase.PROFILING, start_ns={begin}, sent_end_ns={end})",
+            flush=True,
         )
-    event("client-end")
+    else:
+        filename = argv[argv.index("--result-filename") + 1]
+        (logs / filename).write_text(
+            json.dumps(
+                {
+                    "benchmark_start_time_unix": begin / 1e9,
+                    "benchmark_end_time_unix": end / 1e9,
+                    "completed": 192,
+                    "num_prompts": 192,
+                }
+            )
+        )
+        if kind == "vllm" and "INFERENCEX_PROFILE_PHASE_FILE" in os.environ:
+            phase.write_text(
+                json.dumps({"start_unix": begin / 1e9, "end_unix": end / 1e9})
+            )
+    event(kind + "-client-end")
+
+
+def bootstrap():
+    event("client-bootstrap")
+    if sys.argv[2] == "venv":
+        directory = Path(sys.argv[-1]) / "bin"
+        directory.mkdir(parents=True)
+        for executable, action in (
+            ("python", "agentic-python"),
+            ("aiperf", "agentic"),
+            ("hf", "hf"),
+        ):
+            path = directory / executable
+            path.write_text(
+                '#!/usr/bin/env bash\nexec "$TEST_PYTHON" "$TEST_RUNTIME" '
+                + action
+                + ' "$@"\n'
+            )
+            path.chmod(0o755)
 
 
 if sys.argv[1:2] == ["server"]:
     server()
 elif sys.argv[1:2] == ["health"]:
-    # The real readiness helper calls curl; emulate its external HTTP operation.
     url = sys.argv[-1].replace("0.0.0.0", "127.0.0.1")
     for attempt in range(100):
         try:
@@ -113,5 +150,15 @@ elif sys.argv[1:2] == ["health"]:
             time.sleep(0.01)
     else:
         raise SystemExit(1)
+elif sys.argv[1:2] == ["bootstrap"]:
+    bootstrap()
+elif sys.argv[1:2] == ["agentic-python"]:
+    event("agentic-postprocess")
+    if os.environ.get("FAKE_VALIDATION_FAILURE") == "1" and sys.argv[3].endswith(
+        "validate_agentic_result"
+    ):
+        raise SystemExit(7)
+elif sys.argv[1:2] == ["hf"]:
+    event("dataset-ready")
 else:
-    client()
+    client(sys.argv[1])

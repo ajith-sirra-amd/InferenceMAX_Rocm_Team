@@ -36,6 +36,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from datetime import datetime
 from multiprocessing import Pool, cpu_count
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -653,6 +654,12 @@ async def benchmark(
 
     benchmark_start_time = time.perf_counter()
     benchmark_start_time_unix = time.time()
+    if phase_file := os.environ.get("INFERENCEX_PROFILE_PHASE_FILE"):
+        phase_temporary = Path(f"{phase_file}.tmp")
+        # Publish this tiny marker before any measured request can start.
+        with phase_temporary.open("x") as marker:  # noqa: ASYNC230
+            json.dump({"start_unix": benchmark_start_time_unix}, marker)
+        phase_temporary.replace(phase_file)  # noqa: ASYNC240
     tasks: list[asyncio.Task] = []
     async for request in get_request(input_requests, request_rate, burstiness):
         prompt, prompt_len, output_len, mm_content = request

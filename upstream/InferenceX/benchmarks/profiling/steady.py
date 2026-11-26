@@ -1,4 +1,4 @@
-"""Control vLLM's native profiler from the actual AgentX measured-phase marker."""
+"""Control vLLM's native profiler from the selected workload's measured-phase marker."""
 
 import argparse
 import json
@@ -59,6 +59,7 @@ def capture(
     timeout_seconds,
     poll_seconds,
     export_timeout_seconds,
+    phase_file=None,
 ):
     output.mkdir(parents=True, exist_ok=True)
     control = output / "profile-control.json"
@@ -97,10 +98,17 @@ def capture(
         while start is None:
             alive()
             if time.monotonic() >= deadline:
-                raise TimeoutError(
-                    "AgentX measured phase did not start before the deadline"
+                raise TimeoutError("Measured phase did not start before the deadline")
+            if phase_file is not None and phase_file.exists():
+                start = float(json.loads(phase_file.read_text())["start_unix"])
+                if not math.isfinite(start) or start <= 0:
+                    raise ValueError("Invalid fixed-length measurement timestamp")
+                report.update(
+                    phase_marker=str(phase_file),
+                    measurement_start_unix=start,
+                    measurement_observed_unix=time.time(),
                 )
-            if benchmark_log.exists():
+            elif phase_file is None and benchmark_log.exists():
                 with benchmark_log.open(errors="replace") as stream:
                     stream.seek(offset)
                     pending += stream.read()
@@ -148,7 +156,7 @@ def capture(
         request(
             base_url,
             "/start_profile",
-            {"profile_prefix": "measured-c48"},
+            {"profile_prefix": "measured"},
             export_timeout_seconds,
         )
         report["start_returned_unix"] = time.time()
@@ -195,6 +203,7 @@ if __name__ == "__main__":
     for name in ("output", "benchmark-log"):
         p.add_argument("--" + name, required=True, type=Path)
     p.add_argument("--base-url", required=True)
+    p.add_argument("--phase-file", type=Path)
     p.add_argument("--workload-pid", type=int, required=True)
     for name in (
         "settle-seconds",

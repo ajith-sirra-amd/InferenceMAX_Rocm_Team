@@ -815,6 +815,7 @@ run_benchmark_serving() {
     local server_pid=""
     local tokenizer=""
     local tokenizer_mode=""
+    local random_prefix_len=""
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -844,6 +845,10 @@ run_benchmark_serving() {
                 ;;
             --random-range-ratio)
                 random_range_ratio="$2"
+                shift 2
+                ;;
+            --random-prefix-len)
+                random_prefix_len="$2"
                 shift 2
                 ;;
             --num-prompts)
@@ -999,6 +1004,13 @@ run_benchmark_serving() {
 
     if [[ -n "$tokenizer_mode" ]]; then
         benchmark_cmd+=(--tokenizer-mode "$tokenizer_mode")
+    fi
+    if [[ -n "$random_prefix_len" ]]; then
+        if [[ ! "$random_prefix_len" =~ ^[0-9]+$ ]]; then
+            echo 'Error: --random-prefix-len must be a nonnegative integer' >&2
+            return 1
+        fi
+        benchmark_cmd+=(--random-prefix-len "$random_prefix_len")
     fi
 
     if [[ -n "$server_pid" && "$server_pid" != "${INFERENCEX_SERVER_PID:-}" ]]; then

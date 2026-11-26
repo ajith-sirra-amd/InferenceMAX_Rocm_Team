@@ -1,4 +1,4 @@
-"""Prepare and supervise a measured AgentX Torch capture without changing its workload."""
+"""Supervise measured fixed-length or AgentX profiling without changing the workload."""
 
 import argparse
 import json
@@ -14,22 +14,48 @@ from validate import validate
 
 
 def prepare(
-    logs, duration, delay, seconds, minimum, phase_timeout, poll, export_timeout
+    logs,
+    duration,
+    delay,
+    seconds,
+    minimum,
+    phase_timeout,
+    poll,
+    export_timeout,
+    workload="agentic",
+    result_filename=None,
 ):
-    values = (duration, delay, seconds, minimum, phase_timeout, poll, export_timeout)
+    if workload not in ("fixed", "vllm", "agentic"):
+        raise ValueError("Expected fixed, vllm or agentic workload")
+    if workload == "agentic" and duration is None:
+        raise ValueError("Agentic profiling requires DURATION")
+    if workload != "agentic" and (
+        not result_filename or Path(result_filename).name != result_filename
+    ):
+        raise ValueError(
+            "Fixed profiling requires a result filename without directories"
+        )
+    values = (delay, seconds, minimum, phase_timeout, poll, export_timeout)
+    if duration is not None:
+        values += (duration,)
     if any(not math.isfinite(value) or value <= 0 for value in values):
         raise ValueError("All profiling timings must be finite and positive")
     if not minimum <= seconds <= 180:
         raise ValueError("Require minimum <= capture seconds <= 180")
     if poll >= delay:
         raise ValueError("Poll interval must be shorter than the measured-phase delay")
-    if delay + seconds + 2 * export_timeout + poll + 90 >= duration:
+    if (
+        duration is not None
+        and delay + seconds + 2 * export_timeout + poll + 90 >= duration
+    ):
         raise ValueError(
             "Delay, capture and start/stop export budgets must fit inside DURATION"
         )
     logs = logs.resolve()
     if (logs / "agentic/benchmark.log").exists():
         raise FileExistsError("Use fresh logs; an AgentX benchmark log already exists")
+    if workload != "agentic" and (logs / f"{result_filename}.json").exists():
+        raise FileExistsError("Use fresh logs; a fixed-length result already exists")
     output = logs / "profiles/torch"
     output.mkdir(parents=True, exist_ok=False)
     settings = {
@@ -40,6 +66,8 @@ def prepare(
         "poll": poll,
         "export_timeout": export_timeout,
         "duration": duration,
+        "workload": workload,
+        "result_filename": result_filename,
     }
     (output / "settings.json").write_text(json.dumps(settings, indent=2) + "\n")
     config = {
@@ -93,7 +121,13 @@ def run(logs, port, command):
     result = {"status": "failed"}
     try:
         with (output / "controller.log").open("x") as stream:
-            workload = subprocess.Popen(command, start_new_session=True)
+            env = dict(os.environ)
+            phase_args = []
+            if settings["workload"] != "agentic":
+                phase_file = output / "measurement-start.json"
+                env["INFERENCEX_PROFILE_PHASE_FILE"] = str(phase_file)
+                phase_args = ["--phase-file", str(phase_file)]
+            workload = subprocess.Popen(command, env=env, start_new_session=True)
             controller = subprocess.Popen(
                 [
                     sys.executable,
@@ -116,13 +150,14 @@ def run(logs, port, command):
                     str(settings["poll"]),
                     "--export-timeout-seconds",
                     str(settings["export_timeout"]),
+                    *phase_args,
                 ],
                 stdout=stream,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
             print(
-                f"[profile] Waiting for measured AgentX activity; control log: {output / 'controller.log'}",
+                f"[profile] Waiting for measured {settings['workload']} activity; control log: {output / 'controller.log'}",
                 flush=True,
             )
             while workload.poll() is None:
@@ -133,7 +168,12 @@ def run(logs, port, command):
                 raise subprocess.CalledProcessError(workload.returncode, command)
             if controller.wait(timeout=settings["export_timeout"] + 10) != 0:
                 raise RuntimeError("Profile controller failed before export completed")
-        result = validate(logs, settings["minimum"])
+        result = validate(
+            logs,
+            settings["minimum"],
+            workload=settings["workload"],
+            result_filename=settings["result_filename"],
+        )
         print(
             f"[profile] Validated eight workers: {result['common_coverage_seconds']:.3f}s common GPU extent",
             flush=True,
@@ -162,8 +202,10 @@ def main():
     sub = parser.add_subparsers(dest="action", required=True)
     prep = sub.add_parser("prepare")
     prep.add_argument("--logs", required=True, type=Path)
+    prep.add_argument("--workload", required=True, choices=("fixed", "vllm", "agentic"))
+    prep.add_argument("--result-filename")
+    prep.add_argument("--duration", type=float)
     for name in (
-        "duration",
         "delay",
         "seconds",
         "minimum",

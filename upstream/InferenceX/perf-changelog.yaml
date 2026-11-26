@@ -8641,3 +8641,10 @@
   description:
     - 'Add opt-in --profile to the direct Kimi C48 AgentX script. Keep the SA core recipe and workload unchanged; trigger native Torch worker capture from the measured-phase timestamp, bound start/stop export, validate all eight worker traces and emit ranked kernel CSVs. Preserve export before server cleanup on cancellation. Profiling is disabled by default; CPU-only validation, no GPU run.'
     - '为 Kimi C48 AgentX 直接启动脚本新增可选 --profile。保持 SA 核心配置和工作负载不变，按实测阶段时间戳触发原生 Torch worker 采集，限制启停及导出等待时间，验证八个 worker 的 trace 并输出按耗时排序的内核 CSV。取消时先完成导出再清理服务。默认不启用分析；仅完成 CPU 验证，未运行 GPU 测试。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Make Kimi serving, native vLLM prefix repetition and AgentX helper replay independently selectable with or without profiling. Preserve request counts, validate measured capture windows and forward shared-prefix lengths. Add user-requested overridable workload/timing defaults and independent client concurrency/server sequence limits. CPU-only validation; no GPU result.'
+    - 'Kimi 支持独立选择定长 serving、原生 vLLM 前缀重复及 AgentX 共享函数回放，每种均可开启或关闭分析。保留请求数量，验证实测采集窗口并传递共享前缀长度；按用户要求增加可覆盖的工作负载与时间默认值，分离客户端并发和服务端序列上限。仅完成 CPU 验证，无 GPU 测量结果。'
+  pr-link: https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/compare/4ee20f3f...IPAT-Script

@@ -27,13 +27,21 @@ prefill-cadence or adaptive long-prefill flags.
 
 Mount the host's **/data** into the container and supply `MODEL_PATH` and
 `DRAFT_MODEL_PATH` pointing to the corresponding local snapshots. The script
-requires `MODEL=moonshotai/Kimi-K3.1-Pro`, `TP=8`, `DCP_SIZE=8`, `CONC=48`,
+requires `MODEL=moonshotai/Kimi-K3.1-Pro`, `TP=8`, `DCP_SIZE=8`,
 `EP_SIZE=1`, `KV_OFFLOADING=dram`, `KV_OFFLOAD_BACKEND=vllm-simple`,
 `TOTAL_CPU_DRAM_GB=1799`, `EVAL_ONLY=false`, `PORT` and `RESULT_DIR`.
-For `TEST=1`, also supply `TEST_ISL`, `TEST_OSL`, `TEST_RANGE_RATIO`,
-`TEST_NUM_PROMPTS` and `RESULT_FILENAME`; this runs the fixed-length client.
-For native replay, supply `TEST=0`, `DURATION=3600` and a prepared
-`SA_CLIENT_ENTRYPOINT` from the measured source with its `--check` contract.
+Supply `RESULT_FILENAME`. `CONC` and the independent server `MAX_NUM_SEQS`
+default to 48; overrides create a different operating point.
+`BENCHMARK_MODE=serving` (or `TEST=1`) runs `run_benchmark_serving`;
+`BENCHMARK_MODE=vllm` runs native `vllm bench serve` with prefix repetition;
+`BENCHMARK_MODE=agentic` (or `TEST=0`, the default) runs the existing
+`run_agentic_replay_and_write_outputs` helper, including result validation.
+All modes support `PROFILE=0|1`. Synthetic lengths, concurrency and profiling
+timings have overridable defaults; see the guide linked below.
+Agentic mode requires the shared runtime settings and client setup inputs in
+that guide, and defaults to `DURATION=3600`. It bootstraps the checked-out
+helper's client before GPU startup and no longer uses `SA_CLIENT_ENTRYPOINT`.
+This helper's client is not the exact latest measured SA AgentX package set.
 The historical `client.py` below is pinned to the earlier run and must not be
 used as evidence of latest-workload replication. The legacy generic E2E config
 is also not a launcher for this latest point.
@@ -42,8 +50,8 @@ The change was checked locally against the measured command and environment.
 No model startup, GPU benchmark or new throughput measurement was performed.
 The MI355X published result is not a measured result for the MI350 runner.
 
-Add **`--profile`** to the direct script for a bounded native AgentX worker
-capture. It is off by default and requires explicit timing settings; see the
+Add **`--profile`** or `PROFILE=1` for bounded worker capture with any of the
+three workloads. It is off by default; see the defaults and examples in the
 [profiling command and output guide](../../upstream/InferenceX/benchmarks/profiling/README.md).
 The option preserves the native workload, validates all eight traces and writes
 Top 10 kernel statistics. It does not enable profiling in the historical
