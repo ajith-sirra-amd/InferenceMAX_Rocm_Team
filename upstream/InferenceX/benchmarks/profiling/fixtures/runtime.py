@@ -84,11 +84,16 @@ def client(kind):
     event(kind + "-client-start")
     argv = sys.argv[2:]
     (logs / (kind + "-client-argv.json")).write_text(json.dumps(argv))
+    if kind == "vllm":
+        print("Warming up...", flush=True)
+        time.sleep(0.05)
+        print("Starting main benchmark run...", flush=True)
     begin = time.time_ns()
+    start_counter = time.perf_counter()
     if kind == "agentic":
         stamp = datetime.fromtimestamp(begin / 1e9).strftime("%H:%M:%S.%f")
         print(stamp + " NOTICE Phase profiling (profiling) started", flush=True)
-    elif "INFERENCEX_PROFILE_PHASE_FILE" in os.environ:
+    elif kind == "fixed" and "INFERENCEX_PROFILE_PHASE_FILE" in os.environ:
         phase = Path(os.environ["INFERENCEX_PROFILE_PHASE_FILE"])
         temporary = phase.with_suffix(".tmp")
         temporary.write_text(json.dumps({"start_unix": begin / 1e9}))
@@ -109,13 +114,11 @@ def client(kind):
                     "benchmark_end_time_unix": end / 1e9,
                     "completed": 192,
                     "num_prompts": 192,
+                    "start_times": [start_counter] * 192,
+                    "latencies": [time.perf_counter() - start_counter] * 192,
                 }
             )
         )
-        if kind == "vllm" and "INFERENCEX_PROFILE_PHASE_FILE" in os.environ:
-            phase.write_text(
-                json.dumps({"start_unix": begin / 1e9, "end_unix": end / 1e9})
-            )
     event(kind + "-client-end")
 
 

@@ -23,10 +23,25 @@ def validate(
     if workload in ("fixed", "vllm"):
         result = json.loads((logs / f"{result_filename}.json").read_text())
         if workload == "vllm":
-            interval = json.loads((root / "measurement-start.json").read_text())
-            times = [float(interval[key]) for key in ("start_unix", "end_unix")]
             if result["completed"] != result["num_prompts"]:
                 raise ValueError("Native vLLM benchmark did not complete all requests")
+            starts, latencies = result["start_times"], result["latencies"]
+            if (
+                not starts
+                or len(starts) != len(latencies)
+                or len(starts) != result["num_prompts"]
+            ):
+                raise ValueError("Native vLLM detailed request timings are missing")
+            offset = float(control["perf_counter_to_unix_seconds"])
+            if not math.isfinite(offset) or any(
+                not math.isfinite(value) or value <= 0 for value in starts + latencies
+            ):
+                raise ValueError("Invalid native vLLM request timings")
+            times = [
+                min(starts) + offset,
+                max(start + latency for start, latency in zip(starts, latencies))
+                + offset,
+            ]
         else:
             times = [
                 float(result[key])

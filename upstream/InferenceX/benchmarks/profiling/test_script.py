@@ -50,13 +50,16 @@ if [[ "$1" == -m && "$2" == infx.bench_serving.benchmark_serving ]]; then
     shift 2
     exec "$TEST_PYTHON" "$TEST_RUNTIME" fixed "$@"
 fi
-if [[ "$1" == */profiling/vllm_client.py ]]; then
-    shift
-    exec "$TEST_PYTHON" "$TEST_RUNTIME" vllm "$@"
-fi
 exec "$TEST_PYTHON" "$@"
 """)
             python_stub.chmod(0o755)
+            vllm_stub = binary_dir / "vllm"
+            vllm_stub.write_text("""#!/usr/bin/env bash
+[[ "$1" == bench && "$2" == serve ]] || exit 2
+shift 2
+exec "$TEST_PYTHON" "$TEST_RUNTIME" vllm "$@"
+""")
+            vllm_stub.chmod(0o755)
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
@@ -90,7 +93,6 @@ exec "$TEST_PYTHON" "$@"
                     "vllm": "vllm",
                     "agentic": "agentic",
                 }[kind],
-                VLLM_BENCH_PYTHON=str(python_stub),
                 PROFILE=str(int(enabled)),
                 DURATION="3600",
                 INFERENCEX_REPO_ROOT=str(HERE.parent.parent),

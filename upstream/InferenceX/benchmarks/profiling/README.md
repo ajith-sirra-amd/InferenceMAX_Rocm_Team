@@ -40,8 +40,8 @@ All modes default to `PROFILE_PHASE_TIMEOUT_SECONDS=7200`,
 `PROFILE_POLL_SECONDS=0.5`, and `PROFILE_MIN_SECONDS=0.8 * PROFILE_SECONDS`.
 `TEST_RANGE_RATIO=1` makes the bundled client's lengths fixed.
 `VLLM_NUM_PREFIXES=1` selects one shared prefix in the native vLLM dataset;
-raise it to create multiple prefix groups. Native vLLM uses its installed client
-from `VLLM_BENCH_PYTHON` (default `/opt/runtime-venv/bin/python`).
+raise it to create multiple prefix groups. Native vLLM runs the installed
+`vllm bench serve` executable, with `/opt/runtime-venv/bin` first on `PATH`.
 
 Client concurrency and server `MAX_NUM_SEQS` are independent. Changing either
 from 48 creates a new operating point; it does not reproduce SA C48. These
@@ -113,11 +113,14 @@ it does not set total synthetic benchmark runtime. Synthetic benchmarks finish
 all `TEST_NUM_PROMPTS`; agentic replay uses `DURATION`. The phase timeout starts
 after client launch and does not change the server startup timeout.
 
-The bundled client emits an atomic measurement timestamp. The native vLLM
-launcher delegates to the installed `vllm bench serve` CLI, adding process-local
-hooks at its measured request iterator and request completions. It records a
-separate interval without editing installed files or passing client `--profile`.
-Agentic mode uses its native measured-phase marker and completed phase records.
+The bundled client emits an atomic measurement timestamp. Native vLLM runs
+directly, with unbuffered output saved to `vllm-benchmark.log` during profiling.
+Its delay starts when the controller observes `Starting main benchmark run...`
+after warmup, so it has log-polling precision. Final validation uses the native
+JSON's detailed `start_times` and `latencies`, converted from the same host's
+performance-counter clock to wall time. There is no Python client wrapper,
+monkey-patching or client `--profile` flag. Agentic mode uses its native
+measured-phase marker and completed phase records.
 
 The controller confirms generated-token progress, calls `/start_profile`, waits
 for the capture window, then calls `/stop_profile`. Capture must be positive,
@@ -138,7 +141,8 @@ results separate from unprofiled throughput comparisons.
 | `vllm_command.txt` | Actual server command |
 | `<RESULT_FILENAME>-command.txt` or `agentic/benchmark_command.txt` | Selected client command |
 | `profiles/torch/settings.json`, `profiler-config.json` | Capture settings and profiler configuration |
-| `profiles/torch/measurement-start.json` | Synthetic measured interval marker |
+| `profiles/torch/measurement-start.json` | Bundled serving client's measurement marker |
+| `vllm-benchmark.log` | Native vLLM progress/output when profiling |
 | `profiles/torch/controller.log`, `profile-control.json` | Phase, progress, start/stop and export state |
 | `profiles/torch/*.trace.json.gz` | Worker traces, possibly in nested native output directories |
 | `profile-validation.json` | Eight-worker coverage and measured-interval containment |

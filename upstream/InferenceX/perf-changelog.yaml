@@ -8648,3 +8648,10 @@
     - 'Make Kimi serving, native vLLM prefix repetition and AgentX helper replay independently selectable with or without profiling. Preserve request counts, validate measured capture windows and forward shared-prefix lengths. Add user-requested overridable workload/timing defaults and independent client concurrency/server sequence limits. CPU-only validation; no GPU result.'
     - 'Kimi 支持独立选择定长 serving、原生 vLLM 前缀重复及 AgentX 共享函数回放，每种均可开启或关闭分析。保留请求数量，验证实测采集窗口并传递共享前缀长度；按用户要求增加可覆盖的工作负载与时间默认值，分离客户端并发和服务端序列上限。仅完成 CPU 验证，无 GPU 测量结果。'
   pr-link: https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/compare/4ee20f3f...IPAT-Script
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Simplify native Kimi benchmarking to call vllm bench serve directly. Remove the Python client wrapper and runtime hooks; use native progress logs for capture delay and saved request timings for validation. Preserve all workload/profile combinations and defaults. No GPU run.'
+    - '简化 Kimi 原生基准测试，直接调用 vllm bench serve，移除 Python 客户端包装器及运行时函数替换。通过原生进度日志控制采集延迟，使用保存的请求时间校验采集区间。保留所有工作负载与分析开关组合及默认值，未运行 GPU。'
+  pr-link: https://github.com/ajith-sirra-amd/InferenceMAX_Rocm_Team/compare/4f35aac5...IPAT-Script

@@ -41,7 +41,7 @@ if [[ "$BENCHMARK_MODE" == vllm ]]; then
     TEST_ISL=${TEST_ISL-3584}
     TEST_PREFIX_LEN=${TEST_PREFIX_LEN-4608}
     VLLM_NUM_PREFIXES=${VLLM_NUM_PREFIXES-1}
-    VLLM_BENCH_PYTHON=${VLLM_BENCH_PYTHON-/opt/runtime-venv/bin/python}
+    export PATH="/opt/runtime-venv/bin:$PATH"
 else
     TEST_ISL=${TEST_ISL-8192}
     TEST_PREFIX_LEN=${TEST_PREFIX_LEN-0}
@@ -96,7 +96,7 @@ if [[ "$BENCHMARK_MODE" != agentic ]]; then
     done
     PROFILE_WORKLOAD_ARGS=(--workload fixed --result-filename "$RESULT_FILENAME")
     if [[ "$BENCHMARK_MODE" == vllm ]]; then
-        check_env_vars VLLM_NUM_PREFIXES VLLM_BENCH_PYTHON
+        check_env_vars VLLM_NUM_PREFIXES
         if [[ ! "$VLLM_NUM_PREFIXES" =~ ^[1-9][0-9]*$ ]]; then
             echo 'VLLM_NUM_PREFIXES must be a positive integer' >&2; exit 2
         fi
@@ -243,7 +243,7 @@ if [[ "$BENCHMARK_MODE" == serving ]]; then
         --use-chat-template --trust-remote-code
     )
 elif [[ "$BENCHMARK_MODE" == vllm ]]; then
-    VLLM_BENCH_CMD=("$VLLM_BENCH_PYTHON" "$(dirname "$0")/../../profiling/vllm_client.py"
+    VLLM_BENCH_CMD=(vllm bench serve
         --model "$MODEL" --tokenizer "$MODEL_PATH" --tokenizer-mode kimi_k3
         --backend vllm --base-url "http://127.0.0.1:$PORT" --endpoint /v1/completions
         --dataset-name prefix_repetition

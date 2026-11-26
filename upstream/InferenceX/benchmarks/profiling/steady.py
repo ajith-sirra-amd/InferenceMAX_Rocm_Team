@@ -60,6 +60,7 @@ def capture(
     poll_seconds,
     export_timeout_seconds,
     phase_file=None,
+    log_format="agentic",
 ):
     output.mkdir(parents=True, exist_ok=True)
     control = output / "profile-control.json"
@@ -116,13 +117,22 @@ def capture(
                 lines = pending.split("\n")
                 pending = lines.pop()
                 for line in lines:
-                    if not MARKER.search(line):
-                        continue
                     observed = time.time()
-                    zone = (
-                        benchmark_log.parent / "agentic_power_timezone_offset.txt"
-                    ).read_text()
-                    start = marker_time(line, observed, zone)
+                    if log_format == "vllm":
+                        if line.strip() != "Starting main benchmark run...":
+                            continue
+                        start = observed
+                        # Native detailed results use the host's perf_counter clock.
+                        report["perf_counter_to_unix_seconds"] = (
+                            observed - time.perf_counter()
+                        )
+                    else:
+                        if not MARKER.search(line):
+                            continue
+                        zone = (
+                            benchmark_log.parent / "agentic_power_timezone_offset.txt"
+                        ).read_text()
+                        start = marker_time(line, observed, zone)
                     report.update(
                         phase_marker=line,
                         measurement_start_unix=start,
@@ -204,6 +214,7 @@ if __name__ == "__main__":
         p.add_argument("--" + name, required=True, type=Path)
     p.add_argument("--base-url", required=True)
     p.add_argument("--phase-file", type=Path)
+    p.add_argument("--log-format", choices=("agentic", "vllm"), default="agentic")
     p.add_argument("--workload-pid", type=int, required=True)
     for name in (
         "settle-seconds",

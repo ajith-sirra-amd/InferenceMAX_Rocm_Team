@@ -38,7 +38,8 @@
 `PROFILE_MIN_SECONDS=0.8 * PROFILE_SECONDS`。
 `TEST_RANGE_RATIO=1` 使仓库客户端使用固定长度。
 `VLLM_NUM_PREFIXES=1` 表示原生 vLLM 数据集只有一个共享前缀；增加该值可创建多个前缀组。
-原生客户端使用 `VLLM_BENCH_PYTHON`，默认 `/opt/runtime-venv/bin/python`。
+原生客户端直接使用已安装的 `vllm bench serve` 可执行程序，
+`PATH` 中优先使用 `/opt/runtime-venv/bin`。
 
 客户端并发与 `MAX_NUM_SEQS` 相互独立。任一值不为 48 即构成新的工作点，
 不能视为复现 SA C48。这些分析默认值是起始设置，并非实测最优配置。
@@ -101,9 +102,12 @@ Agentic 模式需先 source `upstream/InferenceX/benchmarks/runtime_settings.sh`
 `TEST_NUM_PROMPTS` 后结束；Agentic 使用 `DURATION`。阶段等待超时从客户端启动计时，
 不会改变服务端启动超时。
 
-仓库客户端写入原子更新的实测时间标记。原生 vLLM 启动器调用已安装的
-`vllm bench serve` CLI，并在当前进程的实测请求迭代器及请求完成处记录独立时间区间，
-不修改已安装文件，不传入客户端 `--profile`。Agentic 使用原生实测阶段标记及完成记录。
+仓库客户端写入原子更新的实测时间标记。原生 vLLM 直接运行，分析时将无缓冲输出
+保存到 `vllm-benchmark.log`。控制器观察到预热后的
+`Starting main benchmark run...` 时开始计算延迟，因此精度受日志轮询间隔影响。
+最终校验使用原生 JSON 中的 `start_times` 和 `latencies`，将同一主机的性能计数器
+时钟转换为墙上时间。此模式没有 Python 客户端包装器、运行时函数替换或客户端
+`--profile` 参数。Agentic 使用原生实测阶段标记及完成记录。
 
 控制器验证生成 token 持续增加后调用 `/start_profile`，等待窗口结束，再调用
 `/stop_profile`。采集时长必须为正、不超过 180 秒，且不小于 `PROFILE_MIN_SECONDS`；
@@ -121,7 +125,8 @@ Agentic 模式需先 source `upstream/InferenceX/benchmarks/runtime_settings.sh`
 | `vllm_command.txt` | 实际服务端命令 |
 | `<RESULT_FILENAME>-command.txt` 或 `agentic/benchmark_command.txt` | 所选客户端命令 |
 | `profiles/torch/settings.json`、`profiler-config.json` | 采集及分析器设置 |
-| `profiles/torch/measurement-start.json` | 合成工作负载的实测时间标记 |
+| `profiles/torch/measurement-start.json` | 仓库 serving 客户端的实测时间标记 |
+| `vllm-benchmark.log` | 分析时的原生 vLLM 进度及输出 |
 | `profiles/torch/controller.log`、`profile-control.json` | 阶段、进度、启停及导出状态 |
 | `profiles/torch/*.trace.json.gz` | worker trace，可能位于原生嵌套目录 |
 | `profile-validation.json` | 八个 worker 的覆盖及实测区间包含关系 |

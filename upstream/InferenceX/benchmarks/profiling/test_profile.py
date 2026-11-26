@@ -180,6 +180,32 @@ class MeasuredTests(unittest.TestCase):
             self.assertEqual(float(rows[1]["cumulative_gpu_time_share_percent"]), 100)
             self.assertEqual(int(rows[0]["calls"]), 8)
             self.assertEqual(float(rows[0]["mean_us"]), 3000)
+            (root / "profile-control.json").write_text(
+                json.dumps(
+                    {
+                        "status": "exported",
+                        "perf_counter_to_unix_seconds": begin / 1e9 - 100,
+                    }
+                )
+            )
+            native_result = {
+                "completed": 2,
+                "num_prompts": 2,
+                "start_times": [100, 101],
+                "latencies": [3600, 3599],
+            }
+            native_path = logs / "native.json"
+            native_path.write_text(json.dumps(native_result))
+            native = validate(logs, 120, workload="vllm", result_filename="native")
+            self.assertEqual(
+                native["measurement_utc_ns"], [begin, begin + 3600 * 10**9]
+            )
+            native_path.write_text(json.dumps({**native_result, "latencies": [2, 2]}))
+            with self.assertRaisesRegex(ValueError, "outside measured"):
+                validate(logs, 120, workload="vllm", result_filename="native")
+            native_path.write_text(json.dumps({**native_result, "latencies": [2]}))
+            with self.assertRaisesRegex(ValueError, "timings are missing"):
+                validate(logs, 120, workload="vllm", result_filename="native")
             with self.assertRaisesRegex(ValueError, "missing required shape"):
                 validate(logs, 120, require_metadata=True)
             for path in root.glob("*.pt.trace.json.gz"):

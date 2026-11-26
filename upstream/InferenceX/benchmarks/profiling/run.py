@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import ExitStack
 from pathlib import Path
 
 from validate import validate
@@ -120,14 +121,29 @@ def run(logs, port, command):
     workload = controller = None
     result = {"status": "failed"}
     try:
-        with (output / "controller.log").open("x") as stream:
+        with ExitStack() as files:
+            stream = files.enter_context((output / "controller.log").open("x"))
             env = dict(os.environ)
             phase_args = []
-            if settings["workload"] != "agentic":
+            benchmark_log = logs / "agentic/benchmark.log"
+            client_log = None
+            if settings["workload"] == "fixed":
                 phase_file = output / "measurement-start.json"
                 env["INFERENCEX_PROFILE_PHASE_FILE"] = str(phase_file)
                 phase_args = ["--phase-file", str(phase_file)]
-            workload = subprocess.Popen(command, env=env, start_new_session=True)
+            elif settings["workload"] == "vllm":
+                benchmark_log = logs / "vllm-benchmark.log"
+                client_log = files.enter_context(benchmark_log.open("x"))
+                env["PYTHONUNBUFFERED"] = "1"
+                phase_args = ["--log-format", "vllm"]
+                print(f"[benchmark] Native vLLM output: {benchmark_log}", flush=True)
+            workload = subprocess.Popen(
+                command,
+                env=env,
+                start_new_session=True,
+                stdout=client_log,
+                stderr=subprocess.STDOUT if client_log else None,
+            )
             controller = subprocess.Popen(
                 [
                     sys.executable,
@@ -135,7 +151,7 @@ def run(logs, port, command):
                     "--output",
                     str(output),
                     "--benchmark-log",
-                    str(logs / "agentic/benchmark.log"),
+                    str(benchmark_log),
                     "--base-url",
                     f"http://127.0.0.1:{port}",
                     "--workload-pid",
