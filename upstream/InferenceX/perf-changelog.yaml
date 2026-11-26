@@ -8635,3 +8635,9 @@
   description:
     - 'Update the direct Kimi C48 server script to SA point 448458, run 44640765021/job 135971483924: released DSpark revision e4e6e626, four draft tokens, TRITON_ATTN, measured synthetic acceptance 3.46, prefix unit 1152, new graph ladder and prefill/DCP environment. Record the matching 712d9eb image and measured source. Preserve the older optimization comparisons on an archived script. CPU-only command validation; no GPU run.'
     - '将 Kimi C48 直接启动脚本更新为 SA 数据点 448458、run 44640765021/job 135971483924：使用正式版 DSpark revision e4e6e626、四个草稿 token、TRITON_ATTN、实测合成接受长度 3.46、1152 前缀匹配单位、新的图捕获尺寸及 prefill/DCP 环境。记录匹配的 712d9eb 镜像和实测源码；旧优化对比继续使用归档脚本。仅完成 CPU 命令校验，未运行 GPU 测试。'
+
+- config-keys:
+    - kimik3-fp4-mi355x-vllm-agentic-mtp
+  description:
+    - 'Add opt-in --profile to the direct Kimi C48 AgentX script. Keep the SA core recipe and workload unchanged; trigger native Torch worker capture from the measured-phase timestamp, bound start/stop export, validate all eight worker traces and emit ranked kernel CSVs. Preserve export before server cleanup on cancellation. Profiling is disabled by default; CPU-only validation, no GPU run.'
+    - '为 Kimi C48 AgentX 直接启动脚本新增可选 --profile。保持 SA 核心配置和工作负载不变，按实测阶段时间戳触发原生 Torch worker 采集，限制启停及导出等待时间，验证八个 worker 的 trace 并输出按耗时排序的内核 CSV。取消时先完成导出再清理服务。默认不启用分析；仅完成 CPU 验证，未运行 GPU 测试。'

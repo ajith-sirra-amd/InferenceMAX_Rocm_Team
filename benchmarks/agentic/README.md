@@ -42,6 +42,13 @@ The change was checked locally against the measured command and environment.
 No model startup, GPU benchmark or new throughput measurement was performed.
 The MI355X published result is not a measured result for the MI350 runner.
 
+Add **`--profile`** to the direct script for a bounded native AgentX worker
+capture. It is off by default and requires explicit timing settings; see the
+[profiling command and output guide](../../upstream/InferenceX/benchmarks/profiling/README.md).
+The option preserves the native workload, validates all eight traces and writes
+Top 10 kernel statistics. It does not enable profiling in the historical
+comparison wrapper or migrate the historical client to the latest SA source.
+
 ## Historical native SA agentic comparison
 
 This client hands off to the measured InferenceX `infx.bench agentic` implementation

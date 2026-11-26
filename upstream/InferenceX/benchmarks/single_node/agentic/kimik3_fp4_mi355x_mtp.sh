@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -eo pipefail
 source "$(dirname "$0")/../../benchmark_lib.sh"
+PROFILE_ENABLED=0
+for option in "$@"; do
+    case "$option" in
+        --profile) PROFILE_ENABLED=1 ;;
+        --help|-h)
+            echo "Usage: $0 [--profile]"
+            echo 'Profiling requires TEST=0 and PROFILE_DELAY_SECONDS, PROFILE_SECONDS, PROFILE_MIN_SECONDS,'
+            echo 'PROFILE_PHASE_TIMEOUT_SECONDS, PROFILE_POLL_SECONDS and PROFILE_EXPORT_TIMEOUT_SECONDS.'
+            exit 0 ;;
+        *) echo "Unknown option: $option" >&2; exit 2 ;;
+    esac
+done
 check_env_vars MODEL MODEL_PATH DRAFT_MODEL_PATH TP DCP_SIZE CONC EP_SIZE
 check_env_vars KV_OFFLOADING KV_OFFLOAD_BACKEND TOTAL_CPU_DRAM_GB RESULT_DIR PORT EVAL_ONLY
 if [[ "$EVAL_ONLY" != false ]]; then
@@ -15,6 +27,14 @@ if [[ "$KV_OFFLOADING" != dram || "$KV_OFFLOAD_BACKEND" != vllm-simple || "$TOTA
     echo 'The SA C48 point uses vllm-simple DRAM offload with TOTAL_CPU_DRAM_GB=1799' >&2
     exit 1
 fi
+if [[ "$PROFILE_ENABLED" == 1 ]]; then
+    if [[ "${TEST-}" != 0 || "${PROFILE-0}" != 0 ]]; then
+        echo '--profile requires TEST=0 and the legacy PROFILE flag unset or 0.' >&2
+        exit 2
+    fi
+    check_env_vars PROFILE_DELAY_SECONDS PROFILE_SECONDS PROFILE_MIN_SECONDS
+    check_env_vars PROFILE_PHASE_TIMEOUT_SECONDS PROFILE_POLL_SECONDS PROFILE_EXPORT_TIMEOUT_SECONDS
+fi
 if [[ "${TEST-}" == 1 ]]; then
     check_env_vars TEST_ISL TEST_OSL TEST_RANGE_RATIO TEST_NUM_PROMPTS RESULT_FILENAME
 else
@@ -27,6 +47,13 @@ for model_directory in "$MODEL_PATH" "$DRAFT_MODEL_PATH"; do
         exit 1
     fi
 done
+if [[ "$PROFILE_ENABLED" == 1 ]]; then
+    PROFILE_HELPER="$(dirname "$0")/../../profiling/run.py"
+    PROFILER_CONFIG=$(python3 "$PROFILE_HELPER" prepare --logs "$RESULT_DIR" --duration "$DURATION" \
+        --delay "$PROFILE_DELAY_SECONDS" --seconds "$PROFILE_SECONDS" --minimum "$PROFILE_MIN_SECONDS" \
+        --phase-timeout "$PROFILE_PHASE_TIMEOUT_SECONDS" --poll "$PROFILE_POLL_SECONDS" \
+        --export-timeout "$PROFILE_EXPORT_TIMEOUT_SECONDS")
+fi
 wait_for_amd_gpu_clean
 rocm-smi || true
 export VLLM_ROCM_USE_AITER=1
@@ -93,20 +120,33 @@ VLLM_CMD=(
 mkdir -p "$RESULT_DIR"
 SERVER_LOG="$RESULT_DIR/server.log"
 SERVER_PID=""
+PROFILE_PID=""
 cleanup_services() {
     local exit_code=$?
     trap - EXIT INT TERM
     set +e
+    if [[ -n "$PROFILE_PID" ]] && kill -0 "$PROFILE_PID" 2>/dev/null; then
+        kill -TERM "$PROFILE_PID"
+        wait "$PROFILE_PID"
+    fi
     stop_background_process_tree "$SERVER_PID" "vLLM server" 60
     exit "$exit_code"
 }
 trap cleanup_services EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-write_command "$RESULT_DIR/vllm_command.txt" "${VLLM_CMD[@]}"
+if [[ "$PROFILE_ENABLED" == 1 ]]; then
+    write_command "$RESULT_DIR/vllm_core_command.txt" "${VLLM_CMD[@]}"
+else
+    write_command "$RESULT_DIR/vllm_command.txt" "${VLLM_CMD[@]}"
+fi
 if [[ -n "${SA_CONFIG_AUDIT-}" ]]; then
     check_env_vars SA_REFERENCE_CONFIG
     python3 "$SA_CONFIG_AUDIT" "$SA_REFERENCE_CONFIG" "$RESULT_DIR" "$MODEL_PATH" "$PORT" "${VLLM_CMD[@]}"
+fi
+if [[ "$PROFILE_ENABLED" == 1 ]]; then
+    VLLM_CMD+=(--profiler-config "$PROFILER_CONFIG")
+    write_command "$RESULT_DIR/vllm_command.txt" "${VLLM_CMD[@]}"
 fi
 "${VLLM_CMD[@]}" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
@@ -123,6 +163,11 @@ if [[ "${TEST-}" == 1 ]]; then
         --result-filename "$RESULT_FILENAME" --result-dir "$RESULT_DIR" \
         --bench-serving-dir "$INFERENCEX_REPO_ROOT" \
         --use-chat-template --trust-remote-code
+elif [[ "$PROFILE_ENABLED" == 1 ]]; then
+    python3 "$PROFILE_HELPER" run --logs "$RESULT_DIR" --port "$PORT" -- python3 "$SA_CLIENT_ENTRYPOINT" &
+    PROFILE_PID=$!
+    wait "$PROFILE_PID"
+    PROFILE_PID=""
 else
     python3 "$SA_CLIENT_ENTRYPOINT"
 fi
