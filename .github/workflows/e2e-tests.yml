@@ -9,6 +9,7 @@ on:
                 required: true
                 type: choice
                 options:
+                - "Hyperloom repack g29"
                 # - "test-config  --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-atom-agentic-lmcache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys dsv4-fp4-mi355x-sglang-agentic-hicache"
                 # - "test-config --config-files .github/configs/amd-master.yaml --config-keys minimaxm2.5-fp4-mi355x-vllm-agentic-lmcache"
@@ -74,6 +75,7 @@ on:
 
 jobs:
     get-jobs:
+        if: ${{ inputs.generate-cli-command != 'Hyperloom repack g29' }}
         runs-on: ubuntu-latest
         outputs:
             single-node-config: ${{ steps.get-jobs.outputs.single-node-config }}
@@ -416,3 +418,61 @@ jobs:
     #              name: "run-stats"
     #              path: ${{ env.STATS_FILENAME }}.json
 #
+    hyperloom-local-handoff:
+        if: ${{ inputs.generate-cli-command == 'Hyperloom repack g29' }}
+        runs-on: [self-hosted, 'cluster:mi355x-amds-2']
+        timeout-minutes: 540
+        concurrency:
+            group: sa-mi355x-single-node
+            cancel-in-progress: false
+        env:
+            OUTPUT: /share_nfs/gguasti/benchmarks/hyperloom-repack-${{ github.run_id }}-${{ github.run_attempt }}
+            INPUT_ROOT: /share_nfs/gguasti/benchmarks/hyperloom-repack-inputs-20261127
+            INPUT_MANIFEST_SHA256: b75863ed29bc5107b716ddd87792d69d158a037d108d62872266b0f2bd6b00f0
+            PYTHONDONTWRITEBYTECODE: '1'
+            HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        steps:
+            - name: Verify prepared local handoff and allocated host
+              run: |
+                  python3 - <<'PY'
+                  import hashlib,json,os,pathlib,socket,subprocess
+                  assert os.environ['RUNNER_NAME']=='mi355x-amd_pit2_node_giovanni'
+                  assert socket.gethostname().split('.')[0]=='pit2-p03-g29'
+                  job=subprocess.check_output(['scontrol','show','job','30716'],text=True)
+                  assert 'JobState=RUNNING' in job and 'NodeList=pit2-p03-g29' in job and 'UserId=giovanni.guasti@amd.com' in job
+                  root=pathlib.Path(os.environ['INPUT_ROOT']).resolve()
+                  manifest=(root/'input-manifest.json').read_bytes()
+                  assert hashlib.sha256(manifest).hexdigest()==os.environ['INPUT_MANIFEST_SHA256']
+                  for name,digest in json.loads(manifest).items():
+                      p=(root/name).resolve();p.relative_to(root)
+                      assert hashlib.sha256(p.read_bytes()).hexdigest()==digest,name
+                  print('Allocated host and prepared local input hashes verified')
+                  PY
+            - name: Run prepared experiment and preserve local evidence
+              run: |
+                  set -eo pipefail
+                  mkdir -p "$OUTPUT"
+                  python3 -m venv "$OUTPUT/venv"
+                  "$OUTPUT/venv/bin/pip" install pyyaml huggingface_hub > "$OUTPUT/dependencies.log" 2>&1
+                  "$OUTPUT/venv/bin/python" -u "$INPUT_ROOT/run.py" --output "$OUTPUT" --allocation 30716 --node pit2-p03-g29 --source-archive "$INPUT_ROOT/inferencex-native.tar" --points 1,2,4,8,12,16,24,48,80 > "$OUTPUT/coordinator.log" 2>&1
+            - name: Stop only this run's containers
+              if: always()
+              run: |
+                  python3 - <<'PY'
+                  import os,subprocess
+                  token=os.environ['GITHUB_RUN_ID']+'-'+os.environ['GITHUB_RUN_ATTEMPT']
+                  ids=subprocess.check_output(['docker','ps','-q','--filter','label=hyperloom.run='+token],text=True).split()
+                  if ids:subprocess.run(['docker','stop','--timeout','30',*ids],check=True)
+                  PY
+            - name: Report handoff state without publishing local payload
+              if: always()
+              run: |
+                  python3 - <<'PY'
+                  import json,os,pathlib
+                  out=pathlib.Path(os.environ['OUTPUT']);path=out/'status.json'
+                  if path.exists():
+                      state=json.loads(path.read_text())
+                      print('Experiment state:',state['phase'])
+                      print('Completed measurements:',sum(bool(r.get('valid')) for r in state.get('records',[])))
+                  print('Evidence retained on allocated storage:',out)
+                  PY
