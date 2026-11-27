@@ -427,8 +427,8 @@ jobs:
             cancel-in-progress: false
         env:
             OUTPUT: /share_nfs/gguasti/benchmarks/hyperloom-repack-${{ github.run_id }}-${{ github.run_attempt }}
-            INPUT_ROOT: /share_nfs/gguasti/benchmarks/hyperloom-repack-inputs-20261127
-            INPUT_MANIFEST_SHA256: b75863ed29bc5107b716ddd87792d69d158a037d108d62872266b0f2bd6b00f0
+            INPUT_ROOT: /share_nfs/gguasti/benchmarks/hyperloom-repack-inputs-20261127-r2
+            INPUT_MANIFEST_SHA256: 7814647da0a31cc630fa194d76e8c9d20d06edf898decf44d47fa7839e6237b6
             PYTHONDONTWRITEBYTECODE: '1'
             HF_TOKEN: ${{ secrets.HF_TOKEN }}
         steps:
